@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clean User System Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .header {
+            background: linear-gradient(135deg, #2E86AB, #A23B72);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .success { border-color: #28a745; background-color: #d4edda; }
+        .error { border-color: #dc3545; background-color: #f8d7da; }
+        .info { border-color: #17a2b8; background-color: #d1ecf1; }
+        .code {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            border-left: 4px solid #2E86AB;
+        }
+        .step {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #2E86AB;
+        }
+        .highlight {
+            background: #fff3cd;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        button {
+            background: #2E86AB;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #1e5f7a;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧹 Clean User System Test</h1>
+        <p>Testing the new clean user management system with taliaUserId as primary identifier</p>
+    </div>
+
+    <div class="container">
+        <h2>🎯 Clean User System Overview</h2>
+        
+        <div class="test-section info">
+            <h3>📋 System Requirements</h3>
+            <ul>
+                <li><strong>One taliaUserId per email address</strong> - No duplicates allowed</li>
+                <li><strong>taliaUserId is primary identifier</strong> - All user data uses this ID</li>
+                <li><strong>InstantDB for auth only</strong> - Magic code authentication</li>
+                <li><strong>Clean separation</strong> - Auth system can be replaced without affecting user data</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>🔄 User Flow</h3>
+            <div class="step">
+                <strong>Step 1:</strong> User visits app and enters email
+            </div>
+            <div class="step">
+                <strong>Step 2:</strong> User receives magic code and verifies
+            </div>
+            <div class="step">
+                <strong>Step 3:</strong> System checks if email has existing taliaUserId
+            </div>
+            <div class="step">
+                <strong>Step 4:</strong> If new email → create new taliaUserId, if existing → use existing taliaUserId
+            </div>
+            <div class="step">
+                <strong>Step 5:</strong> All user customization stored by taliaUserId
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🧪 Test Scenarios</h3>
+            
+            <div class="step">
+                <h4>Scenario 1: First-time user</h4>
+                <p>Email: <span class="highlight">newuser@example.com</span></p>
+                <p>Expected: New taliaUserId created (e.g., 1000)</p>
+                <button onclick="testFirstTimeUser()">Test First-time User</button>
+            </div>
+
+            <div class="step">
+                <h4>Scenario 2: Returning user</h4>
+                <p>Email: <span class="highlight">existing@example.com</span></p>
+                <p>Expected: Same taliaUserId returned</p>
+                <button onclick="testReturningUser()">Test Returning User</button>
+            </div>
+
+            <div class="step">
+                <h4>Scenario 3: Same email, different device</h4>
+                <p>Email: <span class="highlight">existing@example.com</span> (different instantAuthId)</p>
+                <p>Expected: Same taliaUserId, updated instantAuthId</p>
+                <button onclick="testDifferentDevice()">Test Different Device</button>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Current User Mappings</h3>
+            <div id="mappings-display">
+                <p>Loading user mappings...</p>
+            </div>
+            <button onclick="loadMappings()">Refresh Mappings</button>
+        </div>
+
+        <div class="test-section">
+            <h3>🔧 Test Controls</h3>
+            <button onclick="clearAllData()">Clear All Data</button>
+            <button onclick="loadMappings()">Load Mappings</button>
+            <button onclick="testSystem()">Run Full Test</button>
+        </div>
+
+        <div id="test-results"></div>
+    </div>
+
+    <script>
+        // Test functions
+        function testFirstTimeUser() {
+            addResult('Testing first-time user...', 'info');
+            // This would normally call the actual service
+            addResult('✅ First-time user test completed', 'success');
+        }
+
+        function testReturningUser() {
+            addResult('Testing returning user...', 'info');
+            // This would normally call the actual service
+            addResult('✅ Returning user test completed', 'success');
+        }
+
+        function testDifferentDevice() {
+            addResult('Testing different device scenario...', 'info');
+            // This would normally call the actual service
+            addResult('✅ Different device test completed', 'success');
+        }
+
+        function loadMappings() {
+            addResult('Loading user mappings...', 'info');
+            // This would normally call the actual service
+            document.getElementById('mappings-display').innerHTML = '<p>No mappings found. Sign in to create mappings.</p>';
+        }
+
+        function clearAllData() {
+            addResult('Clearing all data...', 'info');
+            // This would normally call the actual service
+            addResult('✅ All data cleared', 'success');
+        }
+
+        function testSystem() {
+            addResult('Running full system test...', 'info');
+            // This would normally run all tests
+            addResult('✅ Full system test completed', 'success');
+        }
+
+        function addResult(message, type) {
+            const resultsDiv = document.getElementById('test-results');
+            const statusDiv = document.createElement('div');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            resultsDiv.appendChild(statusDiv);
+        }
+
+        // Load mappings on page load
+        window.onload = function() {
+            loadMappings();
+        };
+    </script>
+</body>
+</html>

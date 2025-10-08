@@ -1,0 +1,5 @@
+chore: Fix git structure - add proper .gitignore and fix filename typo
+
+- Add comprehensive .gitignore with node_modules, dist, env files, IDE/OS files
+- Remove incorrectly tracked talia-server/node_modules/tslib files
+- Rename SImpleTable.jsx to SimpleTable.jsx (fix typo)

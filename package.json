@@ -1,0 +1,57 @@
+{
+  "name": "talia-platform",
+  "version": "0.1.0",
+  "description": "Talia Platform - Multi-Customer Revenue and Inventory Management System (Alpha)",
+  "private": true,
+  "workspaces": [
+    "talia-ui",
+    "talia-server"
+  ],
+  "scripts": {
+    "dev": "npm run dev:all",
+    "dev:all": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "cd talia-ui && npm run dev",
+    "dev:backend": "cd talia-server && npm run start",
+    "build": "npm run build:all",
+    "build:all": "npm run build:backend && npm run build:frontend",
+    "build:frontend": "cd talia-ui && npm run build",
+    "build:backend": "cd talia-server && npm run compile",
+    "start": "npm run dev:all",
+    "clean": "npm run clean:frontend && npm run clean:backend",
+    "clean:frontend": "cd talia-ui && rm -rf dist node_modules/.vite",
+    "clean:backend": "cd talia-server && rm -rf dist",
+    "install:all": "npm install && cd talia-ui && npm install && cd ../talia-server && npm install",
+    "test": "npm run test:frontend && npm run test:backend",
+    "test:frontend": "cd talia-ui && npm test",
+    "test:backend": "cd talia-server && npm test",
+    "lint": "npm run lint:frontend && npm run lint:backend",
+    "lint:frontend": "cd talia-ui && npm run lint",
+    "lint:backend": "cd talia-server && npm run lint",
+    "deploy:preview": "netlify deploy",
+    "deploy:production": "netlify deploy --prod"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "netlify-cli": "^17.10.1"
+  },
+  "keywords": [
+    "revenue-management",
+    "inventory-management",
+    "dashboard",
+    "graphql",
+    "react",
+    "dockview",
+    "netlify",
+    "cruise-industry"
+  ],
+  "author": "Zomarc",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zomarc/talia-platform"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}

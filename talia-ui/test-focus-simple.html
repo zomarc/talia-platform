@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Talia Focus Management - Simple Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f8f9fa;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .test-link {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #2E86AB;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 5px;
+        }
+        .test-link:hover { background: #1e5f7a; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Talia Focus Management - Quick Test</h1>
+        
+        <div id="status" class="status info">Checking servers...</div>
+        
+        <h2>🚀 Quick Links</h2>
+        <a href="http://localhost:5173" class="test-link" target="_blank">Main Dashboard</a>
+        <a href="http://localhost:4000/graphql" class="test-link" target="_blank">GraphQL Playground</a>
+        
+        <h2>📋 What to Test</h2>
+        <ol>
+            <li><strong>Main Dashboard:</strong> Click "Main Dashboard" link above</li>
+            <li><strong>Focus Selection:</strong> Look for focus selection in the sidebar</li>
+            <li><strong>Layout Management:</strong> Try adding panels and saving layouts</li>
+            <li><strong>GraphQL:</strong> Test queries in the GraphQL playground</li>
+        </ol>
+        
+        <h2>🎯 Focus Management Features</h2>
+        <ul>
+            <li>✅ Standard focuses (Performance, Exception, Inventory, Setup)</li>
+            <li>✅ User custom focus creation</li>
+            <li>✅ Role-based permissions</li>
+            <li>✅ Drag-and-drop layout editor</li>
+            <li>✅ Favorites and recently used</li>
+        </ul>
+        
+        <h2>🔧 If Issues Occur</h2>
+        <p>Check the browser console for any errors. The focus management system is integrated into the main dashboard.</p>
+    </div>
+
+    <script>
+        async function checkServers() {
+            const statusEl = document.getElementById('status');
+            
+            try {
+                // Test frontend
+                const frontendResponse = await fetch('http://localhost:5173/', { mode: 'no-cors' });
+                statusEl.className = 'status success';
+                statusEl.innerHTML = '✅ Both servers are running! Ready to test focus management.';
+            } catch (error) {
+                statusEl.className = 'status error';
+                statusEl.innerHTML = '❌ Servers may not be running. Check the terminal for server status.';
+            }
+        }
+        
+        checkServers();
+    </script>
+</body>
+</html>

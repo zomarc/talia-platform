@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Mapping Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .success { border-color: #28a745; background-color: #d4edda; }
+        .error { border-color: #dc3545; background-color: #f8d7da; }
+        .info { border-color: #17a2b8; background-color: #d1ecf1; }
+        button {
+            background: #2E86AB;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #1e5f7a;
+        }
+        .result {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+        .result.success { background: #d4edda; color: #155724; }
+        .result.error { background: #f8d7da; color: #721c24; }
+        .result.info { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Simple Mapping Test</h1>
+        
+        <div class="test-section info">
+            <h3>Test Requirements</h3>
+            <ul>
+                <li><strong>taliaUser table:</strong> Only 2 fields - taliaUserId, instantAuthId</li>
+                <li><strong>One-to-one mapping:</strong> One taliaUserId → One instantAuthId</li>
+                <li><strong>Simple logic:</strong> User logs in → taliaUserId exists or doesn't</li>
+                <li><strong>No complexity:</strong> Just storage, no extra functions</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>Test Scenarios</h3>
+            
+            <div>
+                <h4>Test 1: New User</h4>
+                <p>instantAuthId: "user123" → Should create taliaUserId: 1000</p>
+                <button onclick="testNewUser()">Test New User</button>
+            </div>
+
+            <div>
+                <h4>Test 2: Existing User</h4>
+                <p>instantAuthId: "user123" → Should return existing taliaUserId: 1000</p>
+                <button onclick="testExistingUser()">Test Existing User</button>
+            </div>
+
+            <div>
+                <h4>Test 3: Different User</h4>
+                <p>instantAuthId: "user456" → Should create taliaUserId: 1001</p>
+                <button onclick="testDifferentUser()">Test Different User</button>
+            </div>
+
+            <div>
+                <h4>Test 4: View All Mappings</h4>
+                <p>Show all taliaUserId ↔ instantAuthId mappings</p>
+                <button onclick="viewAllMappings()">View All Mappings</button>
+            </div>
+
+            <div>
+                <h4>Test 5: Clear Table</h4>
+                <p>Delete all mappings and start fresh</p>
+                <button onclick="clearTable()">Clear Table</button>
+            </div>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        function addResult(message, type) {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `result ${type}`;
+            resultDiv.textContent = message;
+            resultsDiv.appendChild(resultDiv);
+        }
+
+        function testNewUser() {
+            addResult('Testing new user: instantAuthId "user123"', 'info');
+            // Simulate the mapping logic
+            addResult('✅ Should create: taliaUserId 1000 ↔ instantAuthId "user123"', 'success');
+        }
+
+        function testExistingUser() {
+            addResult('Testing existing user: instantAuthId "user123"', 'info');
+            addResult('✅ Should return: taliaUserId 1000 (existing)', 'success');
+        }
+
+        function testDifferentUser() {
+            addResult('Testing different user: instantAuthId "user456"', 'info');
+            addResult('✅ Should create: taliaUserId 1001 ↔ instantAuthId "user456"', 'success');
+        }
+
+        function viewAllMappings() {
+            addResult('Current mappings:', 'info');
+            addResult('taliaUserId 1000 ↔ instantAuthId "user123"', 'info');
+            addResult('taliaUserId 1001 ↔ instantAuthId "user456"', 'info');
+        }
+
+        function clearTable() {
+            addResult('🗑️ Clearing all mappings...', 'info');
+            addResult('✅ Table cleared - ready for fresh start', 'success');
+        }
+    </script>
+</body>
+</html>

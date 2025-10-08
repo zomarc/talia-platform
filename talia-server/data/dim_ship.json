@@ -1,0 +1,34 @@
+[
+  {
+    "Ship_Id": 100002,
+    "Ship_Code": "CC",
+    "Ship_Name": "Celestyal Crystal ",
+    "Ship_Pax_Capacity": "1200",
+    "Ship_Length": null,
+    "Ship_Tonnage": null
+  },
+  {
+    "Ship_Id": 100000,
+    "Ship_Code": "CO",
+    "Ship_Name": "Celestyal Olympia",
+    "Ship_Pax_Capacity": "1664",
+    "Ship_Length": "215",
+    "Ship_Tonnage": "37584"
+  },
+  {
+    "Ship_Id": 100060,
+    "Ship_Code": "CJ",
+    "Ship_Name": "Celestyal Journey",
+    "Ship_Pax_Capacity": "1700",
+    "Ship_Length": null,
+    "Ship_Tonnage": null
+  },
+  {
+    "Ship_Id": 100100,
+    "Ship_Code": "CD",
+    "Ship_Name": "Celestyal Discovery",
+    "Ship_Pax_Capacity": "1200",
+    "Ship_Length": null,
+    "Ship_Tonnage": null
+  }
+]

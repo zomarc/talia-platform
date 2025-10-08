@@ -1,0 +1,27 @@
+{
+  "name": "talia-server",
+  "version": "0.1.0",
+  "description": "Talia Platform - GraphQL Server (Alpha)",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "compile": "tsc",
+    "start": "npm run compile && node ./dist/index.js"
+  },
+  "keywords": [
+    "graphql",
+    "revenue-management",
+    "inventory-management"
+  ],
+  "author": "Zomarc",
+  "license": "UNLICENSED",
+
+  "dependencies": {
+    "@apollo/server": "^5.0.0",
+    "graphql": "^16.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}

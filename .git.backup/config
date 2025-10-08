@@ -1,0 +1,14 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+	ignorecase = true
+	precomposeunicode = true
+[remote "origin"]
+	url = https://github.com/rbryer/dockview01
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[branch "feature/focus-management"]
+	remote = origin
+	merge = refs/heads/feature/focus-management
+	vscode-merge-base = origin/main

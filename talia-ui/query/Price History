@@ -1,0 +1,22 @@
+SELECT [SNAPSHOT_DATE]
+      ,[SAIL_CODE]
+      ,[SHIP_CODE]
+      ,[PACKAGE_NAME]
+      ,[REGION]
+      ,[RATE_TYPE]
+      ,[SAIL_DAYS]
+      ,[DEPARTURE_DATE]
+      ,[CABIN_CATEGORY]
+      ,[PROMO_NAME]
+      ,[PROMO_TYPE]
+      ,[CURRENCY_CODE]
+      ,[FARE_PER_PERSON]
+      ,[PORT_TAXES_SERVICES]
+      ,[EXTRA_ADULT]
+      ,[EXTRA_CHILD]
+      ,[DISCOUNT]
+  FROM [fou].[GQL_PUBLISHED_RATES]
+  where 3=3
+  and snapshot_date between '2025-05-01' and getdate() 
+  and rate_type = 'BAR'
+--and   [SHIP_CODE] = 'CJ'

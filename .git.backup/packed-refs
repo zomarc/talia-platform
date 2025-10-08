@@ -1,0 +1,26 @@
+# pack-refs with: peeled fully-peeled sorted 
+a6bfee79fa30d00f25d9d948921e1261ea692e66 refs/heads/feature/focus-management
+b6db402926b144fed3a10c7374368ff4e65b9406 refs/heads/main
+7c371de671566ba12cfcc477aeafceaebe37ca20 refs/remotes/origin/development
+e94309a828ac1882f953038943db41f8ed19cc57 refs/remotes/origin/feature-enhanced-docking-layout
+7c371de671566ba12cfcc477aeafceaebe37ca20 refs/remotes/origin/feature-focus-management
+e94309a828ac1882f953038943db41f8ed19cc57 refs/remotes/origin/feature-focus-navigation
+de564045d61495e2064d8276005ffff69f0b988e refs/remotes/origin/feature-talia-auth
+d24181569da4c25ebf91d0beda4ea5cdaa66e90b refs/remotes/origin/main
+ec9273022786a4599ef1e9cb16ee302e2515c28e refs/remotes/origin/working-panel-close-fix
+e5e21db48580ead6f8792a70c4effb8a6b8b5c85 refs/tags/talia-graphql-server-v2.0.0
+^2c6553ce86f3fc16e9495065e4428f0e3aaf27cd
+5c30c8ecd38787ef605e2e0a42b2566ab514ca8f refs/tags/talia-ui-v2.0.0
+^2c6553ce86f3fc16e9495065e4428f0e3aaf27cd
+1d6999a153685121492b0f833ad0b61caaff1e84 refs/tags/v0.10.0
+^366cd8053b1cef640dbc42024877b671fa50217e
+a76392d9fa200e74bc79fe929761640cd0d4c6c5 refs/tags/v0.9.0
+^d24181569da4c25ebf91d0beda4ea5cdaa66e90b
+e422afc7b1f65f2cce2ac80fbec59d7f544a4c3a refs/tags/v1.0-working-panel-close
+^ec9273022786a4599ef1e9cb16ee302e2515c28e
+604244eeffb151b7f7391b150a7fed19bf8446fc refs/tags/v1.0.0-stable
+^0d8f7eb21beaf05352383ac9db6a620b4c8d8fc5
+a7c0610c06e8b2b4742bbff3b1e39f4fe7aa41a8 refs/tags/v2.0.0
+^2c6553ce86f3fc16e9495065e4428f0e3aaf27cd
+d20b7f7abb55e26a13e9faf29c6dbf58ecbfc2d1 refs/tags/v2.1.0-dev-stable
+^a6bfee79fa30d00f25d9d948921e1261ea692e66

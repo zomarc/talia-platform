@@ -1,0 +1,59 @@
+# Netlify Configuration for Talia Platform v0.1.0 (Alpha)
+# Unified deployment for multi-customer revenue and inventory management system
+# Repository: https://github.com/zomarc/talia-platform
+
+[build]
+  # Build command for the entire monorepo
+  command = "npm run build:all"
+  # Publish directory for the frontend
+  publish = "talia-ui/dist"
+  
+[build.environment]
+  # Node.js version
+  NODE_VERSION = "18"
+  # Build environment
+  NODE_ENV = "production"
+
+# Redirects for API routes
+[[redirects]]
+  # GraphQL endpoint
+  from = "/api/graphql"
+  to = "/.netlify/functions/graphql"
+  status = 200
+
+# Redirects for SPA (Single Page Application)
+[[redirects]]
+  # Handle all other routes for React Router
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Headers for security and CORS
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, Authorization"
+
+# Functions configuration for GraphQL server
+[functions]
+  # Directory where Netlify Functions are stored
+  directory = "netlify/functions"
+
+# Development configuration
+[dev]
+  # Command to run during local development
+  command = "npm run dev:all"
+  # Port for local development
+  port = 8888
+  # Auto-publish during development
+  publish = "talia-ui/dist"

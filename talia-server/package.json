@@ -6,7 +6,16 @@
   "type": "module",
   "scripts": {
     "compile": "tsc",
-    "start": "npm run compile && node ./dist/index.js"
+    "start": "npm run compile && node ./dist/index.js",
+    "sync-all": "node sync-cli.js sync-all",
+    "sync-status": "node sync-cli.js status",
+    "sync-test": "node sync-cli.js test-connection",
+    "sync-help": "node sync-cli.js help",
+    "sync-ships": "node sync-cli.js sync-table ships",
+    "sync-cabin": "node sync-cli.js sync-table cabinAvailability",
+    "sync-reservations": "node sync-cli.js sync-table reservations",
+    "sync-rates": "node sync-cli.js sync-table publishedRates",
+    "sync-occupancy": "node sync-cli.js sync-table sailByCabinOccupancy"
   },
   "keywords": [
     "graphql",
@@ -15,10 +24,15 @@
   ],
   "author": "Zomarc",
   "license": "UNLICENSED",
-
   "dependencies": {
     "@apollo/server": "^5.0.0",
-    "graphql": "^16.11.0"
+    "@supabase/supabase-js": "^2.39.0",
+    "csv-parser": "^3.2.0",
+    "dotenv": "^17.2.3",
+    "graphql": "^16.11.0",
+    "mssql": "^12.0.0",
+    "pg": "^8.16.3",
+    "tedious": "^16.7.1"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

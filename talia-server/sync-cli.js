@@ -3,7 +3,7 @@
 // CLI for Talia Data Sync Service
 // Provides easy command-line interface for syncing data from Synapse to Supabase
 
-import { synapseSyncService } from './src/lib/synapse-sync.js';
+import { synapseSyncService } from './src/services/synapse-sync.js';
 
 const command = process.argv[2];
 const tableName = process.argv[3];

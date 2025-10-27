@@ -10,6 +10,7 @@ import ExceptionList from "./components/focus-panels/ExceptionList";
 import ItineraryList from "./components/focus-panels/ItineraryList";
 import PublishedRates from "./components/focus-panels/PublishedRates";
 import SailingByCabinCategory from "./components/focus-panels/SailingByCabinCategory";
+import SimpleTable from "./components/focus-panels/SImpleTable";
 import SailingSummary from "./components/focus-panels/SailingSummary";
 import UserProfile from "./components/UserProfile";
 import { useAuth } from "./contexts/AuthContext";
@@ -1286,6 +1287,9 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
         <div style={{ ...sectionContentStyle, display: expandedSections.reports ? 'block' : 'none' }}>
           <button style={buttonStyle} onClick={() => onAddPanel('table', 'New Table')}>
             📊 New Table
+          </button>
+          <button style={buttonStyle} onClick={() => onAddPanel('simple-table-test', 'Simple Table Test')}>
+            🧪 Simple Table Test
           </button>
           <button style={buttonStyle} onClick={() => onAddPanel('chart', 'New Chart')}>
             📈 New Chart
@@ -2597,6 +2601,7 @@ function Dashboard({ user }) {
               // Reports components
               "published-rates": PublishedRates,
               "sailing-cabin-category": SailingByCabinCategory,
+              "simple-table-test": SimpleTable,
               "sailing-summary": SailingSummary,
               // Admin components
               "admin-dashboard": AdminDashboard,

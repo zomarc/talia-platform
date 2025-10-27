@@ -100,39 +100,29 @@ const SailingByCabinCategory = React.memo(() => {
   const [selectedSailCode, setSelectedSailCode] = React.useState(null);
   const [allData, setAllData] = React.useState([]);
 
-  // Load sailing cabin occupancy data from local JSON file
+  // Load sailing cabin occupancy data from Supabase
   const loadSailingCabinData = async () => {
     try {
-      const response = await fetch('/local_data/sail_by_cabin_occupancy.json');
+      // Direct Supabase query for master_sail table
+      const response = await fetch('http://127.0.0.1:54321/rest/v1/master_sail?select=*&limit=100', {
+        headers: {
+          'apikey': 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
+          'Authorization': 'Bearer sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH'
+        }
+      });
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
       const data = await response.json();
-      console.log('[SailingByCabinCategory] Loaded data:', data.length, 'records');
+      console.log('[SailingByCabinCategory] Loaded data from Supabase:', data.length, 'records');
       setAllData(data); // Store all data for filtering
       return data;
     } catch (error) {
       console.error('[SailingByCabinCategory] Error loading data:', error);
-      // Return fallback data if JSON file fails to load
-      return [
-        {
-          Sail_ID: 5130.0,
-          Sail_Code: "CJ07260502",
-          Sail_Days: 7,
-          Sail_Date_From: "2026-05-02T00:00:00",
-          Master_Voyage: "CJ07260502",
-          Ship_Code: "CJ",
-          Ship_name: "Celestyal Journey",
-          Package_Type: "PIRPIR7",
-          Package_Name: "Heavenly Greece,Italy and Croatia - 7Nights",
-          Geog_Area_Code: "ADRIATIC",
-          Cabin_Category: "IA",
-          Cabin_Capacity: 4.0,
-          Total_Cabins: 8,
-          Occupied_Cabins: 1,
-          Remaining_Cabins: 7
-        }
-      ];
+      // Return empty array and let the UI handle the no-data state
+      return [];
     }
   };
 
@@ -191,63 +181,20 @@ const SailingByCabinCategory = React.memo(() => {
       check();
     });
 
-    const renderFallbackTable = () => {
+    const renderNoData = () => {
       if (!tableRef.current) return;
       if (instanceRef.current) { 
         console.log('[SailingByCabinCategory] skipped (Tabulator exists)'); 
         return; 
       }
       
-      const data = [
-        { 
-          Sail_Code: "CJ07260502", 
-          Ship_name: "Celestyal Journey", 
-          Package_Name: "Heavenly Greece,Italy and Croatia - 7Nights", 
-          Sail_Days: 7, 
-          Sail_Date_From: "2026-05-02", 
-          Cabin_Category: "IA", 
-          Total_Cabins: 8, 
-          Occupied_Cabins: 1, 
-          Remaining_Cabins: 7 
-        }
-      ];
-      
-      const headers = ["Sail Code", "Ship", "Package", "Days", "Sail Date", "Cabin Category", "Total", "Occupied", "Remaining"];
-      const rows = data.map((r, i) => `<tr data-id="${i}">
-        <td>${r.Sail_Code}</td>
-        <td>${r.Ship_name}</td>
-        <td>${r.Package_Name}</td>
-        <td style="text-align:center">${r.Sail_Days}</td>
-        <td>${r.Sail_Date_From}</td>
-        <td>${r.Cabin_Category}</td>
-        <td style="text-align:right">${r.Total_Cabins}</td>
-        <td style="text-align:right">${r.Occupied_Cabins}</td>
-        <td style="text-align:right">${r.Remaining_Cabins}</td>
-      </tr>`).join("");
-      
       tableRef.current.innerHTML = `
-        <div style="padding:6px 8px;font-family:ui-sans-serif,system-ui;font-size:13px">
-          <div style="margin-bottom:6px;color:#a55">(Sailing by Cabin Category - Fallback table active)</div>
-          <table style="width:100%; border-collapse:collapse">
-            <thead><tr>${headers.map(h=>`<th style="text-align:left;border-bottom:1px solid #e8dfd0;padding:4px 6px">${h}</th>`).join("")}</tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
+        <div style="padding:20px;font-family:ui-sans-serif,system-ui;font-size:14px;text-align:center;color:#666">
+          <div style="margin-bottom:10px;color:#999">⚠️ No data available</div>
+          <div style="color:#888;font-size:12px">Unable to load data from Supabase. Please check the connection.</div>
         </div>`;
       
-      try {
-        const tbody = tableRef.current.querySelector('tbody');
-        tbody?.addEventListener('click', (ev) => {
-          const tr = ev.target.closest('tr');
-          if (!tr) return;
-          // clear others
-          tbody.querySelectorAll('tr.selected').forEach(n => n.classList.remove('selected'));
-          tr.classList.add('selected');
-          const id = Number(tr.getAttribute('data-id'));
-          const rec = data[id];
-          if (rec) emitSelect(rec);
-        });
-      } catch {}
-      console.log('[SailingByCabinCategory] fallback table rendered');
+      console.log('[SailingByCabinCategory] No data message displayed');
     };
 
     (async () => {
@@ -264,7 +211,7 @@ const SailingByCabinCategory = React.memo(() => {
         const TabGlobal = window.Tabulator || window.TabulatorFull;
         console.log('[SailingByCabinCategory] Tabulator global typeof:', typeof TabGlobal);
         if (!cssOk) console.warn("[SailingByCabinCategory] Tabulator CSS failed to load from all sources");
-        if (!TabGlobal) { renderFallbackTable(); return; }
+        if (!TabGlobal) { renderNoData(); return; }
 
         // Wait for real size
         const sz = await waitForNonZeroSize(tableRef.current, 3000);
@@ -272,16 +219,16 @@ const SailingByCabinCategory = React.memo(() => {
 
         // Safety net: If we haven't finished init in 1200ms, draw fallback
         if (failSafeRef.current) clearTimeout(failSafeRef.current);
-        failSafeRef.current = setTimeout(() => {
-          console.warn('[SailingByCabinCategory] failSafe fired — using fallback table');
-          if (!instanceRef.current) renderFallbackTable();
+          failSafeRef.current = setTimeout(() => {
+          console.warn('[SailingByCabinCategory] failSafe fired — showing no data message');
+          if (!instanceRef.current) renderNoData();
         }, 1200);
 
-        // Define columns for sailing cabin occupancy
+        // Define columns for master sail data
         const columns = [
           { 
             title: "Sail ID", 
-            field: "Sail_ID", 
+            field: "sail_id", 
             width: 100,
             headerFilter: "input",
             headerFilterPlaceholder: "Filter sail ID...",
@@ -292,14 +239,14 @@ const SailingByCabinCategory = React.memo(() => {
           },
           { 
             title: "Sail Code", 
-            field: "Sail_Code", 
+            field: "sail_code", 
             width: 120,
             headerFilter: "input",
             headerFilterPlaceholder: "Filter sail code..."
           },
           { 
             title: "Ship", 
-            field: "Ship_name", 
+            field: "ship_name", 
             width: 150,
             headerFilter: "list",
             headerFilterParams: {
@@ -309,21 +256,21 @@ const SailingByCabinCategory = React.memo(() => {
           },
           { 
             title: "Package", 
-            field: "Package_Name", 
+            field: "package_name", 
             widthGrow: 2,
             headerFilter: "input",
             headerFilterPlaceholder: "Filter package..."
           },
           { 
             title: "Package Type", 
-            field: "Package_Type", 
+            field: "package_type", 
             width: 120,
             headerFilter: "input",
             headerFilterPlaceholder: "Filter type..."
           },
           { 
             title: "Geographic Area", 
-            field: "Geog_Area_Code", 
+            field: "geog_area_code", 
             width: 120,
             headerFilter: "list",
             headerFilterParams: {
@@ -333,7 +280,7 @@ const SailingByCabinCategory = React.memo(() => {
           },
           { 
             title: "Sail Days", 
-            field: "Sail_Days", 
+            field: "sail_days", 
             hozAlign: "center", 
             width: 100,
             headerFilter: "input",
@@ -345,7 +292,7 @@ const SailingByCabinCategory = React.memo(() => {
           },
           { 
             title: "Sail Date", 
-            field: "Sail_Date_From", 
+            field: "sail_date_from", 
             width: 120,
             headerFilter: "input",
             headerFilterPlaceholder: "YYYY-MM-DD",
@@ -355,84 +302,28 @@ const SailingByCabinCategory = React.memo(() => {
             }
           },
           { 
-            title: "Cabin Category", 
-            field: "Cabin_Category", 
-            width: 120,
-            headerFilter: "input",
-            headerFilterPlaceholder: "Filter cabin..."
-          },
-          { 
-            title: "Cabin Capacity", 
-            field: "Cabin_Capacity", 
-            hozAlign: "center", 
-            width: 120,
-            headerFilter: "input",
-            headerFilterPlaceholder: "Capacity",
-            headerFilterFunc: ">=",
-            headerFilterParams: {
-              type: "number"
-            },
-            formatter: (cell) => {
-              const value = cell.getValue();
-              return value ? Math.floor(value).toString() : '';
-            }
-          },
-          { 
-            title: "Total Cabins", 
-            field: "Total_Cabins", 
-            hozAlign: "right", 
+            title: "Port From", 
+            field: "port_from", 
             width: 100,
             headerFilter: "input",
-            headerFilterPlaceholder: "Min total",
-            headerFilterFunc: ">=",
-            headerFilterParams: {
-              type: "number"
-            }
+            headerFilterPlaceholder: "From port..."
           },
           { 
-            title: "Occupied", 
-            field: "Occupied_Cabins", 
-            hozAlign: "right", 
+            title: "Port To", 
+            field: "port_to", 
             width: 100,
             headerFilter: "input",
-            headerFilterPlaceholder: "Min occupied",
-            headerFilterFunc: ">=",
-            headerFilterParams: {
-              type: "number"
-            }
+            headerFilterPlaceholder: "To port..."
           },
           { 
-            title: "Remaining", 
-            field: "Remaining_Cabins", 
-            hozAlign: "right", 
-            width: 100,
-            headerFilter: "input",
-            headerFilterPlaceholder: "Min remaining",
-            headerFilterFunc: ">=",
+            title: "Active", 
+            field: "is_active", 
+            width: 80,
+            hozAlign: "center",
+            headerFilter: "list",
             headerFilterParams: {
-              type: "number"
-            }
-          },
-          { 
-            title: "Occupancy %", 
-            field: "Occupancy_Percentage", 
-            hozAlign: "right", 
-            width: 100,
-            headerFilter: "input",
-            headerFilterPlaceholder: "Min %",
-            headerFilterFunc: ">=",
-            headerFilterParams: {
-              type: "number"
-            },
-            formatter: (cell, formatterParams, onRendered) => {
-              const row = cell.getRow().getData();
-              const total = row.Total_Cabins;
-              const occupied = row.Occupied_Cabins;
-              if (total && total > 0) {
-                const percentage = Math.round((occupied / total) * 100);
-                return `${percentage}%`;
-              }
-              return '0%';
+              values: { "": "All", "Y": "Yes", "N": "No" },
+              clearable: true
             }
           }
         ];
@@ -510,7 +401,7 @@ const SailingByCabinCategory = React.memo(() => {
 
       } catch (err) {
         console.error('[SailingByCabinCategory] fatal init error', err);
-        renderFallbackTable();
+        renderNoData();
       }
     })();
 

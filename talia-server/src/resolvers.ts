@@ -1,6 +1,7 @@
 // Enhanced GraphQL Resolvers for Talia Focus Management System
 
 import { sampleData } from './schema.js';
+import { supabaseDataService } from './lib/supabase.js';
 
 // Helper function to check user permissions
 const hasPermission = (userRole: string, requiredRole: string): boolean => {
@@ -98,39 +99,113 @@ export const resolvers = {
       return sailings;
     },
 
-    ships: () => {
-      // This would load from the JSON file in a real implementation
-      return [
-        { Ship_Id: 1, Ship_Code: "DIS", Ship_Name: "Celestyal Discovery", Ship_Pax_Capacity: "950", Ship_Length: "180m", Ship_Tonnage: "45000" },
-        { Ship_Id: 2, Ship_Code: "JRN", Ship_Name: "Celestyal Journey", Ship_Pax_Capacity: "980", Ship_Length: "185m", Ship_Tonnage: "47000" }
-      ];
-    },
-
-    cabinAvailability: (parent: any, args: any) => {
-      const { filters } = args;
-      // In a real implementation, this would load from JSON and apply filters
-      return [
-        {
-          Snapshot_Date: "2025-01-01",
-          Package_Name: "7N Islands",
-          Sail_Days: 7,
-          Cabin_Category: "Interior",
-          Available_Cabins: 120,
-          Total_Cabins: 150,
-          Available_Absolute: 120,
-          Available_Weighted: 115.5,
-          Availability_Result: "Good",
-          Nested_Cabins: 0
+    ships: async () => {
+      try {
+        // Try to get data from Supabase first (local development)
+        const supabaseData = await supabaseDataService.getShips();
+        if (supabaseData && supabaseData.length > 0) {
+          // Transform Supabase data to match GraphQL schema
+          return supabaseData.map(ship => ({
+            Ship_Id: ship.ship_id,
+            Ship_Code: ship.ship_code,
+            Ship_Name: ship.ship_name,
+            Ship_Pax_Capacity: ship.ship_pax_capacity,
+            Ship_Length: ship.ship_length,
+            Ship_Tonnage: ship.ship_tonnage
+          }));
         }
-      ];
+        
+        // Fallback to sample data
+        return [
+          { Ship_Id: 1, Ship_Code: "DIS", Ship_Name: "Celestyal Discovery", Ship_Pax_Capacity: "950", Ship_Length: "180m", Ship_Tonnage: "45000" },
+          { Ship_Id: 2, Ship_Code: "JRN", Ship_Name: "Celestyal Journey", Ship_Pax_Capacity: "980", Ship_Length: "185m", Ship_Tonnage: "47000" }
+        ];
+      } catch (error) {
+        console.error('Error fetching ships data:', error);
+        // Fallback to sample data
+        return [
+          { Ship_Id: 1, Ship_Code: "DIS", Ship_Name: "Celestyal Discovery", Ship_Pax_Capacity: "950", Ship_Length: "180m", Ship_Tonnage: "45000" },
+          { Ship_Id: 2, Ship_Code: "JRN", Ship_Name: "Celestyal Journey", Ship_Pax_Capacity: "980", Ship_Length: "185m", Ship_Tonnage: "47000" }
+        ];
+      }
     },
 
-    kpis: (parent: any, args: any) => {
+    cabinAvailability: async (parent: any, args: any) => {
+      const { filters } = args;
+      try {
+        // Try to get data from Supabase first (local development)
+        const supabaseData = await supabaseDataService.getCabinAvailability(filters);
+        if (supabaseData && supabaseData.length > 0) {
+          // Transform Supabase data to match GraphQL schema
+          return supabaseData.map(cabin => ({
+            Snapshot_Date: cabin.snapshot_date,
+            Sail_Code: cabin.sail_code,
+            Package_Name: cabin.package_name,
+            Sail_Days: cabin.sail_days,
+            Cabin_Category: cabin.cabin_category,
+            Available_Cabins: cabin.available_cabins,
+            Total_Cabins: cabin.total_cabins,
+            Available_Absolute: cabin.available_absolute,
+            Available_Weighted: cabin.available_weighted,
+            Availability_Result: cabin.availability_result,
+            Nested_Cabins: cabin.nested_cabins
+          }));
+        }
+        
+        // Fallback to sample data
+        return [
+          {
+            Snapshot_Date: "2025-01-01",
+            Package_Name: "7N Islands",
+            Sail_Days: 7,
+            Cabin_Category: "Interior",
+            Available_Cabins: 120,
+            Total_Cabins: 150,
+            Available_Absolute: 120,
+            Available_Weighted: 115.5,
+            Availability_Result: "Good",
+            Nested_Cabins: 0
+          }
+        ];
+      } catch (error) {
+        console.error('Error fetching cabin availability data:', error);
+        // Fallback to sample data
+        return [
+          {
+            Snapshot_Date: "2025-01-01",
+            Package_Name: "7N Islands",
+            Sail_Days: 7,
+            Cabin_Category: "Interior",
+            Available_Cabins: 120,
+            Total_Cabins: 150,
+            Available_Absolute: 120,
+            Available_Weighted: 115.5,
+            Availability_Result: "Good",
+            Nested_Cabins: 0
+          }
+        ];
+      }
+    },
+
+    kpis: async (parent: any, args: any) => {
       const { userRole } = args;
-      return filterDataByRole(sampleData.kpis, userRole);
+      try {
+        // Try to get data from Supabase first (local development)
+        const supabaseData = await supabaseDataService.getKPIs(userRole);
+        if (supabaseData && supabaseData.length > 0) {
+          return supabaseData;
+        }
+        
+        // Fallback to sample data
+        return filterDataByRole(sampleData.kpis, userRole);
+      } catch (error) {
+        console.error('Error fetching KPIs data:', error);
+        // Fallback to sample data
+        return filterDataByRole(sampleData.kpis, userRole);
+      }
     },
 
-    exceptions: (parent: any, args: any) => {
+    exceptions: async (parent: any, args: any) => {
       const { userRole } = args;
       
       // Only managers and admins can see exceptions
@@ -138,7 +213,20 @@ export const resolvers = {
         return [];
       }
       
-      return filterDataByRole(sampleData.exceptions, userRole);
+      try {
+        // Try to get data from Supabase first (local development)
+        const supabaseData = await supabaseDataService.getExceptions(userRole);
+        if (supabaseData && supabaseData.length > 0) {
+          return supabaseData;
+        }
+        
+        // Fallback to sample data
+        return filterDataByRole(sampleData.exceptions, userRole);
+      } catch (error) {
+        console.error('Error fetching exceptions data:', error);
+        // Fallback to sample data
+        return filterDataByRole(sampleData.exceptions, userRole);
+      }
     },
 
     // Legacy queries (for backward compatibility)

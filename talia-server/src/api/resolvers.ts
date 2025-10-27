@@ -1,7 +1,7 @@
 // Enhanced GraphQL Resolvers for Talia Focus Management System
 
 import { sampleData } from './schema.js';
-import { supabaseDataService } from './lib/supabase.js';
+import { supabaseDataService } from '../services/supabase.js';
 
 // Helper function to check user permissions
 const hasPermission = (userRole: string, requiredRole: string): boolean => {

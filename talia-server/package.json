@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "clean": "rm -rf dist",
-    "compile": "npm run clean && tsc && mkdir -p dist/lib && cp src/lib/*.js dist/lib/",
+    "compile": "npm run clean && tsc && mkdir -p dist/services dist/config && cp src/services/*.js dist/services/ && cp src/config/*.js dist/config/",
     "start": "npm run compile && node ./dist/index.js",
     "sync-all": "node sync-cli.js sync-all",
     "sync-status": "node sync-cli.js status",

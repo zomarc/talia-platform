@@ -28,19 +28,29 @@ npm run dev
 # Check sync status for all tables
 npm run sync-status
 
-# Sync all tables from Azure Synapse
+# Sync all tables using the default dataset (defined in sync.config.json)
 npm run sync-all
 
-# Sync specific table
-npm run sync-ships         # Ships data
-npm run sync-cabin         # Cabin availability
-npm run sync-reservations  # Reservation data
-npm run sync-rates         # Published rates
-npm run sync-occupancy     # Sail occupancy data
+# Sync a named dataset (e.g. Sept–Dec 2025)
+npm run sync-dataset
 
-# Test connections
-npm run sync-test
+# Sync specific tables (uses default dataset unless you pass an argument)
+npm run sync-ships         # npm run sync-ships -- sept-dec-2025 for custom dataset
+npm run sync-cabin
+npm run sync-reservations
+npm run sync-rates
+npm run sync-occupancy
+
+# Test connections (optional dataset argument)
+npm run sync-test          # npm run sync-test -- sept-dec-2025
 ```
+
+### Configuration-driven sync
+
+- `sync.config.json` defines every table, its source query, target table, replacement rules, and available datasets.
+- Datasets (e.g. `sept-dec-2025`) group tables and filter windows so you can pull a consistent slice of data without editing code.
+- Replace strategies are enforced per-table (`delete-all`, `delete-range`, or `none`) ensuring no full database resets occur during sync.
+- Derived tables such as `reservation_changes` run through specialised handlers that respect the configured date range.
 
 ## Architecture
 
@@ -111,8 +121,7 @@ talia-server/
 
 ## Documentation
 
-- `BUILD-FIX.md`: Build process explanation
-- `SYNC-SERVICE-COMPLETE.md`: Sync service documentation
+- **`DEVELOPMENT-GUIDE.md`**: Complete development reference (start here)
 - `archive/`: Historical scripts and samples
 
 ## Troubleshooting

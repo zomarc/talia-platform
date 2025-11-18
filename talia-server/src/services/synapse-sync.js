@@ -1,28 +1,21 @@
-// Synapse Data Sync Service
-// One-way sync from Azure Synapse to Supabase with year constraints (2025-2026)
-
 import sql from 'mssql';
-import { supabaseDataService } from './supabase.js';
+import { createRequire } from 'module';
 
-/**
- * SynapseSyncService - Controlled one-way data synchronization
- * 
- * Features:
- * - One-way sync: Synapse → Supabase only
- * - Year constraints: 2025-2026 data only
- * - Specific table targeting
- * - Replace strategy (clear and reload)
- * - Error handling and logging
- */
+import { supabaseDataService } from './supabase.js';
+import { syncReservationChanges } from './reservation-changes-sync.js';
+
+const require = createRequire(import.meta.url);
+const syncConfig = require('../../sync.config.json');
+
 class SynapseSyncService {
   constructor() {
-    // Azure Synapse connection configuration
-    this.config = {
+    this.synapseConfig = {
       server: process.env.AZURE_SYNAPSE_SERVER || 'celestyaldataplatform-prd.sql.azuresynapse.net',
       port: parseInt(process.env.AZURE_SYNAPSE_PORT) || 1433,
       database: process.env.AZURE_SYNAPSE_DATABASE || 'CDP_Dedicated_SQL_DWH',
       user: process.env.AZURE_SYNAPSE_USERNAME || 'RBryer',
       password: process.env.AZURE_SYNAPSE_PASSWORD || 'Cele5tyalrbUser!',
+      requestTimeout: parseInt(process.env.AZURE_SYNAPSE_REQUEST_TIMEOUT || '300000'),
       options: {
         encrypt: true,
         trustServerCertificate: false,
@@ -35,103 +28,68 @@ class SynapseSyncService {
       }
     };
 
-    // Sync configuration - ONLY these tables will be synced
-    this.syncConfig = {
-      tables: {
-        // Ships table - no date constraints (static reference data)
-        ships: {
-          sourceTable: 'dwh.Dim_Ship',
-          targetTable: 'ship',
-          query: `SELECT Ship_Id, Ship_Code, Ship_Name, Ship_Pax_Capacity, Ship_Length, Ship_Tonnage 
-                  FROM dwh.Dim_Ship`,
-          constraints: [], // No date constraints for ships
-          primaryKey: 'Ship_Id',
-          description: 'Ship reference data'
-        },
-        
-        // Cabin Availability - 2025-2026 only
-        cabinAvailability: {
-          sourceTable: 'dwh.Dim_Cabin_Availability',
-          targetTable: 'cabin_availability',
-          query: `SELECT [Snapshot_Date], [Sail_Code], [Package_Name], [Sail_Days], [Cabin_Category],
-                         [Available_Cabins], [Total_Cabins], [Available_Absolute], [Available_Weighted],
-                         [Availability_Result], [Nested_Cabins]
-                  FROM dwh.Dim_Cabin_Availability
-                  WHERE YEAR([Snapshot_Date]) IN (2025, 2026)`,
-          constraints: ['YEAR([Snapshot_Date]) IN (2025, 2026)'],
-          primaryKey: 'Snapshot_Date,Sail_Code,Cabin_Category',
-          description: 'Cabin availability data for 2025-2026'
-        },
-        
-        // Reservations - September 2025 only (much smaller dataset)
-        reservations: {
-          sourceTable: 'dwh.Fact_Reservation_History',
-          targetTable: 'reservation',
-          query: `SELECT [WC_Snapshot_Date], [Group_ID], [Res_ID], [Ship], [Sail_code], [Sail_From_Date],
-                         [Sail_To_Date], [Agency_ID], [Cabin_Category], [Guest_Count], [Pax_Status],
-                         [Group_Status], [Res_Status], [GrossSellingFare], [NetSellingFare]
-                  FROM dwh.Fact_Reservation_History
-                  WHERE [Sail_From_Date] >= '2025-09-01' AND [Sail_From_Date] <= '2025-09-30'`,
-          constraints: ['Sail_From_Date >= 2025-09-01 AND Sail_From_Date <= 2025-09-30'],
-          primaryKey: 'Res_ID',
-          description: 'Reservation data for September 2025 sailings only'
-        },
-        
-        // Published Rates - September 2025 only
-        publishedRates: {
-          sourceTable: 'fou.GQL_PUBLISHED_RATES',
-          targetTable: 'published_rates',
-          query: `SELECT [SNAPSHOT_DATE], [SAIL_CODE], [SHIP_CODE], [PACKAGE_NAME], [REGION],
-                         [RATE_TYPE], [SAIL_DAYS], [DEPARTURE_DATE], [CABIN_CATEGORY], [PROMO_NAME],
-                         [PROMO_TYPE], [CURRENCY_CODE], [FARE_PER_PERSON], [PORT_TAXES_SERVICES],
-                         [EXTRA_ADULT], [EXTRA_CHILD], [DISCOUNT]
-                  FROM fou.GQL_PUBLISHED_RATES
-                  WHERE [DEPARTURE_DATE] >= '2025-09-01' AND [DEPARTURE_DATE] <= '2025-09-30'`,
-          constraints: ['DEPARTURE_DATE >= 2025-09-01 AND DEPARTURE_DATE <= 2025-09-30'],
-          primaryKey: 'SNAPSHOT_DATE,SAIL_CODE,CABIN_CATEGORY',
-          description: 'Published rates data for September 2025 sailings'
-        },
-        
-        // Sail By Cabin Occupancy - September 2025 only
-        sailByCabinOccupancy: {
-          sourceTable: 'dwh.Dim_Sail_By_Cabin_Occupancy',
-          targetTable: 'sail_by_cabin_occupancy',
-          query: `SELECT [Sail_ID], [Sail_Code], [Sail_Days], [Sail_Date_From], [Master_Voyage],
-                         [Sail_Itinerary_Date], [Sail_Itinerary_Night], [Port_Code], [Ship_Code], [Ship_name],
-                         [Package_Type], [Package_Name], [Geog_Area_Code], [Season_Code], [IS_Fake],
-                         [IS_Active], [IS_Package_Active], [Cabin_Category], [Cabin_Capacity],
-                         [Total_Cabins], [Occupied_Cabins], [Remaining_Cabins]
-                  FROM dwh.Dim_Sail_By_Cabin_Occupancy
-                  WHERE [Sail_Date_From] >= '2025-09-01' AND [Sail_Date_From] <= '2025-09-30'`,
-          constraints: ['Sail_Date_From >= 2025-09-01 AND Sail_Date_From <= 2025-09-30'],
-          primaryKey: 'Sail_ID,Cabin_Category',
-          description: 'Sail by cabin occupancy data for September 2025 sailings'
-        }
-      }
-    };
+    this.tableDefinitions = syncConfig.tables || {};
+    this.datasets = syncConfig.datasets || {};
+    this.defaultDataset = syncConfig.defaultDataset || Object.keys(this.datasets)[0] || null;
+
+    if (!this.defaultDataset) {
+      console.warn('⚠️  No default dataset defined in sync.config.json. Dataset must be provided explicitly.');
+    }
 
     console.log('🔄 SynapseSyncService initialized');
-    console.log(`📊 Configured tables: ${Object.keys(this.syncConfig.tables).join(', ')}`);
+    console.log(`📊 Default dataset: ${this.defaultDataset || 'none'}`);
   }
 
-  /**
-   * Test connection to Azure Synapse
-   * @returns {Promise<boolean>} Connection success status
-   */
+  listConfiguredTables() {
+    return Object.entries(this.tableDefinitions).map(([name, definition]) => ({
+      name,
+      sourceTable: definition.source,
+      targetTable: definition.target,
+      type: definition.type || 'direct',
+      description: definition.description || 'No description provided'
+    }));
+  }
+
+  listDatasets() {
+    return Object.entries(this.datasets).map(([name, dataset]) => ({
+      name,
+      description: dataset.description || 'No description provided',
+      tables: dataset.tableSequence || Object.keys(dataset.tables || {}),
+      isDefault: name === this.defaultDataset
+    }));
+  }
+
+  getDefaultDataset() {
+    return this.defaultDataset;
+  }
+
+  getDatasetConfig(datasetName = this.defaultDataset) {
+    const dataset = this.datasets[datasetName];
+    if (!dataset) {
+      throw new Error(`Dataset "${datasetName}" is not defined in sync.config.json`);
+    }
+    return dataset;
+  }
+
+  getTableDefinition(tableName) {
+    const definition = this.tableDefinitions[tableName];
+    if (!definition) {
+      throw new Error(`Table "${tableName}" is not defined in sync.config.json`);
+    }
+    return definition;
+  }
+
   async testConnection() {
     console.log('🔍 Testing Azure Synapse connection...');
-    console.log(`   Server: ${this.config.server}`);
-    console.log(`   Database: ${this.config.database}`);
-    console.log(`   User: ${this.config.user}`);
-    
+    console.log(`   Server: ${this.synapseConfig.server}`);
+    console.log(`   Database: ${this.synapseConfig.database}`);
+    console.log(`   User: ${this.synapseConfig.user}`);
+
     try {
-      const pool = await sql.connect(this.config);
+      const pool = await sql.connect(this.synapseConfig);
       console.log('✅ Successfully connected to Azure Synapse');
-      
-      // Test query to verify connection
       const result = await pool.request().query('SELECT 1 test');
       console.log(`✅ Test query successful: ${result.recordset[0].test}`);
-      
       await pool.close();
       return true;
     } catch (error) {
@@ -143,13 +101,9 @@ class SynapseSyncService {
     }
   }
 
-  /**
-   * Create a new connection pool to Azure Synapse
-   * @returns {Promise<sql.Connection>} Connection pool
-   */
   async createConnection() {
     try {
-      const pool = await sql.connect(this.config);
+      const pool = await sql.connect(this.synapseConfig);
       return pool;
     } catch (error) {
       console.error('❌ Failed to create connection:', error.message);
@@ -157,25 +111,19 @@ class SynapseSyncService {
     }
   }
 
-  /**
-   * Execute a query on Azure Synapse
-   * @param {string} query - SQL query to execute
-   * @param {Object} pool - Connection pool (optional, will create if not provided)
-   * @returns {Promise<Object>} Query result
-   */
   async executeQuery(query, pool = null) {
     let shouldClosePool = false;
-    
+
     try {
       if (!pool) {
         pool = await this.createConnection();
         shouldClosePool = true;
       }
-      
+
       console.log(`📊 Executing query: ${query.substring(0, 100)}...`);
       const result = await pool.request().query(query);
       console.log(`✅ Query executed successfully: ${result.recordset.length} rows returned`);
-      
+
       return result;
     } catch (error) {
       console.error('❌ Query execution failed:', error.message);
@@ -187,79 +135,157 @@ class SynapseSyncService {
     }
   }
 
-  /**
-   * Test a specific table query
-   * @param {string} tableName - Name of the table to test
-   * @returns {Promise<Object>} Test result
-   */
-  async testTableQuery(tableName) {
-    const config = this.getTableConfig(tableName);
-    if (!config) {
-      throw new Error(`Table ${tableName} not configured for sync`);
+  buildWhereClause(filters = []) {
+    if (!filters.length) {
+      return '';
     }
 
-    console.log(`🧪 Testing query for table: ${tableName}`);
-    console.log(`   Source: ${config.sourceTable}`);
-    console.log(`   Constraints: ${config.constraints.join(', ') || 'None'}`);
+    const clauses = filters.map(filter => {
+      const column = filter.column;
+      switch (filter.operator) {
+        case 'between':
+          return `${column} BETWEEN '${filter.from}' AND '${filter.to}'`;
+        case 'gte':
+          return `${column} >= '${filter.value}'`;
+        case 'lte':
+          return `${column} <= '${filter.value}'`;
+        case 'equals':
+          return `${column} = '${filter.value}'`;
+        case 'in':
+          return `${column} IN (${filter.values.map(v => `'${v}'`).join(', ')})`;
+        default:
+          throw new Error(`Unsupported filter operator "${filter.operator}" for column ${column}`);
+      }
+    });
 
-    try {
-      // Modify query to get count only for testing
-      const testQuery = config.query.replace(/SELECT.*FROM/, 'SELECT COUNT(*) record_count FROM');
-      
-      const result = await this.executeQuery(testQuery);
-      const count = result.recordset[0].record_count;
-      
-      console.log(`✅ Table test successful: ${count} records found`);
-      return {
-        tableName,
-        recordCount: count,
-        success: true
-      };
-    } catch (error) {
-      console.error(`❌ Table test failed for ${tableName}:`, error.message);
-      return {
-        tableName,
-        error: error.message,
-        success: false
-      };
+    return clauses.join(' AND ');
+  }
+
+  buildRuntimeConfig(tableName, datasetName = this.defaultDataset) {
+    const definition = this.getTableDefinition(tableName);
+    const dataset = this.getDatasetConfig(datasetName);
+    const datasetTables = dataset.tables || {};
+    const overrides = datasetTables[tableName] || {};
+
+    const filters = [
+      ...(definition.defaultFilters || []),
+      ...(overrides.filters || [])
+    ];
+
+    const whereClause = this.buildWhereClause(filters);
+    const columnsSql = definition.columns?.join(', ') || '*';
+    const selectQuery = `SELECT ${columnsSql} FROM ${definition.source}${whereClause ? ` WHERE ${whereClause}` : ''}`;
+
+    const replace = overrides.replace || definition.defaultReplace || null;
+
+    let dateRange = null;
+    if (replace?.from && replace?.to) {
+      dateRange = { from: replace.from, to: replace.to };
+    } else {
+      const betweenFilter = filters.find(filter => filter.operator === 'between');
+      if (betweenFilter?.from && betweenFilter?.to) {
+        dateRange = { from: betweenFilter.from, to: betweenFilter.to };
+      }
     }
+
+    return {
+      tableName,
+      datasetName,
+      type: definition.type || 'direct',
+      source: definition.source,
+      targetTable: definition.target,
+      columnsSql,
+      whereClause,
+      selectQuery,
+      replace,
+      definition,
+      overrides,
+      transformKey: definition.transformKey || tableName,
+      isLargeDataset: Boolean(definition.isLargeDataset),
+      rowNumberOrder: definition.rowNumberOrder || [],
+      dateColumn: definition.dateColumn,
+      supabaseDateColumn: definition.supabaseDateColumn,
+      dateRange
+    };
   }
 
-  /**
-   * Get sync configuration for a specific table
-   * @param {string} tableName - Name of the table
-   * @returns {Object|null} Table configuration or null if not found
-   */
-  getTableConfig(tableName) {
-    return this.syncConfig.tables[tableName] || null;
+  buildCountQuery(runtime) {
+    return `SELECT COUNT(*) as total FROM ${runtime.source}${runtime.whereClause ? ` WHERE ${runtime.whereClause}` : ''}`;
   }
 
-  /**
-   * List all configured tables for sync
-   * @returns {Array} Array of table configurations
-   */
-  listConfiguredTables() {
-    return Object.entries(this.syncConfig.tables).map(([name, config]) => ({
-      name,
-      sourceTable: config.sourceTable,
-      targetTable: config.targetTable,
-      constraints: config.constraints,
-      description: config.description
-    }));
+  buildRowNumberQuery(runtime) {
+    const order = runtime.rowNumberOrder.length
+      ? runtime.rowNumberOrder.join(', ')
+      : '[Res_ID]';
+
+    return `
+      SELECT ${runtime.columnsSql}, ROW_NUMBER() OVER (ORDER BY ${order}) as rn
+      FROM ${runtime.source}
+      ${runtime.whereClause ? `WHERE ${runtime.whereClause}` : ''}
+    `;
   }
 
-  /**
-   * Transform data from Synapse format to Supabase format
-   * @param {string} tableName - Name of the table being transformed
-   * @param {Array} data - Raw data from Synapse
-   * @returns {Array} Transformed data for Supabase
-   */
-  transformData(tableName, data) {
-    console.log(`🔄 Transforming ${data.length} records for ${tableName}...`);
-    
+  buildBatchQuery(runtime, offset, batchSize) {
+    const rowNumberQuery = this.buildRowNumberQuery(runtime);
+    return `
+      SELECT *
+      FROM (
+        ${rowNumberQuery}
+      ) AS numbered
+      WHERE rn > ${offset} AND rn <= ${offset + batchSize}
+      ORDER BY rn
+    `;
+  }
+
+  async applyReplaceStrategy(runtime) {
+    const replace = runtime.replace;
+    if (!replace || replace.strategy === 'none') {
+      console.log(`ℹ️  No replace strategy configured for ${runtime.targetTable}. Existing data will remain.`);
+      return;
+    }
+
+    const table = runtime.targetTable;
+    console.log(`🗑️  Applying replace strategy (${replace.strategy}) on ${table}...`);
+
+    switch (replace.strategy) {
+      case 'delete-all': {
+        const column = replace.column || 'id';
+        const { error } = await supabaseDataService.client
+          .from(table)
+          .delete()
+          .not(column, 'is', null);
+        if (error) {
+          throw new Error(`Failed to delete all rows from ${table}: ${error.message}`);
+        }
+        break;
+      }
+      case 'delete-range': {
+        if (!replace.column || !replace.from || !replace.to) {
+          throw new Error(`delete-range strategy for ${table} requires column, from, and to values`);
+        }
+
+        const { error } = await supabaseDataService.client
+          .from(table)
+          .delete()
+          .gte(replace.column, replace.from)
+          .lte(replace.column, replace.to);
+        if (error) {
+          throw new Error(`Failed to delete rows in ${table} between ${replace.from} and ${replace.to}: ${error.message}`);
+        }
+        break;
+      }
+      default:
+        throw new Error(`Unsupported replace strategy "${replace.strategy}" for table ${table}`);
+    }
+
+    console.log(`✅ Replace strategy applied on ${table}`);
+  }
+
+  transformData(transformKey, data) {
+    console.log(`🔄 Transforming ${data.length} records for ${transformKey}...`);
     const currentTime = new Date().toISOString();
-    
-    switch (tableName) {
+
+    switch (transformKey) {
       case 'ships':
         return data.map(row => ({
           ship_id: row.Ship_Id,
@@ -353,62 +379,64 @@ class SynapseSyncService {
           created_at: currentTime
         }));
 
+      case 'masterSail':
+        return data.map(row => ({
+          sail_id: row.Sail_ID,
+          ship_code: row.Ship_Code,
+          ship_name: row.Ship_Name,
+          sail_date_from: row.Sail_Date_From,
+          port_from: row.Port_From,
+          sail_date_to: row.Sail_Date_To,
+          port_to: row.Port_To,
+          package_id: row.Package_ID,
+          package_type: row.Package_Type,
+          sail_code: row.Sail_Code,
+          package_name: row.Package_Name,
+          sail_days: row.Sail_Days,
+          geog_area_code: row.Geog_Area_Code,
+          vacation_date: row.Vacation_Date,
+          season_code: row.Season_Code,
+          is_fake: row.IS_Fake,
+          is_active: row.IS_Active,
+          is_package_active: row.IS_Package_Active,
+          master_voyage_departure_date: row.Master_Voyage_Departure_Date,
+          master_voyage1: row.Master_Voyage1,
+          master_voyage1_length: row.Master_Voyage1_Length,
+          master_voyage1_sail_days: row.Master_Voyage1_Sail_Days,
+          master_voyage2: row.Master_Voyage2,
+          master_voyage2_length: row.Master_Voyage2_Length,
+          master_voyage2_sail_days: row.Master_Voyage2_Sail_Days,
+          is_main: row.IS_Main,
+          is_primary: row.IS_Primary,
+          created_at: currentTime
+        }));
+
       default:
-        console.warn(`⚠️  No transformation defined for table: ${tableName}`);
+        console.warn(`⚠️  No transformation defined for key: ${transformKey}`);
         return data;
     }
   }
 
-  /**
-   * Clear target table in Supabase (ONE WAY SYNC - replace, don't merge)
-   * @param {string} tableName - Name of the target table
-   * @returns {Promise<void>}
-   */
-  async clearTargetTable(tableName) {
-    try {
-      console.log(`🗑️  Clearing existing data in ${tableName}...`);
-      
-      const { error } = await supabaseDataService.client
-        .from(tableName)
-        .delete()
-        .gte('id', 0); // Delete all records (id is always >= 0)
-      
-      if (error) throw error;
-      
-      console.log(`✅ Cleared existing data in ${tableName}`);
-    } catch (error) {
-      console.error(`❌ Failed to clear ${tableName}:`, error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Insert transformed data into Supabase
-   * @param {string} tableName - Name of the target table
-   * @param {Array} data - Transformed data to insert
-   * @returns {Promise<void>}
-   */
   async insertData(tableName, data) {
     try {
       console.log(`📥 Inserting ${data.length} records into ${tableName}...`);
-      
-      // Insert in batches to avoid memory issues with large datasets
+
       const batchSize = 1000;
       let insertedCount = 0;
-      
+
       for (let i = 0; i < data.length; i += batchSize) {
         const batch = data.slice(i, i + batchSize);
-        
+
         const { error } = await supabaseDataService.client
           .from(tableName)
           .insert(batch);
-        
+
         if (error) throw error;
-        
+
         insertedCount += batch.length;
         console.log(`   📊 Inserted ${insertedCount}/${data.length} records...`);
       }
-      
+
       console.log(`✅ Successfully inserted ${insertedCount} records into ${tableName}`);
     } catch (error) {
       console.error(`❌ Failed to insert into ${tableName}:`, error.message);
@@ -416,53 +444,21 @@ class SynapseSyncService {
     }
   }
 
-  /**
-   * Sync a specific table from Synapse to Supabase
-   * @param {string} tableName - Name of the table to sync
-   * @returns {Promise<Object>} Sync result
-   */
-  async syncTable(tableName) {
-    const config = this.getTableConfig(tableName);
-    if (!config) {
-      throw new Error(`Table ${tableName} not configured for sync`);
-    }
-
-    console.log(`🔄 Starting sync for table: ${tableName}`);
-    console.log(`   Source: ${config.sourceTable}`);
-    console.log(`   Target: ${config.targetTable}`);
-    console.log(`   Constraints: ${config.constraints.join(', ') || 'None'}`);
-
-    // Check if this is a large dataset that needs streaming
-    const isLargeDataset = tableName === 'reservations';
-    
-    if (isLargeDataset) {
-      return await this.syncLargeTable(tableName, config);
-    } else {
-      return await this.syncSmallTable(tableName, config);
-    }
-  }
-
-  /**
-   * Sync small/medium tables (load all data into memory)
-   */
-  async syncSmallTable(tableName, config) {
+  async syncSmallTable(runtime) {
     const startTime = Date.now();
     let pool = null;
 
     try {
-      // 1. Connect to Synapse
       pool = await this.createConnection();
-      console.log(`✅ Connected to Synapse for ${tableName}`);
+      console.log(`✅ Connected to Synapse for ${runtime.tableName}`);
 
-      // 2. Fetch data from Synapse
-      console.log(`📊 Fetching data from ${config.sourceTable}...`);
-      const result = await pool.request().query(config.query);
+      const result = await pool.request().query(runtime.selectQuery);
       const rawData = result.recordset;
-      
+
       if (rawData.length === 0) {
-        console.log(`⚠️  No data found for ${tableName} with current constraints`);
+        console.log(`⚠️  No data found for ${runtime.tableName} with current constraints`);
         return {
-          tableName,
+          tableName: runtime.tableName,
           success: true,
           recordsProcessed: 0,
           duration: Date.now() - startTime,
@@ -472,21 +468,18 @@ class SynapseSyncService {
 
       console.log(`📥 Fetched ${rawData.length} records from Synapse`);
 
-      // 3. Transform data
-      const transformedData = this.transformData(tableName, rawData);
+      const transformedData = this.transformData(runtime.transformKey, rawData);
       console.log(`🔄 Transformed ${transformedData.length} records`);
 
-      // 4. Clear target table (ONE WAY SYNC)
-      await this.clearTargetTable(config.targetTable);
+      await this.applyReplaceStrategy(runtime);
 
-      // 5. Insert data into Supabase
-      await this.insertData(config.targetTable, transformedData);
+      await this.insertData(runtime.targetTable, transformedData);
 
       const duration = Date.now() - startTime;
-      console.log(`✅ Sync completed for ${tableName} in ${duration}ms`);
+      console.log(`✅ Sync completed for ${runtime.tableName} in ${duration}ms`);
 
       return {
-        tableName,
+        tableName: runtime.tableName,
         success: true,
         recordsProcessed: transformedData.length,
         duration,
@@ -494,9 +487,9 @@ class SynapseSyncService {
       };
 
     } catch (error) {
-      console.error(`❌ Sync failed for ${tableName}:`, error.message);
+      console.error(`❌ Sync failed for ${runtime.tableName}:`, error.message);
       return {
-        tableName,
+        tableName: runtime.tableName,
         success: false,
         recordsProcessed: 0,
         duration: Date.now() - startTime,
@@ -509,72 +502,50 @@ class SynapseSyncService {
     }
   }
 
-  /**
-   * Sync large tables using streaming/batching to avoid memory issues
-   */
-  async syncLargeTable(tableName, config) {
+  async syncLargeTable(runtime) {
     const startTime = Date.now();
     let pool = null;
-    const BATCH_SIZE = 10000; // Process 10K records at a time
+    const BATCH_SIZE = 10000;
     let totalProcessed = 0;
 
     try {
-      // 1. Connect to Synapse
       pool = await this.createConnection();
-      console.log(`✅ Connected to Synapse for ${tableName}`);
+      console.log(`✅ Connected to Synapse for ${runtime.tableName}`);
 
-      // 2. Clear target table first (ONE WAY SYNC)
-      console.log(`🗑️  Clearing existing data in ${config.targetTable}...`);
-      await this.clearTargetTable(config.targetTable);
+      await this.applyReplaceStrategy(runtime);
 
-      // 3. Get total count first
-      console.log(`📊 Getting total record count from ${config.sourceTable}...`);
-      // Create a simple count query for reservations (September 2025 only)
-      const countQuery = `SELECT COUNT(*) as total FROM dwh.Fact_Reservation_History WHERE [Sail_From_Date] >= '2025-09-01' AND [Sail_From_Date] <= '2025-09-30'`;
-      
+      console.log(`📊 Getting total record count from ${runtime.source}...`);
+      const countQuery = this.buildCountQuery(runtime);
       const countResult = await pool.request().query(countQuery);
       const totalRecords = countResult.recordset[0].total;
       console.log(`📊 Total records to process: ${totalRecords.toLocaleString()}`);
 
-      // 4. Process in batches using ROW_NUMBER() for Azure Synapse compatibility
-      let offset = 0;
-      while (offset < totalRecords) {
-        const batchQuery = `
-          SELECT * FROM (
-            SELECT *, ROW_NUMBER() OVER (ORDER BY [Res_ID]) as rn
-            FROM (${config.query}) as subquery
-          ) as numbered
-          WHERE rn > ${offset} AND rn <= ${offset + BATCH_SIZE}
-        `;
-        
-        console.log(`📊 Processing batch ${Math.floor(offset/BATCH_SIZE) + 1}/${Math.ceil(totalRecords/BATCH_SIZE)} (${offset + 1}-${Math.min(offset + BATCH_SIZE, totalRecords)})...`);
-        
+      for (let offset = 0; offset < totalRecords; offset += BATCH_SIZE) {
+        const batchQuery = this.buildBatchQuery(runtime, offset, BATCH_SIZE);
+        console.log(`📊 Processing batch ${Math.floor(offset / BATCH_SIZE) + 1}/${Math.ceil(totalRecords / BATCH_SIZE)} (${offset + 1}-${Math.min(offset + BATCH_SIZE, totalRecords)})...`);
+
         const batchResult = await pool.request().query(batchQuery);
         const batchData = batchResult.recordset;
-        
-        if (batchData.length === 0) break;
-        
-        // Transform batch
-        const transformedBatch = this.transformData(tableName, batchData);
-        
-        // Insert batch
-        await this.insertData(config.targetTable, transformedBatch);
-        
+
+        if (!batchData.length) {
+          break;
+        }
+
+        const transformedBatch = this.transformData(runtime.transformKey, batchData);
+        await this.insertData(runtime.targetTable, transformedBatch);
+
         totalProcessed += batchData.length;
         console.log(`✅ Processed ${totalProcessed.toLocaleString()}/${totalRecords.toLocaleString()} records`);
-        
-        offset += BATCH_SIZE;
-        
-        // Small delay to prevent overwhelming the database
+
         await new Promise(resolve => setTimeout(resolve, 100));
       }
 
       const duration = Date.now() - startTime;
-      console.log(`✅ Sync completed for ${tableName} in ${duration}ms`);
+      console.log(`✅ Sync completed for ${runtime.tableName} in ${duration}ms`);
       console.log(`📊 Total records processed: ${totalProcessed.toLocaleString()}`);
 
       return {
-        tableName,
+        tableName: runtime.tableName,
         success: true,
         recordsProcessed: totalProcessed,
         duration,
@@ -582,9 +553,9 @@ class SynapseSyncService {
       };
 
     } catch (error) {
-      console.error(`❌ Sync failed for ${tableName}:`, error.message);
+      console.error(`❌ Sync failed for ${runtime.tableName}:`, error.message);
       return {
-        tableName,
+        tableName: runtime.tableName,
         success: false,
         recordsProcessed: totalProcessed,
         duration: Date.now() - startTime,
@@ -597,50 +568,103 @@ class SynapseSyncService {
     }
   }
 
-  /**
-   * Sync all configured tables from Synapse to Supabase
-   * @returns {Promise<Object>} Overall sync result
-   */
-  async syncAllTables() {
-    console.log('🚀 Starting full data sync from Synapse to Supabase...');
-    console.log(`📋 Tables to sync: ${Object.keys(this.syncConfig.tables).join(', ')}`);
-    console.log('');
+  async syncDerivedTable(runtime) {
+    switch (runtime.definition.handler) {
+      case 'reservationChanges': {
+        if (!runtime.dateRange) {
+          throw new Error('reservationChanges requires a date range in the configuration');
+        }
+
+        // Check if forceFullSync is requested (e.g., via CLI flag or config)
+        const forceFullSync = runtime.overrides?.forceFullSync || false;
+
+        const result = await syncReservationChanges({
+          synapseConfig: this.synapseConfig,
+          supabaseClient: supabaseDataService.client,
+          source: runtime.definition.source,
+          columns: runtime.definition.columns,
+          dateColumn: runtime.definition.dateColumn,
+          supabaseDateColumn: runtime.overrides.replace?.column || runtime.definition.supabaseDateColumn,
+          dateRange: runtime.dateRange,
+          targetTable: runtime.definition.target,
+          rowNumberOrder: runtime.definition.rowNumberOrder,
+          forceFullSync
+        });
+
+        return {
+          tableName: runtime.tableName,
+          success: result.success,
+          recordsProcessed: result.recordsProcessed || 0,
+          changesDetected: result.changesDetected || 0,
+          duration: null,
+          message: result.message
+        };
+      }
+      default:
+        throw new Error(`Unsupported derived table handler "${runtime.definition.handler}"`);
+    }
+  }
+
+  async syncTable(tableName, datasetName = this.defaultDataset, overrides = {}) {
+    const runtime = this.buildRuntimeConfig(tableName, datasetName);
+    
+    // Merge overrides into runtime config
+    if (overrides.forceFullSync !== undefined) {
+      runtime.overrides = { ...runtime.overrides, forceFullSync: overrides.forceFullSync };
+    }
+
+    console.log(`🔄 Starting sync for table: ${tableName} (dataset: ${datasetName})`);
+
+    if (runtime.type === 'derived') {
+      return await this.syncDerivedTable(runtime);
+    }
+
+    if (runtime.isLargeDataset) {
+      return await this.syncLargeTable(runtime);
+    }
+
+    return await this.syncSmallTable(runtime);
+  }
+
+  async syncDataset(datasetName = this.defaultDataset) {
+    if (!datasetName) {
+      throw new Error('No dataset specified and no default dataset available.');
+    }
+
+    const dataset = this.getDatasetConfig(datasetName);
+    const tableOrder = dataset.tableSequence || Object.keys(dataset.tables || {});
+
+    console.log(`🚀 Starting dataset sync: ${datasetName}`);
+    console.log(`📋 Tables: ${tableOrder.join(', ')}`);
 
     const startTime = Date.now();
     const results = [];
-    let totalRecords = 0;
     let successCount = 0;
+    let totalRecords = 0;
 
-    // Sync each table individually
-    for (const tableName of Object.keys(this.syncConfig.tables)) {
+    for (const tableName of tableOrder) {
       console.log(`\n${'='.repeat(60)}`);
-      const result = await this.syncTable(tableName);
+      const result = await this.syncTable(tableName, datasetName);
       results.push(result);
-      
+
       if (result.success) {
-        successCount++;
-        totalRecords += result.recordsProcessed;
+        successCount += 1;
+        totalRecords += result.recordsProcessed || 0;
       }
-      
+
       console.log(`${'='.repeat(60)}`);
     }
 
     const duration = Date.now() - startTime;
     const overallSuccess = successCount === results.length;
 
-    console.log('\n🎯 SYNC SUMMARY');
-    console.log('================');
+    console.log('\n🎯 DATASET SYNC SUMMARY');
+    console.log('========================');
+    console.log(`Dataset: ${datasetName}`);
     console.log(`✅ Successful tables: ${successCount}/${results.length}`);
     console.log(`📊 Total records processed: ${totalRecords.toLocaleString()}`);
-    console.log(`⏱️  Total duration: ${duration}ms (${(duration/1000).toFixed(1)}s)`);
-    
-    if (overallSuccess) {
-      console.log('🎉 All tables synced successfully!');
-    } else {
-      console.log('⚠️  Some tables failed to sync. Check individual results below.');
-    }
+    console.log(`⏱️  Total duration: ${duration}ms (${(duration / 1000).toFixed(1)}s)`);
 
-    console.log('\n📋 Individual Results:');
     results.forEach(result => {
       const status = result.success ? '✅' : '❌';
       console.log(`   ${status} ${result.tableName}: ${result.message || result.error}`);
@@ -648,6 +672,7 @@ class SynapseSyncService {
 
     return {
       success: overallSuccess,
+      dataset: datasetName,
       totalTables: results.length,
       successfulTables: successCount,
       totalRecords,
@@ -656,32 +681,60 @@ class SynapseSyncService {
     };
   }
 
-  /**
-   * Get sync status for all tables
-   * @returns {Promise<Object>} Status information
-   */
+  async syncAllTables() {
+    return this.syncDataset(this.defaultDataset);
+  }
+
+  async testTableQuery(tableName, datasetName = this.defaultDataset) {
+    const runtime = this.buildRuntimeConfig(tableName, datasetName);
+
+    if (runtime.type === 'derived') {
+      return {
+        tableName,
+        success: true,
+        message: 'Derived tables use specialised handlers and are not directly queryable.'
+      };
+    }
+
+    try {
+      const countQuery = this.buildCountQuery(runtime).replace('COUNT(*) as total', 'COUNT(*) as record_count');
+      const result = await this.executeQuery(countQuery);
+      const count = result.recordset[0].record_count;
+      return {
+        tableName,
+        recordCount: count,
+        success: true
+      };
+    } catch (error) {
+      return {
+        tableName,
+        error: error.message,
+        success: false
+      };
+    }
+  }
+
   async getSyncStatus() {
     console.log('📊 Checking sync status...');
-    
+
     const status = {};
-    
-    for (const [tableName, config] of Object.entries(this.syncConfig.tables)) {
+
+    for (const [tableName, definition] of Object.entries(this.tableDefinitions)) {
       try {
         const { data, error } = await supabaseDataService.client
-          .from(config.targetTable)
+          .from(definition.target)
           .select('created_at')
           .order('created_at', { ascending: false })
           .limit(1);
-        
+
         if (error) throw error;
-        
-        // Get total count
+
         const { count, error: countError } = await supabaseDataService.client
-          .from(config.targetTable)
+          .from(definition.target)
           .select('*', { count: 'exact', head: true });
-        
+
         if (countError) throw countError;
-        
+
         status[tableName] = {
           lastSync: data[0]?.created_at || 'Never',
           recordCount: count || 0,
@@ -696,10 +749,9 @@ class SynapseSyncService {
         };
       }
     }
-    
+
     return status;
   }
 }
 
-// Export singleton instance
 export const synapseSyncService = new SynapseSyncService();

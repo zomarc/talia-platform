@@ -1,29 +1,30 @@
 /**
- * Test Page for New Architecture Components
- * Access at: http://localhost:5173/test
- * 
- * This page demonstrates the new architecture patterns:
- * - Separated concerns (Container/Presenter)
- * - Custom hooks for data fetching
- * - Shared components (Loading, Error)
- * - Service layer
+ * Test Page for Component Testing
+ * Compact design with component selector, events, and information panels
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSailingData } from '../hooks/data/useSailingData';
-import SailingTableContainer from './focus-panels/SailingTable';
-import { LoadingSpinner, ErrorMessage, EventMonitor } from './shared';
+import { componentRegistry, getComponentsByCategory } from './TestPage/componentRegistry';
+import ComponentWrapper from './TestPage/ComponentWrapper';
+import EventMonitor from './shared/EventMonitor';
+import InformationPanel from './TestPage/InformationPanel';
+import { LoadingSpinner, ErrorMessage } from './shared';
+import queryTracker from '../services/data/queryTracker';
 
 const TestPage = () => {
-  // State for filters
+  // Component selection
+  const [selectedComponent, setSelectedComponent] = useState('SailingTable');
+  const [activeTab, setActiveTab] = useState('component');
+
+  // Filters for SailingTable
   const [limit, setLimit] = useState(100);
   const [filters, setFilters] = useState({ limit: 100 });
   const [sailCode, setSailCode] = useState('');
   const [shipName, setShipName] = useState('');
-  const [isFixedWidth, setIsFixedWidth] = useState(true);
-  const [showRawData, setShowRawData] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
-  // Use the new hook
+  // Data fetching
   const { 
     data: sailingData, 
     loading, 
@@ -31,7 +32,7 @@ const TestPage = () => {
     refetch 
   } = useSailingData(filters);
 
-  // Theme for components
+  // Theme
   const theme = {
     colors: {
       background: '#ffffff',
@@ -41,6 +42,23 @@ const TestPage = () => {
       sidebarHeader: '#f5efe6',
       accent: '#b08d57',
     }
+  };
+
+  // Component metadata
+  const componentMeta = componentRegistry[selectedComponent];
+  const Component = componentMeta?.component;
+  const componentFile = componentMeta?.filePath || 'Unknown';
+  const categories = getComponentsByCategory();
+
+  // Get component props based on selection
+  const getComponentProps = () => {
+    if (selectedComponent === 'SailingTable') {
+      return { filters, theme };
+    }
+    if (selectedComponent === 'SimpleTable' && sailingData) {
+      return { data: sailingData };
+    }
+    return {};
   };
 
   const handleLimitChange = (newLimit) => {
@@ -63,332 +81,394 @@ const TestPage = () => {
     setFilters({ limit: limit });
   };
 
+  const tabs = [
+    { id: 'component', label: 'Component' },
+    { id: 'events', label: 'Events' },
+    { id: 'information', label: 'Information' }
+  ];
+
+  // Get latest event and query info
+  const [latestEvent, setLatestEvent] = useState(null);
+  const [latestQuery, setLatestQuery] = useState(null);
+
+  // Listen for events
+  useEffect(() => {
+    const handleEvent = (event) => {
+      if (event instanceof CustomEvent) {
+        setLatestEvent({
+          name: event.type,
+          timestamp: new Date().toLocaleTimeString()
+        });
+      }
+    };
+    window.addEventListener('talia:sailing.select', handleEvent);
+    window.addEventListener('talia:sailing.clear', handleEvent);
+    window.addEventListener('talia:sail.select', handleEvent);
+    window.addEventListener('talia:sail.clear', handleEvent);
+    return () => {
+      window.removeEventListener('talia:sailing.select', handleEvent);
+      window.removeEventListener('talia:sailing.clear', handleEvent);
+      window.removeEventListener('talia:sail.select', handleEvent);
+      window.removeEventListener('talia:sail.clear', handleEvent);
+    };
+  }, []);
+
+  // Listen for queries
+  useEffect(() => {
+    const unsubscribe = queryTracker.subscribe((queries) => {
+      if (queries.length > 0) {
+        setLatestQuery(queries[0]);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
   return (
     <div style={{
-      padding: '20px',
+      padding: '12px',
       fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       background: '#f5f5f5',
       minHeight: '100vh'
     }}>
-      <div style={{
-        maxWidth: isFixedWidth ? '1400px' : '100%',
-        margin: isFixedWidth ? '0 auto' : '0'
-      }}>
-        {/* Header */}
+      <div style={{ maxWidth: '100%', margin: '0 auto' }}>
+        {/* Compact Header */}
         <div style={{
           background: 'white',
-          padding: '24px',
+          padding: '12px 16px',
           borderRadius: '8px',
-          marginBottom: '20px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          marginBottom: '12px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
         }}>
-          <h1 style={{ margin: '0 0 8px 0', color: '#2b2b2b' }}>
-            🧪 New Architecture Test Page
-          </h1>
-          <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
-            Testing the refactored components with separated concerns and custom hooks
-          </p>
-        </div>
-
-        {/* Configuration Section with Event Monitor Side-by-Side */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '2fr 1fr',
-          gap: '20px',
-          marginBottom: '20px'
-        }}>
-          {/* Left: Configuration */}
-          <div style={{
-            background: 'white',
-            padding: '20px',
-            borderRadius: '8px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-          }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600' }}>
-              Configuration
-            </h3>
-          
-          {/* Width Toggle */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            marginBottom: '16px',
-            padding: '12px',
-            background: '#f5f5f5',
-            borderRadius: '4px'
-          }}>
-            <label style={{ fontSize: '14px', fontWeight: '500', color: '#666' }}>
-              Layout Width:
-            </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                onClick={() => setIsFixedWidth(true)}
-                style={{
-                  padding: '6px 12px',
-                  background: isFixedWidth ? '#b08d57' : '#e0e0e0',
-                  color: isFixedWidth ? 'white' : '#333',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: '500'
-                }}
-              >
-                Fixed (1400px)
-              </button>
-              <button
-                onClick={() => setIsFixedWidth(false)}
-                style={{
-                  padding: '6px 12px',
-                  background: !isFixedWidth ? '#b08d57' : '#e0e0e0',
-                  color: !isFixedWidth ? 'white' : '#333',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: '500'
-                }}
-              >
-                Max Width (100%)
-              </button>
-            </div>
-          </div>
-
-          <h3 style={{ margin: '16px 0', fontSize: '14px', fontWeight: '600', color: '#666' }}>
-            Data Filters
-          </h3>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '12px',
-            marginBottom: '16px'
-          }}>
-            <div>
-              <label style={{
-                display: 'block',
-                fontSize: '12px',
-                color: '#666',
-                marginBottom: '4px',
-                fontWeight: '500'
-              }}>
-                Sail Code
-              </label>
-              <input
-                type="text"
-                value={sailCode}
-                onChange={(e) => setSailCode(e.target.value)}
-                placeholder="Filter by sail code..."
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-            <div>
-              <label style={{
-                display: 'block',
-                fontSize: '12px',
-                color: '#666',
-                marginBottom: '4px',
-                fontWeight: '500'
-              }}>
-                Ship Name
-              </label>
-              <input
-                type="text"
-                value={shipName}
-                onChange={(e) => setShipName(e.target.value)}
-                placeholder="Filter by ship name..."
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-            <div>
-              <label style={{
-                display: 'block',
-                fontSize: '12px',
-                color: '#666',
-                marginBottom: '4px',
-                fontWeight: '500'
-              }}>
-                Limit
-              </label>
-              <input
-                type="number"
-                value={limit}
-                onChange={(e) => handleLimitChange(parseInt(e.target.value) || 100)}
-                min="10"
-                max="1000"
-                step="10"
-                placeholder="Number of records..."
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button
-              onClick={handleApplyFilters}
-              style={{
-                padding: '10px 20px',
-                background: '#b08d57',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500'
-              }}
-            >
-              Apply Filters
-            </button>
-            <button
-              onClick={handleClearFilters}
-              style={{
-                padding: '10px 20px',
-                background: '#e0e0e0',
-                color: '#333',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
-            >
-              Clear
-            </button>
-            <button
-              onClick={refetch}
-              style={{
-                padding: '10px 20px',
-                background: '#e0e0e0',
-                color: '#333',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
-            >
-              ↻ Refresh Data
-            </button>
-          </div>
-          </div>
-
-          {/* Right: Compact Event Monitor */}
           <div>
-            <EventMonitor />
+            <h1 style={{ margin: 0, fontSize: '18px', color: '#2b2b2b' }}>
+              🧪 Component Test Page
+            </h1>
+            <p style={{ margin: '4px 0 0 0', color: '#666', fontSize: '12px' }}>
+              Test and inspect components with real-time monitoring
+            </p>
           </div>
         </div>
 
-        {/* Raw Data Button */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          marginBottom: '20px'
-        }}>
-          <div></div>
-          <button
-            onClick={() => setShowRawData(!showRawData)}
-            style={{
-              padding: '8px 16px',
-              background: '#e0e0e0',
-              color: '#333',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '13px'
-            }}
-          >
-            {showRawData ? '▼ Hide' : '▶ Show'} Raw Data
-          </button>
-        </div>
-
-        {/* Raw Data Preview - Collapsible */}
-        {showRawData && (
-          <div style={{
-            background: 'white',
-            padding: '20px',
-            borderRadius: '8px',
-            marginBottom: '20px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-          }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600' }}>
-              Raw Data (for debugging)
-            </h3>
-
-            {loading && (
-              <LoadingSpinner 
-                size="small" 
-                message="Loading sailing data..." 
-              />
-            )}
-            
-            {error && (
-              <ErrorMessage 
-                error={error} 
-                title="Error loading data"
-                onRetry={refetch}
-              />
-            )}
-            
-            {!loading && !error && sailingData && (
-              <div style={{ fontSize: '13px' }}>
-                <p style={{ color: '#666', marginBottom: '8px' }}>
-                  Records loaded: <strong>{sailingData.length}</strong>
-                </p>
-                <pre style={{
-                  background: '#f5f5f5',
-                  padding: '16px',
-                  borderRadius: '4px',
-                  overflow: 'auto',
-                  maxHeight: '300px',
-                  fontSize: '12px'
-                }}>
-                  {JSON.stringify(sailingData.slice(0, 5), null, 2)}
-                </pre>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Sailing Table Component */}
+        {/* Summary Bar */}
         <div style={{
           background: 'white',
-          padding: '20px',
+          padding: '8px 16px',
           borderRadius: '8px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          marginBottom: '12px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          display: 'flex',
+          gap: '24px',
+          alignItems: 'center',
+          fontSize: '11px',
+          borderLeft: '3px solid #b08d57'
         }}>
-          <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600' }}>
-            New SailingTable Component
-          </h3>
-          
-          <div style={{ 
-            height: '600px',
-            border: '1px solid #e0e0e0',
-            borderRadius: '4px',
-            overflow: 'hidden'
-          }}>
-            {!loading && !error && (
-              <SailingTableContainer 
-                filters={filters}
-                theme={theme}
-              />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ color: '#666', fontWeight: '500' }}>Source:</span>
+            <span style={{ color: '#333', fontFamily: 'monospace' }}>{componentFile}</span>
+          </div>
+          <div style={{ width: '1px', height: '20px', background: '#e0e0e0' }}></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ color: '#666', fontWeight: '500' }}>Latest Event:</span>
+            <span style={{ color: latestEvent ? '#b08d57' : '#999' }}>
+              {latestEvent ? `${latestEvent.name} (${latestEvent.timestamp})` : 'None'}
+            </span>
+          </div>
+          <div style={{ width: '1px', height: '20px', background: '#e0e0e0' }}></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ color: '#666', fontWeight: '500' }}>Data Source:</span>
+            <span style={{ color: '#333', fontFamily: 'monospace' }}>
+              http://localhost:4000/graphql
+            </span>
+            {latestQuery && (
+              <span style={{ color: '#4caf50', marginLeft: '4px' }}>
+                ({Math.round(latestQuery.duration || 0)}ms)
+              </span>
             )}
           </div>
+        </div>
+
+        {/* Tabs */}
+        <div style={{
+          display: 'flex',
+          background: 'white',
+          borderRadius: '8px 8px 0 0',
+          borderBottom: '1px solid #e0e0e0',
+          padding: '0 12px'
+        }}>
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                padding: '10px 16px',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: activeTab === tab.id ? '2px solid #b08d57' : '2px solid transparent',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: activeTab === tab.id ? '600' : '400',
+                color: activeTab === tab.id ? '#b08d57' : '#666',
+                marginRight: '8px'
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        <div style={{
+          background: 'white',
+          borderRadius: '0 0 8px 8px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          minHeight: '600px'
+        }}>
+          {/* Component Tab */}
+          {activeTab === 'component' && (
+            <div style={{ padding: '12px' }}>
+              {/* Component Selector */}
+              <div style={{
+                display: 'flex',
+                gap: '12px',
+                marginBottom: '12px',
+                alignItems: 'center'
+              }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '11px',
+                    color: '#666',
+                    marginBottom: '4px',
+                    fontWeight: '500'
+                  }}>
+                    Component
+                  </label>
+                  <select
+                    value={selectedComponent}
+                    onChange={(e) => setSelectedComponent(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      fontSize: '13px',
+                      background: 'white'
+                    }}
+                  >
+                    {Object.entries(categories).map(([category, components]) => (
+                      <optgroup key={category} label={category}>
+                        {components.map(comp => (
+                          <option key={comp.name} value={comp.name}>
+                            {comp.name} - {comp.description}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  style={{
+                    padding: '6px 12px',
+                    background: showFilters ? '#b08d57' : '#e0e0e0',
+                    color: showFilters ? 'white' : '#333',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    alignSelf: 'flex-end',
+                    marginTop: '20px'
+                  }}
+                >
+                  {showFilters ? '▼' : '▶'} Filters
+                </button>
+              </div>
+
+              {/* Collapsible Filters */}
+              {showFilters && (
+                <div style={{
+                  padding: '12px',
+                  background: '#f9f9f9',
+                  borderRadius: '4px',
+                  marginBottom: '12px'
+                }}>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                    gap: '8px',
+                    marginBottom: '8px'
+                  }}>
+                    <div>
+                      <label style={{
+                        display: 'block',
+                        fontSize: '11px',
+                        color: '#666',
+                        marginBottom: '4px',
+                        fontWeight: '500'
+                      }}>
+                        Sail Code
+                      </label>
+                      <input
+                        type="text"
+                        value={sailCode}
+                        onChange={(e) => setSailCode(e.target.value)}
+                        placeholder="Filter by sail code..."
+                        style={{
+                          width: '100%',
+                          padding: '6px',
+                          border: '1px solid #ddd',
+                          borderRadius: '4px',
+                          fontSize: '12px'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{
+                        display: 'block',
+                        fontSize: '11px',
+                        color: '#666',
+                        marginBottom: '4px',
+                        fontWeight: '500'
+                      }}>
+                        Ship Name
+                      </label>
+                      <input
+                        type="text"
+                        value={shipName}
+                        onChange={(e) => setShipName(e.target.value)}
+                        placeholder="Filter by ship name..."
+                        style={{
+                          width: '100%',
+                          padding: '6px',
+                          border: '1px solid #ddd',
+                          borderRadius: '4px',
+                          fontSize: '12px'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{
+                        display: 'block',
+                        fontSize: '11px',
+                        color: '#666',
+                        marginBottom: '4px',
+                        fontWeight: '500'
+                      }}>
+                        Limit
+                      </label>
+                      <input
+                        type="number"
+                        value={limit}
+                        onChange={(e) => handleLimitChange(parseInt(e.target.value) || 100)}
+                        min="10"
+                        max="1000"
+                        step="10"
+                        style={{
+                          width: '100%',
+                          padding: '6px',
+                          border: '1px solid #ddd',
+                          borderRadius: '4px',
+                          fontSize: '12px'
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={handleApplyFilters}
+                      style={{
+                        padding: '6px 12px',
+                        background: '#b08d57',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: '500'
+                      }}
+                    >
+                      Apply
+                    </button>
+                    <button
+                      onClick={handleClearFilters}
+                      style={{
+                        padding: '6px 12px',
+                        background: '#e0e0e0',
+                        color: '#333',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      Clear
+                    </button>
+                    <button
+                      onClick={refetch}
+                      style={{
+                        padding: '6px 12px',
+                        background: '#e0e0e0',
+                        color: '#333',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      ↻ Refresh
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Component Render Area */}
+              <div style={{
+                border: '1px solid #e0e0e0',
+                borderRadius: '4px',
+                padding: '12px',
+                minHeight: '500px',
+                background: '#fafafa'
+              }}>
+                {loading && selectedComponent === 'SailingTable' && (
+                  <LoadingSpinner size="small" message="Loading data..." />
+                )}
+                {error && selectedComponent === 'SailingTable' && (
+                  <ErrorMessage error={error} title="Error loading data" onRetry={refetch} />
+                )}
+                {Component && (
+                  <ComponentWrapper
+                    componentName={selectedComponent}
+                    Component={Component}
+                    props={getComponentProps()}
+                    theme={theme}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Events Tab */}
+          {activeTab === 'events' && (
+            <div style={{ padding: '12px', height: '600px' }}>
+              <div style={{ marginBottom: '12px', fontSize: '12px', color: '#666' }}>
+                Showing events for: <strong>{selectedComponent}</strong>
+              </div>
+              <EventMonitor componentFilter={selectedComponent} />
+            </div>
+          )}
+
+          {/* Information Tab */}
+          {activeTab === 'information' && (
+            <div style={{ height: '600px' }}>
+              <InformationPanel 
+                selectedComponent={selectedComponent}
+                performanceData={null} // Will be passed from ComponentWrapper if needed
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -396,4 +476,3 @@ const TestPage = () => {
 };
 
 export default TestPage;
-

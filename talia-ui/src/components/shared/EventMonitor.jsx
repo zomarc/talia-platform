@@ -1,114 +1,115 @@
 /**
  * Event Monitor Component
  * Displays all custom events being dispatched in real-time
+ * Enhanced with filtering, export, and grouping
  */
 
 import React, { useState, useEffect } from 'react';
 
-const EventMonitor = () => {
+const EventMonitor = ({ componentFilter = null }) => {
   const [events, setEvents] = useState([]);
   const [isPaused, setIsPaused] = useState(false);
+  const [filter, setFilter] = useState('');
+  const [grouped, setGrouped] = useState(false);
 
-  useEffect(() => {
-    const eventListener = (event) => {
-      // Only capture events that include "talia" in the name
-      if (event.type.toLowerCase().includes('talia')) {
-        if (!isPaused) {
-          const timestamp = new Date().toLocaleTimeString();
-          setEvents(prev => [
-            {
-              name: event.type,
-              detail: event.detail,
-              timestamp,
-              fullEvent: event
-            },
-            ...prev
-          ].slice(0, 50)); // Keep last 50 events
-        }
-      }
-    };
-
-    // Listen for ALL events on the window (intercepting custom events)
-    // We'll catch any event type and filter for 'talia'
-    const eventTypes = Object.keys(window).filter(key => key.startsWith('on'));
-    
-    // Add a universal event listener by patching addEventListener
-    const originalAddEventListener = window.addEventListener;
-    window.addEventListener = function(type, listener, options) {
-      // Call original
-      const result = originalAddEventListener.call(window, type, listener, options);
-      
-      // Also add our listener
-      originalAddEventListener.call(window, type, (e) => {
-        eventListener(e);
-      }, options);
-      
-      return result;
-    };
-
-    // Also listen using document events
-    document.addEventListener('click', eventListener, true);
-    document.addEventListener('change', eventListener, true);
-    document.addEventListener('input', eventListener, true);
-
-    return () => {
-      // Restore original
-      window.addEventListener = originalAddEventListener;
-      document.removeEventListener('click', eventListener, true);
-      document.removeEventListener('change', eventListener, true);
-      document.removeEventListener('input', eventListener, true);
-    };
-  }, [isPaused]);
-
-  // Use MutationObserver to catch CustomEvents
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      // This will catch events through observation
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-
-    return () => observer.disconnect();
-  }, []);
-
-  // Universal event capture
+  // Intercept dispatchEvent to catch ALL custom events - this is the primary capture mechanism
   useEffect(() => {
     const captureEvent = (event) => {
-      // Only capture custom events with 'talia' in the name
-      if (event.type && event.type.toLowerCase().includes('talia')) {
-        if (!isPaused) {
-          const timestamp = new Date().toLocaleTimeString();
-          setEvents(prev => [
-            {
-              name: event.type,
-              detail: event.detail,
-              timestamp,
-              fullEvent: event
-            },
-            ...prev
-          ].slice(0, 50));
-        }
+      // Capture all CustomEvents, especially those with 'talia' in the name
+      if (event instanceof CustomEvent && !isPaused) {
+        const timestamp = new Date().toLocaleTimeString();
+        console.log('[EventMonitor] Captured event:', event.type, event.detail);
+        setEvents(prev => [
+          {
+            name: event.type,
+            detail: event.detail,
+            timestamp,
+            fullEvent: event
+          },
+          ...prev
+        ].slice(0, 100));
       }
     };
 
-    // Try to catch all window custom events by overriding dispatchEvent
+    // Override dispatchEvent to catch all custom events before they're dispatched
     const originalDispatchEvent = window.dispatchEvent.bind(window);
     window.dispatchEvent = function(event) {
       captureEvent(event);
       return originalDispatchEvent(event);
     };
 
+    // Also listen directly for talia events as a backup
+    const eventTypes = [
+      'talia:sail.select',
+      'talia:sail.clear',
+      'talia:sailing.select',
+      'talia:sailing.clear',
+      'publishedRatesSelect',
+      'publishedRatesClear',
+      'sailingCabinSelect',
+      'sailingCabinClear'
+    ];
+
+    const directListener = (event) => {
+      if (!isPaused) {
+        const timestamp = new Date().toLocaleTimeString();
+        console.log('[EventMonitor] Direct listener caught:', event.type, event.detail);
+        setEvents(prev => [
+          {
+            name: event.type,
+            detail: event.detail,
+            timestamp,
+            fullEvent: event
+          },
+          ...prev
+        ].slice(0, 100));
+      }
+    };
+
+    eventTypes.forEach(eventType => {
+      window.addEventListener(eventType, directListener, true);
+    });
+
     return () => {
       window.dispatchEvent = originalDispatchEvent;
+      eventTypes.forEach(eventType => {
+        window.removeEventListener(eventType, directListener, true);
+      });
     };
   }, [isPaused]);
 
   const clearEvents = () => {
     setEvents([]);
   };
+
+  const exportEvents = () => {
+    const dataStr = JSON.stringify(events, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `events-${new Date().toISOString()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Filter events by component if specified, and by text filter
+  const filteredEvents = events.filter(e => {
+    // Component filter: show all events (component-specific filtering can be added later)
+    const matchesFilter = !filter || e.name.toLowerCase().includes(filter.toLowerCase());
+    return matchesFilter;
+  });
+
+  const groupedEvents = grouped
+    ? filteredEvents.reduce((acc, event) => {
+        const key = event.name;
+        if (!acc[key]) {
+          acc[key] = [];
+        }
+        acc[key].push(event);
+        return acc;
+      }, {})
+    : null;
 
   return (
     <div style={{
@@ -120,49 +121,96 @@ const EventMonitor = () => {
       display: 'flex',
       flexDirection: 'column'
     }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '8px'
-      }}>
-        <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '600' }}>
-          📡 Events
-        </h4>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => setIsPaused(!isPaused)}
-            style={{
-              padding: '2px 6px',
-              background: isPaused ? '#999' : '#f44336',
-              color: 'white',
-              border: 'none',
-              borderRadius: '3px',
-              cursor: 'pointer',
-              fontSize: '10px',
-              fontWeight: '500'
-            }}
-          >
-            {isPaused ? '▶' : '⏸'}
-          </button>
-          <button
-            onClick={clearEvents}
-            style={{
-              padding: '2px 6px',
-              background: '#e0e0e0',
-              color: '#333',
-              border: 'none',
-              borderRadius: '3px',
-              cursor: 'pointer',
-              fontSize: '10px'
-            }}
-          >
-            🗑️
-          </button>
+      <div style={{ marginBottom: '8px' }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '6px'
+        }}>
+          <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '600' }}>
+            📡 Events
+          </h4>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <button
+              onClick={() => setIsPaused(!isPaused)}
+              style={{
+                padding: '2px 6px',
+                background: isPaused ? '#999' : '#f44336',
+                color: 'white',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '10px',
+                fontWeight: '500'
+              }}
+              title={isPaused ? 'Resume' : 'Pause'}
+            >
+              {isPaused ? '▶' : '⏸'}
+            </button>
+            <button
+              onClick={exportEvents}
+              style={{
+                padding: '2px 6px',
+                background: '#e0e0e0',
+                color: '#333',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '10px'
+              }}
+              title="Export events"
+            >
+              💾
+            </button>
+            <button
+              onClick={() => setGrouped(!grouped)}
+              style={{
+                padding: '2px 6px',
+                background: grouped ? '#b08d57' : '#e0e0e0',
+                color: grouped ? 'white' : '#333',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '10px'
+              }}
+              title="Group by event type"
+            >
+              📊
+            </button>
+            <button
+              onClick={clearEvents}
+              style={{
+                padding: '2px 6px',
+                background: '#e0e0e0',
+                color: '#333',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '10px'
+              }}
+              title="Clear events"
+            >
+              🗑️
+            </button>
+          </div>
         </div>
+        <input
+          type="text"
+          placeholder="Filter events..."
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '4px 8px',
+            border: '1px solid #ddd',
+            borderRadius: '3px',
+            fontSize: '11px'
+          }}
+        />
       </div>
 
-      {events.length === 0 ? (
+      {filteredEvents.length === 0 ? (
         <div style={{
           textAlign: 'center',
           padding: '10px',
@@ -170,7 +218,76 @@ const EventMonitor = () => {
           fontSize: '11px',
           fontStyle: 'italic'
         }}>
-          {isPaused ? 'Paused' : 'No events'}
+          {isPaused ? 'Paused' : filter ? 'No matching events' : 'No events'}
+        </div>
+      ) : groupedEvents ? (
+        <div style={{
+          maxHeight: '280px',
+          overflowY: 'auto',
+          border: '1px solid #e0e0e0',
+          borderRadius: '4px',
+          padding: '6px',
+          flex: 1
+        }}>
+          {Object.entries(groupedEvents).map(([eventName, eventGroup]) => (
+            <div key={eventName} style={{ marginBottom: '8px' }}>
+              <div style={{
+                padding: '4px 8px',
+                background: '#b08d57',
+                color: 'white',
+                borderRadius: '3px',
+                fontSize: '11px',
+                fontWeight: '600',
+                marginBottom: '4px'
+              }}>
+                {eventName} ({eventGroup.length})
+              </div>
+              {eventGroup.map((event, index) => (
+                <div
+                  key={index}
+                  style={{
+                    padding: '4px 8px',
+                    marginLeft: '12px',
+                    marginBottom: '2px',
+                    background: '#f9f9f9',
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '3px',
+                    fontSize: '10px'
+                  }}
+                >
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <span style={{ color: '#666' }}>{event.timestamp}</span>
+                    {event.detail !== undefined && event.detail !== null && (
+                      <span style={{ color: '#999', fontSize: '9px' }}>
+                        {typeof event.detail === 'object' ? 'Object' : 'String'}
+                      </span>
+                    )}
+                  </div>
+                  {event.detail !== undefined && event.detail !== null && (
+                    <div style={{
+                      padding: '4px 6px',
+                      marginTop: '4px',
+                      background: '#f0f0f0',
+                      borderRadius: '2px',
+                      fontSize: '9px',
+                      fontFamily: 'monospace',
+                      maxHeight: '80px',
+                      overflow: 'auto'
+                    }}>
+                      {typeof event.detail === 'object' 
+                        ? JSON.stringify(event.detail, null, 2)
+                        : String(event.detail)
+                      }
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       ) : (
         <div style={{
@@ -181,7 +298,7 @@ const EventMonitor = () => {
           padding: '6px',
           flex: 1
         }}>
-          {events.map((event, index) => (
+          {filteredEvents.map((event, index) => (
             <div
               key={index}
               style={{
@@ -197,35 +314,45 @@ const EventMonitor = () => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                marginBottom: '3px'
+                marginBottom: '4px'
               }}>
                 <strong style={{ color: '#b08d57', fontSize: '11px' }}>{event.name}</strong>
                 <span style={{ color: '#999', fontSize: '9px' }}>{event.timestamp}</span>
               </div>
-              {event.detail && (
+              {event.detail !== undefined && event.detail !== null && (
                 <div style={{
-                  padding: '3px 6px',
+                  padding: '6px 8px',
                   background: '#f5f5f5',
-                  borderRadius: '2px',
+                  borderRadius: '3px',
                   fontFamily: 'monospace',
                   fontSize: '10px',
                   color: '#333',
                   overflowX: 'auto',
-                  wordBreak: 'break-word'
+                  wordBreak: 'break-word',
+                  maxHeight: '150px',
+                  overflowY: 'auto',
+                  marginTop: '4px',
+                  border: '1px solid #e0e0e0'
                 }}>
-                  {typeof event.detail === 'object' 
-                    ? JSON.stringify(event.detail, null, 2)
-                    : String(event.detail)
-                  }
+                  <div style={{ fontWeight: '600', marginBottom: '4px', fontSize: '9px', color: '#666' }}>
+                    Event Payload:
+                  </div>
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: '9px' }}>
+                    {typeof event.detail === 'object' 
+                      ? JSON.stringify(event.detail, null, 2)
+                      : String(event.detail)
+                    }
+                  </pre>
                 </div>
               )}
-              {!event.detail && (
+              {(event.detail === undefined || event.detail === null) && (
                 <div style={{
                   color: '#999',
                   fontStyle: 'italic',
-                  fontSize: '10px'
+                  fontSize: '10px',
+                  marginTop: '4px'
                 }}>
-                  (no detail)
+                  (no payload)
                 </div>
               )}
             </div>
@@ -233,14 +360,15 @@ const EventMonitor = () => {
         </div>
       )}
 
-      {events.length > 0 && (
+      {filteredEvents.length > 0 && (
         <div style={{
           marginTop: '6px',
           textAlign: 'center',
           color: '#666',
           fontSize: '10px'
         }}>
-          {events.length} event{events.length !== 1 ? 's' : ''}
+          {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''}
+          {filter && ` (filtered from ${events.length})`}
         </div>
       )}
     </div>

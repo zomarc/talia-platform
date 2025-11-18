@@ -162,16 +162,24 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
         instanceRef.current.on("rowSelected", (row) => {
           const data = row.getData();
           console.log("[SailingTable] Row selected:", data);
-          // Emit selection event for other components
+          // Emit selection event for other components with full row data
           window.dispatchEvent(new CustomEvent('talia:sail.select', { 
-            detail: data.sail_code 
+            detail: {
+              sail_code: data.sail_code,
+              row_data: data,
+              timestamp: new Date().toISOString()
+            }
           }));
         });
 
         instanceRef.current.on("rowDeselected", () => {
           console.log("[SailingTable] Row deselected");
           // Emit clear event
-          window.dispatchEvent(new CustomEvent('talia:sail.clear'));
+          window.dispatchEvent(new CustomEvent('talia:sail.clear', {
+            detail: {
+              timestamp: new Date().toISOString()
+            }
+          }));
         });
 
         console.log('[SailingTable] Table initialized with event listeners');

@@ -1,0 +1,146 @@
+/**
+ * Component Registry for Test Page
+ * Maps component names to their imports and provides metadata
+ */
+
+import SailingTableContainer from '../focus-panels/SailingTable';
+import SimpleTable from '../focus-panels/SimpleTable';
+import KPICards from '../focus-panels/KPICards';
+import PublishedRates from '../focus-panels/PublishedRates';
+import OccupancyChart from '../focus-panels/OccupancyChart';
+import RevenueBreakdown from '../focus-panels/RevenueBreakdown';
+import SailingSummary from '../focus-panels/SailingSummary';
+import SailingByCabinCategory from '../focus-panels/SailingByCabinCategory';
+import ExceptionList from '../focus-panels/ExceptionList';
+import ItineraryList from '../focus-panels/ItineraryList';
+
+/**
+ * Component registry with metadata
+ */
+export const componentRegistry = {
+  SailingTable: {
+    component: SailingTableContainer,
+    category: 'Tables',
+    description: 'Interactive sailing data table with filtering and sorting',
+    props: {
+      filters: { type: 'object', required: false, description: 'Filter object with sail_code, ship_name, limit' },
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Requires GraphQL connection to masterSail endpoint',
+    filePath: 'src/components/focus-panels/SailingTable/index.jsx'
+  },
+  SimpleTable: {
+    component: SimpleTable,
+    category: 'Tables',
+    description: 'Simple table component for displaying tabular data',
+    props: {
+      data: { type: 'array', required: true, description: 'Array of data objects' },
+      columns: { type: 'array', required: false, description: 'Column definitions' }
+    },
+    dataRequirements: 'Requires data prop',
+    filePath: 'src/components/focus-panels/SimpleTable.jsx'
+  },
+  KPICards: {
+    component: KPICards,
+    category: 'Dashboards',
+    description: 'Key Performance Indicator cards displaying metrics',
+    props: {},
+    dataRequirements: 'Uses mock data',
+    filePath: 'src/components/focus-panels/KPICards.jsx'
+  },
+  PublishedRates: {
+    component: PublishedRates,
+    category: 'Tables',
+    description: 'Published rates table with Tabulator integration',
+    props: {},
+    dataRequirements: 'Loads data from local JSON or API',
+    filePath: 'src/components/focus-panels/PublishedRates.jsx'
+  },
+  OccupancyChart: {
+    component: OccupancyChart,
+    category: 'Charts',
+    description: 'Occupancy visualization chart',
+    props: {},
+    dataRequirements: 'Requires occupancy data',
+    filePath: 'src/components/focus-panels/OccupancyChart.jsx'
+  },
+  RevenueBreakdown: {
+    component: RevenueBreakdown,
+    category: 'Charts',
+    description: 'Revenue breakdown visualization',
+    props: {},
+    dataRequirements: 'Requires revenue data',
+    filePath: 'src/components/focus-panels/RevenueBreakdown.jsx'
+  },
+  SailingSummary: {
+    component: SailingSummary,
+    category: 'Dashboards',
+    description: 'Sailing summary dashboard with key metrics',
+    props: {},
+    dataRequirements: 'Requires sailing data',
+    filePath: 'src/components/focus-panels/SailingSummary.jsx'
+  },
+  SailingByCabinCategory: {
+    component: SailingByCabinCategory,
+    category: 'Charts',
+    description: 'Sailing data grouped by cabin category',
+    props: {},
+    dataRequirements: 'Requires cabin and sailing data',
+    filePath: 'src/components/focus-panels/SailingByCabinCategory.jsx'
+  },
+  ExceptionList: {
+    component: ExceptionList,
+    category: 'Lists',
+    description: 'List of exceptions and alerts',
+    props: {},
+    dataRequirements: 'Uses mock data',
+    filePath: 'src/components/focus-panels/ExceptionList.jsx'
+  },
+  ItineraryList: {
+    component: ItineraryList,
+    category: 'Lists',
+    description: 'List of cruise itineraries',
+    props: {},
+    dataRequirements: 'Uses mock data',
+    filePath: 'src/components/focus-panels/ItineraryList.jsx'
+  }
+};
+
+/**
+ * Get component by name
+ */
+export const getComponent = (name) => {
+  return componentRegistry[name]?.component || null;
+};
+
+/**
+ * Get component metadata
+ */
+export const getComponentMetadata = (name) => {
+  return componentRegistry[name] || null;
+};
+
+/**
+ * Get all components grouped by category
+ */
+export const getComponentsByCategory = () => {
+  const categories = {};
+  Object.entries(componentRegistry).forEach(([name, metadata]) => {
+    const category = metadata.category || 'Other';
+    if (!categories[category]) {
+      categories[category] = [];
+    }
+    categories[category].push({ name, ...metadata });
+  });
+  return categories;
+};
+
+/**
+ * Get all component names
+ */
+export const getComponentNames = () => {
+  return Object.keys(componentRegistry);
+};
+
+export default componentRegistry;
+

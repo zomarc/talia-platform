@@ -104,6 +104,38 @@ export const typeDefs = `#graphql
     status: String!
   }
 
+  type MasterSail {
+    id: Int
+    sail_id: Float
+    ship_code: String
+    ship_name: String
+    sail_date_from: String
+    port_from: String
+    sail_date_to: String
+    port_to: String
+    package_id: Float
+    package_type: String
+    sail_code: String
+    package_name: String
+    sail_days: Int
+    geog_area_code: String
+    vacation_date: String
+    season_code: String
+    is_fake: String
+    is_active: String
+    is_package_active: String
+    master_voyage_departure_date: String
+    master_voyage1: String
+    master_voyage1_length: Int
+    master_voyage1_sail_days: Int
+    master_voyage2: String
+    master_voyage2_length: Int
+    master_voyage2_sail_days: Int
+    is_main: Int
+    is_primary: Int
+    created_at: String
+  }
+
   type KPI {
     id: ID!
     title: String!
@@ -162,6 +194,19 @@ export const typeDefs = `#graphql
     createdBy: ID
   }
 
+  input MasterSailFilters {
+    sail_code: String
+    ship_name: String
+    ship_code: String
+    package_name: String
+    package_type: String
+    geog_area_code: String
+    is_active: String
+    sail_date_from: String
+    sail_date_to: String
+    limit: Int
+  }
+
   # Input Types for Mutations
   input FocusInput {
     name: String!
@@ -207,6 +252,7 @@ export const typeDefs = `#graphql
     
     # Data Queries (with role-based filtering)
     sailings(filters: SailingFilters, userRole: UserRole): [Sailing!]!
+    masterSail(filters: MasterSailFilters): [MasterSail!]!
     ships: [Ship!]!
     cabinAvailability(filters: DateFilters): [CabinAvailability!]!
     kpis(userRole: UserRole): [KPI!]!

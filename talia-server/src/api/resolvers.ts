@@ -99,6 +99,28 @@ export const resolvers = {
       return sailings;
     },
 
+    masterSail: async (parent: any, args: any) => {
+      const { filters } = args;
+      try {
+        // Get data from Supabase
+        const supabaseData = await supabaseDataService.getMasterSail(filters || {});
+        
+        // Transform dates to strings for GraphQL
+        return supabaseData.map(sail => ({
+          ...sail,
+          sail_date_from: sail.sail_date_from ? new Date(sail.sail_date_from).toISOString().split('T')[0] : null,
+          sail_date_to: sail.sail_date_to ? new Date(sail.sail_date_to).toISOString().split('T')[0] : null,
+          vacation_date: sail.vacation_date ? new Date(sail.vacation_date).toISOString().split('T')[0] : null,
+          master_voyage_departure_date: sail.master_voyage_departure_date ? new Date(sail.master_voyage_departure_date).toISOString().split('T')[0] : null,
+          created_at: sail.created_at ? new Date(sail.created_at).toISOString() : null
+        }));
+      } catch (error) {
+        console.error('Error fetching master sail data:', error);
+        // Return empty array on error rather than throwing
+        return [];
+      }
+    },
+
     ships: async () => {
       try {
         // Try to get data from Supabase first (local development)

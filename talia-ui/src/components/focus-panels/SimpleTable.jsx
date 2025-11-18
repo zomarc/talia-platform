@@ -6,55 +6,7 @@
 
 import React, { useRef, useEffect } from 'react';
 
-// CDN URLs for Tabulator
-const CDN = {
-  tabulatorCss: [
-    "https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css"
-  ],
-  tabulatorJs: [
-    "https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"
-  ]
-};
-
-// Utility functions for loading CDN resources
-const loadCssFromList = async (urls) => {
-  for (const url of urls) {
-    try {
-      if (document.querySelector(`link[href="${url}"]`)) return true;
-      await new Promise((resolve, reject) => {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = url;
-        link.onload = () => resolve();
-        link.onerror = () => reject(new Error(`Failed to load CSS: ${url}`));
-        document.head.appendChild(link);
-      });
-      return true;
-    } catch (e) {
-      console.warn(`Failed to load CSS from ${url}:`, e);
-    }
-  }
-  return false;
-};
-
-const loadScriptFromList = async (urls, checkFn) => {
-  for (const url of urls) {
-    try {
-      if (checkFn && checkFn()) return true;
-      await new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = url;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error(`Failed to load script: ${url}`));
-        document.head.appendChild(script);
-      });
-      if (checkFn && checkFn()) return true;
-    } catch (e) {
-      console.warn(`Failed to load script from ${url}:`, e);
-    }
-  }
-  return false;
-};
+import { initTabulator } from '../../lib/tabulatorConfig';
 
 // Event system for selection
 const SELECT_EVENT = 'sailingCabinSelect';
@@ -205,12 +157,10 @@ const SailingByCabinCategory = React.memo(() => {
         const sailingCabinData = await loadSailingCabinData();
         console.log('[LinkingEvent] [SailingByCabinCategory] Loaded data for Tabulator:', sailingCabinData.length, 'records');
 
-        // Ensure Tabulator is available (via CDN)
-        const cssOk = await loadCssFromList(CDN.tabulatorCss);
-        await loadScriptFromList(CDN.tabulatorJs, () => window.Tabulator || window.TabulatorFull);
-        const TabGlobal = window.Tabulator || window.TabulatorFull;
+        // Load Tabulator using shared config
+        const Tabulator = await initTabulator();
+        const TabGlobal = Tabulator;
         console.log('[SailingByCabinCategory] Tabulator global typeof:', typeof TabGlobal);
-        if (!cssOk) console.warn("[SailingByCabinCategory] Tabulator CSS failed to load from all sources");
         if (!TabGlobal) { renderNoData(); return; }
 
         // Wait for real size

@@ -16,7 +16,10 @@
     "sync-cabin": "node sync-cli.js sync-table cabinAvailability",
     "sync-reservations": "node sync-cli.js sync-table reservations",
     "sync-rates": "node sync-cli.js sync-table publishedRates",
-    "sync-occupancy": "node sync-cli.js sync-table sailByCabinOccupancy"
+    "sync-occupancy": "node sync-cli.js sync-table sailByCabinOccupancy",
+    "sync-masterSail": "node sync-cli.js sync-table masterSail",
+    "sync-reservationChanges": "node sync-cli.js sync-table reservationChanges",
+    "sync-dataset": "node sync-cli.js sync-dataset sept-dec-2025"
   },
   "keywords": [
     "graphql",

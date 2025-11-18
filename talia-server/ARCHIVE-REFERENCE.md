@@ -127,9 +127,9 @@ Before moving new files to archive:
 
 ## Related Documentation
 
+- **`DEVELOPMENT-GUIDE.md`** - Complete development reference (start here)
 - `README.md` - Main project documentation
-- `BUILD-FIX.md` - Build process and file structure
-- `SYNC-SERVICE-COMPLETE.md` - Active sync service documentation
+- `archive/docs/` - Archived documentation files (consolidated into DEVELOPMENT-GUIDE.md)
 
 ## Archive Statistics
 

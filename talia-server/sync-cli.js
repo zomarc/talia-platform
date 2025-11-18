@@ -6,7 +6,16 @@
 import { synapseSyncService } from './src/services/synapse-sync.js';
 
 const command = process.argv[2];
-const tableName = process.argv[3];
+const arg1 = process.argv[3];
+const arg2 = process.argv[4];
+
+function resolveDataset(explicitDataset) {
+  const dataset = explicitDataset || synapseSyncService.getDefaultDataset();
+  if (!dataset) {
+    throw new Error('No dataset specified and no default dataset defined in sync.config.json');
+  }
+  return dataset;
+}
 
 // Helper function to display help
 function showHelp() {
@@ -14,31 +23,27 @@ function showHelp() {
 🔄 Talia Data Sync CLI
 
 USAGE:
-  node sync-cli.js <command> [table-name]
+  node sync-cli.js <command> [options]
 
 COMMANDS:
-  sync-all              Sync all configured tables (2025-2026 only)
-  sync-table <name>     Sync specific table only
-  status               Check sync status for all tables
-  test-connection      Test connection to Azure Synapse
-  list-tables          List all configured tables
-  help                 Show this help message
+  sync-all [dataset]           Sync every table defined for the dataset (defaults to config default)
+  sync-dataset <dataset>       Sync the named dataset
+  sync-table <name> [dataset]  Sync a specific table for the dataset
+  status                       Check sync status for all tables
+  test-connection [dataset]    Test connection to Azure Synapse (uses dataset filters)
+  list-tables                  List configured tables
+  list-datasets                List configured datasets
+  help                         Show this help message
 
 EXAMPLES:
   node sync-cli.js sync-all
-  node sync-cli.js sync-table ships
-  node sync-cli.js sync-table cabinAvailability
+  node sync-cli.js sync-all sept-dec-2025
+  node sync-cli.js sync-table reservations sept-dec-2025
+  node sync-cli.js sync-dataset sept-dec-2025
   node sync-cli.js status
-  node sync-cli.js test-connection
-
-CONFIGURED TABLES:
-  • ships (no date constraints)
-  • cabinAvailability (2025-2026 only)
-  • reservations (2025-2026 only)
+  node sync-cli.js test-connection sept-dec-2025
 
 🔒 SECURITY: ONE-WAY SYNC ONLY (Synapse → Supabase)
-📊 DATA VOLUME: ~6.1M records total
-⏱️  ESTIMATED TIME: 10-30 minutes for full sync
     `);
 }
 
@@ -49,9 +54,19 @@ function listTables() {
   tables.forEach(table => {
     console.log(`  • ${table.name}: ${table.description}`);
     console.log(`    Source: ${table.sourceTable} → Target: ${table.targetTable}`);
-    if (table.constraints.length > 0) {
-      console.log(`    Constraints: ${table.constraints.join(', ')}`);
-    }
+    console.log(`    Type: ${table.type}`);
+    console.log('');
+  });
+}
+
+function listDatasets() {
+  console.log('📚 Available Datasets:');
+  const datasets = synapseSyncService.listDatasets();
+  datasets.forEach(dataset => {
+    const marker = dataset.isDefault ? ' (default)' : '';
+    console.log(`  • ${dataset.name}${marker}`);
+    console.log(`    ${dataset.description}`);
+    console.log(`    Tables: ${dataset.tables.join(', ')}`);
     console.log('');
   });
 }
@@ -63,88 +78,130 @@ async function main() {
 
   try {
     switch (command) {
-      case 'sync-all':
-        console.log('🚀 Starting full data sync...');
-        console.log('⚠️  This will sync ALL configured tables and may take 10-30 minutes');
-        console.log('📊 Estimated data volume: ~6.1M records\n');
-        
-        const result = await synapseSyncService.syncAllTables();
-        
-        if (result.success) {
-          console.log('\n🎉 Full sync completed successfully!');
-          process.exit(0);
-        } else {
+      case 'sync-all': {
+        try {
+          const dataset = resolveDataset(arg1);
+          console.log(`🚀 Starting full data sync for dataset "${dataset}"...`);
+          const result = await synapseSyncService.syncDataset(dataset);
+          if (result.success) {
+            console.log('\n🎉 Full dataset sync completed successfully!');
+            process.exit(0);
+          }
           console.log('\n⚠️  Sync completed with some failures. Check results above.');
+          process.exit(1);
+        } catch (error) {
+          console.error(`❌ ${error.message}`);
+          process.exit(1);
+        }
+        break;
+      }
+
+      case 'sync-dataset':
+        if (!arg1) {
+          console.error('❌ Please specify dataset name: node sync-cli.js sync-dataset sept-dec-2025');
+          listDatasets();
+          process.exit(1);
+        }
+
+        console.log(`🚀 Starting dataset sync for "${arg1}"...`);
+        {
+          const result = await synapseSyncService.syncDataset(arg1);
+          if (result.success) {
+            console.log('\n🎉 Dataset sync completed successfully!');
+            process.exit(0);
+          }
+
+          console.log('\n⚠️  Dataset sync completed with some failures. Check results above.');
           process.exit(1);
         }
         break;
 
       case 'sync-table':
-        if (!tableName) {
+        if (!arg1) {
           console.error('❌ Please specify table name: node sync-cli.js sync-table ships');
           console.log('\nAvailable tables:');
           listTables();
           process.exit(1);
         }
 
-        console.log(`🔄 Starting sync for table: ${tableName}`);
-        const tableResult = await synapseSyncService.syncTable(tableName);
-        
-        if (tableResult.success) {
-          console.log(`\n✅ Table sync completed: ${tableResult.message}`);
-          process.exit(0);
-        } else {
+        try {
+          const dataset = resolveDataset(arg2);
+          // Check for --force-full-sync flag
+          const forceFullSync = process.argv.includes('--force-full-sync');
+          
+          console.log(`🔄 Starting sync for table: ${arg1} (dataset: ${dataset})${forceFullSync ? ' [FORCE FULL SYNC]' : ''}`);
+          const tableResult = await synapseSyncService.syncTable(arg1, dataset, { forceFullSync });
+
+          if (tableResult.success) {
+            const changesMsg = tableResult.changesDetected !== undefined 
+              ? `, detected ${tableResult.changesDetected} changes`
+              : '';
+            console.log(`\n✅ Table sync completed: ${tableResult.message}${changesMsg}`);
+            process.exit(0);
+          }
+
           console.log(`\n❌ Table sync failed: ${tableResult.error}`);
+          process.exit(1);
+        } catch (error) {
+          console.error(`❌ ${error.message}`);
           process.exit(1);
         }
         break;
 
       case 'status':
         console.log('📊 Checking sync status...\n');
-        const status = await synapseSyncService.getSyncStatus();
-        
-        console.log('📋 Sync Status:');
-        Object.entries(status).forEach(([tableName, info]) => {
-          const statusIcon = info.success ? '✅' : '❌';
-          console.log(`  ${statusIcon} ${tableName}:`);
-          console.log(`    Last Sync: ${info.lastSync}`);
-          console.log(`    Records: ${info.recordCount?.toLocaleString() || 'Unknown'}`);
-          if (info.error) {
-            console.log(`    Error: ${info.error}`);
-          }
-          console.log('');
-        });
+        {
+          const status = await synapseSyncService.getSyncStatus();
+          console.log('📋 Sync Status:');
+          Object.entries(status).forEach(([tableName, info]) => {
+            const statusIcon = info.success ? '✅' : '❌';
+            console.log(`  ${statusIcon} ${tableName}:`);
+            console.log(`    Last Sync: ${info.lastSync}`);
+            console.log(`    Records: ${info.recordCount?.toLocaleString() || 'Unknown'}`);
+            if (info.error) {
+              console.log(`    Error: ${info.error}`);
+            }
+            console.log('');
+          });
+        }
         break;
 
       case 'test-connection':
         console.log('🔍 Testing Azure Synapse connection...\n');
-        const connected = await synapseSyncService.testConnection();
-        
-        if (connected) {
-          console.log('\n✅ Connection test successful!');
-          console.log('🧪 Testing individual table queries...\n');
-          
-          const tables = synapseSyncService.listConfiguredTables();
-          for (const table of tables) {
-            try {
-              const result = await synapseSyncService.testTableQuery(table.name);
-              if (result.success) {
-                console.log(`✅ ${table.name}: ${result.recordCount?.toLocaleString()} records`);
-              } else {
-                console.log(`❌ ${table.name}: ${result.error}`);
+        {
+          const connected = await synapseSyncService.testConnection();
+
+          if (connected) {
+            console.log('\n✅ Connection test successful!');
+            console.log('🧪 Testing individual table queries...\n');
+
+            const dataset = resolveDataset(arg1);
+            const tables = synapseSyncService.listConfiguredTables();
+            for (const table of tables) {
+              try {
+                const result = await synapseSyncService.testTableQuery(table.name, dataset);
+                if (result.success) {
+                  console.log(`✅ ${table.name}: ${result.recordCount?.toLocaleString()} records`);
+                } else {
+                  console.log(`❌ ${table.name}: ${result.error}`);
+                }
+              } catch (error) {
+                console.log(`❌ ${table.name}: ${error.message}`);
               }
-            } catch (error) {
-              console.log(`❌ ${table.name}: ${error.message}`);
             }
+          } else {
+            console.log('\n❌ Connection test failed!');
+            process.exit(1);
           }
-        } else {
-          console.log('\n❌ Connection test failed!');
-          process.exit(1);
         }
         break;
 
       case 'list-tables':
         listTables();
+        break;
+
+      case 'list-datasets':
+        listDatasets();
         break;
 
       case 'help':

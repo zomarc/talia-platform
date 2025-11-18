@@ -95,6 +95,61 @@ export class SupabaseDataService {
     });
   }
 
+  // Get master sail data
+  async getMasterSail(filters = {}) {
+    try {
+      let queryBuilder = this.client.from('master_sail').select('*');
+      
+      // Apply filters
+      if (filters.sail_code) {
+        queryBuilder = queryBuilder.eq('sail_code', filters.sail_code);
+      }
+      if (filters.ship_name) {
+        queryBuilder = queryBuilder.ilike('ship_name', `%${filters.ship_name}%`);
+      }
+      if (filters.ship_code) {
+        queryBuilder = queryBuilder.eq('ship_code', filters.ship_code);
+      }
+      if (filters.package_name) {
+        queryBuilder = queryBuilder.ilike('package_name', `%${filters.package_name}%`);
+      }
+      if (filters.package_type) {
+        queryBuilder = queryBuilder.eq('package_type', filters.package_type);
+      }
+      if (filters.geog_area_code) {
+        queryBuilder = queryBuilder.eq('geog_area_code', filters.geog_area_code);
+      }
+      if (filters.is_active) {
+        queryBuilder = queryBuilder.eq('is_active', filters.is_active);
+      }
+      if (filters.sail_date_from) {
+        queryBuilder = queryBuilder.gte('sail_date_from', filters.sail_date_from);
+      }
+      if (filters.sail_date_to) {
+        queryBuilder = queryBuilder.lte('sail_date_to', filters.sail_date_to);
+      }
+      
+      // Apply ordering
+      queryBuilder = queryBuilder.order('sail_date_from', { ascending: false });
+      
+      // Apply limit
+      const limit = filters.limit || 100;
+      queryBuilder = queryBuilder.limit(limit);
+      
+      const { data, error } = await queryBuilder;
+      
+      if (error) {
+        console.error('Supabase query error for master_sail:', error);
+        throw error;
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error querying master_sail:', error);
+      throw error;
+    }
+  }
+
   // Get cabin availability data
   async getCabinAvailability(filters = {}) {
     return await this.query('cabin_availability', {

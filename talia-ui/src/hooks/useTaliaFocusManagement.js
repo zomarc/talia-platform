@@ -1,73 +1,30 @@
 /**
  * React Hook for Talia Focus Management
- * Uses mapping service to get Talia user ID from InstantDB auth
+ * Uses GraphQL service to fetch and manage focus data from Supabase
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import userMappingService from '../services/UserMappingService';
-import taliaUserService from '../services/TaliaUserService';
-import taliaFocusService from '../services/TaliaFocusService';
+import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
+import graphQLFocusService from '../services/GraphQLFocusService';
 
 export const useTaliaFocusManagement = () => {
-  const { user: instantUser, loading: authLoading, error: authError } = useAuth();
-  const [taliaUserId, setTaliaUserId] = useState(null);
-  const [taliaUser, setTaliaUser] = useState(null);
+  const { user, loading: authLoading, error: authError } = useSupabaseAuth();
   const [taliaFocuses, setTaliaFocuses] = useState([]);
   const [currentTaliaFocus, setCurrentTaliaFocus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Initialize Talia user when InstantDB user is authenticated
-  useEffect(() => {
-    const initializeTaliaUser = async () => {
-      if (authLoading) return;
+  const userRole = user?.role;
 
-      if (instantUser) {
-        setLoading(true);
-        try {
-          // Get or create mapping between InstantDB auth ID and Talia user ID
-          const userId = await userMappingService.getOrCreateMapping(instantUser.id, instantUser.email);
-          if (userId) {
-            setTaliaUserId(userId);
-            
-            // Create Talia user if not exists
-            let user = taliaUserService.getTaliaUserById(userId);
-            if (!user) {
-              // For development, make first user admin
-              const isFirstUser = taliaUserService.getAllTaliaUsers().length === 0;
-              const role = isFirstUser ? 'admin' : 'user';
-              user = taliaUserService.createTaliaUser(userId, instantUser.email, role);
-            }
-            
-            setTaliaUser(user);
-            console.log(`✅ Talia user initialized: ${userId} (${user.taliaRole})`);
-          }
-        } catch (err) {
-          console.error('Error initializing Talia user:', err);
-          setError(err.message);
-        } finally {
-          setLoading(false);
-        }
-      } else {
-        setTaliaUserId(null);
-        setTaliaUser(null);
-        setLoading(false);
-      }
-    };
-
-    initializeTaliaUser();
-  }, [instantUser, authLoading]);
-
-  // Load Talia focuses when Talia user is ready
+  // Load Talia focuses when user role is available
   const loadTaliaFocuses = useCallback(async () => {
-    if (!taliaUser?.taliaRole) return;
+    if (!userRole) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const focuses = await taliaFocusService.getTaliaFocusesForRole(taliaUser.taliaRole);
+      const focuses = await graphQLFocusService.getFocusesForRole(userRole);
       setTaliaFocuses(focuses);
 
       // Set default focus if none selected
@@ -81,7 +38,7 @@ export const useTaliaFocusManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [taliaUser?.taliaRole, currentTaliaFocus]);
+  }, [userRole, currentTaliaFocus]);
 
   useEffect(() => {
     loadTaliaFocuses();
@@ -89,7 +46,7 @@ export const useTaliaFocusManagement = () => {
 
   // Load a specific Talia focus
   const loadTaliaFocus = useCallback(async (taliaFocusId) => {
-    const focus = taliaFocuses.find(f => f.taliaFocusId === taliaFocusId);
+    const focus = taliaFocuses.find(f => f.id === taliaFocusId);
     if (focus) {
       setCurrentTaliaFocus(focus);
       return focus;
@@ -99,18 +56,13 @@ export const useTaliaFocusManagement = () => {
 
   // Create a new Talia focus (admin only)
   const createTaliaFocus = useCallback(async (focusData) => {
-    if (!taliaUser) {
-      setError('Talia user not initialized');
-      return false;
-    }
-
-    if (taliaUser.taliaRole !== 'admin') {
+    if (userRole !== 'admin') {
       setError('Admin access required to create Talia focuses');
       return false;
     }
 
     try {
-      const newFocus = await taliaFocusService.createTaliaFocus(focusData, taliaUser.taliaUserId);
+      const newFocus = await graphQLFocusService.createFocus(focusData);
       if (newFocus) {
         setTaliaFocuses(prev => [...prev, newFocus]);
         setCurrentTaliaFocus(newFocus);
@@ -122,19 +74,19 @@ export const useTaliaFocusManagement = () => {
       setError(error.message);
       return false;
     }
-  }, [taliaUser]);
+  }, [userRole]);
 
   // Update a Talia focus (admin only)
   const updateTaliaFocus = useCallback(async (taliaFocusId, updateData) => {
-    if (taliaUser?.taliaRole !== 'admin') {
+    if (userRole !== 'admin') {
       setError('Admin access required to update Talia focuses');
       return false;
     }
     try {
-      const success = await taliaFocusService.updateTaliaFocus(taliaFocusId, updateData);
+      const success = await graphQLFocusService.updateFocus(taliaFocusId, updateData);
       if (success) {
-        setTaliaFocuses(prev => prev.map(f => f.taliaFocusId === taliaFocusId ? { ...f, ...updateData } : f));
-        if (currentTaliaFocus?.taliaFocusId === taliaFocusId) {
+        setTaliaFocuses(prev => prev.map(f => f.id === taliaFocusId ? { ...f, ...updateData } : f));
+        if (currentTaliaFocus?.id === taliaFocusId) {
           setCurrentTaliaFocus(prev => ({ ...prev, ...updateData }));
         }
         return true;
@@ -145,19 +97,19 @@ export const useTaliaFocusManagement = () => {
       setError(error.message);
       return false;
     }
-  }, [taliaUser, currentTaliaFocus]);
+  }, [userRole, currentTaliaFocus]);
 
   // Delete a Talia focus (admin only)
   const deleteTaliaFocus = useCallback(async (taliaFocusId) => {
-    if (taliaUser?.taliaRole !== 'admin') {
+    if (userRole !== 'admin') {
       setError('Admin access required to delete Talia focuses');
       return false;
     }
     try {
-      const success = await taliaFocusService.deleteTaliaFocus(taliaFocusId);
+      const success = await graphQLFocusService.deleteFocus(taliaFocusId);
       if (success) {
-        setTaliaFocuses(prev => prev.filter(f => f.taliaFocusId !== taliaFocusId));
-        if (currentTaliaFocus?.taliaFocusId === taliaFocusId) {
+        setTaliaFocuses(prev => prev.filter(f => f.id !== taliaFocusId));
+        if (currentTaliaFocus?.id === taliaFocusId) {
           setCurrentTaliaFocus(null);
         }
         return true;
@@ -168,39 +120,20 @@ export const useTaliaFocusManagement = () => {
       setError(error.message);
       return false;
     }
-  }, [taliaUser, currentTaliaFocus]);
+  }, [userRole, currentTaliaFocus]);
 
-  // Initialize standard Talia focuses (admin only)
-  const initializeStandardTaliaFocuses = useCallback(async () => {
-    if (!taliaUser || taliaUser.taliaRole !== 'admin') {
-      setError('Admin access required');
-      return false;
-    }
-    try {
-      const success = await taliaFocusService.initializeStandardTaliaFocuses(taliaUser.taliaUserId);
-      if (success) {
-        await loadTaliaFocuses();
-      }
-      return success;
-    } catch (error) {
-      console.error('Error initializing standard Talia focuses:', error);
-      setError(error.message);
-      return false;
-    }
-  }, [taliaUser, loadTaliaFocuses]);
-
-  // Toggle favorite
+  // Toggle favorite (placeholder)
   const toggleFavorite = useCallback(async (taliaFocusId) => {
-    console.log(`Toggling favorite for focus ${taliaFocusId} for user ${taliaUserId}`);
+    console.log(`Toggling favorite for focus ${taliaFocusId} for user ${user?.id}`);
     return true;
-  }, [taliaUserId]);
+  }, [user?.id]);
 
-  const isAdmin = taliaUser?.taliaRole === 'admin';
+  const isAdmin = userRole === 'admin';
 
   return {
     // State
-    taliaUserId,
-    taliaUser,
+    taliaUserId: user?.id,
+    taliaUser: user,
     taliaFocuses,
     currentTaliaFocus,
     loading: loading || authLoading,
@@ -213,8 +146,7 @@ export const useTaliaFocusManagement = () => {
     updateTaliaFocus,
     deleteTaliaFocus,
     toggleFavorite,
-    initializeStandardTaliaFocuses,
-
+    
     // Computed values
     favoriteFocuses: [], // TODO: Implement proper favorite tracking
     canCreateFocus: isAdmin,

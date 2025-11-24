@@ -1,45 +1,27 @@
 import React, { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 
 const LandingPage = () => {
-  const { signIn, verifyCode, error } = useAuth();
+  const { signInWithEmail, error } = useSupabaseAuth();
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [step, setStep] = useState('email'); // 'email' or 'code'
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
 
   const handleEmailSubmit = async (e) => {
     e.preventDefault();
     if (!email) return;
 
     setLoading(true);
+    setMessage('');
     try {
-      await signIn(email);
-      setStep('code');
+      await signInWithEmail(email);
+      setMessage('Check your email for the magic link to sign in!');
     } catch (err) {
       console.error('Sign in error:', err);
+      setMessage(''); // Error message will be displayed by the context
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleCodeSubmit = async (e) => {
-    e.preventDefault();
-    if (!code) return;
-
-    setLoading(true);
-    try {
-      await verifyCode(email, code);
-    } catch (err) {
-      console.error('Code verification error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleBackToEmail = () => {
-    setStep('email');
-    setCode('');
   };
 
   return (
@@ -93,132 +75,67 @@ const LandingPage = () => {
           </div>
         )}
 
-        {/* Email Step */}
-        {step === 'email' && (
-          <form onSubmit={handleEmailSubmit}>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{
-                display: 'block',
-                textAlign: 'left',
-                marginBottom: '0.5rem',
-                fontWeight: '500',
-                color: '#374151'
-              }}>
-                Email Address
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                required
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '1rem',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading || !email}
-              style={{
-                width: '100%',
-                background: loading ? '#9ca3af' : '#3b82f6',
-                color: 'white',
-                border: 'none',
-                padding: '0.75rem',
-                borderRadius: '6px',
-                fontSize: '1rem',
-                fontWeight: '500',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                transition: 'background-color 0.2s'
-              }}
-            >
-              {loading ? 'Sending...' : 'Send Magic Code'}
-            </button>
-          </form>
+        {/* Message Display */}
+        {message && (
+          <div style={{
+            background: '#d1fae5',
+            color: '#065f46',
+            padding: '0.75rem',
+            borderRadius: '6px',
+            marginBottom: '1rem',
+            fontSize: '0.875rem'
+          }}>
+            {message}
+          </div>
         )}
 
-        {/* Code Step */}
-        {step === 'code' && (
-          <form onSubmit={handleCodeSubmit}>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <p style={{
-                color: '#374151',
-                marginBottom: '1rem',
-                fontSize: '0.875rem'
-              }}>
-                We sent a 6-digit code to <strong>{email}</strong>
-              </p>
-              <label style={{
-                display: 'block',
-                textAlign: 'left',
-                marginBottom: '0.5rem',
-                fontWeight: '500',
-                color: '#374151'
-              }}>
-                Verification Code
-              </label>
-              <input
-                type="text"
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="Enter 6-digit code"
-                required
-                maxLength="6"
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '1rem',
-                  textAlign: 'center',
-                  letterSpacing: '0.1em',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button
-                type="button"
-                onClick={handleBackToEmail}
-                style={{
-                  flex: 1,
-                  background: 'transparent',
-                  color: '#6b7280',
-                  border: '1px solid #d1d5db',
-                  padding: '0.75rem',
-                  borderRadius: '6px',
-                  fontSize: '1rem',
-                  cursor: 'pointer'
-                }}
-              >
-                Back
-              </button>
-              <button
-                type="submit"
-                disabled={loading || code.length !== 6}
-                style={{
-                  flex: 1,
-                  background: loading ? '#9ca3af' : '#3b82f6',
-                  color: 'white',
-                  border: 'none',
-                  padding: '0.75rem',
-                  borderRadius: '6px',
-                  fontSize: '1rem',
-                  fontWeight: '500',
-                  cursor: loading ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {loading ? 'Verifying...' : 'Verify Code'}
-              </button>
-            </div>
-          </form>
-        )}
+        {/* Email Step */}
+        <form onSubmit={handleEmailSubmit}>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{
+              display: 'block',
+              textAlign: 'left',
+              marginBottom: '0.5rem',
+              fontWeight: '500',
+              color: '#374151'
+            }}>
+              Email Address
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
+              required
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '1rem',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loading || !email}
+            style={{
+              width: '100%',
+              background: loading ? '#9ca3af' : '#3b82f6',
+              color: 'white',
+              border: 'none',
+              padding: '0.75rem',
+              borderRadius: '6px',
+              fontSize: '1rem',
+              fontWeight: '500',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              transition: 'background-color 0.2s'
+            }}
+          >
+            {loading ? 'Sending...' : 'Send Magic Link'}
+          </button>
+        </form>
 
         {/* Demo Mode */}
         <div style={{

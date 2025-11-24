@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import AppWithAuth from './AppWithAuth.jsx'
 import TestPage from './components/TestPage.jsx'
+import { ApolloProvider } from '@apollo/client';
+import apolloClient from './lib/apolloClient.js';
+import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext.jsx';
 
 // Debug logging for main entry point
 console.log('🚀 main.jsx loading');
@@ -99,7 +102,13 @@ if (!root) {
     const reactRoot = createRoot(root);
     console.log('✅ React root created');
     
-    reactRoot.render(<DevSwitcher />);
+    reactRoot.render(
+      <ApolloProvider client={apolloClient}>
+        <SupabaseAuthProvider>
+          <DevSwitcher />
+        </SupabaseAuthProvider>
+      </ApolloProvider>
+    );
     console.log('✅ React app rendered successfully');
   } catch (error) {
     console.error('❌ React render error:', error);

@@ -1,8 +1,8 @@
 import React from 'react';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LandingPage from './components/LandingPage';
 import Dashboard, { ThemeProvider } from './Dashboard';
 import ErrorBoundary from './components/ErrorBoundary';
+import { useSupabaseAuth } from './contexts/SupabaseAuthContext';
 
 // Main app component that handles authentication routing
 const AppContent = () => {
@@ -10,14 +10,14 @@ const AppContent = () => {
   
   let authResult;
   try {
-    authResult = useAuth();
-    console.log('✅ useAuth hook successful:', { 
+    authResult = useSupabaseAuth();
+    console.log('✅ useSupabaseAuth hook successful:', { 
       hasUser: !!authResult.user, 
       loading: authResult.loading, 
       hasError: !!authResult.error 
     });
   } catch (err) {
-    console.error('❌ useAuth hook failed:', err);
+    console.error('❌ useSupabaseAuth hook failed:', err);
     return (
       <div style={{
         height: '100vh',
@@ -149,9 +149,7 @@ const AppWithAuth = () => {
   try {
     return (
       <ErrorBoundary>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
+        <AppContent />
       </ErrorBoundary>
     );
   } catch (err) {

@@ -1,5 +1,24 @@
+# Dependencies
 node_modules
-node_modules
-node_modules
-node_modules
-node_modules
+
+# Build artifacts
+dist
+dist-ssr
+
+# System files
+.DS_Store
+.idea
+.vscode/
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Local data
+local_data/

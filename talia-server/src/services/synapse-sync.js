@@ -3,6 +3,8 @@ import { createRequire } from 'module';
 
 import { supabaseDataService } from './supabase.js';
 import { syncReservationChanges } from './reservation-changes-sync.js';
+import { syncCompetitors } from './competitor-sync.js';
+import { syncPublishedRates } from './published-rates-sync.js';
 
 const require = createRequire(import.meta.url);
 const syncConfig = require('../../sync.config.json');
@@ -600,6 +602,66 @@ class SynapseSyncService {
           message: result.message
         };
       }
+      case 'competitor': {
+        if (!runtime.dateRange) {
+          throw new Error('competitor requires a date range in the configuration');
+        }
+
+        // Check if forceFullSync is requested
+        const forceFullSync = runtime.overrides?.forceFullSync || false;
+
+        const result = await syncCompetitors({
+          synapseConfig: this.synapseConfig,
+          supabaseClient: supabaseDataService.client,
+          source: runtime.definition.source,
+          columns: runtime.definition.columns,
+          dateColumn: runtime.definition.dateColumn,
+          dateRange: runtime.dateRange,
+          targetTable: runtime.definition.target,
+          rowNumberOrder: runtime.definition.rowNumberOrder,
+          forceFullSync
+        });
+
+        return {
+          tableName: runtime.tableName,
+          success: result.success,
+          recordsProcessed: result.recordsProcessed || 0,
+          recordsUpdated: result.recordsUpdated || 0,
+          duration: null,
+          message: result.message
+        };
+      }
+
+      case 'publishedRates': {
+        if (!runtime.dateRange) {
+          throw new Error('publishedRates requires a date range in the configuration');
+        }
+
+        // Check if forceFullSync is requested
+        const forceFullSync = runtime.overrides?.forceFullSync || false;
+
+        const result = await syncPublishedRates({
+          synapseConfig: this.synapseConfig,
+          supabaseClient: supabaseDataService.client,
+          source: runtime.definition.source,
+          columns: runtime.definition.columns,
+          dateColumn: runtime.definition.dateColumn,
+          dateRange: runtime.dateRange,
+          targetTable: runtime.definition.target,
+          rowNumberOrder: runtime.definition.rowNumberOrder,
+          forceFullSync
+        });
+
+        return {
+          tableName: runtime.tableName,
+          success: result.success,
+          recordsProcessed: result.recordsProcessed || 0,
+          changesDetected: result.recordsUpdated || 0,
+          duration: null,
+          message: result.message
+        };
+      }
+
       default:
         throw new Error(`Unsupported derived table handler "${runtime.definition.handler}"`);
     }

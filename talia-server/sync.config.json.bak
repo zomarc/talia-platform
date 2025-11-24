@@ -66,10 +66,9 @@
       ]
     },
     "publishedRates": {
-      "type": "derived",
-      "handler": "publishedRates",
+      "type": "direct",
       "source": "fou.GQL_PUBLISHED_RATES",
-      "target": "published_rates_changes",
+      "target": "published_rates",
       "columns": [
         "[SNAPSHOT_DATE]",
         "[SAIL_CODE]",
@@ -89,13 +88,7 @@
         "[EXTRA_CHILD]",
         "[DISCOUNT]"
       ],
-      "dateColumn": "SNAPSHOT_DATE",
-      "supabaseDateColumn": "snapshot_date",
-      "rowNumberOrder": [
-        "[SNAPSHOT_DATE]",
-        "[SAIL_CODE]",
-        "[CABIN_CATEGORY]"
-      ]
+      "transformKey": "publishedRates"
     },
     "sailByCabinOccupancy": {
       "type": "direct",
@@ -185,41 +178,6 @@
         "strategy": "delete-range",
         "column": "sail_date_from"
       }
-    },
-    "competitor": {
-      "type": "derived",
-      "handler": "competitor",
-      "source": "stg.COMPETITOR",
-      "target": "competitor",
-      "columns": [
-        "Currency",
-        "Departure_Date",
-        "Duration",
-        "Week_Number",
-        "Year",
-        "Lowest_Price",
-        "Lowest_Inside",
-        "Lowest_Outside",
-        "Lowest_Balcony",
-        "Lowest_Suite",
-        "Taxes",
-        "Cruise_Line",
-        "Destination",
-        "Cruise_Name",
-        "Ship_Name",
-        "Ports",
-        "Market",
-        "Source",
-        "Snapshot_Date"
-      ],
-      "dateColumn": "Snapshot_Date",
-      "supabaseDateColumn": "snapshot_date",
-      "rowNumberOrder": [
-        "[Snapshot_Date]",
-        "[Departure_Date]",
-        "[Cruise_Line]",
-        "[Ship_Name]"
-      ]
     }
   },
   "datasets": {
@@ -230,9 +188,9 @@
         "masterSail",
         "cabinAvailability",
         "sailByCabinOccupancy",
+        "reservations",
         "publishedRates",
-        "reservationChanges",
-        "competitor"
+        "reservationChanges"
       ],
       "tables": {
         "ships": {
@@ -276,12 +234,18 @@
         "publishedRates": {
           "filters": [
             {
-              "column": "[SNAPSHOT_DATE]",
+              "column": "[DEPARTURE_DATE]",
               "operator": "between",
               "from": "2025-09-01",
               "to": "2025-12-31"
             }
-          ]
+          ],
+          "replace": {
+            "strategy": "delete-range",
+            "column": "departure_date",
+            "from": "2025-09-01",
+            "to": "2025-12-31"
+          }
         },
         "sailByCabinOccupancy": {
           "filters": [
@@ -300,22 +264,6 @@
           }
         },
         "reservationChanges": {
-          "filters": [
-            {
-              "column": "[Snapshot_Date]",
-              "operator": "between",
-              "from": "2025-09-01",
-              "to": "2025-12-31"
-            }
-          ],
-          "replace": {
-            "strategy": "delete-range",
-            "column": "snapshot_date",
-            "from": "2025-09-01",
-            "to": "2025-12-31"
-          }
-        },
-        "competitor": {
           "filters": [
             {
               "column": "[Snapshot_Date]",

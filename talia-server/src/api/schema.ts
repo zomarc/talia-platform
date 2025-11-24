@@ -25,6 +25,7 @@ export const typeDefs = `#graphql
     fontFamily: String
     spacingMode: String
     defaultFocus: String
+    selectedSailCode: String
   }
 
   # Focus Management Types
@@ -207,6 +208,60 @@ export const typeDefs = `#graphql
     limit: Int
   }
 
+  type Reservation {
+    id: Int
+    res_id: Float
+    res_status: String
+    source_code: String
+    res_probability: Float
+    pax_type: String
+    pax_status: String
+    ship: String
+    sail_code: String
+    sail_duration: Int
+    sail_from_date: String
+    sail_to_date: String
+    agency_id: Float
+    sec_agency_id: Float
+    agency_channel: String
+    agency_country_code: String
+    agency_market: String
+    cabin_type: String
+    cabin_category: String
+    ticket_type: String
+    promo_code: Int
+    currency: String
+    currency_rate: Float
+    guest_count: Float
+    foc_guest_count: Float
+    gross_published_fare: Float
+    gross_selling_fare: Float
+    net_selling_fare: Float
+    cruise_fare_comm: Float
+    published_discount: Float
+    promotional_discounts: Float
+    total_discounts: Float
+    gross_ticket_revenue: Float
+    net_ticket_revenue: Float
+    net_invoice_revenue: Float
+    gross_ticket_revenue_eur: Float
+    net_ticket_revenue_eur: Float
+    net_invoice_revenue_eur: Float
+    total_discounts_eur: Float
+    created_at: String
+  }
+
+  input ReservationFilters {
+    sail_code: String
+    ship: String
+    res_status: String
+    agency_id: Float
+    cabin_category: String
+    sail_from_date_from: String
+    sail_from_date_to: String
+    limit: Int
+  }
+
   # Input Types for Mutations
   input FocusInput {
     name: String!
@@ -237,6 +292,7 @@ export const typeDefs = `#graphql
     fontFamily: String
     spacingMode: String
     defaultFocus: String
+    selectedSailCode: String
   }
 
   # Queries
@@ -255,6 +311,7 @@ export const typeDefs = `#graphql
     masterSail(filters: MasterSailFilters): [MasterSail!]!
     ships: [Ship!]!
     cabinAvailability(filters: DateFilters): [CabinAvailability!]!
+    reservations(filters: ReservationFilters): [Reservation!]!
     kpis(userRole: UserRole): [KPI!]!
     exceptions(userRole: UserRole): [Exception!]!
     

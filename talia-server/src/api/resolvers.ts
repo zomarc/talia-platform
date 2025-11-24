@@ -121,6 +121,26 @@ export const resolvers = {
       }
     },
 
+    reservations: async (parent: any, args: any) => {
+      const { filters } = args;
+      try {
+        // Get data from Supabase
+        const supabaseData = await supabaseDataService.getReservations(filters || {});
+        
+        // Transform dates to strings for GraphQL
+        return supabaseData.map(reservation => ({
+          ...reservation,
+          sail_from_date: reservation.sail_from_date ? new Date(reservation.sail_from_date).toISOString().split('T')[0] : null,
+          sail_to_date: reservation.sail_to_date ? new Date(reservation.sail_to_date).toISOString().split('T')[0] : null,
+          created_at: reservation.created_at ? new Date(reservation.created_at).toISOString() : null
+        }));
+      } catch (error) {
+        console.error('Error fetching reservations data:', error);
+        // Return empty array on error rather than throwing
+        return [];
+      }
+    },
+
     ships: async () => {
       try {
         // Try to get data from Supabase first (local development)

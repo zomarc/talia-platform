@@ -1,8 +1,8 @@
 import sql from 'mssql';
 
-const SYNC_TYPE = 'reservation_changes';
+const SYNC_TYPE = 'reservations';
 const CURRENT_STATE_TABLE = 'reservation_current_state';
-const CHANGES_TABLE = 'reservation_changes';
+const TARGET_TABLE = 'reservations';
 const METADATA_TABLE = 'sync_metadata';
 
 /**
@@ -25,14 +25,14 @@ async function getLastProcessedDate(supabaseClient) {
 /**
  * Update sync metadata with last processed date and stats
  */
-async function updateSyncMetadata(supabaseClient, lastProcessedDate, recordsProcessed, changesDetected) {
+async function updateSyncMetadata(supabaseClient, lastProcessedDate, recordsProcessed, recordsUpdated) {
   const { error } = await supabaseClient
     .from(METADATA_TABLE)
     .upsert({
       sync_type: SYNC_TYPE,
       last_processed_date: lastProcessedDate,
       records_processed: recordsProcessed,
-      changes_detected: changesDetected,
+      changes_detected: recordsUpdated,
       last_sync_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }, {
@@ -127,7 +127,7 @@ async function updateCurrentState(supabaseClient, updatedStates) {
  * Process a batch of snapshots and detect changes compared to current state
  * Returns { changes: [], updatedStates: [] }
  */
-function processChangesBatch(batch, currentState) {
+function processReservationsBatch(batch, currentState) {
   const changes = [];
   const updatedStates = [];
 
@@ -204,9 +204,9 @@ function processChangesBatch(batch, currentState) {
 }
 
 /**
- * Insert changes into reservation_changes table
+ * Insert changes into reservations table
  */
-async function insertChanges(supabaseClient, changes) {
+async function upsertReservations(supabaseClient, changes) {
   if (changes.length === 0) return;
 
   console.log(`📥 Inserting ${changes.length} reservation change rows...`);
@@ -215,7 +215,7 @@ async function insertChanges(supabaseClient, changes) {
 
   for (let i = 0; i < changes.length; i += batchSize) {
     const batch = changes.slice(i, i + batchSize);
-    const { error } = await supabaseClient.from(CHANGES_TABLE).insert(batch);
+    const { error } = await supabaseClient.from(TARGET_TABLE).insert(batch);
     if (error) {
       throw new Error(`Failed to insert reservation change batch: ${error.message}`);
     }
@@ -254,7 +254,7 @@ function buildRowNumberQuery({ source, columnsSql, whereClause, rowNumberOrder }
  *   - Stores only new changes
  *   - Updates current state
  */
-export async function syncReservationChanges({
+export async function syncReservations({
   synapseConfig,
   supabaseClient,
   source,
@@ -271,67 +271,41 @@ export async function syncReservationChanges({
     throw new Error('Reservation changes sync requires a dateRange with from/to values');
   }
 
-  // Calculate today and yesterday dates (YYYY-MM-DD format)
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const twoDaysAgo = new Date(today);
-  twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-  
-  const todayStr = today.toISOString().split('T')[0];
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
-  const twoDaysAgoStr = twoDaysAgo.toISOString().split('T')[0];
-
   // Get last processed date
-  let lastProcessedDate = forceFullSync ? null : await getLastProcessedDate(supabaseClient);
-  
-  // If no last_processed_date exists, initialize it to 2 days ago
-  if (!lastProcessedDate && !forceFullSync) {
-    lastProcessedDate = twoDaysAgoStr;
-    console.log(`📅 No last processed date found. Initializing to 2 days ago: ${lastProcessedDate}`);
-    // Store the initial date in metadata
-    await updateSyncMetadata(supabaseClient, lastProcessedDate, 0, 0);
-  }
-  
-  const isInitialLoad = forceFullSync;
+  const lastProcessedDate = forceFullSync ? null : await getLastProcessedDate(supabaseClient);
   
   // Determine actual date range to process
-  let processFrom, processTo;
+  const processFrom = lastProcessedDate && !forceFullSync 
+    ? new Date(lastProcessedDate) > new Date(dateRange.from)
+      ? lastProcessedDate 
+      : dateRange.from
+    : dateRange.from;
   
-  if (isInitialLoad) {
-    // Initial load: use the configured date range
-    processFrom = dateRange.from;
-    processTo = dateRange.to;
-    console.log(`🔄 INITIAL LOAD: Processing snapshots from ${processFrom} to ${processTo}`);
-  } else {
-    // Incremental sync: always ensure we process at least yesterday
-    // If last_processed_date is before yesterday, catch up from there
-    // If last_processed_date is today or later, still process from yesterday to ensure we have yesterday's data
-    const lastProcessedDateObj = new Date(lastProcessedDate);
-    const yesterdayObj = new Date(yesterdayStr);
-    
-    // Always process from the earlier of last_processed_date or yesterday
-    // This ensures we always get yesterday's data, and catch up if we're behind
-    processFrom = lastProcessedDateObj <= yesterdayObj ? lastProcessedDate : yesterdayStr;
-    processTo = null; // No upper bound for incremental syncs
-    console.log(`🔄 INCREMENTAL UPDATE: Processing all snapshots since ${processFrom} (ensuring at least yesterday ${yesterdayStr} is processed, no upper bound)`);
+  const processTo = dateRange.to;
+
+  // If incremental and no new data, skip
+  if (lastProcessedDate && !forceFullSync && processFrom >= processTo) {
+    console.log(`✅ No new data to process. Last processed: ${lastProcessedDate}, Requested to: ${processTo}`);
+    return {
+      success: true,
+      recordsProcessed: 0,
+      recordsUpdated: 0,
+      message: 'No new data to process'
+    };
   }
+
+  const isInitialLoad = !lastProcessedDate || forceFullSync;
+  console.log(`${isInitialLoad ? '🔄 INITIAL LOAD' : '🔄 INCREMENTAL UPDATE'}: Processing snapshots from ${processFrom} to ${processTo}`);
 
   // Load current state from database
   const currentState = await loadCurrentState(supabaseClient);
 
   const pool = await sql.connect(synapseConfig);
-  const allChanges = [];
+  const allReservations = [];
   const allUpdatedStates = [];
   let totalProcessed = 0;
-  let maxSnapshotDate = null; // Track the maximum Snapshot_Date processed
   const columnsSql = columns.join(', ');
-  
-  // Build WHERE clause based on sync type
-  const whereClause = isInitialLoad
-    ? `${dateColumn} >= '${processFrom}' AND ${dateColumn} <= '${processTo}'`
-    : `${dateColumn} >= '${processFrom}'`; // Incremental: use >= to ensure we always get yesterday's data, no upper bound
+  const whereClause = `${dateColumn} >= '${processFrom}' AND ${dateColumn} <= '${processTo}'`;
 
   try {
     const countQuery = `
@@ -349,7 +323,7 @@ export async function syncReservationChanges({
       return {
         success: true,
         recordsProcessed: 0,
-        changesDetected: 0,
+        recordsUpdated: 0,
         message: 'No rows to process'
       };
     }
@@ -379,25 +353,15 @@ export async function syncReservationChanges({
         break;
       }
 
-      const { changes, updatedStates } = processChangesBatch(batch, currentState);
-      allChanges.push(...changes);
+      const { changes, updatedStates } = processReservationsBatch(batch, currentState);
+      allReservations.push(...changes);
       allUpdatedStates.push(...updatedStates);
       totalProcessed += batch.length;
-      
-      // Track the maximum Snapshot_Date from this batch
-      for (const row of batch) {
-        if (row.Snapshot_Date) {
-          const snapshotDate = new Date(row.Snapshot_Date);
-          if (!maxSnapshotDate || snapshotDate > maxSnapshotDate) {
-            maxSnapshotDate = snapshotDate;
-          }
-        }
-      }
 
       // Insert changes in batches to avoid memory issues
-      if (allChanges.length >= 10000) {
-        await insertChanges(supabaseClient, allChanges);
-        allChanges.length = 0;
+      if (allReservations.length >= 10000) {
+        await upsertReservations(supabaseClient, allReservations);
+        allReservations.length = 0;
       }
 
       // Update current state in batches
@@ -408,8 +372,8 @@ export async function syncReservationChanges({
     }
 
     // Insert remaining changes
-    if (allChanges.length > 0) {
-      await insertChanges(supabaseClient, allChanges);
+    if (allReservations.length > 0) {
+      await upsertReservations(supabaseClient, allReservations);
     }
 
     // Update remaining states
@@ -417,34 +381,16 @@ export async function syncReservationChanges({
       await updateCurrentState(supabaseClient, allUpdatedStates);
     }
 
-    // Update sync metadata with the actual maximum Snapshot_Date processed
-    // For initial load, use processTo; for incremental, use maxSnapshotDate
-    // CRITICAL: last_processed_date can NEVER be before today
-    let newLastProcessedDate;
-    if (isInitialLoad) {
-      newLastProcessedDate = processTo;
-    } else {
-      // Use maxSnapshotDate if available, otherwise use processFrom
-      const maxDateStr = maxSnapshotDate ? maxSnapshotDate.toISOString().split('T')[0] : processFrom;
-      // Ensure we never set last_processed_date before today
-      const maxDateObj = new Date(maxDateStr);
-      newLastProcessedDate = maxDateObj >= today ? maxDateStr : todayStr;
-    }
-    
-    await updateSyncMetadata(supabaseClient, newLastProcessedDate, totalProcessed, allChanges.length);
+    // Update sync metadata
+    await updateSyncMetadata(supabaseClient, processTo, totalProcessed, allReservations.length);
 
-    console.log(`✅ Sync complete: Processed ${totalProcessed} rows, detected ${allChanges.length} changes`);
-    if (!isInitialLoad) {
-      const maxDateStr = maxSnapshotDate ? maxSnapshotDate.toISOString().split('T')[0] : processFrom;
-      console.log(`📅 Max Snapshot_Date processed: ${maxDateStr}`);
-      console.log(`📅 New last processed date: ${newLastProcessedDate} (never before today: ${todayStr})`);
-    }
+    console.log(`✅ Sync complete: Processed ${totalProcessed} rows, detected ${allReservations.length} changes`);
 
     return {
       success: true,
       recordsProcessed: totalProcessed,
-      changesDetected: allChanges.length,
-      message: `Processed ${totalProcessed} snapshot rows, detected ${allChanges.length} changes`
+      recordsUpdated: allReservations.length,
+      message: `Processed ${totalProcessed} snapshot rows, detected ${allReservations.length} changes`
     };
   } finally {
     await pool.close();

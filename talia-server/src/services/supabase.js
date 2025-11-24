@@ -189,6 +189,55 @@ export class SupabaseDataService {
       orderBy: { column: 'date', ascending: false }
     });
   }
+
+  // Get reservations data
+  async getReservations(filters = {}) {
+    try {
+      let queryBuilder = this.client.from('reservation').select('*');
+      
+      // Apply filters
+      if (filters.sail_code) {
+        queryBuilder = queryBuilder.eq('sail_code', filters.sail_code);
+      }
+      if (filters.ship) {
+        queryBuilder = queryBuilder.ilike('ship', `%${filters.ship}%`);
+      }
+      if (filters.res_status) {
+        queryBuilder = queryBuilder.eq('res_status', filters.res_status);
+      }
+      if (filters.agency_id) {
+        queryBuilder = queryBuilder.eq('agency_id', filters.agency_id);
+      }
+      if (filters.cabin_category) {
+        queryBuilder = queryBuilder.eq('cabin_category', filters.cabin_category);
+      }
+      if (filters.sail_from_date_from) {
+        queryBuilder = queryBuilder.gte('sail_from_date', filters.sail_from_date_from);
+      }
+      if (filters.sail_from_date_to) {
+        queryBuilder = queryBuilder.lte('sail_from_date', filters.sail_from_date_to);
+      }
+      
+      // Apply ordering
+      queryBuilder = queryBuilder.order('sail_from_date', { ascending: false });
+      
+      // Apply limit
+      const limit = filters.limit || 1000;
+      queryBuilder = queryBuilder.limit(limit);
+      
+      const { data, error } = await queryBuilder;
+      
+      if (error) {
+        console.error('Supabase query error for reservation:', error);
+        throw error;
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error querying reservation:', error);
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance

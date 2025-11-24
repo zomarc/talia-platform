@@ -11,6 +11,20 @@
 
 import React, { useRef, useEffect } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
+import { useAuth } from '../../../contexts/AuthContext';
+import { apolloClient } from '../../../lib/apolloClient';
+import { gql } from '@apollo/client';
+
+const UPDATE_USER_PREFERENCES = gql`
+  mutation UpdateUserPreferences($input: UserPreferencesInput!) {
+    updateUserPreferences(input: $input) {
+      id
+      preferences {
+        selectedSailCode
+      }
+    }
+  }
+`;
 
 /**
  * Presentational component for the sailing table
@@ -18,6 +32,38 @@ import { initTabulator } from '../../../lib/tabulatorConfig';
 const SailingTablePresenter = ({ data, theme, onRefresh }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
+  
+  // Safely get user from auth context (may not be available in all contexts)
+  let user = null;
+  try {
+    const authContext = useAuth();
+    user = authContext?.user || null;
+  } catch (error) {
+    // AuthContext not available, continue without user
+    console.warn('[SailingTable] AuthContext not available:', error);
+  }
+
+  // Function to update user preferences with selected sail code
+  const updateSelectedSail = async (sailCode) => {
+    if (!user?.id) {
+      console.log('[SailingTable] No user available, skipping preference save');
+      return;
+    }
+    
+    try {
+      await apolloClient.mutate({
+        mutation: UPDATE_USER_PREFERENCES,
+        variables: {
+          input: {
+            selectedSailCode: sailCode || null
+          }
+        }
+      });
+      console.log('[SailingTable] Saved selected sail to user preferences:', sailCode);
+    } catch (error) {
+      console.error('[SailingTable] Error saving selected sail:', error);
+    }
+  };
 
   // Column definitions using Tabulator's native features
   // NOTE: Using valuesLookup:true lets Tabulator automatically generate filter options
@@ -162,6 +208,10 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
         instanceRef.current.on("rowSelected", (row) => {
           const data = row.getData();
           console.log("[SailingTable] Row selected:", data);
+          
+          // Save to database
+          updateSelectedSail(data.sail_code);
+          
           // Emit selection event for other components with full row data
           window.dispatchEvent(new CustomEvent('talia:sail.select', { 
             detail: {
@@ -174,6 +224,10 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
 
         instanceRef.current.on("rowDeselected", () => {
           console.log("[SailingTable] Row deselected");
+          
+          // Clear from database
+          updateSelectedSail(null);
+          
           // Emit clear event
           window.dispatchEvent(new CustomEvent('talia:sail.clear', {
             detail: {

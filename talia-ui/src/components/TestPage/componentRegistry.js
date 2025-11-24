@@ -13,6 +13,7 @@ import SailingSummary from '../focus-panels/SailingSummary';
 import SailingByCabinCategory from '../focus-panels/SailingByCabinCategory';
 import ExceptionList from '../focus-panels/ExceptionList';
 import ItineraryList from '../focus-panels/ItineraryList';
+import ReservationCurrentStateContainer from '../focus-panels/ReservationCurrentState';
 
 /**
  * Component registry with metadata
@@ -103,6 +104,17 @@ export const componentRegistry = {
     props: {},
     dataRequirements: 'Uses mock data',
     filePath: 'src/components/focus-panels/ItineraryList.jsx'
+  },
+  ReservationCurrentState: {
+    component: ReservationCurrentStateContainer,
+    category: 'Tables',
+    description: 'Reservation current state table - reacts to sail selection from SailingTable',
+    props: {
+      filters: { type: 'object', required: false, description: 'Filter object with sail_code, ship, res_status, etc.' },
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Requires GraphQL connection to reservations endpoint. Reacts to talia:sail.select events.',
+    filePath: 'src/components/focus-panels/ReservationCurrentState/index.jsx'
   }
 };
 

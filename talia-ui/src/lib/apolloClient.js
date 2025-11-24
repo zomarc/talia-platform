@@ -195,6 +195,7 @@ export const FOCUS_QUERIES = {
           fontFamily
           spacingMode
           defaultFocus
+          selectedSailCode
         }
         createdAt
         updatedAt
@@ -375,6 +376,7 @@ export const FOCUS_MUTATIONS = {
           fontFamily
           spacingMode
           defaultFocus
+          selectedSailCode
         }
         updatedAt
       }

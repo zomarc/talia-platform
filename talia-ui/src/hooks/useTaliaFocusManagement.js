@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import graphQLFocusService from '../services/GraphQLFocusService';
+import focusPreferencesService from '../services/FocusPreferencesService';
 
 export const useTaliaFocusManagement = () => {
   const { user, loading: authLoading, error: authError } = useSupabaseAuth();
@@ -13,6 +14,8 @@ export const useTaliaFocusManagement = () => {
   const [currentTaliaFocus, setCurrentTaliaFocus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [focusPreferences, setFocusPreferences] = useState([]);
+  const [focusGroups, setFocusGroups] = useState([]);
 
   const userRole = user?.role;
 
@@ -122,13 +125,146 @@ export const useTaliaFocusManagement = () => {
     }
   }, [userRole, currentTaliaFocus]);
 
-  // Toggle favorite (placeholder)
-  const toggleFavorite = useCallback(async (taliaFocusId) => {
-    console.log(`Toggling favorite for focus ${taliaFocusId} for user ${user?.id}`);
-    return true;
+  // Load focus preferences
+  const loadFocusPreferences = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      const preferences = await focusPreferencesService.getUserPreferences(user.id);
+      setFocusPreferences(preferences);
+    } catch (err) {
+      console.error('Error loading focus preferences:', err);
+    }
   }, [user?.id]);
 
+  // Load focus groups
+  const loadFocusGroups = useCallback(async () => {
+    try {
+      const groups = await graphQLFocusService.getFocusGroups();
+      setFocusGroups(groups);
+    } catch (err) {
+      console.error('Error loading focus groups:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFocusPreferences();
+    loadFocusGroups();
+  }, [loadFocusPreferences, loadFocusGroups]);
+
+  // Toggle favorite
+  const toggleFavorite = useCallback(async (taliaFocusId) => {
+    if (!user?.id) return false;
+
+    try {
+      const updated = await focusPreferencesService.toggleFavorite(user.id, taliaFocusId);
+      setFocusPreferences(prev => {
+        const filtered = prev.filter(p => p.focusId !== taliaFocusId);
+        return [...filtered, updated];
+      });
+      return true;
+    } catch (err) {
+      console.error('Error toggling favorite:', err);
+      setError(err.message);
+      return false;
+    }
+  }, [user?.id]);
+
+  // Update last used
+  const updateLastUsed = useCallback(async (taliaFocusId) => {
+    if (!user?.id) return;
+
+    try {
+      await focusPreferencesService.updateLastUsed(user.id, taliaFocusId);
+      await loadFocusPreferences();
+    } catch (err) {
+      console.error('Error updating last used:', err);
+    }
+  }, [user?.id, loadFocusPreferences]);
+
+  // Save custom layout
+  const saveCustomLayout = useCallback(async (taliaFocusId, layout) => {
+    if (!user?.id) return false;
+
+    try {
+      await focusPreferencesService.saveCustomLayout(user.id, taliaFocusId, layout);
+      await loadFocusPreferences();
+      return true;
+    } catch (err) {
+      console.error('Error saving custom layout:', err);
+      setError(err.message);
+      return false;
+    }
+  }, [user?.id, loadFocusPreferences]);
+
+  // Focus group management (admin only)
+  const createFocusGroup = useCallback(async (groupData) => {
+    if (userRole !== 'admin') {
+      setError('Admin access required to create focus groups');
+      return false;
+    }
+
+    try {
+      const newGroup = await graphQLFocusService.createFocusGroup(groupData);
+      if (newGroup) {
+        setFocusGroups(prev => [...prev, newGroup]);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error creating focus group:', err);
+      setError(err.message);
+      return false;
+    }
+  }, [userRole]);
+
+  const updateFocusGroup = useCallback(async (groupId, updateData) => {
+    if (userRole !== 'admin') {
+      setError('Admin access required to update focus groups');
+      return false;
+    }
+
+    try {
+      const updated = await graphQLFocusService.updateFocusGroup(groupId, updateData);
+      if (updated) {
+        setFocusGroups(prev => prev.map(g => g.id === groupId ? updated : g));
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error updating focus group:', err);
+      setError(err.message);
+      return false;
+    }
+  }, [userRole]);
+
+  const deleteFocusGroup = useCallback(async (groupId) => {
+    if (userRole !== 'admin') {
+      setError('Admin access required to delete focus groups');
+      return false;
+    }
+
+    try {
+      const success = await graphQLFocusService.deleteFocusGroup(groupId);
+      if (success) {
+        setFocusGroups(prev => prev.filter(g => g.id !== groupId));
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error deleting focus group:', err);
+      setError(err.message);
+      return false;
+    }
+  }, [userRole]);
+
   const isAdmin = userRole === 'admin';
+
+  // Computed values
+  const favoriteFocuses = taliaFocuses.filter(focus => {
+    const pref = focusPreferences.find(p => p.focusId === focus.id);
+    return pref?.isFavorite;
+  });
 
   return {
     // State
@@ -136,6 +272,8 @@ export const useTaliaFocusManagement = () => {
     taliaUser: user,
     taliaFocuses,
     currentTaliaFocus,
+    focusPreferences,
+    focusGroups,
     loading: loading || authLoading,
     error: error || authError,
 
@@ -146,9 +284,16 @@ export const useTaliaFocusManagement = () => {
     updateTaliaFocus,
     deleteTaliaFocus,
     toggleFavorite,
+    updateLastUsed,
+    saveCustomLayout,
+    loadFocusPreferences,
+    loadFocusGroups,
+    createFocusGroup,
+    updateFocusGroup,
+    deleteFocusGroup,
     
     // Computed values
-    favoriteFocuses: [], // TODO: Implement proper favorite tracking
+    favoriteFocuses,
     canCreateFocus: isAdmin,
     canModifyFocus: isAdmin,
     isAdmin

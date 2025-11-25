@@ -3,9 +3,13 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import AppWithAuth from './AppWithAuth.jsx'
 import TestPage from './components/TestPage.jsx'
-import { ApolloProvider } from '@apollo/client';
-import apolloClient from './lib/apolloClient.js';
+import DataManagementPage from './components/DataManagementPage.jsx'
 import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext.jsx';
+
+// Apollo Client temporarily disabled during database restoration
+// TODO: Re-enable when database is restored
+// import { ApolloProvider } from '@apollo/client';
+// import apolloClient from './lib/apolloClient.js';
 
 // Debug logging for main entry point
 console.log('🚀 main.jsx loading');
@@ -16,24 +20,29 @@ console.log('📱 Document ready state:', document.readyState);
 
 // Dev Mode Switcher Component
 const DevSwitcher = () => {
-  const [showTestPage, setShowTestPage] = useState(false);
+  const [mode, setMode] = useState('app'); // 'app', 'test', or 'data'
   
   // Check localStorage for saved preference on mount
   useEffect(() => {
     const savedMode = localStorage.getItem('devMode');
-    if (savedMode) {
-      setShowTestPage(savedMode === 'test');
+    if (savedMode && ['app', 'test', 'data'].includes(savedMode)) {
+      setMode(savedMode);
     }
   }, []);
 
   const toggleToTest = () => {
-    setShowTestPage(true);
+    setMode('test');
     localStorage.setItem('devMode', 'test');
   };
 
   const toggleToApp = () => {
-    setShowTestPage(false);
+    setMode('app');
     localStorage.setItem('devMode', 'app');
+  };
+
+  const toggleToData = () => {
+    setMode('data');
+    localStorage.setItem('devMode', 'data');
   };
 
   const ModeToggle = () => (
@@ -54,8 +63,8 @@ const DevSwitcher = () => {
         onClick={toggleToTest}
         style={{
           padding: '6px 12px',
-          background: showTestPage ? '#b08d57' : '#e8e8e8',
-          color: showTestPage ? 'white' : '#333',
+          background: mode === 'test' ? '#b08d57' : '#e8e8e8',
+          color: mode === 'test' ? 'white' : '#333',
           border: 'none',
           borderRadius: '4px',
           cursor: 'pointer',
@@ -70,8 +79,8 @@ const DevSwitcher = () => {
         onClick={toggleToApp}
         style={{
           padding: '6px 12px',
-          background: !showTestPage ? '#b08d57' : '#e8e8e8',
-          color: !showTestPage ? 'white' : '#333',
+          background: mode === 'app' ? '#b08d57' : '#e8e8e8',
+          color: mode === 'app' ? 'white' : '#333',
           border: 'none',
           borderRadius: '4px',
           cursor: 'pointer',
@@ -82,13 +91,41 @@ const DevSwitcher = () => {
       >
         🚀 APP MODE
       </button>
+      <button
+        onClick={toggleToData}
+        style={{
+          padding: '6px 12px',
+          background: mode === 'data' ? '#b08d57' : '#e8e8e8',
+          color: mode === 'data' ? 'white' : '#333',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '12px',
+          fontWeight: '500',
+          transition: 'all 0.2s'
+        }}
+      >
+        📊 DATA MODE
+      </button>
     </div>
   );
+
+  const renderContent = () => {
+    switch (mode) {
+      case 'test':
+        return <TestPage />;
+      case 'data':
+        return <DataManagementPage />;
+      case 'app':
+      default:
+        return <AppWithAuth />;
+    }
+  };
 
   return (
     <StrictMode>
       <ModeToggle />
-      {showTestPage ? <TestPage /> : <AppWithAuth />}
+      {renderContent()}
     </StrictMode>
   );
 };
@@ -103,11 +140,9 @@ if (!root) {
     console.log('✅ React root created');
     
     reactRoot.render(
-      <ApolloProvider client={apolloClient}>
-        <SupabaseAuthProvider>
-          <DevSwitcher />
-        </SupabaseAuthProvider>
-      </ApolloProvider>
+      <SupabaseAuthProvider>
+        <DevSwitcher />
+      </SupabaseAuthProvider>
     );
     console.log('✅ React app rendered successfully');
   } catch (error) {

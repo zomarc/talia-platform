@@ -23,6 +23,62 @@ const filterDataByRole = (data: any[], userRole: string, roleField?: string) => 
   return data;
 };
 
+// Helper function to map database focus to GraphQL Focus format
+const mapDbFocusToGraphQL = (dbFocus: any) => {
+  if (!dbFocus) return null;
+  
+  // Extract components from layout_data if it exists
+  const layoutData = dbFocus.layout_data || {};
+  const components = layoutData.components || [];
+  
+  // Use first assigned role as the primary role, or default to ADMIN
+  const primaryRole = dbFocus.assigned_roles && dbFocus.assigned_roles.length > 0 
+    ? dbFocus.assigned_roles[0].toUpperCase() 
+    : 'ADMIN';
+  
+  return {
+    id: dbFocus.id,
+    name: dbFocus.name,
+    description: dbFocus.description || null,
+    type: dbFocus.type ? dbFocus.type.toUpperCase() : 'USER',
+    role: primaryRole,
+    components: components.map((comp: any, index: number) => ({
+      id: comp.id || `comp-${index}`,
+      type: comp.type || 'TABLE',
+      position: comp.position || { x: 0, y: 0, width: 6, height: 4 },
+      settings: comp.settings || null,
+      dataSource: comp.dataSource || null
+    })),
+    createdBy: dbFocus.created_by || '',
+    createdAt: dbFocus.created_at || new Date().toISOString(),
+    updatedAt: dbFocus.updated_at || dbFocus.created_at || new Date().toISOString(),
+    isPublic: dbFocus.is_standard || false
+  };
+};
+
+// Helper function to map GraphQL FocusInput to database format
+const mapGraphQLFocusToDb = (input: any, createdBy?: string) => {
+  // Extract components and store in layout_data
+  const layoutData = {
+    components: input.components || []
+  };
+  
+  // Convert single role to array if needed
+  const assignedRoles = input.assignedRoles || (input.role ? [input.role] : []);
+  
+  return {
+    name: input.name,
+    description: input.description || null,
+    type: input.type ? input.type.toLowerCase() : 'user',
+    isStandard: input.isPublic !== undefined ? input.isPublic : (input.isStandard || false),
+    assignedRoles: assignedRoles.map((r: string) => r.toUpperCase()),
+    isDefault: input.isDefault || false,
+    isActive: input.isActive !== undefined ? input.isActive : true,
+    createdBy: createdBy,
+    layoutData: layoutData
+  };
+};
+
 export const resolvers = {
   Query: {
     // User Management
@@ -35,34 +91,92 @@ export const resolvers = {
       return sampleData.users;
     },
 
-    // Focus Management
-    focuses: (parent: any, args: any) => {
-      const { filters } = args;
-      let focuses = sampleData.focuses;
-
-      if (filters) {
-        if (filters.role) {
-          focuses = focuses.filter(focus => focus.role === filters.role);
-        }
-        if (filters.type) {
-          focuses = focuses.filter(focus => focus.type === filters.type);
-        }
-        if (filters.isPublic !== undefined) {
-          focuses = focuses.filter(focus => focus.isPublic === filters.isPublic);
-        }
+    taliaUser: async (parent: any, args: any) => {
+      const { email } = args;
+      try {
+        const taliaUser = await supabaseDataService.getTaliaUserByEmail(email);
+        if (!taliaUser) return null;
+        
+        return {
+          id: taliaUser.id,
+          taliaUserId: taliaUser.talia_user_id,
+          email: taliaUser.email,
+          createdAt: taliaUser.created_at,
+          updatedAt: taliaUser.updated_at,
+          lastLoginAt: taliaUser.last_login_at
+        };
+      } catch (error) {
+        console.error('Error fetching talia user:', error);
+        throw new Error(`Failed to fetch talia user: ${error.message}`);
       }
-
-      return focuses;
     },
 
-    focus: (parent: any, args: any) => {
+    // Focus Management
+    focuses: async (parent: any, args: any, context: any) => {
+      const { filters } = args;
+      try {
+        // Get focuses from Supabase
+        const dbFocuses = await supabaseDataService.getFocuses(filters || {});
+        
+        // Map to GraphQL format
+        const mappedFocuses = dbFocuses.map(mapDbFocusToGraphQL).filter(Boolean);
+        
+        // Apply additional filtering if needed
+        let filteredFocuses = mappedFocuses;
+        if (filters) {
+          if (filters.role) {
+            filteredFocuses = filteredFocuses.filter(focus => focus.role === filters.role);
+          }
+          if (filters.type) {
+            filteredFocuses = filteredFocuses.filter(focus => focus.type === filters.type);
+          }
+          if (filters.isPublic !== undefined) {
+            filteredFocuses = filteredFocuses.filter(focus => focus.isPublic === filters.isPublic);
+          }
+        }
+        
+        return filteredFocuses;
+      } catch (error) {
+        console.error('Error fetching focuses:', error);
+        // Fallback to sample data on error
+        return sampleData.focuses;
+      }
+    },
+
+    focus: async (parent: any, args: any) => {
       const { id } = args;
-      return sampleData.focuses.find(focus => focus.id === id);
+      try {
+        const dbFocus = await supabaseDataService.getFocusById(id);
+        return mapDbFocusToGraphQL(dbFocus);
+      } catch (error) {
+        console.error('Error fetching focus:', error);
+        // Fallback to sample data
+        return sampleData.focuses.find(focus => focus.id === id);
+      }
     },
 
-    myFocuses: () => {
-      // In a real app, filter by current user
-      return sampleData.focuses.filter(focus => focus.createdBy === "1");
+    focusesByRole: async (parent: any, args: any) => {
+      const { role } = args;
+      try {
+        const dbFocuses = await supabaseDataService.getFocuses({ role: role.toLowerCase() });
+        return dbFocuses.map(mapDbFocusToGraphQL).filter(Boolean);
+      } catch (error) {
+        console.error('Error fetching focuses by role:', error);
+        return sampleData.focuses.filter(f => f.role === role.toUpperCase());
+      }
+    },
+
+    myFocuses: async (parent: any, args: any, context: any) => {
+      try {
+        // In a real app, get current user from context
+        const userId = context?.user?.id || "1";
+        const dbFocuses = await supabaseDataService.getFocuses({ createdBy: userId });
+        return dbFocuses.map(mapDbFocusToGraphQL).filter(Boolean);
+      } catch (error) {
+        console.error('Error fetching my focuses:', error);
+        // Fallback to sample data
+        return sampleData.focuses.filter(focus => focus.createdBy === "1");
+      }
     },
 
     // Data Queries with Role-based Filtering
@@ -283,63 +397,80 @@ export const resolvers = {
 
   Mutation: {
     // Focus Management
-    createFocus: (parent: any, args: any) => {
+    createFocus: async (parent: any, args: any, context: any) => {
       const { input } = args;
-      const newFocus = {
-        id: (sampleData.focuses.length + 1).toString(),
-        ...input,
-        createdBy: "1", // In real app, get from context
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isPublic: input.isPublic || false
-      };
-      
-      sampleData.focuses.push(newFocus);
-      return newFocus;
+      try {
+        // In a real app, get current user from context
+        // For now, use null if user ID is not a valid UUID
+        const userId = context?.user?.id || null;
+        
+        // Map GraphQL input to database format
+        const dbFocusData = mapGraphQLFocusToDb(input, userId);
+        
+        // Create focus in Supabase
+        const dbFocus = await supabaseDataService.createFocus(dbFocusData);
+        
+        // Map back to GraphQL format
+        return mapDbFocusToGraphQL(dbFocus);
+      } catch (error: any) {
+        console.error('Error creating focus:', error);
+        throw new Error(`Failed to create focus: ${error.message}`);
+      }
     },
 
-    updateFocus: (parent: any, args: any) => {
+    updateFocus: async (parent: any, args: any) => {
       const { id, input } = args;
-      const focusIndex = sampleData.focuses.findIndex(focus => focus.id === id);
-      
-      if (focusIndex === -1) {
-        throw new Error(`Focus with id ${id} not found`);
+      try {
+        // Map GraphQL input to database format
+        const updateData: any = {};
+        
+        if (input.name !== undefined) updateData.name = input.name;
+        if (input.description !== undefined) updateData.description = input.description;
+        if (input.type !== undefined) updateData.type = input.type.toLowerCase();
+        if (input.isPublic !== undefined) updateData.isStandard = input.isPublic;
+        if (input.isDefault !== undefined) updateData.isDefault = input.isDefault;
+        if (input.isActive !== undefined) updateData.isActive = input.isActive;
+        if (input.assignedRoles !== undefined) {
+          updateData.assignedRoles = input.assignedRoles.map((r: string) => r.toUpperCase());
+        } else if (input.role !== undefined) {
+          updateData.assignedRoles = [input.role.toUpperCase()];
+        }
+        if (input.components !== undefined) {
+          updateData.layoutData = { components: input.components };
+        }
+        
+        // Update focus in Supabase
+        const dbFocus = await supabaseDataService.updateFocus(id, updateData);
+        
+        // Map back to GraphQL format
+        return mapDbFocusToGraphQL(dbFocus);
+      } catch (error) {
+        console.error('Error updating focus:', error);
+        throw new Error(`Failed to update focus: ${error.message}`);
       }
-      
-      const updatedFocus = {
-        ...sampleData.focuses[focusIndex],
-        ...input,
-        updatedAt: new Date().toISOString()
-      };
-      
-      sampleData.focuses[focusIndex] = updatedFocus;
-      return updatedFocus;
     },
 
-    deleteFocus: (parent: any, args: any) => {
+    deleteFocus: async (parent: any, args: any) => {
       const { id } = args;
-      const focusIndex = sampleData.focuses.findIndex(focus => focus.id === id);
-      
-      if (focusIndex === -1) {
-        throw new Error(`Focus with id ${id} not found`);
+      try {
+        await supabaseDataService.deleteFocus(id);
+        return true;
+      } catch (error) {
+        console.error('Error deleting focus:', error);
+        throw new Error(`Failed to delete focus: ${error.message}`);
       }
-      
-      sampleData.focuses.splice(focusIndex, 1);
-      return true;
     },
 
-    shareFocus: (parent: any, args: any) => {
+    shareFocus: async (parent: any, args: any) => {
       const { id, isPublic } = args;
-      const focusIndex = sampleData.focuses.findIndex(focus => focus.id === id);
-      
-      if (focusIndex === -1) {
-        throw new Error(`Focus with id ${id} not found`);
+      try {
+        // Update is_standard field to reflect public/private status
+        const dbFocus = await supabaseDataService.updateFocus(id, { isStandard: isPublic });
+        return mapDbFocusToGraphQL(dbFocus);
+      } catch (error) {
+        console.error('Error sharing focus:', error);
+        throw new Error(`Failed to share focus: ${error.message}`);
       }
-      
-      sampleData.focuses[focusIndex].isPublic = isPublic;
-      sampleData.focuses[focusIndex].updatedAt = new Date().toISOString();
-      
-      return sampleData.focuses[focusIndex];
     },
 
     // User Management
@@ -354,6 +485,136 @@ export const resolvers = {
       sampleData.users[userIndex].updatedAt = new Date().toISOString();
       
       return sampleData.users[userIndex];
+    },
+
+    // Focus Preferences
+    updateFocusPreference: async (parent: any, args: any, context: any) => {
+      try {
+        const { focusId, preferences } = args;
+        const userId = context.user?.id;
+        if (!userId) throw new Error('Authentication required to update focus preferences.');
+        
+        const updated = await supabaseDataService.updateUserFocusPreference(
+          userId,
+          focusId,
+          {
+            isFavorite: preferences.isFavorite,
+            lastUsed: preferences.lastUsed,
+            customLayout: preferences.customLayout
+          }
+        );
+        
+        return {
+          id: updated.id,
+          userId: updated.user_id,
+          focusId: updated.focus_id,
+          isFavorite: updated.is_favorite,
+          lastUsed: updated.last_used,
+          customLayout: updated.custom_layout,
+          createdAt: updated.created_at,
+          updatedAt: updated.updated_at
+        };
+      } catch (error) {
+        console.error('Error updating focus preference:', error);
+        throw new Error(`Failed to update focus preference: ${error.message}`);
+      }
+    },
+
+    toggleFavorite: async (parent: any, args: any, context: any) => {
+      try {
+        const { focusId } = args;
+        const userId = context.user?.id;
+        if (!userId) throw new Error('Authentication required to toggle favorite.');
+        
+        const updated = await supabaseDataService.toggleFavorite(userId, focusId);
+        
+        return {
+          id: updated.id,
+          userId: updated.user_id,
+          focusId: updated.focus_id,
+          isFavorite: updated.is_favorite,
+          lastUsed: updated.last_used,
+          customLayout: updated.custom_layout,
+          createdAt: updated.created_at,
+          updatedAt: updated.updated_at
+        };
+      } catch (error) {
+        console.error('Error toggling favorite:', error);
+        throw new Error(`Failed to toggle favorite: ${error.message}`);
+      }
+    },
+
+    // Focus Groups (Admin)
+    createFocusGroup: async (parent: any, args: any, context: any) => {
+      try {
+        const { groupData } = args;
+        const userId = context.user?.id;
+        if (!userId) throw new Error('Authentication required to create focus group.');
+        
+        // TODO: Check if user is admin
+        const group = await supabaseDataService.createFocusGroup({
+          name: groupData.name,
+          description: groupData.description,
+          isActive: groupData.isActive !== undefined ? groupData.isActive : true,
+          createdBy: userId
+        });
+        
+        return {
+          id: group.id,
+          name: group.name,
+          description: group.description,
+          isActive: group.is_active,
+          createdBy: group.created_by,
+          createdAt: group.created_at,
+          updatedAt: group.updated_at
+        };
+      } catch (error) {
+        console.error('Error creating focus group:', error);
+        throw new Error(`Failed to create focus group: ${error.message}`);
+      }
+    },
+
+    updateFocusGroup: async (parent: any, args: any, context: any) => {
+      try {
+        const { groupId, updateData } = args;
+        const userId = context.user?.id;
+        if (!userId) throw new Error('Authentication required to update focus group.');
+        
+        // TODO: Check if user is admin
+        const group = await supabaseDataService.updateFocusGroup(groupId, {
+          name: updateData.name,
+          description: updateData.description,
+          isActive: updateData.isActive
+        });
+        
+        return {
+          id: group.id,
+          name: group.name,
+          description: group.description,
+          isActive: group.is_active,
+          createdBy: group.created_by,
+          createdAt: group.created_at,
+          updatedAt: group.updated_at
+        };
+      } catch (error) {
+        console.error('Error updating focus group:', error);
+        throw new Error(`Failed to update focus group: ${error.message}`);
+      }
+    },
+
+    deleteFocusGroup: async (parent: any, args: any, context: any) => {
+      try {
+        const { groupId } = args;
+        const userId = context.user?.id;
+        if (!userId) throw new Error('Authentication required to delete focus group.');
+        
+        // TODO: Check if user is admin
+        await supabaseDataService.deleteFocusGroup(groupId);
+        return true;
+      } catch (error) {
+        console.error('Error deleting focus group:', error);
+        throw new Error(`Failed to delete focus group: ${error.message}`);
+      }
     }
   },
 

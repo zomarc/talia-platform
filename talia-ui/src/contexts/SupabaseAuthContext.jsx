@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { useQuery } from '@apollo/client';
-import { GET_TALIA_USER_BY_EMAIL } from '../graphql/queries'; // Assuming this query exists or will be created
+// GraphQL queries disabled during database restoration
+// TODO: Re-enable GraphQL queries when database is restored
+// import { useQuery } from '@apollo/client';
+// import { GET_TALIA_USER_BY_EMAIL } from '../graphql/queries';
 
 const SupabaseAuthContext = createContext();
 
@@ -19,66 +21,111 @@ export const SupabaseAuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [session, setSession] = useState(null);
 
-  useEffect(() => {
-    const { data: { session } } = supabase.auth.getSession();
-    setSession(session);
-    setUser(session?.user ?? null);
-    setLoading(false);
+  // Get or create Talia user record
+  const getOrCreateTaliaUser = async (supabaseUser) => {
+    if (!supabaseUser?.email) return null;
+    
+    try {
+      // First try to get existing talia_user
+      const { data: existingUser, error: fetchError } = await supabase
+        .from('talia_users')
+        .select('*')
+        .eq('email', supabaseUser.email)
+        .single();
+      
+      if (existingUser && !fetchError) {
+        // Update last_login_at
+        await supabase
+          .from('talia_users')
+          .update({ last_login_at: new Date().toISOString() })
+          .eq('id', existingUser.id);
+        return existingUser;
+      }
+      
+      // User doesn't exist, create new one
+      // Get max talia_user_id to determine next ID
+      const { data: maxUser } = await supabase
+        .from('talia_users')
+        .select('talia_user_id')
+        .order('talia_user_id', { ascending: false })
+        .limit(1)
+        .single();
+      
+      const taliaUserId = maxUser?.talia_user_id ? maxUser.talia_user_id + 1 : 1000;
+      
+      const { data: newUser, error: createError } = await supabase
+        .from('talia_users')
+        .insert({
+          id: supabaseUser.id,
+          talia_user_id: taliaUserId,
+          email: supabaseUser.email,
+          last_login_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+      
+      if (createError) {
+        console.error('Error creating talia_user:', createError);
+        return null;
+      }
+      
+      return newUser;
+    } catch (error) {
+      console.error('Error getting/creating talia_user:', error);
+      return null;
+    }
+  };
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
+  useEffect(() => {
+    // Get initial session
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      setSession(session);
+      
+      if (session?.user) {
+        // Get or create Talia user record
+        const taliaUser = await getOrCreateTaliaUser(session.user);
+        setUser({
+          ...session.user,
+          taliaUserId: taliaUser?.talia_user_id || null,
+          taliaUser: taliaUser
+        });
+      } else {
+        setUser(null);
+      }
+      
+      setLoading(false);
+    }).catch((err) => {
+      console.error('Error getting session:', err);
+      setError(err);
+      setLoading(false);
+    });
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         setSession(session);
-        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          // Get or create Talia user record
+          const taliaUser = await getOrCreateTaliaUser(session.user);
+          setUser({
+            ...session.user,
+            taliaUserId: taliaUser?.talia_user_id || null,
+            taliaUser: taliaUser
+          });
+        } else {
+          setUser(null);
+        }
+        
         setLoading(false);
       }
     );
 
     return () => {
-      authListener.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
-  // Fetch Talia user data from GraphQL once Supabase user is available
-  // This assumes a GraphQL endpoint is set up to query Supabase data
-  const { data: taliaUserData, loading: taliaUserLoading, error: taliaUserError } = useQuery(
-    GET_TALIA_USER_BY_EMAIL,
-    {
-      variables: { email: user?.email },
-      skip: !user?.email,
-      fetchPolicy: 'network-only', // Ensure we get the latest data
-    }
-  );
-
-  useEffect(() => {
-    if (user && taliaUserData?.taliaUserByEmail) {
-      // Merge Supabase user data with Talia-specific user data from GraphQL
-      setUser(prevUser => ({
-        ...prevUser,
-        taliaUserId: taliaUserData.taliaUserByEmail.id, // Assuming 'id' is the taliaUserId
-        role: taliaUserData.taliaUserByEmail.role,
-        preferences: taliaUserData.taliaUserByEmail.preferences,
-        // Add other Talia-specific fields as needed
-      }));
-    } else if (user && !taliaUserLoading && !taliaUserData?.taliaUserByEmail) {
-      // If Supabase user exists but no Talia user found, create a default one
-      // This part would typically involve a GraphQL mutation to create the user
-      // For now, we'll just log a message.
-      console.warn('Supabase user authenticated, but no corresponding Talia user found in GraphQL. A default user might need to be created.');
-      // You might want to trigger a mutation here to create the Talia user
-      // For now, we'll assign a default role and preferences
-      setUser(prevUser => ({
-        ...prevUser,
-        taliaUserId: null, // No Talia ID yet
-        role: 'user', // Default role
-        preferences: {
-          theme: 'default',
-          fontSize: 12,
-          fontFamily: 'Inter',
-          spacingMode: 'default'
-        },
-      }));
-    }
-  }, [user, taliaUserData, taliaUserLoading]);
 
 
   const signInWithEmail = async (email) => {
@@ -115,8 +162,8 @@ export const SupabaseAuthProvider = ({ children }) => {
   const value = {
     user,
     session,
-    loading: loading || taliaUserLoading,
-    error: error || taliaUserError,
+    loading,
+    error,
     signInWithEmail,
     signOut,
     // Add other Supabase auth methods as needed (e.g., signUp, resetPassword)

@@ -12,6 +12,36 @@ export const typeDefs = `#graphql
     updatedAt: String!
   }
 
+  type TaliaUser {
+    id: ID!
+    taliaUserId: Int!
+    email: String!
+    createdAt: String!
+    updatedAt: String!
+    lastLoginAt: String
+  }
+
+  type FocusPreference {
+    id: ID!
+    userId: ID!
+    focusId: ID!
+    isFavorite: Boolean!
+    lastUsed: String
+    customLayout: JSON
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type FocusGroup {
+    id: ID!
+    name: String!
+    description: String
+    isActive: Boolean!
+    createdBy: ID
+    createdAt: String!
+    updatedAt: String!
+  }
+
   enum UserRole {
     ADMIN
     MANAGER
@@ -295,16 +325,32 @@ export const typeDefs = `#graphql
     selectedSailCode: String
   }
 
+  input FocusPreferenceInput {
+    isFavorite: Boolean
+    lastUsed: String
+    customLayout: JSON
+  }
+
+  input FocusGroupInput {
+    name: String!
+    description: String
+    isActive: Boolean
+  }
+
   # Queries
   type Query {
     # User Management
     me: User
     users: [User!]!
+    taliaUser(email: String!): TaliaUser
     
     # Focus Management
     focuses(filters: FocusFilters): [Focus!]!
+    focusesByRole(role: String!): [Focus!]!
     focus(id: ID!): Focus
     myFocuses: [Focus!]!
+    myFocusPreferences: [FocusPreference!]!
+    focusGroups(isActive: Boolean): [FocusGroup!]!
     
     # Data Queries (with role-based filtering)
     sailings(filters: SailingFilters, userRole: UserRole): [Sailing!]!
@@ -329,6 +375,15 @@ export const typeDefs = `#graphql
     
     # User Management
     updateUserPreferences(input: UserPreferencesInput!): User!
+    
+    # Focus Preferences
+    updateFocusPreference(focusId: ID!, preferences: FocusPreferenceInput!): FocusPreference!
+    toggleFavorite(focusId: ID!): FocusPreference!
+    
+    # Focus Groups (Admin)
+    createFocusGroup(groupData: FocusGroupInput!): FocusGroup!
+    updateFocusGroup(groupId: ID!, updateData: FocusGroupInput!): FocusGroup!
+    deleteFocusGroup(groupId: ID!): Boolean!
   }
 
   # Subscriptions (for real-time updates)

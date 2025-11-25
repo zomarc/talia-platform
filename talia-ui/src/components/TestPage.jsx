@@ -11,6 +11,7 @@ import EventMonitor from './shared/EventMonitor';
 import InformationPanel from './TestPage/InformationPanel';
 import { LoadingSpinner, ErrorMessage } from './shared';
 import queryTracker from '../services/data/queryTracker';
+import { getThemeForMode } from '../themes/modeThemes';
 
 const TestPage = () => {
   // Component selection
@@ -32,17 +33,8 @@ const TestPage = () => {
     refetch 
   } = useSailingData(filters);
 
-  // Theme
-  const theme = {
-    colors: {
-      background: '#ffffff',
-      foreground: '#2b2b2b',
-      sidebar: '#f7f3ee',
-      sidebarBorder: '#e8dfd0',
-      sidebarHeader: '#f5efe6',
-      accent: '#b08d57',
-    }
-  };
+  // Get theme for test mode
+  const theme = getThemeForMode('test');
 
   // Component metadata
   const componentMeta = componentRegistry[selectedComponent];
@@ -142,26 +134,31 @@ const TestPage = () => {
     <div style={{
       padding: '12px',
       fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      background: '#f5f5f5',
-      minHeight: '100vh'
+      background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
+      backgroundAttachment: 'fixed',
+      minHeight: '100vh',
+      position: 'relative'
     }}>
       <div style={{ maxWidth: '100%', margin: '0 auto' }}>
         {/* Compact Header */}
         <div style={{
-          background: 'white',
+          background: theme.colors.glass,
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
           padding: '12px 16px',
-          borderRadius: '8px',
+          borderRadius: '12px',
           marginBottom: '12px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+          border: `1px solid ${theme.colors.glassBorder}`,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: '18px', color: '#2b2b2b' }}>
+            <h1 style={{ margin: 0, fontSize: '18px', color: theme.colors.foreground, fontWeight: '600' }}>
               🧪 Component Test Page
             </h1>
-            <p style={{ margin: '4px 0 0 0', color: '#666', fontSize: '12px' }}>
+            <p style={{ margin: '4px 0 0 0', color: 'rgba(224, 224, 224, 0.7)', fontSize: '12px' }}>
               Test and inspect components with real-time monitoring
             </p>
           </div>
@@ -169,32 +166,35 @@ const TestPage = () => {
 
         {/* Summary Bar */}
         <div style={{
-          background: 'white',
+          background: theme.colors.glass,
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
           padding: '8px 16px',
-          borderRadius: '8px',
+          borderRadius: '12px',
           marginBottom: '12px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+          border: `1px solid ${theme.colors.glassBorder}`,
           display: 'flex',
           gap: '24px',
           alignItems: 'center',
           fontSize: '11px',
-          borderLeft: '3px solid #b08d57'
+          borderLeft: `3px solid ${theme.colors.accent}`
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: '#666', fontWeight: '500' }}>Source:</span>
-            <span style={{ color: '#333', fontFamily: 'monospace' }}>{componentFile}</span>
+            <span style={{ color: 'rgba(224, 224, 224, 0.7)', fontWeight: '500' }}>Source:</span>
+            <span style={{ color: theme.colors.foreground, fontFamily: 'monospace' }}>{componentFile}</span>
           </div>
-          <div style={{ width: '1px', height: '20px', background: '#e0e0e0' }}></div>
+          <div style={{ width: '1px', height: '20px', background: 'rgba(255, 255, 255, 0.2)' }}></div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: '#666', fontWeight: '500' }}>Latest Event:</span>
-            <span style={{ color: latestEvent ? '#b08d57' : '#999' }}>
+            <span style={{ color: 'rgba(224, 224, 224, 0.7)', fontWeight: '500' }}>Latest Event:</span>
+            <span style={{ color: latestEvent ? theme.colors.accent : 'rgba(224, 224, 224, 0.5)' }}>
               {latestEvent ? `${latestEvent.name} (${latestEvent.timestamp})` : 'None'}
             </span>
           </div>
-          <div style={{ width: '1px', height: '20px', background: '#e0e0e0' }}></div>
+          <div style={{ width: '1px', height: '20px', background: 'rgba(255, 255, 255, 0.2)' }}></div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: '#666', fontWeight: '500' }}>Data Source:</span>
-            <span style={{ color: '#333', fontFamily: 'monospace' }}>
+            <span style={{ color: 'rgba(224, 224, 224, 0.7)', fontWeight: '500' }}>Data Source:</span>
+            <span style={{ color: theme.colors.foreground, fontFamily: 'monospace' }}>
               http://localhost:4000/graphql
             </span>
             {latestQuery && (
@@ -208,24 +208,29 @@ const TestPage = () => {
         {/* Event Content Bar */}
         {latestEvent && latestEvent.detail && (
           <div style={{
-            background: '#fff9e6',
+            background: 'rgba(255, 193, 7, 0.1)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
             padding: '8px 16px',
-            borderRadius: '8px',
+            borderRadius: '12px',
             marginBottom: '12px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            borderLeft: '3px solid #ffc107',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+            border: '1px solid rgba(255, 193, 7, 0.3)',
+            borderLeft: `3px solid #ffc107`,
             fontSize: '10px'
           }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-              <span style={{ color: '#666', fontWeight: '500', minWidth: '80px' }}>Event Content:</span>
+              <span style={{ color: 'rgba(224, 224, 224, 0.9)', fontWeight: '500', minWidth: '80px' }}>Event Content:</span>
               <div style={{ 
                 flex: 1, 
                 fontFamily: 'monospace', 
-                color: '#333',
-                background: '#fff',
+                color: theme.colors.foreground,
+                background: 'rgba(0, 0, 0, 0.3)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
                 padding: '4px 8px',
-                borderRadius: '4px',
-                border: '1px solid #e0e0e0',
+                borderRadius: '6px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
                 maxHeight: '80px',
                 overflow: 'auto',
                 whiteSpace: 'pre-wrap',
@@ -243,10 +248,15 @@ const TestPage = () => {
         {/* Tabs */}
         <div style={{
           display: 'flex',
-          background: 'white',
-          borderRadius: '8px 8px 0 0',
-          borderBottom: '1px solid #e0e0e0',
-          padding: '0 12px'
+          background: theme.colors.glass,
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderRadius: '12px 12px 0 0',
+          borderBottom: `1px solid ${theme.colors.glassBorder}`,
+          padding: '0 12px',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+          border: `1px solid ${theme.colors.glassBorder}`,
+          borderBottom: `1px solid ${theme.colors.glassBorder}`
         }}>
           {tabs.map(tab => (
             <button
@@ -256,12 +266,13 @@ const TestPage = () => {
                 padding: '10px 16px',
                 background: 'transparent',
                 border: 'none',
-                borderBottom: activeTab === tab.id ? '2px solid #b08d57' : '2px solid transparent',
+                borderBottom: activeTab === tab.id ? `2px solid ${theme.colors.accent}` : '2px solid transparent',
                 cursor: 'pointer',
                 fontSize: '13px',
                 fontWeight: activeTab === tab.id ? '600' : '400',
-                color: activeTab === tab.id ? '#b08d57' : '#666',
-                marginRight: '8px'
+                color: activeTab === tab.id ? theme.colors.accent : 'rgba(224, 224, 224, 0.7)',
+                marginRight: '8px',
+                transition: 'all 0.2s'
               }}
             >
               {tab.label}
@@ -271,9 +282,13 @@ const TestPage = () => {
 
         {/* Tab Content */}
         <div style={{
-          background: 'white',
-          borderRadius: '0 0 8px 8px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          background: theme.colors.glass,
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderRadius: '0 0 12px 12px',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+          border: `1px solid ${theme.colors.glassBorder}`,
+          borderTop: 'none',
           minHeight: '600px'
         }}>
           {/* Component Tab */}
@@ -290,7 +305,7 @@ const TestPage = () => {
                   <label style={{
                     display: 'block',
                     fontSize: '11px',
-                    color: '#666',
+                    color: 'rgba(224, 224, 224, 0.7)',
                     marginBottom: '4px',
                     fontWeight: '500'
                   }}>
@@ -302,10 +317,13 @@ const TestPage = () => {
                     style={{
                       width: '100%',
                       padding: '6px 8px',
-                      border: '1px solid #ddd',
-                      borderRadius: '4px',
+                      border: `1px solid ${theme.colors.glassBorder}`,
+                      borderRadius: '6px',
                       fontSize: '13px',
-                      background: 'white'
+                      background: 'rgba(0, 0, 0, 0.3)',
+                      backdropFilter: 'blur(10px)',
+                      WebkitBackdropFilter: 'blur(10px)',
+                      color: theme.colors.foreground
                     }}
                   >
                     {Object.entries(categories).map(([category, components]) => (
@@ -323,14 +341,18 @@ const TestPage = () => {
                   onClick={() => setShowFilters(!showFilters)}
                   style={{
                     padding: '6px 12px',
-                    background: showFilters ? '#b08d57' : '#e0e0e0',
-                    color: showFilters ? 'white' : '#333',
-                    border: 'none',
-                    borderRadius: '4px',
+                    background: showFilters ? theme.colors.accent : theme.colors.glass,
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                    color: showFilters ? '#0f0f23' : theme.colors.foreground,
+                    border: `1px solid ${theme.colors.glassBorder}`,
+                    borderRadius: '6px',
                     cursor: 'pointer',
                     fontSize: '12px',
                     alignSelf: 'flex-end',
-                    marginTop: '20px'
+                    marginTop: '20px',
+                    fontWeight: '500',
+                    transition: 'all 0.2s'
                   }}
                 >
                   {showFilters ? '▼' : '▶'} Filters
@@ -341,9 +363,12 @@ const TestPage = () => {
               {showFilters && (
                 <div style={{
                   padding: '12px',
-                  background: '#f9f9f9',
-                  borderRadius: '4px',
-                  marginBottom: '12px'
+                  background: 'rgba(0, 0, 0, 0.3)',
+                  backdropFilter: 'blur(10px)',
+                  WebkitBackdropFilter: 'blur(10px)',
+                  borderRadius: '8px',
+                  marginBottom: '12px',
+                  border: `1px solid ${theme.colors.glassBorder}`
                 }}>
                   <div style={{
                     display: 'grid',
@@ -355,7 +380,7 @@ const TestPage = () => {
                       <label style={{
                         display: 'block',
                         fontSize: '11px',
-                        color: '#666',
+                        color: 'rgba(224, 224, 224, 0.7)',
                         marginBottom: '4px',
                         fontWeight: '500'
                       }}>
@@ -369,9 +394,13 @@ const TestPage = () => {
                         style={{
                           width: '100%',
                           padding: '6px',
-                          border: '1px solid #ddd',
-                          borderRadius: '4px',
-                          fontSize: '12px'
+                          border: `1px solid ${theme.colors.glassBorder}`,
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          background: 'rgba(0, 0, 0, 0.4)',
+                          color: theme.colors.foreground,
+                          backdropFilter: 'blur(10px)',
+                          WebkitBackdropFilter: 'blur(10px)'
                         }}
                       />
                     </div>
@@ -379,7 +408,7 @@ const TestPage = () => {
                       <label style={{
                         display: 'block',
                         fontSize: '11px',
-                        color: '#666',
+                        color: 'rgba(224, 224, 224, 0.7)',
                         marginBottom: '4px',
                         fontWeight: '500'
                       }}>
@@ -393,9 +422,13 @@ const TestPage = () => {
                         style={{
                           width: '100%',
                           padding: '6px',
-                          border: '1px solid #ddd',
-                          borderRadius: '4px',
-                          fontSize: '12px'
+                          border: `1px solid ${theme.colors.glassBorder}`,
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          background: 'rgba(0, 0, 0, 0.4)',
+                          color: theme.colors.foreground,
+                          backdropFilter: 'blur(10px)',
+                          WebkitBackdropFilter: 'blur(10px)'
                         }}
                       />
                     </div>
@@ -403,7 +436,7 @@ const TestPage = () => {
                       <label style={{
                         display: 'block',
                         fontSize: '11px',
-                        color: '#666',
+                        color: 'rgba(224, 224, 224, 0.7)',
                         marginBottom: '4px',
                         fontWeight: '500'
                       }}>
@@ -419,9 +452,13 @@ const TestPage = () => {
                         style={{
                           width: '100%',
                           padding: '6px',
-                          border: '1px solid #ddd',
-                          borderRadius: '4px',
-                          fontSize: '12px'
+                          border: `1px solid ${theme.colors.glassBorder}`,
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          background: 'rgba(0, 0, 0, 0.4)',
+                          color: theme.colors.foreground,
+                          backdropFilter: 'blur(10px)',
+                          WebkitBackdropFilter: 'blur(10px)'
                         }}
                       />
                     </div>
@@ -431,13 +468,14 @@ const TestPage = () => {
                       onClick={handleApplyFilters}
                       style={{
                         padding: '6px 12px',
-                        background: '#b08d57',
-                        color: 'white',
+                        background: theme.colors.accent,
+                        color: '#0f0f23',
                         border: 'none',
-                        borderRadius: '4px',
+                        borderRadius: '6px',
                         cursor: 'pointer',
                         fontSize: '12px',
-                        fontWeight: '500'
+                        fontWeight: '500',
+                        transition: 'all 0.2s'
                       }}
                     >
                       Apply
@@ -446,12 +484,15 @@ const TestPage = () => {
                       onClick={handleClearFilters}
                       style={{
                         padding: '6px 12px',
-                        background: '#e0e0e0',
-                        color: '#333',
-                        border: 'none',
-                        borderRadius: '4px',
+                        background: theme.colors.glass,
+                        backdropFilter: 'blur(10px)',
+                        WebkitBackdropFilter: 'blur(10px)',
+                        color: theme.colors.foreground,
+                        border: `1px solid ${theme.colors.glassBorder}`,
+                        borderRadius: '6px',
                         cursor: 'pointer',
-                        fontSize: '12px'
+                        fontSize: '12px',
+                        transition: 'all 0.2s'
                       }}
                     >
                       Clear
@@ -460,12 +501,15 @@ const TestPage = () => {
                       onClick={refetch}
                       style={{
                         padding: '6px 12px',
-                        background: '#e0e0e0',
-                        color: '#333',
-                        border: 'none',
-                        borderRadius: '4px',
+                        background: theme.colors.glass,
+                        backdropFilter: 'blur(10px)',
+                        WebkitBackdropFilter: 'blur(10px)',
+                        color: theme.colors.foreground,
+                        border: `1px solid ${theme.colors.glassBorder}`,
+                        borderRadius: '6px',
                         cursor: 'pointer',
-                        fontSize: '12px'
+                        fontSize: '12px',
+                        transition: 'all 0.2s'
                       }}
                     >
                       ↻ Refresh
@@ -476,11 +520,13 @@ const TestPage = () => {
 
               {/* Component Render Area */}
               <div style={{
-                border: '1px solid #e0e0e0',
-                borderRadius: '4px',
+                border: `1px solid ${theme.colors.glassBorder}`,
+                borderRadius: '8px',
                 padding: '12px',
                 minHeight: '500px',
-                background: '#fafafa'
+                background: 'rgba(0, 0, 0, 0.2)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)'
               }}>
                 {loading && selectedComponent === 'SailingTable' && (
                   <LoadingSpinner size="small" message="Loading data..." />
@@ -503,8 +549,8 @@ const TestPage = () => {
           {/* Events Tab */}
           {activeTab === 'events' && (
             <div style={{ padding: '12px', height: '600px' }}>
-              <div style={{ marginBottom: '12px', fontSize: '12px', color: '#666' }}>
-                Showing events for: <strong>{selectedComponent}</strong>
+              <div style={{ marginBottom: '12px', fontSize: '12px', color: 'rgba(224, 224, 224, 0.7)' }}>
+                Showing events for: <strong style={{ color: theme.colors.foreground }}>{selectedComponent}</strong>
               </div>
               <EventMonitor componentFilter={selectedComponent} />
             </div>

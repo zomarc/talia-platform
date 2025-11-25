@@ -42,6 +42,84 @@ const DELETE_FOCUS_MUTATION = gql`
   }
 `;
 
+const GET_FOCUS_GROUPS_QUERY = gql`
+  query GetFocusGroups($isActive: Boolean) {
+    focusGroups(isActive: $isActive) {
+      id
+      name
+      description
+      isActive
+      createdBy
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const CREATE_FOCUS_GROUP_MUTATION = gql`
+  mutation CreateFocusGroup($groupData: FocusGroupInput!) {
+    createFocusGroup(groupData: $groupData) {
+      id
+      name
+      description
+      isActive
+      createdBy
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const UPDATE_FOCUS_GROUP_MUTATION = gql`
+  mutation UpdateFocusGroup($groupId: ID!, $updateData: FocusGroupInput!) {
+    updateFocusGroup(groupId: $groupId, updateData: $updateData) {
+      id
+      name
+      description
+      isActive
+      createdBy
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const DELETE_FOCUS_GROUP_MUTATION = gql`
+  mutation DeleteFocusGroup($groupId: ID!) {
+    deleteFocusGroup(groupId: $groupId)
+  }
+`;
+
+const GET_USER_PREFERENCES_QUERY = gql`
+  query GetMyFocusPreferences {
+    myFocusPreferences {
+      id
+      userId
+      focusId
+      isFavorite
+      lastUsed
+      customLayout
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const UPDATE_PREFERENCE_MUTATION = gql`
+  mutation UpdateFocusPreference($focusId: ID!, $preferences: FocusPreferenceInput!) {
+    updateFocusPreference(focusId: $focusId, preferences: $preferences) {
+      id
+      userId
+      focusId
+      isFavorite
+      lastUsed
+      customLayout
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
 
 class GraphQLFocusService {
   async getFocusesForRole(userRole) {
@@ -103,6 +181,74 @@ class GraphQLFocusService {
     } catch (error) {
       console.error('❌ Error deleting focus via GraphQL:', error);
       return false;
+    }
+  }
+
+  // Focus Groups
+  async getFocusGroups(isActive = null) {
+    try {
+      const { data } = await apolloClient.query({
+        query: GET_FOCUS_GROUPS_QUERY,
+        variables: { isActive },
+        fetchPolicy: 'network-only',
+      });
+      return data.focusGroups || [];
+    } catch (error) {
+      console.error('Error getting focus groups:', error);
+      return [];
+    }
+  }
+
+  async createFocusGroup(groupData) {
+    try {
+      const { data } = await apolloClient.mutate({
+        mutation: CREATE_FOCUS_GROUP_MUTATION,
+        variables: { groupData },
+      });
+      return data.createFocusGroup;
+    } catch (error) {
+      console.error('Error creating focus group:', error);
+      throw error;
+    }
+  }
+
+  async updateFocusGroup(groupId, updateData) {
+    try {
+      const { data } = await apolloClient.mutate({
+        mutation: UPDATE_FOCUS_GROUP_MUTATION,
+        variables: { groupId, updateData },
+      });
+      return data.updateFocusGroup;
+    } catch (error) {
+      console.error('Error updating focus group:', error);
+      throw error;
+    }
+  }
+
+  // User Preferences
+  async getUserPreferences() {
+    try {
+      const { data } = await apolloClient.query({
+        query: GET_USER_PREFERENCES_QUERY,
+        fetchPolicy: 'network-only',
+      });
+      return data.myFocusPreferences || [];
+    } catch (error) {
+      console.error('Error getting user preferences:', error);
+      return [];
+    }
+  }
+
+  async updatePreference(focusId, preferences) {
+    try {
+      const { data } = await apolloClient.mutate({
+        mutation: UPDATE_PREFERENCE_MUTATION,
+        variables: { focusId, preferences },
+      });
+      return data.updateFocusPreference;
+    } catch (error) {
+      console.error('Error updating preference:', error);
+      throw error;
     }
   }
 }

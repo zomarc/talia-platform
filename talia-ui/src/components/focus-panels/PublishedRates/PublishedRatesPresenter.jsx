@@ -12,7 +12,6 @@
 import React, { useRef, useEffect } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
 import { useTheme } from '../../../contexts/ThemeContext';
-import '../../../styles/publishedRates.css';
 
 // Event names for row selection
 const SELECT_EVENT = 'talia:publishedRates.select';

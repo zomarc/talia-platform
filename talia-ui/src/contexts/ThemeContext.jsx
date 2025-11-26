@@ -56,21 +56,6 @@ export const ThemeProvider = ({ children }) => {
     }
   }, [currentTheme]);
 
-  // Apply font size and font family as CSS variables
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty('--theme-font-size', `${fontSize}px`);
-    root.style.setProperty('--theme-font-family', selectedFont.value);
-    root.style.setProperty('--theme-font-family-monospace', 'monospace');
-    
-    // Table-specific font settings (Data Mode uses 10px monospace)
-    // These are fixed to match Data Management screen styling
-    root.style.setProperty('--theme-table-font-size', '10px');
-    root.style.setProperty('--theme-table-font-family', 'monospace');
-    root.style.setProperty('--theme-table-header-font-size', '10px');
-    root.style.setProperty('--theme-table-header-font-weight', '600');
-  }, [fontSize, selectedFont]);
-
   // Get current theme object
   const theme = getTheme(currentTheme);
   const themeColors = getThemeColors(currentTheme);
@@ -150,6 +135,22 @@ export const ThemeProvider = ({ children }) => {
   };
 
   const selectedFont = FONT_FAMILIES[fontFamily] || FONT_FAMILIES['Inter'];
+
+  // Apply font size and font family as CSS variables
+  // This must be AFTER fontSize, fontFamily, and selectedFont are defined
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--theme-font-size', `${fontSize}px`);
+    root.style.setProperty('--theme-font-family', selectedFont.value);
+    root.style.setProperty('--theme-font-family-monospace', 'monospace');
+    
+    // Table-specific font settings (Data Mode uses 10px monospace)
+    // These are fixed to match Data Management screen styling
+    root.style.setProperty('--theme-table-font-size', '10px');
+    root.style.setProperty('--theme-table-font-family', 'monospace');
+    root.style.setProperty('--theme-table-header-font-size', '10px');
+    root.style.setProperty('--theme-table-header-font-weight', '600');
+  }, [fontSize, selectedFont]);
 
   const value = {
     // Theme

@@ -1,0 +1,62 @@
+/**
+ * Native CSS hover styles for data management tables
+ * Uses CSS variables set by the component for theme colors
+ */
+
+/* Data Management Table - row base styles */
+.data-management-table tbody tr {
+  background-color: var(--table-row-even);
+  transition: background-color 0.15s ease;
+}
+
+.data-management-table tbody tr.table-row-odd {
+  background-color: var(--table-row-odd);
+}
+
+.data-management-table tbody tr.table-row-even {
+  background-color: var(--table-row-even);
+}
+
+/* Selected row */
+.data-management-table tbody tr.table-row-selected {
+  background-color: var(--table-row-selected);
+}
+
+/* Hover state - native CSS */
+.data-management-table tbody tr:hover {
+  background-color: var(--table-row-hover) !important;
+}
+
+/* Selected row hover */
+.data-management-table tbody tr.table-row-selected:hover {
+  background-color: var(--table-row-selected-hover) !important;
+}
+
+/* Ensure cells are transparent so row background shows through */
+.data-management-table tbody tr td {
+  background-color: transparent;
+}
+
+/* Review Table - row base styles */
+.review-table tbody tr {
+  background-color: transparent;
+  transition: background-color 0.15s ease;
+}
+
+.review-table tbody tr.review-row-odd {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.review-table tbody tr.review-row-even {
+  background-color: transparent;
+}
+
+/* Review table hover state - native CSS */
+.review-table tbody tr:hover {
+  background-color: var(--table-row-hover) !important;
+}
+
+/* Ensure review table cells are transparent so row background shows through */
+.review-table tbody tr td {
+  background-color: transparent;
+}

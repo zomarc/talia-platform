@@ -8,6 +8,7 @@ import { useDatabaseTables } from '../hooks/useDatabaseTables';
 import { LoadingSpinner, ErrorMessage } from './shared';
 import { getThemeForMode } from '../themes/modeThemes';
 import { supabase } from '../lib/supabase';
+import '../themes/dataMode.css';
 
 const DataManagementPage = () => {
   const { tables, loading, error, refetch } = useDatabaseTables();
@@ -441,17 +442,18 @@ const DataManagementPage = () => {
   const renderTableRows = (tableList) => {
     return tableList.map((table, idx) => {
       const statusColors = getStatusColor(table.status);
+      const isSelected = table.tableName === selectedTable;
+      const isEven = idx % 2 === 0;
+      
       return (
         <tr
           key={table.tableName}
           onClick={() => setSelectedTable(table.tableName === selectedTable ? null : table.tableName)}
+          className={isSelected ? 'table-row-selected' : (isEven ? 'table-row-even' : 'table-row-odd')}
           style={{
             borderBottom: `1px solid ${theme.colors.glassBorder}`,
-            background: table.tableName === selectedTable 
-              ? 'rgba(100, 181, 246, 0.2)' 
-              : idx % 2 === 0 ? 'transparent' : 'rgba(0, 0, 0, 0.1)',
             cursor: 'pointer',
-            transition: 'background 0.2s'
+            color: theme.colors.foreground
           }}
         >
           <td style={{
@@ -459,8 +461,7 @@ const DataManagementPage = () => {
             fontFamily: 'monospace',
             fontSize: '10px',
             fontWeight: '500',
-            width: columnWidths.tableName,
-            color: theme.colors.foreground
+            width: columnWidths.tableName
           }}>
             {table.tableName}
           </td>
@@ -478,31 +479,30 @@ const DataManagementPage = () => {
             textAlign: 'right',
             fontFamily: 'monospace',
             fontSize: '10px',
-            width: columnWidths.rowCount,
-            color: theme.colors.foreground
+            width: columnWidths.rowCount
           }}>
             {table.rowCount.toLocaleString()}
           </td>
           <td style={{
-            padding: '6px 8px',
-            fontSize: '10px',
-            color: theme.colors.textSecondary,
-            width: columnWidths.dateRange
+            padding: '8px 12px',
+            fontSize: '11px',
+            width: columnWidths.dateRange,
+            color: theme.colors.textSecondary
           }}>
             {formatDateRange(table.dateRange)}
           </td>
           <td style={{
-            padding: '6px 8px',
-            fontSize: '10px',
-            color: theme.colors.textSecondary,
-            width: columnWidths.lastSync
+            padding: '8px 12px',
+            fontSize: '11px',
+            width: columnWidths.lastSync,
+            color: theme.colors.textSecondary
           }}>
             {formatDate(table.lastSync)}
           </td>
           <td style={{
-            padding: '6px 8px',
-            fontSize: '10px',
+            padding: '8px 12px',
             fontFamily: 'monospace',
+            fontSize: '11px',
             color: table.syncDuration === null ? theme.colors.textMuted : theme.colors.textSecondary,
             width: columnWidths.syncDuration
           }}>
@@ -524,12 +524,13 @@ const DataManagementPage = () => {
               {table.status}
             </span>
           </td>
-          <td style={{
-            padding: '6px 8px',
-            textAlign: 'center',
-            width: columnWidths.actions
-          }}
-          onClick={(e) => e.stopPropagation()}
+          <td 
+            style={{
+              padding: '6px 8px',
+              textAlign: 'center',
+              width: columnWidths.actions
+            }}
+            onClick={(e) => e.stopPropagation()}
           >
             {table.source !== 'N/A' && table.type !== 'unknown' && table.type !== 'system' && table.type !== 'application' ? (
               <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -643,25 +644,37 @@ const DataManagementPage = () => {
     });
   };
 
+  // Set CSS variables for theme colors
+  const rootStyle = {
+    padding: '8px',
+    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
+    backgroundAttachment: 'fixed',
+    minHeight: '100vh',
+    position: 'relative',
+    '--table-row-even': theme.colors.tableRowEven,
+    '--table-row-odd': theme.colors.tableRowOdd,
+    '--table-row-hover': theme.colors.tableRowHover,
+    '--table-row-selected': theme.colors.tableRowSelected,
+    '--table-row-selected-hover': theme.colors.tableRowSelectedHover,
+    '--glass-border': theme.colors.glassBorder,
+    '--foreground': theme.colors.foreground,
+    '--text-secondary': theme.colors.textSecondary,
+    '--text-muted': theme.colors.textMuted
+  };
+
   return (
-    <div style={{
-      padding: '8px',
-      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
-      backgroundAttachment: 'fixed',
-      minHeight: '100vh',
-      position: 'relative'
-    }}>
+    <div style={rootStyle}>
       <div style={{ maxWidth: '100%', margin: '0 auto' }}>
         {/* Header */}
         <div style={{
           background: theme.colors.glass,
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          padding: '8px 12px',
+          padding: '12px 16px',
           borderRadius: '12px',
-          marginBottom: '8px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+          marginBottom: '12px',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
           border: `1px solid ${theme.colors.glassBorder}`,
           display: 'flex',
           justifyContent: 'space-between',
@@ -861,7 +874,7 @@ const DataManagementPage = () => {
               Top 5 Tables
             </div>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{
+              <table className="data-management-table" style={{
                 width: '100%',
                 borderCollapse: 'collapse',
                 fontSize: '10px',
@@ -901,7 +914,7 @@ const DataManagementPage = () => {
               All Tables ({restTables.length})
             </div>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{
+              <table className="data-management-table" style={{
                 width: '100%',
                 borderCollapse: 'collapse',
                 fontSize: '10px',
@@ -1128,7 +1141,7 @@ const DataManagementPage = () => {
                   No data found
                 </div>
               ) : (
-                <table style={{
+                <table className="review-table" style={{
                   width: '100%',
                   borderCollapse: 'collapse',
                   fontSize: '10px',
@@ -1162,9 +1175,9 @@ const DataManagementPage = () => {
                     {reviewData.data.map((row, idx) => (
                       <tr
                         key={idx}
+                        className={idx % 2 === 0 ? 'review-row-even' : 'review-row-odd'}
                         style={{
-                          borderBottom: `1px solid ${theme.colors.glassBorder}`,
-                          background: idx % 2 === 0 ? 'transparent' : 'rgba(0, 0, 0, 0.1)'
+                          borderBottom: `1px solid ${theme.colors.glassBorder}`
                         }}
                       >
                         {Object.values(row).map((val, colIdx) => (

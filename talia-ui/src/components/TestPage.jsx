@@ -12,6 +12,7 @@ import InformationPanel from './TestPage/InformationPanel';
 import { LoadingSpinner, ErrorMessage } from './shared';
 import queryTracker from '../services/data/queryTracker';
 import { getThemeForMode } from '../themes/modeThemes';
+import '../themes/dataMode.css';
 
 const TestPage = () => {
   // Component selection

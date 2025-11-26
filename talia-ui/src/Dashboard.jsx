@@ -774,7 +774,7 @@ function InfoPanel(props) {
 
 // ---- VS Code-style Sidebar Component ----
 function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFiltersChange, width, saveLayout, loadLayout, addPanel, clearSelection, clearFilters, resetLayout, createLayoutPreset, currentFocus, onFocusChange, userRole, taliaFocuses, focusLoading, focusError, initializeStandardTaliaFocuses, onSaveCurrentLayout }) {
-  const { theme, currentTheme, setCurrentTheme, fontSize, setFontSize, fontFamily, setFontFamily, selectedFont, spacingMode, setSpacingMode, fontFamilies } = useTheme();
+  const { theme, currentTheme, setCurrentTheme, fontSize, setFontSize, fontFamily, setFontFamily, selectedFont, spacingMode, setSpacingMode, fontFamilies, availableThemes } = useTheme();
 
   const [expandedSections, setExpandedSections] = React.useState({
     focus: true,  // Only Focus Management open by default
@@ -1070,9 +1070,11 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
               value={currentTheme}
               onChange={(e) => setCurrentTheme(e.target.value)}
             >
-              <option value="default">Default</option>
-              <option value="dark">Dark Mode</option>
-              <option value="light">Light Mode</option>
+              {availableThemes.map((themeOption) => (
+                <option key={themeOption.key} value={themeOption.key}>
+                  {themeOption.name}
+                </option>
+              ))}
             </select>
           </div>
           <div style={{ marginBottom: '8px' }}>

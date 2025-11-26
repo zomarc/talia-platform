@@ -82,24 +82,24 @@ export const usePublishedRatesBySail = (options = {}) => {
     };
   }, [listenToSailEvents]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const filters = selectedSailCode ? { sail_code: selectedSailCode } : {};
-      const result = await publishedRatesService.fetch(filters);
-      setData(result);
-    } catch (err) {
-      console.error('[usePublishedRatesBySail] Error:', err);
-      setError(err);
-      setData([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const filters = selectedSailCode ? { sail_code: selectedSailCode } : {};
+        const result = await publishedRatesService.fetch(filters);
+        setData(result);
+      } catch (err) {
+        console.error('[usePublishedRatesBySail] Error:', err);
+        setError(err);
+        setData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchData();
   }, [selectedSailCode]);
 

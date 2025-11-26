@@ -1,8 +1,9 @@
 import React from 'react';
 import LandingPage from './components/LandingPage';
-import Dashboard, { ThemeProvider } from './Dashboard';
+import Dashboard from './Dashboard';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useSupabaseAuth } from './contexts/SupabaseAuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 // Main app component that handles authentication routing
 const AppContent = () => {

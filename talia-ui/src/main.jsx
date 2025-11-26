@@ -1,10 +1,12 @@
 import { StrictMode, useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import './styles/theme.css' // Import theme CSS variables
 import AppWithAuth from './AppWithAuth.jsx'
 import TestPage from './components/TestPage.jsx'
 import DataManagementPage from './components/DataManagementPage.jsx'
 import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext.jsx';
+import { ThemeProvider } from './contexts/ThemeContext.jsx';
 
 // Apollo Client temporarily disabled during database restoration
 // TODO: Re-enable when database is restored
@@ -145,7 +147,9 @@ if (!root) {
     
     reactRoot.render(
       <SupabaseAuthProvider>
-        <DevSwitcher />
+        <ThemeProvider>
+          <DevSwitcher />
+        </ThemeProvider>
       </SupabaseAuthProvider>
     );
     console.log('✅ React app rendered successfully');

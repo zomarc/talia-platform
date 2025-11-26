@@ -1,0 +1,60 @@
+/**
+ * Theme CSS Variables
+ * 
+ * All theme colors are defined as CSS variables.
+ * These variables are set by the ThemeProvider via JavaScript.
+ * 
+ * Components should use these CSS variables instead of hardcoded colors.
+ * 
+ * Example usage:
+ *   background-color: var(--theme-bg);
+ *   color: var(--theme-fg);
+ *   border-color: var(--theme-border);
+ */
+
+:root {
+  /* Default theme variables (will be overridden by ThemeProvider) */
+  --theme-bg: #ffffff;
+  --theme-bg-solid: #ffffff;
+  --theme-fg: #2b2b2b;
+  --theme-text-secondary: #6b6b6b;
+  --theme-text-muted: #999;
+  --theme-sidebar: #f7f3ee;
+  --theme-sidebar-border: #e8dfd0;
+  --theme-sidebar-header: #f5efe6;
+  --theme-accent: #b08d57;
+  --theme-accent-hover: rgba(176, 141, 87, 0.6);
+  --theme-accent-light: rgba(176, 141, 87, 0.3);
+  --theme-glass: rgba(255, 255, 255, 0.8);
+  --theme-glass-border: #e8dfd0;
+  --theme-glass-hover: #fff7ea;
+  --theme-border: #e8dfd0;
+  --theme-hover: #fff7ea;
+  --theme-selected: #fdeacc;
+  --theme-table-row-even: transparent;
+  --theme-table-row-odd: rgba(0, 0, 0, 0.02);
+  --theme-table-row-hover: rgba(176, 141, 87, 0.1);
+  --theme-table-row-selected: #fdeacc;
+  --theme-table-row-selected-hover: rgba(176, 141, 87, 0.2);
+}
+
+/* Apply theme background to body */
+body {
+  background: var(--theme-bg);
+  color: var(--theme-fg);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Theme-specific utility classes */
+.theme-data {
+  /* Additional styles for data theme if needed */
+}
+
+.theme-default {
+  /* Additional styles for default theme if needed */
+}
+
+.theme-dark {
+  /* Additional styles for dark theme if needed */
+}
+

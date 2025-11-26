@@ -22,6 +22,8 @@ import { useFocusManagement } from "./hooks/useFocusManagement";
 import graphQLFocusService from "./services/GraphQLFocusService";
 // Admin Components
 import { AdminDashboard, UserMappingTable, TaliaUserTable } from "./components/admin";
+// Theme System - using centralized theme context
+import { useTheme } from "./contexts/ThemeContext";
 // Removed Apollo Client - using direct fetch instead
 
 // Debug logging
@@ -63,199 +65,8 @@ console.log('🚀 App.jsx file loaded');
 console.log('📦 React version:', React?.version);
 console.log('🔧 Dockview imported:', !!DockviewReact);
 
-// Theme system
-const THEMES = {
-  default: {
-    name: 'Default',
-    colors: {
-      background: '#ffffff',
-      foreground: '#2b2b2b',
-      sidebar: '#f7f3ee',
-      sidebarBorder: '#e8dfd0',
-      sidebarHeader: '#f5efe6',
-      accent: '#b08d57',
-      accentHover: 'rgba(176, 141, 87, 0.6)',
-      accentLight: 'rgba(176, 141, 87, 0.3)',
-      textSecondary: '#6b6b6b',
-      textMuted: '#999',
-      border: '#e8dfd0',
-      hover: '#fff7ea',
-      selected: '#fdeacc'
-    }
-  },
-  dark: {
-    name: 'Dark Mode',
-    colors: {
-      background: '#1e1e1e',
-      foreground: '#d4d4d4',
-      sidebar: '#252526',
-      sidebarBorder: '#3e3e42',
-      sidebarHeader: '#2d2d30',
-      accent: '#007acc',
-      accentHover: 'rgba(0, 122, 204, 0.6)',
-      accentLight: 'rgba(0, 122, 204, 0.3)',
-      textSecondary: '#cccccc',
-      textMuted: '#808080',
-      border: '#3e3e42',
-      hover: '#2a2d2e',
-      selected: '#094771'
-    }
-  },
-  light: {
-    name: 'Light Mode',
-    colors: {
-      background: '#ffffff',
-      foreground: '#333333',
-      sidebar: '#f3f3f3',
-      sidebarBorder: '#e1e1e1',
-      sidebarHeader: '#e8e8e8',
-      accent: '#0078d4',
-      accentHover: 'rgba(0, 120, 212, 0.6)',
-      accentLight: 'rgba(0, 120, 212, 0.3)',
-      textSecondary: '#666666',
-      textMuted: '#999999',
-      border: '#e1e1e1',
-      hover: '#f5f5f5',
-      selected: '#deecf9'
-    }
-  }
-};
-
-// Theme Context
-const ThemeContext = React.createContext();
-
-// Font families for data visualization
-const FONT_FAMILIES = {
-  'Inter': {
-    name: 'Inter',
-    value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    description: 'Modern, clean, highly readable'
-  },
-  'Roboto': {
-    name: 'Roboto',
-    value: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    description: 'Google\'s data-friendly font'
-  },
-  'Source Sans Pro': {
-    name: 'Source Sans Pro',
-    value: '"Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    description: 'Adobe\'s professional font'
-  },
-  'Arial': {
-    name: 'Arial',
-    value: 'Arial, Helvetica, sans-serif',
-    description: 'Classic, widely supported'
-  },
-  'Verdana': {
-    name: 'Verdana',
-    value: 'Verdana, Geneva, sans-serif',
-    description: 'High readability, screen-optimized'
-  },
-  'Brush Script': {
-    name: 'Brush Script',
-    value: '"Brush Script MT", cursive',
-    description: 'Handwritten, casual style'
-  },
-  'Georgia': {
-    name: 'Georgia',
-    value: 'Georgia, "Times New Roman", serif',
-    description: 'Elegant serif, print-friendly'
-  },
-  'Comic Sans': {
-    name: 'Comic Sans',
-    value: '"Comic Sans MS", cursive, sans-serif',
-    description: 'Informal, friendly appearance'
-  }
-};
-
-// Theme Provider Component
-function ThemeProvider({ children }) {
-  // Initialize appearance settings from localStorage if available
-  const [currentTheme, setCurrentTheme] = React.useState(() => {
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.fontSettings?.theme || 'default';
-      }
-    } catch (e) {
-      console.warn('Failed to load theme from localStorage:', e);
-    }
-    return 'default';
-  });
-  
-  const [fontSize, setFontSize] = React.useState(() => {
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.fontSettings?.fontSize || 12;
-      }
-    } catch (e) {
-      console.warn('Failed to load fontSize from localStorage:', e);
-    }
-    return 12;
-  });
-  
-  const [fontFamily, setFontFamily] = React.useState(() => {
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.fontSettings?.fontFamily || 'Inter';
-      }
-    } catch (e) {
-      console.warn('Failed to load fontFamily from localStorage:', e);
-    }
-    return 'Inter';
-  });
-  
-  const [spacingMode, setSpacingMode] = React.useState(() => {
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.fontSettings?.spacingMode || 'default';
-      }
-    } catch (e) {
-      console.warn('Failed to load spacingMode from localStorage:', e);
-    }
-    return 'default';
-  });
-
-  const theme = THEMES[currentTheme];
-  const scaledFontSize = fontSize;
-  const selectedFont = FONT_FAMILIES[fontFamily];
-
-  const value = {
-    theme,
-    currentTheme,
-    setCurrentTheme,
-    fontSize,
-    setFontSize,
-    fontFamily,
-    setFontFamily,
-    selectedFont,
-    spacingMode,
-    setSpacingMode,
-    scaledFontSize
-  };
-
-  return (
-    <ThemeContext.Provider value={value}>
-      {children}
-    </ThemeContext.Provider>
-  );
-}
-
-// Hook to use theme
-const useTheme = () => {
-  const context = React.useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
-};
+// Theme system is now centralized in src/contexts/ThemeContext.jsx
+// Dashboard uses the centralized theme via useTheme hook imported above
 
 /**
  * Talia Demo — Dockview + Tabulator + Chart.js (React + Vite)
@@ -1041,7 +852,7 @@ function InfoPanel(props) {
 
 // ---- VS Code-style Sidebar Component ----
 function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFiltersChange, width, saveLayout, loadLayout, addPanel, clearSelection, clearFilters, resetLayout, createLayoutPreset, currentFocus, onFocusChange, userRole, taliaFocuses, focusLoading, focusError, initializeStandardTaliaFocuses, onSaveCurrentLayout }) {
-  const { theme, currentTheme, setCurrentTheme, fontSize, setFontSize, fontFamily, setFontFamily, selectedFont, spacingMode, setSpacingMode } = useTheme();
+  const { theme, currentTheme, setCurrentTheme, fontSize, setFontSize, fontFamily, setFontFamily, selectedFont, spacingMode, setSpacingMode, fontFamilies } = useTheme();
 
   const [expandedSections, setExpandedSections] = React.useState({
     focus: true,  // Only Focus Management open by default
@@ -1349,7 +1160,7 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
               value={fontFamily}
               onChange={(e) => setFontFamily(e.target.value)}
             >
-              {Object.entries(FONT_FAMILIES).map(([key, font]) => (
+              {Object.entries(fontFamilies).map(([key, font]) => (
                 <option key={key} value={key}>{font.name}</option>
               ))}
             </select>
@@ -2733,7 +2544,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// Export Dashboard component and ThemeProvider
+// Export Dashboard component only
+// ThemeProvider is now centralized in src/contexts/ThemeContext.jsx
 export default Dashboard;
-export { ThemeProvider };
 

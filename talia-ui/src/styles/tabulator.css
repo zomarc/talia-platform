@@ -8,9 +8,10 @@
  */
 
 /* Base Tabulator styling using theme variables */
+/* Defaults to Dark Modern theme values for consistency */
 .tabulator {
-  background-color: var(--theme-bg-solid, #ffffff) !important;
-  color: var(--theme-fg, #2b2b2b) !important;
+  background-color: var(--theme-bg-solid, #151528) !important;
+  color: var(--theme-fg, #e8e8f0) !important;
   border-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
   font-family: var(--theme-font-family, 'Inter', sans-serif) !important;
 }

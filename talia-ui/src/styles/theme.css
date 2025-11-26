@@ -13,36 +13,37 @@
  */
 
 :root {
-  /* Default theme variables (will be overridden by ThemeProvider) */
-  --theme-bg: #ffffff;
-  --theme-bg-solid: #ffffff;
-  --theme-fg: #2b2b2b;
-  --theme-text-secondary: #6b6b6b;
-  --theme-text-muted: #999;
-  --theme-sidebar: #f7f3ee;
-  --theme-sidebar-border: #e8dfd0;
-  --theme-sidebar-header: #f5efe6;
-  --theme-accent: #b08d57;
-  --theme-accent-hover: rgba(176, 141, 87, 0.6);
-  --theme-accent-light: rgba(176, 141, 87, 0.3);
-  --theme-glass: rgba(255, 255, 255, 0.8);
-  --theme-glass-border: #e8dfd0;
-  --theme-glass-hover: #fff7ea;
-  --theme-border: #e8dfd0;
-  --theme-hover: #fff7ea;
-  --theme-selected: #fdeacc;
+  /* Default theme variables - Dark Modern (data theme) */
+  /* These are set by ThemeProvider, but provide Dark Modern as fallback */
+  --theme-bg: linear-gradient(135deg, #0a0a1a 0%, #151528 50%, #1a1a2e 100%);
+  --theme-bg-solid: #151528;
+  --theme-fg: #e8e8f0;
+  --theme-text-secondary: rgba(232, 232, 240, 0.75);
+  --theme-text-muted: rgba(232, 232, 240, 0.55);
+  --theme-sidebar: rgba(255, 255, 255, 0.05);
+  --theme-sidebar-border: rgba(255, 255, 255, 0.12);
+  --theme-sidebar-header: rgba(255, 255, 255, 0.08);
+  --theme-accent: #5b9bd5;
+  --theme-accent-hover: #4a8bc2;
+  --theme-accent-light: rgba(91, 155, 213, 0.15);
+  --theme-glass: rgba(255, 255, 255, 0.08);
+  --theme-glass-border: rgba(255, 255, 255, 0.15);
+  --theme-glass-hover: rgba(255, 255, 255, 0.12);
+  --theme-border: rgba(255, 255, 255, 0.15);
+  --theme-hover: rgba(91, 155, 213, 0.25);
+  --theme-selected: rgba(91, 155, 213, 0.15);
   --theme-table-row-even: transparent;
-  --theme-table-row-odd: rgba(0, 0, 0, 0.02);
-  --theme-table-row-hover: rgba(176, 141, 87, 0.1);
-  --theme-table-row-selected: #fdeacc;
-  --theme-table-row-selected-hover: rgba(176, 141, 87, 0.2);
+  --theme-table-row-odd: rgba(0, 0, 0, 0.2);
+  --theme-table-row-hover: rgba(66, 133, 244, 0.5);
+  --theme-table-row-selected: rgba(66, 133, 244, 0.25);
+  --theme-table-row-selected-hover: rgba(66, 133, 244, 0.6);
   
-  /* Tabulator-specific theme variables */
-  --theme-tabulator-header-bg: #f5efe6;
-  --theme-tabulator-header-text: #2b2b2b;
-  --theme-tabulator-filter-bg: #ffffff;
-  --theme-tabulator-filter-border: #e8dfd0;
-  --theme-tabulator-sort-active: #b08d57;
+  /* Tabulator-specific theme variables - Dark Modern */
+  --theme-tabulator-header-bg: rgba(255, 255, 255, 0.08);
+  --theme-tabulator-header-text: #e8e8f0;
+  --theme-tabulator-filter-bg: #151528;
+  --theme-tabulator-filter-border: rgba(255, 255, 255, 0.15);
+  --theme-tabulator-sort-active: #5b9bd5;
 }
 
 /* Apply theme background to body */

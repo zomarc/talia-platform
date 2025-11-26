@@ -160,7 +160,7 @@
 }
 
 .tabulator-col-sorter:hover {
-  color: var(--theme-accent, #5b9bd5) !important;
+  color: var(--theme-tabulator-sort-active, var(--theme-accent, #5b9bd5)) !important;
 }
 
 .tabulator-col-sorter-element.tabulator-arrow-active {

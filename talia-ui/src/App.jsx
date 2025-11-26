@@ -12,7 +12,7 @@ import { apolloClient, GraphQLUtils } from "./lib/apolloClient";
 // Focus Management Integration
 import { FocusSelector, FocusManager } from "./components/focus-management";
 import { useFocusManagement } from "./hooks/useFocusManagement";
-import { useAuth } from "./contexts/AuthContext";
+import { useSupabaseAuth } from "./contexts/SupabaseAuthContext";
 import "./components/focus-management/focus-management.css";
 
 // Debug logging
@@ -1888,7 +1888,7 @@ function App() {
   const { theme, currentTheme, setCurrentTheme, fontSize, selectedFont, fontFamily, spacingMode, setFontSize, setFontFamily, setSpacingMode } = useTheme();
   
   // Focus Management Integration
-  const { user } = useAuth();
+  const { user } = useSupabaseAuth();
   
   // Development mode: Override user role to admin for testing
   const devUser = user ? { ...user, role: 'admin' } : null;

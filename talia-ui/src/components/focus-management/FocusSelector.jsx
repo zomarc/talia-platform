@@ -5,10 +5,10 @@
 
 import React, { useState } from 'react';
 import { useFocusManagement } from '../../hooks/useFocusManagement';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 
 const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
-  const { user } = useAuth();
+  const { user } = useSupabaseAuth();
   const {
     focuses,
     currentFocus,

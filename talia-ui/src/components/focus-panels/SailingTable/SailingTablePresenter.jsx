@@ -11,7 +11,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { apolloClient } from '../../../lib/apolloClient';
 import { gql } from '@apollo/client';
 
@@ -36,7 +36,7 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
   // Safely get user from auth context (may not be available in all contexts)
   let user = null;
   try {
-    const authContext = useAuth();
+    const authContext = useSupabaseAuth();
     user = authContext?.user || null;
   } catch (error) {
     // AuthContext not available, continue without user

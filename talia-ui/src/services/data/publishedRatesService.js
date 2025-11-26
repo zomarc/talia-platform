@@ -9,7 +9,7 @@ import queryTracker from './queryTracker';
 
 class PublishedRatesService {
   constructor() {
-    this.tableName = 'published_rates';
+    this.tableName = 'published_rates_current_state';
   }
 
   /**

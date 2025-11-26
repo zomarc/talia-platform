@@ -50,6 +50,10 @@ export const themes = {
       '--theme-glass-border': 'rgba(255, 255, 255, 0.15)',
       '--theme-glass-hover': 'rgba(255, 255, 255, 0.12)',
       
+      // Text colors (for consistency with Data Mode)
+      '--theme-text-secondary': 'rgba(232, 232, 240, 0.75)',
+      '--theme-text-muted': 'rgba(232, 232, 240, 0.55)',
+      
       // Border colors
       '--theme-border': 'rgba(255, 255, 255, 0.15)',
       

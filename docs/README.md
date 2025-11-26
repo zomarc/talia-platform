@@ -144,7 +144,7 @@ npm run deploy:production
 - **Dashboard**: Dockview 4.9.0
 - **Charts**: Chart.js 4.5.0
 - **Tables**: Tabulator 5.6.1
-- **Auth**: InstantDB 0.21.26
+- **Auth**: Supabase Authentication
 
 ### **Backend (talia-graphql-server v2.0.0)**
 - **Server**: Apollo Server 5.0.0

@@ -9,6 +9,12 @@ This document outlines all old and redundant code that should be removed now tha
 - ✅ User management using GraphQL → Supabase
 - ✅ All InstantDB packages removed from package.json
 - ✅ Database backup created
+- ✅ All components migrated from `useAuth()` to `useSupabaseAuth()`
+- ✅ `AuthContext.jsx` deleted (no longer needed)
+- ✅ InstantDB schema files deleted (`instant.schema.ts`, `instant.perms.ts`, `instant.config.json`)
+- ✅ Migration scripts deleted
+- ✅ Mock database stub deleted (`db.js`)
+- ✅ CleanUserService deleted
 
 ## 🗑️ Files/Directories to Remove
 
@@ -89,7 +95,7 @@ This document outlines all old and redundant code that should be removed now tha
 
 ## 📋 Cleanup Steps (In Order)
 
-### Phase 1: Safe Deletions (No Dependencies)
+### Phase 1: Safe Deletions (No Dependencies) ✅ COMPLETED
 1. ✅ Delete migration scripts:
    ```bash
    rm talia-ui/scripts/migrate-instantdb-*.js
@@ -102,20 +108,25 @@ This document outlines all old and redundant code that should be removed now tha
    rm talia-ui/src/lib/db.js
    ```
 
-### Phase 2: Audit and Migrate
-3. ⚠️ Audit `useAuth()` usage:
-   - Find all components using `useAuth` from `AuthContext`
-   - Migrate to `useSupabaseAuth` from `SupabaseAuthContext`
-   - Test each component after migration
+3. ✅ Delete InstantDB schema files:
+   ```bash
+   rm talia-ui/instant.schema.ts
+   rm talia-ui/instant.perms.ts
+   rm talia-ui/instant.config.json
+   ```
 
-4. ⚠️ Audit `CleanUserService.js`:
-   - Check if still used
-   - Update comments if used, delete if unused
+### Phase 2: Audit and Migrate ✅ COMPLETED
+3. ✅ Audit `useAuth()` usage:
+   - ✅ All components migrated from `useAuth` to `useSupabaseAuth`
+   - ✅ Components tested and working
 
-### Phase 3: Remove Legacy Code
-5. ⚠️ After Phase 2 is complete:
-   - Delete `talia-ui/src/contexts/AuthContext.jsx`
-   - Delete `talia-ui/src/services/CleanUserService.js` (if unused)
+4. ✅ Audit `CleanUserService.js`:
+   - ✅ Service deleted (no longer used)
+
+### Phase 3: Remove Legacy Code ✅ COMPLETED
+5. ✅ After Phase 2 complete:
+   - ✅ Deleted `talia-ui/src/contexts/AuthContext.jsx`
+   - ✅ Deleted `talia-ui/src/services/CleanUserService.js`
 
 ### Phase 4: Documentation Cleanup
 6. ⚠️ Archive old documentation:

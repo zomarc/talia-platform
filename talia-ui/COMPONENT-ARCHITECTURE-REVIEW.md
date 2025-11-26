@@ -5,7 +5,7 @@
 ### 📊 Overview
 - **Framework**: React 19.1.1 with Vite
 - **State Management**: Context API (AuthContext)
-- **Data Fetching**: Multiple patterns (InstantDB, Supabase REST, Apollo Client configured but unused)
+- **Data Fetching**: GraphQL via Apollo Client, Supabase direct access for admin operations
 - **Layout System**: Dockview for panel management
 - **Table Library**: Tabulator (loaded via CDN)
 
@@ -27,7 +27,7 @@ talia-ui/src/
 ### ⚠️ Key Issues Identified
 
 #### 1. **Inconsistent Data Fetching Patterns**
-- **InstantDB** used for auth and focus management
+- **Supabase** used for authentication and user management
 - **Supabase REST API** used for business data (SimpleTable.jsx)
 - **Apollo Client + GraphQL** configured but not utilized
 - **Hardcoded API URLs** in components

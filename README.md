@@ -29,7 +29,7 @@ Talia Platform provides:
 - **Interactive Dashboard**: React-based UI with customizable focus layouts using Dockview
 - **GraphQL API**: TypeScript-based backend with flexible data querying
 - **Multi-Customer Support**: Environment-based configuration for different customers
-- **User Management**: Role-based access control with InstantDB authentication
+- **User Management**: Role-based access control with Supabase authentication
 
 ### Key Features
 
@@ -100,7 +100,7 @@ cp talia-server/.env.example talia-server/.env
 ```
 
 2. Update `.env` files with your configuration:
-   - InstantDB App ID
+   - Supabase URL and keys
    - GraphQL endpoint
    - Customer branding (optional)
 

@@ -18,3 +18,4 @@ CREATE INDEX IF NOT EXISTS idx_competitor_departure_port ON competitor(departure
 
 
 
+

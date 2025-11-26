@@ -5,7 +5,7 @@
  * Themes are separated from application code and applied via CSS variables.
  */
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useLayoutEffect } from 'react';
 import { themes, DEFAULT_THEME, getTheme, applyTheme, getThemeColors } from '../config/themes';
 
 const ThemeContext = createContext();
@@ -28,6 +28,8 @@ export const ThemeProvider = ({ children }) => {
     try {
       const saved = localStorage.getItem('talia-theme');
       if (saved && themes[saved]) {
+        // Apply theme IMMEDIATELY during initialization (before first render)
+        applyTheme(saved);
         return saved;
       }
       // Also check legacy localStorage key for backward compatibility
@@ -36,6 +38,8 @@ export const ThemeProvider = ({ children }) => {
         const parsed = JSON.parse(legacySaved);
         const legacyTheme = parsed.fontSettings?.theme;
         if (legacyTheme && themes[legacyTheme]) {
+          // Apply theme IMMEDIATELY during initialization
+          applyTheme(legacyTheme);
           return legacyTheme;
         }
       }
@@ -43,10 +47,12 @@ export const ThemeProvider = ({ children }) => {
       console.warn('Failed to load theme from localStorage:', e);
     }
     // Default to 'data' theme (Modern Dark - Data Mode style)
+    // Apply theme IMMEDIATELY during initialization
+    applyTheme(DEFAULT_THEME);
     return DEFAULT_THEME;
   });
 
-  // Apply theme when it changes
+  // Apply theme when it changes (for runtime theme switching)
   useEffect(() => {
     applyTheme(currentTheme);
     try {
@@ -62,29 +68,51 @@ export const ThemeProvider = ({ children }) => {
 
   // Font settings (kept here for backward compatibility with existing code)
   const [fontSize, setFontSize] = useState(() => {
+    let initialFontSize = 12;
     try {
       const saved = localStorage.getItem("taliaLayout");
       if (saved) {
         const parsed = JSON.parse(saved);
-        return parsed.fontSettings?.fontSize || 12;
+        initialFontSize = parsed.fontSettings?.fontSize || 12;
       }
     } catch (e) {
       console.warn('Failed to load fontSize from localStorage:', e);
     }
-    return 12;
+    // Set font CSS variable IMMEDIATELY during initialization (before first render)
+    const root = document.documentElement;
+    root.style.setProperty('--theme-font-size', `${initialFontSize}px`);
+    root.style.setProperty('--theme-table-font-size', '10px');
+    root.style.setProperty('--theme-table-header-font-size', '10px');
+    root.style.setProperty('--theme-table-header-font-weight', '600');
+    return initialFontSize;
   });
 
   const [fontFamily, setFontFamily] = useState(() => {
+    let initialFontFamily = 'Inter';
     try {
       const saved = localStorage.getItem("taliaLayout");
       if (saved) {
         const parsed = JSON.parse(saved);
-        return parsed.fontSettings?.fontFamily || 'Inter';
+        initialFontFamily = parsed.fontSettings?.fontFamily || 'Inter';
       }
     } catch (e) {
       console.warn('Failed to load fontFamily from localStorage:', e);
     }
-    return 'Inter';
+    // Set font family CSS variable IMMEDIATELY during initialization
+    const root = document.documentElement;
+    const FONT_FAMILIES = {
+      'Inter': { value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
+      'Roboto': { value: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+      'Source Sans Pro': { value: '"Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+      'Arial': { value: 'Arial, Helvetica, sans-serif' },
+      'Verdana': { value: 'Verdana, Geneva, sans-serif' },
+      'Georgia': { value: 'Georgia, "Times New Roman", serif' }
+    };
+    const selectedFont = FONT_FAMILIES[initialFontFamily] || FONT_FAMILIES['Inter'];
+    root.style.setProperty('--theme-font-family', selectedFont.value);
+    root.style.setProperty('--theme-font-family-monospace', 'monospace');
+    root.style.setProperty('--theme-table-font-family', 'monospace');
+    return initialFontFamily;
   });
 
   const [spacingMode, setSpacingMode] = useState(() => {
@@ -136,8 +164,8 @@ export const ThemeProvider = ({ children }) => {
 
   const selectedFont = FONT_FAMILIES[fontFamily] || FONT_FAMILIES['Inter'];
 
-  // Apply font size and font family as CSS variables
-  // This must be AFTER fontSize, fontFamily, and selectedFont are defined
+  // Update font CSS variables when fontSize or fontFamily changes (for runtime updates)
+  // Note: Initial values are set synchronously in useState initializers above
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty('--theme-font-size', `${fontSize}px`);
@@ -150,6 +178,15 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-table-font-family', 'monospace');
     root.style.setProperty('--theme-table-header-font-size', '10px');
     root.style.setProperty('--theme-table-header-font-weight', '600');
+    
+    // Update injected Tabulator CSS if it exists
+    // This ensures tables update when font settings change
+    const injectedStyle = document.getElementById('talia-tabulator-global-css');
+    if (injectedStyle) {
+      // Re-inject CSS to pick up new variable values
+      // The CSS variables will be read fresh when CSS is re-evaluated
+      injectedStyle.textContent = injectedStyle.textContent; // Force re-evaluation
+    }
   }, [fontSize, selectedFont]);
 
   const value = {

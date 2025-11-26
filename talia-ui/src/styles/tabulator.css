@@ -16,27 +16,35 @@
   font-family: var(--theme-font-family, 'Inter', sans-serif) !important;
 }
 
-/* Header styling */
+/* Header styling - matches Data Mode tables */
 .tabulator-header {
-  background-color: var(--theme-sidebar-header, rgba(255, 255, 255, 0.08)) !important;
-  color: var(--theme-fg, #e8e8f0) !important;
-  border-bottom-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
+  background-color: var(--theme-glass, var(--theme-sidebar-header, rgba(255, 255, 255, 0.08))) !important;
+  color: var(--theme-text-secondary, var(--theme-fg, rgba(232, 232, 240, 0.75))) !important;
+  border-bottom-color: var(--theme-glass-border, var(--theme-border, rgba(255, 255, 255, 0.15))) !important;
   font-weight: 600 !important;
+  font-size: 10px !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
 }
 
 .tabulator-header .tabulator-col {
-  background-color: var(--theme-tabulator-header-bg, var(--theme-sidebar-header, rgba(255, 255, 255, 0.08))) !important;
-  color: var(--theme-tabulator-header-text, var(--theme-fg, #e8e8f0)) !important;
-  border-right-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
+  background-color: var(--theme-glass, var(--theme-sidebar-header, rgba(255, 255, 255, 0.08))) !important;
+  color: var(--theme-text-secondary, var(--theme-fg, rgba(232, 232, 240, 0.75))) !important;
+  border-right-color: var(--theme-glass-border, var(--theme-border, rgba(255, 255, 255, 0.15))) !important;
   font-weight: 600 !important;
+  font-size: 10px !important;
+  padding: 6px 8px !important;
 }
 
 .tabulator-header .tabulator-col-content {
-  color: var(--theme-tabulator-header-text, var(--theme-fg, #e8e8f0)) !important;
+  color: var(--theme-text-secondary, var(--theme-fg, rgba(232, 232, 240, 0.75))) !important;
+  font-size: 10px !important;
 }
 
 .tabulator-header .tabulator-col-content .tabulator-col-title {
-  color: var(--theme-tabulator-header-text, var(--theme-fg, #e8e8f0)) !important;
+  color: var(--theme-text-secondary, var(--theme-fg, rgba(232, 232, 240, 0.75))) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
 }
 
 /* Table holder (scrollable area) */

@@ -59,31 +59,33 @@ export const useTheme = () => {
 export const ThemeProvider = ({ children }) => {
   // Initialize theme from localStorage or use default (data theme)
   const [currentTheme, setCurrentTheme] = useState(() => {
+    let themeToApply = DEFAULT_THEME;
     try {
       const saved = localStorage.getItem('talia-theme');
       if (saved && themes[saved]) {
-        // Apply theme IMMEDIATELY during initialization (before first render)
-        applyTheme(saved);
-        return saved;
-      }
-      // Also check legacy localStorage key for backward compatibility
-      const legacySaved = localStorage.getItem("taliaLayout");
-      if (legacySaved) {
-        const parsed = JSON.parse(legacySaved);
-        const legacyTheme = parsed.fontSettings?.theme;
-        if (legacyTheme && themes[legacyTheme]) {
-          // Apply theme IMMEDIATELY during initialization
-          applyTheme(legacyTheme);
-          return legacyTheme;
+        themeToApply = saved;
+      } else {
+        // Also check legacy localStorage key for backward compatibility
+        const legacySaved = localStorage.getItem("taliaLayout");
+        if (legacySaved) {
+          const parsed = JSON.parse(legacySaved);
+          const legacyTheme = parsed.fontSettings?.theme;
+          if (legacyTheme && themes[legacyTheme]) {
+            themeToApply = legacyTheme;
+          }
         }
       }
     } catch (e) {
       console.warn('Failed to load theme from localStorage:', e);
     }
-    // Default to 'data' theme (Modern Dark - Data Mode style)
-    // Apply theme IMMEDIATELY during initialization
-    applyTheme(DEFAULT_THEME);
-    return DEFAULT_THEME;
+    // Apply theme IMMEDIATELY during initialization (before first render)
+    console.log('[ThemeContext] Applying theme synchronously:', themeToApply);
+    applyTheme(themeToApply);
+    // Verify CSS variables were set
+    const root = document.documentElement;
+    const bgValue = getComputedStyle(root).getPropertyValue('--theme-bg');
+    console.log('[ThemeContext] CSS variable --theme-bg after applyTheme:', bgValue ? 'SET' : 'NOT SET');
+    return themeToApply;
   });
 
   // Apply theme when it changes (for runtime theme switching)
@@ -118,6 +120,11 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-table-font-size', '10px');
     root.style.setProperty('--theme-table-header-font-size', '10px');
     root.style.setProperty('--theme-table-header-font-weight', '600');
+    console.log('[ThemeContext] Set font CSS variables synchronously:', {
+      fontSize: initialFontSize,
+      tableFontSize: '10px',
+      tableHeaderFontSize: '10px'
+    });
     return initialFontSize;
   });
 
@@ -138,6 +145,11 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-font-family', selectedFont.value);
     root.style.setProperty('--theme-font-family-monospace', 'monospace');
     root.style.setProperty('--theme-table-font-family', 'monospace');
+    console.log('[ThemeContext] Set font family CSS variables synchronously:', {
+      fontFamily: initialFontFamily,
+      fontFamilyValue: selectedFont.value,
+      tableFontFamily: 'monospace'
+    });
     return initialFontFamily;
   });
 

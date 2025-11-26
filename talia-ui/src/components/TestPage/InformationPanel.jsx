@@ -44,10 +44,26 @@ const InformationPanel = ({ selectedComponent, performanceData }) => {
       );
     }
 
+    // Determine presenter file name based on component name
+    const componentName = selectedComponent || '';
+    const presenterFileName = componentName === 'SailingTable' 
+      ? 'SailingTablePresenter.jsx'
+      : componentName === 'PublishedRates'
+      ? 'PublishedRatesPresenter.jsx'
+      : componentName === 'ReservationCurrentState'
+      ? 'ReservationCurrentStatePresenter.jsx'
+      : componentName === 'BookingProfile'
+      ? 'BookingProfilePresenter.jsx'
+      : null;
+
     const imports = [
       { name: 'Component', path: componentMeta.filePath },
-      { name: 'Container', path: componentMeta.filePath.replace('.jsx', '/index.jsx') },
-      { name: 'Presenter', path: componentMeta.filePath.replace('index.jsx', 'SailingTablePresenter.jsx') }
+      ...(componentMeta.filePath.includes('/index.jsx') ? [] : [
+        { name: 'Container', path: componentMeta.filePath.replace('.jsx', '/index.jsx') }
+      ]),
+      ...(presenterFileName ? [
+        { name: 'Presenter', path: componentMeta.filePath.replace('index.jsx', presenterFileName) }
+      ] : [])
     ].filter(imp => imp.path);
 
     return (

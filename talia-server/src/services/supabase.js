@@ -679,6 +679,220 @@ export class SupabaseDataService {
       throw error;
     }
   }
+
+  // Get booking profile for a sailing
+  async getBookingProfile(sailCode) {
+    try {
+      // First, get the sailing details from master_sail
+      const { data: sailData, error: sailError } = await this.client
+        .from('master_sail')
+        .select('sail_code, sail_date_from, ship_name, ship_code')
+        .eq('sail_code', sailCode)
+        .single();
+
+      if (sailError || !sailData) {
+        throw new Error(`Sailing not found: ${sailCode}`);
+      }
+
+      // Get reservations for this sailing by joining reservation with master_sail logic
+      // Since reservation doesn't have sail_code, we match by ship_code + sail_date_from
+      const { data: reservations, error: resError } = await this.client
+        .from('reservation')
+        .select('res_id, sail_from_date, ship, res_status, guest_count')
+        .eq('ship', sailData.ship_code)
+        .eq('sail_from_date', sailData.sail_date_from);
+
+      if (resError) {
+        console.warn('Error fetching reservations:', resError);
+      }
+
+      // Use database function to get aggregated booking profile data
+      let bookingDataPoints = [];
+      
+      if (reservations && reservations.length > 0) {
+        const sailDate = new Date(sailData.sail_date_from);
+        const sailDateEnd = new Date(sailDate);
+        sailDateEnd.setHours(23, 59, 59, 999);
+        const sailDateStr = sailDateEnd.toISOString().split('T')[0];
+        
+        // Query reservation_changes directly - simpler and more reliable
+        // Get all changes for these reservations, process in smaller batches to avoid limits
+        const resIds = reservations.map(r => r.res_id);
+        const batchSize = 500; // Smaller batches for reliability
+        let allChanges = [];
+        
+        for (let i = 0; i < resIds.length; i += batchSize) {
+          const batch = resIds.slice(i, i + batchSize);
+          
+          // Query without date filter first, we'll filter in JS
+          let page = 0;
+          const pageSize = 1000;
+          let hasMore = true;
+          
+          while (hasMore) {
+            const { data: changesData, error: changesError } = await this.client
+              .from('reservation_changes')
+              .select('snapshot_date, res_id, guest_count, guest_count_delta')
+              .in('res_id', batch)
+              .order('snapshot_date', { ascending: true })
+              .range(page * pageSize, (page + 1) * pageSize - 1);
+            
+            if (changesError) {
+              console.error(`[getBookingProfile] Error batch ${i/batchSize + 1}, page ${page + 1}:`, changesError);
+              hasMore = false;
+            } else if (changesData && changesData.length > 0) {
+              allChanges.push(...changesData);
+              hasMore = changesData.length === pageSize;
+              page++;
+            } else {
+              hasMore = false;
+            }
+          }
+        }
+        
+        console.log(`[getBookingProfile] Total changes loaded: ${allChanges.length}`);
+        
+        // Get latest snapshot per reservation per date
+        const latestSnapshots = new Map();
+        allChanges.forEach(change => {
+          const date = change.snapshot_date ? change.snapshot_date.split('T')[0] : null;
+          if (!date || date > sailDateStr) return;
+          
+          const key = `${date}_${change.res_id}`;
+          const existing = latestSnapshots.get(key);
+          if (!existing || parseFloat(change.guest_count || 0) >= parseFloat(existing.guest_count || 0)) {
+            latestSnapshots.set(key, change);
+          }
+        });
+        
+        // Group by date
+        const groupedByDate = {};
+        latestSnapshots.forEach((change, key) => {
+          const date = change.snapshot_date ? change.snapshot_date.split('T')[0] : null;
+          if (!date) return;
+          
+          if (!groupedByDate[date]) {
+            groupedByDate[date] = {
+              date,
+              bookings: new Set(),
+              guests: 0,
+              newBookings: 0,
+              cancellations: 0,
+              netBookings: 0
+            };
+          }
+          
+          groupedByDate[date].bookings.add(change.res_id);
+          groupedByDate[date].guests += parseFloat(change.guest_count || 0);
+          
+          const delta = parseFloat(change.guest_count_delta || 0);
+          if (delta > 0) groupedByDate[date].newBookings++;
+          if (delta < 0) groupedByDate[date].cancellations++;
+        });
+        
+        // Convert Sets to counts and calculate netBookings
+        Object.keys(groupedByDate).forEach(date => {
+          groupedByDate[date].bookings = groupedByDate[date].bookings.size;
+          groupedByDate[date].netBookings = groupedByDate[date].newBookings - groupedByDate[date].cancellations;
+        });
+        
+        // Find the actual earliest date from the data
+        const actualDates = Object.keys(groupedByDate).sort();
+        console.log(`[getBookingProfile] Found ${actualDates.length} unique dates`);
+        
+        if (actualDates.length === 0) {
+          // No data found - return empty array
+          bookingDataPoints = [];
+        } else {
+          const actualFirstDate = new Date(actualDates[0]);
+          actualFirstDate.setHours(0, 0, 0, 0);
+          const sailDateEndForRange = new Date(sailDate);
+          sailDateEndForRange.setHours(23, 59, 59, 999);
+          
+          // Generate date range from actual first booking date to sail date
+          const dateRange = [];
+          const currentDate = new Date(actualFirstDate);
+          while (currentDate <= sailDateEndForRange) {
+            dateRange.push(new Date(currentDate));
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+          
+          console.log(`[getBookingProfile] Date range: ${actualDates[0]} to ${sailDateEndForRange.toISOString().split('T')[0]}, ${dateRange.length} days`);
+          
+          // Build data points - use actual state for dates with data, last known state for missing dates
+          let lastBookings = 0;
+          let lastGuests = 0;
+          
+          dateRange.forEach(date => {
+            const dateStr = date.toISOString().split('T')[0];
+            const dayData = groupedByDate[dateStr];
+            
+            if (dayData) {
+              // Use actual state for this date
+              lastBookings = dayData.bookings;
+              lastGuests = dayData.guests;
+              
+              bookingDataPoints.push({
+                date: dateStr,
+                bookings: lastBookings,
+                guests: Math.round(lastGuests),
+                newBookings: dayData.newBookings,
+                cancellations: dayData.cancellations,
+                netBookings: dayData.netBookings
+              });
+            } else {
+              // Fill missing dates with last known state (not zero)
+              bookingDataPoints.push({
+                date: dateStr,
+                bookings: lastBookings,
+                guests: Math.round(lastGuests),
+                newBookings: 0,
+                cancellations: 0,
+                netBookings: 0
+              });
+            }
+          });
+          
+          console.log(`[getBookingProfile] Created ${bookingDataPoints.length} data points`);
+        }
+      }
+
+      // Calculate current bookings and guests
+      const currentBookings = (reservations || []).length;
+      const currentGuests = (reservations || []).reduce((sum, r) => sum + parseFloat(r.guest_count || 0), 0);
+
+      // Calculate booking velocity (bookings per day)
+      const totalNewBookings = bookingDataPoints.reduce((sum, dp) => sum + dp.newBookings, 0);
+      const daysWithBookings = bookingDataPoints.length;
+      const bookingVelocity = daysWithBookings > 0 ? totalNewBookings / daysWithBookings : 0;
+
+      // Calculate cancellation rate
+      const totalCancellations = bookingDataPoints.reduce((sum, dp) => sum + dp.cancellations, 0);
+      const cancellationRate = currentBookings > 0 ? (totalCancellations / (currentBookings + totalCancellations)) * 100 : 0;
+
+      // Calculate days until sailing
+      const sailDate = new Date(sailData.sail_date_from);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const daysUntilSailing = Math.ceil((sailDate - today) / (1000 * 60 * 60 * 24));
+
+      return {
+        sailCode: sailData.sail_code,
+        sailDate: sailData.sail_date_from,
+        shipName: sailData.ship_name,
+        shipCode: sailData.ship_code,
+        currentBookings,
+        currentGuests: Math.round(currentGuests),
+        bookingDataPoints,
+        bookingVelocity: Math.round(bookingVelocity * 100) / 100,
+        cancellationRate: Math.round(cancellationRate * 100) / 100,
+        daysUntilSailing
+      };
+    } catch (error) {
+      console.error('Error getting booking profile:', error);
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance

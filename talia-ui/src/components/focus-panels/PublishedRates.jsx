@@ -526,7 +526,7 @@ const PublishedRates = React.memo(() => {
         console.warn('[PublishedRates] Failed to refresh data:', e);
       }
     }
-  }, [selectedSailCode, allData]);
+  }, [selectedSailCode, allData.length]);
 
   // Update Tabulator data when selected sail code changes
   useEffect(() => {
@@ -545,7 +545,7 @@ const PublishedRates = React.memo(() => {
     } else if (instanceRef.current && allData.length === 0) {
       console.log('[PublishedRates] No data available yet');
     }
-  }, [selectedSailCode, allData]);
+  }, [selectedSailCode, allData.length]);
 
   // Expose refresh function globally for testing
   React.useEffect(() => {

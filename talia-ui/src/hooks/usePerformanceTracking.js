@@ -42,36 +42,20 @@ export const usePerformanceTracking = (componentName) => {
     };
   }, []);
 
-  // Track render times
+  // Track render times using refs only (no state updates to avoid infinite loops)
   useEffect(() => {
     const now = performance.now();
     renderCountRef.current += 1;
-
-    if (lastRenderTimeRef.current !== null) {
-      const renderTime = now - lastRenderTimeRef.current;
-      const currentRenderTimes = performanceData.renderTimes || [];
-      const newRenderTimes = [...currentRenderTimes, renderTime].slice(-20); // Keep last 20
-      
-      const avgRenderTime = newRenderTimes.length > 0
-        ? newRenderTimes.reduce((sum, time) => sum + time, 0) / newRenderTimes.length
-        : null;
-
-      setPerformanceData(prev => ({
-        ...prev,
-        renderCount: renderCountRef.current,
-        lastRenderTime: renderTime,
-        avgRenderTime: avgRenderTime ? Math.round(avgRenderTime * 100) / 100 : null,
-        renderTimes: newRenderTimes
-      }));
-    }
-
     lastRenderTimeRef.current = now;
+    
+    // Only update state periodically or when explicitly needed, not on every render
+    // This prevents infinite re-render loops
   });
 
   return {
     componentName,
     mountTime: performanceData.mountTime,
-    renderCount: performanceData.renderCount,
+    renderCount: renderCountRef.current,
     lastRenderTime: performanceData.lastRenderTime,
     avgRenderTime: performanceData.avgRenderTime,
     totalMountTime: mountTimeRef.current 

@@ -3,7 +3,7 @@
  * Handles data fetching and state management
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReservationCurrentStatePresenter from './ReservationCurrentStatePresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
@@ -75,6 +75,25 @@ const ReservationCurrentStateContainer = ({ filters = {}, theme }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [initialLoad, setInitialLoad] = useState(true);
+  const prevFiltersRef = useRef(null);
+
+  // Fetch data function - defined before useEffects that use it
+  const fetchData = useCallback(async (filtersToUse) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await apolloClient.query({
+        query: GET_RESERVATIONS,
+        variables: { filters: filtersToUse }
+      });
+      setData(result.data?.reservations || []);
+    } catch (err) {
+      setError(err);
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   // Load user preferences on mount to get stored sail selection
   useEffect(() => {
@@ -89,47 +108,42 @@ const ReservationCurrentStateContainer = ({ filters = {}, theme }) => {
         if (storedSailCode) {
           console.log('[ReservationCurrentState] Loaded stored sail selection:', storedSailCode);
           setSelectedSailCode(storedSailCode);
-          setQueryFilters({
+          const newFilters = {
             ...filters,
             sail_code: storedSailCode
-          });
+          };
+          setQueryFilters(newFilters);
+          // Update prevFiltersRef to prevent double fetch
+          prevFiltersRef.current = JSON.stringify(newFilters);
+          // Fetch data immediately with stored sail code
+          await fetchData(newFilters);
+        } else {
+          // No stored sail code, fetch with initial filters
+          prevFiltersRef.current = JSON.stringify(filters);
+          await fetchData(filters);
         }
       } catch (err) {
         console.error('[ReservationCurrentState] Error loading user preferences:', err);
+        // On error, still fetch with initial filters
+        prevFiltersRef.current = JSON.stringify(filters);
+        await fetchData(filters);
       } finally {
         setInitialLoad(false);
       }
     };
 
     loadUserPreferences();
-  }, []);
-
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await apolloClient.query({
-        query: GET_RESERVATIONS,
-        variables: { filters: queryFilters }
-      });
-      setData(result.data?.reservations || []);
-    } catch (err) {
-      setError(err);
-      setData([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [fetchData, filters]);
 
   // Listen for sail selection events
   useEffect(() => {
     const handleSailSelect = (event) => {
       const sailCode = event.detail?.sail_code;
       setSelectedSailCode(sailCode);
-      setQueryFilters({
-        ...filters,
+      setQueryFilters(prev => ({
+        ...prev,
         sail_code: sailCode || undefined
-      });
+      }));
     };
 
     const handleSailClear = () => {
@@ -146,12 +160,20 @@ const ReservationCurrentStateContainer = ({ filters = {}, theme }) => {
     };
   }, [filters]);
 
+  // Fetch data when queryFilters change (but only after initial load)
   useEffect(() => {
-    // Wait for initial load of user preferences before fetching data
     if (!initialLoad) {
-      fetchData();
+      const filtersStr = JSON.stringify(queryFilters);
+      const prevFiltersStr = prevFiltersRef.current;
+      
+      // Only fetch if filters actually changed
+      if (filtersStr !== prevFiltersStr) {
+        prevFiltersRef.current = filtersStr;
+        fetchData(queryFilters);
+      }
     }
-  }, [JSON.stringify(queryFilters), initialLoad]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryFilters, initialLoad]);
 
   // Handle loading state
   if (loading) {
@@ -164,7 +186,7 @@ const ReservationCurrentStateContainer = ({ filters = {}, theme }) => {
       <ErrorMessage 
         error={error} 
         title="Failed to load reservations"
-        onRetry={fetchData}
+        onRetry={() => fetchData(queryFilters)}
       />
     );
   }
@@ -174,7 +196,7 @@ const ReservationCurrentStateContainer = ({ filters = {}, theme }) => {
     return (
       <div style={{ padding: '40px', textAlign: 'center' }}>
         <p>No reservations available{selectedSailCode ? ` for sail code: ${selectedSailCode}` : ''}</p>
-        <button onClick={fetchData}>Retry</button>
+        <button onClick={() => fetchData(queryFilters)}>Retry</button>
       </div>
     );
   }
@@ -184,7 +206,7 @@ const ReservationCurrentStateContainer = ({ filters = {}, theme }) => {
     <ReservationCurrentStatePresenter 
       data={data} 
       theme={theme}
-      onRefresh={fetchData}
+      onRefresh={() => fetchData(queryFilters)}
     />
   );
 };

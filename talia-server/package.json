@@ -21,6 +21,8 @@
     "sync-reservationChanges": "node sync-cli.js sync-table reservationChanges",
     "sync-competitor": "node sync-cli.js sync-table competitor",
     "sync-dataset": "node sync-cli.js sync-dataset sept-dec-2025",
+    "sync-dataset-2024": "node sync-cli.js sync-dataset sept-dec-2024",
+    "explore-stg-res": "node scripts/explore-stg-res-tables.js",
     "db-backup": "./scripts/backup-db.sh",
     "db-restore": "./scripts/restore-db.sh"
   },

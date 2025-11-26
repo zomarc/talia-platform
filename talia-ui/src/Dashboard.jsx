@@ -10,7 +10,7 @@ import ExceptionList from "./components/focus-panels/ExceptionList";
 import ItineraryList from "./components/focus-panels/ItineraryList";
 import PublishedRates from "./components/focus-panels/PublishedRates";
 import SailingByCabinCategory from "./components/focus-panels/SailingByCabinCategory";
-import SimpleTable from "./components/focus-panels/SImpleTable";
+import SimpleTable from "./components/focus-panels/SimpleTable";
 import SailingSummary from "./components/focus-panels/SailingSummary";
 import UserProfile from "./components/UserProfile";
 import { useAuth } from "./contexts/AuthContext";

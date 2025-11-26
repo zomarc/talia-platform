@@ -40,29 +40,30 @@
     },
     "reservations": {
       "type": "direct",
-      "source": "dwh.Fact_Reservation_History",
+      "source": "stg.RES_HEADER",
       "target": "reservation",
       "columns": [
-        "[WC_Snapshot_Date]",
-        "[Group_ID]",
-        "[Res_ID]",
-        "[Ship]",
-        "[Sail_code]",
-        "[Sail_From_Date]",
-        "[Sail_To_Date]",
-        "[Agency_ID]",
-        "[Cabin_Category]",
-        "[Guest_Count]",
-        "[Pax_Status]",
-        "[Group_Status]",
-        "[Res_Status]",
-        "[GrossSellingFare]",
-        "[NetSellingFare]"
+        "[RES_ID]",
+        "[RES_STATUS]",
+        "[SOURCE_CODE]",
+        "[PROBABILITY]",
+        "[RES_GUEST_COUNT]",
+        "[SAIL_DATE_FROM]",
+        "[SAIL_DATE_TO]",
+        "[AGENCY_ID]",
+        "[SEC_AGENCY_ID]",
+        "[SHIP_CODE]",
+        "[PACKAGE_TYPE]",
+        "[CABIN_CATEGORY]",
+        "[GROUP_ID]",
+        "[CURRENCY_CODE]",
+        "[CURRENCY_RATE]",
+        "[LAST_UPDATED_AT]"
       ],
       "transformKey": "reservations",
       "isLargeDataset": true,
       "rowNumberOrder": [
-        "[Res_ID]"
+        "[RES_ID]"
       ]
     },
     "publishedRates": {
@@ -130,15 +131,18 @@
     "reservationChanges": {
       "type": "derived",
       "handler": "reservationChanges",
-      "source": "fou.Fact_Reservation_daily",
+      "source": "stg.RES_HEADER_SNAPSHOT",
       "target": "reservation_changes",
       "columns": [
         "Snapshot_Date",
         "RES_ID",
-        "Sail_code",
-        "Agency_ID",
-        "Group_ID",
-        "Guest_Count"
+        "SHIP",
+        "AGENCY_ID",
+        "GROUP_ID",
+        "RES_GUEST_COUNT",
+        "RES_STATUS",
+        "PROBABILITY",
+        "CABIN_CATEGORY"
       ],
       "dateColumn": "Snapshot_Date",
       "supabaseDateColumn": "snapshot_date",
@@ -260,7 +264,7 @@
         "reservations": {
           "filters": [
             {
-              "column": "[Sail_From_Date]",
+              "column": "[SAIL_DATE_FROM]",
               "operator": "between",
               "from": "2025-09-01",
               "to": "2025-12-31"
@@ -345,6 +349,71 @@
             "column": "sail_date_from",
             "from": "2025-09-01",
             "to": "2025-12-31"
+          }
+        }
+      }
+    },
+    "sept-dec-2024": {
+      "description": "Previous year data for year-over-year comparison (September through December 2024)",
+      "tableSequence": [
+        "ships",
+        "masterSail",
+        "reservations",
+        "reservationChanges"
+      ],
+      "tables": {
+        "ships": {
+          "replace": {
+            "strategy": "delete-all",
+            "column": "id"
+          }
+        },
+        "reservations": {
+          "filters": [
+            {
+              "column": "[SAIL_DATE_FROM]",
+              "operator": "between",
+              "from": "2024-09-01",
+              "to": "2024-12-31"
+            }
+          ],
+          "replace": {
+            "strategy": "delete-range",
+            "column": "sail_from_date",
+            "from": "2024-09-01",
+            "to": "2024-12-31"
+          }
+        },
+        "reservationChanges": {
+          "filters": [
+            {
+              "column": "[Snapshot_Date]",
+              "operator": "between",
+              "from": "2024-09-01",
+              "to": "2024-12-31"
+            }
+          ],
+          "replace": {
+            "strategy": "delete-range",
+            "column": "snapshot_date",
+            "from": "2024-09-01",
+            "to": "2024-12-31"
+          }
+        },
+        "masterSail": {
+          "filters": [
+            {
+              "column": "[Sail_Date_From]",
+              "operator": "between",
+              "from": "2024-09-01",
+              "to": "2024-12-31"
+            }
+          ],
+          "replace": {
+            "strategy": "delete-range",
+            "column": "sail_date_from",
+            "from": "2024-09-01",
+            "to": "2024-12-31"
           }
         }
       }

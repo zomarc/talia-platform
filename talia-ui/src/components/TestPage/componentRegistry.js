@@ -14,6 +14,7 @@ import SailingByCabinCategory from '../focus-panels/SailingByCabinCategory';
 import ExceptionList from '../focus-panels/ExceptionList';
 import ItineraryList from '../focus-panels/ItineraryList';
 import ReservationCurrentStateContainer from '../focus-panels/ReservationCurrentState';
+import BookingProfileContainer from '../focus-panels/BookingProfile';
 
 /**
  * Component registry with metadata
@@ -115,6 +116,19 @@ export const componentRegistry = {
     },
     dataRequirements: 'Requires GraphQL connection to reservations endpoint. Reacts to talia:sail.select events.',
     filePath: 'src/components/focus-panels/ReservationCurrentState/index.jsx'
+  },
+  BookingProfile: {
+    component: BookingProfileContainer,
+    category: 'Dashboards',
+    description: 'Booking profile showing booking trends, metrics, and year-over-year comparison for a sailing',
+    props: {
+      sailCode: { type: 'string', required: true, description: 'Sail code (e.g., "CJ07250901")' },
+      includeComparison: { type: 'boolean', required: false, description: 'Include year-over-year comparison' },
+      previousYearSailCode: { type: 'string', required: false, description: 'Previous year sail code for comparison' },
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Requires GraphQL connection to bookingProfile endpoint',
+    filePath: 'src/components/focus-panels/BookingProfile/index.jsx'
   }
 };
 

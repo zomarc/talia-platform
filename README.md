@@ -35,10 +35,12 @@ Talia Platform provides:
 
 - ✅ React-based dashboard with Dockview layout system
 - ✅ GraphQL server with TypeScript
-- ✅ InstantDB authentication integration
+- ✅ Supabase authentication integration
 - ✅ User mapping and role management (admin, manager, user, guest)
 - ✅ Focus management system for customizable layouts
 - ✅ Admin dashboard for user and system management
+- ✅ Data Management UI with sync controls and activity logs
+- ✅ Azure Synapse to Supabase data synchronization
 - ✅ Published rates and sailing data components
 - ✅ Revenue and inventory management capabilities
 - ✅ Monorepo structure with independent deployment capability
@@ -154,6 +156,27 @@ npm run test           # Run tests for both projects
 - `feature/*` - Feature branches
 - `hotfix/*` - Bug fixes
 - `release/*` - Release preparation
+
+### Database Backup & Restore
+
+The local Supabase database can be backed up and restored to protect against data loss:
+
+```bash
+# Create a backup
+cd talia-server
+npm run db-backup
+
+# Restore from backup
+npm run db-restore backups/supabase_backup_YYYYMMDD_HHMMSS.sql.gz
+```
+
+**⚠️ Important**: Always create backups before running migrations or major data changes. The local database contains synced data that is expensive to restore from Azure Synapse.
+
+**Prerequisites**: PostgreSQL client tools (`pg_dump`, `psql`) must be installed:
+- macOS: `brew install postgresql`
+- Ubuntu/Debian: `sudo apt-get install postgresql-client`
+
+See [`talia-server/scripts/BACKUP-RESTORE.md`](./talia-server/scripts/BACKUP-RESTORE.md) for detailed documentation.
 
 ---
 

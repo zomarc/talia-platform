@@ -24,6 +24,8 @@ npm run dev
 
 ## Data Sync Commands
 
+### CLI Commands
+
 ```bash
 # Check sync status for all tables
 npm run sync-status
@@ -40,10 +42,31 @@ npm run sync-cabin
 npm run sync-reservations
 npm run sync-rates
 npm run sync-occupancy
+npm run sync-competitor
+npm run sync-master-sail
 
 # Test connections (optional dataset argument)
 npm run sync-test          # npm run sync-test -- sept-dec-2025
 ```
+
+### GraphQL API
+
+You can also trigger syncs via the GraphQL API:
+
+```graphql
+mutation {
+  syncTable(tableName: "master_sail", forceFullSync: false) {
+    success
+    tableName
+    message
+    recordsProcessed
+    duration
+    error
+  }
+}
+```
+
+The UI provides a Data Management page with sync buttons for all tables. Access it via the "📊 DATA MODE" button in the dashboard.
 
 ### Configuration-driven sync
 
@@ -124,6 +147,52 @@ talia-server/
 - **`DEVELOPMENT-GUIDE.md`**: Complete development reference (start here)
 - `archive/`: Historical scripts and samples
 
+## Database Backup & Restore
+
+The local Supabase database can be backed up and restored using the provided scripts.
+
+### Creating a Backup
+
+```bash
+# Using npm script (recommended)
+npm run db-backup
+
+# Or directly
+./scripts/backup-db.sh
+```
+
+Backups are saved to `talia-server/backups/` with timestamps (e.g., `supabase_backup_20251125_143022.sql.gz`).
+
+### Restoring from Backup
+
+```bash
+# Using npm script (recommended)
+npm run db-restore backups/supabase_backup_20251125_143022.sql.gz
+
+# Or directly
+./scripts/restore-db.sh backups/supabase_backup_20251125_143022.sql.gz
+
+# Or just the filename if it's in the backups directory
+./scripts/restore-db.sh supabase_backup_20251125_143022.sql.gz
+```
+
+**⚠️ Warning**: Restoring will replace all data in the database. The script will ask for confirmation before proceeding.
+
+### Prerequisites
+
+The backup/restore scripts require PostgreSQL client tools (`pg_dump` and `psql`):
+
+- **macOS**: `brew install postgresql`
+- **Ubuntu/Debian**: `sudo apt-get install postgresql-client`
+- **Windows**: Install PostgreSQL from [postgresql.org](https://www.postgresql.org/download/windows/)
+
+### Best Practices
+
+- Create backups before running migrations or major data changes
+- Store backups in version control (they're automatically excluded via `.gitignore`)
+- Regular backups help protect against accidental data loss
+- Backups are compressed to save disk space
+
 ## Troubleshooting
 
 ### "Cannot find module" errors
@@ -137,6 +206,12 @@ Ensure TypeScript is installed: `npm install typescript --save-dev`
 ### GraphQL errors with Supabase
 
 Check that Supabase is running locally: `supabase status`
+
+### Backup/Restore fails
+
+- Ensure Supabase is running: `supabase start`
+- Check that PostgreSQL client tools are installed: `which pg_dump`
+- Verify database connection: `pg_isready -h 127.0.0.1 -p 54322`
 
 ## License
 

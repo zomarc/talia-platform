@@ -22,7 +22,8 @@ npm run build
 - **Dockview**: Tabbed panel layout system
 - **Apollo Client**: GraphQL data fetching
 - **Tabulator**: Advanced table rendering
-- **InstantDB**: Focus management (archived)
+- **Supabase**: Direct database access for data management
+- **Data Management**: Sync management UI with activity logs and data review
 
 ## Architecture
 
@@ -65,6 +66,7 @@ talia-ui/
 ### Key Components
 
 - **Dashboard.jsx**: Main Dockview layout
+- **DataManagementPage**: Sync management UI with activity logs and data review
 - **SimpleTable**: Test component for Supabase direct queries
 - **FocusPanel**: Panel base component
 - **SailingByCabinCategory**: Cabin availability visualization

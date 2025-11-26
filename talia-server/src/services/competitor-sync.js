@@ -25,7 +25,7 @@ async function getLastProcessedDate(supabaseClient) {
 /**
  * Update sync metadata with last processed date and stats
  */
-async function updateSyncMetadata(supabaseClient, lastProcessedDate, recordsProcessed, recordsUpdated) {
+async function updateSyncMetadata(supabaseClient, lastProcessedDate, recordsProcessed, recordsUpdated, durationMs = null) {
   const { error } = await supabaseClient
     .from(METADATA_TABLE)
     .upsert({
@@ -33,6 +33,7 @@ async function updateSyncMetadata(supabaseClient, lastProcessedDate, recordsProc
       last_processed_date: lastProcessedDate,
       records_processed: recordsProcessed,
       changes_detected: recordsUpdated,
+      duration_ms: durationMs,
       last_sync_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }, {
@@ -388,6 +389,8 @@ export async function syncCompetitors({
   batchSize = 50000,
   forceFullSync = false
 }) {
+  const startTime = Date.now();
+  
   if (!dateRange?.from || !dateRange?.to) {
     throw new Error('Competitor sync requires a dateRange with from/to values');
   }
@@ -506,7 +509,8 @@ export async function syncCompetitors({
     }
 
     // Update sync metadata
-    await updateSyncMetadata(supabaseClient, processTo, totalProcessed, allChanges.length);
+    const duration = Date.now() - startTime;
+    await updateSyncMetadata(supabaseClient, processTo, totalProcessed, allChanges.length, duration);
 
     console.log(`✅ Sync complete: Processed ${totalProcessed.toLocaleString()} rows, detected ${allChanges.length} changes`);
 

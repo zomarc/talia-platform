@@ -25,7 +25,7 @@ async function getLastProcessedDate(supabaseClient) {
 /**
  * Update sync metadata with last processed date and stats
  */
-async function updateSyncMetadata(supabaseClient, lastProcessedDate, recordsProcessed, changesDetected) {
+async function updateSyncMetadata(supabaseClient, lastProcessedDate, recordsProcessed, changesDetected, durationMs = null) {
   const { error } = await supabaseClient
     .from(METADATA_TABLE)
     .upsert({
@@ -33,6 +33,7 @@ async function updateSyncMetadata(supabaseClient, lastProcessedDate, recordsProc
       last_processed_date: lastProcessedDate,
       records_processed: recordsProcessed,
       changes_detected: changesDetected,
+      duration_ms: durationMs,
       last_sync_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }, {
@@ -302,6 +303,8 @@ export async function syncPublishedRates({
   batchSize = 50000,
   forceFullSync = false
 }) {
+  const startTime = Date.now();
+  
   if (!dateRange?.from || !dateRange?.to) {
     throw new Error('Published rates sync requires a dateRange with from/to values');
   }
@@ -326,7 +329,7 @@ export async function syncPublishedRates({
     lastProcessedDate = twoDaysAgoStr;
     console.log(`📅 No last processed date found. Initializing to 2 days ago: ${lastProcessedDate}`);
     // Store the initial date in metadata
-    await updateSyncMetadata(supabaseClient, lastProcessedDate, 0, 0);
+    await updateSyncMetadata(supabaseClient, lastProcessedDate, 0, 0, null);
   }
   
   const isInitialLoad = forceFullSync;
@@ -473,7 +476,8 @@ export async function syncPublishedRates({
       newLastProcessedDate = maxDateObj >= today ? maxDateStr : todayStr;
     }
     
-    await updateSyncMetadata(supabaseClient, newLastProcessedDate, totalProcessed, totalChangesDetected);
+    const duration = Date.now() - startTime;
+    await updateSyncMetadata(supabaseClient, newLastProcessedDate, totalProcessed, totalChangesDetected, duration);
 
     console.log(`✅ Sync complete: Processed ${totalProcessed.toLocaleString()} rows, detected ${totalChangesDetected} changes`);
     if (!isInitialLoad) {

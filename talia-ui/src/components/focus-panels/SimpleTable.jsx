@@ -375,7 +375,7 @@ const SailingByCabinCategory = React.memo(() => {
         console.warn('[SailingByCabinCategory] Failed to refresh data:', e);
       }
     }
-  }, [selectedSailCode, allData]);
+  }, [selectedSailCode, allData.length]);
 
   // Update Tabulator data when selected sail code changes
   useEffect(() => {
@@ -394,7 +394,7 @@ const SailingByCabinCategory = React.memo(() => {
     } else if (instanceRef.current && allData.length === 0) {
       console.log('[SailingByCabinCategory] No data available yet');
     }
-  }, [selectedSailCode, allData]);
+  }, [selectedSailCode, allData.length]);
 
   // Expose refresh function globally for testing
   React.useEffect(() => {

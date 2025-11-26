@@ -24,6 +24,10 @@ const TestPage = () => {
   const [sailCode, setSailCode] = useState('');
   const [shipName, setShipName] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  
+  // BookingProfile props
+  const [bookingProfileSailCode, setBookingProfileSailCode] = useState('CJ05251122');
+  const [includeComparison, setIncludeComparison] = useState(false);
 
   // Data fetching
   const { 
@@ -49,6 +53,13 @@ const TestPage = () => {
     }
     if (selectedComponent === 'SimpleTable' && sailingData) {
       return { data: sailingData };
+    }
+    if (selectedComponent === 'BookingProfile') {
+      return { 
+        sailCode: bookingProfileSailCode,
+        includeComparison,
+        theme 
+      };
     }
     return {};
   };
@@ -370,68 +381,128 @@ const TestPage = () => {
                   marginBottom: '12px',
                   border: `1px solid ${theme.colors.glassBorder}`
                 }}>
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-                    gap: '8px',
-                    marginBottom: '8px'
-                  }}>
-                    <div>
-                      <label style={{
-                        display: 'block',
-                        fontSize: '11px',
-                        color: 'rgba(224, 224, 224, 0.7)',
-                        marginBottom: '4px',
-                        fontWeight: '500'
-                      }}>
-                        Sail Code
-                      </label>
-                      <input
-                        type="text"
-                        value={sailCode}
-                        onChange={(e) => setSailCode(e.target.value)}
-                        placeholder="Filter by sail code..."
-                        style={{
-                          width: '100%',
-                          padding: '6px',
-                          border: `1px solid ${theme.colors.glassBorder}`,
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          background: 'rgba(0, 0, 0, 0.4)',
-                          color: theme.colors.foreground,
-                          backdropFilter: 'blur(10px)',
-                          WebkitBackdropFilter: 'blur(10px)'
-                        }}
-                      />
+                  {/* BookingProfile Filters */}
+                  {selectedComponent === 'BookingProfile' ? (
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px'
+                    }}>
+                      <div>
+                        <label style={{
+                          display: 'block',
+                          fontSize: '11px',
+                          color: 'rgba(224, 224, 224, 0.7)',
+                          marginBottom: '4px',
+                          fontWeight: '500'
+                        }}>
+                          Sail Code
+                        </label>
+                        <input
+                          type="text"
+                          value={bookingProfileSailCode}
+                          onChange={(e) => setBookingProfileSailCode(e.target.value)}
+                          placeholder="e.g., CJ07250901"
+                          style={{
+                            width: '100%',
+                            padding: '6px',
+                            border: `1px solid ${theme.colors.glassBorder}`,
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            background: 'rgba(0, 0, 0, 0.4)',
+                            color: theme.colors.foreground,
+                            backdropFilter: 'blur(10px)',
+                            WebkitBackdropFilter: 'blur(10px)'
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          fontSize: '11px',
+                          color: 'rgba(224, 224, 224, 0.7)',
+                          fontWeight: '500',
+                          cursor: 'pointer'
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={includeComparison}
+                            onChange={(e) => setIncludeComparison(e.target.checked)}
+                            style={{
+                              width: '16px',
+                              height: '16px',
+                              cursor: 'pointer'
+                            }}
+                          />
+                          Include Year-over-Year Comparison
+                        </label>
+                      </div>
                     </div>
-                    <div>
-                      <label style={{
-                        display: 'block',
-                        fontSize: '11px',
-                        color: 'rgba(224, 224, 224, 0.7)',
-                        marginBottom: '4px',
-                        fontWeight: '500'
-                      }}>
-                        Ship Name
-                      </label>
-                      <input
-                        type="text"
-                        value={shipName}
-                        onChange={(e) => setShipName(e.target.value)}
-                        placeholder="Filter by ship name..."
-                        style={{
-                          width: '100%',
-                          padding: '6px',
-                          border: `1px solid ${theme.colors.glassBorder}`,
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          background: 'rgba(0, 0, 0, 0.4)',
-                          color: theme.colors.foreground,
-                          backdropFilter: 'blur(10px)',
-                          WebkitBackdropFilter: 'blur(10px)'
-                        }}
-                      />
-                    </div>
+                  ) : (
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                      gap: '8px',
+                      marginBottom: '8px'
+                    }}>
+                      <div>
+                        <label style={{
+                          display: 'block',
+                          fontSize: '11px',
+                          color: 'rgba(224, 224, 224, 0.7)',
+                          marginBottom: '4px',
+                          fontWeight: '500'
+                        }}>
+                          Sail Code
+                        </label>
+                        <input
+                          type="text"
+                          value={sailCode}
+                          onChange={(e) => setSailCode(e.target.value)}
+                          placeholder="Filter by sail code..."
+                          style={{
+                            width: '100%',
+                            padding: '6px',
+                            border: `1px solid ${theme.colors.glassBorder}`,
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            background: 'rgba(0, 0, 0, 0.4)',
+                            color: theme.colors.foreground,
+                            backdropFilter: 'blur(10px)',
+                            WebkitBackdropFilter: 'blur(10px)'
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{
+                          display: 'block',
+                          fontSize: '11px',
+                          color: 'rgba(224, 224, 224, 0.7)',
+                          marginBottom: '4px',
+                          fontWeight: '500'
+                        }}>
+                          Ship Name
+                        </label>
+                        <input
+                          type="text"
+                          value={shipName}
+                          onChange={(e) => setShipName(e.target.value)}
+                          placeholder="Filter by ship name..."
+                          style={{
+                            width: '100%',
+                            padding: '6px',
+                            border: `1px solid ${theme.colors.glassBorder}`,
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            background: 'rgba(0, 0, 0, 0.4)',
+                            color: theme.colors.foreground,
+                            backdropFilter: 'blur(10px)',
+                            WebkitBackdropFilter: 'blur(10px)'
+                          }}
+                        />
+                      </div>
                     <div>
                       <label style={{
                         display: 'block',
@@ -462,59 +533,60 @@ const TestPage = () => {
                         }}
                       />
                     </div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                      <button
+                        onClick={handleApplyFilters}
+                        style={{
+                          padding: '6px 12px',
+                          background: theme.colors.accent,
+                          color: '#0f0f23',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        Apply
+                      </button>
+                      <button
+                        onClick={handleClearFilters}
+                        style={{
+                          padding: '6px 12px',
+                          background: theme.colors.glass,
+                          backdropFilter: 'blur(10px)',
+                          WebkitBackdropFilter: 'blur(10px)',
+                          color: theme.colors.foreground,
+                          border: `1px solid ${theme.colors.glassBorder}`,
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        Clear
+                      </button>
+                      <button
+                        onClick={refetch}
+                        style={{
+                          padding: '6px 12px',
+                          background: theme.colors.glass,
+                          backdropFilter: 'blur(10px)',
+                          WebkitBackdropFilter: 'blur(10px)',
+                          color: theme.colors.foreground,
+                          border: `1px solid ${theme.colors.glassBorder}`,
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        ↻ Refresh
+                      </button>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      onClick={handleApplyFilters}
-                      style={{
-                        padding: '6px 12px',
-                        background: theme.colors.accent,
-                        color: '#0f0f23',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        fontWeight: '500',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      Apply
-                    </button>
-                    <button
-                      onClick={handleClearFilters}
-                      style={{
-                        padding: '6px 12px',
-                        background: theme.colors.glass,
-                        backdropFilter: 'blur(10px)',
-                        WebkitBackdropFilter: 'blur(10px)',
-                        color: theme.colors.foreground,
-                        border: `1px solid ${theme.colors.glassBorder}`,
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      Clear
-                    </button>
-                    <button
-                      onClick={refetch}
-                      style={{
-                        padding: '6px 12px',
-                        background: theme.colors.glass,
-                        backdropFilter: 'blur(10px)',
-                        WebkitBackdropFilter: 'blur(10px)',
-                        color: theme.colors.foreground,
-                        border: `1px solid ${theme.colors.glassBorder}`,
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      ↻ Refresh
-                    </button>
-                  </div>
+                  )}
                 </div>
               )}
 

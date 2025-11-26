@@ -25,7 +25,7 @@ async function getLastProcessedDate(supabaseClient) {
 /**
  * Update sync metadata with last processed date and stats
  */
-async function updateSyncMetadata(supabaseClient, lastProcessedDate, recordsProcessed, changesDetected) {
+async function updateSyncMetadata(supabaseClient, lastProcessedDate, recordsProcessed, changesDetected, durationMs = null) {
   const { error } = await supabaseClient
     .from(METADATA_TABLE)
     .upsert({
@@ -33,6 +33,7 @@ async function updateSyncMetadata(supabaseClient, lastProcessedDate, recordsProc
       last_processed_date: lastProcessedDate,
       records_processed: recordsProcessed,
       changes_detected: changesDetected,
+      duration_ms: durationMs,
       last_sync_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }, {
@@ -45,21 +46,35 @@ async function updateSyncMetadata(supabaseClient, lastProcessedDate, recordsProc
 }
 
 /**
- * Load current state of all reservations from database
+ * Load current state of reservations from database
+ * Only loads reservations that are in the provided activeResIds list
  * Returns a Map<res_id, currentState>
- * Paginates to load all records (Supabase defaults to 1000 row limit)
+ * Loads all states and filters in memory to avoid URI length limits
  */
-async function loadCurrentState(supabaseClient) {
+async function loadCurrentState(supabaseClient, dateRange, activeResIds) {
   console.log('📥 Loading current reservation state from database...');
   const stateMap = new Map();
+  
+  if (!activeResIds || activeResIds.length === 0) {
+    console.log('✅ No active reservations to load state for');
+    return stateMap;
+  }
+
+  // Create a Set for fast lookup
+  const activeResIdsSet = new Set(activeResIds.map(id => Number(id)));
+
+  // Load all current states and filter in memory (avoids URI length limits)
+  // Paginate through all records
   let page = 0;
   const pageSize = 1000;
   let hasMore = true;
+  let totalLoaded = 0;
+  let filteredCount = 0;
 
   while (hasMore) {
-    const { data, error, count } = await supabaseClient
+    const { data, error } = await supabaseClient
       .from(CURRENT_STATE_TABLE)
-      .select('*', { count: 'exact' })
+      .select('*')
       .range(page * pageSize, (page + 1) * pageSize - 1);
 
     if (error) {
@@ -68,13 +83,18 @@ async function loadCurrentState(supabaseClient) {
 
     if (data && data.length > 0) {
       for (const row of data) {
-        stateMap.set(row.res_id, {
-          snapshot_date: row.snapshot_date,
-          sail_code: row.sail_code,
-          agency_id: row.agency_id,
-          group_id: row.group_id,
-          guest_count: row.guest_count
-        });
+        totalLoaded++;
+        // Only include states for active reservations
+        if (activeResIdsSet.has(Number(row.res_id))) {
+          stateMap.set(row.res_id, {
+            snapshot_date: row.snapshot_date,
+            sail_code: row.sail_code,
+            agency_id: row.agency_id,
+            group_id: row.group_id,
+            guest_count: row.guest_count
+          });
+          filteredCount++;
+        }
       }
       page++;
       hasMore = data.length === pageSize;
@@ -83,8 +103,71 @@ async function loadCurrentState(supabaseClient) {
     }
   }
 
-  console.log(`✅ Loaded ${stateMap.size} reservation states`);
+  console.log(`✅ Loaded ${stateMap.size} reservation states (filtered from ${totalLoaded} total rows)`);
   return stateMap;
+}
+
+/**
+ * Clean up reservations from current_state where sailing dates have passed
+ * Only keep reservations for active sailings (within date range)
+ * Uses reservation table to identify which res_ids to remove
+ */
+async function cleanupOldReservations(supabaseClient, dateRange) {
+  console.log(`🧹 Cleaning up reservations with sailing dates outside range ${dateRange.from} to ${dateRange.to}...`);
+  
+  try {
+    // Get reservations from reservation table that are outside the sailing date range
+    // We'll use the reservation table to find which res_ids to remove from current_state
+    const { data: oldReservations, error: fetchError } = await supabaseClient
+      .from('reservation')
+      .select('res_id')
+      .or(`sail_from_date.lt.${dateRange.from},sail_from_date.gt.${dateRange.to}`);
+
+    if (fetchError) {
+      // If reservation table doesn't exist or has no data, skip cleanup
+      if (fetchError.code === 'PGRST116' || fetchError.code === '42P01') {
+        console.log('ℹ️  Reservation table not available for cleanup check - skipping');
+        return;
+      }
+      console.warn(`⚠️  Could not fetch old reservations for cleanup: ${fetchError.message}`);
+      return;
+    }
+
+    if (!oldReservations || oldReservations.length === 0) {
+      console.log('✅ No old reservations to clean up');
+      return;
+    }
+
+    const resIdsToRemove = oldReservations.map(r => r.res_id).filter(Boolean);
+    if (resIdsToRemove.length === 0) {
+      console.log('✅ No old reservations to clean up');
+      return;
+    }
+
+    console.log(`🗑️  Removing ${resIdsToRemove.length} old reservations from current_state...`);
+    
+    // Delete in batches (Supabase has limits on IN clause size)
+    const batchSize = 1000;
+    let deletedCount = 0;
+    for (let i = 0; i < resIdsToRemove.length; i += batchSize) {
+      const batch = resIdsToRemove.slice(i, i + batchSize);
+      const { error } = await supabaseClient
+        .from(CURRENT_STATE_TABLE)
+        .delete()
+        .in('res_id', batch);
+
+      if (error) {
+        console.warn(`⚠️  Error cleaning up batch ${i / batchSize + 1}: ${error.message}`);
+      } else {
+        deletedCount += batch.length;
+      }
+    }
+
+    console.log(`✅ Cleaned up ${deletedCount} old reservations from current_state`);
+  } catch (error) {
+    // Don't fail the sync if cleanup fails
+    console.warn(`⚠️  Cleanup failed (non-fatal): ${error.message}`);
+  }
 }
 
 /**
@@ -131,7 +214,7 @@ function processChangesBatch(batch, currentState) {
   const changes = [];
   const updatedStates = [];
 
-  // Sort batch by res_id, then by snapshot_date
+  // Sort batch by res_id, then by snapshot_date (ascending - oldest first)
   const sorted = batch.sort((a, b) => {
     if (a.RES_ID !== b.RES_ID) {
       return a.RES_ID - b.RES_ID;
@@ -139,6 +222,8 @@ function processChangesBatch(batch, currentState) {
     return new Date(a.Snapshot_Date) - new Date(b.Snapshot_Date);
   });
 
+  // First pass: Process all rows sequentially to detect changes correctly
+  // (We need to process chronologically to detect intermediate changes)
   for (const row of sorted) {
     const resId = row.RES_ID;
     const snapshotDate = row.Snapshot_Date ? new Date(row.Snapshot_Date).toISOString().split('T')[0] : null;
@@ -146,24 +231,13 @@ function processChangesBatch(batch, currentState) {
     const current = {
       snapshot_date: snapshotDate,
       res_id: resId,
-      sail_code: row.Sail_code || null,
-      agency_id: row.Agency_ID || null,
-      group_id: row.Group_ID || null,
-      guest_count: row.Guest_Count ? parseFloat(row.Guest_Count) : null,
+      sail_code: null, // Not available in RES_HEADER_SNAPSHOT (may need to join or derive)
+      agency_id: row.AGENCY_ID || null,
+      group_id: row.GROUP_ID || null,
+      guest_count: row.RES_GUEST_COUNT ? parseFloat(row.RES_GUEST_COUNT) : null,
     };
 
     const previous = currentState.get(resId);
-
-    // Always update current state with latest snapshot
-    updatedStates.push({
-      res_id: resId,
-      snapshot_date: current.snapshot_date,
-      sail_code: current.sail_code,
-      agency_id: current.agency_id,
-      group_id: current.group_id,
-      guest_count: current.guest_count,
-      updated_at: new Date().toISOString()
-    });
 
     // Only store a change if there's a previous state AND something changed
     if (previous) {
@@ -200,6 +274,30 @@ function processChangesBatch(batch, currentState) {
     });
   }
 
+  // Second pass: Extract only the LATEST state per reservation for updatedStates
+  // This prevents adding 50,000 states when we only have ~590 unique reservations
+  const latestStatePerReservation = new Map();
+  for (const row of sorted) {
+    const resId = row.RES_ID;
+    const snapshotDate = row.Snapshot_Date ? new Date(row.Snapshot_Date).toISOString().split('T')[0] : null;
+    
+    const existing = latestStatePerReservation.get(resId);
+    if (!existing || new Date(snapshotDate) > new Date(existing.snapshot_date)) {
+      latestStatePerReservation.set(resId, {
+        res_id: resId,
+        snapshot_date: snapshotDate,
+        sail_code: null, // Not available in RES_HEADER_SNAPSHOT
+        agency_id: row.AGENCY_ID || null,
+        group_id: row.GROUP_ID || null,
+        guest_count: row.RES_GUEST_COUNT ? parseFloat(row.RES_GUEST_COUNT) : null,
+        updated_at: new Date().toISOString()
+      });
+    }
+  }
+
+  // Only add the latest state per reservation
+  updatedStates.push(...Array.from(latestStatePerReservation.values()));
+
   return { changes, updatedStates };
 }
 
@@ -228,15 +326,34 @@ async function insertChanges(supabaseClient, changes) {
 
 /**
  * Build row number query for pagination
+ * Uses table alias for stg.RES_HEADER_SNAPSHOT
  */
 function buildRowNumberQuery({ source, columnsSql, whereClause, rowNumberOrder }) {
   const order = (rowNumberOrder && rowNumberOrder.length > 0)
     ? rowNumberOrder.join(', ')
     : '[RES_ID]';
 
+  // Use table alias for RES_HEADER_SNAPSHOT
+  const tableAlias = 'rhs'; // RES_HEADER_SNAPSHOT alias
+  
+  // Map columns to use alias - handle brackets and table prefixes
+  const columnsWithAlias = columnsSql.split(',').map(col => {
+    const trimmed = col.trim();
+    // Remove brackets and add alias
+    const colName = trimmed.replace(/\[/g, '').replace(/\]/g, '');
+    return `${tableAlias}.[${colName}]`;
+  }).join(', ');
+
+  // Map order columns to use alias
+  const orderWithAlias = order.split(',').map(col => {
+    const trimmed = col.trim();
+    const colName = trimmed.replace(/\[/g, '').replace(/\]/g, '');
+    return `${tableAlias}.[${colName}]`;
+  }).join(', ');
+
   return `
-    SELECT ${columnsSql}, ROW_NUMBER() OVER (ORDER BY ${order}) as rn
-    FROM ${source}
+    SELECT ${columnsWithAlias}, ROW_NUMBER() OVER (ORDER BY ${orderWithAlias}) as rn
+    FROM ${source} ${tableAlias}
     ${whereClause ? `WHERE ${whereClause}` : ''}
   `;
 }
@@ -267,6 +384,8 @@ export async function syncReservationChanges({
   batchSize = 50000,
   forceFullSync = false
 }) {
+  const startTime = Date.now();
+  
   if (!dateRange?.from || !dateRange?.to) {
     throw new Error('Reservation changes sync requires a dateRange with from/to values');
   }
@@ -291,7 +410,7 @@ export async function syncReservationChanges({
     lastProcessedDate = twoDaysAgoStr;
     console.log(`📅 No last processed date found. Initializing to 2 days ago: ${lastProcessedDate}`);
     // Store the initial date in metadata
-    await updateSyncMetadata(supabaseClient, lastProcessedDate, 0, 0);
+    await updateSyncMetadata(supabaseClient, lastProcessedDate, 0, 0, null);
   }
   
   const isInitialLoad = forceFullSync;
@@ -305,106 +424,177 @@ export async function syncReservationChanges({
     processTo = dateRange.to;
     console.log(`🔄 INITIAL LOAD: Processing snapshots from ${processFrom} to ${processTo}`);
   } else {
-    // Incremental sync: always ensure we process at least yesterday
-    // If last_processed_date is before yesterday, catch up from there
-    // If last_processed_date is today or later, still process from yesterday to ensure we have yesterday's data
+    // Incremental sync: process snapshots from last_processed_date up to yesterday
+    // This ensures we catch up if behind, but don't process future dates
     const lastProcessedDateObj = new Date(lastProcessedDate);
     const yesterdayObj = new Date(yesterdayStr);
     
-    // Always process from the earlier of last_processed_date or yesterday
-    // This ensures we always get yesterday's data, and catch up if we're behind
+    // Process from last_processed_date (or yesterday if we're behind)
     processFrom = lastProcessedDateObj <= yesterdayObj ? lastProcessedDate : yesterdayStr;
-    processTo = null; // No upper bound for incremental syncs
-    console.log(`🔄 INCREMENTAL UPDATE: Processing all snapshots since ${processFrom} (ensuring at least yesterday ${yesterdayStr} is processed, no upper bound)`);
+    // CRITICAL: Always set an upper bound to yesterday to prevent processing infinite data
+    // This ensures we only process historical snapshots, not future dates
+    processTo = yesterdayStr;
+    console.log(`🔄 INCREMENTAL UPDATE: Processing snapshots from ${processFrom} to ${processTo} (yesterday)`);
   }
 
-  // Load current state from database
-  const currentState = await loadCurrentState(supabaseClient);
+  // Clean up old reservations from current_state (sailings that have passed)
+  await cleanupOldReservations(supabaseClient, dateRange);
 
+  // STEP 1: Get reservation IDs for sailings within the date range from stg.RES_HEADER
+  console.log(`🔍 Finding reservations for sailings ${dateRange.from} to ${dateRange.to}...`);
   const pool = await sql.connect(synapseConfig);
+  
+  const activeResQuery = `
+    SELECT DISTINCT RES_ID
+    FROM stg.RES_HEADER
+    WHERE SAIL_DATE_FROM >= '${dateRange.from}'
+      AND SAIL_DATE_FROM <= '${dateRange.to}'
+  `;
+  
+  const activeResResult = await pool.request().query(activeResQuery);
+  const activeResIds = activeResResult.recordset.map(row => row.RES_ID).filter(Boolean);
+  console.log(`✅ Found ${activeResIds.length} reservations for sailings in date range`);
+  
+  if (activeResIds.length === 0) {
+    console.log('✅ No reservations found - nothing to process');
+    await pool.close();
+    return {
+      success: true,
+      recordsProcessed: 0,
+      changesDetected: 0,
+      message: 'No reservations in sailing date range'
+    };
+  }
+
+  // STEP 2: Load current state from database (only for active reservations)
+  const currentState = await loadCurrentState(supabaseClient, dateRange, activeResIds);
+
+  // STEP 3: Process snapshots only for these reservations
   const allChanges = [];
   const allUpdatedStates = [];
   let totalProcessed = 0;
-  let maxSnapshotDate = null; // Track the maximum Snapshot_Date processed
+  let maxSnapshotDate = null;
   const columnsSql = columns.join(', ');
   
-  // Build WHERE clause based on sync type
-  const whereClause = isInitialLoad
-    ? `${dateColumn} >= '${processFrom}' AND ${dateColumn} <= '${processTo}'`
-    : `${dateColumn} >= '${processFrom}'`; // Incremental: use >= to ensure we always get yesterday's data, no upper bound
-
+  // Process in batches if we have too many reservation IDs
+  // SQL Server can handle large IN clauses, but we use 5000 as a safe batch size for performance
+  const maxInClauseSize = 5000; // Reduced from 10000 for better performance and reliability
+  const resIdBatches = [];
+  for (let i = 0; i < activeResIds.length; i += maxInClauseSize) {
+    resIdBatches.push(activeResIds.slice(i, i + maxInClauseSize));
+  }
+  
+  console.log(`📋 Processing ${activeResIds.length} reservations in ${resIdBatches.length} batch(es) of up to ${maxInClauseSize} reservations each`);
+  console.log(`📅 Snapshot date range: ${processFrom} to ${processTo}`);
+  console.log(`📅 Sailing date range: ${dateRange.from} to ${dateRange.to}`);
+  
   try {
-    const countQuery = `
-      SELECT COUNT(*) as total
-      FROM ${source}
-      WHERE ${whereClause}
-    `;
+    // Process each batch of reservation IDs
+    for (let batchIdx = 0; batchIdx < resIdBatches.length; batchIdx++) {
+      const resIdBatch = resIdBatches[batchIdx];
+      const resIdsList = resIdBatch.map(id => id.toString()).join(', ');
+      
+      // Build WHERE clause - Filter by snapshot date AND reservation IDs
+      // Use alias 'rhs' for RES_HEADER_SNAPSHOT
+      // CRITICAL: Only process snapshots for reservations within sailing date range
+      const dateCol = dateColumn.replace(/\[/g, '').replace(/\]/g, '');
+      const whereClause = `rhs.[${dateCol}] >= '${processFrom}' AND rhs.[${dateCol}] <= '${processTo}' AND rhs.RES_ID IN (${resIdsList})`;
+      
+      console.log(`\n📦 Processing reservation batch ${batchIdx + 1}/${resIdBatches.length} (${resIdBatch.length} reservations)...`);
 
-    const countResult = await pool.request().query(countQuery);
-    const totalRows = countResult.recordset[0].total;
-    console.log(`📊 Total rows to process: ${totalRows}`);
-
-    if (totalRows === 0) {
-      console.log('✅ No rows to process');
-      return {
-        success: true,
-        recordsProcessed: 0,
-        changesDetected: 0,
-        message: 'No rows to process'
-      };
-    }
-
-    const rowNumberQuery = buildRowNumberQuery({
-      source,
-      columnsSql,
-      whereClause,
-      rowNumberOrder
-    });
-
-    // Process in batches
-    for (let offset = 0; offset < totalRows; offset += batchSize) {
-      const batchQuery = `
-        SELECT *
-        FROM (
-          ${rowNumberQuery}
-        ) AS numbered
-        WHERE rn > ${offset} AND rn <= ${offset + batchSize}
-        ORDER BY rn
+      // Count query needs to use the same alias and WHERE clause
+      const countQuery = `
+        SELECT COUNT(*) as total
+        FROM ${source} rhs
+        WHERE ${whereClause}
       `;
 
-      console.log(`  Processing batch ${offset + 1} to ${Math.min(offset + batchSize, totalRows)}...`);
-      const batchResult = await pool.request().query(batchQuery);
-      const batch = batchResult.recordset;
-      if (!batch.length) {
-        break;
-      }
-
-      const { changes, updatedStates } = processChangesBatch(batch, currentState);
-      allChanges.push(...changes);
-      allUpdatedStates.push(...updatedStates);
-      totalProcessed += batch.length;
+      const countResult = await pool.request().query(countQuery);
+      const totalRows = countResult.recordset[0].total;
+      console.log(`  📊 Found ${totalRows.toLocaleString()} snapshot rows for this batch`);
       
-      // Track the maximum Snapshot_Date from this batch
-      for (const row of batch) {
-        if (row.Snapshot_Date) {
-          const snapshotDate = new Date(row.Snapshot_Date);
-          if (!maxSnapshotDate || snapshotDate > maxSnapshotDate) {
-            maxSnapshotDate = snapshotDate;
+      if (totalRows === 0) {
+        console.log(`  ✅ No snapshots found for this batch - skipping`);
+        continue; // Skip to next batch
+      }
+      
+      if (totalRows > 500000) {
+        console.log(`  ⚠️  WARNING: Large batch (${totalRows.toLocaleString()} rows) - this may take a while`);
+      }
+      
+      const rowNumberQuery = buildRowNumberQuery({
+        source,
+        columnsSql,
+        whereClause,
+        rowNumberOrder
+      });
+
+      // Process snapshot rows in batches (within each reservation batch)
+      const snapshotBatchCount = Math.ceil(totalRows / batchSize);
+      console.log(`  📥 Processing ${totalRows.toLocaleString()} snapshot rows in ${snapshotBatchCount} batch(es) of ${batchSize.toLocaleString()}...`);
+      
+      for (let offset = 0; offset < totalRows; offset += batchSize) {
+        const batchQuery = `
+          SELECT *
+          FROM (
+            ${rowNumberQuery}
+          ) AS numbered
+          WHERE rn > ${offset} AND rn <= ${offset + batchSize}
+          ORDER BY rn
+        `;
+
+        const batchNum = Math.floor(offset / batchSize) + 1;
+        console.log(`    Processing snapshot batch ${batchNum}/${snapshotBatchCount} (rows ${offset + 1} to ${Math.min(offset + batchSize, totalRows)})...`);
+        const batchResult = await pool.request().query(batchQuery);
+        const batch = batchResult.recordset;
+        if (!batch.length) {
+          break;
+        }
+
+        const { changes, updatedStates } = processChangesBatch(batch, currentState);
+        allChanges.push(...changes);
+        allUpdatedStates.push(...updatedStates);
+        totalProcessed += batch.length;
+        
+        // Track the maximum Snapshot_Date from this batch
+        for (const row of batch) {
+          if (row.Snapshot_Date) {
+            const snapshotDate = new Date(row.Snapshot_Date);
+            if (!maxSnapshotDate || snapshotDate > maxSnapshotDate) {
+              maxSnapshotDate = snapshotDate;
+            }
           }
         }
-      }
 
-      // Insert changes in batches to avoid memory issues
-      if (allChanges.length >= 10000) {
-        await insertChanges(supabaseClient, allChanges);
-        allChanges.length = 0;
-      }
+        // Insert changes in batches to avoid memory issues
+        if (allChanges.length >= 10000) {
+          console.log(`    💾 Flushing ${allChanges.length.toLocaleString()} changes to database...`);
+          await insertChanges(supabaseClient, allChanges);
+          allChanges.length = 0;
+        }
 
-      // Update current state in batches
-      if (allUpdatedStates.length >= 10000) {
-        await updateCurrentState(supabaseClient, allUpdatedStates);
-        allUpdatedStates.length = 0;
+        // Update current state in batches - CRITICAL: Update immediately after each batch
+        // to ensure in-memory state matches database state for next batch comparison
+        if (allUpdatedStates.length >= 10000) {
+          console.log(`    💾 Flushing ${allUpdatedStates.length.toLocaleString()} state updates to database...`);
+          await updateCurrentState(supabaseClient, allUpdatedStates);
+          // Update in-memory state map with the states we just saved
+          // This is more efficient than reloading from database
+          for (const state of allUpdatedStates) {
+            currentState.set(state.res_id, {
+              snapshot_date: state.snapshot_date,
+              sail_code: state.sail_code,
+              agency_id: state.agency_id,
+              group_id: state.group_id,
+              guest_count: state.guest_count
+            });
+          }
+          allUpdatedStates.length = 0;
+          console.log(`    ✅ In-memory state map updated (${currentState.size} reservations)`);
+        }
       }
+      
+      console.log(`  ✅ Completed reservation batch ${batchIdx + 1}/${resIdBatches.length} (${totalProcessed.toLocaleString()} total rows processed so far)`);
     }
 
     // Insert remaining changes
@@ -418,20 +608,23 @@ export async function syncReservationChanges({
     }
 
     // Update sync metadata with the actual maximum Snapshot_Date processed
-    // For initial load, use processTo; for incremental, use maxSnapshotDate
-    // CRITICAL: last_processed_date can NEVER be before today
+    // For initial load, use processTo; for incremental, use processTo (yesterday)
+    // CRITICAL: last_processed_date should be set to the last date we actually processed
     let newLastProcessedDate;
     if (isInitialLoad) {
       newLastProcessedDate = processTo;
     } else {
-      // Use maxSnapshotDate if available, otherwise use processFrom
-      const maxDateStr = maxSnapshotDate ? maxSnapshotDate.toISOString().split('T')[0] : processFrom;
-      // Ensure we never set last_processed_date before today
+      // For incremental syncs, use processTo (yesterday) as we always process up to yesterday
+      // Use maxSnapshotDate if it's earlier than processTo (in case there's no data for yesterday)
+      const maxDateStr = maxSnapshotDate ? maxSnapshotDate.toISOString().split('T')[0] : processTo;
       const maxDateObj = new Date(maxDateStr);
-      newLastProcessedDate = maxDateObj >= today ? maxDateStr : todayStr;
+      const processToObj = new Date(processTo);
+      // Use the earlier of maxSnapshotDate or processTo (but never before processFrom)
+      newLastProcessedDate = maxDateObj <= processToObj ? maxDateStr : processTo;
     }
     
-    await updateSyncMetadata(supabaseClient, newLastProcessedDate, totalProcessed, allChanges.length);
+    const duration = Date.now() - startTime;
+    await updateSyncMetadata(supabaseClient, newLastProcessedDate, totalProcessed, allChanges.length, duration);
 
     console.log(`✅ Sync complete: Processed ${totalProcessed} rows, detected ${allChanges.length} changes`);
     if (!isInitialLoad) {

@@ -58,3 +58,8 @@ coverage/
 
 # InstantDB
 .instant/
+
+# Database backups
+**/backups/
+*.sql.gz
+*.sql

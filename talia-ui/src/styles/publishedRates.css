@@ -8,39 +8,51 @@
   /* Tabulator table will inherit theme variables */
 }
 
-/* Override Tabulator styles to use theme variables */
-/* Uses Dark Modern theme via CSS variables */
+/* Override Tabulator styles to match Data Mode exactly */
+/* Table background transparent to show glass container */
 .published-rates-table .tabulator {
-  background-color: var(--theme-bg-solid);
+  background-color: transparent !important;
   color: var(--theme-fg);
-  border-color: var(--theme-border);
+  border-color: transparent !important;
 }
 
+/* Header matches Data Mode - glass background with text-secondary color */
 .published-rates-table .tabulator-header {
-  background-color: var(--theme-sidebar-header);
-  color: var(--theme-fg);
-  border-bottom-color: var(--theme-border);
+  background-color: var(--theme-glass, rgba(255, 255, 255, 0.08)) !important;
+  color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
+  border-bottom-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15)) !important;
+  font-size: 10px !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
 }
 
 .published-rates-table .tabulator-header .tabulator-col {
-  background-color: var(--theme-sidebar-header);
-  color: var(--theme-fg);
-  border-right-color: var(--theme-border);
+  background-color: var(--theme-glass, rgba(255, 255, 255, 0.08)) !important;
+  color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
+  border-right-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15)) !important;
+  padding: 6px 8px !important;
+  font-size: 10px !important;
+  height: 28px !important;
 }
 
 .published-rates-table .tabulator-header .tabulator-col-content {
-  color: var(--theme-fg);
+  color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
+  font-size: 10px !important;
 }
 
 .published-rates-table .tabulator-tableHolder {
-  background-color: var(--theme-bg-solid);
+  background-color: transparent !important;
 }
 
 .published-rates-table .tabulator-row {
   background-color: var(--theme-table-row-even);
   color: var(--theme-fg);
-  border-bottom-color: var(--theme-border);
+  border-bottom-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15));
   transition: background-color 0.15s ease;
+  font-size: 10px !important;
+  height: 24px !important;
+  min-height: 24px !important;
+  max-height: 24px !important;
 }
 
 .published-rates-table .tabulator-row:nth-child(even) {
@@ -65,8 +77,12 @@
 
 .published-rates-table .tabulator-cell {
   color: var(--theme-fg);
-  border-right-color: var(--theme-border);
+  border-right-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15));
   background-color: transparent; /* Let row background show through */
+  padding: 6px 8px !important;
+  font-size: 10px !important;
+  line-height: 12px !important;
+  vertical-align: middle !important;
 }
 
 .published-rates-table .tabulator-cell input,
@@ -82,12 +98,13 @@
   outline-color: var(--theme-accent);
 }
 
-/* Filter input styling */
+/* Filter input styling - matches Data Mode */
 .published-rates-table .tabulator-header-filter input,
 .published-rates-table .tabulator-header-filter select {
-  background-color: var(--theme-bg-solid);
+  background-color: var(--theme-bg-solid, #151528);
   color: var(--theme-fg);
-  border-color: var(--theme-border);
+  border-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15));
+  font-size: 10px !important;
 }
 
 .published-rates-table .tabulator-header-filter input:focus,

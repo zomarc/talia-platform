@@ -9,8 +9,9 @@
 }
 
 /* Override Tabulator styles to use theme variables */
+/* Uses Dark Modern theme via CSS variables */
 .published-rates-table .tabulator {
-  background-color: var(--theme-bg);
+  background-color: var(--theme-bg-solid);
   color: var(--theme-fg);
   border-color: var(--theme-border);
 }
@@ -32,7 +33,7 @@
 }
 
 .published-rates-table .tabulator-tableHolder {
-  background-color: var(--theme-bg);
+  background-color: var(--theme-bg-solid);
 }
 
 .published-rates-table .tabulator-row {

@@ -2,9 +2,8 @@ import { StrictMode, useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './styles/theme.css' // Import theme CSS variables
-// Note: tabulator.css is imported AFTER Tabulator's default CSS loads (in components)
-// This ensures our custom styles override Tabulator's defaults
-import './styles/tabulator.css' // Import global Tabulator theme styles
+// Note: Tabulator CSS is loaded dynamically in components via initTabulator()
+// Custom Tabulator styling is injected AFTER Tabulator's CSS loads (see tabulatorConfig.js)
 import AppWithAuth from './AppWithAuth.jsx'
 import TestPage from './components/TestPage.jsx'
 import DataManagementPage from './components/DataManagementPage.jsx'

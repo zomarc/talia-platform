@@ -512,7 +512,7 @@ const TablePanel = React.memo(function TablePanel() {
         ref={tableRef} 
         style={{ height: "100%", width: "100%", flex: 1 }} 
       />
-      {/* Tabulator styling now handled by global tabulator.css - matches Data Mode */}
+      {/* Tabulator styling configured via initTabulator() - CSS injected after Tabulator loads */}
     </div>
   );
 });

@@ -3,7 +3,7 @@
  * Provides a reusable pattern for data fetching with loading and error states
  */
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import publishedRatesService from '../../services/data/publishedRatesService';
 
 /**
@@ -82,26 +82,26 @@ export const usePublishedRatesBySail = (options = {}) => {
     };
   }, [listenToSailEvents]);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      
-      try {
-        const filters = selectedSailCode ? { sail_code: selectedSailCode } : {};
-        const result = await publishedRatesService.fetch(filters);
-        setData(result);
-      } catch (err) {
-        console.error('[usePublishedRatesBySail] Error:', err);
-        setError(err);
-        setData([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+  const fetchData = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const filters = selectedSailCode ? { sail_code: selectedSailCode } : {};
+      const result = await publishedRatesService.fetch(filters);
+      setData(result);
+    } catch (err) {
+      console.error('[usePublishedRatesBySail] Error:', err);
+      setError(err);
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
   }, [selectedSailCode]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   return {
     data,

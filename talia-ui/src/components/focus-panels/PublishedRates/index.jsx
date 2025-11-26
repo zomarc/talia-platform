@@ -14,10 +14,14 @@ import { useTheme } from '../../../contexts/ThemeContext';
 const PublishedRatesContainer = ({ filters = {} }) => {
   const { theme } = useTheme();
   
+  console.log('[PublishedRatesContainer] Component rendering');
+  
   // Use hook that listens to sail selection events
   const { data, loading, error, refetch, selectedSailCode } = usePublishedRatesBySail({
     listenToSailEvents: true
   });
+
+  console.log('[PublishedRatesContainer] State:', { loading, error: error?.message, dataLength: data?.length, selectedSailCode });
 
   // Handle loading state
   if (loading) {

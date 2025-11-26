@@ -8,7 +8,7 @@ import OccupancyChart from "./components/focus-panels/OccupancyChart";
 import RevenueBreakdown from "./components/focus-panels/RevenueBreakdown";
 import ExceptionList from "./components/focus-panels/ExceptionList";
 import ItineraryList from "./components/focus-panels/ItineraryList";
-import PublishedRates from "./components/focus-panels/PublishedRates";
+import PublishedRates from "./components/focus-panels/PublishedRates/index.jsx";
 import SailingByCabinCategory from "./components/focus-panels/SailingByCabinCategory";
 import SimpleTable from "./components/focus-panels/SimpleTable";
 import SailingSummary from "./components/focus-panels/SailingSummary";

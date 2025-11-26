@@ -10,6 +10,40 @@ import { themes, DEFAULT_THEME, getTheme, applyTheme, getThemeColors } from '../
 
 const ThemeContext = createContext();
 
+// Font families for data visualization - defined outside component for use in useState initializers
+const FONT_FAMILIES = {
+  'Inter': {
+    name: 'Inter',
+    value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    description: 'Modern, clean, highly readable'
+  },
+  'Roboto': {
+    name: 'Roboto',
+    value: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    description: 'Google\'s data-friendly font'
+  },
+  'Source Sans Pro': {
+    name: 'Source Sans Pro',
+    value: '"Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    description: 'Adobe\'s professional font'
+  },
+  'Arial': {
+    name: 'Arial',
+    value: 'Arial, Helvetica, sans-serif',
+    description: 'Classic, widely supported'
+  },
+  'Verdana': {
+    name: 'Verdana',
+    value: 'Verdana, Geneva, sans-serif',
+    description: 'High readability, screen-optimized'
+  },
+  'Georgia': {
+    name: 'Georgia',
+    value: 'Georgia, "Times New Roman", serif',
+    description: 'Elegant serif, print-friendly'
+  }
+};
+
 export const useTheme = () => {
   const context = useContext(ThemeContext);
   if (!context) {
@@ -100,14 +134,6 @@ export const ThemeProvider = ({ children }) => {
     }
     // Set font family CSS variable IMMEDIATELY during initialization
     const root = document.documentElement;
-    const FONT_FAMILIES = {
-      'Inter': { value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
-      'Roboto': { value: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
-      'Source Sans Pro': { value: '"Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
-      'Arial': { value: 'Arial, Helvetica, sans-serif' },
-      'Verdana': { value: 'Verdana, Geneva, sans-serif' },
-      'Georgia': { value: 'Georgia, "Times New Roman", serif' }
-    };
     const selectedFont = FONT_FAMILIES[initialFontFamily] || FONT_FAMILIES['Inter'];
     root.style.setProperty('--theme-font-family', selectedFont.value);
     root.style.setProperty('--theme-font-family-monospace', 'monospace');
@@ -128,39 +154,7 @@ export const ThemeProvider = ({ children }) => {
     return 'default';
   });
 
-  // Font families for data visualization
-  const FONT_FAMILIES = {
-    'Inter': {
-      name: 'Inter',
-      value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      description: 'Modern, clean, highly readable'
-    },
-    'Roboto': {
-      name: 'Roboto',
-      value: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      description: 'Google\'s data-friendly font'
-    },
-    'Source Sans Pro': {
-      name: 'Source Sans Pro',
-      value: '"Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      description: 'Adobe\'s professional font'
-    },
-    'Arial': {
-      name: 'Arial',
-      value: 'Arial, Helvetica, sans-serif',
-      description: 'Classic, widely supported'
-    },
-    'Verdana': {
-      name: 'Verdana',
-      value: 'Verdana, Geneva, sans-serif',
-      description: 'High readability, screen-optimized'
-    },
-    'Georgia': {
-      name: 'Georgia',
-      value: 'Georgia, "Times New Roman", serif',
-      description: 'Elegant serif, print-friendly'
-    }
-  };
+  // FONT_FAMILIES is now defined outside component (above) for use in useState initializers
 
   const selectedFont = FONT_FAMILIES[fontFamily] || FONT_FAMILIES['Inter'];
 

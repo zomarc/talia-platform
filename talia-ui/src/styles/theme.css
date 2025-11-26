@@ -38,9 +38,18 @@
   --theme-table-row-selected: rgba(66, 133, 244, 0.25);
   --theme-table-row-selected-hover: rgba(66, 133, 244, 0.6);
   
-  /* Tabulator-specific theme variables - Dark Modern */
+  /* Glass morphism effects */
+  --theme-glass: rgba(255, 255, 255, 0.08);
+  --theme-glass-border: rgba(255, 255, 255, 0.15);
+  --theme-glass-hover: rgba(255, 255, 255, 0.12);
+  
+  /* Text colors (for consistency with Data Mode) */
+  --theme-text-secondary: rgba(232, 232, 240, 0.75);
+  --theme-text-muted: rgba(232, 232, 240, 0.55);
+  
+  /* Tabulator-specific theme variables */
   --theme-tabulator-header-bg: rgba(255, 255, 255, 0.08);
-  --theme-tabulator-header-text: #e8e8f0;
+  --theme-tabulator-header-text: rgba(232, 232, 240, 0.75);
   --theme-tabulator-filter-bg: #151528;
   --theme-tabulator-filter-border: rgba(255, 255, 255, 0.15);
   --theme-tabulator-sort-active: #5b9bd5;

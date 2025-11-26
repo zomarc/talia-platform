@@ -214,8 +214,8 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
           headerFilterLiveFilter: true, // Live filtering
           headerFilterLiveFilterDelay: 300, // 300ms delay for performance
           pagination: false, // Disable pagination - show all data
-          headerHeight: spacingMode === 'compact' ? Math.max(28, fontSize + 6) : Math.max(35, fontSize + 12),
-          rowHeight: spacingMode === 'compact' ? Math.max(24, fontSize + 4) : Math.max(32, fontSize + 8),
+          headerHeight: 28, // Fixed to match Data Mode (10px font + 6px padding top/bottom = ~28px)
+          rowHeight: 24, // Fixed to match Data Mode (10px font + 6px padding top/bottom = ~24px)
           theme: "default" // Use default theme, CSS variables will override
         });
 

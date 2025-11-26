@@ -79,11 +79,11 @@ const injectGlobalTabulatorCss = () => {
 
     /* 
      * STEP 2: Style table header to match Data Mode
-     * Data Mode header has: background rgba(0, 0, 0, 0.2) with backdrop blur
-     * This matches the section header style in Data Management screen
+     * Data Mode header uses: background rgba(255, 255, 255, 0.08) with backdrop blur(10px)
+     * This matches the table header row style in Data Management screen (theme.colors.glass)
      */
     .tabulator-header {
-      background: rgba(0, 0, 0, 0.2) !important;
+      background: var(--theme-glass, rgba(255, 255, 255, 0.08)) !important;
       backdrop-filter: blur(10px) !important;
       -webkit-backdrop-filter: blur(10px) !important;
       font-size: 10px !important;

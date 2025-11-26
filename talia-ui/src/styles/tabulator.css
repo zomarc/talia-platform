@@ -1,235 +1,200 @@
 /**
  * Global Tabulator Theme Styles
  * 
- * Applies theme to all Tabulator tables using CSS variables.
- * Components can override specific styles if needed.
- * 
- * This file is imported globally and applies theme to all Tabulator instances.
- * IMPORTANT: This CSS must load AFTER Tabulator's default CSS to override it.
+ * Uses Tabulator's proper CSS classes without overriding the library.
+ * Follows Tabulator's recommended styling approach.
  */
 
-/* Base Tabulator styling using theme variables */
-/* Defaults to Dark Modern theme values for consistency */
-/* Background is transparent to allow glass container to show through */
-/* Using high specificity to override Tabulator's default styles */
-div.tabulator,
-.tabulator-table,
+/* Base Tabulator styling - use proper classes */
 .tabulator {
-  background-color: transparent !important;
-  color: var(--theme-fg, #e8e8f0) !important;
-  border-color: transparent !important;
-  font-family: var(--theme-font-family, 'Inter', sans-serif) !important;
+  background-color: transparent;
+  color: var(--theme-fg, #e8e8f0);
+  border-color: transparent;
+  font-family: var(--theme-font-family, 'Inter', sans-serif);
 }
 
-/* Header styling - matches Data Mode tables */
-/* High specificity to override Tabulator defaults */
-div.tabulator .tabulator-header,
-.tabulator .tabulator-header,
+/* Header styling - matches Data Mode */
 .tabulator-header {
-  background-color: var(--theme-glass, var(--theme-sidebar-header, rgba(255, 255, 255, 0.08))) !important;
-  color: var(--theme-text-secondary, var(--theme-fg, rgba(232, 232, 240, 0.75))) !important;
-  border-bottom-color: var(--theme-glass-border, var(--theme-border, rgba(255, 255, 255, 0.15))) !important;
-  font-weight: 600 !important;
-  font-size: 10px !important;
-  backdrop-filter: blur(10px) !important;
-  -webkit-backdrop-filter: blur(10px) !important;
+  background-color: var(--theme-glass, rgba(255, 255, 255, 0.08));
+  color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75));
+  border-bottom-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15));
+  font-weight: 600;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
-div.tabulator .tabulator-header .tabulator-col,
-.tabulator .tabulator-header .tabulator-col,
 .tabulator-header .tabulator-col {
-  background-color: var(--theme-glass, var(--theme-sidebar-header, rgba(255, 255, 255, 0.08))) !important;
-  color: var(--theme-text-secondary, var(--theme-fg, rgba(232, 232, 240, 0.75))) !important;
-  border-right-color: var(--theme-glass-border, var(--theme-border, rgba(255, 255, 255, 0.15))) !important;
-  font-weight: 600 !important;
-  font-size: 10px !important;
-  padding: 6px 8px !important;
-  height: 28px !important; /* Fixed height to match Data Mode */
-  line-height: 16px !important; /* 10px font + 6px line spacing */
+  background-color: var(--theme-glass, rgba(255, 255, 255, 0.08));
+  color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75));
+  border-right-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15));
+  font-weight: 600;
 }
 
 .tabulator-header .tabulator-col-content {
-  color: var(--theme-text-secondary, var(--theme-fg, rgba(232, 232, 240, 0.75))) !important;
-  font-size: 10px !important;
+  color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75));
 }
 
 .tabulator-header .tabulator-col-content .tabulator-col-title {
-  color: var(--theme-text-secondary, var(--theme-fg, rgba(232, 232, 240, 0.75))) !important;
-  font-size: 10px !important;
-  font-weight: 600 !important;
+  color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75));
+  font-weight: 600;
 }
 
-/* Table holder (scrollable area) - transparent to show glass container */
+/* Table holder - transparent to show glass container */
 .tabulator-tableHolder {
-  background-color: transparent !important;
+  background-color: transparent;
 }
 
-/* Row styling - matches Data Mode */
-/* High specificity to override Tabulator defaults */
-div.tabulator .tabulator-row,
-.tabulator .tabulator-row,
+/* Row styling - use Tabulator's proper nth-child selectors */
 .tabulator-row {
-  background-color: var(--theme-table-row-even, transparent) !important;
-  color: var(--theme-fg, #e8e8f0) !important;
-  border-bottom-color: var(--theme-glass-border, var(--theme-border, rgba(255, 255, 255, 0.15))) !important;
-  transition: background-color 0.15s ease !important;
-  font-size: 10px !important;
-  height: 24px !important; /* Fixed height to match Data Mode */
-  min-height: 24px !important;
-  max-height: 24px !important;
+  color: var(--theme-fg, #e8e8f0);
+  border-bottom-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15));
+  transition: background-color 0.15s ease;
 }
 
+/* Alternating row colors - Tabulator's proper method */
 .tabulator-row:nth-child(even) {
-  background-color: var(--theme-table-row-even, transparent) !important;
+  background-color: var(--theme-table-row-even, transparent);
 }
 
 .tabulator-row:nth-child(odd) {
-  background-color: var(--theme-table-row-odd, rgba(0, 0, 0, 0.2)) !important;
+  background-color: var(--theme-table-row-odd, rgba(0, 0, 0, 0.2));
 }
 
 .tabulator-row:hover {
-  background-color: var(--theme-table-row-hover, rgba(66, 133, 244, 0.5)) !important;
+  background-color: var(--theme-table-row-hover, rgba(66, 133, 244, 0.5));
 }
 
 .tabulator-row.tabulator-selected {
-  background-color: var(--theme-table-row-selected, rgba(66, 133, 244, 0.25)) !important;
+  background-color: var(--theme-table-row-selected, rgba(66, 133, 244, 0.25));
 }
 
 .tabulator-row.tabulator-selected:hover {
-  background-color: var(--theme-table-row-selected-hover, rgba(66, 133, 244, 0.6)) !important;
+  background-color: var(--theme-table-row-selected-hover, rgba(66, 133, 244, 0.6));
 }
 
-/* Cell styling - matches Data Mode */
-/* High specificity to override Tabulator defaults */
-div.tabulator .tabulator-cell,
-.tabulator .tabulator-cell,
+/* Cell styling */
 .tabulator-cell {
-  color: var(--theme-fg, #e8e8f0) !important;
-  border-right-color: var(--theme-glass-border, var(--theme-border, rgba(255, 255, 255, 0.15))) !important;
-  background-color: transparent !important; /* Let row background show through */
-  padding: 6px 8px !important;
-  font-size: 10px !important;
-  line-height: 12px !important; /* Tight line height for 10px font */
-  vertical-align: middle !important;
+  color: var(--theme-fg, #e8e8f0);
+  border-right-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15));
+  background-color: transparent; /* Let row background show through */
 }
 
-/* Header filter styling - matches Data Mode */
+/* Header filter styling */
 .tabulator-header-filter {
-  background-color: var(--theme-glass, var(--theme-sidebar-header, rgba(255, 255, 255, 0.08))) !important;
+  background-color: var(--theme-glass, rgba(255, 255, 255, 0.08));
 }
 
 .tabulator-header-filter input,
 .tabulator-header-filter select {
-  background-color: var(--theme-tabulator-filter-bg, var(--theme-bg-solid, #151528)) !important;
-  color: var(--theme-fg, #e8e8f0) !important;
-  border-color: var(--theme-tabulator-filter-border, var(--theme-border, rgba(255, 255, 255, 0.15))) !important;
+  background-color: var(--theme-tabulator-filter-bg, var(--theme-bg-solid, #151528));
+  color: var(--theme-fg, #e8e8f0);
+  border-color: var(--theme-tabulator-filter-border, rgba(255, 255, 255, 0.15));
 }
 
 .tabulator-header-filter input:focus,
 .tabulator-header-filter select:focus {
-  border-color: var(--theme-accent, #5b9bd5) !important;
-  outline-color: var(--theme-accent, #5b9bd5) !important;
+  border-color: var(--theme-accent, #5b9bd5);
+  outline-color: var(--theme-accent, #5b9bd5);
 }
 
 .tabulator-header-filter input::placeholder {
-  color: var(--theme-text-muted, rgba(232, 232, 240, 0.55)) !important;
+  color: var(--theme-text-muted, rgba(232, 232, 240, 0.55));
 }
 
 /* Cell input/select styling (for editable cells) */
 .tabulator-cell input,
 .tabulator-cell select,
 .tabulator-cell textarea {
-  background-color: var(--theme-bg-solid, #151528) !important;
-  color: var(--theme-fg, #e8e8f0) !important;
-  border-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
+  background-color: var(--theme-bg-solid, #151528);
+  color: var(--theme-fg, #e8e8f0);
+  border-color: var(--theme-border, rgba(255, 255, 255, 0.15));
 }
 
 .tabulator-cell input:focus,
 .tabulator-cell select:focus,
 .tabulator-cell textarea:focus {
-  border-color: var(--theme-accent, #5b9bd5) !important;
-  outline-color: var(--theme-accent, #5b9bd5) !important;
+  border-color: var(--theme-accent, #5b9bd5);
+  outline-color: var(--theme-accent, #5b9bd5);
 }
 
-/* Footer styling - matches Data Mode */
+/* Footer styling */
 .tabulator-footer {
-  background-color: var(--theme-glass, var(--theme-sidebar-header, rgba(255, 255, 255, 0.08))) !important;
-  color: var(--theme-text-secondary, var(--theme-fg, rgba(232, 232, 240, 0.75))) !important;
-  border-top-color: var(--theme-glass-border, var(--theme-border, rgba(255, 255, 255, 0.15))) !important;
+  background-color: var(--theme-glass, rgba(255, 255, 255, 0.08));
+  color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75));
+  border-top-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15));
 }
 
-/* Pagination styling - matches Data Mode */
+/* Pagination styling */
 .tabulator-paginator {
-  background-color: var(--theme-glass, var(--theme-sidebar-header, rgba(255, 255, 255, 0.08))) !important;
-  color: var(--theme-text-secondary, var(--theme-fg, rgba(232, 232, 240, 0.75))) !important;
+  background-color: var(--theme-glass, rgba(255, 255, 255, 0.08));
+  color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75));
 }
 
 .tabulator-paginator button {
-  background-color: var(--theme-bg-solid, #151528) !important;
-  color: var(--theme-fg, #e8e8f0) !important;
-  border-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
+  background-color: var(--theme-bg-solid, #151528);
+  color: var(--theme-fg, #e8e8f0);
+  border-color: var(--theme-border, rgba(255, 255, 255, 0.15));
 }
 
 .tabulator-paginator button:hover {
-  background-color: var(--theme-hover, rgba(91, 155, 213, 0.25)) !important;
+  background-color: var(--theme-hover, rgba(91, 155, 213, 0.25));
 }
 
 .tabulator-paginator button.tabulator-page-active {
-  background-color: var(--theme-accent, #5b9bd5) !important;
-  color: white !important;
+  background-color: var(--theme-accent, #5b9bd5);
+  color: white;
 }
 
 /* Loading overlay */
 .tabulator-loading-overlay {
-  background-color: var(--theme-bg-solid, #151528) !important;
-  color: var(--theme-fg, #e8e8f0) !important;
+  background-color: var(--theme-bg-solid, #151528);
+  color: var(--theme-fg, #e8e8f0);
 }
 
 .tabulator-loading {
-  color: var(--theme-accent, #5b9bd5) !important;
+  color: var(--theme-accent, #5b9bd5);
 }
 
 /* Sort arrows */
 .tabulator-col-sorter {
-  color: var(--theme-text-muted, rgba(232, 232, 240, 0.55)) !important;
+  color: var(--theme-text-muted, rgba(232, 232, 240, 0.55));
 }
 
 .tabulator-col-sorter:hover {
-  color: var(--theme-tabulator-sort-active, var(--theme-accent, #5b9bd5)) !important;
+  color: var(--theme-tabulator-sort-active, var(--theme-accent, #5b9bd5));
 }
 
 .tabulator-col-sorter-element.tabulator-arrow-active {
-  color: var(--theme-tabulator-sort-active, var(--theme-accent, #5b9bd5)) !important;
+  color: var(--theme-tabulator-sort-active, var(--theme-accent, #5b9bd5));
 }
 
 /* Column resize handle */
 .tabulator-col-resize-handle {
-  background-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
+  background-color: var(--theme-border, rgba(255, 255, 255, 0.15));
 }
 
 .tabulator-col-resize-handle:hover {
-  background-color: var(--theme-accent, #5b9bd5) !important;
+  background-color: var(--theme-accent, #5b9bd5);
 }
 
-/* Tooltip styling - matches Data Mode */
+/* Tooltip styling */
 .tabulator-tooltip {
-  background-color: var(--theme-glass, rgba(255, 255, 255, 0.08)) !important;
-  color: var(--theme-fg, #e8e8f0) !important;
-  border-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15)) !important;
-  backdrop-filter: blur(10px) !important;
-  -webkit-backdrop-filter: blur(10px) !important;
+  background-color: var(--theme-glass, rgba(255, 255, 255, 0.08));
+  color: var(--theme-fg, #e8e8f0);
+  border-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 /* Print styling */
 @media print {
   .tabulator {
-    background-color: white !important;
-    color: black !important;
+    background-color: white;
+    color: black;
   }
   
   .tabulator-row {
-    background-color: white !important;
-    color: black !important;
+    background-color: white;
+    color: black;
   }
 }
-

@@ -192,7 +192,10 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
             { column: "sail_date_from", dir: "desc" } // Sort by sail date descending
           ],
           height: "100%",
-          selectable: 1, // Enable row selection
+          selectableRows: 1, // Enable row selection (correct property name)
+          fontSize: 10, // Use Tabulator's fontSize option
+          headerHeight: 28, // Fixed to match Data Mode
+          rowHeight: 24, // Fixed to match Data Mode
           resizableColumns: true, // Allow column resizing
           movableColumns: true, // Allow column reordering
           headerFilterLiveFilter: true, // Live filtering

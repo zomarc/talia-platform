@@ -198,7 +198,9 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
           instanceRef.current.destroy();
         }
 
-        instanceRef.current = new Tabulator(tableRef.current, {
+        // Get Tabulator options with theme-aware font and size from CSS variables
+        const { getTabulatorOptions } = await import('../../../lib/tabulatorConfig');
+        const tabulatorOptions = getTabulatorOptions({
           data: data,
           columns: columns,
           layout: "fitColumns",
@@ -213,11 +215,10 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,
           pagination: false,
-          headerHeight: 28,
-          rowHeight: 24,
-          fontSize: 10,
           theme: "midnight"
-        });
+        }, { fontSize, spacingMode });
+
+        instanceRef.current = new Tabulator(tableRef.current, tabulatorOptions);
 
         // Register event listeners using Tabulator's .on() method
         instanceRef.current.on("rowClick", (e, row) => {

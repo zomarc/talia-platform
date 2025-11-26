@@ -184,7 +184,9 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
           instanceRef.current.destroy();
         }
 
-        instanceRef.current = new Tabulator(tableRef.current, {
+        // Get Tabulator options with theme-aware font and size from CSS variables
+        const { getTabulatorOptions } = await import('../../../lib/tabulatorConfig');
+        const tabulatorOptions = getTabulatorOptions({
           data: data,
           columns: columns,
           layout: "fitData",
@@ -193,16 +195,15 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
           ],
           height: "100%",
           selectableRows: 1,
-          fontSize: 10,
-          headerHeight: 28,
-          rowHeight: 24,
           resizableColumns: true,
           movableColumns: true,
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,
           pagination: false,
           theme: "midnight"
-        });
+        }, { fontSize, spacingMode });
+
+        instanceRef.current = new Tabulator(tableRef.current, tabulatorOptions);
 
         // Register event listeners using Tabulator's .on() method
         instanceRef.current.on("rowClick", (e, row) => {

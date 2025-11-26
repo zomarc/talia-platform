@@ -191,31 +191,56 @@ export const initTabulator = async () => {
 };
 
 /**
+ * Get CSS variable value from root element
+ * @param {string} varName - CSS variable name (e.g., '--theme-table-font-size')
+ * @param {string} fallback - Fallback value if variable not found
+ * @returns {string|number} CSS variable value or fallback
+ */
+const getCssVariable = (varName, fallback) => {
+  const root = document.documentElement;
+  const value = getComputedStyle(root).getPropertyValue(varName).trim();
+  if (!value) return fallback;
+  
+  // If value ends with 'px', convert to number
+  if (value.endsWith('px')) {
+    return parseInt(value, 10);
+  }
+  return value;
+};
+
+/**
  * Get theme-aware Tabulator options
- * Merges default options with theme-specific settings
+ * Reads CSS variables from theme system for font size and spacing
  * @param {Object} options - Additional options to merge
  * @param {Object} themeContext - Theme context from useTheme hook (optional)
  * @returns {Object} Tabulator configuration object
  */
 export const getTabulatorOptions = (options = {}, themeContext = null) => {
+  // Read CSS variables from root element (set by ThemeContext)
+  const tableFontSize = getCssVariable('--theme-table-font-size', 10);
+  const tableHeaderFontSize = getCssVariable('--theme-table-header-font-size', 10);
+  const headerHeight = getCssVariable('--theme-table-header-height', 28);
+  const rowHeight = getCssVariable('--theme-table-row-height', 24);
+  
   const baseOptions = {
     ...DEFAULT_TABULATOR_OPTIONS,
+    // Use CSS variable values for font and spacing
+    fontSize: tableFontSize,
+    headerHeight: headerHeight,
+    rowHeight: rowHeight,
     ...options
   };
 
-  // Apply theme-aware settings if theme context is provided
+  // Apply theme-aware settings if theme context is provided (for runtime updates)
   if (themeContext) {
     const { fontSize, spacingMode } = themeContext;
     
-    // Override with theme-aware values
+    // Override with theme-aware values if provided
     if (fontSize !== undefined) {
-      baseOptions.fontSize = fontSize;
-      baseOptions.headerHeight = spacingMode === 'compact' 
-        ? Math.max(28, fontSize + 6) 
-        : Math.max(35, fontSize + 12);
-      baseOptions.rowHeight = spacingMode === 'compact' 
-        ? Math.max(24, fontSize + 4) 
-        : Math.max(32, fontSize + 8);
+      // Use table-specific font size from CSS variables, not general fontSize
+      baseOptions.fontSize = tableFontSize;
+      baseOptions.headerHeight = headerHeight;
+      baseOptions.rowHeight = rowHeight;
     }
   }
 

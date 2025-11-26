@@ -120,14 +120,10 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-table-font-size', '10px');
     root.style.setProperty('--theme-table-header-font-size', '10px');
     root.style.setProperty('--theme-table-header-font-weight', '600');
-    root.style.setProperty('--theme-table-header-height', '28px');
-    root.style.setProperty('--theme-table-row-height', '24px');
     console.log('[ThemeContext] Set font CSS variables synchronously:', {
       fontSize: initialFontSize,
       tableFontSize: '10px',
-      tableHeaderFontSize: '10px',
-      tableHeaderHeight: '28px',
-      tableRowHeight: '24px'
+      tableHeaderFontSize: '10px'
     });
     return initialFontSize;
   });
@@ -188,8 +184,6 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-table-font-family', 'monospace');
     root.style.setProperty('--theme-table-header-font-size', '10px');
     root.style.setProperty('--theme-table-header-font-weight', '600');
-    root.style.setProperty('--theme-table-header-height', '28px');
-    root.style.setProperty('--theme-table-row-height', '24px');
     
     // Update injected Tabulator CSS if it exists
     // This ensures tables update when font settings change

@@ -117,13 +117,14 @@ export const ThemeProvider = ({ children }) => {
     // Set font CSS variable IMMEDIATELY during initialization (before first render)
     const root = document.documentElement;
     root.style.setProperty('--theme-font-size', `${initialFontSize}px`);
-    root.style.setProperty('--theme-table-font-size', '10px');
-    root.style.setProperty('--theme-table-header-font-size', '10px');
+    // Scale table font size proportionally (Data Mode baseline: fontSize 12 = table 10px)
+    const tableFontSize = Math.max(8, Math.round((initialFontSize / 12) * 10));
+    root.style.setProperty('--theme-table-font-size', `${tableFontSize}px`);
+    root.style.setProperty('--theme-table-header-font-size', `${tableFontSize}px`);
     root.style.setProperty('--theme-table-header-font-weight', '600');
     console.log('[ThemeContext] Set font CSS variables synchronously:', {
       fontSize: initialFontSize,
-      tableFontSize: '10px',
-      tableHeaderFontSize: '10px'
+      tableFontSize: tableFontSize
     });
     return initialFontSize;
   });
@@ -178,21 +179,20 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-font-family', selectedFont.value);
     root.style.setProperty('--theme-font-family-monospace', 'monospace');
     
-    // Table-specific font settings (Data Mode uses 10px monospace)
-    // These are fixed to match Data Management screen styling
-    root.style.setProperty('--theme-table-font-size', '10px');
+    // Table-specific font settings
+    // Scale table font size proportionally with theme fontSize (Data Mode baseline: fontSize 12 = table 10px)
+    // Formula: tableFontSize = (fontSize / 12) * 10, minimum 8px
+    const tableFontSize = Math.max(8, Math.round((fontSize / 12) * 10));
+    root.style.setProperty('--theme-table-font-size', `${tableFontSize}px`);
     root.style.setProperty('--theme-table-font-family', 'monospace');
-    root.style.setProperty('--theme-table-header-font-size', '10px');
+    root.style.setProperty('--theme-table-header-font-size', `${tableFontSize}px`);
     root.style.setProperty('--theme-table-header-font-weight', '600');
     
-    // Update injected Tabulator CSS if it exists
-    // This ensures tables update when font settings change
-    const injectedStyle = document.getElementById('talia-tabulator-global-css');
-    if (injectedStyle) {
-      // Re-inject CSS to pick up new variable values
-      // The CSS variables will be read fresh when CSS is re-evaluated
-      injectedStyle.textContent = injectedStyle.textContent; // Force re-evaluation
-    }
+    console.log('[ThemeContext] Updated font CSS variables:', {
+      fontSize: `${fontSize}px`,
+      tableFontSize: `${tableFontSize}px`,
+      fontFamily: selectedFont.value
+    });
   }, [fontSize, selectedFont]);
 
   const value = {

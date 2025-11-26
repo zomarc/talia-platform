@@ -63,6 +63,13 @@ export const themes = {
       '--theme-table-row-hover': 'rgba(66, 133, 244, 0.5)',
       '--theme-table-row-selected': 'rgba(66, 133, 244, 0.25)',
       '--theme-table-row-selected-hover': 'rgba(66, 133, 244, 0.6)',
+      
+      // Tabulator-specific theme variables
+      '--theme-tabulator-header-bg': 'rgba(255, 255, 255, 0.08)',
+      '--theme-tabulator-header-text': '#e8e8f0',
+      '--theme-tabulator-filter-bg': '#151528',
+      '--theme-tabulator-filter-border': 'rgba(255, 255, 255, 0.15)',
+      '--theme-tabulator-sort-active': '#5b9bd5',
     },
     // Legacy color object for backward compatibility (will be deprecated)
     colors: {
@@ -117,6 +124,13 @@ export const themes = {
       '--theme-table-row-hover': 'rgba(176, 141, 87, 0.1)',
       '--theme-table-row-selected': '#fdeacc',
       '--theme-table-row-selected-hover': 'rgba(176, 141, 87, 0.2)',
+      
+      // Tabulator-specific theme variables
+      '--theme-tabulator-header-bg': '#f5efe6',
+      '--theme-tabulator-header-text': '#2b2b2b',
+      '--theme-tabulator-filter-bg': '#ffffff',
+      '--theme-tabulator-filter-border': '#e8dfd0',
+      '--theme-tabulator-sort-active': '#b08d57',
     },
     colors: {
       background: '#ffffff',
@@ -162,6 +176,13 @@ export const themes = {
       '--theme-table-row-hover': 'rgba(0, 122, 204, 0.2)',
       '--theme-table-row-selected': '#094771',
       '--theme-table-row-selected-hover': 'rgba(0, 122, 204, 0.4)',
+      
+      // Tabulator-specific theme variables
+      '--theme-tabulator-header-bg': '#2d2d30',
+      '--theme-tabulator-header-text': '#d4d4d4',
+      '--theme-tabulator-filter-bg': '#1e1e1e',
+      '--theme-tabulator-filter-border': '#3e3e42',
+      '--theme-tabulator-sort-active': '#007acc',
     },
     colors: {
       background: '#1e1e1e',

@@ -36,6 +36,13 @@
   --theme-table-row-hover: rgba(176, 141, 87, 0.1);
   --theme-table-row-selected: #fdeacc;
   --theme-table-row-selected-hover: rgba(176, 141, 87, 0.2);
+  
+  /* Tabulator-specific theme variables */
+  --theme-tabulator-header-bg: #f5efe6;
+  --theme-tabulator-header-text: #2b2b2b;
+  --theme-tabulator-filter-bg: #ffffff;
+  --theme-tabulator-filter-border: #e8dfd0;
+  --theme-tabulator-sort-active: #b08d57;
 }
 
 /* Apply theme background to body */

@@ -59,6 +59,38 @@ export const initTabulator = async () => {
 };
 
 /**
+ * Get theme-aware Tabulator options
+ * Merges default options with theme-specific settings
+ * @param {Object} options - Additional options to merge
+ * @param {Object} themeContext - Theme context from useTheme hook (optional)
+ * @returns {Object} Tabulator configuration object
+ */
+export const getTabulatorOptions = (options = {}, themeContext = null) => {
+  const baseOptions = {
+    ...DEFAULT_TABULATOR_OPTIONS,
+    ...options
+  };
+
+  // Apply theme-aware settings if theme context is provided
+  if (themeContext) {
+    const { fontSize, spacingMode } = themeContext;
+    
+    // Override with theme-aware values
+    if (fontSize !== undefined) {
+      baseOptions.fontSize = fontSize;
+      baseOptions.headerHeight = spacingMode === 'compact' 
+        ? Math.max(28, fontSize + 6) 
+        : Math.max(35, fontSize + 12);
+      baseOptions.rowHeight = spacingMode === 'compact' 
+        ? Math.max(24, fontSize + 4) 
+        : Math.max(32, fontSize + 8);
+    }
+  }
+
+  return baseOptions;
+};
+
+/**
  * Default Tabulator options for consistent styling
  */
 export const DEFAULT_TABULATOR_OPTIONS = {

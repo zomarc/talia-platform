@@ -2,6 +2,7 @@ import { StrictMode, useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './styles/theme.css' // Import theme CSS variables
+import './styles/tabulator.css' // Import global Tabulator theme styles
 import AppWithAuth from './AppWithAuth.jsx'
 import TestPage from './components/TestPage.jsx'
 import DataManagementPage from './components/DataManagementPage.jsx'

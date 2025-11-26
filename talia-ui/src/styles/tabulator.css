@@ -1,0 +1,198 @@
+/**
+ * Global Tabulator Theme Styles
+ * 
+ * Applies theme to all Tabulator tables using CSS variables.
+ * Components can override specific styles if needed.
+ * 
+ * This file is imported globally and applies theme to all Tabulator instances.
+ */
+
+/* Base Tabulator styling using theme variables */
+.tabulator {
+  background-color: var(--theme-bg-solid, #ffffff) !important;
+  color: var(--theme-fg, #2b2b2b) !important;
+  border-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
+  font-family: var(--theme-font-family, 'Inter', sans-serif) !important;
+}
+
+/* Header styling */
+.tabulator-header {
+  background-color: var(--theme-sidebar-header, rgba(255, 255, 255, 0.08)) !important;
+  color: var(--theme-fg, #e8e8f0) !important;
+  border-bottom-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
+  font-weight: 600 !important;
+}
+
+.tabulator-header .tabulator-col {
+  background-color: var(--theme-tabulator-header-bg, var(--theme-sidebar-header, rgba(255, 255, 255, 0.08))) !important;
+  color: var(--theme-tabulator-header-text, var(--theme-fg, #e8e8f0)) !important;
+  border-right-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
+  font-weight: 600 !important;
+}
+
+.tabulator-header .tabulator-col-content {
+  color: var(--theme-tabulator-header-text, var(--theme-fg, #e8e8f0)) !important;
+}
+
+.tabulator-header .tabulator-col-content .tabulator-col-title {
+  color: var(--theme-tabulator-header-text, var(--theme-fg, #e8e8f0)) !important;
+}
+
+/* Table holder (scrollable area) */
+.tabulator-tableHolder {
+  background-color: var(--theme-bg-solid, #151528) !important;
+}
+
+/* Row styling */
+.tabulator-row {
+  background-color: var(--theme-table-row-even, transparent) !important;
+  color: var(--theme-fg, #e8e8f0) !important;
+  border-bottom-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
+  transition: background-color 0.15s ease !important;
+}
+
+.tabulator-row:nth-child(even) {
+  background-color: var(--theme-table-row-even, transparent) !important;
+}
+
+.tabulator-row:nth-child(odd) {
+  background-color: var(--theme-table-row-odd, rgba(0, 0, 0, 0.2)) !important;
+}
+
+.tabulator-row:hover {
+  background-color: var(--theme-table-row-hover, rgba(66, 133, 244, 0.5)) !important;
+}
+
+.tabulator-row.tabulator-selected {
+  background-color: var(--theme-table-row-selected, rgba(66, 133, 244, 0.25)) !important;
+}
+
+.tabulator-row.tabulator-selected:hover {
+  background-color: var(--theme-table-row-selected-hover, rgba(66, 133, 244, 0.6)) !important;
+}
+
+/* Cell styling */
+.tabulator-cell {
+  color: var(--theme-fg, #e8e8f0) !important;
+  border-right-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
+  background-color: transparent !important; /* Let row background show through */
+}
+
+/* Header filter styling */
+.tabulator-header-filter {
+  background-color: var(--theme-tabulator-header-bg, var(--theme-sidebar-header, rgba(255, 255, 255, 0.08))) !important;
+}
+
+.tabulator-header-filter input,
+.tabulator-header-filter select {
+  background-color: var(--theme-tabulator-filter-bg, var(--theme-bg-solid, #151528)) !important;
+  color: var(--theme-fg, #e8e8f0) !important;
+  border-color: var(--theme-tabulator-filter-border, var(--theme-border, rgba(255, 255, 255, 0.15))) !important;
+}
+
+.tabulator-header-filter input:focus,
+.tabulator-header-filter select:focus {
+  border-color: var(--theme-accent, #5b9bd5) !important;
+  outline-color: var(--theme-accent, #5b9bd5) !important;
+}
+
+.tabulator-header-filter input::placeholder {
+  color: var(--theme-text-muted, rgba(232, 232, 240, 0.55)) !important;
+}
+
+/* Cell input/select styling (for editable cells) */
+.tabulator-cell input,
+.tabulator-cell select,
+.tabulator-cell textarea {
+  background-color: var(--theme-bg-solid, #151528) !important;
+  color: var(--theme-fg, #e8e8f0) !important;
+  border-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
+}
+
+.tabulator-cell input:focus,
+.tabulator-cell select:focus,
+.tabulator-cell textarea:focus {
+  border-color: var(--theme-accent, #5b9bd5) !important;
+  outline-color: var(--theme-accent, #5b9bd5) !important;
+}
+
+/* Footer styling */
+.tabulator-footer {
+  background-color: var(--theme-tabulator-header-bg, var(--theme-sidebar-header, rgba(255, 255, 255, 0.08))) !important;
+  color: var(--theme-tabulator-header-text, var(--theme-fg, #e8e8f0)) !important;
+  border-top-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
+}
+
+/* Pagination styling */
+.tabulator-paginator {
+  background-color: var(--theme-tabulator-header-bg, var(--theme-sidebar-header, rgba(255, 255, 255, 0.08))) !important;
+  color: var(--theme-tabulator-header-text, var(--theme-fg, #e8e8f0)) !important;
+}
+
+.tabulator-paginator button {
+  background-color: var(--theme-bg-solid, #151528) !important;
+  color: var(--theme-fg, #e8e8f0) !important;
+  border-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
+}
+
+.tabulator-paginator button:hover {
+  background-color: var(--theme-hover, rgba(91, 155, 213, 0.25)) !important;
+}
+
+.tabulator-paginator button.tabulator-page-active {
+  background-color: var(--theme-accent, #5b9bd5) !important;
+  color: white !important;
+}
+
+/* Loading overlay */
+.tabulator-loading-overlay {
+  background-color: var(--theme-bg-solid, #151528) !important;
+  color: var(--theme-fg, #e8e8f0) !important;
+}
+
+.tabulator-loading {
+  color: var(--theme-accent, #5b9bd5) !important;
+}
+
+/* Sort arrows */
+.tabulator-col-sorter {
+  color: var(--theme-text-muted, rgba(232, 232, 240, 0.55)) !important;
+}
+
+.tabulator-col-sorter:hover {
+  color: var(--theme-accent, #5b9bd5) !important;
+}
+
+.tabulator-col-sorter-element.tabulator-arrow-active {
+  color: var(--theme-tabulator-sort-active, var(--theme-accent, #5b9bd5)) !important;
+}
+
+/* Column resize handle */
+.tabulator-col-resize-handle {
+  background-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
+}
+
+.tabulator-col-resize-handle:hover {
+  background-color: var(--theme-accent, #5b9bd5) !important;
+}
+
+/* Tooltip styling */
+.tabulator-tooltip {
+  background-color: var(--theme-sidebar-header, rgba(255, 255, 255, 0.08)) !important;
+  color: var(--theme-fg, #e8e8f0) !important;
+  border-color: var(--theme-border, rgba(255, 255, 255, 0.15)) !important;
+}
+
+/* Print styling */
+@media print {
+  .tabulator {
+    background-color: white !important;
+    color: black !important;
+  }
+  
+  .tabulator-row {
+    background-color: white !important;
+    color: black !important;
+  }
+}
+

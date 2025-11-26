@@ -281,9 +281,31 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
       height: "100%",
       width: "100%",
       position: "relative",
-      background: themeValues.colors.background,
-      color: themeValues.colors.foreground
+      display: "flex",
+      flexDirection: "column"
     }}>
+      {/* Container wrapper matching Data Mode styling */}
+      <div style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        background: "var(--theme-glass, rgba(255, 255, 255, 0.08))",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderRadius: "12px",
+        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
+        border: "1px solid var(--theme-glass-border, rgba(255, 255, 255, 0.15))",
+        overflow: "hidden"
+      }}>
+        {/* Table container */}
+        <div style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          fontSize: "10px",
+          color: "var(--theme-fg, #e8e8f0)"
+        }}>
       {onRefresh && (
         <div style={{
           position: 'absolute',

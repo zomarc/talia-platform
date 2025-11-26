@@ -65,21 +65,6 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
     }
   };
 
-  // Shared styling for Data Mode look - using Tabulator's proper methods
-  const headerStyle = {
-    fontSize: '10px',
-    fontWeight: '600',
-    color: 'var(--theme-text-secondary, rgba(232, 232, 240, 0.75))',
-    padding: '6px 8px'
-  };
-
-  const cellStyle = {
-    fontSize: '10px',
-    fontFamily: 'monospace',
-    padding: '6px 8px',
-    color: 'var(--theme-fg, #e8e8f0)'
-  };
-
   // Column definitions using Tabulator's native features
   // NOTE: Using valuesLookup:true lets Tabulator automatically generate filter options
   // NOTE: Using Tabulator's layout:"fitData" handles all column sizing automatically!
@@ -87,8 +72,6 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
     { 
       field: "sail_id", 
       title: "Sail ID",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       formatter: (cell) => {
         const value = cell.getValue();
         return value ? Math.floor(value).toString() : '';
@@ -98,8 +81,6 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
     { 
       field: "sail_code", 
       title: "Sail Code",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       headerFilter: "autocomplete",
       headerFilterParams: {
         valuesLookup: true  // Automatically lookup unique values from this column
@@ -108,8 +89,6 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
     { 
       field: "ship_name", 
       title: "Ship",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       headerFilter: "autocomplete",
       headerFilterParams: {
         valuesLookup: true  // Automatically lookup unique values
@@ -118,15 +97,11 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
     { 
       field: "package_name", 
       title: "Package",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       headerFilter: "input"
     },
     { 
       field: "package_type", 
       title: "Package Type",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       headerFilter: "autocomplete",
       headerFilterParams: {
         valuesLookup: true  // Automatically lookup unique values
@@ -135,8 +110,6 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
     { 
       field: "geog_area_code", 
       title: "Geographic Area",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       headerFilter: "autocomplete",
       headerFilterParams: {
         valuesLookup: true  // Automatically lookup unique values
@@ -146,8 +119,6 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
       field: "sail_days", 
       title: "Sail Days",
       hozAlign: "center",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       headerFilter: "number",
       headerFilterParams: {
         min: 0,
@@ -157,8 +128,6 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
     { 
       field: "sail_date_from", 
       title: "Sail Date",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       formatter: (cell) => {
         const date = new Date(cell.getValue());
         return date.toLocaleDateString();
@@ -168,8 +137,6 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
     { 
       field: "port_from", 
       title: "Port From",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       headerFilter: "autocomplete",
       headerFilterParams: {
         valuesLookup: true
@@ -178,8 +145,6 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
     { 
       field: "port_to", 
       title: "Port To",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       headerFilter: "autocomplete",
       headerFilterParams: {
         valuesLookup: true
@@ -189,8 +154,6 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
       field: "is_active", 
       title: "Active",
       hozAlign: "center",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       headerFilter: "select",
       headerFilterParams: {
         values: {
@@ -224,40 +187,21 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
         instanceRef.current = new Tabulator(tableRef.current, {
           data: data,
           columns: columns,
-          layout: "fitData", // Tabulator handles all column sizing automatically!
+          layout: "fitData",
           initialSort: [
-            { column: "sail_date_from", dir: "desc" } // Sort by sail date descending
+            { column: "sail_date_from", dir: "desc" }
           ],
           height: "100%",
-          selectableRows: 1, // Enable row selection (correct property name)
-          fontSize: 10, // Use Tabulator's fontSize option
-          headerHeight: 28, // Fixed to match Data Mode
-          rowHeight: 24, // Fixed to match Data Mode
-          resizableColumns: true, // Allow column resizing
-          movableColumns: true, // Allow column reordering
-          headerFilterLiveFilter: true, // Live filtering
-          headerFilterLiveFilterDelay: 300, // 300ms delay for performance
-          pagination: false, // Disable pagination - show all data
-          theme: "midnight", // Use midnight theme
-          // Row formatter for alternating colors and borders - Tabulator's proper method
-          rowFormatter: (row) => {
-            const element = row.getElement();
-            if (!element) return;
-            
-            const rowIndex = row.getPosition();
-            const isEven = rowIndex % 2 === 0;
-            
-            // Apply alternating row colors using CSS variables
-            element.style.backgroundColor = isEven 
-              ? 'var(--theme-table-row-even, transparent)' 
-              : 'var(--theme-table-row-odd, rgba(0, 0, 0, 0.2))';
-            
-            // Apply border using CSS variable
-            element.style.borderBottom = '1px solid var(--theme-glass-border, rgba(255, 255, 255, 0.15))';
-            
-            // Apply hover and selected states via CSS (Tabulator handles these)
-            element.style.transition = 'background-color 0.15s ease';
-          }
+          selectableRows: 1,
+          fontSize: 10,
+          headerHeight: 28,
+          rowHeight: 24,
+          resizableColumns: true,
+          movableColumns: true,
+          headerFilterLiveFilter: true,
+          headerFilterLiveFilterDelay: 300,
+          pagination: false,
+          theme: "midnight"
         });
 
         // Register event listeners using Tabulator's .on() method

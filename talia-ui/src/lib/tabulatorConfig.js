@@ -49,12 +49,92 @@ export const loadTabulatorJs = (url = TABULATOR_CONFIG.js) => {
 };
 
 /**
+ * Inject global Tabulator custom CSS after theme CSS loads
+ * This ensures proper cascade order: midnight theme -> our custom styles
+ */
+const injectGlobalTabulatorCss = () => {
+  // Check if already injected
+  if (document.getElementById('talia-tabulator-global-css')) {
+    return;
+  }
+
+  // Create style element with global CSS
+  const style = document.createElement('style');
+  style.id = 'talia-tabulator-global-css';
+  style.textContent = `
+    /* Global Tabulator Styling - matches Data Mode */
+    /* Header styling */
+    .tabulator-header {
+      font-size: 10px !important;
+      font-weight: 600 !important;
+      color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
+    }
+
+    .tabulator-header .tabulator-col {
+      padding: 6px 8px !important;
+      font-size: 10px !important;
+      font-weight: 600 !important;
+      color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
+    }
+
+    .tabulator-header .tabulator-col-content {
+      font-size: 10px !important;
+      color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
+    }
+
+    /* Cell styling */
+    .tabulator-cell {
+      font-size: 10px !important;
+      font-family: monospace !important;
+      padding: 6px 8px !important;
+      color: var(--theme-fg, #e8e8f0) !important;
+    }
+
+    /* Row styling - alternating colors */
+    .tabulator-row {
+      border-bottom: 1px solid var(--theme-glass-border, rgba(255, 255, 255, 0.15)) !important;
+      transition: background-color 0.15s ease !important;
+    }
+
+    .tabulator-row:nth-child(even) {
+      background-color: var(--theme-table-row-even, transparent) !important;
+    }
+
+    .tabulator-row:nth-child(odd) {
+      background-color: var(--theme-table-row-odd, rgba(0, 0, 0, 0.2)) !important;
+    }
+
+    .tabulator-row:hover {
+      background-color: var(--theme-table-row-hover, rgba(66, 133, 244, 0.5)) !important;
+    }
+
+    .tabulator-row.tabulator-selected {
+      background-color: var(--theme-table-row-selected, rgba(66, 133, 244, 0.25)) !important;
+    }
+
+    .tabulator-row.tabulator-selected:hover {
+      background-color: var(--theme-table-row-selected-hover, rgba(66, 133, 244, 0.6)) !important;
+    }
+  `;
+  
+  // Insert after Tabulator's CSS if it exists
+  const tabulatorLink = document.querySelector('link[href*="tabulator"]');
+  if (tabulatorLink && tabulatorLink.nextSibling) {
+    tabulatorLink.parentNode.insertBefore(style, tabulatorLink.nextSibling);
+  } else {
+    document.head.appendChild(style);
+  }
+};
+
+/**
  * Initialize Tabulator (loads both CSS and JS)
- * Uses Tabulator's default styling - no custom CSS overrides
+ * Loads midnight theme CSS, then injects our global custom CSS
  * @returns {Promise<Tabulator>} Resolves with Tabulator constructor
  */
 export const initTabulator = async () => {
   await loadTabulatorCss();
+  // Inject global custom CSS after theme CSS loads
+  injectGlobalTabulatorCss();
   const Tabulator = await loadTabulatorJs();
   return Tabulator;
 };

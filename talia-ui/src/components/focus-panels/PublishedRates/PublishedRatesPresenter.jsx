@@ -25,21 +25,6 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
   const instanceRef = useRef(null);
   const { fontSize, selectedFont, spacingMode } = useTheme();
 
-  // Shared styling for Data Mode look - using Tabulator's proper methods
-  const headerStyle = {
-    fontSize: '10px',
-    fontWeight: '600',
-    color: 'var(--theme-text-secondary, rgba(232, 232, 240, 0.75))',
-    padding: '6px 8px'
-  };
-
-  const cellStyle = {
-    fontSize: '10px',
-    fontFamily: 'monospace',
-    padding: '6px 8px',
-    color: 'var(--theme-fg, #e8e8f0)'
-  };
-
   // Column definitions using Tabulator's native features
   const columns = [
     { 
@@ -48,8 +33,6 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
       width: 120,
       headerFilter: "input",
       headerFilterPlaceholder: "YYYY-MM-DD",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       formatter: (cell) => {
         const value = cell.getValue();
         if (!value) return '';
@@ -62,9 +45,7 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
       field: "SAIL_CODE", 
       width: 120,
       headerFilter: "input",
-      headerFilterPlaceholder: "Filter sail code...",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle
+      headerFilterPlaceholder: "Filter sail code..."
     },
     { 
       title: "Ship", 
@@ -74,27 +55,21 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
       headerFilterParams: {
         values: { "": "All Ships", "CJ": "Celestyal Journey", "CD": "Celestyal Discovery" },
         clearable: true
-      },
-      headerStyle: headerStyle,
-      cellStyle: cellStyle
+      }
     },
     { 
       title: "Package", 
       field: "PACKAGE_NAME", 
       widthGrow: 2,
       headerFilter: "input",
-      headerFilterPlaceholder: "Filter package...",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle
+      headerFilterPlaceholder: "Filter package..."
     },
     { 
       title: "Region", 
       field: "REGION", 
       width: 120,
       headerFilter: "input",
-      headerFilterPlaceholder: "Filter region...",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle
+      headerFilterPlaceholder: "Filter region..."
     },
     { 
       title: "Rate Type", 
@@ -104,9 +79,7 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
       headerFilterParams: {
         values: { "": "All Types", "CUG": "CUG", "BAR": "BAR", "PROMO": "PROMO" },
         clearable: true
-      },
-      headerStyle: headerStyle,
-      cellStyle: cellStyle
+      }
     },
     { 
       title: "Sail Days", 
@@ -118,9 +91,7 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
       headerFilterFunc: ">=",
       headerFilterParams: {
         type: "number"
-      },
-      headerStyle: headerStyle,
-      cellStyle: cellStyle
+      }
     },
     { 
       title: "Departure", 
@@ -128,8 +99,6 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
       width: 120,
       headerFilter: "input",
       headerFilterPlaceholder: "YYYY-MM-DD",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       formatter: (cell) => {
         const value = cell.getValue();
         if (!value) return '';
@@ -142,18 +111,14 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
       field: "CABIN_CATEGORY", 
       width: 100,
       headerFilter: "input",
-      headerFilterPlaceholder: "Filter cabin...",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle
+      headerFilterPlaceholder: "Filter cabin..."
     },
     { 
       title: "Promo", 
       field: "PROMO_NAME", 
       widthGrow: 2,
       headerFilter: "input",
-      headerFilterPlaceholder: "Filter promo...",
-      headerStyle: headerStyle,
-      cellStyle: cellStyle
+      headerFilterPlaceholder: "Filter promo..."
     },
     { 
       title: "Currency", 
@@ -163,9 +128,7 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
       headerFilterParams: {
         values: { "": "All", "EUR": "EUR", "USD": "USD", "GBP": "GBP" },
         clearable: true
-      },
-      headerStyle: headerStyle,
-      cellStyle: cellStyle
+      }
     },
     { 
       title: "Fare", 
@@ -178,8 +141,6 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
       headerFilterParams: {
         type: "number"
       },
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       formatter: (cell) => {
         const value = cell.getValue();
         return value ? value.toLocaleString() : '';
@@ -196,8 +157,6 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
       headerFilterParams: {
         type: "number"
       },
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       formatter: (cell) => {
         const value = cell.getValue();
         return value ? value.toLocaleString() : '';
@@ -214,8 +173,6 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
       headerFilterParams: {
         type: "number"
       },
-      headerStyle: headerStyle,
-      cellStyle: cellStyle,
       formatter: (cell) => {
         const value = cell.getValue();
         return value ? value.toLocaleString() : '';
@@ -250,35 +207,16 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
             { column: "DEPARTURE_DATE", dir: "asc" }
           ],
           height: "100%",
-          selectableRows: 1, // Enable row selection (correct property name)
+          selectableRows: 1,
           resizableColumns: true,
           movableColumns: true,
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,
           pagination: false,
-          headerHeight: 28, // Fixed to match Data Mode
-          rowHeight: 24, // Fixed to match Data Mode
-          fontSize: 10, // Use Tabulator's fontSize option
-          theme: "midnight", // Use midnight theme
-          // Row formatter for alternating colors and borders - Tabulator's proper method
-          rowFormatter: (row) => {
-            const element = row.getElement();
-            if (!element) return;
-            
-            const rowIndex = row.getPosition();
-            const isEven = rowIndex % 2 === 0;
-            
-            // Apply alternating row colors using CSS variables
-            element.style.backgroundColor = isEven 
-              ? 'var(--theme-table-row-even, transparent)' 
-              : 'var(--theme-table-row-odd, rgba(0, 0, 0, 0.2))';
-            
-            // Apply border using CSS variable
-            element.style.borderBottom = '1px solid var(--theme-glass-border, rgba(255, 255, 255, 0.15))';
-            
-            // Apply hover and selected states via CSS (Tabulator handles these)
-            element.style.transition = 'background-color 0.15s ease';
-          }
+          headerHeight: 28,
+          rowHeight: 24,
+          fontSize: 10,
+          theme: "midnight"
         });
 
         // Register event listeners using Tabulator's .on() method

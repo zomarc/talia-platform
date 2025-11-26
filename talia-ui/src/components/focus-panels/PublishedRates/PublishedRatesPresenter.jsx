@@ -307,46 +307,46 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
           color: "var(--theme-fg, #e8e8f0)",
           fontFamily: selectedFont.value
         }}>
-      {selectedSailCode && (
-        <div style={{
-          position: 'absolute',
-          top: '8px',
-          left: '8px',
-          zIndex: 10,
-          padding: '4px 8px',
-          backgroundColor: 'var(--theme-accent-light)',
-          color: 'var(--theme-fg)',
-          borderRadius: '4px',
-          fontSize: `${fontSize - 2}px`,
-          fontWeight: '500'
-        }}>
-          Filtered by: {selectedSailCode}
-        </div>
-      )}
-      {onRefresh && (
-        <div style={{
-          position: 'absolute',
-          top: '8px',
-          right: '8px',
-          zIndex: 10
-        }}>
-          <button
-            onClick={onRefresh}
-            style={{
-              padding: '6px 12px',
-              fontSize: `${fontSize - 2}px`,
-              border: '1px solid var(--theme-border)',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              background: 'var(--theme-bg-solid)',
+          {selectedSailCode && (
+            <div style={{
+              position: 'absolute',
+              top: '8px',
+              left: '8px',
+              zIndex: 10,
+              padding: '4px 8px',
+              backgroundColor: 'var(--theme-accent-light)',
               color: 'var(--theme-fg)',
+              borderRadius: '4px',
+              fontSize: '8px',
               fontWeight: '500'
-            }}
-          >
-            ↻ Refresh
-          </button>
-        </div>
-      )}
+            }}>
+              Filtered by: {selectedSailCode}
+            </div>
+          )}
+          {onRefresh && (
+            <div style={{
+              position: 'absolute',
+              top: '8px',
+              right: '8px',
+              zIndex: 10
+            }}>
+              <button
+                onClick={onRefresh}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '10px',
+                  border: '1px solid var(--theme-glass-border, rgba(255, 255, 255, 0.15))',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  background: 'var(--theme-bg-solid, #151528)',
+                  color: 'var(--theme-fg, #e8e8f0)',
+                  fontWeight: '500'
+                }}
+              >
+                ↻ Refresh
+              </button>
+            </div>
+          )}
           <div 
             ref={tableRef} 
             className="published-rates-table"

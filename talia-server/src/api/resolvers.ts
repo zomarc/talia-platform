@@ -50,6 +50,8 @@ const mapDbFocusToGraphQL = (dbFocus: any) => {
       settings: comp.settings || null,
       dataSource: comp.dataSource || null
     })),
+    // Include full layoutData as JSON for dockviewLayout preservation
+    layoutData: layoutData,
     createdBy: dbFocus.created_by || '',
     createdAt: dbFocus.created_at || new Date().toISOString(),
     updatedAt: dbFocus.updated_at || dbFocus.created_at || new Date().toISOString(),
@@ -159,11 +161,55 @@ export const resolvers = {
     focusesByRole: async (parent: any, args: any) => {
       const { role } = args;
       try {
-        const dbFocuses = await supabaseDataService.getFocuses({ role: role.toLowerCase() });
-        return dbFocuses.map(mapDbFocusToGraphQL).filter(Boolean);
+        const normalizedRole = role?.toUpperCase() || 'USER';
+        console.log(`[focusesByRole] Called with role: ${normalizedRole}`);
+        
+        // Get all active focuses from Supabase
+        const allFocuses = await supabaseDataService.getFocuses();
+        console.log(`[focusesByRole] Got ${allFocuses.length} focuses from getFocuses()`);
+        
+        if (allFocuses.length === 0) {
+          console.log(`[focusesByRole] No focuses returned, returning empty array`);
+          return [];
+        }
+        
+        console.log(`[focusesByRole] First focus:`, {
+          name: allFocuses[0].name,
+          assigned_roles: allFocuses[0].assigned_roles,
+          is_active: allFocuses[0].is_active
+        });
+        
+        // Filter focuses where assigned_roles array contains the requested role
+        const filteredFocuses = allFocuses.filter(focus => {
+          // Skip inactive focuses (though getFocuses already filters these)
+          if (focus.is_active === false) {
+            return false;
+          }
+          
+          // Must have assigned_roles array
+          if (!focus.assigned_roles || !Array.isArray(focus.assigned_roles)) {
+            return false;
+          }
+          
+          // Check if any assigned role matches (case-insensitive)
+          const matches = focus.assigned_roles.some(assignedRole => 
+            String(assignedRole).toUpperCase() === normalizedRole
+          );
+          
+          return matches;
+        });
+        
+        console.log(`[focusesByRole] Filtered to ${filteredFocuses.length} focuses`);
+        
+        // Map to GraphQL format
+        const mapped = filteredFocuses.map(mapDbFocusToGraphQL).filter(Boolean);
+        console.log(`[focusesByRole] Mapped to ${mapped.length} GraphQL focuses`);
+        
+        return mapped;
       } catch (error) {
-        console.error('Error fetching focuses by role:', error);
-        return sampleData.focuses.filter(f => f.role === role.toUpperCase());
+        console.error('[focusesByRole] Error:', error);
+        console.error('[focusesByRole] Error stack:', error.stack);
+        throw error;
       }
     },
 
@@ -177,6 +223,61 @@ export const resolvers = {
         console.error('Error fetching my focuses:', error);
         // Fallback to sample data
         return sampleData.focuses.filter(focus => focus.createdBy === "1");
+      }
+    },
+
+    myFocusPreferences: async (parent: any, args: any, context: any) => {
+      try {
+        // In a real app, get current user from context
+        const userId = context?.user?.id || "1";
+        let preferences;
+        try {
+          preferences = await supabaseDataService.getUserFocusPreferences(userId);
+        } catch (serviceError) {
+          console.error('Error calling getUserFocusPreferences:', serviceError);
+          return [];
+        }
+        
+        // Ensure we always return an array, never null
+        if (!preferences || !Array.isArray(preferences)) {
+          return [];
+        }
+        
+        // Map database format to GraphQL format
+        const mapped = preferences.map((pref: any) => ({
+          id: pref.id,
+          userId: pref.user_id,
+          focusId: pref.focus_id,
+          isFavorite: pref.is_favorite || false,
+          lastUsed: pref.last_used || null,
+          customLayout: pref.custom_layout || null,
+          createdAt: pref.created_at || new Date().toISOString(),
+          updatedAt: pref.updated_at || pref.created_at || new Date().toISOString()
+        }));
+        
+        return mapped;
+      } catch (error) {
+        console.error('Error fetching my focus preferences:', error);
+        // Return empty array instead of null to satisfy non-nullable field
+        return [];
+      }
+    },
+
+    focusGroups: async (parent: any, args: any) => {
+      const { isActive } = args;
+      try {
+        // Get focus groups from Supabase
+        const filters = isActive !== undefined ? { isActive } : {};
+        const focusGroups = await supabaseDataService.getFocusGroups(filters);
+        // Always return an array, never null (required by GraphQL schema)
+        if (!focusGroups || !Array.isArray(focusGroups)) {
+          return [];
+        }
+        return focusGroups;
+      } catch (error) {
+        console.error('Error fetching focus groups:', error);
+        // Return empty array instead of null to satisfy non-nullable field
+        return [];
       }
     },
 
@@ -467,8 +568,25 @@ export const resolvers = {
         // Create focus in Supabase
         const dbFocus = await supabaseDataService.createFocus(dbFocusData);
         
+        if (!dbFocus) {
+          throw new Error('Failed to create focus - no data returned from database');
+        }
+        
         // Map back to GraphQL format
-        return mapDbFocusToGraphQL(dbFocus);
+        const graphQLFocus = mapDbFocusToGraphQL(dbFocus);
+        
+        if (!graphQLFocus) {
+          throw new Error('Failed to map created focus to GraphQL format');
+        }
+        
+        console.log('[createFocus] Successfully created focus:', {
+          id: graphQLFocus.id,
+          name: graphQLFocus.name,
+          type: graphQLFocus.type,
+          role: graphQLFocus.role
+        });
+        
+        return graphQLFocus;
       } catch (error: any) {
         console.error('Error creating focus:', error);
         throw new Error(`Failed to create focus: ${error.message}`);
@@ -478,6 +596,9 @@ export const resolvers = {
     updateFocus: async (parent: any, args: any) => {
       const { id, input } = args;
       try {
+        // Get current focus to preserve existing layoutData.dockviewLayout if not being updated
+        const currentFocus = await supabaseDataService.getFocusById(id);
+        
         // Map GraphQL input to database format
         const updateData: any = {};
         
@@ -493,14 +614,73 @@ export const resolvers = {
           updateData.assignedRoles = [input.role.toUpperCase()];
         }
         if (input.components !== undefined) {
-          updateData.layoutData = { components: input.components };
+          // Preserve existing layoutData completely
+          const existingLayoutData = currentFocus?.layout_data || {};
+          
+          // Extract dockviewLayout from first component's settings if present (new save)
+          let dockviewLayout = null;
+          let hasNewDockviewLayout = false;
+          
+          if (input.components.length > 0 && input.components[0]?.settings?._dockviewLayout) {
+            dockviewLayout = input.components[0].settings._dockviewLayout;
+            hasNewDockviewLayout = true;
+            // Remove it from settings
+            delete input.components[0].settings._dockviewLayout;
+            // If this was a dummy component created just to store layout, remove it
+            // Check by checking if it's the first component with only _dockviewLayout in settings
+            const firstCompSettings = input.components[0].settings || {};
+            const settingsKeys = Object.keys(firstCompSettings);
+            if (settingsKeys.length === 1 && settingsKeys[0] === '_dockviewLayout') {
+              input.components = input.components.slice(1); // Remove the dummy component
+            } else if (Object.keys(firstCompSettings).length === 0) {
+              input.components[0].settings = null;
+            }
+          } else {
+            // If no new dockviewLayout provided, preserve existing one
+            dockviewLayout = existingLayoutData.dockviewLayout || null;
+          }
+          
+          // CRITICAL: Preserve ALL existing layoutData properties (grid, etc.)
+          // Update components and dockviewLayout
+          updateData.layoutData = {
+            ...existingLayoutData, // Preserve grid and any other properties
+            components: input.components, // Update components
+            dockviewLayout: dockviewLayout // Always set dockviewLayout (even if null)
+          };
+          
+          console.log('[updateFocus] Saving layoutData:', {
+            componentsCount: input.components.length,
+            hasDockviewLayout: !!dockviewLayout,
+            hasNewDockviewLayout: hasNewDockviewLayout,
+            existingHasDockviewLayout: !!existingLayoutData.dockviewLayout,
+            preservedKeys: Object.keys(existingLayoutData),
+            dockviewLayoutKeys: dockviewLayout ? Object.keys(dockviewLayout) : [],
+            dockviewLayoutPanels: dockviewLayout?.panels ? Object.keys(dockviewLayout.panels).length : 0
+          });
         }
         
         // Update focus in Supabase
         const dbFocus = await supabaseDataService.updateFocus(id, updateData);
         
+        if (!dbFocus) {
+          throw new Error(`Focus with ID ${id} was not found or could not be updated`);
+        }
+        
         // Map back to GraphQL format
-        return mapDbFocusToGraphQL(dbFocus);
+        const graphQLFocus = mapDbFocusToGraphQL(dbFocus);
+        
+        if (!graphQLFocus) {
+          throw new Error(`Failed to map updated focus to GraphQL format`);
+        }
+        
+        console.log('[updateFocus] Successfully updated focus:', {
+          id: graphQLFocus.id,
+          name: graphQLFocus.name,
+          hasLayoutData: !!graphQLFocus.layoutData,
+          hasDockviewLayout: !!graphQLFocus.layoutData?.dockviewLayout
+        });
+        
+        return graphQLFocus;
       } catch (error) {
         console.error('Error updating focus:', error);
         throw new Error(`Failed to update focus: ${error.message}`);

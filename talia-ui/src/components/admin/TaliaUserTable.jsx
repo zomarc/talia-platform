@@ -3,20 +3,45 @@
  * Displays Talia's internal user system (separate from auth)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import taliaUserService from '../../services/TaliaUserService';
 
 const TaliaUserTable = () => {
-  const [users, setUsers] = useState(taliaUserService.getAllTaliaUsers());
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
   const [newRole, setNewRole] = useState('');
 
-  const handleRoleChange = (taliaUserId) => {
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const userList = await taliaUserService.getAllTaliaUsers();
+      setUsers(userList);
+    } catch (err) {
+      console.error('Error loading users:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRoleChange = async (taliaUserId) => {
     if (newRole) {
-      taliaUserService.updateTaliaUserRole(taliaUserId, newRole);
-      setUsers(taliaUserService.getAllTaliaUsers());
-      setEditingUser(null);
-      setNewRole('');
+      try {
+        await taliaUserService.updateTaliaUserRole(taliaUserId, newRole);
+        await loadUsers(); // Reload users after update
+        setEditingUser(null);
+        setNewRole('');
+      } catch (err) {
+        console.error('Error updating role:', err);
+        setError(err.message);
+      }
     }
   };
 
@@ -60,7 +85,11 @@ const TaliaUserTable = () => {
         <em>Note: This is independent of authentication. Users are identified by Talia user ID.</em>
       </p>
 
-      {users.length === 0 ? (
+      {loading ? (
+        <div style={styles.empty}>Loading Talia users...</div>
+      ) : error ? (
+        <div style={styles.empty}>Error loading users: {error}</div>
+      ) : users.length === 0 ? (
         <div style={styles.empty}>No Talia users yet. Sign in to create the first user.</div>
       ) : (
         <table style={styles.table}>

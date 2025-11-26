@@ -57,10 +57,29 @@ class FocusPreferencesService {
    */
   async getUserPreferences(userId) {
     try {
-      const { data } = await apolloClient.query({
+      const result = await apolloClient.query({
         query: GET_USER_PREFERENCES_QUERY,
         fetchPolicy: 'network-only',
+        errorPolicy: 'all'
       });
+
+      const { data, error } = result || {};
+
+      if (error) {
+        console.warn('⚠️ GraphQL error getting user preferences:', error);
+        return [];
+      }
+
+      // Check if data exists before accessing properties
+      if (!data) {
+        console.log('ℹ️ No data returned from GraphQL, returning empty array');
+        return [];
+      }
+
+      if (!data.myFocusPreferences) {
+        console.log('ℹ️ No user preferences found, returning empty array');
+        return [];
+      }
 
       return data.myFocusPreferences || [];
     } catch (error) {

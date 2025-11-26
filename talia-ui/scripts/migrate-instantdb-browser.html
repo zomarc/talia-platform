@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InstantDB to Supabase Migration Tool</title>
+    <script type="module">
+        import { init } from 'https://cdn.jsdelivr.net/npm/@instantdb/react@0.21.26/dist/esm/index.js';
+
+        const INSTANTDB_APP_ID = '1c2b040a-7bb2-4eb5-8490-ce5832e19dd0';
+        const SUPABASE_URL = 'http://127.0.0.1:54321';
+        const SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
+
+        // Initialize InstantDB
+        const db = init({ appId: INSTANTDB_APP_ID });
+
+        // Migration statistics
+        const stats = {
+            taliaUsers: { found: 0, migrated: 0, skipped: 0, errors: 0 },
+            focuses: { found: 0, migrated: 0, skipped: 0, errors: 0 },
+            userFocusPreferences: { found: 0, migrated: 0, skipped: 0, errors: 0 }
+        };
+
+        // Initialize Supabase client (using fetch since we can't import in HTML)
+        async function supabaseRequest(table, method, data = null) {
+            const url = `${SUPABASE_URL}/rest/v1/${table}`;
+            const options = {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+                }
+            };
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+            const response = await fetch(url, options);
+            return response.json();
+        }
+
+        async function migrateTaliaUsers() {
+            const logDiv = document.getElementById('taliaUsersLog');
+            logDiv.innerHTML = '<p>📋 Migrating taliaUser mappings...</p>';
+            
+            try {
+                // Query InstantDB
+                const result = await db.queryOnce({
+                    taliaUser: {}
+                });
+                
+                const instantUsers = result?.data?.taliaUser || [];
+                stats.taliaUsers.found = instantUsers.length;
+                
+                if (instantUsers.length === 0) {
+                    logDiv.innerHTML += '<p>ℹ️ No taliaUser mappings found</p>';
+                    return;
+                }
+                
+                logDiv.innerHTML += `<p>Found ${instantUsers.length} taliaUser mappings</p>`;
+                
+                for (const instantUser of instantUsers) {
+                    try {
+                        // Check if exists in Supabase
+                        const existing = await supabaseRequest(
+                            `talia_users?talia_user_id=eq.${instantUser.taliaUserId}`,
+                            'GET'
+                        );
+                        
+                        if (existing && existing.length > 0) {
+                            logDiv.innerHTML += `<p>⏭️ Skipping taliaUserId ${instantUser.taliaUserId} (already exists)</p>`;
+                            stats.taliaUsers.skipped++;
+                            continue;
+                        }
+                        
+                        logDiv.innerHTML += `<p>⚠️ taliaUserId ${instantUser.taliaUserId} needs Supabase auth.users.id</p>`;
+                        logDiv.innerHTML += `<p>   InstantDB auth ID: ${instantUser.instantAuthId}</p>`;
+                        stats.taliaUsers.skipped++;
+                        
+                    } catch (error) {
+                        logDiv.innerHTML += `<p>❌ Error: ${error.message}</p>`;
+                        stats.taliaUsers.errors++;
+                    }
+                }
+                
+            } catch (error) {
+                logDiv.innerHTML += `<p>❌ Error querying InstantDB: ${error.message}</p>`;
+            }
+        }
+
+        async function migrateFocuses() {
+            const logDiv = document.getElementById('focusesLog');
+            logDiv.innerHTML = '<p>📋 Migrating focus definitions...</p>';
+            
+            try {
+                // Query InstantDB
+                const result = await db.queryOnce({
+                    focus: {}
+                });
+                
+                const instantFocuses = result?.data?.focus || [];
+                stats.focuses.found = instantFocuses.length;
+                
+                if (instantFocuses.length === 0) {
+                    logDiv.innerHTML += '<p>ℹ️ No focus definitions found</p>';
+                    return;
+                }
+                
+                logDiv.innerHTML += `<p>Found ${instantFocuses.length} focus definitions</p>`;
+                
+                for (const instantFocus of instantFocuses) {
+                    try {
+                        // Check if exists by name
+                        const existing = await supabaseRequest(
+                            `focuses?name=eq.${encodeURIComponent(instantFocus.name)}`,
+                            'GET'
+                        );
+                        
+                        if (existing && existing.length > 0) {
+                            logDiv.innerHTML += `<p>⏭️ Skipping "${instantFocus.name}" (already exists)</p>`;
+                            stats.focuses.skipped++;
+                            continue;
+                        }
+                        
+                        // Transform data
+                        const supabaseFocus = {
+                            name: instantFocus.name,
+                            description: instantFocus.description || null,
+                            type: instantFocus.type || 'user',
+                            is_standard: instantFocus.isStandard || false,
+                            assigned_roles: Array.isArray(instantFocus.assignedRoles) 
+                                ? instantFocus.assignedRoles 
+                                : (instantFocus.assignedRoles ? [instantFocus.assignedRoles] : []),
+                            is_default: instantFocus.isDefault || false,
+                            is_active: instantFocus.isActive !== undefined ? instantFocus.isActive : true,
+                            created_by: null, // Will need to map taliaUserId to UUID
+                            layout_data: instantFocus.layoutData || {},
+                            created_at: instantFocus.createdAt ? new Date(instantFocus.createdAt).toISOString() : new Date().toISOString(),
+                            updated_at: instantFocus.updatedAt ? new Date(instantFocus.updatedAt).toISOString() : new Date().toISOString()
+                        };
+                        
+                        // Insert into Supabase
+                        const inserted = await supabaseRequest('focuses', 'POST', supabaseFocus);
+                        
+                        logDiv.innerHTML += `<p>✅ Migrated focus "${instantFocus.name}"</p>`;
+                        stats.focuses.migrated++;
+                        
+                        // Store mapping for preferences
+                        instantFocus._supabaseId = inserted[0]?.id;
+                        
+                    } catch (error) {
+                        logDiv.innerHTML += `<p>❌ Error migrating "${instantFocus.name}": ${error.message}</p>`;
+                        stats.focuses.errors++;
+                    }
+                }
+                
+            } catch (error) {
+                logDiv.innerHTML += `<p>❌ Error querying InstantDB: ${error.message}</p>`;
+            }
+        }
+
+        async function migrateUserFocusPreferences() {
+            const logDiv = document.getElementById('preferencesLog');
+            logDiv.innerHTML = '<p>📋 Migrating user focus preferences...</p>';
+            
+            try {
+                // Query InstantDB
+                const result = await db.queryOnce({
+                    userFocusPreference: {}
+                });
+                
+                const instantPreferences = result?.data?.userFocusPreference || [];
+                stats.userFocusPreferences.found = instantPreferences.length;
+                
+                if (instantPreferences.length === 0) {
+                    logDiv.innerHTML += '<p>ℹ️ No user focus preferences found</p>';
+                    return;
+                }
+                
+                logDiv.innerHTML += `<p>Found ${instantPreferences.length} user focus preferences</p>`;
+                
+                // Note: This requires mapping taliaUserId and focusId to UUIDs
+                // Will need to be done after users and focuses are migrated
+                logDiv.innerHTML += '<p>⚠️ Preferences migration requires user and focus UUIDs</p>';
+                logDiv.innerHTML += '<p>   Will need manual mapping after user/focus migration</p>';
+                
+            } catch (error) {
+                logDiv.innerHTML += `<p>❌ Error querying InstantDB: ${error.message}</p>`;
+            }
+        }
+
+        async function runMigration() {
+            const startBtn = document.getElementById('startBtn');
+            const statusDiv = document.getElementById('status');
+            
+            startBtn.disabled = true;
+            statusDiv.innerHTML = '<p>🚀 Starting migration...</p>';
+            
+            try {
+                await migrateTaliaUsers();
+                await migrateFocuses();
+                await migrateUserFocusPreferences();
+                
+                // Print summary
+                const summary = `
+                    <h3>📊 Migration Summary</h3>
+                    <p><strong>taliaUser Mappings:</strong> Found: ${stats.taliaUsers.found}, Migrated: ${stats.taliaUsers.migrated}, Skipped: ${stats.taliaUsers.skipped}, Errors: ${stats.taliaUsers.errors}</p>
+                    <p><strong>Focus Definitions:</strong> Found: ${stats.focuses.found}, Migrated: ${stats.focuses.migrated}, Skipped: ${stats.focuses.skipped}, Errors: ${stats.focuses.errors}</p>
+                    <p><strong>User Preferences:</strong> Found: ${stats.userFocusPreferences.found}, Migrated: ${stats.userFocusPreferences.migrated}, Skipped: ${stats.userFocusPreferences.skipped}, Errors: ${stats.userFocusPreferences.errors}</p>
+                `;
+                statusDiv.innerHTML += summary;
+                statusDiv.innerHTML += '<p>✅ Migration complete!</p>';
+                
+            } catch (error) {
+                statusDiv.innerHTML += `<p>❌ Migration failed: ${error.message}</p>`;
+            } finally {
+                startBtn.disabled = false;
+            }
+        }
+
+        // Make runMigration available globally
+        window.runMigration = runMigration;
+    </script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 10px 0;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        h1 { color: #1f2937; }
+        h2 { color: #374151; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 InstantDB to Supabase Migration Tool</h1>
+        <p>This tool migrates data from InstantDB to Supabase using the browser-based InstantDB client.</p>
+        
+        <button id="startBtn" onclick="window.runMigration()">Start Migration</button>
+        
+        <div id="status"></div>
+        
+        <h2>taliaUser Mappings</h2>
+        <div id="taliaUsersLog" class="log">Ready to migrate...</div>
+        
+        <h2>Focus Definitions</h2>
+        <div id="focusesLog" class="log">Ready to migrate...</div>
+        
+        <h2>User Focus Preferences</h2>
+        <div id="preferencesLog" class="log">Ready to migrate...</div>
+    </div>
+</body>
+</html>
+

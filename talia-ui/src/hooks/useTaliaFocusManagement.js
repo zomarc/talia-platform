@@ -7,6 +7,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import graphQLFocusService from '../services/GraphQLFocusService';
 import focusPreferencesService from '../services/FocusPreferencesService';
+import { normalizeRole, isAdmin } from '../utils/roleUtils';
+import { GraphQLUtils } from '../lib/apolloClient';
 
 export const useTaliaFocusManagement = () => {
   const { user, loading: authLoading, error: authError } = useSupabaseAuth();
@@ -17,7 +19,8 @@ export const useTaliaFocusManagement = () => {
   const [focusPreferences, setFocusPreferences] = useState([]);
   const [focusGroups, setFocusGroups] = useState([]);
 
-  const userRole = user?.role;
+  // Get role from user or localStorage (normalized to uppercase)
+  const userRole = normalizeRole(user?.role || GraphQLUtils.getUserRole() || 'USER');
 
   // Load Talia focuses when user role is available
   const loadTaliaFocuses = useCallback(async () => {
@@ -28,16 +31,17 @@ export const useTaliaFocusManagement = () => {
 
     try {
       const focuses = await graphQLFocusService.getFocusesForRole(userRole);
-      setTaliaFocuses(focuses);
+      setTaliaFocuses(focuses || []);
 
       // Set default focus if none selected
-      if (!currentTaliaFocus && focuses.length > 0) {
+      if (!currentTaliaFocus && focuses && focuses.length > 0) {
         const defaultFocus = focuses.find(f => f.isDefault) || focuses[0];
         setCurrentTaliaFocus(defaultFocus);
       }
     } catch (err) {
       console.error('Error loading Talia focuses:', err);
       setError(err.message);
+      setTaliaFocuses([]);
     } finally {
       setLoading(false);
     }
@@ -59,52 +63,78 @@ export const useTaliaFocusManagement = () => {
 
   // Create a new Talia focus (admin only)
   const createTaliaFocus = useCallback(async (focusData) => {
-    if (userRole !== 'admin') {
+    if (!isAdmin(userRole)) {
       setError('Admin access required to create Talia focuses');
       return false;
     }
 
     try {
+      console.log('🆕 Creating focus:', focusData);
       const newFocus = await graphQLFocusService.createFocus(focusData);
       if (newFocus) {
-        setTaliaFocuses(prev => [...prev, newFocus]);
-        setCurrentTaliaFocus(newFocus);
+        // Map GraphQL response back to expected format
+        const mappedFocus = {
+          ...newFocus,
+          isStandard: newFocus.isPublic || false,
+          assignedRoles: newFocus.role ? [newFocus.role] : [],
+          layoutData: newFocus.layoutData || { components: [] }
+        };
+        console.log('✅ Focus created successfully:', mappedFocus.id, mappedFocus.name);
+        // Reload focuses to get the latest data
+        await loadTaliaFocuses();
+        // Set the newly created focus as current
+        setCurrentTaliaFocus(mappedFocus);
         return true;
       }
+      console.error('❌ No focus returned from createFocus');
+      setError('No focus returned from create operation');
       return false;
     } catch (error) {
-      console.error('Error creating Talia focus:', error);
-      setError(error.message);
+      console.error('❌ Error creating Talia focus:', error);
+      setError(error.message || 'Failed to create focus');
       return false;
     }
-  }, [userRole]);
+  }, [userRole, loadTaliaFocuses]);
 
   // Update a Talia focus (admin only)
   const updateTaliaFocus = useCallback(async (taliaFocusId, updateData) => {
-    if (userRole !== 'admin') {
+    if (!isAdmin(userRole)) {
       setError('Admin access required to update Talia focuses');
       return false;
     }
     try {
-      const success = await graphQLFocusService.updateFocus(taliaFocusId, updateData);
-      if (success) {
-        setTaliaFocuses(prev => prev.map(f => f.id === taliaFocusId ? { ...f, ...updateData } : f));
+      console.log('📝 Updating focus:', taliaFocusId, updateData);
+      const updatedFocus = await graphQLFocusService.updateFocus(taliaFocusId, updateData);
+      if (updatedFocus) {
+        // Map GraphQL response back to expected format
+        const mappedFocus = {
+          ...updatedFocus,
+          isStandard: updatedFocus.isPublic || false,
+          assignedRoles: updatedFocus.role ? [updatedFocus.role] : [],
+          layoutData: updatedFocus.layoutData || { components: updatedFocus.components || [] }
+        };
+        console.log('✅ Focus updated successfully:', mappedFocus.id, mappedFocus.name);
+        // Reload focuses to get the latest data
+        await loadTaliaFocuses();
+        // Update current focus if it's the one being updated
         if (currentTaliaFocus?.id === taliaFocusId) {
-          setCurrentTaliaFocus(prev => ({ ...prev, ...updateData }));
+          setCurrentTaliaFocus(mappedFocus);
         }
         return true;
       }
+      console.error('❌ No focus returned from updateFocus');
+      setError('No focus returned from update operation');
       return false;
     } catch (error) {
-      console.error('Error updating Talia focus:', error);
-      setError(error.message);
+      console.error('❌ Error updating Talia focus:', error);
+      setError(error.message || 'Failed to update focus');
       return false;
     }
-  }, [userRole, currentTaliaFocus]);
+  }, [userRole, currentTaliaFocus, loadTaliaFocuses]);
 
   // Delete a Talia focus (admin only)
   const deleteTaliaFocus = useCallback(async (taliaFocusId) => {
-    if (userRole !== 'admin') {
+    if (!isAdmin(userRole)) {
       setError('Admin access required to delete Talia focuses');
       return false;
     }
@@ -199,7 +229,7 @@ export const useTaliaFocusManagement = () => {
 
   // Focus group management (admin only)
   const createFocusGroup = useCallback(async (groupData) => {
-    if (userRole !== 'admin') {
+    if (!isAdmin(userRole)) {
       setError('Admin access required to create focus groups');
       return false;
     }
@@ -219,7 +249,7 @@ export const useTaliaFocusManagement = () => {
   }, [userRole]);
 
   const updateFocusGroup = useCallback(async (groupId, updateData) => {
-    if (userRole !== 'admin') {
+    if (!isAdmin(userRole)) {
       setError('Admin access required to update focus groups');
       return false;
     }
@@ -239,7 +269,7 @@ export const useTaliaFocusManagement = () => {
   }, [userRole]);
 
   const deleteFocusGroup = useCallback(async (groupId) => {
-    if (userRole !== 'admin') {
+    if (!isAdmin(userRole)) {
       setError('Admin access required to delete focus groups');
       return false;
     }
@@ -258,7 +288,7 @@ export const useTaliaFocusManagement = () => {
     }
   }, [userRole]);
 
-  const isAdmin = userRole === 'admin';
+  const userIsAdmin = isAdmin(userRole);
 
   // Computed values
   const favoriteFocuses = taliaFocuses.filter(focus => {
@@ -296,6 +326,6 @@ export const useTaliaFocusManagement = () => {
     favoriteFocuses,
     canCreateFocus: isAdmin,
     canModifyFocus: isAdmin,
-    isAdmin
+    isAdmin: userIsAdmin
   };
 };

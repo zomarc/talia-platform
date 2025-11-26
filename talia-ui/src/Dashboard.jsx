@@ -13,10 +13,13 @@ import SailingByCabinCategory from "./components/focus-panels/SailingByCabinCate
 import SimpleTable from "./components/focus-panels/SimpleTable";
 import SailingSummary from "./components/focus-panels/SailingSummary";
 import UserProfile from "./components/UserProfile";
-import { useAuth } from "./contexts/AuthContext";
+import { useSupabaseAuth } from "./contexts/SupabaseAuthContext";
+import { normalizeRole, isAdmin } from "./utils/roleUtils";
+import { GraphQLUtils } from "./lib/apolloClient";
 // Focus Management Integration
 import { FocusSelector, FocusManager } from "./components/focus-management";
 import { useFocusManagement } from "./hooks/useFocusManagement";
+import graphQLFocusService from "./services/GraphQLFocusService";
 // Admin Components
 import { AdminDashboard, UserMappingTable, TaliaUserTable } from "./components/admin";
 // Removed Apollo Client - using direct fetch instead
@@ -1462,7 +1465,7 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
       </div>
 
       {/* Admin Section - Only visible to admins */}
-      {userRole === 'admin' && (
+      {isAdmin(userRole) && (
         <div style={sectionStyle}>
           <div
             style={sectionHeaderStyle}
@@ -1767,11 +1770,11 @@ function Dashboard({ user }) {
     initializeStandardFocuses: initializeStandardTaliaFocuses,
     favoriteFocuses,
     taliaUserId,
-    canModifyFocus: isAdmin
+    canModifyFocus: canModifyFocus
   } = useFocusManagement();
   
-  // Development mode: Override user role to admin for testing
-  const devUser = user ? { ...user, role: 'admin' } : null;
+  // Get role from user or localStorage (normalized)
+  const normalizedUserRole = normalizeRole(user?.role || GraphQLUtils.getUserRole() || 'USER');
   
   debugLog('App component initializing');
 
@@ -1857,114 +1860,102 @@ function Dashboard({ user }) {
   const [currentFocus, setCurrentFocus] = useState(null);
 
   // Role-based focus filtering function is now defined outside the component
-  const [userRole, setUserRole] = useState(devUser?.role || 'admin'); // Use dev user role or admin for full access during development
+  const [userRole, setUserRole] = useState(normalizedUserRole);
 
-  // Update userRole when devUser changes
+  // Update userRole when user changes
   useEffect(() => {
-    if (devUser?.role) {
-      setUserRole(devUser.role);
-      console.log('User role updated to:', devUser.role);
-    }
-  }, [devUser?.role]);
+    const currentRole = normalizeRole(user?.role || GraphQLUtils.getUserRole() || 'USER');
+    setUserRole(currentRole);
+    console.log('User role updated to:', currentRole);
+  }, [user?.role, user?.email]);
 
   debugLog('App state initialized', { sidebarCollapsed, sidebarWidth, globalFilters, theme: theme.name, fontSize });
 
   // Load focus-specific layout from database
   const loadFocusLayout = useCallback(async (focusId) => {
-    if (!apiRef.current) return;
-    
-    console.log('Loading focus layout from database:', focusId);
-    
-    // Find the focus in the current focuses list
-    const focus = taliaFocuses.find(f => f.id === focusId);
-    if (!focus) {
-      console.warn('Focus not found:', focusId);
-      return;
+    if (!apiRef.current) {
+      throw new Error('Dockview API not ready. Cannot load focus layout.');
     }
+
+    console.log('🔄 Loading focus layout from database:', focusId);
     
-    console.log('Found focus:', focus.name);
-    
-    // Check if focus has saved layout data
-    if (focus.layoutData && focus.layoutData.dockviewLayout) {
-      console.log('Loading saved Dockview layout from database');
+    // Reload focuses from database to ensure we have the latest data
+    try {
+      const refreshedFocuses = await graphQLFocusService.getFocusesForRole(normalizedUserRole || 'ADMIN');
+      // Try to find by ID first, then by name (for backward compatibility)
+      let focus = refreshedFocuses.find(f => f.id === focusId);
+      if (!focus) {
+        // Try finding by name (case-insensitive)
+        focus = refreshedFocuses.find(f => f.name.toLowerCase() === focusId.toLowerCase());
+      }
+      
+      if (!focus) {
+        // Don't show error alert - just log and return gracefully
+        const errorMsg = `Focus with ID/name "${focusId}" not found in database. Available focuses: ${refreshedFocuses.map(f => f.name).join(', ')}`;
+        console.warn('⚠️', errorMsg);
+        // Don't throw error - allow app to continue
+        return;
+      }
+      
+      console.log('✅ Found focus:', focus.name, '(ID:', focusId + ')', 'Layout data:', focus.layoutData);
+      
+      // Check if focus has saved layout data
+      if (!focus.layoutData || !focus.layoutData.dockviewLayout) {
+        const errorMsg = `Focus "${focus.name}" (ID: ${focusId}) has no saved Dockview layout. The layout_data only contains: ${JSON.stringify(Object.keys(focus.layoutData || {}))}. Please save a layout first using the "Save Current Layout" button.`;
+        console.warn('⚠️', errorMsg);
+        console.warn('⚠️ Full layoutData:', JSON.stringify(focus.layoutData, null, 2));
+        // Don't show alert or throw error - just log and return
+        // This allows the app to continue without blocking the UI
+        return;
+      }
+      
+      console.log('📦 Loading saved Dockview layout from database');
       try {
         // Clear existing panels first
         apiRef.current.clear();
+        
+        // Validate layout data structure
+        const layoutData = focus.layoutData.dockviewLayout;
+        if (!layoutData || typeof layoutData !== 'object') {
+          throw new Error('Invalid layout data structure');
+        }
+        
         // Load the saved Dockview layout directly
-        apiRef.current.fromJSON(focus.layoutData.dockviewLayout);
-        console.log('Successfully loaded saved layout from database');
-        return;
+        apiRef.current.fromJSON(layoutData);
+        console.log('✅ Successfully loaded saved layout from database');
+        
       } catch (e) {
-        console.warn('Failed to load saved layout, falling back to default:', e);
+        const errorMsg = `Failed to load saved layout for focus "${focus.name}": ${e.message}. The layout data may be corrupted. Please save a new layout.`;
+        console.error('❌', errorMsg, e);
+        alert(errorMsg);
+        throw new Error(errorMsg);
       }
+    } catch (error) {
+      // Re-throw if it's already our formatted error
+      if (error.message && (error.message.includes('not found') || error.message.includes('no saved layout') || error.message.includes('Failed to load'))) {
+        throw error;
+      }
+      // Otherwise wrap in a meaningful error
+      const errorMsg = `Error loading focus layout: ${error.message}. Please try refreshing the page.`;
+      console.error('❌', errorMsg, error);
+      alert(errorMsg);
+      throw new Error(errorMsg);
     }
-    
-    // Fallback to default layout if no saved layout exists
-    console.log('No saved layout found, using default layout');
-    const focusLayout = getFocusLayout(focusId);
-    console.log('Loading focus layout:', focusLayout.name);
-    
-    // Clear existing panels first
-    try {
-      apiRef.current.clear();
-      console.log('Cleared existing panels');
-    } catch (e) {
-      console.warn('Failed to clear existing panels:', e);
-    }
-    
-    // Generate unique timestamp for this focus load to ensure unique panel IDs
-    const timestamp = Date.now();
-    
-    // Pre-generate all panel IDs to ensure consistency
-    const panelIds = focusLayout.panels.map((panel, index) => 
-      `${focusId}-${panel.id}-${timestamp}-${Math.random().toString(36).substr(2, 5)}`
-    );
-    
-    // Add panels with proper positioning like the original implementation
-    setTimeout(() => {
-      focusLayout.panels.forEach((panel, index) => {
-        setTimeout(() => {
-          try {
-            const uniqueId = panelIds[index];
-            
-            // Add first panel without position, then add others with relative positioning
-            if (index === 0) {
-              apiRef.current.addPanel({
-                id: uniqueId,
-                component: panel.component,
-                title: panel.title
-              });
-            } else {
-              // Use the pre-generated previous panel ID for positioning
-              const prevPanelId = panelIds[index - 1];
-              
-              // Use Dockview's natural positioning - alternate between right and below
-              const direction = index % 2 === 1 ? 'right' : 'below';
-              apiRef.current.addPanel({
-                id: uniqueId,
-                component: panel.component,
-                title: panel.title,
-                position: { 
-                  referencePanel: prevPanelId, 
-                  direction: direction 
-                }
-              });
-            }
-            console.log('Added panel:', panel.title, 'with ID:', uniqueId);
-          } catch (e) {
-            console.warn('Failed to add panel:', panel.id, e);
-          }
-        }, index * 200); // Stagger panel creation
-      });
-    }, 100);
-  }, [taliaFocuses]);
+  }, [normalizedUserRole]);
 
   // Focus change handler
-  const handleFocusChange = useCallback((focusId) => {
-    console.log('Focus changed to:', focusId);
+  const handleFocusChange = useCallback(async (focusId) => {
+    console.log('🔄 Focus changed to:', focusId);
     setCurrentFocus(focusId);
-    // Load the focus-specific layout from database
-    loadFocusLayout(focusId);
+    
+    try {
+      // Load the focus-specific layout from database (will error if not found or invalid)
+      await loadFocusLayout(focusId);
+    } catch (error) {
+      console.error('❌ Failed to load focus layout:', error);
+      // Error is already shown to user in loadFocusLayout
+      // Don't fall back - let the error stand
+    }
   }, [loadFocusLayout]);
 
   // Save current layout to focus
@@ -2367,14 +2358,28 @@ function Dashboard({ user }) {
     // No MutationObserver or DOM manipulation needed
   }, []);
 
-  const createDefaultLayout = useCallback((api) => {
-    // Load the performance focus layout as the default
-    console.log('Creating default layout using performance focus');
-    loadFocusLayout('performance');
+  const createDefaultLayout = useCallback(async (api) => {
+    // Load the first available focus layout as the default
+    // Try to find a focus by name "Performance" or use the first available focus
+    console.log('Creating default layout using first available focus');
+    try {
+      const focuses = await graphQLFocusService.getFocusesForRole(normalizedUserRole || 'ADMIN');
+      if (focuses && focuses.length > 0) {
+        // Try to find "Performance" focus by name, otherwise use first focus
+        const performanceFocus = focuses.find(f => f.name.toLowerCase().includes('performance')) || focuses[0];
+        console.log(`Loading default focus: ${performanceFocus.name} (ID: ${performanceFocus.id})`);
+        await loadFocusLayout(performanceFocus.id);
+      } else {
+        console.warn('No focuses available, skipping default layout load');
+      }
+    } catch (error) {
+      console.error('Error loading default focus:', error);
+      // Don't throw - allow the app to continue without a default layout
+    }
     
     // Safety: in case Tabulator doesn't emit, show first sailing
     setTimeout(() => { emitSelect({ id:1, ship:"Celestyal Discovery", sailing:"7N Islands" }); }, 700);
-  }, [loadFocusLayout]);
+  }, [loadFocusLayout, normalizedUserRole]);
 
   // Enhanced layout creation with different presets
   const createLayoutPreset = useCallback((preset) => {

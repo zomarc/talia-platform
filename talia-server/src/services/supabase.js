@@ -242,7 +242,11 @@ export class SupabaseDataService {
   // Get focuses data
   async getFocuses(filters = {}) {
     try {
+      console.log('[getFocuses] Starting query with filters:', filters);
       let queryBuilder = this.client.from('focuses').select('*');
+      
+      // Always filter by is_active = true
+      queryBuilder = queryBuilder.eq('is_active', true);
       
       // Apply filters
       if (filters.role) {
@@ -266,13 +270,23 @@ export class SupabaseDataService {
       const { data, error } = await queryBuilder;
       
       if (error) {
-        console.error('Supabase query error for focuses:', error);
+        console.error('[getFocuses] Supabase query error:', error);
         throw error;
+      }
+      
+      console.log(`[getFocuses] Retrieved ${data?.length || 0} focuses from Supabase`);
+      if (data && data.length > 0) {
+        console.log(`[getFocuses] First focus:`, {
+          id: data[0].id,
+          name: data[0].name,
+          assigned_roles: data[0].assigned_roles,
+          is_active: data[0].is_active
+        });
       }
       
       return data || [];
     } catch (error) {
-      console.error('Error querying focuses:', error);
+      console.error('[getFocuses] Error querying focuses:', error);
       throw error;
     }
   }

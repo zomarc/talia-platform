@@ -107,7 +107,7 @@ class ErrorBoundary extends React.Component {
                 paddingLeft: '1.5rem'
               }}>
                 <li>Check the browser console for detailed error logs</li>
-                <li>Verify your InstantDB project ID is correct</li>
+                <li>Verify your Supabase connection is configured correctly</li>
                 <li>Ensure you have a stable internet connection</li>
                 <li>Try refreshing the page</li>
                 <li>Clear browser cache and cookies</li>

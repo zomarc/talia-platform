@@ -54,17 +54,17 @@ const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
     const customFocusData = {
       name: newFocusName.trim(),
       description: `Custom focus created by ${user.name}`,
-      type: 'user',
-      assignedRoles: [user.role],
-      layoutData: {
-        components: [
-          {
-            type: 'panel',
-            title: 'Welcome Panel',
-            position: { x: 0, y: 0, width: 12, height: 6 }
-          }
-        ]
-      }
+      type: 'USER', // Must be uppercase enum: USER, STANDARD, TEMPLATE, SHARED
+      role: user.role || 'USER', // Must be uppercase enum: ADMIN, MANAGER, USER, GUEST
+      components: [
+        {
+          type: 'TABLE', // Must be uppercase enum: CHART, TABLE, KPI, GRAPHQL_PANEL
+          position: { x: 0, y: 0, width: 6, height: 4 },
+          settings: null,
+          dataSource: null
+        }
+      ],
+      isPublic: false
     };
 
     const success = await createFocus(customFocusData);

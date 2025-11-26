@@ -5,11 +5,12 @@
 
 import React, { useState } from 'react';
 import { useFocusManagement } from '../../hooks/useFocusManagement';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
+import { isAdmin } from '../../utils/roleUtils';
 import './focus-management.css';
 
 const FocusManager = () => {
-  const { user } = useAuth();
+  const { user } = useSupabaseAuth();
   const {
     focuses,
     loading,
@@ -33,7 +34,7 @@ const FocusManager = () => {
   });
 
   // Check if user has admin access
-  if (!user || user.role !== 'admin') {
+  if (!user || !isAdmin(user.role)) {
     return (
       <div className="focus-manager">
         <div className="error-message">

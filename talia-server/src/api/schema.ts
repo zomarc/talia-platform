@@ -66,6 +66,7 @@ export const typeDefs = `#graphql
     type: FocusType!
     role: UserRole!
     components: [FocusComponent!]!
+    layoutData: JSON
     createdBy: ID!
     createdAt: String!
     updatedAt: String!

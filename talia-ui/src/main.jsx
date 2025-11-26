@@ -111,13 +111,17 @@ const DevSwitcher = () => {
   );
 
   const renderContent = () => {
+    console.log('🎯 renderContent called with mode:', mode);
     switch (mode) {
       case 'test':
+        console.log('📋 Rendering TestPage');
         return <TestPage />;
       case 'data':
+        console.log('📋 Rendering DataManagementPage');
         return <DataManagementPage />;
       case 'app':
       default:
+        console.log('📋 Rendering AppWithAuth');
         return <AppWithAuth />;
     }
   };

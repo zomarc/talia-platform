@@ -1,17 +1,50 @@
 /**
  * User Mapping Table Component
- * Displays the mapping between InstantDB auth IDs and Talia user IDs
+ * Displays the mapping between Supabase auth IDs and Talia user IDs
  * This is purely informational - business logic doesn't depend on it
  */
 
-import React from 'react';
-import db from '../../lib/db';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 
 const UserMappingTable = () => {
-  // Query the taliaUser table from InstantDB
-  const { isLoading, error, data } = db.useQuery({
-    taliaUser: {}
-  });
+  const [mappings, setMappings] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    loadMappings();
+  }, []);
+
+  const loadMappings = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const { data, error: fetchError } = await supabase
+        .from('talia_users')
+        .select('id, talia_user_id, email')
+        .order('talia_user_id', { ascending: true });
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      // Map Supabase data to mapping format
+      const mappedData = (data || []).map(user => ({
+        taliaUserId: user.talia_user_id,
+        supabaseAuthId: user.id, // Supabase auth user ID
+        email: user.email
+      }));
+
+      setMappings(mappedData);
+    } catch (err) {
+      console.error('Error loading user mappings:', err);
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -26,20 +59,18 @@ const UserMappingTable = () => {
     return (
       <div style={styles.container}>
         <h2 style={styles.title}>User Mapping Table</h2>
-        <div style={styles.error}>Error: {error.message}</div>
+        <div style={styles.error}>Error: {error}</div>
       </div>
     );
   }
-
-  const mappings = data?.taliaUser || [];
 
   return (
     <div style={styles.container}>
       <h2 style={styles.title}>User Mapping Table</h2>
       <p style={styles.subtitle}>
-        Simple mapping: InstantDB Auth ID → Talia User ID
+        Simple mapping: Supabase Auth ID → Talia User ID
         <br />
-        <em>Just two fields: instantAuthId and taliaUserId</em>
+        <em>Maps Supabase authentication users to Talia internal user IDs</em>
       </p>
 
       {mappings.length === 0 ? (
@@ -49,7 +80,8 @@ const UserMappingTable = () => {
           <thead>
             <tr style={styles.headerRow}>
               <th style={styles.headerCell}>Talia User ID</th>
-              <th style={styles.headerCell}>InstantDB Auth ID</th>
+              <th style={styles.headerCell}>Supabase Auth ID</th>
+              <th style={styles.headerCell}>Email</th>
             </tr>
           </thead>
           <tbody>
@@ -59,8 +91,9 @@ const UserMappingTable = () => {
                   <strong style={styles.taliaId}>{mapping.taliaUserId}</strong>
                 </td>
                 <td style={styles.dataCell}>
-                  <code style={styles.authId}>{mapping.instantAuthId}</code>
+                  <code style={styles.authId}>{mapping.supabaseAuthId}</code>
                 </td>
+                <td style={styles.dataCell}>{mapping.email}</td>
               </tr>
             ))}
           </tbody>
@@ -68,12 +101,12 @@ const UserMappingTable = () => {
       )}
 
       <div style={styles.info}>
-        <h3 style={styles.infoTitle}>Simple Mapping</h3>
+        <h3 style={styles.infoTitle}>User Mapping</h3>
         <ul style={styles.infoList}>
-          <li><strong>instantAuthId:</strong> From InstantDB $user (unique)</li>
+          <li><strong>supabaseAuthId:</strong> From Supabase Auth (unique UUID)</li>
           <li><strong>taliaUserId:</strong> Talia's internal ID (unique, 1000+)</li>
           <li><strong>Purpose:</strong> Map logged-in user to Talia user ID</li>
-          <li><strong>Clean:</strong> No history, no extra fields, just mapping</li>
+          <li><strong>Storage:</strong> Stored in talia_users table in Supabase</li>
         </ul>
       </div>
     </div>

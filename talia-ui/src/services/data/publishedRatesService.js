@@ -31,8 +31,7 @@ class PublishedRatesService {
       let query = supabase
         .from(this.tableName)
         .select('*')
-        .order('snapshot_date', { ascending: false })
-        .order('departure_date', { ascending: true });
+        .order('snapshot_date', { ascending: false });
 
       // Apply filters
       if (sail_code) {

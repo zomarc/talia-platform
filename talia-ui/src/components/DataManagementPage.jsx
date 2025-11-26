@@ -3,10 +3,11 @@
  * Displays database table information including sources, sync status, and data ranges
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useDatabaseTables } from '../hooks/useDatabaseTables';
 import { LoadingSpinner, ErrorMessage } from './shared';
 import { getThemeForMode } from '../themes/modeThemes';
+import { supabase } from '../lib/supabase';
 
 const DataManagementPage = () => {
   const { tables, loading, error, refetch } = useDatabaseTables();
@@ -14,6 +15,19 @@ const DataManagementPage = () => {
   const [sortDirection, setSortDirection] = useState('desc');
   const [filterText, setFilterText] = useState('');
   const [activeFilter, setActiveFilter] = useState(null); // 'no-data', 'synced', 'outdated', etc.
+  const [syncingTables, setSyncingTables] = useState(new Set());
+  const [logs, setLogs] = useState([]);
+  const [selectedTable, setSelectedTable] = useState(null);
+  const [reviewData, setReviewData] = useState(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const logEndRef = useRef(null);
+
+  // Auto-scroll logs to bottom
+  useEffect(() => {
+    if (logEndRef.current) {
+      logEndRef.current.scrollTop = logEndRef.current.scrollHeight;
+    }
+  }, [logs]);
 
   // Get theme for data mode
   const theme = getThemeForMode('data');
@@ -40,6 +54,28 @@ const DataManagementPage = () => {
     const min = dateRange.min ? formatDate(dateRange.min) : 'N/A';
     const max = dateRange.max ? formatDate(dateRange.max) : 'N/A';
     return `${min} - ${max}`;
+  };
+
+  // Format duration in milliseconds to human-readable format
+  const formatDuration = (durationMs) => {
+    if (durationMs === null || durationMs === undefined) {
+      return 'N/A';
+    }
+    
+    const seconds = Math.floor(durationMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    
+    if (hours > 0) {
+      const remainingMinutes = minutes % 60;
+      return `${hours}h ${remainingMinutes}m`;
+    } else if (minutes > 0) {
+      const remainingSeconds = seconds % 60;
+      return `${minutes}m ${remainingSeconds}s`;
+    } else {
+      // Show milliseconds if less than 1 second, otherwise seconds
+      return durationMs < 1000 ? `${durationMs}ms` : `${seconds}s`;
+    }
   };
 
   // Get status badge color
@@ -74,6 +110,12 @@ const DataManagementPage = () => {
     if (sortColumn === 'lastSync') {
       aVal = a.lastSync ? new Date(a.lastSync).getTime() : 0;
       bVal = b.lastSync ? new Date(b.lastSync).getTime() : 0;
+    }
+
+    // Handle duration
+    if (sortColumn === 'syncDuration') {
+      aVal = a.syncDuration !== null && a.syncDuration !== undefined ? a.syncDuration : -1;
+      bVal = b.syncDuration !== null && b.syncDuration !== undefined ? b.syncDuration : -1;
     }
 
     // Convert to strings for comparison
@@ -132,12 +174,129 @@ const DataManagementPage = () => {
 
   // Column widths configuration - shared between both tables
   const columnWidths = {
-    tableName: '20%',
-    source: '25%',
-    rowCount: '10%',
-    dateRange: '20%',
-    lastSync: '15%',
-    status: '10%'
+    tableName: '16%',
+    source: '20%',
+    rowCount: '7%',
+    dateRange: '16%',
+    lastSync: '10%',
+    syncDuration: '9%',
+    status: '10%',
+    actions: '12%'
+  };
+
+  // Handle sync button click
+  const handleSync = async (tableName, forceFullSync = false) => {
+    // Check if table has a sync configuration
+    const table = tables.find(t => t.tableName === tableName);
+    if (!table || table.source === 'N/A' || table.type === 'unknown' || table.type === 'system' || table.type === 'application') {
+      alert(`Table "${tableName}" does not have a sync configuration.`);
+      return;
+    }
+
+    setSyncingTables(prev => new Set(prev).add(tableName));
+    
+    // Add log entry
+    const logEntry = {
+      id: Date.now(),
+      timestamp: new Date(),
+      type: 'info',
+      message: `Starting ${forceFullSync ? 'full refresh' : 'sync'} for ${tableName}...`,
+      tableName
+    };
+    setLogs(prev => [...prev, logEntry]);
+
+    try {
+      const mutation = `
+        mutation SyncTable($tableName: String!, $dataset: String, $forceFullSync: Boolean) {
+          syncTable(tableName: $tableName, dataset: $dataset, forceFullSync: $forceFullSync) {
+            success
+            tableName
+            message
+            recordsProcessed
+            duration
+            error
+          }
+        }
+      `;
+
+      const response = await fetch('http://localhost:4000/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: mutation,
+          variables: {
+            tableName: tableName,
+            dataset: null,
+            forceFullSync: forceFullSync
+          }
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.errors) {
+        throw new Error(result.errors[0]?.message || 'GraphQL error');
+      }
+
+      if (result.data?.syncTable?.success) {
+        const syncResult = result.data.syncTable;
+        console.log('Sync completed:', syncResult);
+        
+        // Show success message with details
+        const syncType = forceFullSync ? 'Full refresh' : 'Sync';
+        const message = syncResult.recordsProcessed 
+          ? `${syncType} completed successfully! Processed ${syncResult.recordsProcessed.toLocaleString()} records in ${formatDuration(syncResult.duration)}.`
+          : `${syncType} completed successfully!`;
+        console.log(message);
+        
+        // Add success log
+        setLogs(prev => [...prev, {
+          id: Date.now(),
+          timestamp: new Date(),
+          type: 'success',
+          message,
+          tableName
+        }]);
+        
+        // Wait a bit longer to ensure database has updated, then refresh
+        // For direct tables, the sync completes synchronously, but we give it time to commit
+        setTimeout(() => {
+          console.log('Refreshing table data...');
+          refetch();
+        }, 2000);
+      } else {
+        const errorMsg = result.data?.syncTable?.error || result.data?.syncTable?.message || 'Unknown error';
+        // Add error log
+        setLogs(prev => [...prev, {
+          id: Date.now(),
+          timestamp: new Date(),
+          type: 'error',
+          message: `Sync failed for ${tableName}: ${errorMsg}`,
+          tableName
+        }]);
+        alert(`Sync failed: ${errorMsg}`);
+      }
+    } catch (err) {
+      console.error('Sync error:', err);
+      const errorMsg = err.message || 'Unknown error';
+      // Add error log
+      setLogs(prev => [...prev, {
+        id: Date.now(),
+        timestamp: new Date(),
+        type: 'error',
+        message: `Sync error for ${tableName}: ${errorMsg}`,
+        tableName
+      }]);
+      alert(`Sync error: ${errorMsg}`);
+    } finally {
+      setSyncingTables(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(tableName);
+        return newSet;
+      });
+    }
   };
 
   // Render table header
@@ -230,6 +389,22 @@ const DataManagementPage = () => {
           Last Sync<SortIcon column="lastSync" />
         </th>
         <th
+          onClick={() => handleSort('syncDuration')}
+          style={{
+            padding: '6px 8px',
+            textAlign: 'left',
+            fontWeight: '600',
+            color: theme.colors.textSecondary,
+            cursor: 'pointer',
+            userSelect: 'none',
+            whiteSpace: 'nowrap',
+            fontSize: '10px',
+            width: columnWidths.syncDuration
+          }}
+        >
+          Sync Duration<SortIcon column="syncDuration" />
+        </th>
+        <th
           onClick={() => handleSort('status')}
           style={{
             padding: '6px 8px',
@@ -245,6 +420,19 @@ const DataManagementPage = () => {
         >
           Status<SortIcon column="status" />
         </th>
+        <th
+          style={{
+            padding: '6px 8px',
+            textAlign: 'center',
+            fontWeight: '600',
+            color: theme.colors.textSecondary,
+            whiteSpace: 'nowrap',
+            fontSize: '10px',
+            width: columnWidths.actions
+          }}
+        >
+          Actions
+        </th>
       </tr>
     </thead>
   );
@@ -256,9 +444,14 @@ const DataManagementPage = () => {
       return (
         <tr
           key={table.tableName}
+          onClick={() => setSelectedTable(table.tableName === selectedTable ? null : table.tableName)}
           style={{
             borderBottom: `1px solid ${theme.colors.glassBorder}`,
-            background: idx % 2 === 0 ? 'transparent' : 'rgba(0, 0, 0, 0.1)'
+            background: table.tableName === selectedTable 
+              ? 'rgba(100, 181, 246, 0.2)' 
+              : idx % 2 === 0 ? 'transparent' : 'rgba(0, 0, 0, 0.1)',
+            cursor: 'pointer',
+            transition: 'background 0.2s'
           }}
         >
           <td style={{
@@ -306,6 +499,15 @@ const DataManagementPage = () => {
           }}>
             {formatDate(table.lastSync)}
           </td>
+          <td style={{
+            padding: '6px 8px',
+            fontSize: '10px',
+            fontFamily: 'monospace',
+            color: table.syncDuration === null ? theme.colors.textMuted : theme.colors.textSecondary,
+            width: columnWidths.syncDuration
+          }}>
+            {formatDuration(table.syncDuration)}
+          </td>
           <td style={{ 
             padding: '6px 8px',
             width: columnWidths.status
@@ -321,6 +523,120 @@ const DataManagementPage = () => {
             }}>
               {table.status}
             </span>
+          </td>
+          <td style={{
+            padding: '6px 8px',
+            textAlign: 'center',
+            width: columnWidths.actions
+          }}
+          onClick={(e) => e.stopPropagation()}
+          >
+            {table.source !== 'N/A' && table.type !== 'unknown' && table.type !== 'system' && table.type !== 'application' ? (
+              <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
+                {selectedTable === table.tableName && (
+                  <button
+                    onClick={async () => {
+                      setReviewLoading(true);
+                      try {
+                        const { data, error } = await supabase
+                          .from(table.tableName)
+                          .select('*')
+                          .limit(100);
+                        
+                        if (error) throw error;
+                        setReviewData({ tableName: table.tableName, data });
+                        setLogs(prev => [...prev, {
+                          id: Date.now(),
+                          timestamp: new Date(),
+                          type: 'info',
+                          message: `Loaded ${data.length} rows from ${table.tableName}`,
+                          tableName: table.tableName
+                        }]);
+                      } catch (err) {
+                        setLogs(prev => [...prev, {
+                          id: Date.now(),
+                          timestamp: new Date(),
+                          type: 'error',
+                          message: `Failed to load data for ${table.tableName}: ${err.message}`,
+                          tableName: table.tableName
+                        }]);
+                        alert(`Failed to load data: ${err.message}`);
+                      } finally {
+                        setReviewLoading(false);
+                      }
+                    }}
+                    disabled={reviewLoading}
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: '9px',
+                      background: reviewLoading ? theme.colors.textMuted : '#4caf50',
+                      color: reviewLoading ? theme.colors.textSecondary : '#ffffff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: reviewLoading ? 'not-allowed' : 'pointer',
+                      fontWeight: '600',
+                      opacity: reviewLoading ? 0.6 : 1,
+                      transition: 'all 0.2s'
+                    }}
+                    title="Review top 100 rows"
+                  >
+                    {reviewLoading ? '⏳' : '👁️ Review'}
+                  </button>
+                )}
+                <button
+                  onClick={() => handleSync(table.tableName, false)}
+                  disabled={syncingTables.has(table.tableName)}
+                  style={{
+                    padding: '4px 8px',
+                    fontSize: '9px',
+                    background: syncingTables.has(table.tableName) 
+                      ? theme.colors.textMuted 
+                      : theme.colors.accent,
+                    color: syncingTables.has(table.tableName) 
+                      ? theme.colors.textSecondary 
+                      : '#0f0f23',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: syncingTables.has(table.tableName) ? 'not-allowed' : 'pointer',
+                    fontWeight: '500',
+                    opacity: syncingTables.has(table.tableName) ? 0.6 : 1,
+                    transition: 'all 0.2s'
+                  }}
+                  title="Incremental sync"
+                >
+                  {syncingTables.has(table.tableName) ? '⏳ Syncing...' : '🔄 Sync'}
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm(`Force full refresh for "${table.tableName}"? This will sync all data, not just changes.`)) {
+                      handleSync(table.tableName, true);
+                    }
+                  }}
+                  disabled={syncingTables.has(table.tableName)}
+                  style={{
+                    padding: '4px 8px',
+                    fontSize: '9px',
+                    background: syncingTables.has(table.tableName) 
+                      ? theme.colors.textMuted 
+                      : '#ff6b35',
+                    color: syncingTables.has(table.tableName) 
+                      ? theme.colors.textSecondary 
+                      : '#ffffff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: syncingTables.has(table.tableName) ? 'not-allowed' : 'pointer',
+                    fontWeight: '600',
+                    opacity: syncingTables.has(table.tableName) ? 0.6 : 1,
+                    transition: 'all 0.2s'
+                  }}
+                  title="Force full refresh (syncs all data)"
+                >
+                  {syncingTables.has(table.tableName) ? '⏳' : '⚡ Full'}
+                </button>
+              </div>
+            ) : (
+              <span style={{ color: theme.colors.textMuted, fontSize: '9px' }}>—</span>
+            )}
           </td>
         </tr>
       );
@@ -648,6 +964,242 @@ const DataManagementPage = () => {
           </div>
         )}
       </div>
+
+      {/* Log Panel */}
+      <div style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: '200px',
+        background: theme.colors.glass,
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderTop: `1px solid ${theme.colors.glassBorder}`,
+        boxShadow: '0 -8px 32px rgba(0, 0, 0, 0.3)',
+        display: 'flex',
+        flexDirection: 'column',
+        zIndex: 1000
+      }}>
+        <div style={{
+          padding: '8px 12px',
+          borderBottom: `1px solid ${theme.colors.glassBorder}`,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <div style={{ fontSize: '11px', fontWeight: '600', color: theme.colors.foreground }}>
+            📋 Activity Log
+          </div>
+          <button
+            onClick={() => setLogs([])}
+            style={{
+              padding: '2px 6px',
+              fontSize: '9px',
+              background: 'transparent',
+              color: theme.colors.textSecondary,
+              border: `1px solid ${theme.colors.glassBorder}`,
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            Clear
+          </button>
+        </div>
+        <div style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '8px',
+          fontFamily: 'monospace',
+          fontSize: '9px'
+        }}
+        ref={logEndRef}
+        >
+          {logs.length === 0 ? (
+            <div style={{ color: theme.colors.textMuted, textAlign: 'center', padding: '20px' }}>
+              No activity yet
+            </div>
+          ) : (
+            logs.map(log => (
+              <div
+                key={log.id}
+                style={{
+                  padding: '4px 8px',
+                  marginBottom: '2px',
+                  borderRadius: '4px',
+                  background: log.type === 'error' 
+                    ? 'rgba(244, 67, 54, 0.1)' 
+                    : log.type === 'success' 
+                      ? 'rgba(76, 175, 80, 0.1)' 
+                      : 'rgba(255, 255, 255, 0.02)',
+                  color: log.type === 'error' 
+                    ? '#f44336' 
+                    : log.type === 'success' 
+                      ? '#4caf50' 
+                      : theme.colors.textSecondary,
+                  borderLeft: `3px solid ${
+                    log.type === 'error' 
+                      ? '#f44336' 
+                      : log.type === 'success' 
+                        ? '#4caf50' 
+                        : theme.colors.accent
+                  }`
+                }}
+              >
+                <span style={{ color: theme.colors.textMuted }}>
+                  {log.timestamp.toLocaleTimeString()}
+                </span>
+                {' '}
+                <span style={{ fontWeight: '600' }}>[{log.tableName}]</span>
+                {' '}
+                {log.message}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Review Modal */}
+      {reviewData && (
+        <div
+          onClick={() => setReviewData(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+            padding: '20px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: theme.colors.glass,
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              borderRadius: '12px',
+              border: `1px solid ${theme.colors.glassBorder}`,
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              width: '100%'
+            }}
+          >
+            <div style={{
+              padding: '12px 16px',
+              borderBottom: `1px solid ${theme.colors.glassBorder}`,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <h2 style={{ margin: 0, fontSize: '14px', color: theme.colors.foreground }}>
+                👁️ Review: {reviewData.tableName} (Top 100 rows)
+              </h2>
+              <button
+                onClick={() => setReviewData(null)}
+                style={{
+                  padding: '4px 8px',
+                  background: 'transparent',
+                  color: theme.colors.textSecondary,
+                  border: `1px solid ${theme.colors.glassBorder}`,
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px'
+                }}
+              >
+                ✕ Close
+              </button>
+            </div>
+            <div style={{
+              flex: 1,
+              overflow: 'auto',
+              padding: '12px'
+            }}>
+              {reviewData.data.length === 0 ? (
+                <div style={{ color: theme.colors.textMuted, textAlign: 'center', padding: '40px' }}>
+                  No data found
+                </div>
+              ) : (
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontSize: '10px',
+                  fontFamily: 'monospace'
+                }}>
+                  <thead>
+                    <tr style={{
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      borderBottom: `2px solid ${theme.colors.glassBorder}`
+                    }}>
+                      {Object.keys(reviewData.data[0]).map(col => (
+                        <th
+                          key={col}
+                          style={{
+                            padding: '6px 8px',
+                            textAlign: 'left',
+                            fontWeight: '600',
+                            color: theme.colors.foreground,
+                            fontSize: '9px',
+                            position: 'sticky',
+                            top: 0,
+                            background: 'rgba(15, 15, 35, 0.95)'
+                          }}
+                        >
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reviewData.data.map((row, idx) => (
+                      <tr
+                        key={idx}
+                        style={{
+                          borderBottom: `1px solid ${theme.colors.glassBorder}`,
+                          background: idx % 2 === 0 ? 'transparent' : 'rgba(0, 0, 0, 0.1)'
+                        }}
+                      >
+                        {Object.values(row).map((val, colIdx) => (
+                          <td
+                            key={colIdx}
+                            style={{
+                              padding: '6px 8px',
+                              color: theme.colors.textSecondary,
+                              maxWidth: '200px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}
+                            title={String(val)}
+                          >
+                            {val === null || val === undefined ? (
+                              <span style={{ color: theme.colors.textMuted }}>NULL</span>
+                            ) : typeof val === 'object' ? (
+                              JSON.stringify(val)
+                            ) : (
+                              String(val)
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ height: '200px' }} /> {/* Spacer for fixed log panel */}
     </div>
   );
 };

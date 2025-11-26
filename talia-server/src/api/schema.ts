@@ -281,6 +281,44 @@ export const typeDefs = `#graphql
     created_at: String
   }
 
+  # Booking Profile Types
+  type BookingDataPoint {
+    date: String!
+    bookings: Int!
+    guests: Int!
+    newBookings: Int!
+    cancellations: Int!
+    netBookings: Int!
+  }
+
+  type BookingProfile {
+    sailCode: String!
+    sailDate: String!
+    shipName: String!
+    shipCode: String!
+    currentBookings: Int!
+    currentGuests: Int!
+    bookingDataPoints: [BookingDataPoint!]!
+    bookingVelocity: Float!
+    cancellationRate: Float!
+    daysUntilSailing: Int
+  }
+
+  type ComparisonMetrics {
+    bookingsDifference: Int!
+    bookingsPercentageChange: Float!
+    guestsDifference: Int!
+    guestsPercentageChange: Float!
+    velocityDifference: Float!
+    velocityPercentageChange: Float!
+  }
+
+  type YearOverYearComparison {
+    currentYear: BookingProfile!
+    previousYear: BookingProfile
+    comparison: ComparisonMetrics
+  }
+
   input ReservationFilters {
     sail_code: String
     ship: String
@@ -361,6 +399,10 @@ export const typeDefs = `#graphql
     kpis(userRole: UserRole): [KPI!]!
     exceptions(userRole: UserRole): [Exception!]!
     
+    # Booking Profile
+    bookingProfile(sailCode: String!): BookingProfile
+    bookingProfileYearOverYear(sailCode: String!, previousYearSailCode: String): YearOverYearComparison
+    
     # Legacy queries (for backward compatibility)
     books: [Book!]!
   }
@@ -384,6 +426,18 @@ export const typeDefs = `#graphql
     createFocusGroup(groupData: FocusGroupInput!): FocusGroup!
     updateFocusGroup(groupId: ID!, updateData: FocusGroupInput!): FocusGroup!
     deleteFocusGroup(groupId: ID!): Boolean!
+    
+    # Data Sync
+    syncTable(tableName: String!, dataset: String, forceFullSync: Boolean): SyncResult!
+  }
+
+  type SyncResult {
+    success: Boolean!
+    tableName: String!
+    message: String!
+    recordsProcessed: Int
+    duration: Int
+    error: String
   }
 
   # Subscriptions (for real-time updates)

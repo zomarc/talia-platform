@@ -381,6 +381,20 @@ export const FOCUS_MUTATIONS = {
         updatedAt
       }
     }
+  `,
+
+  // Sync table
+  SYNC_TABLE: gql`
+    mutation SyncTable($tableName: String!, $dataset: String, $forceFullSync: Boolean) {
+      syncTable(tableName: $tableName, dataset: $dataset, forceFullSync: $forceFullSync) {
+        success
+        tableName
+        message
+        recordsProcessed
+        duration
+        error
+      }
+    }
   `
 };
 

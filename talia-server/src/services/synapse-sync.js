@@ -317,18 +317,44 @@ class SynapseSyncService {
 
       case 'reservations':
         return data.map(row => ({
-          res_id: row.Res_ID,
-          res_status: row.Res_Status,
-          pax_status: row.Pax_Status,
-          ship: row.Ship,
-          sail_code: row.Sail_code,
-          sail_from_date: row.Sail_From_Date,
-          sail_to_date: row.Sail_To_Date,
-          agency_id: row.Agency_ID,
-          cabin_category: row.Cabin_Category,
-          guest_count: row.Guest_Count,
-          gross_selling_fare: row.GrossSellingFare,
-          net_selling_fare: row.NetSellingFare,
+          res_id: row.RES_ID,
+          res_status: row.RES_STATUS,
+          source_code: row.SOURCE_CODE || null,
+          res_probability: row.PROBABILITY || null,
+          pax_type: null, // Not available in RES_HEADER
+          pax_status: null, // Not available in RES_HEADER
+          ship: row.SHIP_CODE || null,
+          sail_code: null, // May need to derive from SAIL_DATE_FROM or join with master_sail
+          sail_duration: null, // May need to calculate from SAIL_DATE_FROM and SAIL_DATE_TO
+          sail_from_date: row.SAIL_DATE_FROM ? new Date(row.SAIL_DATE_FROM).toISOString().split('T')[0] : null,
+          sail_to_date: row.SAIL_DATE_TO ? new Date(row.SAIL_DATE_TO).toISOString().split('T')[0] : null,
+          agency_id: row.AGENCY_ID || null,
+          sec_agency_id: row.SEC_AGENCY_ID || null,
+          agency_channel: null, // Not available in RES_HEADER
+          agency_country_code: null, // Not available in RES_HEADER
+          agency_market: null, // Not available in RES_HEADER
+          cabin_type: null, // Not available in RES_HEADER
+          cabin_category: row.CABIN_CATEGORY || null,
+          ticket_type: null, // Not available in RES_HEADER
+          promo_code: null, // Not available in RES_HEADER
+          currency: row.CURRENCY_CODE || null,
+          currency_rate: row.CURRENCY_RATE || null,
+          guest_count: row.RES_GUEST_COUNT || null,
+          foc_guest_count: null, // Not available in RES_HEADER
+          gross_published_fare: null, // Not available in RES_HEADER (may be in SNAPSHOT)
+          gross_selling_fare: null, // Not available in RES_HEADER (may be in SNAPSHOT)
+          net_selling_fare: null, // Not available in RES_HEADER (may be in SNAPSHOT)
+          cruise_fare_comm: null, // Not available in RES_HEADER (may be in SNAPSHOT)
+          published_discount: null, // Not available in RES_HEADER
+          promotional_discounts: null, // Not available in RES_HEADER
+          total_discounts: null, // Not available in RES_HEADER
+          gross_ticket_revenue: null, // Not available in RES_HEADER (may be in SNAPSHOT)
+          net_ticket_revenue: null, // Not available in RES_HEADER (may be in SNAPSHOT)
+          net_invoice_revenue: null, // Not available in RES_HEADER (may be in SNAPSHOT)
+          gross_ticket_revenue_eur: null, // Not available in RES_HEADER
+          net_ticket_revenue_eur: null, // Not available in RES_HEADER
+          net_invoice_revenue_eur: null, // Not available in RES_HEADER
+          total_discounts_eur: null, // Not available in RES_HEADER
           created_at: currentTime
         }));
 
@@ -446,6 +472,40 @@ class SynapseSyncService {
     }
   }
 
+  /**
+   * Update sync metadata for direct tables
+   */
+  async updateSyncMetadata(tableName, recordsProcessed, durationMs) {
+    try {
+      console.log(`📝 Updating sync metadata for ${tableName}: records=${recordsProcessed}, duration=${durationMs}ms`);
+      const now = new Date();
+      const today = now.toISOString().split('T')[0]; // YYYY-MM-DD format for date
+      
+      const { data, error } = await supabaseDataService.client
+        .from('sync_metadata')
+        .upsert({
+          sync_type: tableName,
+          last_processed_date: today, // Required field - use today's date for direct tables
+          records_processed: recordsProcessed,
+          duration_ms: durationMs,
+          last_sync_at: now.toISOString(),
+          updated_at: now.toISOString()
+        }, {
+          onConflict: 'sync_type'
+        });
+
+      if (error) {
+        console.error(`❌ Failed to update sync metadata for ${tableName}:`, error);
+        console.error(`   Error details:`, JSON.stringify(error, null, 2));
+      } else {
+        console.log(`✅ Updated sync metadata for ${tableName} - data:`, data);
+      }
+    } catch (error) {
+      console.error(`❌ Error updating sync metadata for ${tableName}:`, error);
+      console.error(`   Stack:`, error.stack);
+    }
+  }
+
   async syncSmallTable(runtime) {
     const startTime = Date.now();
     let pool = null;
@@ -459,11 +519,13 @@ class SynapseSyncService {
 
       if (rawData.length === 0) {
         console.log(`⚠️  No data found for ${runtime.tableName} with current constraints`);
+        const duration = Date.now() - startTime;
+        await this.updateSyncMetadata(runtime.targetTable, 0, duration);
         return {
           tableName: runtime.tableName,
           success: true,
           recordsProcessed: 0,
-          duration: Date.now() - startTime,
+          duration,
           message: 'No data found with current constraints'
         };
       }
@@ -480,6 +542,9 @@ class SynapseSyncService {
       const duration = Date.now() - startTime;
       console.log(`✅ Sync completed for ${runtime.tableName} in ${duration}ms`);
 
+      // Update sync metadata
+      await this.updateSyncMetadata(runtime.targetTable, transformedData.length, duration);
+
       return {
         tableName: runtime.tableName,
         success: true,
@@ -490,11 +555,14 @@ class SynapseSyncService {
 
     } catch (error) {
       console.error(`❌ Sync failed for ${runtime.tableName}:`, error.message);
+      const duration = Date.now() - startTime;
+      // Still try to update metadata even on failure
+      await this.updateSyncMetadata(runtime.targetTable, 0, duration);
       return {
         tableName: runtime.tableName,
         success: false,
         recordsProcessed: 0,
-        duration: Date.now() - startTime,
+        duration,
         error: error.message
       };
     } finally {
@@ -546,6 +614,9 @@ class SynapseSyncService {
       console.log(`✅ Sync completed for ${runtime.tableName} in ${duration}ms`);
       console.log(`📊 Total records processed: ${totalProcessed.toLocaleString()}`);
 
+      // Update sync metadata
+      await this.updateSyncMetadata(runtime.targetTable, totalProcessed, duration);
+
       return {
         tableName: runtime.tableName,
         success: true,
@@ -556,11 +627,14 @@ class SynapseSyncService {
 
     } catch (error) {
       console.error(`❌ Sync failed for ${runtime.tableName}:`, error.message);
+      const duration = Date.now() - startTime;
+      // Still try to update metadata even on failure
+      await this.updateSyncMetadata(runtime.targetTable, totalProcessed, duration);
       return {
         tableName: runtime.tableName,
         success: false,
         recordsProcessed: totalProcessed,
-        duration: Date.now() - startTime,
+        duration,
         error: error.message
       };
     } finally {

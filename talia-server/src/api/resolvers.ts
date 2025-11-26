@@ -2,6 +2,7 @@
 
 import { sampleData } from './schema.js';
 import { supabaseDataService } from '../services/supabase.js';
+import { synapseSyncService } from '../services/synapse-sync.js';
 
 // Helper function to check user permissions
 const hasPermission = (userRole: string, requiredRole: string): boolean => {
@@ -385,6 +386,62 @@ export const resolvers = {
       }
     },
 
+    // Booking Profile
+    bookingProfile: async (parent: any, args: any) => {
+      const { sailCode } = args;
+      try {
+        const profile = await supabaseDataService.getBookingProfile(sailCode);
+        console.log(`[resolver] bookingProfile for ${sailCode}: ${profile?.bookingDataPoints?.length || 0} data points`);
+        return profile;
+      } catch (error) {
+        console.error('Error fetching booking profile:', error);
+        throw error;
+      }
+    },
+
+    bookingProfileYearOverYear: async (parent: any, args: any) => {
+      const { sailCode, previousYearSailCode } = args;
+      try {
+        const currentYear = await supabaseDataService.getBookingProfile(sailCode);
+        let previousYear = null;
+        let comparison = null;
+
+        if (previousYearSailCode) {
+          try {
+            previousYear = await supabaseDataService.getBookingProfile(previousYearSailCode);
+            
+            // Calculate comparison metrics
+            comparison = {
+              bookingsDifference: currentYear.currentBookings - previousYear.currentBookings,
+              bookingsPercentageChange: previousYear.currentBookings > 0 
+                ? ((currentYear.currentBookings - previousYear.currentBookings) / previousYear.currentBookings) * 100 
+                : 0,
+              guestsDifference: currentYear.currentGuests - previousYear.currentGuests,
+              guestsPercentageChange: previousYear.currentGuests > 0
+                ? ((currentYear.currentGuests - previousYear.currentGuests) / previousYear.currentGuests) * 100
+                : 0,
+              velocityDifference: currentYear.bookingVelocity - previousYear.bookingVelocity,
+              velocityPercentageChange: previousYear.bookingVelocity > 0
+                ? ((currentYear.bookingVelocity - previousYear.bookingVelocity) / previousYear.bookingVelocity) * 100
+                : 0
+            };
+          } catch (error) {
+            console.warn('Could not fetch previous year data:', error);
+            // Continue without previous year data
+          }
+        }
+
+        return {
+          currentYear,
+          previousYear,
+          comparison
+        };
+      } catch (error) {
+        console.error('Error fetching year-over-year comparison:', error);
+        throw error;
+      }
+    },
+
     // Legacy queries (for backward compatibility)
     books: () => {
       return [
@@ -614,6 +671,62 @@ export const resolvers = {
       } catch (error) {
         console.error('Error deleting focus group:', error);
         throw new Error(`Failed to delete focus group: ${error.message}`);
+      }
+    },
+
+    syncTable: async (parent: any, args: any) => {
+      const { tableName, dataset, forceFullSync } = args;
+      
+      try {
+        // Map Supabase table names to sync config table names
+        const tableNameMap: Record<string, string> = {
+          'ship': 'ships',
+          'cabin_availability': 'cabinAvailability',
+          'reservation': 'reservations',
+          'master_sail': 'masterSail',
+          'sail_by_cabin_occupancy': 'sailByCabinOccupancy',
+          'reservation_changes': 'reservationChanges',
+          'reservation_current_state': 'reservationChanges', // Uses same sync
+          'published_rates': 'publishedRates',
+          'published_rates_changes': 'publishedRates', // Uses same sync
+          'published_rates_current_state': 'publishedRates', // Uses same sync
+          'competitor': 'competitor',
+          'competitor_current_state': 'competitor' // Uses same sync
+        };
+
+        const syncTableName = tableNameMap[tableName] || tableName;
+        
+        if (!tableNameMap[tableName]) {
+          return {
+            success: false,
+            tableName,
+            message: `Table "${tableName}" does not have a sync configuration`,
+            recordsProcessed: null,
+            duration: null,
+            error: `No sync configuration found for table: ${tableName}`
+          };
+        }
+
+        const result = await synapseSyncService.syncTable(syncTableName, dataset || undefined, { forceFullSync: forceFullSync || false });
+
+        return {
+          success: result.success,
+          tableName,
+          message: result.message || 'Sync completed',
+          recordsProcessed: result.recordsProcessed || null,
+          duration: result.duration || null,
+          error: result.error || null
+        };
+      } catch (error: any) {
+        console.error('Error syncing table:', error);
+        return {
+          success: false,
+          tableName,
+          message: `Sync failed: ${error.message}`,
+          recordsProcessed: null,
+          duration: null,
+          error: error.message
+        };
       }
     }
   },

@@ -10,31 +10,31 @@ export const tableSources = {
     source: 'dwh.Dim_Ship',
     type: 'direct',
     dateColumns: [], // No date columns for ship table
-    syncType: null // Ships don't have sync metadata
+    syncType: 'ship' // Use table name as syncType for sync_metadata lookup
   },
   cabin_availability: {
     source: 'dwh.Dim_Cabin_Availability',
     type: 'direct',
     dateColumns: ['snapshot_date'],
-    syncType: null
+    syncType: 'cabin_availability'
   },
   reservation: {
-    source: 'dwh.Fact_Reservation_History',
+    source: 'stg.RES_HEADER',
     type: 'direct',
     dateColumns: ['sail_from_date', 'sail_to_date'],
-    syncType: null
+    syncType: 'reservation'
   },
   master_sail: {
     source: 'dwh.Dim_Master_Sail',
     type: 'direct',
     dateColumns: ['sail_date_from', 'sail_date_to', 'vacation_date', 'master_voyage_departure_date'],
-    syncType: null
+    syncType: 'master_sail'
   },
   sail_by_cabin_occupancy: {
     source: 'dwh.Dim_Sail_By_Cabin_Occupancy',
     type: 'direct',
     dateColumns: ['sail_date_from', 'sail_itinerary_date'],
-    syncType: null
+    syncType: 'sail_by_cabin_occupancy'
   },
   reservation_changes: {
     source: 'fou.Fact_Reservation_daily',
@@ -144,4 +144,6 @@ export const getSyncedTables = () => {
 };
 
 export default tableSources;
+
+
 

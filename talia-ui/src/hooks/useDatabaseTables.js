@@ -195,10 +195,12 @@ export const useDatabaseTables = () => {
         const syncStatus = calculateSyncStatus(tableConfig, metadata);
         const dataStatus = calculateDataStatus(rowCount, dateRange);
         
-        // Get last sync time
+        // Get last sync time and duration
         let lastSync = null;
+        let syncDuration = null;
         if (tableConfig.syncType && metadata[tableConfig.syncType]) {
           lastSync = metadata[tableConfig.syncType].last_sync_at;
+          syncDuration = metadata[tableConfig.syncType].duration_ms;
         }
 
         return {
@@ -208,6 +210,7 @@ export const useDatabaseTables = () => {
           rowCount,
           dateRange,
           lastSync,
+          syncDuration,
           syncStatus,
           dataStatus,
           status: `${syncStatus} • ${dataStatus}`,

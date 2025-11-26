@@ -2,9 +2,12 @@
  * Published Rates Component
  * Based on TablePanel structure with Tabulator for displaying published rates data
  * Loads data from local JSON file for demo purposes
+ * Uses centralized theme system via CSS variables
  */
 
 import React, { useRef, useEffect } from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
+import '../../styles/publishedRates.css';
 
 // CDN URLs for Tabulator
 const CDN = {
@@ -71,27 +74,8 @@ const SAIL_CLEAR_EVENT = 'talia:sail.clear';     // clear selection
 const PublishedRates = React.memo(() => {
   console.log('[LinkingEvent] [PublishedRates] Component mounted/rendered');
   
-  // Default theme values (same as Dashboard default theme)
-  const theme = {
-    colors: {
-      background: '#ffffff',
-      foreground: '#2b2b2b',
-      sidebar: '#f7f3ee',
-      sidebarBorder: '#e8dfd0',
-      sidebarHeader: '#f5efe6',
-      accent: '#b08d57',
-      accentHover: 'rgba(176, 141, 87, 0.6)',
-      accentLight: 'rgba(176, 141, 87, 0.3)',
-      textSecondary: '#6b6b6b',
-      textMuted: '#999',
-      border: '#e8dfd0',
-      hover: '#fff7ea',
-      selected: '#fdeacc'
-    }
-  };
-  const fontSize = 12;
-  const selectedFont = { value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' };
-  const spacingMode = 'default';
+  // Use centralized theme system
+  const { theme, themeColors, fontSize, selectedFont, spacingMode } = useTheme();
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const initializedRef = useRef(false);
@@ -228,11 +212,11 @@ const PublishedRates = React.memo(() => {
       </tr>`).join("");
       
       tableRef.current.innerHTML = `
-        <div style="padding:6px 8px;font-family:ui-sans-serif,system-ui;font-size:13px">
-          <div style="margin-bottom:6px;color:#a55">(Published Rates - Fallback table active)</div>
+        <div style="padding:6px 8px;font-family:${selectedFont.value};font-size:${fontSize}px;color:var(--theme-fg);background:var(--theme-bg)">
+          <div style="margin-bottom:6px;color:var(--theme-accent)">(Published Rates - Fallback table active)</div>
           <table style="width:100%; border-collapse:collapse">
-            <thead><tr>${headers.map(h=>`<th style="text-align:left;border-bottom:1px solid #e8dfd0;padding:4px 6px">${h}</th>`).join("")}</tr></thead>
-            <tbody>${rows}</tbody>
+            <thead><tr>${headers.map(h=>`<th style="text-align:left;border-bottom:1px solid var(--theme-border);padding:4px 6px;color:var(--theme-fg);background:var(--theme-sidebar-header)">${h}</th>`).join("")}</tr></thead>
+            <tbody style="color:var(--theme-fg)">${rows}</tbody>
           </table>
         </div>`;
       
@@ -563,13 +547,14 @@ const PublishedRates = React.memo(() => {
       height: "100%", 
       width: "100%", 
       position: "relative",
-      background: theme.colors.background,
-      color: theme.colors.foreground,
+      background: "var(--theme-bg)",
+      color: "var(--theme-fg)",
       fontSize: `${fontSize}px`,
       fontFamily: selectedFont.value
     }}>
       <div 
         ref={tableRef} 
+        className="published-rates-table"
         style={{ 
           height: "100%", 
           width: "100%",

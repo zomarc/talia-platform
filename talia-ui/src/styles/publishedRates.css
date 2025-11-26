@@ -1,0 +1,97 @@
+/**
+ * Published Rates Component Styles
+ * Uses CSS variables from centralized theme system
+ * Follows the same pattern as DataManagementPage
+ */
+
+.published-rates-table {
+  /* Tabulator table will inherit theme variables */
+}
+
+/* Override Tabulator styles to use theme variables */
+.published-rates-table .tabulator {
+  background-color: var(--theme-bg);
+  color: var(--theme-fg);
+  border-color: var(--theme-border);
+}
+
+.published-rates-table .tabulator-header {
+  background-color: var(--theme-sidebar-header);
+  color: var(--theme-fg);
+  border-bottom-color: var(--theme-border);
+}
+
+.published-rates-table .tabulator-header .tabulator-col {
+  background-color: var(--theme-sidebar-header);
+  color: var(--theme-fg);
+  border-right-color: var(--theme-border);
+}
+
+.published-rates-table .tabulator-header .tabulator-col-content {
+  color: var(--theme-fg);
+}
+
+.published-rates-table .tabulator-tableHolder {
+  background-color: var(--theme-bg);
+}
+
+.published-rates-table .tabulator-row {
+  background-color: var(--theme-table-row-even);
+  color: var(--theme-fg);
+  border-bottom-color: var(--theme-border);
+  transition: background-color 0.15s ease;
+}
+
+.published-rates-table .tabulator-row:nth-child(even) {
+  background-color: var(--theme-table-row-even);
+}
+
+.published-rates-table .tabulator-row:nth-child(odd) {
+  background-color: var(--theme-table-row-odd);
+}
+
+.published-rates-table .tabulator-row:hover {
+  background-color: var(--theme-table-row-hover) !important;
+}
+
+.published-rates-table .tabulator-row.tabulator-selected {
+  background-color: var(--theme-table-row-selected) !important;
+}
+
+.published-rates-table .tabulator-row.tabulator-selected:hover {
+  background-color: var(--theme-table-row-selected-hover) !important;
+}
+
+.published-rates-table .tabulator-cell {
+  color: var(--theme-fg);
+  border-right-color: var(--theme-border);
+  background-color: transparent; /* Let row background show through */
+}
+
+.published-rates-table .tabulator-cell input,
+.published-rates-table .tabulator-cell select {
+  background-color: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  border-color: var(--theme-border);
+}
+
+.published-rates-table .tabulator-cell input:focus,
+.published-rates-table .tabulator-cell select:focus {
+  border-color: var(--theme-accent);
+  outline-color: var(--theme-accent);
+}
+
+/* Filter input styling */
+.published-rates-table .tabulator-header-filter input,
+.published-rates-table .tabulator-header-filter select {
+  background-color: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  border-color: var(--theme-border);
+}
+
+.published-rates-table .tabulator-header-filter input:focus,
+.published-rates-table .tabulator-header-filter select:focus {
+  border-color: var(--theme-accent);
+  outline-color: var(--theme-accent);
+}
+

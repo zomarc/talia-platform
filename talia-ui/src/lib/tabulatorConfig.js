@@ -5,7 +5,7 @@
 
 // CDN URLs for Tabulator
 export const TABULATOR_CONFIG = {
-  css: 'https://unpkg.com/tabulator-tables@5.6.1/dist/css/tabulator.min.css',
+  css: 'https://unpkg.com/tabulator-tables@5.6.1/dist/css/tabulator_midnight.min.css',
   js: 'https://unpkg.com/tabulator-tables@5.6.1/dist/js/tabulator.min.js'
 };
 
@@ -104,7 +104,7 @@ export const DEFAULT_TABULATOR_OPTIONS = {
   fontSize: 12,
   headerHeight: 35,
   rowHeight: 32,
-  theme: 'default'
+  theme: 'midnight'
 };
 
 /**

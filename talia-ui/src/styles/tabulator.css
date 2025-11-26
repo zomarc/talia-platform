@@ -5,11 +5,15 @@
  * Components can override specific styles if needed.
  * 
  * This file is imported globally and applies theme to all Tabulator instances.
+ * IMPORTANT: This CSS must load AFTER Tabulator's default CSS to override it.
  */
 
 /* Base Tabulator styling using theme variables */
 /* Defaults to Dark Modern theme values for consistency */
 /* Background is transparent to allow glass container to show through */
+/* Using high specificity to override Tabulator's default styles */
+div.tabulator,
+.tabulator-table,
 .tabulator {
   background-color: transparent !important;
   color: var(--theme-fg, #e8e8f0) !important;
@@ -18,6 +22,9 @@
 }
 
 /* Header styling - matches Data Mode tables */
+/* High specificity to override Tabulator defaults */
+div.tabulator .tabulator-header,
+.tabulator .tabulator-header,
 .tabulator-header {
   background-color: var(--theme-glass, var(--theme-sidebar-header, rgba(255, 255, 255, 0.08))) !important;
   color: var(--theme-text-secondary, var(--theme-fg, rgba(232, 232, 240, 0.75))) !important;
@@ -28,6 +35,8 @@
   -webkit-backdrop-filter: blur(10px) !important;
 }
 
+div.tabulator .tabulator-header .tabulator-col,
+.tabulator .tabulator-header .tabulator-col,
 .tabulator-header .tabulator-col {
   background-color: var(--theme-glass, var(--theme-sidebar-header, rgba(255, 255, 255, 0.08))) !important;
   color: var(--theme-text-secondary, var(--theme-fg, rgba(232, 232, 240, 0.75))) !important;
@@ -56,6 +65,9 @@
 }
 
 /* Row styling - matches Data Mode */
+/* High specificity to override Tabulator defaults */
+div.tabulator .tabulator-row,
+.tabulator .tabulator-row,
 .tabulator-row {
   background-color: var(--theme-table-row-even, transparent) !important;
   color: var(--theme-fg, #e8e8f0) !important;
@@ -88,6 +100,9 @@
 }
 
 /* Cell styling - matches Data Mode */
+/* High specificity to override Tabulator defaults */
+div.tabulator .tabulator-cell,
+.tabulator .tabulator-cell,
 .tabulator-cell {
   color: var(--theme-fg, #e8e8f0) !important;
   border-right-color: var(--theme-glass-border, var(--theme-border, rgba(255, 255, 255, 0.15))) !important;

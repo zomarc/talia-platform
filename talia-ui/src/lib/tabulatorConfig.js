@@ -49,97 +49,11 @@ export const loadTabulatorJs = (url = TABULATOR_CONFIG.js) => {
 };
 
 /**
- * Inject our custom Tabulator CSS after Tabulator's default CSS loads
- * This ensures our styles override Tabulator's defaults
- */
-const injectCustomTabulatorCss = () => {
-  // Check if our CSS is already injected
-  if (document.getElementById('talia-tabulator-custom-css')) {
-    return;
-  }
-
-  // Create a style element with our custom CSS
-  const style = document.createElement('style');
-  style.id = 'talia-tabulator-custom-css';
-  style.textContent = `
-    /* High specificity selectors to override Tabulator defaults */
-    div.tabulator,
-    .tabulator-table,
-    .tabulator {
-      background-color: transparent !important;
-      color: var(--theme-fg, #e8e8f0) !important;
-      border-color: transparent !important;
-      font-family: var(--theme-font-family, 'Inter', sans-serif) !important;
-    }
-
-    div.tabulator .tabulator-header,
-    .tabulator .tabulator-header,
-    .tabulator-header {
-      background-color: var(--theme-glass, rgba(255, 255, 255, 0.08)) !important;
-      color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
-      border-bottom-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15)) !important;
-      font-weight: 600 !important;
-      font-size: 10px !important;
-      backdrop-filter: blur(10px) !important;
-      -webkit-backdrop-filter: blur(10px) !important;
-    }
-
-    div.tabulator .tabulator-header .tabulator-col,
-    .tabulator .tabulator-header .tabulator-col,
-    .tabulator-header .tabulator-col {
-      background-color: var(--theme-glass, rgba(255, 255, 255, 0.08)) !important;
-      color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
-      border-right-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15)) !important;
-      font-weight: 600 !important;
-      font-size: 10px !important;
-      padding: 6px 8px !important;
-      height: 28px !important;
-      line-height: 16px !important;
-    }
-
-    div.tabulator .tabulator-row,
-    .tabulator .tabulator-row,
-    .tabulator-row {
-      background-color: var(--theme-table-row-even, transparent) !important;
-      color: var(--theme-fg, #e8e8f0) !important;
-      border-bottom-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15)) !important;
-      font-size: 10px !important;
-      height: 24px !important;
-      min-height: 24px !important;
-      max-height: 24px !important;
-    }
-
-    div.tabulator .tabulator-cell,
-    .tabulator .tabulator-cell,
-    .tabulator-cell {
-      color: var(--theme-fg, #e8e8f0) !important;
-      border-right-color: var(--theme-glass-border, rgba(255, 255, 255, 0.15)) !important;
-      background-color: transparent !important;
-      padding: 6px 8px !important;
-      font-size: 10px !important;
-      line-height: 12px !important;
-      vertical-align: middle !important;
-    }
-
-    div.tabulator .tabulator-tableHolder,
-    .tabulator .tabulator-tableHolder,
-    .tabulator-tableHolder {
-      background-color: transparent !important;
-    }
-  `;
-  
-  // Append to head AFTER Tabulator's CSS
-  document.head.appendChild(style);
-};
-
-/**
  * Initialize Tabulator (loads both CSS and JS)
  * @returns {Promise<Tabulator>} Resolves with Tabulator constructor
  */
 export const initTabulator = async () => {
   await loadTabulatorCss();
-  // Inject our custom CSS AFTER Tabulator's CSS loads
-  injectCustomTabulatorCss();
   const Tabulator = await loadTabulatorJs();
   return Tabulator;
 };

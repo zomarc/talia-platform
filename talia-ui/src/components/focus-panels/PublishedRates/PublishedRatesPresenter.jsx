@@ -202,21 +202,22 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
         instanceRef.current = new Tabulator(tableRef.current, {
           data: data,
           columns: columns,
-          layout: "fitColumns", // Tabulator handles all column sizing automatically!
+          layout: "fitColumns",
           initialSort: [
             { column: "SNAPSHOT_DATE", dir: "desc" },
             { column: "DEPARTURE_DATE", dir: "asc" }
           ],
           height: "100%",
-          selectable: 1, // Enable row selection
-          resizableColumns: true, // Allow column resizing
-          movableColumns: true, // Allow column reordering
-          headerFilterLiveFilter: true, // Live filtering
-          headerFilterLiveFilterDelay: 300, // 300ms delay for performance
-          pagination: false, // Disable pagination - show all data
-          headerHeight: 28, // Fixed to match Data Mode (10px font + 6px padding top/bottom = ~28px)
-          rowHeight: 24, // Fixed to match Data Mode (10px font + 6px padding top/bottom = ~24px)
-          theme: "default" // Use default theme, CSS variables will override
+          selectableRows: 1, // Enable row selection (correct property name)
+          resizableColumns: true,
+          movableColumns: true,
+          headerFilterLiveFilter: true,
+          headerFilterLiveFilterDelay: 300,
+          pagination: false,
+          headerHeight: 28, // Fixed to match Data Mode
+          rowHeight: 24, // Fixed to match Data Mode
+          fontSize: 10, // Use Tabulator's fontSize option
+          theme: "default" // Use default theme
         });
 
         // Register event listeners using Tabulator's .on() method

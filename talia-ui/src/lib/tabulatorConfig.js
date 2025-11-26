@@ -80,28 +80,29 @@ const injectGlobalTabulatorCss = () => {
     /* 
      * STEP 2: Style table header to match Data Mode
      * Data Mode header uses: background rgba(255, 255, 255, 0.08) with backdrop blur(10px)
+     * Font size and weight from theme CSS variables (10px, 600)
      * This matches the table header row style in Data Management screen (theme.colors.glass)
      */
     .tabulator-header {
       background: var(--theme-glass, rgba(255, 255, 255, 0.08)) !important;
       backdrop-filter: blur(10px) !important;
       -webkit-backdrop-filter: blur(10px) !important;
-      font-size: 10px !important;
-      font-weight: 600 !important;
+      font-size: var(--theme-table-header-font-size, 10px) !important;
+      font-weight: var(--theme-table-header-font-weight, 600) !important;
       color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
       border-bottom: 1px solid var(--theme-glass-border, rgba(255, 255, 255, 0.15)) !important;
     }
 
     .tabulator-header .tabulator-col {
       padding: 6px 8px !important;
-      font-size: 10px !important;
-      font-weight: 600 !important;
+      font-size: var(--theme-table-header-font-size, 10px) !important;
+      font-weight: var(--theme-table-header-font-weight, 600) !important;
       color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
       background: transparent !important;
     }
 
     .tabulator-header .tabulator-col-content {
-      font-size: 10px !important;
+      font-size: var(--theme-table-header-font-size, 10px) !important;
       color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
     }
 
@@ -115,11 +116,12 @@ const injectGlobalTabulatorCss = () => {
 
     /* 
      * STEP 4: Cell styling - matches Data Mode exactly
-     * Font: 10px monospace, padding 6px 8px, foreground color
+     * Font size and family from theme CSS variables (10px monospace)
+     * Padding 6px 8px, foreground color from theme
      */
     .tabulator-cell {
-      font-size: 10px !important;
-      font-family: monospace !important;
+      font-size: var(--theme-table-font-size, 10px) !important;
+      font-family: var(--theme-table-font-family, monospace) !important;
       padding: 6px 8px !important;
       color: var(--theme-fg, #e8e8f0) !important;
       background: transparent !important;

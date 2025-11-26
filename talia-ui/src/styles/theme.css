@@ -53,6 +53,17 @@
   --theme-tabulator-filter-bg: #151528;
   --theme-tabulator-filter-border: rgba(255, 255, 255, 0.15);
   --theme-tabulator-sort-active: #5b9bd5;
+  
+  /* Font settings - set dynamically by ThemeContext */
+  --theme-font-size: 12px;
+  --theme-font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --theme-font-family-monospace: monospace;
+  
+  /* Table-specific font settings - Data Mode uses 10px monospace */
+  --theme-table-font-size: 10px;
+  --theme-table-font-family: monospace;
+  --theme-table-header-font-size: 10px;
+  --theme-table-header-font-weight: 600;
 }
 
 /* Apply theme background to body */

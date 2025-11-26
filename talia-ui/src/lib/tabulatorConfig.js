@@ -62,12 +62,34 @@ const injectGlobalTabulatorCss = () => {
   const style = document.createElement('style');
   style.id = 'talia-tabulator-global-css';
   style.textContent = `
-    /* Global Tabulator Styling - matches Data Mode */
-    /* Header styling */
+    /* 
+     * Global Tabulator Styling - matches Data Management screen exactly
+     * 
+     * STEP 1: Make table container transparent
+     * The Data Management screen uses a glass container (rgba(255, 255, 255, 0.08))
+     * with backdrop blur. The table itself must be transparent to show this through.
+     */
+    .tabulator {
+      background: transparent !important;
+    }
+
+    .tabulator-tableHolder {
+      background: transparent !important;
+    }
+
+    /* 
+     * STEP 2: Style table header to match Data Mode
+     * Data Mode header has: background rgba(0, 0, 0, 0.2) with backdrop blur
+     * This matches the section header style in Data Management screen
+     */
     .tabulator-header {
+      background: rgba(0, 0, 0, 0.2) !important;
+      backdrop-filter: blur(10px) !important;
+      -webkit-backdrop-filter: blur(10px) !important;
       font-size: 10px !important;
       font-weight: 600 !important;
       color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
+      border-bottom: 1px solid var(--theme-glass-border, rgba(255, 255, 255, 0.15)) !important;
     }
 
     .tabulator-header .tabulator-col {
@@ -75,6 +97,7 @@ const injectGlobalTabulatorCss = () => {
       font-size: 10px !important;
       font-weight: 600 !important;
       color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
+      background: transparent !important;
     }
 
     .tabulator-header .tabulator-col-content {
@@ -82,28 +105,54 @@ const injectGlobalTabulatorCss = () => {
       color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
     }
 
-    /* Cell styling */
+    /* 
+     * STEP 3: Style table body - transparent background
+     * The table body must be transparent so the glass container shows through
+     */
+    .tabulator-table {
+      background: transparent !important;
+    }
+
+    /* 
+     * STEP 4: Cell styling - matches Data Mode exactly
+     * Font: 10px monospace, padding 6px 8px, foreground color
+     */
     .tabulator-cell {
       font-size: 10px !important;
       font-family: monospace !important;
       padding: 6px 8px !important;
       color: var(--theme-fg, #e8e8f0) !important;
+      background: transparent !important;
     }
 
-    /* Row styling - alternating colors */
+    /* 
+     * STEP 5: Row backgrounds - match Data Mode alternating colors exactly
+     * Even rows: transparent (matches Data Mode table-row-even)
+     * Odd rows: rgba(0, 0, 0, 0.2) (matches Data Mode table-row-odd)
+     * These use CSS variables from theme system for consistency
+     */
     .tabulator-row {
       border-bottom: 1px solid var(--theme-glass-border, rgba(255, 255, 255, 0.15)) !important;
       transition: background-color 0.15s ease !important;
+      background: transparent !important;
     }
 
+    /* Even rows: transparent (same as Data Mode) */
     .tabulator-row:nth-child(even) {
       background-color: var(--theme-table-row-even, transparent) !important;
     }
 
+    /* Odd rows: rgba(0, 0, 0, 0.2) (same as Data Mode) */
     .tabulator-row:nth-child(odd) {
       background-color: var(--theme-table-row-odd, rgba(0, 0, 0, 0.2)) !important;
     }
 
+    /* 
+     * STEP 6: Hover and selected states - match Data Mode exactly
+     * Hover: rgba(66, 133, 244, 0.5) (blue tint)
+     * Selected: rgba(66, 133, 244, 0.25) (lighter blue)
+     * Selected hover: rgba(66, 133, 244, 0.6) (darker blue)
+     */
     .tabulator-row:hover {
       background-color: var(--theme-table-row-hover, rgba(66, 133, 244, 0.5)) !important;
     }

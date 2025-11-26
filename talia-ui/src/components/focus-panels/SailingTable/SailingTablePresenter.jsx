@@ -306,37 +306,41 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
           fontSize: "10px",
           color: "var(--theme-fg, #e8e8f0)"
         }}>
-      {onRefresh && (
-        <div style={{
-          position: 'absolute',
-          top: '8px',
-          right: '8px',
-          zIndex: 10
-        }}>
-          <button
-            onClick={onRefresh}
-            style={{
-              padding: '6px 12px',
-              fontSize: '12px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              background: 'white',
-              fontWeight: '500'
-            }}
-          >
-            ↻ Refresh
-          </button>
+          {onRefresh && (
+            <div style={{
+              position: 'absolute',
+              top: '8px',
+              right: '8px',
+              zIndex: 10
+            }}>
+              <button
+                onClick={onRefresh}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '10px',
+                  border: '1px solid var(--theme-glass-border, rgba(255, 255, 255, 0.15))',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  background: 'var(--theme-bg-solid, #151528)',
+                  color: 'var(--theme-fg, #e8e8f0)',
+                  fontWeight: '500'
+                }}
+              >
+                ↻ Refresh
+              </button>
+            </div>
+          )}
+          <div 
+            ref={tableRef} 
+            style={{ 
+              height: "100%", 
+              width: "100%",
+              flex: 1,
+              overflow: "hidden"
+            }} 
+          />
         </div>
-      )}
-      <div 
-        ref={tableRef} 
-        style={{ 
-          height: "100%", 
-          width: "100%",
-          padding: '8px'
-        }} 
-      />
+      </div>
     </div>
   );
 };

@@ -56,7 +56,7 @@ export const componentRegistry = {
     description: 'Published rates table with Tabulator integration',
     props: {},
     dataRequirements: 'Loads data from local JSON or API',
-    filePath: 'src/components/focus-panels/PublishedRates.jsx'
+    filePath: 'src/components/focus-panels/PublishedRates/index.jsx'
   },
   OccupancyChart: {
     component: OccupancyChart,

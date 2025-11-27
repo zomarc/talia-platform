@@ -9,11 +9,82 @@ import TestPage from './components/TestPage.jsx'
 import DataManagementPage from './components/DataManagementPage.jsx'
 import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
+import { applyTheme, DEFAULT_THEME, themes } from './config/themes.js';
 
 // Apollo Client temporarily disabled during database restoration
 // TODO: Re-enable when database is restored
 // import { ApolloProvider } from '@apollo/client';
 // import apolloClient from './lib/apolloClient.js';
+
+// Apply theme IMMEDIATELY before React renders (ensures CSS variables are set before first render)
+// This fixes the issue where theme doesn't load on first page load
+try {
+  let themeToApply = DEFAULT_THEME;
+  const saved = localStorage.getItem('talia-theme');
+  if (saved && themes[saved]) {
+    themeToApply = saved;
+  } else {
+    // Check legacy localStorage key
+    const legacySaved = localStorage.getItem("taliaLayout");
+    if (legacySaved) {
+      try {
+        const parsed = JSON.parse(legacySaved);
+        const legacyTheme = parsed.fontSettings?.theme;
+        if (legacyTheme && themes[legacyTheme]) {
+          themeToApply = legacyTheme;
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
+  }
+  console.log('[main.jsx] Applying theme BEFORE React render:', themeToApply);
+  applyTheme(themeToApply);
+  
+  // Also set font CSS variables synchronously before React renders
+  const root = document.documentElement;
+  let fontSize = 12;
+  let fontFamily = 'Inter';
+  try {
+    const saved = localStorage.getItem("taliaLayout");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      fontSize = parsed.fontSettings?.fontSize || 12;
+      fontFamily = parsed.fontSettings?.fontFamily || 'Inter';
+    }
+  } catch (e) {
+    // Use defaults
+  }
+  
+  // Set font CSS variables
+  root.style.setProperty('--theme-font-size', `${fontSize}px`);
+  const FONT_FAMILIES = {
+    'Inter': { value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
+    'Roboto': { value: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+    'Source Sans Pro': { value: '"Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+    'Arial': { value: 'Arial, Helvetica, sans-serif' },
+    'Verdana': { value: 'Verdana, Geneva, sans-serif' },
+    'Georgia': { value: 'Georgia, "Times New Roman", serif' }
+  };
+  const selectedFont = FONT_FAMILIES[fontFamily] || FONT_FAMILIES['Inter'];
+  root.style.setProperty('--theme-font-family', selectedFont.value);
+  root.style.setProperty('--theme-font-family-monospace', 'monospace');
+  
+  // Table font settings
+  const tableFontSize = Math.max(8, Math.round((fontSize / 12) * 10));
+  root.style.setProperty('--theme-table-font-size', `${tableFontSize}px`);
+  root.style.setProperty('--theme-table-font-family', selectedFont.value);
+  root.style.setProperty('--theme-table-header-font-size', `${tableFontSize}px`);
+  root.style.setProperty('--theme-table-header-font-weight', '600');
+  root.style.setProperty('--theme-table-header-height', '28px');
+  root.style.setProperty('--theme-table-row-height', '24px');
+  
+  console.log('[main.jsx] CSS variables set BEFORE React render');
+} catch (e) {
+  console.warn('[main.jsx] Error applying theme before render:', e);
+  // Fallback: apply default theme
+  applyTheme(DEFAULT_THEME);
+}
 
 // Debug logging for main entry point
 console.log('🚀 main.jsx loading');

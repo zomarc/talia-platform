@@ -89,9 +89,6 @@ const SailingByCabinCategory = React.memo(() => {
       selected: '#fdeacc'
     }
   };
-  const fontSize = 12;
-  const selectedFont = { value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' };
-  const spacingMode = 'default';
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const initializedRef = useRef(false);
@@ -451,11 +448,6 @@ const SailingByCabinCategory = React.memo(() => {
           selectable: 1,                // single-select only (native Tabulator method)
           headerFilterLiveFilter: true, // live filtering as you type
           headerFilterLiveFilterDelay: 300, // delay for live filtering
-          // Theme and font configuration
-          theme: "default", // Use default theme, we'll override with CSS
-          fontSize: fontSize,
-          headerHeight: spacingMode === 'compact' ? Math.max(28, fontSize + 6) : Math.max(35, fontSize + 12),
-          rowHeight: spacingMode === 'compact' ? Math.max(24, fontSize + 4) : Math.max(32, fontSize + 8),
           rowClick: (e, row) => {
             try { row?.select?.(); } catch {}
           },
@@ -469,14 +461,6 @@ const SailingByCabinCategory = React.memo(() => {
               emitSelect(null);
             }
           },
-          // Font and theme styling
-          rowFormatter: (row) => {
-            const element = row.getElement();
-            if (element) {
-              element.style.fontSize = `${fontSize}px`;
-              element.style.fontFamily = selectedFont.value;
-            }
-          }
         });
 
         // Listen for tableBuilt event
@@ -566,27 +550,7 @@ const SailingByCabinCategory = React.memo(() => {
   // Note: Font changes are handled via CSS and don't require Tabulator updates
   // This prevents interference with Dockview's drag and drop system
 
-  return (
-    <div style={{ 
-      height: "100%", 
-      width: "100%", 
-      position: "relative",
-      background: theme.colors.background,
-      color: theme.colors.foreground,
-      fontSize: `${fontSize}px`,
-      fontFamily: selectedFont.value
-    }}>
-      <div 
-        ref={tableRef} 
-        style={{ 
-          height: "100%", 
-          width: "100%",
-          fontSize: `${fontSize}px`,
-          fontFamily: selectedFont.value
-        }} 
-      />
-    </div>
-  );
+  return <div ref={tableRef} style={{ width: "100%", height: "100%" }} />;
 });
 
 SailingByCabinCategory.displayName = 'SailingByCabinCategory';

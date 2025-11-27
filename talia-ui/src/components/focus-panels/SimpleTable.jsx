@@ -41,9 +41,6 @@ const SailingByCabinCategory = React.memo(() => {
       selected: '#fdeacc'
     }
   };
-  const fontSize = 12;
-  const selectedFont = { value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' };
-  const spacingMode = 'default';
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const initializedRef = useRef(false);
@@ -305,14 +302,6 @@ const SailingByCabinCategory = React.memo(() => {
               emitSelect(null);
             }
           },
-          // Font and theme styling
-          rowFormatter: (row) => {
-            const element = row.getElement();
-            if (element) {
-              element.style.fontSize = `${fontSize}px`;
-              element.style.fontFamily = selectedFont.value;
-            }
-          }
         });
 
         // Listen for tableBuilt event
@@ -402,27 +391,7 @@ const SailingByCabinCategory = React.memo(() => {
   // Note: Font changes are handled via CSS and don't require Tabulator updates
   // This prevents interference with Dockview's drag and drop system
 
-  return (
-    <div style={{ 
-      height: "100%", 
-      width: "100%", 
-      position: "relative",
-      background: theme.colors.background,
-      color: theme.colors.foreground,
-      fontSize: `${fontSize}px`,
-      fontFamily: selectedFont.value
-    }}>
-      <div 
-        ref={tableRef} 
-        style={{ 
-          height: "100%", 
-          width: "100%",
-          fontSize: `${fontSize}px`,
-          fontFamily: selectedFont.value
-        }} 
-      />
-    </div>
-  );
+  return <div ref={tableRef} style={{ width: "100%", height: "100%" }} />;
 });
 
 SailingByCabinCategory.displayName = 'SailingByCabinCategory';

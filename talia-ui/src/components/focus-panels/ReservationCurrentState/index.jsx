@@ -193,22 +193,11 @@ const ReservationCurrentStateContainer = ({ filters = {}, theme }) => {
 
   // Handle empty data
   if (!data || data.length === 0) {
-    return (
-      <div style={{ padding: '40px', textAlign: 'center' }}>
-        <p>No reservations available{selectedSailCode ? ` for sail code: ${selectedSailCode}` : ''}</p>
-        <button onClick={() => fetchData(queryFilters)}>Retry</button>
-      </div>
-    );
+    return null;
   }
 
   // Render presenter with data
-  return (
-    <ReservationCurrentStatePresenter 
-      data={data} 
-      theme={theme}
-      onRefresh={() => fetchData(queryFilters)}
-    />
-  );
+  return <ReservationCurrentStatePresenter data={data} />;
 };
 
 export default ReservationCurrentStateContainer;

@@ -20,8 +20,9 @@ import { applyTheme, DEFAULT_THEME, themes } from './config/themes.js';
 // ALWAYS use DEFAULT_THEME ('data' - dark theme) on first load - ignore localStorage
 // User can change theme via UI, which will save to localStorage for next time
 // This ensures consistent first-load experience
-console.log('[main.jsx] Applying DEFAULT theme BEFORE React render (ignoring localStorage):', DEFAULT_THEME);
-applyTheme(DEFAULT_THEME);
+try {
+  console.log('[main.jsx] Applying DEFAULT theme BEFORE React render (ignoring localStorage):', DEFAULT_THEME);
+  applyTheme(DEFAULT_THEME);
   
   // Also set font CSS variables synchronously before React renders
   const root = document.documentElement;

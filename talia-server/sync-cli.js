@@ -129,7 +129,7 @@ async function main() {
           // Check for --force-full-sync flag
           const forceFullSync = process.argv.includes('--force-full-sync');
           
-          console.log(`🔄 Starting sync for table: ${arg1} (dataset: ${dataset})${forceFullSync ? ' [FORCE FULL SYNC]' : ''}`);
+          // Note: The sync service will log the start message, so we don't duplicate it here
           const tableResult = await synapseSyncService.syncTable(arg1, dataset, { forceFullSync });
 
           if (tableResult.success) {

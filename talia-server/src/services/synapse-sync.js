@@ -5,6 +5,8 @@ import { supabaseDataService } from './supabase.js';
 import { syncReservationChanges } from './reservation-changes-sync.js';
 import { syncCompetitors } from './competitor-sync.js';
 import { syncPublishedRates } from './published-rates-sync.js';
+import { SyncLogger } from './sync-logger.js';
+import { SyncOperation } from './sync-operation.js';
 
 const require = createRequire(import.meta.url);
 const syncConfig = require('../../sync.config.json');
@@ -445,9 +447,9 @@ class SynapseSyncService {
     }
   }
 
-  async insertData(tableName, data) {
+  async insertData(tableName, data, logger = null) {
     try {
-      console.log(`📥 Inserting ${data.length} records into ${tableName}...`);
+      logger?.info(`📥 Inserting ${data.length} records into ${tableName}...`);
 
       const batchSize = 1000;
       let insertedCount = 0;
@@ -462,12 +464,12 @@ class SynapseSyncService {
         if (error) throw error;
 
         insertedCount += batch.length;
-        console.log(`   📊 Inserted ${insertedCount}/${data.length} records...`);
+        logger?.info(`   📊 Inserted ${insertedCount}/${data.length} records...`);
       }
 
-      console.log(`✅ Successfully inserted ${insertedCount} records into ${tableName}`);
+      logger?.info(`✅ Successfully inserted ${insertedCount} records into ${tableName}`);
     } catch (error) {
-      console.error(`❌ Failed to insert into ${tableName}:`, error.message);
+      logger?.error(`❌ Failed to insert into ${tableName}:`, error.message);
       throw error;
     }
   }
@@ -506,19 +508,19 @@ class SynapseSyncService {
     }
   }
 
-  async syncSmallTable(runtime) {
+  async syncSmallTable(runtime, logger) {
     const startTime = Date.now();
     let pool = null;
 
     try {
       pool = await this.createConnection();
-      console.log(`✅ Connected to Synapse for ${runtime.tableName}`);
+      logger?.info(`✅ Connected to Synapse for ${runtime.tableName}`);
 
       const result = await pool.request().query(runtime.selectQuery);
       const rawData = result.recordset;
 
       if (rawData.length === 0) {
-        console.log(`⚠️  No data found for ${runtime.tableName} with current constraints`);
+        logger?.warn(`⚠️  No data found for ${runtime.tableName} with current constraints`);
         const duration = Date.now() - startTime;
         await this.updateSyncMetadata(runtime.targetTable, 0, duration);
         return {
@@ -530,17 +532,17 @@ class SynapseSyncService {
         };
       }
 
-      console.log(`📥 Fetched ${rawData.length} records from Synapse`);
+      logger?.info(`📥 Fetched ${rawData.length} records from Synapse`);
 
       const transformedData = this.transformData(runtime.transformKey, rawData);
-      console.log(`🔄 Transformed ${transformedData.length} records`);
+      logger?.info(`🔄 Transformed ${transformedData.length} records`);
 
       await this.applyReplaceStrategy(runtime);
 
-      await this.insertData(runtime.targetTable, transformedData);
+      await this.insertData(runtime.targetTable, transformedData, logger);
 
       const duration = Date.now() - startTime;
-      console.log(`✅ Sync completed for ${runtime.tableName} in ${duration}ms`);
+      logger?.info(`✅ Sync completed for ${runtime.tableName} in ${duration}ms`);
 
       // Update sync metadata
       await this.updateSyncMetadata(runtime.targetTable, transformedData.length, duration);
@@ -554,7 +556,7 @@ class SynapseSyncService {
       };
 
     } catch (error) {
-      console.error(`❌ Sync failed for ${runtime.tableName}:`, error.message);
+      logger?.error(`❌ Sync failed for ${runtime.tableName}:`, error.message);
       const duration = Date.now() - startTime;
       // Still try to update metadata even on failure
       await this.updateSyncMetadata(runtime.targetTable, 0, duration);
@@ -572,7 +574,7 @@ class SynapseSyncService {
     }
   }
 
-  async syncLargeTable(runtime) {
+  async syncLargeTable(runtime, logger) {
     const startTime = Date.now();
     let pool = null;
     const BATCH_SIZE = 10000;
@@ -580,19 +582,19 @@ class SynapseSyncService {
 
     try {
       pool = await this.createConnection();
-      console.log(`✅ Connected to Synapse for ${runtime.tableName}`);
+      logger?.info(`✅ Connected to Synapse for ${runtime.tableName}`);
 
       await this.applyReplaceStrategy(runtime);
 
-      console.log(`📊 Getting total record count from ${runtime.source}...`);
+      logger?.info(`📊 Getting total record count from ${runtime.source}...`);
       const countQuery = this.buildCountQuery(runtime);
       const countResult = await pool.request().query(countQuery);
       const totalRecords = countResult.recordset[0].total;
-      console.log(`📊 Total records to process: ${totalRecords.toLocaleString()}`);
+      logger?.info(`📊 Total records to process: ${totalRecords.toLocaleString()}`);
 
       for (let offset = 0; offset < totalRecords; offset += BATCH_SIZE) {
         const batchQuery = this.buildBatchQuery(runtime, offset, BATCH_SIZE);
-        console.log(`📊 Processing batch ${Math.floor(offset / BATCH_SIZE) + 1}/${Math.ceil(totalRecords / BATCH_SIZE)} (${offset + 1}-${Math.min(offset + BATCH_SIZE, totalRecords)})...`);
+        logger?.info(`📊 Processing batch ${Math.floor(offset / BATCH_SIZE) + 1}/${Math.ceil(totalRecords / BATCH_SIZE)} (${offset + 1}-${Math.min(offset + BATCH_SIZE, totalRecords)})...`);
 
         const batchResult = await pool.request().query(batchQuery);
         const batchData = batchResult.recordset;
@@ -602,17 +604,17 @@ class SynapseSyncService {
         }
 
         const transformedBatch = this.transformData(runtime.transformKey, batchData);
-        await this.insertData(runtime.targetTable, transformedBatch);
+        await this.insertData(runtime.targetTable, transformedBatch, logger);
 
         totalProcessed += batchData.length;
-        console.log(`✅ Processed ${totalProcessed.toLocaleString()}/${totalRecords.toLocaleString()} records`);
+        logger?.info(`✅ Processed ${totalProcessed.toLocaleString()}/${totalRecords.toLocaleString()} records`);
 
         await new Promise(resolve => setTimeout(resolve, 100));
       }
 
       const duration = Date.now() - startTime;
-      console.log(`✅ Sync completed for ${runtime.tableName} in ${duration}ms`);
-      console.log(`📊 Total records processed: ${totalProcessed.toLocaleString()}`);
+      logger?.info(`✅ Sync completed for ${runtime.tableName} in ${duration}ms`);
+      logger?.info(`📊 Total records processed: ${totalProcessed.toLocaleString()}`);
 
       // Update sync metadata
       await this.updateSyncMetadata(runtime.targetTable, totalProcessed, duration);
@@ -626,7 +628,7 @@ class SynapseSyncService {
       };
 
     } catch (error) {
-      console.error(`❌ Sync failed for ${runtime.tableName}:`, error.message);
+      logger?.error(`❌ Sync failed for ${runtime.tableName}:`, error.message);
       const duration = Date.now() - startTime;
       // Still try to update metadata even on failure
       await this.updateSyncMetadata(runtime.targetTable, totalProcessed, duration);
@@ -644,7 +646,7 @@ class SynapseSyncService {
     }
   }
 
-  async syncDerivedTable(runtime) {
+  async syncDerivedTable(runtime, logger) {
     switch (runtime.definition.handler) {
       case 'reservationChanges': {
         if (!runtime.dateRange) {
@@ -664,15 +666,17 @@ class SynapseSyncService {
           dateRange: runtime.dateRange,
           targetTable: runtime.definition.target,
           rowNumberOrder: runtime.definition.rowNumberOrder,
-          forceFullSync
+          forceFullSync,
+          dataset: runtime.datasetName,
+          logger
         });
 
         return {
           tableName: runtime.tableName,
           success: result.success,
           recordsProcessed: result.recordsProcessed || 0,
-          changesDetected: result.changesDetected || 0,
-          duration: null,
+          recordsUpdated: result.recordsUpdated || result.changesDetected || 0,
+          duration: result.duration || null,
           message: result.message
         };
       }
@@ -684,7 +688,13 @@ class SynapseSyncService {
         // Check if forceFullSync is requested
         const forceFullSync = runtime.overrides?.forceFullSync || false;
 
-        const result = await syncCompetitors({
+        // Wrap sync function with SyncOperation for logging
+        const syncOp = new SyncOperation(syncCompetitors, logger, {
+          tableName: runtime.tableName,
+          syncType: 'competitor'
+        });
+
+        const result = await syncOp.execute({
           synapseConfig: this.synapseConfig,
           supabaseClient: supabaseDataService.client,
           source: runtime.definition.source,
@@ -693,7 +703,8 @@ class SynapseSyncService {
           dateRange: runtime.dateRange,
           targetTable: runtime.definition.target,
           rowNumberOrder: runtime.definition.rowNumberOrder,
-          forceFullSync
+          forceFullSync,
+          dataset: runtime.datasetName
         });
 
         return {
@@ -701,8 +712,9 @@ class SynapseSyncService {
           success: result.success,
           recordsProcessed: result.recordsProcessed || 0,
           recordsUpdated: result.recordsUpdated || 0,
-          duration: null,
-          message: result.message
+          duration: result.duration || null,
+          message: result.message,
+          detailedLogs: result.detailedLogs || []
         };
       }
 
@@ -723,15 +735,16 @@ class SynapseSyncService {
           dateRange: runtime.dateRange,
           targetTable: runtime.definition.target,
           rowNumberOrder: runtime.definition.rowNumberOrder,
-          forceFullSync
+          forceFullSync,
+          logger // Pass the logger here
         });
 
         return {
           tableName: runtime.tableName,
           success: result.success,
           recordsProcessed: result.recordsProcessed || 0,
-          changesDetected: result.recordsUpdated || 0,
-          duration: null,
+          recordsUpdated: result.recordsUpdated || result.changesDetected || 0,
+          duration: result.duration || null,
           message: result.message
         };
       }
@@ -742,24 +755,40 @@ class SynapseSyncService {
   }
 
   async syncTable(tableName, datasetName = this.defaultDataset, overrides = {}) {
-    const runtime = this.buildRuntimeConfig(tableName, datasetName);
+    // Create a logger instance for this sync operation
+    const logger = new SyncLogger();
     
-    // Merge overrides into runtime config
-    if (overrides.forceFullSync !== undefined) {
-      runtime.overrides = { ...runtime.overrides, forceFullSync: overrides.forceFullSync };
+    try {
+      const runtime = this.buildRuntimeConfig(tableName, datasetName);
+      
+      // Merge overrides into runtime config
+      if (overrides.forceFullSync !== undefined) {
+        runtime.overrides = { ...runtime.overrides, forceFullSync: overrides.forceFullSync };
+      }
+
+      logger.info(`🔄 Starting sync for table: ${tableName} (dataset: ${datasetName})`);
+
+      let result;
+      if (runtime.type === 'derived') {
+        result = await this.syncDerivedTable(runtime, logger);
+        // For derived tables, detailedLogs come from SyncOperation wrapper
+        // If not present, fall back to logger
+        if (!result.detailedLogs) {
+          result.detailedLogs = logger.getLogs();
+        }
+      } else if (runtime.isLargeDataset) {
+        result = await this.syncLargeTable(runtime, logger);
+        result.detailedLogs = logger.getLogs();
+      } else {
+        result = await this.syncSmallTable(runtime, logger);
+        result.detailedLogs = logger.getLogs();
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error(`❌ Sync failed for ${tableName}:`, error.message);
+      throw error;
     }
-
-    console.log(`🔄 Starting sync for table: ${tableName} (dataset: ${datasetName})`);
-
-    if (runtime.type === 'derived') {
-      return await this.syncDerivedTable(runtime);
-    }
-
-    if (runtime.isLargeDataset) {
-      return await this.syncLargeTable(runtime);
-    }
-
-    return await this.syncSmallTable(runtime);
   }
 
   async syncDataset(datasetName = this.defaultDataset) {

@@ -124,24 +124,6 @@ const aggregateSailingData = (rawData) => {
 const SailingSummary = React.memo(() => {
   console.log('🚨 [LinkingEvent] [SailingSummary] COMPONENT LOADED - This should appear when component mounts!');
   
-  // Default theme values (same as Dashboard default theme)
-  const theme = {
-    colors: {
-      background: '#ffffff',
-      foreground: '#2b2b2b',
-      sidebar: '#f7f3ee',
-      sidebarBorder: '#e8dfd0',
-      sidebarHeader: '#f5efe6',
-      accent: '#b08d57',
-      accentHover: 'rgba(176, 141, 87, 0.6)',
-      accentLight: 'rgba(176, 141, 87, 0.3)',
-      textSecondary: '#6b6b6b',
-      textMuted: '#999',
-      border: '#e8dfd0',
-      hover: '#fff7ea',
-      selected: '#fdeacc'
-    }
-  };
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const initializedRef = useRef(false);

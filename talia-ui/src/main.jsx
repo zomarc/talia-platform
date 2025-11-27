@@ -64,6 +64,17 @@ try {
   root.style.setProperty('--theme-table-row-height', '24px');
   
   console.log('[main.jsx] CSS variables set BEFORE React render');
+  
+  // Load Tabulator CSS early so our custom CSS can be injected after it
+  loadTabulatorCss().then(() => {
+    // Import and inject global Tabulator CSS after Tabulator CSS loads
+    import('./lib/tabulatorConfig.js').then(({ injectGlobalTabulatorCss }) => {
+      injectGlobalTabulatorCss();
+      console.log('[main.jsx] Tabulator global CSS injected');
+    });
+  }).catch((e) => {
+    console.warn('[main.jsx] Failed to load Tabulator CSS:', e);
+  });
 } catch (e) {
   console.warn('[main.jsx] Error applying theme before render:', e);
   // Fallback: apply default theme

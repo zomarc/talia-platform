@@ -64,6 +64,8 @@
   --theme-table-font-family: monospace;
   --theme-table-header-font-size: 10px;
   --theme-table-header-font-weight: 600;
+  --theme-table-header-height: 28px;
+  --theme-table-row-height: 24px;
 }
 
 /* Apply theme background to body */

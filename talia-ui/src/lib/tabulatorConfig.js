@@ -91,6 +91,9 @@ const injectGlobalTabulatorCss = () => {
       font-weight: var(--theme-table-header-font-weight, 600) !important;
       color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
       border-bottom: 1px solid var(--theme-glass-border, rgba(255, 255, 255, 0.15)) !important;
+      height: var(--theme-table-header-height, 28px) !important;
+      min-height: var(--theme-table-header-height, 28px) !important;
+      max-height: var(--theme-table-header-height, 28px) !important;
     }
 
     .tabulator-header .tabulator-col {
@@ -99,6 +102,8 @@ const injectGlobalTabulatorCss = () => {
       font-weight: var(--theme-table-header-font-weight, 600) !important;
       color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
       background: transparent !important;
+      height: var(--theme-table-header-height, 28px) !important;
+      line-height: calc(var(--theme-table-header-height, 28px) - 12px) !important;
     }
 
     .tabulator-header .tabulator-col-content {
@@ -132,11 +137,15 @@ const injectGlobalTabulatorCss = () => {
      * Even rows: transparent (matches Data Mode table-row-even)
      * Odd rows: rgba(0, 0, 0, 0.2) (matches Data Mode table-row-odd)
      * These use CSS variables from theme system for consistency
+     * Row height from spacing mode CSS variable
      */
     .tabulator-row {
       border-bottom: 1px solid var(--theme-glass-border, rgba(255, 255, 255, 0.15)) !important;
       transition: background-color 0.15s ease !important;
       background: transparent !important;
+      height: var(--theme-table-row-height, 24px) !important;
+      min-height: var(--theme-table-row-height, 24px) !important;
+      max-height: var(--theme-table-row-height, 24px) !important;
     }
 
     /* Even rows: transparent (same as Data Mode) */

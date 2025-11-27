@@ -122,6 +122,9 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-table-font-size', `${tableFontSize}px`);
     root.style.setProperty('--theme-table-header-font-size', `${tableFontSize}px`);
     root.style.setProperty('--theme-table-header-font-weight', '600');
+    // Initial spacing (will be updated by useEffect when spacingMode loads)
+    root.style.setProperty('--theme-table-header-height', '28px');
+    root.style.setProperty('--theme-table-row-height', '24px');
     console.log('[ThemeContext] Set font CSS variables synchronously:', {
       fontSize: initialFontSize,
       tableFontSize: tableFontSize
@@ -145,11 +148,12 @@ export const ThemeProvider = ({ children }) => {
     const selectedFont = FONT_FAMILIES[initialFontFamily] || FONT_FAMILIES['Inter'];
     root.style.setProperty('--theme-font-family', selectedFont.value);
     root.style.setProperty('--theme-font-family-monospace', 'monospace');
-    root.style.setProperty('--theme-table-font-family', 'monospace');
+    // Table font family uses selected font (will be updated by useEffect when fontFamily changes)
+    root.style.setProperty('--theme-table-font-family', selectedFont.value);
     console.log('[ThemeContext] Set font family CSS variables synchronously:', {
       fontFamily: initialFontFamily,
       fontFamilyValue: selectedFont.value,
-      tableFontFamily: 'monospace'
+      tableFontFamily: selectedFont.value
     });
     return initialFontFamily;
   });
@@ -171,7 +175,7 @@ export const ThemeProvider = ({ children }) => {
 
   const selectedFont = FONT_FAMILIES[fontFamily] || FONT_FAMILIES['Inter'];
 
-  // Update font CSS variables when fontSize or fontFamily changes (for runtime updates)
+  // Update font CSS variables when fontSize, fontFamily, or spacingMode changes (for runtime updates)
   // Note: Initial values are set synchronously in useState initializers above
   useEffect(() => {
     const root = document.documentElement;
@@ -184,16 +188,37 @@ export const ThemeProvider = ({ children }) => {
     // Formula: tableFontSize = (fontSize / 12) * 10, minimum 8px
     const tableFontSize = Math.max(8, Math.round((fontSize / 12) * 10));
     root.style.setProperty('--theme-table-font-size', `${tableFontSize}px`);
-    root.style.setProperty('--theme-table-font-family', 'monospace');
+    
+    // Table font family: Use selected font family (allows user to change table fonts)
+    // Falls back to monospace if font family not available
+    root.style.setProperty('--theme-table-font-family', selectedFont.value);
+    
     root.style.setProperty('--theme-table-header-font-size', `${tableFontSize}px`);
     root.style.setProperty('--theme-table-header-font-weight', '600');
     
-    console.log('[ThemeContext] Updated font CSS variables:', {
+    // Table spacing: Scale with spacingMode
+    // Compact mode: smaller heights, Default mode: larger heights
+    // Baseline: fontSize 12px, compact = header 28px/row 24px, default = header 35px/row 32px
+    const isCompact = spacingMode === 'compact';
+    const tableHeaderHeight = isCompact 
+      ? Math.max(24, Math.round((fontSize / 12) * 28))
+      : Math.max(28, Math.round((fontSize / 12) * 35));
+    const tableRowHeight = isCompact
+      ? Math.max(20, Math.round((fontSize / 12) * 24))
+      : Math.max(24, Math.round((fontSize / 12) * 32));
+    
+    root.style.setProperty('--theme-table-header-height', `${tableHeaderHeight}px`);
+    root.style.setProperty('--theme-table-row-height', `${tableRowHeight}px`);
+    
+    console.log('[ThemeContext] Updated font and spacing CSS variables:', {
       fontSize: `${fontSize}px`,
       tableFontSize: `${tableFontSize}px`,
-      fontFamily: selectedFont.value
+      fontFamily: selectedFont.value,
+      spacingMode: spacingMode,
+      tableHeaderHeight: `${tableHeaderHeight}px`,
+      tableRowHeight: `${tableRowHeight}px`
     });
-  }, [fontSize, selectedFont]);
+  }, [fontSize, selectedFont, spacingMode]);
 
   const value = {
     // Theme

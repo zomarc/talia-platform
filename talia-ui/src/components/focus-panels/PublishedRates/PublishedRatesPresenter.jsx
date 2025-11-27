@@ -11,7 +11,6 @@
 
 import React, { useRef, useEffect } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
-import { useTheme } from '../../../contexts/ThemeContext';
 
 // Event names for row selection
 const SELECT_EVENT = 'talia:publishedRates.select';
@@ -23,7 +22,6 @@ const CLEAR_EVENT = 'talia:publishedRates.clear';
 const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
-  const { fontSize, selectedFont, spacingMode } = useTheme();
 
   // Column definitions using Tabulator's native features
   const columns = [

@@ -3,9 +3,9 @@
  * Centralized configuration for all Tabulator table instances
  */
 
-// CDN URLs for Tabulator
+// CDN URLs for Tabulator - using default theme
 export const TABULATOR_CONFIG = {
-  css: 'https://unpkg.com/tabulator-tables@5.6.1/dist/css/tabulator_midnight.min.css',
+  css: 'https://unpkg.com/tabulator-tables@5.6.1/dist/css/tabulator.min.css',
   js: 'https://unpkg.com/tabulator-tables@5.6.1/dist/js/tabulator.min.js'
 };
 
@@ -50,143 +50,11 @@ export const loadTabulatorJs = (url = TABULATOR_CONFIG.js) => {
 
 /**
  * Inject global Tabulator custom CSS after theme CSS loads
- * This ensures proper cascade order: midnight theme -> our custom styles
+ * REMOVED - Using Tabulator defaults only
  */
 export const injectGlobalTabulatorCss = () => {
-  // Check if already injected
-  if (document.getElementById('talia-tabulator-global-css')) {
-    return;
-  }
-
-  // Create style element with global CSS
-  const style = document.createElement('style');
-  style.id = 'talia-tabulator-global-css';
-  style.textContent = `
-    /* 
-     * Global Tabulator Styling - matches Data Management screen exactly
-     * 
-     * STEP 1: Make table container transparent
-     * The Data Management screen uses a glass container (rgba(255, 255, 255, 0.08))
-     * with backdrop blur. The table itself must be transparent to show this through.
-     */
-    .tabulator {
-      background: transparent !important;
-    }
-
-    .tabulator-tableHolder {
-      background: transparent !important;
-    }
-
-    /* 
-     * STEP 2: Style table header to match Data Mode
-     * Data Mode header uses: background rgba(255, 255, 255, 0.08) with backdrop blur(10px)
-     * Font size and weight from theme CSS variables (10px, 600)
-     * This matches the table header row style in Data Management screen (theme.colors.glass)
-     */
-    .tabulator-header {
-      background: var(--theme-glass, rgba(255, 255, 255, 0.08)) !important;
-      backdrop-filter: blur(10px) !important;
-      -webkit-backdrop-filter: blur(10px) !important;
-      font-weight: 600 !important;
-      color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
-      border-bottom: none !important;
-      border: none !important;
-      height: var(--theme-table-header-height, 28px) !important;
-      min-height: var(--theme-table-header-height, 28px) !important;
-      max-height: var(--theme-table-header-height, 28px) !important;
-    }
-
-    .tabulator-header .tabulator-col {
-      padding: 6px 8px !important;
-      font-weight: 600 !important;
-      color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
-      background: transparent !important;
-      border: none !important;
-      height: var(--theme-table-header-height, 28px) !important;
-    }
-
-    .tabulator-header .tabulator-col-content {
-      color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
-    }
-
-    /* 
-     * STEP 3: Style table body - transparent background
-     * The table body must be transparent so the glass container shows through
-     */
-    .tabulator-table {
-      background: transparent !important;
-    }
-
-    /* 
-     * STEP 4: Cell styling - matches Data Mode exactly
-     * Font size and family from theme CSS variables (10px monospace)
-     * Padding 6px 8px, foreground color from theme
-     */
-    .tabulator-cell {
-      padding: 6px 8px !important;
-      color: var(--theme-fg, #e8e8f0) !important;
-      background: transparent !important;
-      border: none !important;
-    }
-
-    /* 
-     * STEP 5: Row backgrounds - match Data Mode alternating colors exactly
-     * Even rows: transparent (matches Data Mode table-row-even)
-     * Odd rows: rgba(0, 0, 0, 0.2) (matches Data Mode table-row-odd)
-     * These use CSS variables from theme system for consistency
-     * Row height from spacing mode CSS variable
-     */
-    .tabulator-row {
-      border: none !important;
-      border-bottom: none !important;
-      transition: background-color 0.15s ease !important;
-      background: transparent !important;
-      height: var(--theme-table-row-height, 24px) !important;
-      min-height: var(--theme-table-row-height, 24px) !important;
-      max-height: var(--theme-table-row-height, 24px) !important;
-    }
-    
-    .tabulator-row .tabulator-cell {
-      border: none !important;
-      border-right: none !important;
-    }
-
-    /* Even rows: transparent (same as Data Mode) */
-    .tabulator-row:nth-child(even) {
-      background-color: var(--theme-table-row-even, transparent) !important;
-    }
-
-    /* Odd rows: rgba(0, 0, 0, 0.2) (same as Data Mode) */
-    .tabulator-row:nth-child(odd) {
-      background-color: var(--theme-table-row-odd, rgba(0, 0, 0, 0.2)) !important;
-    }
-
-    /* 
-     * STEP 6: Hover and selected states - match Data Mode exactly
-     * Hover: rgba(66, 133, 244, 0.5) (blue tint)
-     * Selected: rgba(66, 133, 244, 0.25) (lighter blue)
-     * Selected hover: rgba(66, 133, 244, 0.6) (darker blue)
-     */
-    .tabulator-row:hover {
-      background-color: var(--theme-table-row-hover, rgba(66, 133, 244, 0.5)) !important;
-    }
-
-    .tabulator-row.tabulator-selected {
-      background-color: var(--theme-table-row-selected, rgba(66, 133, 244, 0.25)) !important;
-    }
-
-    .tabulator-row.tabulator-selected:hover {
-      background-color: var(--theme-table-row-selected-hover, rgba(66, 133, 244, 0.6)) !important;
-    }
-  `;
-  
-  // Insert after Tabulator's CSS if it exists
-  const tabulatorLink = document.querySelector('link[href*="tabulator"]');
-  if (tabulatorLink && tabulatorLink.nextSibling) {
-    tabulatorLink.parentNode.insertBefore(style, tabulatorLink.nextSibling);
-  } else {
-    document.head.appendChild(style);
-  }
+  // No custom CSS - using Tabulator defaults
+  return;
 };
 
 /**

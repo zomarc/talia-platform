@@ -25,41 +25,8 @@ try {
   console.log('[main.jsx] Applying DEFAULT theme BEFORE React render (ignoring localStorage):', DEFAULT_THEME);
   applyTheme(DEFAULT_THEME);
   
-  // Also set font CSS variables synchronously before React renders
+  // Set table spacing CSS variables - always compact
   const root = document.documentElement;
-  let fontSize = 12;
-  let fontFamily = 'Inter';
-  try {
-    const saved = localStorage.getItem("taliaLayout");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      fontSize = parsed.fontSettings?.fontSize || 12;
-      fontFamily = parsed.fontSettings?.fontFamily || 'Inter';
-    }
-  } catch (e) {
-    // Use defaults
-  }
-  
-  // Set font CSS variables
-  root.style.setProperty('--theme-font-size', `${fontSize}px`);
-  const FONT_FAMILIES = {
-    'Inter': { value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
-    'Roboto': { value: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
-    'Source Sans Pro': { value: '"Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
-    'Arial': { value: 'Arial, Helvetica, sans-serif' },
-    'Verdana': { value: 'Verdana, Geneva, sans-serif' },
-    'Georgia': { value: 'Georgia, "Times New Roman", serif' }
-  };
-  const selectedFont = FONT_FAMILIES[fontFamily] || FONT_FAMILIES['Inter'];
-  root.style.setProperty('--theme-font-family', selectedFont.value);
-  root.style.setProperty('--theme-font-family-monospace', 'monospace');
-  
-  // Table font settings
-  const tableFontSize = Math.max(8, Math.round((fontSize / 12) * 10));
-  root.style.setProperty('--theme-table-font-size', `${tableFontSize}px`);
-  root.style.setProperty('--theme-table-font-family', selectedFont.value);
-  root.style.setProperty('--theme-table-header-font-size', `${tableFontSize}px`);
-  root.style.setProperty('--theme-table-header-font-weight', '600');
   root.style.setProperty('--theme-table-header-height', '28px');
   root.style.setProperty('--theme-table-row-height', '24px');
   

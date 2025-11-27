@@ -162,18 +162,9 @@ export const ThemeProvider = ({ children }) => {
     return initialFontFamily;
   });
 
-  const [spacingMode, setSpacingMode] = useState(() => {
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.fontSettings?.spacingMode || 'default';
-      }
-    } catch (e) {
-      console.warn('Failed to load spacingMode from localStorage:', e);
-    }
-    return 'default';
-  });
+  // Spacing mode is always compact - no user control
+  const [spacingMode] = useState('compact');
+  const setSpacingMode = () => {}; // No-op function for compatibility
 
   // FONT_FAMILIES is now defined outside component (above) for use in useState initializers
 

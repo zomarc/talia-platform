@@ -24,6 +24,7 @@ import graphQLFocusService from "./services/GraphQLFocusService";
 import { AdminDashboard, UserMappingTable, TaliaUserTable } from "./components/admin";
 // Theme System - using centralized theme context
 import { useTheme } from "./contexts/ThemeContext";
+import { DEFAULT_THEME } from "./config/themes.js";
 // Removed Apollo Client - using direct fetch instead
 
 // Debug logging

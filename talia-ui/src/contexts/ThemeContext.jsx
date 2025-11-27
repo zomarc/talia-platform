@@ -191,16 +191,9 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-table-header-font-size', `${tableFontSize}px`);
     root.style.setProperty('--theme-table-header-font-weight', '600');
     
-    // Table spacing: Scale with spacingMode
-    // Compact mode: smaller heights, Default mode: larger heights
-    // Baseline: fontSize 12px, compact = header 28px/row 24px, default = header 35px/row 32px
-    const isCompact = spacingMode === 'compact';
-    const tableHeaderHeight = isCompact 
-      ? Math.max(24, Math.round((fontSize / 12) * 28))
-      : Math.max(28, Math.round((fontSize / 12) * 35));
-    const tableRowHeight = isCompact
-      ? Math.max(20, Math.round((fontSize / 12) * 24))
-      : Math.max(24, Math.round((fontSize / 12) * 32));
+    // Table spacing: Always compact
+    const tableHeaderHeight = 28;
+    const tableRowHeight = 24;
     
     root.style.setProperty('--theme-table-header-height', `${tableHeaderHeight}px`);
     root.style.setProperty('--theme-table-row-height', `${tableRowHeight}px`);

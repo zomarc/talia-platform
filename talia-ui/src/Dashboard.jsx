@@ -1093,36 +1093,6 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
               {selectedFont.description}
             </div>
           </div>
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: `${fontSize - 1}px`, fontWeight: '500', color: theme.colors.foreground }}>Spacing Mode:</label>
-            <select 
-              style={inputStyle}
-              value={spacingMode}
-              onChange={(e) => setSpacingMode(e.target.value)}
-            >
-              <option value="default">Default</option>
-              <option value="compact">Compact</option>
-            </select>
-            <div style={{ fontSize: `${fontSize - 2}px`, color: theme.colors.textMuted, marginTop: '2px' }}>
-              {spacingMode === 'compact' ? 'Minimal spacing for data cells' : 'Standard spacing for readability'}
-            </div>
-          </div>
-          <div>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: `${fontSize - 1}px`, fontWeight: '500', color: theme.colors.foreground }}>
-              Font Size: {fontSize}px
-            </label>
-            <input 
-              type="range" 
-              min="10" 
-              max="18" 
-              value={fontSize}
-              onChange={(e) => setFontSize(Number(e.target.value))}
-              style={{ 
-                width: '100%',
-                accentColor: theme.colors.accent
-              }}
-            />
-          </div>
         </div>
       </div>
 

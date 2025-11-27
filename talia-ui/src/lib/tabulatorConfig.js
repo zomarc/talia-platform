@@ -87,10 +87,10 @@ export const injectGlobalTabulatorCss = () => {
       background: var(--theme-glass, rgba(255, 255, 255, 0.08)) !important;
       backdrop-filter: blur(10px) !important;
       -webkit-backdrop-filter: blur(10px) !important;
-      font-size: var(--theme-table-header-font-size, 10px) !important;
-      font-weight: var(--theme-table-header-font-weight, 600) !important;
+      font-weight: 600 !important;
       color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
       border-bottom: none !important;
+      border: none !important;
       height: var(--theme-table-header-height, 28px) !important;
       min-height: var(--theme-table-header-height, 28px) !important;
       max-height: var(--theme-table-header-height, 28px) !important;
@@ -98,16 +98,14 @@ export const injectGlobalTabulatorCss = () => {
 
     .tabulator-header .tabulator-col {
       padding: 6px 8px !important;
-      font-size: var(--theme-table-header-font-size, 10px) !important;
-      font-weight: var(--theme-table-header-font-weight, 600) !important;
+      font-weight: 600 !important;
       color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
       background: transparent !important;
+      border: none !important;
       height: var(--theme-table-header-height, 28px) !important;
-      line-height: calc(var(--theme-table-header-height, 28px) - 12px) !important;
     }
 
     .tabulator-header .tabulator-col-content {
-      font-size: var(--theme-table-header-font-size, 10px) !important;
       color: var(--theme-text-secondary, rgba(232, 232, 240, 0.75)) !important;
     }
 
@@ -125,11 +123,10 @@ export const injectGlobalTabulatorCss = () => {
      * Padding 6px 8px, foreground color from theme
      */
     .tabulator-cell {
-      font-size: var(--theme-table-font-size, 10px) !important;
-      font-family: var(--theme-table-font-family, monospace) !important;
       padding: 6px 8px !important;
       color: var(--theme-fg, #e8e8f0) !important;
       background: transparent !important;
+      border: none !important;
     }
 
     /* 
@@ -140,12 +137,18 @@ export const injectGlobalTabulatorCss = () => {
      * Row height from spacing mode CSS variable
      */
     .tabulator-row {
+      border: none !important;
       border-bottom: none !important;
       transition: background-color 0.15s ease !important;
       background: transparent !important;
       height: var(--theme-table-row-height, 24px) !important;
       min-height: var(--theme-table-row-height, 24px) !important;
       max-height: var(--theme-table-row-height, 24px) !important;
+    }
+    
+    .tabulator-row .tabulator-cell {
+      border: none !important;
+      border-right: none !important;
     }
 
     /* Even rows: transparent (same as Data Mode) */

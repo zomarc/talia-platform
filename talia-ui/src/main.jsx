@@ -10,6 +10,7 @@ import DataManagementPage from './components/DataManagementPage.jsx'
 import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
 import { applyTheme, DEFAULT_THEME, themes } from './config/themes.js';
+import { loadTabulatorCss } from './lib/tabulatorConfig.js';
 
 // Apollo Client temporarily disabled during database restoration
 // TODO: Re-enable when database is restored

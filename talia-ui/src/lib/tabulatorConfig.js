@@ -52,7 +52,7 @@ export const loadTabulatorJs = (url = TABULATOR_CONFIG.js) => {
  * Inject global Tabulator custom CSS after theme CSS loads
  * This ensures proper cascade order: midnight theme -> our custom styles
  */
-const injectGlobalTabulatorCss = () => {
+export const injectGlobalTabulatorCss = () => {
   // Check if already injected
   if (document.getElementById('talia-tabulator-global-css')) {
     return;

@@ -399,10 +399,6 @@ const TablePanel = React.memo(function TablePanel() {
           headerFilterLiveFilter: true, // live filtering as you type
           headerFilterLiveFilterDelay: 300, // delay for live filtering
           // Theme and font configuration
-          theme: "default", // Use default theme, we'll override with CSS
-          fontSize: fontSize,
-          headerHeight: spacingMode === 'compact' ? Math.max(28, fontSize + 6) : Math.max(35, fontSize + 12),
-          rowHeight: spacingMode === 'compact' ? Math.max(24, fontSize + 4) : Math.max(32, fontSize + 8),
           rowClick: (e, row) => {
             try { row?.select?.(); } catch {}
           },

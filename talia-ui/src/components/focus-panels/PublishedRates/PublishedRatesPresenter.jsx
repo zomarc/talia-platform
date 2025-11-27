@@ -212,11 +212,7 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
           movableColumns: true,
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,
-          pagination: false,
-          headerHeight: 28,
-          rowHeight: 24,
-          fontSize: 10,
-          theme: "midnight"
+          pagination: false
         });
 
         // Register event listeners using Tabulator's .on() method

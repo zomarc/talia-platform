@@ -1817,7 +1817,7 @@ function Dashboard({ user }) {
           
           // Restore font settings
           if (parsed.fontSettings) {
-            setCurrentTheme(parsed.fontSettings.theme || 'default');
+            setCurrentTheme(parsed.fontSettings.theme || DEFAULT_THEME);
             setFontSize(parsed.fontSettings.fontSize || 12);
             setFontFamily(parsed.fontSettings.fontFamily || 'Inter');
             setSpacingMode(parsed.fontSettings.spacingMode || 'default');
@@ -2019,7 +2019,7 @@ function Dashboard({ user }) {
           
           // Restore font settings FIRST to prevent component recreation
           if (parsed.fontSettings) {
-            setCurrentTheme(parsed.fontSettings.theme || 'default');
+            setCurrentTheme(parsed.fontSettings.theme || DEFAULT_THEME);
             setFontSize(parsed.fontSettings.fontSize || 12);
             setFontFamily(parsed.fontSettings.fontFamily || 'Inter');
             setSpacingMode(parsed.fontSettings.spacingMode || 'default');

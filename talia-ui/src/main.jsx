@@ -22,7 +22,14 @@ try {
   let themeToApply = DEFAULT_THEME;
   const saved = localStorage.getItem('talia-theme');
   if (saved && themes[saved]) {
-    themeToApply = saved;
+    // Migrate old 'default' theme to 'data' theme (default is now light, data is dark)
+    if (saved === 'default') {
+      themeToApply = DEFAULT_THEME; // Use 'data' instead of old 'default'
+      localStorage.setItem('talia-theme', DEFAULT_THEME); // Update localStorage
+      console.log('[main.jsx] Migrated old "default" theme to "data" theme');
+    } else {
+      themeToApply = saved;
+    }
   } else {
     // Check legacy localStorage key
     const legacySaved = localStorage.getItem("taliaLayout");
@@ -31,7 +38,16 @@ try {
         const parsed = JSON.parse(legacySaved);
         const legacyTheme = parsed.fontSettings?.theme;
         if (legacyTheme && themes[legacyTheme]) {
-          themeToApply = legacyTheme;
+          // Migrate old 'default' theme to 'data' theme
+          if (legacyTheme === 'default') {
+            themeToApply = DEFAULT_THEME; // Use 'data' instead of old 'default'
+            // Update legacy storage too
+            parsed.fontSettings.theme = DEFAULT_THEME;
+            localStorage.setItem("taliaLayout", JSON.stringify(parsed));
+            console.log('[main.jsx] Migrated old "default" theme in taliaLayout to "data" theme');
+          } else {
+            themeToApply = legacyTheme;
+          }
         }
       } catch (e) {
         // Ignore parse errors

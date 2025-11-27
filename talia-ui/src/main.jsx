@@ -17,45 +17,11 @@ import { applyTheme, DEFAULT_THEME, themes } from './config/themes.js';
 // import apolloClient from './lib/apolloClient.js';
 
 // Apply theme IMMEDIATELY before React renders (ensures CSS variables are set before first render)
-// This fixes the issue where theme doesn't load on first page load
-try {
-  let themeToApply = DEFAULT_THEME;
-  const saved = localStorage.getItem('talia-theme');
-  if (saved && themes[saved]) {
-    // Migrate old 'default' theme to 'data' theme (default is now light, data is dark)
-    if (saved === 'default') {
-      themeToApply = DEFAULT_THEME; // Use 'data' instead of old 'default'
-      localStorage.setItem('talia-theme', DEFAULT_THEME); // Update localStorage
-      console.log('[main.jsx] Migrated old "default" theme to "data" theme');
-    } else {
-      themeToApply = saved;
-    }
-  } else {
-    // Check legacy localStorage key
-    const legacySaved = localStorage.getItem("taliaLayout");
-    if (legacySaved) {
-      try {
-        const parsed = JSON.parse(legacySaved);
-        const legacyTheme = parsed.fontSettings?.theme;
-        if (legacyTheme && themes[legacyTheme]) {
-          // Migrate old 'default' theme to 'data' theme
-          if (legacyTheme === 'default') {
-            themeToApply = DEFAULT_THEME; // Use 'data' instead of old 'default'
-            // Update legacy storage too
-            parsed.fontSettings.theme = DEFAULT_THEME;
-            localStorage.setItem("taliaLayout", JSON.stringify(parsed));
-            console.log('[main.jsx] Migrated old "default" theme in taliaLayout to "data" theme');
-          } else {
-            themeToApply = legacyTheme;
-          }
-        }
-      } catch (e) {
-        // Ignore parse errors
-      }
-    }
-  }
-  console.log('[main.jsx] Applying theme BEFORE React render:', themeToApply);
-  applyTheme(themeToApply);
+// ALWAYS use DEFAULT_THEME ('data' - dark theme) on first load - ignore localStorage
+// User can change theme via UI, which will save to localStorage for next time
+// This ensures consistent first-load experience
+console.log('[main.jsx] Applying DEFAULT theme BEFORE React render (ignoring localStorage):', DEFAULT_THEME);
+applyTheme(DEFAULT_THEME);
   
   // Also set font CSS variables synchronously before React renders
   const root = document.documentElement;

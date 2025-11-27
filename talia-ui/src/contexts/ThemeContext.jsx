@@ -57,50 +57,38 @@ export const useTheme = () => {
  * Manages theme state and applies themes via CSS variables
  */
 export const ThemeProvider = ({ children }) => {
-  // Initialize theme from localStorage or use default (data theme)
+  // Initialize theme - ALWAYS start with DEFAULT_THEME, then load from localStorage if available
+  // This ensures consistent first-load experience
   const [currentTheme, setCurrentTheme] = useState(() => {
+    // Theme is already applied in main.jsx, so just read from localStorage for UI state
+    // but don't re-apply it (it's already applied)
     let themeToApply = DEFAULT_THEME;
     try {
       const saved = localStorage.getItem('talia-theme');
-      if (saved && themes[saved]) {
-        // Migrate old 'default' theme to 'data' theme (default is now light, data is dark)
-        if (saved === 'default') {
-          themeToApply = DEFAULT_THEME; // Use 'data' instead of old 'default'
-          localStorage.setItem('talia-theme', DEFAULT_THEME); // Update localStorage
-          console.log('[ThemeContext] Migrated old "default" theme to "data" theme');
-        } else {
-          themeToApply = saved;
-        }
+      if (saved && themes[saved] && saved !== 'default') {
+        // Only use saved theme if it's not the old 'default' theme
+        themeToApply = saved;
       } else {
-        // Also check legacy localStorage key for backward compatibility
+        // Check legacy localStorage key
         const legacySaved = localStorage.getItem("taliaLayout");
         if (legacySaved) {
-          const parsed = JSON.parse(legacySaved);
-          const legacyTheme = parsed.fontSettings?.theme;
-          if (legacyTheme && themes[legacyTheme]) {
-            // Migrate old 'default' theme to 'data' theme
-            if (legacyTheme === 'default') {
-              themeToApply = DEFAULT_THEME; // Use 'data' instead of old 'default'
-              // Update legacy storage too
-              parsed.fontSettings.theme = DEFAULT_THEME;
-              localStorage.setItem("taliaLayout", JSON.stringify(parsed));
-              console.log('[ThemeContext] Migrated old "default" theme in taliaLayout to "data" theme');
-            } else {
+          try {
+            const parsed = JSON.parse(legacySaved);
+            const legacyTheme = parsed.fontSettings?.theme;
+            if (legacyTheme && themes[legacyTheme] && legacyTheme !== 'default') {
               themeToApply = legacyTheme;
             }
+          } catch (e) {
+            // Ignore parse errors
           }
         }
       }
     } catch (e) {
       console.warn('Failed to load theme from localStorage:', e);
     }
-    // Apply theme IMMEDIATELY during initialization (before first render)
-    console.log('[ThemeContext] Applying theme synchronously:', themeToApply);
-    applyTheme(themeToApply);
-    // Verify CSS variables were set
-    const root = document.documentElement;
-    const bgValue = getComputedStyle(root).getPropertyValue('--theme-bg');
-    console.log('[ThemeContext] CSS variable --theme-bg after applyTheme:', bgValue ? 'SET' : 'NOT SET');
+    // Don't re-apply theme here - it's already applied in main.jsx
+    // Just return the theme name for React state
+    console.log('[ThemeContext] Theme state initialized (theme already applied in main.jsx):', themeToApply);
     return themeToApply;
   });
 

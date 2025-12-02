@@ -195,6 +195,45 @@ class SynapseSyncService {
     return await this.testConnectionUsingSyncMethod();
   }
 
+  /**
+   * Enhance connection error messages for better user feedback
+   * Generic helper used by all sync methods
+   */
+  _enhanceConnectionError(error) {
+    let errorMessage = error.message || 'Unknown error';
+    
+    if (error.message?.includes('Connection is closed') || 
+        error.message?.includes('connection is closed') || 
+        error.message?.includes('connection lost')) {
+      errorMessage = 'Database connection closed during sync. Please check VPN connection and ensure Azure Synapse is accessible.';
+    } else if (error.code === 'ETIMEOUT' || error.code === 'ESOCKET' || error.message?.includes('timeout')) {
+      errorMessage = 'Connection timeout during sync. Please check VPN connection and network settings.';
+    } else if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
+      errorMessage = 'Connection refused. Please check VPN connection and ensure Azure Synapse is accessible.';
+    } else if (error.code === 'ENOTFOUND' || error.message?.includes('ENOTFOUND')) {
+      errorMessage = 'Cannot resolve server address. Please check VPN connection.';
+    } else if (error.message?.includes('Login failed') || error.message?.includes('authentication')) {
+      errorMessage = 'Authentication failed. Please check credentials.';
+    } else if (error.message?.includes('getaddrinfo') || error.message?.includes('DNS')) {
+      errorMessage = 'DNS resolution failed. Please check VPN connection.';
+    }
+    
+    return errorMessage;
+  }
+
+  /**
+   * Validate database connection before operations
+   * Generic helper used by all sync methods - fails fast if connection is closed
+   */
+  async _validateConnection(pool, tableName) {
+    try {
+      await pool.request().query('SELECT 1 as connection_test');
+    } catch (connError) {
+      const errorMessage = this._enhanceConnectionError(connError);
+      throw new Error(`Database connection lost during sync for ${tableName}. ${errorMessage}`);
+    }
+  }
+
   async createConnection() {
     try {
       // Use connect with the same config as syncs - this ensures consistency
@@ -206,20 +245,9 @@ class SynapseSyncService {
         console.error(`   Error code: ${error.code}`);
       }
       
-      // Enhance error message for better user feedback
-      let enhancedError = error;
-      if (error.code === 'ETIMEOUT' || error.code === 'ESOCKET' || error.message?.includes('timeout')) {
-        enhancedError.message = 'Connection timeout. Please check VPN connection and network settings.';
-      } else if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
-        enhancedError.message = 'Connection refused. Please check VPN connection and ensure Azure Synapse is accessible.';
-      } else if (error.code === 'ENOTFOUND' || error.message?.includes('ENOTFOUND')) {
-        enhancedError.message = 'Cannot resolve server address. Please check VPN connection.';
-      } else if (error.message?.includes('Login failed') || error.message?.includes('authentication')) {
-        enhancedError.message = 'Authentication failed. Please check credentials.';
-      } else if (error.message?.includes('getaddrinfo') || error.message?.includes('DNS')) {
-        enhancedError.message = 'DNS resolution failed. Please check VPN connection.';
-      }
-      
+      // Use generic error enhancement helper
+      const enhancedError = new Error(this._enhanceConnectionError(error));
+      enhancedError.originalError = error;
       throw enhancedError;
     }
   }
@@ -249,19 +277,8 @@ class SynapseSyncService {
         console.error(`   Error code: ${error.code}`);
       }
       
-      // Use the same error message enhancement as createConnection
-      let userFriendlyMessage = error.message || 'Unknown error';
-      if (error.code === 'ETIMEOUT' || error.code === 'ESOCKET' || error.message?.includes('timeout')) {
-        userFriendlyMessage = 'Connection timeout. Please check VPN connection and network settings.';
-      } else if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
-        userFriendlyMessage = 'Connection refused. Please check VPN connection and ensure Azure Synapse is accessible.';
-      } else if (error.code === 'ENOTFOUND' || error.message?.includes('ENOTFOUND')) {
-        userFriendlyMessage = 'Cannot resolve server address. Please check VPN connection.';
-      } else if (error.message?.includes('Login failed') || error.message?.includes('authentication')) {
-        userFriendlyMessage = 'Authentication failed. Please check credentials.';
-      } else if (error.message?.includes('getaddrinfo') || error.message?.includes('DNS')) {
-        userFriendlyMessage = 'DNS resolution failed. Please check VPN connection.';
-      }
+      // Use generic error enhancement helper for consistent error messages
+      const userFriendlyMessage = this._enhanceConnectionError(error);
       
       return {
         online: false,
@@ -766,6 +783,10 @@ class SynapseSyncService {
       pool = await this.createConnection();
       logger?.info(`✅ Connected to Synapse for ${runtime.tableName}`);
 
+      // Validate connection before query - fail fast if connection is closed
+      // Uses generic helper method for consistency across all sync methods
+      await this._validateConnection(pool, runtime.tableName);
+
       const result = await pool.request().query(runtime.selectQuery);
       const rawData = result.recordset;
 
@@ -854,7 +875,10 @@ class SynapseSyncService {
       };
 
     } catch (error) {
-      logger?.error(`❌ Sync failed for ${runtime.tableName}:`, error.message);
+      // Use generic error enhancement helper for consistent error messages
+      const errorMessage = this._enhanceConnectionError(error);
+      
+      logger?.error(`❌ Sync failed for ${runtime.tableName}:`, errorMessage);
       const duration = Date.now() - startTime;
       // Still try to update metadata even on failure - use sync config name (tableName) not target table name
       await this.updateSyncMetadata(runtime.tableName, 0, duration);
@@ -863,11 +887,15 @@ class SynapseSyncService {
         success: false,
         recordsProcessed: 0,
         duration,
-        error: error.message
+        error: errorMessage
       };
     } finally {
       if (pool) {
-        await pool.close();
+        try {
+          await pool.close();
+        } catch (closeError) {
+          // Ignore close errors - connection may already be closed
+        }
       }
     }
   }
@@ -908,12 +936,8 @@ class SynapseSyncService {
         logger?.info(`📊 Processing batch ${batchNumber}/${totalBatches} (${offset + 1}-${Math.min(offset + BATCH_SIZE, totalRecords)})...`);
 
         // Validate connection before each batch - fail fast if connection is closed
-        // Test connection with a simple query - if it fails, connection is closed
-        try {
-          await pool.request().query('SELECT 1 as connection_test');
-        } catch (connError) {
-          throw new Error(`Database connection lost during sync. Please check VPN connection and ensure Azure Synapse is accessible. Original error: ${connError.message}`);
-        }
+        // Uses generic helper method for consistency across all sync methods
+        await this._validateConnection(pool, runtime.tableName);
 
         const batchResult = await pool.request().query(batchQuery);
         const batchData = batchResult.recordset;
@@ -959,17 +983,8 @@ class SynapseSyncService {
       };
 
     } catch (error) {
-      // Enhance error message for connection issues
-      let errorMessage = error.message || 'Unknown error';
-      if (error.message?.includes('Connection is closed') || error.message?.includes('connection is closed')) {
-        errorMessage = 'Database connection closed during sync. Please check VPN connection and ensure Azure Synapse is accessible.';
-      } else if (error.code === 'ETIMEOUT' || error.code === 'ESOCKET' || error.message?.includes('timeout')) {
-        errorMessage = 'Connection timeout during sync. Please check VPN connection and network settings.';
-      } else if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
-        errorMessage = 'Connection refused. Please check VPN connection and ensure Azure Synapse is accessible.';
-      } else if (error.code === 'ENOTFOUND' || error.message?.includes('ENOTFOUND')) {
-        errorMessage = 'Cannot resolve server address. Please check VPN connection.';
-      }
+      // Use generic error enhancement helper for consistent error messages
+      const errorMessage = this._enhanceConnectionError(error);
       
       logger?.error(`❌ Sync failed for ${runtime.tableName}:`, errorMessage);
       const duration = Date.now() - startTime;
@@ -1165,11 +1180,8 @@ class SynapseSyncService {
 
       for (let offset = 0; offset < totalRecords; offset += BATCH_SIZE) {
         // Validate connection before each batch - fail fast if connection is closed
-        try {
-          await pool.request().query('SELECT 1 as connection_test');
-        } catch (connError) {
-          throw new Error(`Database connection lost during sync. Please check VPN connection and ensure Azure Synapse is accessible. Original error: ${connError.message}`);
-        }
+        // Uses generic helper method for consistency across all sync methods
+        await this._validateConnection(pool, runtime.tableName);
 
         const batchQuery = `
           SELECT *
@@ -1304,17 +1316,8 @@ class SynapseSyncService {
         detailedLogs: logger?.getLogs() || []
       };
     } catch (error) {
-      // Enhance error message for connection issues
-      let errorMessage = error.message || 'Unknown error';
-      if (error.message?.includes('Connection is closed') || error.message?.includes('connection is closed') || error.message?.includes('connection lost')) {
-        errorMessage = 'Database connection closed during sync. Please check VPN connection and ensure Azure Synapse is accessible.';
-      } else if (error.code === 'ETIMEOUT' || error.code === 'ESOCKET' || error.message?.includes('timeout')) {
-        errorMessage = 'Connection timeout during sync. Please check VPN connection and network settings.';
-      } else if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
-        errorMessage = 'Connection refused. Please check VPN connection and ensure Azure Synapse is accessible.';
-      } else if (error.code === 'ENOTFOUND' || error.message?.includes('ENOTFOUND')) {
-        errorMessage = 'Cannot resolve server address. Please check VPN connection.';
-      }
+      // Use generic error enhancement helper for consistent error messages
+      const errorMessage = this._enhanceConnectionError(error);
       
       logger?.error(`❌ Batch processing failed for ${runtime.tableName}:`, errorMessage);
       
@@ -1343,6 +1346,15 @@ class SynapseSyncService {
         // Check if forceFullSync is requested (e.g., via CLI flag or config)
         const forceFullSync = runtime.overrides?.forceFullSync || false;
 
+        // NOTE: reservationChanges uses SyncOperation wrapper instead of syncDerivedTableWithBatching
+        // because it requires special handling for active reservation IDs filtering.
+        // The loadReservationChangesCurrentState function needs synapseConfig and dateRange
+        // to query stg.RES_HEADER for active reservations, which is different from other derived tables.
+        // This pattern is intentional and correct for this use case.
+        // 
+        // Template for other derived tables: Use syncDerivedTableWithBatching (see competitor/publishedRates)
+        // Template for direct tables: Use syncSmallTable (small) or syncLargeTable (large datasets)
+        
         // Wrap sync function with SyncOperation for logging
         // Pass logger directly - it already has tableName and eventEmitter set from syncTable
         const syncOp = new SyncOperation(syncReservationChanges, logger, {

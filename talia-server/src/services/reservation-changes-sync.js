@@ -450,7 +450,7 @@ export async function syncReservationChanges({
 
   // STEP 5: Get reservation IDs for sailings within the date range from stg.RES_HEADER
   // Logging handled by sync service
-  const pool = await sql.connect(synapseConfig);
+  let pool = await sql.connect(synapseConfig);
   
   const activeResQuery = `
     SELECT DISTINCT RES_ID
@@ -462,8 +462,10 @@ export async function syncReservationChanges({
   const activeResResult = await pool.request().query(activeResQuery);
   const activeResIds = activeResResult.recordset.map(row => row.RES_ID).filter(Boolean);
   
+  // Close initial connection - we'll recreate it after loading current state
+  await pool.close();
+  
   if (activeResIds.length === 0) {
-    await pool.close();
     const duration = Date.now() - startTime;
     await SyncMetadataService.updateSyncMetadataNoData(
       supabaseClient,
@@ -485,9 +487,15 @@ export async function syncReservationChanges({
   // STEP 6: Load current state from database (only for active reservations)
   // Use the exported wrapper function that handles getting activeResIds
   // Logging handled by sync service
+  // This may take time, so we close the previous connection and create a new one after
   const currentState = await loadReservationChangesCurrentState(supabaseClient, synapseConfig, dateRange, logger);
 
-  // STEP 7: Process snapshots only for these reservations
+  // STEP 7: Recreate connection for processing snapshots
+  // Connection may have timed out while loading current state, so create fresh connection
+  // Generic pattern - no table-specific code
+  pool = await sql.connect(synapseConfig);
+  
+  // Process snapshots only for these reservations
   const allChanges = [];
   const allUpdatedStates = [];
   let totalProcessed = 0;
@@ -503,6 +511,7 @@ export async function syncReservationChanges({
   }
   
   try {
+    
     // Process each batch of reservation IDs
     for (let batchIdx = 0; batchIdx < resIdBatches.length; batchIdx++) {
       const resIdBatch = resIdBatches[batchIdx];
@@ -526,6 +535,13 @@ export async function syncReservationChanges({
         WHERE ${whereClause}
       `;
 
+      // Validate connection before each batch query - generic pattern
+      try {
+        await pool.request().query('SELECT 1 as connection_test');
+      } catch (connError) {
+        throw new Error(`Database connection lost during sync. Please check VPN connection and ensure Azure Synapse is accessible. Original error: ${connError.message}`);
+      }
+
       const countResult = await pool.request().query(countQuery);
       const totalRows = countResult.recordset[0].total;
       
@@ -545,6 +561,13 @@ export async function syncReservationChanges({
       logger?.info(`📊 Processing ${totalRows.toLocaleString()} snapshot rows in ${snapshotBatchCount} batch(es) for reservation batch ${batchIdx + 1}/${resIdBatches.length}...`);
       
       for (let offset = 0; offset < totalRows; offset += batchSize) {
+        // Validate connection before each batch query - generic pattern
+        try {
+          await pool.request().query('SELECT 1 as connection_test');
+        } catch (connError) {
+          throw new Error(`Database connection lost during sync. Please check VPN connection and ensure Azure Synapse is accessible. Original error: ${connError.message}`);
+        }
+        
         const batchQuery = `
           SELECT *
           FROM (

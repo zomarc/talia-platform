@@ -29,7 +29,7 @@ export const tableSources = {
     source: 'dwh.Dim_Master_Sail',
     type: 'direct',
     dateColumns: ['sail_date_from', 'sail_date_to', 'vacation_date', 'master_voyage_departure_date'],
-    syncType: 'master_sail'
+    syncType: 'masterSail' // Match sync.config.json key (camelCase)
   },
   sail_by_cabin_occupancy: {
     source: 'dwh.Dim_Sail_By_Cabin_Occupancy',

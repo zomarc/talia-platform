@@ -789,6 +789,15 @@ class SynapseSyncService {
 
       const result = await pool.request().query(runtime.selectQuery);
       const rawData = result.recordset;
+      
+      // Validate connection after query - connection might have closed during query execution
+      // This ensures we catch connection issues early before processing data
+      try {
+        await this._validateConnection(pool, runtime.tableName);
+      } catch (connError) {
+        // Connection closed during query - fail fast with clear error
+        throw new Error(`Database connection closed during query execution for ${runtime.tableName}. ${connError.message}`);
+      }
 
       if (rawData.length === 0) {
         logger?.warn(`⚠️  No data found for ${runtime.tableName} with current constraints`);

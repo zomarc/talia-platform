@@ -28,6 +28,11 @@ async function startServer() {
           email: 'admin@celestyal.com'
         }
       };
+    },
+    // CORS configuration for GraphQL endpoint
+    cors: {
+      origin: '*',
+      credentials: true
     }
   });
 

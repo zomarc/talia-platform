@@ -124,32 +124,48 @@ const DataManagementPage = () => {
             body: JSON.stringify({ query: service.check.query })
           });
           
-          if (response.ok) {
-            const result = await response.json();
-            if (service.id === 'graphql') {
-              // Simple GraphQL server check
-              isOnline = true;
-              statusData = { online: true, lastChecked: new Date() };
-            } else if (result.data) {
-              // Service-specific GraphQL query - check for known query names
-              let serviceStatus = null;
-              if (service.id === 'synapse' && result.data.synapseConnectionStatus) {
-                serviceStatus = result.data.synapseConnectionStatus;
-              } else if (result.data[`${service.id}ConnectionStatus`]) {
-                serviceStatus = result.data[`${service.id}ConnectionStatus`];
-              }
-              
-              if (serviceStatus) {
-                isOnline = serviceStatus.online;
-                statusData = {
-                  online: serviceStatus.online,
-                  lastChecked: serviceStatus.lastChecked ? new Date(serviceStatus.lastChecked) : new Date(),
-                  error: serviceStatus.error || null,
-                  ...(serviceStatus.server && { server: serviceStatus.server }),
-                  ...(serviceStatus.database && { database: serviceStatus.database })
-                };
-              }
+          if (!response.ok) {
+            // HTTP error - server responded but with error status
+            const errorText = await response.text().catch(() => 'Unknown error');
+            throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 100)}`);
+          }
+          
+          const result = await response.json();
+          
+          // Check for GraphQL errors
+          if (result.errors && result.errors.length > 0) {
+            throw new Error(`GraphQL error: ${result.errors[0].message || 'Unknown GraphQL error'}`);
+          }
+          
+          if (service.id === 'graphql') {
+            // Simple GraphQL server check - if we got here, server is online
+            isOnline = true;
+            statusData = { online: true, lastChecked: new Date() };
+          } else if (result.data) {
+            // Service-specific GraphQL query - check for known query names
+            let serviceStatus = null;
+            if (service.id === 'synapse' && result.data.synapseConnectionStatus) {
+              serviceStatus = result.data.synapseConnectionStatus;
+            } else if (result.data[`${service.id}ConnectionStatus`]) {
+              serviceStatus = result.data[`${service.id}ConnectionStatus`];
             }
+            
+            if (serviceStatus) {
+              isOnline = serviceStatus.online;
+              statusData = {
+                online: serviceStatus.online,
+                lastChecked: serviceStatus.lastChecked ? new Date(serviceStatus.lastChecked) : new Date(),
+                error: serviceStatus.error || null,
+                ...(serviceStatus.server && { server: serviceStatus.server }),
+                ...(serviceStatus.database && { database: serviceStatus.database })
+              };
+            } else {
+              // No service status found in response
+              throw new Error(`No status data found in GraphQL response for ${service.id}`);
+            }
+          } else {
+            // No data in response
+            throw new Error(`No data in GraphQL response for ${service.id}`);
           }
         } else if (service.check.method === 'supabase') {
           // Supabase-based check
@@ -182,7 +198,9 @@ const DataManagementPage = () => {
           };
         });
       } catch (error) {
-        // Error checking this service
+        // Error checking this service - log for debugging
+        console.error(`Failed to check ${service.id} status:`, error);
+        
         setServerStatus(prev => {
           const prevStatus = prev[service.id] || {};
           return {
@@ -191,7 +209,7 @@ const DataManagementPage = () => {
               ...prevStatus,
               online: false,
               error: error.message || 'Failed to check connection status',
-              lastChecked: prevStatus.lastChecked || new Date()
+              lastChecked: new Date() // Always update lastChecked even on error
             }
           };
         });
@@ -202,14 +220,14 @@ const DataManagementPage = () => {
     setIsRefreshingStatus(false);
   };
 
-  // Server status polling
+  // Server status polling - reduced frequency to avoid excessive Azure connection tests
   useEffect(() => {
-
     // Initial check
     checkServerStatus();
     
-    // Poll every 5 seconds
-    const interval = setInterval(checkServerStatus, 5000);
+    // Poll every 30 seconds (reduced from 5 seconds to avoid excessive Azure connection tests)
+    // Azure Synapse connection tests are expensive, so we check less frequently
+    const interval = setInterval(checkServerStatus, 30000);
     
     return () => clearInterval(interval);
   }, []); // Empty dependency array - only run on mount/unmount

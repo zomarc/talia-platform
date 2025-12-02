@@ -787,8 +787,25 @@ class SynapseSyncService {
       // Uses generic helper method for consistency across all sync methods
       await this._validateConnection(pool, runtime.tableName);
 
-      const result = await pool.request().query(runtime.selectQuery);
-      const rawData = result.recordset;
+      // Execute query with explicit error handling for connection issues
+      let result;
+      let rawData;
+      try {
+        result = await pool.request().query(runtime.selectQuery);
+        rawData = result.recordset;
+      } catch (queryError) {
+        // Check if it's a connection error - connection might have closed during query
+        if (queryError.message?.includes('Connection is closed') || 
+            queryError.message?.includes('connection is closed') ||
+            queryError.code === 'ECONNRESET' ||
+            queryError.code === 'ETIMEOUT' ||
+            queryError.code === 'ESOCKET') {
+          const errorMessage = this._enhanceConnectionError(queryError);
+          throw new Error(`Database connection lost during query execution for ${runtime.tableName}. ${errorMessage}`);
+        }
+        // Re-throw other query errors as-is
+        throw queryError;
+      }
       
       // Validate connection after query - connection might have closed during query execution
       // This ensures we catch connection issues early before processing data
@@ -796,7 +813,7 @@ class SynapseSyncService {
         await this._validateConnection(pool, runtime.tableName);
       } catch (connError) {
         // Connection closed during query - fail fast with clear error
-        throw new Error(`Database connection closed during query execution for ${runtime.tableName}. ${connError.message}`);
+        throw new Error(`Database connection closed after query execution for ${runtime.tableName}. ${connError.message}`);
       }
 
       if (rawData.length === 0) {

@@ -944,21 +944,17 @@ const DataManagementPage = () => {
         const syncResult = result.data?.syncTable;
         const errorMsg = syncResult?.error || syncResult?.message || 'Unknown error from server';
         
-        // Check if it's a connection error and enhance the message
-        let enhancedErrorMsg = errorMsg;
-        let isConnectionError = false;
+        // Trust the server's error classification - don't re-enhance
+        // Server already handles connection error enhancement appropriately
+        // Only add context if it's clearly a connection error from server
+        const isConnectionError = errorMsg.toLowerCase().includes('connection closed') ||
+                                  errorMsg.toLowerCase().includes('connection timeout') ||
+                                  errorMsg.toLowerCase().includes('connection refused') ||
+                                  errorMsg.toLowerCase().includes('cannot resolve server');
         
-        if (errorMsg.toLowerCase().includes('vpn') || 
-            errorMsg.toLowerCase().includes('connection') ||
-            errorMsg.toLowerCase().includes('cannot connect') ||
-            errorMsg.toLowerCase().includes('timeout') ||
-            errorMsg.toLowerCase().includes('dns') ||
-            errorMsg.toLowerCase().includes('refused')) {
-          isConnectionError = true;
-          enhancedErrorMsg = `🔌 Connection Error: ${errorMsg}. Please check your VPN connection and ensure Azure Synapse is accessible.`;
-        }
-        
-        const detailedError = isConnectionError ? enhancedErrorMsg : `Sync failed: ${errorMsg}`;
+        const detailedError = isConnectionError 
+          ? `🔌 ${errorMsg}` 
+          : `Sync failed: ${errorMsg}`;
         
         // Capture server detailed logs even on failure and add to unified activity log
         if (syncResult?.detailedLogs && syncResult.detailedLogs.length > 0) {

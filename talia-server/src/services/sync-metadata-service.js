@@ -24,9 +24,15 @@ export class SyncMetadataService {
    * @returns {Promise<string|null>} Latest snapshot datetime as ISO string (YYYY-MM-DDTHH:mm:ss.sssZ) or null
    */
   static async getLatestSnapshotDate(synapseConfig, sourceTable, snapshotColumn) {
+    // CRITICAL: sql.connect() creates/returns a GLOBAL connection pool singleton
+    // We should reuse the existing pool if available, or let the caller manage it
+    // DO NOT close the pool here - it will break subsequent operations
     let pool = null;
     try {
+      // Check if a pool already exists for this config
+      // sql.connect() returns the existing global pool if one exists
       pool = await sql.connect(synapseConfig);
+      
       const query = `
         SELECT MAX(${snapshotColumn}) as latest_snapshot_date
         FROM ${sourceTable}
@@ -46,11 +52,9 @@ export class SyncMetadataService {
     } catch (error) {
       console.error(`Error getting latest snapshot date from ${sourceTable}:`, error.message);
       throw error;
-    } finally {
-      if (pool) {
-        await pool.close();
-      }
     }
+    // DO NOT close the pool - sql.connect() returns a global singleton
+    // Closing it here would break the main sync operation that uses the same pool
   }
 
   /**

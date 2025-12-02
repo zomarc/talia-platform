@@ -64,8 +64,17 @@ async function startServer() {
 
     // Subscribe to sync events for this table
     const eventHandler = (event) => {
+      // DEBUG: Log all events to see what's being received
+      console.log(`[SSE DEBUG] Event received for tableName=${tableName}:`, {
+        eventTableName: event.tableName,
+        eventType: event.type,
+        matches: event.tableName === tableName
+      });
+      
       if (event.tableName === tableName) {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
+      } else {
+        console.log(`[SSE DEBUG] Event tableName mismatch: expected ${tableName}, got ${event.tableName}`);
       }
     };
 

@@ -963,7 +963,12 @@ export const resolvers = {
         // Handle dataset parameter - use undefined instead of null
         const datasetName = dataset && dataset !== 'null' ? dataset : undefined;
         
-        const result = await synapseSyncService.syncTable(syncTableName, datasetName, { forceFullSync: forceFullSync || false });
+        // CRITICAL: Pass original tableName for event emission (UI listens to this)
+        // syncTableName is used for sync config lookup, but tableName is used for logger/events
+        const result = await synapseSyncService.syncTable(syncTableName, datasetName, { 
+          forceFullSync: forceFullSync || false,
+          uiTableName: tableName // Pass original tableName for event emission
+        });
 
         return {
           success: result.success,

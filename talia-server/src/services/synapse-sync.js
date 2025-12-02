@@ -51,6 +51,18 @@ class SynapseSyncService {
       }
     };
 
+    // Separate config for status checks - uses a smaller pool to avoid conflicts
+    // Note: Each new ConnectionPool() creates a separate instance, so no need for a name
+    this.statusCheckConfig = {
+      ...this.synapseConfig,
+      pool: {
+        max: 1, // Status checks only need 1 connection
+        min: 0,
+        idleTimeoutMillis: 30000, // 30 seconds - shorter timeout for status checks
+        acquireTimeoutMillis: 10000 // 10 seconds to acquire connection
+      }
+    };
+
     this.tableDefinitions = syncConfig.tables || {};
     this.datasets = syncConfig.datasets || {};
     this.defaultDataset = syncConfig.defaultDataset || Object.keys(this.datasets)[0] || null;
@@ -65,6 +77,29 @@ class SynapseSyncService {
     // Store active sync logs for real-time polling
     // Format: { tableName: { logger: SyncLogger, startTime: number, status: 'running'|'completed'|'failed' } }
     this.activeSyncs = new Map();
+    
+    // Separate connection pool for status checks (to avoid interfering with sync operations)
+    this.statusCheckPool = null;
+  }
+  
+  /**
+   * Map sync.config.json table key (camelCase) to syncType (snake_case) for metadata
+   * This ensures metadata uses consistent naming that matches tableSources.js
+   */
+  getSyncType(tableName) {
+    const syncTypeMap = {
+      'ships': 'ships',
+      'cabinAvailability': 'cabin_availability',
+      'reservations': 'reservation',
+      'masterSail': 'master_sail',
+      'sailByCabinOccupancy': 'sail_by_cabin_occupancy',
+      'publishedRates': 'published_rates',
+      'competitor': 'competitor',
+      'reservationChanges': 'reservation_changes',
+      'reservationPromotion': 'reservation_promotion'
+    };
+    
+    return syncTypeMap[tableName] || tableName; // Fallback to tableName if not in map
   }
   
   /**
@@ -76,31 +111,30 @@ class SynapseSyncService {
     // Try direct lookup first
     let syncInfo = this.activeSyncs.get(tableName);
     
-    // If not found, try reverse mapping (for UI table names)
-    if (!syncInfo) {
-      const reverseMap = {
-        'ships': 'ship',
-        'cabinAvailability': 'cabin_availability',
-        'reservations': 'reservation',
-        'reservationPromotion': 'reservation_promotion',
-        'masterSail': 'master_sail',
-        'sailByCabinOccupancy': 'sail_by_cabin_occupancy',
-        'reservationChanges': 'reservation_changes',
-        'publishedRates': 'published_rates',
-        'competitor': 'competitor'
-      };
-      
-      // Check if any active sync matches this UI table name
-      for (const [syncConfigName, uiTableName] of Object.entries(reverseMap)) {
-        if (uiTableName === tableName) {
+      // If not found, try reverse mapping (for UI table names)
+      // Map UI table names (snake_case) to sync.config.json keys (camelCase)
+      if (!syncInfo) {
+        const uiToSyncConfigMap = {
+          'ship': 'ships',
+          'cabin_availability': 'cabinAvailability',
+          'reservation': 'reservations',
+          'reservation_promotion': 'reservationPromotion',
+          'master_sail': 'masterSail',
+          'sail_by_cabin_occupancy': 'sailByCabinOccupancy',
+          'reservation_changes': 'reservationChanges',
+          'published_rates': 'publishedRates',
+          'competitor': 'competitor'
+        };
+        
+        // Check if any active sync matches this UI table name
+        const syncConfigName = uiToSyncConfigMap[tableName];
+        if (syncConfigName) {
           syncInfo = this.activeSyncs.get(syncConfigName);
           if (syncInfo) {
             tableName = syncConfigName; // Use sync config name for return
-            break;
           }
         }
       }
-    }
     
     if (!syncInfo) {
       return null;
@@ -168,12 +202,13 @@ class SynapseSyncService {
     console.log(`   Database: ${this.synapseConfig.database}`);
     console.log(`   User: ${this.synapseConfig.user}`);
 
+    let pool = null;
     try {
-      const pool = await sql.connect(this.synapseConfig);
+      // Use separate pool to avoid interfering with active syncs
+      pool = await this.createStatusCheckConnection();
       console.log('✅ Successfully connected to Azure Synapse');
       const result = await pool.request().query('SELECT 1 test');
       console.log(`✅ Test query successful: ${result.recordset[0].test}`);
-      await pool.close();
       return true;
     } catch (error) {
       console.error('❌ Connection failed:', error.message);
@@ -181,6 +216,14 @@ class SynapseSyncService {
         console.error(`   Error code: ${error.code}`);
       }
       return false;
+    } finally {
+      if (pool) {
+        try {
+          await pool.close();
+        } catch (closeError) {
+          // Ignore close errors
+        }
+      }
     }
   }
 
@@ -197,47 +240,64 @@ class SynapseSyncService {
 
   /**
    * Enhance connection error messages for better user feedback
+   * ONLY enhances actual connection errors - returns original message for other errors
    * Generic helper used by all sync methods
    */
   _enhanceConnectionError(error) {
-    let errorMessage = error.message || 'Unknown error';
+    // If it's not a connection-related error, return the original message
+    const isConnectionError = 
+      error.code === 'ETIMEOUT' ||
+      error.code === 'ESOCKET' ||
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ENOTFOUND' ||
+      error.code === 'ECONNRESET' ||
+      error.message?.includes('Connection is closed') ||
+      error.message?.includes('connection is closed') ||
+      error.message?.includes('connection lost') ||
+      error.message?.includes('Login failed') ||
+      error.message?.includes('authentication failed') ||
+      error.message?.includes('getaddrinfo') ||
+      error.message?.includes('DNS') ||
+      error.message?.includes('ENOTFOUND') ||
+      error.message?.includes('ECONNREFUSED') ||
+      error.message?.includes('ETIMEOUT') ||
+      error.message?.includes('ESOCKET');
     
+    // Only enhance if it's actually a connection error
+    if (!isConnectionError) {
+      return error.message || 'Unknown error';
+    }
+    
+    // Enhance connection errors with user-friendly messages
     if (error.message?.includes('Connection is closed') || 
         error.message?.includes('connection is closed') || 
-        error.message?.includes('connection lost')) {
-      errorMessage = 'Database connection closed during sync. Please check VPN connection and ensure Azure Synapse is accessible.';
+        error.message?.includes('connection lost') ||
+        error.code === 'ECONNRESET') {
+      return 'Database connection closed during sync. Please check VPN connection and ensure Azure Synapse is accessible.';
     } else if (error.code === 'ETIMEOUT' || error.code === 'ESOCKET' || error.message?.includes('timeout')) {
-      errorMessage = 'Connection timeout during sync. Please check VPN connection and network settings.';
+      return 'Connection timeout during sync. Please check VPN connection and network settings.';
     } else if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
-      errorMessage = 'Connection refused. Please check VPN connection and ensure Azure Synapse is accessible.';
+      return 'Connection refused. Please check VPN connection and ensure Azure Synapse is accessible.';
     } else if (error.code === 'ENOTFOUND' || error.message?.includes('ENOTFOUND')) {
-      errorMessage = 'Cannot resolve server address. Please check VPN connection.';
+      return 'Cannot resolve server address. Please check VPN connection.';
     } else if (error.message?.includes('Login failed') || error.message?.includes('authentication')) {
-      errorMessage = 'Authentication failed. Please check credentials.';
+      return 'Authentication failed. Please check credentials.';
     } else if (error.message?.includes('getaddrinfo') || error.message?.includes('DNS')) {
-      errorMessage = 'DNS resolution failed. Please check VPN connection.';
+      return 'DNS resolution failed. Please check VPN connection.';
     }
     
-    return errorMessage;
+    // For other connection errors, return original message
+    return error.message || 'Connection error occurred';
   }
 
-  /**
-   * Validate database connection before operations
-   * Generic helper used by all sync methods - fails fast if connection is closed
-   */
-  async _validateConnection(pool, tableName) {
-    try {
-      await pool.request().query('SELECT 1 as connection_test');
-    } catch (connError) {
-      const errorMessage = this._enhanceConnectionError(connError);
-      throw new Error(`Database connection lost during sync for ${tableName}. ${errorMessage}`);
-    }
-  }
 
   async createConnection() {
     try {
-      // Use connect with the same config as syncs - this ensures consistency
-      const pool = await sql.connect(this.synapseConfig);
+      // Use ConnectionPool directly instead of sql.connect() to avoid global singleton conflicts
+      // This ensures each sync operation has its own independent connection pool
+      // that won't be affected by status checks or other operations
+      const pool = new sql.ConnectionPool(this.synapseConfig);
+      await pool.connect();
       return pool;
     } catch (error) {
       console.error('❌ Failed to create connection:', error.message);
@@ -253,14 +313,33 @@ class SynapseSyncService {
   }
   
   /**
-   * Test connection using the same method as actual syncs
-   * This ensures the test behaves the same way as real operations
+   * Create a separate connection pool for status checks
+   * This ensures status checks don't interfere with active sync operations
+   * Uses ConnectionPool directly to avoid global singleton conflicts
+   */
+  async createStatusCheckConnection() {
+    try {
+      // Create a NEW ConnectionPool instance (not using sql.connect() which uses global singleton)
+      // This ensures status checks use a completely separate pool from sync operations
+      const pool = new sql.ConnectionPool(this.statusCheckConfig);
+      await pool.connect();
+      return pool;
+    } catch (error) {
+      console.error('❌ Failed to create status check connection:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Test connection using a SEPARATE connection pool
+   * This ensures status checks don't interfere with active sync operations
    */
   async testConnectionUsingSyncMethod() {
     let pool = null;
     try {
-      // Use the same connection method as syncs
-      pool = await this.createConnection();
+      // Use a SEPARATE connection pool for status checks
+      // This prevents status checks from interfering with active sync operations
+      pool = await this.createStatusCheckConnection();
       console.log('✅ Successfully connected to Azure Synapse (using sync method)');
       
       // Test query
@@ -285,11 +364,13 @@ class SynapseSyncService {
         error: userFriendlyMessage
       };
     } finally {
+      // CRITICAL: Always close the status check connection pool
+      // This prevents status checks from interfering with active sync operations
       if (pool) {
         try {
           await pool.close();
         } catch (closeError) {
-          // Ignore close errors
+          // Ignore close errors - connection may already be closed
         }
       }
     }
@@ -733,48 +814,6 @@ class SynapseSyncService {
     }
   }
 
-  /**
-   * Update sync metadata for direct tables
-   */
-  async updateSyncMetadata(tableName, recordsProcessed, durationMs) {
-    try {
-      console.log(`📝 Updating sync metadata for ${tableName}: records=${recordsProcessed}, duration=${durationMs}ms`);
-      const now = new Date();
-      const today = now.toISOString().split('T')[0]; // YYYY-MM-DD format for date
-      
-      const { data, error } = await supabaseDataService.client
-        .from('sync_metadata')
-        .upsert({
-          sync_type: tableName,
-          last_processed_date: today, // Required field - use today's date for direct tables
-          records_processed: recordsProcessed,
-          duration_ms: durationMs,
-          last_sync_at: now.toISOString(),
-          updated_at: now.toISOString()
-        }, {
-          onConflict: 'sync_type'
-        });
-
-      if (error) {
-        console.error(`❌ Failed to update sync metadata for ${tableName}:`, error);
-        console.error(`   Error details:`, JSON.stringify(error, null, 2));
-        // Don't throw - metadata update failure shouldn't fail the sync
-        // But log it prominently so it's visible
-        console.warn(`⚠️  WARNING: Sync metadata not updated for ${tableName}. Sync succeeded but metadata update failed.`);
-      } else {
-        console.log(`✅ Updated sync metadata for ${tableName}`);
-        if (data && data.length > 0) {
-          console.log(`   Metadata record:`, JSON.stringify(data[0], null, 2));
-        }
-      }
-    } catch (error) {
-      console.error(`❌ Error updating sync metadata for ${tableName}:`, error);
-      console.error(`   Stack:`, error.stack);
-      console.warn(`⚠️  WARNING: Sync metadata update threw exception for ${tableName}. Sync succeeded but metadata may not be updated.`);
-      // Don't throw - metadata update failure shouldn't fail the sync
-    }
-  }
-
   async syncSmallTable(runtime, logger) {
     const startTime = Date.now();
     let pool = null;
@@ -783,37 +822,68 @@ class SynapseSyncService {
       pool = await this.createConnection();
       logger?.info(`✅ Connected to Synapse for ${runtime.tableName}`);
 
-      // Validate connection before query - fail fast if connection is closed
-      // Uses generic helper method for consistency across all sync methods
-      await this._validateConnection(pool, runtime.tableName);
-
-      // Execute query with explicit error handling for connection issues
-      let result;
+      // Execute query with retry logic for connection errors
       let rawData;
-      try {
-        result = await pool.request().query(runtime.selectQuery);
-        rawData = result.recordset;
-      } catch (queryError) {
-        // Check if it's a connection error - connection might have closed during query
-        if (queryError.message?.includes('Connection is closed') || 
-            queryError.message?.includes('connection is closed') ||
-            queryError.code === 'ECONNRESET' ||
-            queryError.code === 'ETIMEOUT' ||
-            queryError.code === 'ESOCKET') {
-          const errorMessage = this._enhanceConnectionError(queryError);
-          throw new Error(`Database connection lost during query execution for ${runtime.tableName}. ${errorMessage}`);
+      let retryCount = 0;
+      const maxRetries = 2;
+      
+      while (retryCount <= maxRetries) {
+        try {
+          // Check connection health before query
+          try {
+            await pool.request().query('SELECT 1 as health_check');
+          } catch (healthError) {
+            logger?.warn(`⚠️  Connection unhealthy before query, reconnecting...`);
+            if (pool) {
+              try {
+                await pool.close();
+              } catch (closeError) {
+                // Ignore
+              }
+            }
+            pool = await this.createConnection();
+            logger?.info(`✅ Reconnected to Synapse`);
+          }
+          
+          const result = await pool.request().query(runtime.selectQuery);
+          rawData = result.recordset;
+          break; // Success - exit retry loop
+        } catch (queryError) {
+          const isConnectionError = queryError.code === 'ECONNCLOSED' || 
+                                   queryError.message?.includes('Connection is closed') ||
+                                   queryError.message?.includes('connection is closed');
+          
+          if (isConnectionError && retryCount < maxRetries) {
+            retryCount++;
+            logger?.warn(`⚠️  Connection closed during query (attempt ${retryCount}/${maxRetries}), reconnecting...`);
+            
+            try {
+              if (pool) {
+                try {
+                  await pool.close();
+                } catch (closeError) {
+                  // Ignore
+                }
+              }
+              pool = await this.createConnection();
+              logger?.info(`✅ Reconnected to Synapse, retrying query (attempt ${retryCount})...`);
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              continue;
+            } catch (reconnectError) {
+              logger?.error(`❌ Failed to reconnect:`, reconnectError.message);
+              if (retryCount >= maxRetries) {
+                throw queryError;
+              }
+              continue;
+            }
+          } else {
+            throw queryError;
+          }
         }
-        // Re-throw other query errors as-is
-        throw queryError;
       }
       
-      // Validate connection after query - connection might have closed during query execution
-      // This ensures we catch connection issues early before processing data
-      try {
-        await this._validateConnection(pool, runtime.tableName);
-      } catch (connError) {
-        // Connection closed during query - fail fast with clear error
-        throw new Error(`Database connection closed after query execution for ${runtime.tableName}. ${connError.message}`);
+      if (!rawData) {
+        throw new Error(`Failed to execute query after ${maxRetries} retries`);
       }
 
       if (rawData.length === 0) {
@@ -831,8 +901,19 @@ class SynapseSyncService {
           });
         }
         
-        // Update sync metadata - use sync config name (tableName) not target table name
-        await this.updateSyncMetadata(runtime.tableName, 0, duration);
+        // Update sync metadata using SyncMetadataService (consistent with derived tables)
+        // Direct tables don't have snapshot dates, so pass null
+        // Use getSyncType to map camelCase tableName to snake_case syncType
+        await SyncMetadataService.updateSyncMetadata(
+          supabaseDataService.client,
+          this.getSyncType(runtime.tableName),
+          null, // lastProcessedSnapshotDate - direct tables don't have snapshots
+          null, // latestAvailableSnapshotDate - direct tables don't have snapshots
+          0, // recordsProcessed
+          0, // changesDetected - direct tables don't track changes
+          duration,
+          runtime.datasetName
+        );
         return {
           tableName: runtime.tableName,
           success: true,
@@ -889,8 +970,19 @@ class SynapseSyncService {
       // Logger automatically emits events via eventEmitter
       logger?.info(`✅ Sync completed for ${runtime.tableName} in ${duration}ms`);
 
-      // Update sync metadata - use sync config name (tableName) not target table name
-      await this.updateSyncMetadata(runtime.tableName, transformedData.length, duration);
+      // Update sync metadata using SyncMetadataService (consistent with derived tables)
+      // Direct tables don't have snapshot dates, so pass null
+      // Use getSyncType to map camelCase tableName to snake_case syncType
+      await SyncMetadataService.updateSyncMetadata(
+        supabaseDataService.client,
+        this.getSyncType(runtime.tableName),
+        null, // lastProcessedSnapshotDate - direct tables don't have snapshots
+        null, // latestAvailableSnapshotDate - direct tables don't have snapshots
+        transformedData.length, // recordsProcessed
+        0, // changesDetected - direct tables don't track changes
+        duration,
+        runtime.datasetName
+      );
 
       return {
         tableName: runtime.tableName,
@@ -901,13 +993,36 @@ class SynapseSyncService {
       };
 
     } catch (error) {
-      // Use generic error enhancement helper for consistent error messages
-      const errorMessage = this._enhanceConnectionError(error);
+      // Only enhance connection errors - preserve original message for others
+      const isConnectionError = 
+        error.code === 'ETIMEOUT' ||
+        error.code === 'ESOCKET' ||
+        error.code === 'ECONNREFUSED' ||
+        error.code === 'ENOTFOUND' ||
+        error.code === 'ECONNRESET' ||
+        error.message?.includes('Connection is closed') ||
+        error.message?.includes('connection is closed') ||
+        error.message?.includes('connection lost');
+      
+      const errorMessage = isConnectionError 
+        ? this._enhanceConnectionError(error)
+        : (error.message || 'Unknown error occurred');
       
       logger?.error(`❌ Sync failed for ${runtime.tableName}:`, errorMessage);
       const duration = Date.now() - startTime;
-      // Still try to update metadata even on failure - use sync config name (tableName) not target table name
-      await this.updateSyncMetadata(runtime.tableName, 0, duration);
+      // Still try to update metadata even on failure using SyncMetadataService
+      // Direct tables don't have snapshot dates, so pass null
+      // Use getSyncType to map camelCase tableName to snake_case syncType
+      await SyncMetadataService.updateSyncMetadata(
+        supabaseDataService.client,
+        this.getSyncType(runtime.tableName),
+        null, // lastProcessedSnapshotDate - direct tables don't have snapshots
+        null, // latestAvailableSnapshotDate - direct tables don't have snapshots
+        0, // recordsProcessed
+        0, // changesDetected - direct tables don't track changes
+        duration,
+        runtime.datasetName
+      );
       return {
         tableName: runtime.tableName,
         success: false,
@@ -940,7 +1055,66 @@ class SynapseSyncService {
 
       logger?.info(`📊 Getting total record count from ${runtime.source}...`);
       const countQuery = this.buildCountQuery(runtime);
-      const countResult = await pool.request().query(countQuery);
+      
+      // Execute count query with retry logic
+      let countResult;
+      let retryCount = 0;
+      const maxRetries = 2;
+      
+      while (retryCount <= maxRetries) {
+        try {
+          // Check connection health before query
+          try {
+            await pool.request().query('SELECT 1 as health_check');
+          } catch (healthError) {
+            logger?.warn(`⚠️  Connection unhealthy before count query, reconnecting...`);
+            if (pool) {
+              try {
+                await pool.close();
+              } catch (closeError) {
+                // Ignore
+              }
+            }
+            pool = await this.createConnection();
+            logger?.info(`✅ Reconnected to Synapse for count query`);
+          }
+          
+          countResult = await pool.request().query(countQuery);
+          break; // Success - exit retry loop
+        } catch (queryError) {
+          const isConnectionError = queryError.code === 'ECONNCLOSED' || 
+                                   queryError.message?.includes('Connection is closed') ||
+                                   queryError.message?.includes('connection is closed');
+          
+          if (isConnectionError && retryCount < maxRetries) {
+            retryCount++;
+            logger?.warn(`⚠️  Connection closed during count query (attempt ${retryCount}/${maxRetries}), reconnecting...`);
+            
+            try {
+              if (pool) {
+                try {
+                  await pool.close();
+                } catch (closeError) {
+                  // Ignore
+                }
+              }
+              pool = await this.createConnection();
+              logger?.info(`✅ Reconnected to Synapse, retrying count query (attempt ${retryCount})...`);
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              continue;
+            } catch (reconnectError) {
+              logger?.error(`❌ Failed to reconnect for count query:`, reconnectError.message);
+              if (retryCount >= maxRetries) {
+                throw queryError;
+              }
+              continue;
+            }
+          } else {
+            throw queryError;
+          }
+        }
+      }
+      
       const totalRecords = countResult.recordset[0].total;
       logger?.info(`📊 Total records to process: ${totalRecords.toLocaleString()}`);
       
@@ -961,12 +1135,87 @@ class SynapseSyncService {
         // Logger automatically emits events via eventEmitter
         logger?.info(`📊 Processing batch ${batchNumber}/${totalBatches} (${offset + 1}-${Math.min(offset + BATCH_SIZE, totalRecords)})...`);
 
-        // Validate connection before each batch - fail fast if connection is closed
-        // Uses generic helper method for consistency across all sync methods
-        await this._validateConnection(pool, runtime.tableName);
-
-        const batchResult = await pool.request().query(batchQuery);
-        const batchData = batchResult.recordset;
+        // Execute batch query with automatic reconnection on connection errors
+        let batchData;
+        let retryCount = 0;
+        const maxRetries = 2;
+        
+        while (retryCount <= maxRetries) {
+          try {
+            // Check connection health right before query (catches race conditions)
+            try {
+              await pool.request().query('SELECT 1 as health_check');
+            } catch (healthError) {
+              // Connection is closed - reconnect before query
+              logger?.warn(`⚠️  Connection unhealthy before batch ${batchNumber} query, reconnecting...`);
+              if (pool) {
+                try {
+                  await pool.close();
+                } catch (closeError) {
+                  // Ignore
+                }
+              }
+              pool = await this.createConnection();
+              logger?.info(`✅ Reconnected to Synapse for batch ${batchNumber}`);
+            }
+            
+            // Execute the actual batch query
+            const batchResult = await pool.request().query(batchQuery);
+            batchData = batchResult.recordset;
+            break; // Success - exit retry loop
+          } catch (queryError) {
+            // If it's a connection error, try to reconnect and retry
+            const isConnectionError = queryError.code === 'ECONNCLOSED' || 
+                                     queryError.message?.includes('Connection is closed') ||
+                                     queryError.message?.includes('connection is closed');
+            
+            if (isConnectionError && retryCount < maxRetries) {
+              retryCount++;
+              logger?.warn(`⚠️  Connection closed during batch ${batchNumber} query (attempt ${retryCount}/${maxRetries}), reconnecting...`);
+              
+              try {
+                // Close old pool if it exists
+                if (pool) {
+                  try {
+                    await pool.close();
+                  } catch (closeError) {
+                    // Ignore close errors
+                  }
+                }
+                
+                // Create new connection
+                pool = await this.createConnection();
+                logger?.info(`✅ Reconnected to Synapse, retrying batch ${batchNumber} (attempt ${retryCount})...`);
+                
+                // Wait a moment before retrying to let connection stabilize
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Continue loop to retry query
+                continue;
+              } catch (reconnectError) {
+                logger?.error(`❌ Failed to reconnect for batch ${batchNumber}:`, reconnectError.message);
+                if (retryCount >= maxRetries) {
+                  // Max retries reached - throw original error
+                  throw queryError;
+                }
+                // Try again
+                continue;
+              }
+            } else {
+              // Not a connection error, or max retries reached - log and throw
+              logger?.error(`❌ Failed to execute batch query for ${runtime.tableName} (batch ${batchNumber}):`, queryError.message);
+              if (queryError.code) {
+                logger?.error(`   Error code: ${queryError.code}`);
+              }
+              throw queryError;
+            }
+          }
+        }
+        
+        // If we get here without breaking, all retries failed
+        if (!batchData) {
+          throw new Error(`Failed to execute batch ${batchNumber} after ${maxRetries} retries`);
+        }
 
         if (!batchData.length) {
           break;
@@ -997,8 +1246,19 @@ class SynapseSyncService {
       logger?.info(`✅ Sync completed for ${runtime.tableName} in ${duration}ms`);
       logger?.info(`📊 Total records processed: ${totalProcessed.toLocaleString()}`);
 
-      // Update sync metadata - use sync config name (tableName) not target table name
-      await this.updateSyncMetadata(runtime.tableName, totalProcessed, duration);
+      // Update sync metadata using SyncMetadataService (consistent with derived tables)
+      // Direct tables don't have snapshot dates, so pass null
+      // Use getSyncType to map camelCase tableName to snake_case syncType
+      await SyncMetadataService.updateSyncMetadata(
+        supabaseDataService.client,
+        this.getSyncType(runtime.tableName),
+        null, // lastProcessedSnapshotDate - direct tables don't have snapshots
+        null, // latestAvailableSnapshotDate - direct tables don't have snapshots
+        totalProcessed, // recordsProcessed
+        0, // changesDetected - direct tables don't track changes
+        duration,
+        runtime.datasetName
+      );
 
       return {
         tableName: runtime.tableName,
@@ -1009,13 +1269,36 @@ class SynapseSyncService {
       };
 
     } catch (error) {
-      // Use generic error enhancement helper for consistent error messages
-      const errorMessage = this._enhanceConnectionError(error);
+      // Only enhance connection errors - preserve original message for others
+      const isConnectionError = 
+        error.code === 'ETIMEOUT' ||
+        error.code === 'ESOCKET' ||
+        error.code === 'ECONNREFUSED' ||
+        error.code === 'ENOTFOUND' ||
+        error.code === 'ECONNRESET' ||
+        error.message?.includes('Connection is closed') ||
+        error.message?.includes('connection is closed') ||
+        error.message?.includes('connection lost');
+      
+      const errorMessage = isConnectionError 
+        ? this._enhanceConnectionError(error)
+        : (error.message || 'Unknown error occurred');
       
       logger?.error(`❌ Sync failed for ${runtime.tableName}:`, errorMessage);
       const duration = Date.now() - startTime;
-      // Still try to update metadata even on failure
-      await this.updateSyncMetadata(runtime.targetTable, totalProcessed, duration);
+      // Still try to update metadata even on failure using SyncMetadataService
+      // Direct tables don't have snapshot dates, so pass null
+      // Use getSyncType to map camelCase tableName to snake_case syncType
+      await SyncMetadataService.updateSyncMetadata(
+        supabaseDataService.client,
+        this.getSyncType(runtime.tableName),
+        null, // lastProcessedSnapshotDate - direct tables don't have snapshots
+        null, // latestAvailableSnapshotDate - direct tables don't have snapshots
+        totalProcessed, // recordsProcessed
+        0, // changesDetected - direct tables don't track changes
+        duration,
+        runtime.datasetName
+      );
       return {
         tableName: runtime.tableName,
         success: false,
@@ -1069,7 +1352,7 @@ class SynapseSyncService {
       logger?.info(`📥 Loading current state for ${runtime.tableName}...`);
       // For reservationChanges, currentStateLoader needs synapseConfig and dateRange
       // For others, it only needs supabaseClient and logger
-      const currentState = metadataConfig.syncType === 'reservationChanges'
+      const currentState = metadataConfig.syncType === 'reservation_changes'
         ? await currentStateLoader(supabaseDataService.client, this.synapseConfig, metadataConfig.dateRange, logger)
         : await currentStateLoader(supabaseDataService.client, logger);
       logger?.info(`✅ Loaded ${currentState.size.toLocaleString()} current state records`);
@@ -1077,19 +1360,39 @@ class SynapseSyncService {
       // STEP 2: Check metadata and determine sync type
       const { syncType, dateRange, forceFullSync, dataset } = metadataConfig;
       
-      // Get latest snapshot date from source
+      // STEP 3: Connect to Synapse FIRST (before checking metadata)
+      // This ensures we have a connection pool that won't be closed by getLatestSnapshotDate
+      pool = await this.createConnection();
+      logger?.info(`✅ Connected to Synapse for ${runtime.tableName}`);
+      
+      // Get latest snapshot date from source (using the existing pool)
       // For competitor and publishedRates, use the appropriate snapshot date column
       const snapshotDateColumn = metadataConfig.syncType === 'competitor' 
         ? 'Snapshot_Date' 
-        : metadataConfig.syncType === 'publishedRates' 
+        : metadataConfig.syncType === 'published_rates' 
           ? 'SNAPSHOT_DATE' 
           : runtime.dateColumn || 'Snapshot_Date';
       
-      const latestAvailableSnapshotDate = await SyncMetadataService.getLatestSnapshotDate(
-        this.synapseConfig,
-        runtime.source,
-        snapshotDateColumn
-      );
+      // Use the existing pool instead of creating a new one
+      let latestAvailableSnapshotDate;
+      try {
+        const query = `
+          SELECT MAX(${snapshotDateColumn}) as latest_snapshot_date
+          FROM ${runtime.source}
+        `;
+        const result = await pool.request().query(query);
+        const latestDate = result.recordset[0]?.latest_snapshot_date;
+        if (latestDate) {
+          const date = new Date(latestDate);
+          date.setHours(0, 0, 0, 0);
+          latestAvailableSnapshotDate = date.toISOString();
+        } else {
+          latestAvailableSnapshotDate = null;
+        }
+      } catch (error) {
+        logger?.error(`❌ Failed to get latest snapshot date:`, error.message);
+        throw error;
+      }
 
       // Get last processed snapshot date
       const lastProcessedSnapshotDate = forceFullSync 
@@ -1110,6 +1413,14 @@ class SynapseSyncService {
             duration,
             dataset
           );
+          // Close pool before returning
+          if (pool) {
+            try {
+              await pool.close();
+            } catch (closeError) {
+              // Ignore close errors
+            }
+          }
           return {
             tableName: runtime.tableName,
             success: true,
@@ -1122,17 +1433,13 @@ class SynapseSyncService {
         }
       }
 
-      // STEP 3: Connect to Synapse and query in batches
-      pool = await this.createConnection();
-      logger?.info(`✅ Connected to Synapse for ${runtime.tableName}`);
-
       // Build WHERE clause for the query
       // For derived tables (competitor, publishedRates), build dynamic WHERE clause
       // that includes Departure_Date range and optionally Snapshot_Date filter
       let whereClause = runtime.whereClause || '';
       
-      // For competitor and publishedRates, build WHERE clause dynamically
-      if (metadataConfig.syncType === 'competitor' || metadataConfig.syncType === 'publishedRates') {
+      // For competitor and published_rates, build WHERE clause dynamically
+      if (metadataConfig.syncType === 'competitor' || metadataConfig.syncType === 'published_rates') {
         const { dateRange, forceFullSync } = metadataConfig;
         const departureDateColumn = metadataConfig.syncType === 'competitor' ? 'Departure_Date' : 'DEPARTURE_DATE';
         const snapshotDateColumn = metadataConfig.syncType === 'competitor' ? 'Snapshot_Date' : 'SNAPSHOT_DATE';
@@ -1163,9 +1470,21 @@ class SynapseSyncService {
 
       // Get total count
       const countQuery = `SELECT COUNT(*) as total FROM (${rowNumberQuery}) AS numbered`;
-      const countResult = await pool.request().query(countQuery);
-      const totalRecords = countResult.recordset[0].total;
-      logger?.info(`📊 Total records to process: ${totalRecords.toLocaleString()}`);
+      let totalRecords;
+      try {
+        const countResult = await pool.request().query(countQuery);
+        totalRecords = countResult.recordset[0].total;
+        logger?.info(`📊 Total records to process: ${totalRecords.toLocaleString()}`);
+      } catch (queryError) {
+        // Log SQL query errors with full context
+        logger?.error(`❌ Failed to execute count query for ${runtime.tableName}:`, queryError.message);
+        logger?.error(`   Query: ${countQuery.substring(0, 200)}...`);
+        if (queryError.code) {
+          logger?.error(`   Error code: ${queryError.code}`);
+        }
+        // Re-throw - let the catch block handle it
+        throw queryError;
+      }
       
       // Emit initial progress event
       if (logger?.tableName && logger?.eventEmitter) {
@@ -1205,10 +1524,6 @@ class SynapseSyncService {
       let batchNumber = 1;
 
       for (let offset = 0; offset < totalRecords; offset += BATCH_SIZE) {
-        // Validate connection before each batch - fail fast if connection is closed
-        // Uses generic helper method for consistency across all sync methods
-        await this._validateConnection(pool, runtime.tableName);
-
         const batchQuery = `
           SELECT *
           FROM (
@@ -1221,8 +1536,111 @@ class SynapseSyncService {
         // Logger automatically emits events via eventEmitter
         logger?.info(`📊 Processing batch ${batchNumber}/${totalBatches} (${offset + 1}-${Math.min(offset + BATCH_SIZE, totalRecords)})...`);
 
-        const batchResult = await pool.request().query(batchQuery);
-        const batch = batchResult.recordset;
+        // Execute batch query with automatic reconnection on connection errors
+        let batch;
+        let retryCount = 0;
+        const maxRetries = 2;
+        
+        while (retryCount <= maxRetries) {
+          try {
+            // Check connection health right before query (catches race conditions)
+            try {
+              await pool.request().query('SELECT 1 as health_check');
+            } catch (healthError) {
+              // Connection is closed - reconnect before query
+              logger?.warn(`⚠️  Connection unhealthy before batch ${batchNumber} query, reconnecting...`);
+              if (pool) {
+                try {
+                  await pool.close();
+                } catch (closeError) {
+                  // Ignore
+                }
+              }
+              pool = await this.createConnection();
+              logger?.info(`✅ Reconnected to Synapse for batch ${batchNumber}`);
+            }
+            
+            // Execute the actual batch query
+            // Wrap in try-catch to handle connection errors that occur during query execution
+            try {
+              const batchResult = await pool.request().query(batchQuery);
+              batch = batchResult.recordset;
+              break; // Success - exit retry loop
+            } catch (queryExecError) {
+              // Re-throw to be caught by outer catch block
+              throw queryExecError;
+            }
+          } catch (queryError) {
+            // Log the error details for debugging
+            console.error(`[RETRY DEBUG] Batch ${batchNumber} query error:`, {
+              code: queryError.code,
+              message: queryError.message,
+              name: queryError.name,
+              retryCount
+            });
+            
+            // If it's a connection error, try to reconnect and retry
+            // Check both error code and error name/type
+            const isConnectionError = queryError.code === 'ECONNCLOSED' || 
+                                     queryError.code === 'ETIMEOUT' ||
+                                     queryError.code === 'ESOCKET' ||
+                                     queryError.code === 'ECONNRESET' ||
+                                     queryError.name === 'ConnectionError' ||
+                                     queryError.name === 'RequestError' ||
+                                     queryError.message?.includes('Connection is closed') ||
+                                     queryError.message?.includes('connection is closed') ||
+                                     queryError.message?.includes('connection lost') ||
+                                     queryError.message?.includes('ConnectionError') ||
+                                     queryError.message?.includes('RequestError');
+            
+            if (isConnectionError && retryCount < maxRetries) {
+              retryCount++;
+              logger?.warn(`⚠️  Connection closed during batch ${batchNumber} query (attempt ${retryCount}/${maxRetries}), reconnecting...`);
+              
+              try {
+                // Close old pool if it exists
+                if (pool) {
+                  try {
+                    await pool.close();
+                  } catch (closeError) {
+                    // Ignore close errors
+                  }
+                }
+                
+                // Create new connection
+                pool = await this.createConnection();
+                logger?.info(`✅ Reconnected to Synapse, retrying batch ${batchNumber} (attempt ${retryCount})...`);
+                
+                // Wait a moment before retrying to let connection stabilize
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Continue loop to retry query
+                continue;
+              } catch (reconnectError) {
+                logger?.error(`❌ Failed to reconnect for batch ${batchNumber}:`, reconnectError.message);
+                if (retryCount >= maxRetries) {
+                  // Max retries reached - throw original error
+                  throw queryError;
+                }
+                // Try again
+                continue;
+              }
+            } else {
+              // Not a connection error, or max retries reached - log and throw
+              logger?.error(`❌ Failed to execute batch query for ${runtime.tableName} (batch ${batchNumber}):`, queryError.message);
+              logger?.error(`   Query: ${batchQuery.substring(0, 200)}...`);
+              if (queryError.code) {
+                logger?.error(`   Error code: ${queryError.code}`);
+              }
+              throw queryError;
+            }
+          }
+        }
+        
+        // If we get here without breaking, all retries failed
+        if (!batch) {
+          throw new Error(`Failed to execute batch ${batchNumber} after ${maxRetries} retries`);
+        }
 
         if (!batch.length) {
           break;
@@ -1237,10 +1655,10 @@ class SynapseSyncService {
 
         // Track max snapshot date
         if (batch.length > 0) {
-          // For competitor and publishedRates, use the appropriate snapshot date column
+          // For competitor and published_rates, use the appropriate snapshot date column
           const snapshotDateColumn = metadataConfig.syncType === 'competitor' 
             ? 'Snapshot_Date' 
-            : metadataConfig.syncType === 'publishedRates' 
+            : metadataConfig.syncType === 'published_rates' 
               ? 'SNAPSHOT_DATE' 
               : runtime.dateColumn || 'Snapshot_Date';
           
@@ -1342,15 +1760,61 @@ class SynapseSyncService {
         detailedLogs: logger?.getLogs() || []
       };
     } catch (error) {
-      // Use generic error enhancement helper for consistent error messages
-      const errorMessage = this._enhanceConnectionError(error);
+      // CRITICAL: Log original error FIRST before any enhancement
+      // This ensures we see the real error in logs and UI
+      const originalError = error;
+      const originalMessage = error.message || 'Unknown error occurred';
+      const originalCode = error.code;
       
-      logger?.error(`❌ Batch processing failed for ${runtime.tableName}:`, errorMessage);
+      // Log original error details immediately
+      // CRITICAL: Log to console FIRST so we see the real error even if logger fails
+      console.error(`[ERROR] Batch processing failed for ${runtime.tableName}:`, originalMessage);
+      console.error(`[ERROR] Error code:`, originalCode);
+      console.error(`[ERROR] Error name:`, error.name);
+      console.error(`[ERROR] Full error:`, error);
+      if (error.stack) {
+        console.error(`[ERROR] Stack:`, error.stack);
+      }
       
-      // Create enhanced error with better message
-      const enhancedError = new Error(errorMessage);
-      enhancedError.originalError = error;
-      throw enhancedError;
+      logger?.error(`❌ Batch processing failed for ${runtime.tableName}:`, originalMessage);
+      if (originalCode) {
+        logger?.error(`   Error code: ${originalCode}`);
+      }
+      if (error.stack) {
+        logger?.debug(`   Stack: ${error.stack.substring(0, 500)}`);
+      }
+      
+      // ONLY enhance if it's clearly a connection error
+      // Check error codes first (most reliable)
+      const isConnectionError = 
+        originalCode === 'ETIMEOUT' ||
+        originalCode === 'ESOCKET' ||
+        originalCode === 'ECONNREFUSED' ||
+        originalCode === 'ENOTFOUND' ||
+        originalCode === 'ECONNRESET' ||
+        // Only check message if code doesn't indicate connection error
+        (!originalCode && (
+          originalMessage?.includes('Connection is closed') ||
+          originalMessage?.includes('connection is closed') ||
+          originalMessage?.includes('connection lost')
+        ));
+      
+      let errorMessage;
+      if (isConnectionError) {
+        errorMessage = this._enhanceConnectionError(error);
+        logger?.error(`   Enhanced connection error message: ${errorMessage}`);
+      } else {
+        // Preserve original error message - this is the REAL error
+        errorMessage = originalMessage;
+      }
+      
+      // Create error with appropriate message
+      const finalError = new Error(errorMessage);
+      finalError.originalError = originalError;
+      finalError.originalMessage = originalMessage;
+      finalError.originalCode = originalCode;
+      finalError.isConnectionError = isConnectionError;
+      throw finalError;
     } finally {
       if (pool) {
         try {
@@ -1385,7 +1849,7 @@ class SynapseSyncService {
         // Pass logger directly - it already has tableName and eventEmitter set from syncTable
         const syncOp = new SyncOperation(syncReservationChanges, logger, {
           tableName: runtime.tableName,
-          syncType: 'reservationChanges'
+          syncType: 'reservation_changes' // snake_case - matches tableSources.js
         });
         
         // Ensure logger has eventEmitter (should already be set, but verify)
@@ -1437,7 +1901,7 @@ class SynapseSyncService {
           insertCompetitorChanges,
           updateCompetitorCurrentState,
           {
-            syncType: 'competitor',
+            syncType: 'competitor', // snake_case - matches tableSources.js
             dateRange: runtime.dateRange,
             forceFullSync,
             dataset: runtime.datasetName
@@ -1462,7 +1926,7 @@ class SynapseSyncService {
           insertPublishedRatesChanges,
           updatePublishedRatesCurrentState,
           {
-            syncType: 'publishedRates',
+            syncType: 'published_rates', // Must match tableSources.js syncType (snake_case)
             dateRange: runtime.dateRange,
             forceFullSync,
             dataset: runtime.datasetName
@@ -1476,7 +1940,11 @@ class SynapseSyncService {
   }
 
   async syncTable(tableName, datasetName = this.defaultDataset, overrides = {}) {
-    // CONCURRENCY CONTROL: Check if sync is already running
+    // CRITICAL: Use uiTableName for event emission (what UI listens to)
+    // tableName is the sync config name (camelCase), uiTableName is the UI table name (snake_case)
+    const eventTableName = overrides.uiTableName || tableName;
+    
+    // CONCURRENCY CONTROL: Check if sync is already running (use sync config name)
     const existingSync = this.activeSyncs.get(tableName);
     if (existingSync && existingSync.status === 'running') {
       throw new Error(`Sync already in progress for ${tableName}. Please wait for it to complete.`);
@@ -1486,9 +1954,16 @@ class SynapseSyncService {
     // The connection test was too strict and could fail even when syncs work.
     // Actual sync operations will fail gracefully with clear error messages if connection fails.
     
-    // Create a logger instance for this sync operation (with event emission)
-    const logger = new SyncLogger(tableName, syncEventEmitter);
-    const startTime = Date.now();
+      // Create a logger instance for this sync operation (with event emission)
+      // Use eventTableName so UI receives events (UI listens to snake_case like "published_rates")
+      const logger = new SyncLogger(eventTableName, syncEventEmitter);
+      const startTime = Date.now();
+      
+      // DEBUG: Verify logger has correct tableName for event emission
+      console.log(`[SYNC DEBUG] syncTable called: tableName=${tableName}, eventTableName=${eventTableName}, logger.tableName=${logger.tableName}`);
+      
+      // DEBUG: Log tableName mapping to verify correct event emission
+      console.log(`[DEBUG] syncTable: tableName=${tableName}, eventTableName=${eventTableName}, logger.tableName=${logger.tableName}`);
     
     // Store in active syncs for real-time status tracking
     this.activeSyncs.set(tableName, {
@@ -1531,8 +2006,9 @@ class SynapseSyncService {
       }
       
       // Emit completion event (logger already emitted log events, just emit complete event)
+      // Use eventTableName so UI receives events
       const finalDuration = Date.now() - startTime;
-      syncEventEmitter.emitComplete(tableName, {
+      syncEventEmitter.emitComplete(eventTableName, {
         success: result.success,
         recordsProcessed: result.recordsProcessed || 0,
         duration: finalDuration,
@@ -1547,7 +2023,18 @@ class SynapseSyncService {
       
       return result;
     } catch (error) {
-      logger.error(`❌ Sync failed for ${tableName}:`, error.message);
+      // CRITICAL: Log original error details - don't enhance here
+      // The error may have already been enhanced in syncDerivedTableWithBatching
+      // If it has originalError, use that; otherwise use the error itself
+      const originalError = error.originalError || error;
+      const originalMessage = error.originalMessage || originalError.message || error.message || 'Unknown error occurred';
+      const originalCode = error.originalCode || originalError.code;
+      
+      // Log the REAL error message
+      logger.error(`❌ Sync failed for ${tableName}:`, originalMessage);
+      if (originalCode) {
+        logger.error(`   Error code: ${originalCode}`);
+      }
       
       // Mark as failed
       const syncInfo = this.activeSyncs.get(tableName);
@@ -1555,16 +2042,26 @@ class SynapseSyncService {
         syncInfo.status = 'failed';
       }
       
-      // Emit error event (logger already emitted log event, just emit error event)
-      syncEventEmitter.emitError(tableName, {
-        message: error.message,
-        error: error.stack || error.message
+      // Emit error event with original message - UI needs to see the REAL error
+      // Use eventTableName so UI receives events
+      // Use the error.message (which may be enhanced if it's a connection error)
+      // but also include originalMessage in the error object
+      syncEventEmitter.emitError(eventTableName, {
+        message: error.message || originalMessage, // Use enhanced message if available, otherwise original
+        error: originalError.stack || originalMessage,
+        originalMessage: originalMessage, // Always include original for debugging
+        originalCode: originalCode
       });
       
       // Clean up failed syncs immediately
       this.activeSyncs.delete(tableName);
       
-      throw error;
+      // Re-throw with original context preserved
+      const finalError = new Error(error.message || originalMessage);
+      finalError.originalError = originalError;
+      finalError.originalMessage = originalMessage;
+      finalError.originalCode = originalCode;
+      throw finalError;
     }
   }
 

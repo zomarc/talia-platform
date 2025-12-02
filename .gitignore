@@ -62,4 +62,5 @@ coverage/
 # Database backups
 **/backups/
 *.sql.gz
-*.sql
+*.sql.DS_Store
+*.log

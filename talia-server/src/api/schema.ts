@@ -404,6 +404,12 @@ export const typeDefs = `#graphql
     bookingProfile(sailCode: String!): BookingProfile
     bookingProfileYearOverYear(sailCode: String!, previousYearSailCode: String): YearOverYearComparison
     
+    # Sync Status (for real-time polling)
+    syncStatus(tableName: String!): SyncStatus
+    
+    # Connection Status
+    synapseConnectionStatus: ConnectionStatus!
+    
     # Legacy queries (for backward compatibility)
     books: [Book!]!
   }
@@ -430,6 +436,9 @@ export const typeDefs = `#graphql
     
     # Data Sync
     syncTable(tableName: String!, dataset: String, forceFullSync: Boolean): SyncResult!
+    
+    # Server Management
+    restartServer: Boolean!
   }
 
   type SyncResult {
@@ -438,6 +447,30 @@ export const typeDefs = `#graphql
     message: String!
     recordsProcessed: Int
     duration: Int
+    error: String
+    detailedLogs: [String!]
+  }
+
+  type SyncStatus {
+    tableName: String!
+    status: String! # 'running' | 'completed' | 'failed'
+    startTime: Int!
+    duration: Int!
+    logs: [String!]!
+    structuredLogs: [StructuredLog!]!
+  }
+
+  type StructuredLog {
+    level: String!
+    message: String!
+    timestamp: String!
+  }
+
+  type ConnectionStatus {
+    online: Boolean!
+    server: String!
+    database: String
+    lastChecked: String
     error: String
   }
 

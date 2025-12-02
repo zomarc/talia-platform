@@ -500,6 +500,49 @@ export const resolvers = {
       }
     },
 
+    syncStatus: async (parent: any, args: any) => {
+      const { tableName } = args;
+      const status = synapseSyncService.getSyncStatus(tableName);
+      
+      if (!status) {
+        return null; // No active sync
+      }
+      
+      return {
+        tableName: status.tableName,
+        status: status.status,
+        startTime: status.startTime,
+        duration: status.duration,
+        logs: status.logs,
+        structuredLogs: status.structuredLogs.map(log => ({
+          level: log.level,
+          message: log.message,
+          timestamp: log.timestamp.toISOString()
+        }))
+      };
+    },
+
+    synapseConnectionStatus: async () => {
+      try {
+        const result = await synapseSyncService.testConnectionDetailed();
+        return {
+          online: result.online,
+          server: synapseSyncService.synapseConfig.server,
+          database: synapseSyncService.synapseConfig.database,
+          lastChecked: new Date().toISOString(),
+          error: result.error || null
+        };
+      } catch (error: any) {
+        return {
+          online: false,
+          server: synapseSyncService.synapseConfig.server,
+          database: synapseSyncService.synapseConfig.database,
+          lastChecked: new Date().toISOString(),
+          error: error.message || 'Unknown error'
+        };
+      }
+    },
+
     bookingProfileYearOverYear: async (parent: any, args: any) => {
       const { sailCode, previousYearSailCode } = args;
       try {
@@ -858,11 +901,25 @@ export const resolvers = {
       const { tableName, dataset, forceFullSync } = args;
       
       try {
+        // Validate required parameter
+        if (!tableName || typeof tableName !== 'string') {
+          return {
+            success: false,
+            tableName: tableName || 'unknown',
+            message: 'Invalid table name provided',
+            recordsProcessed: null,
+            duration: null,
+            error: 'tableName parameter is required and must be a string',
+            detailedLogs: []
+          };
+        }
+        
         // Map Supabase table names to sync config table names
         const tableNameMap: Record<string, string> = {
           'ship': 'ships',
           'cabin_availability': 'cabinAvailability',
           'reservation': 'reservations',
+          'reservation_promotion': 'reservationPromotion',
           'master_sail': 'masterSail',
           'sail_by_cabin_occupancy': 'sailByCabinOccupancy',
           'reservation_changes': 'reservationChanges',
@@ -874,8 +931,7 @@ export const resolvers = {
           'competitor_current_state': 'competitor' // Uses same sync
         };
 
-        const syncTableName = tableNameMap[tableName] || tableName;
-        
+        // Check if table has a sync configuration BEFORE using it
         if (!tableNameMap[tableName]) {
           return {
             success: false,
@@ -883,11 +939,31 @@ export const resolvers = {
             message: `Table "${tableName}" does not have a sync configuration`,
             recordsProcessed: null,
             duration: null,
-            error: `No sync configuration found for table: ${tableName}`
+            error: `No sync configuration found for table: ${tableName}. Available tables: ${Object.keys(tableNameMap).join(', ')}`,
+            detailedLogs: []
           };
         }
 
-        const result = await synapseSyncService.syncTable(syncTableName, dataset || undefined, { forceFullSync: forceFullSync || false });
+        const syncTableName = tableNameMap[tableName];
+        
+        // Check for concurrent sync
+        const existingSync = synapseSyncService.getSyncStatus(syncTableName);
+        if (existingSync && existingSync.status === 'running') {
+          return {
+            success: false,
+            tableName,
+            message: `Sync already in progress for "${tableName}"`,
+            recordsProcessed: null,
+            duration: null,
+            error: `A sync is already running for ${tableName}. Please wait for it to complete.`,
+            detailedLogs: []
+          };
+        }
+
+        // Handle dataset parameter - use undefined instead of null
+        const datasetName = dataset && dataset !== 'null' ? dataset : undefined;
+        
+        const result = await synapseSyncService.syncTable(syncTableName, datasetName, { forceFullSync: forceFullSync || false });
 
         return {
           success: result.success,
@@ -895,7 +971,8 @@ export const resolvers = {
           message: result.message || 'Sync completed',
           recordsProcessed: result.recordsProcessed || null,
           duration: result.duration || null,
-          error: result.error || null
+          error: result.error || null,
+          detailedLogs: result.detailedLogs || []
         };
       } catch (error: any) {
         console.error('Error syncing table:', error);
@@ -907,6 +984,52 @@ export const resolvers = {
           duration: null,
           error: error.message
         };
+      }
+    },
+
+    restartServer: async () => {
+      try {
+        console.log('🔄 Restart request received from UI...');
+        console.log('⏳ Server will restart in 2 seconds...');
+        
+        // Give time for the response to be sent, then execute restart script
+        setTimeout(async () => {
+          try {
+            console.log('🔄 Executing restart script...');
+            
+            // Import child_process dynamically (ES modules)
+            const { spawn } = await import('child_process');
+            const { fileURLToPath } = await import('url');
+            const { dirname } = await import('path');
+            const { resolve } = await import('path');
+            
+            const serverDir = process.cwd();
+            const restartScriptPath = resolve(serverDir, 'restart-server-now.sh');
+            
+            // Execute the restart script
+            const restartProcess = spawn('sh', [restartScriptPath], {
+              detached: true,
+              stdio: 'ignore',
+              cwd: serverDir
+            });
+            
+            // Unref the restart process so it can run independently
+            restartProcess.unref();
+            
+            // Exit this process immediately - the script will handle killing and restarting
+            console.log('✅ Restart script executed, exiting current process...');
+            process.exit(0);
+          } catch (spawnError: any) {
+            console.error('❌ Error executing restart script:', spawnError);
+            console.log('⚠️  Falling back to simple exit - please restart server manually');
+            process.exit(0);
+          }
+        }, 2000);
+        
+        return true;
+      } catch (error: any) {
+        console.error('Error restarting server:', error);
+        throw new Error(`Failed to restart server: ${error.message}`);
       }
     }
   },

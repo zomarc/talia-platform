@@ -224,6 +224,30 @@
         "[Cruise_Line]",
         "[Ship_Name]"
       ]
+    },
+    "reservationPromotion": {
+      "type": "direct",
+      "source": "stg.RES_PROMOTION",
+      "target": "reservation_promotion",
+      "columns": [
+        "[RES_PROMO_ID]",
+        "[RES_ID]",
+        "[GUEST_ID]",
+        "[PROMO_CODE]",
+        "[IS_EXCLUDED]",
+        "[IS_ACTIVE]",
+        "[RES_PACKAGE_ID]",
+        "[IS_MANUAL]",
+        "[PROMO_VALUE]",
+        "[PROMO_VALUE_TYPE]",
+        "[IS_STATIC]"
+      ],
+      "transformKey": "reservationPromotion",
+      "isLargeDataset": true,
+      "rowNumberOrder": [
+        "[RES_ID]",
+        "[RES_PROMO_ID]"
+      ]
     }
   },
   "datasets": {
@@ -234,6 +258,8 @@
         "masterSail",
         "cabinAvailability",
         "sailByCabinOccupancy",
+        "reservations",
+        "reservationPromotion",
         "publishedRates",
         "reservationChanges",
         "competitor"
@@ -331,6 +357,24 @@
           "replace": {
             "strategy": "delete-range",
             "column": "snapshot_date",
+            "from": "2025-09-01",
+            "to": "2025-12-31"
+          }
+        },
+        "reservationPromotion": {
+          "filters": [
+            {
+              "column": "[RES_ID]",
+              "operator": "subquery",
+              "subquery": "SELECT RES_ID FROM stg.RES_HEADER WHERE SAIL_DATE_FROM >= '2025-09-01' AND SAIL_DATE_FROM <= '2025-12-31'"
+            }
+          ],
+          "replace": {
+            "strategy": "delete-range",
+            "column": "res_id",
+            "joinTable": "reservation",
+            "joinColumn": "res_id",
+            "dateColumn": "sail_from_date",
             "from": "2025-09-01",
             "to": "2025-12-31"
           }

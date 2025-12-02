@@ -4,9 +4,11 @@
  * and can be easily extended for future data sources
  */
 export class SyncLogger {
-  constructor() {
+  constructor(tableName = null, eventEmitter = null) {
     this.logs = [];
     this.startTime = Date.now();
+    this.tableName = tableName;
+    this.eventEmitter = eventEmitter;
   }
 
   /**
@@ -16,6 +18,20 @@ export class SyncLogger {
     const message = this.formatMessage(args);
     this.logs.push({ level: 'info', message, timestamp: new Date() });
     console.log(...args);
+    
+    // Emit event if eventEmitter is available
+    // CRITICAL: Always emit events for server logs - this is how the UI receives logs
+    if (this.eventEmitter && this.tableName) {
+      this.eventEmitter.emitLog(this.tableName, { level: 'info', message });
+    } else {
+      // Debug: Log when eventEmitter or tableName is missing (should never happen in production)
+      console.error('[SyncLogger] ERROR: Cannot emit log event - missing eventEmitter or tableName:', {
+        hasEventEmitter: !!this.eventEmitter,
+        hasTableName: !!this.tableName,
+        tableName: this.tableName,
+        message
+      });
+    }
   }
 
   /**
@@ -25,6 +41,11 @@ export class SyncLogger {
     const message = this.formatMessage(args);
     this.logs.push({ level: 'error', message, timestamp: new Date() });
     console.error(...args);
+    
+    // Emit event if eventEmitter is available
+    if (this.eventEmitter && this.tableName) {
+      this.eventEmitter.emitError(this.tableName, { message, error: message });
+    }
   }
 
   /**
@@ -34,6 +55,11 @@ export class SyncLogger {
     const message = this.formatMessage(args);
     this.logs.push({ level: 'warn', message, timestamp: new Date() });
     console.warn(...args);
+    
+    // Emit event if eventEmitter is available
+    if (this.eventEmitter && this.tableName) {
+      this.eventEmitter.emitLog(this.tableName, { level: 'warn', message });
+    }
   }
 
   /**

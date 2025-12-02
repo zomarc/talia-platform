@@ -4,24 +4,31 @@
 
 ## Core Principles
 
-### 1. Table Syncs = Source/Transform Only
+### 1. Table Syncs = Definitions and Transforms Only
 
-Table-specific sync files (e.g., `competitor-sync.js`, `published-rates-sync.js`) should contain **MINIMAL CODE**:
+Table-specific sync files (e.g., `competitor-sync.js`, `published-rates-sync.js`) should contain **MINIMAL CODE** - only data definitions and transformations:
 
 ✅ **DO:**
 - Define source column mappings
 - Transform data from source format to target format
 - Generate unique keys for records
-- Detect changes between snapshots
-- Insert data into target tables
+- Detect changes between snapshots (compare current vs previous state)
+- Export batch processor functions: `processXxxBatch(batch, currentState, logger) => {changes, updatedStates}`
+- Export helper functions: `loadXxxCurrentState`, `insertXxxChanges`, `updateXxxCurrentState`
 
 ❌ **DON'T:**
-- Add logging logic (use `logger` parameter)
-- Add control flow (full vs incremental decisions)
-- Add metadata management (use `SyncMetadataService`)
+- Handle batching logic (sync service handles all batching)
+- Add logging logic (sync service handles all logging)
+- Add control flow (full vs incremental decisions - sync service handles this)
+- Add metadata management (sync service handles via `SyncMetadataService`)
+- Create connection pools or query Synapse directly (sync service handles queries)
 - Add UI-specific code
 - Add terminal-specific code
 - Add table-specific error handling
+- Accumulate changes across batches (sync service handles accumulation)
+- Insert data directly (sync service calls exported insert functions)
+
+**CRITICAL:** The sync service (`synapse-sync.js`) handles ALL batching, logging, UI updates, connection management, query execution, and metadata updates. Table sync files are pure data transformation functions.
 
 ### 2. UI and Terminal = Same Code Path
 
@@ -34,29 +41,35 @@ Table-specific sync files (e.g., `competitor-sync.js`, `published-rates-sync.js`
 
 **NEVER** add code that only works in one context.
 
-### 3. Logging = Always Via Logger Parameter
+### 3. Logging = Handled by Sync Service
 
-**ALWAYS** accept a `logger` parameter in sync functions:
+**The sync service handles ALL logging.** Table sync functions should:
 
+- Accept a `logger` parameter for batch processor functions (optional, for progress logging within batch processing)
+- Use logger only for batch-level progress (e.g., "Transforming X records")
+- **NOT** log connection status, batch counts, totals, or completion messages (sync service handles this)
+
+**Batch Processor Function Signature:**
 ```javascript
-export async function syncCompetitors({
-  // ... other parameters ...
-  logger = null  // Always accept logger, default to null
-}) {
-  // Create local log functions at the START of the function
+export function processXxxBatch(batch, currentState, logger = null) {
   const log = (...args) => logger ? logger.info(...args) : console.log(...args);
-  const logError = (...args) => logger ? logger.error(...args) : console.error(...args);
-  const logWarn = (...args) => logger ? logger.warn(...args) : console.warn(...args);
   
-  // Use log, logError, logWarn throughout
-  // NEVER use console.log directly
+  // Only log batch-level progress
+  log(`🔄 Transforming ${batch.length} records...`);
+  
+  // Transform and detect changes
+  const result = processChangesBatch(batch, currentState);
+  
+  log(`✅ Processed ${batch.length} records (${result.changes.length} changes)`);
+  
+  return result; // { changes: [], updatedStates: [] }
 }
 ```
 
 **Rules:**
-- Define `log`, `logError`, `logWarn` at the very start of each function
-- Use these functions throughout, never `console.log` directly
-- The logger works in both UI and terminal contexts
+- Sync service handles all high-level logging (connection, totals, completion)
+- Table syncs only log batch-level transformation progress
+- Never log connection status, metadata checks, or sync completion
 
 ### 4. Metadata = Always Via SyncMetadataService
 
@@ -144,17 +157,28 @@ await SyncMetadataService.updateSyncMetadata(
 
 ## Standard Sync Flow
 
-1. Check source for latest snapshot date → store in metadata
+**Sync Service (`synapse-sync.js`) Responsibilities:**
+1. Check source for latest snapshot date
 2. Get last processed snapshot date from metadata
 3. Determine sync type (full vs incremental)
 4. Build WHERE clause (always filter by departure_date range)
-5. Process data in batches
-6. Update current state table (for derived tables)
-7. Detect and insert changes (for derived tables)
-8. Update metadata:
-   - `last_processed_snapshot_date` = max snapshot date processed
-   - `latest_available_snapshot_date` = max from source
-   - `last_sync_at` = now (always updated, even if no data)
+5. Load current state (once, before batching)
+6. Query Synapse in batches
+7. For each batch: call table's batch processor function
+8. Accumulate changes and updated states from all batches
+9. Insert changes (after all batches complete)
+10. Update current state (after all batches complete)
+11. Update metadata:
+    - `last_processed_snapshot_date` = max snapshot date processed
+    - `latest_available_snapshot_date` = max from source
+    - `last_sync_at` = now (always updated, even if no data)
+
+**Table Sync File Responsibilities:**
+1. Export batch processor: `processXxxBatch(batch, currentState, logger) => {changes, updatedStates}`
+2. Export helpers: `loadXxxCurrentState`, `insertXxxChanges`, `updateXxxCurrentState`
+3. Transform batch data from source format to target format
+4. Detect changes compared to current state
+5. Return results to sync service
 
 ## File Structure
 
@@ -173,17 +197,24 @@ talia-server/src/services/
 
 When implementing or modifying a table sync:
 
-- [ ] Table sync file contains ONLY source/transform logic
-- [ ] All logging uses `logger` parameter (no console.log)
-- [ ] All metadata operations use `SyncMetadataService`
-- [ ] Code works in both UI and terminal contexts
-- [ ] No table-specific control flow or error handling
+- [ ] Export batch processor function: `processXxxBatch(batch, currentState, logger) => {changes, updatedStates}`
+- [ ] Export helper functions: `loadXxxCurrentState`, `insertXxxChanges`, `updateXxxCurrentState`
+- [ ] Batch processor only transforms data and detects changes (no batching logic)
+- [ ] No connection pooling or Synapse queries in table sync files
+- [ ] No metadata checks or updates in table sync files
+- [ ] No logging of connection status, totals, or completion (only batch-level progress)
+- [ ] Keep code minimal - definitions and transforms only
+- [ ] Code works in both UI and terminal contexts (via sync service)
 - [ ] All functionality is generic and reusable
+
+**Remember:** The sync service handles ALL batching, logging, UI updates, connections, queries, and metadata. Table syncs are pure data transformation functions.
 
 ## Quick Reference
 
-- **Table syncs** = Source/Transform only
-- **UI and Terminal** = Same code path
-- **Logging** = Always via logger parameter
-- **Metadata** = Always via SyncMetadataService
+- **Table syncs** = Definitions and transforms only (no batching, no logging, no metadata)
+- **Sync service** = Handles ALL batching, logging, UI updates, connections, queries, metadata
+- **UI and Terminal** = Same code path (via sync service)
+- **Logging** = Handled by sync service (table syncs only log batch-level progress)
+- **Metadata** = Handled by sync service via SyncMetadataService
+- **Batching** = Handled by sync service (table syncs process single batches)
 - **Everything** = Generic and reusable

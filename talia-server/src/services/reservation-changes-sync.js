@@ -1,47 +1,41 @@
 import sql from 'mssql';
+import { SyncMetadataService } from './sync-metadata-service.js';
 
 const SYNC_TYPE = 'reservation_changes';
 const CURRENT_STATE_TABLE = 'reservation_current_state';
 const CHANGES_TABLE = 'reservation_changes';
-const METADATA_TABLE = 'sync_metadata';
+const SNAPSHOT_COLUMN = 'Snapshot_Date';
 
 /**
- * Get the last processed date from sync metadata
+ * Wrapper to load current state for reservation changes
+ * First gets active reservation IDs from Synapse, then loads current state
+ * Exported for use by sync service batching wrapper
  */
-async function getLastProcessedDate(supabaseClient) {
-  const { data, error } = await supabaseClient
-    .from(METADATA_TABLE)
-    .select('last_processed_date')
-    .eq('sync_type', SYNC_TYPE)
-    .single();
-
-  if (error && error.code !== 'PGRST116') { // PGRST116 = not found
-    throw new Error(`Failed to get last processed date: ${error.message}`);
-  }
-
-  return data?.last_processed_date || null;
-}
-
-/**
- * Update sync metadata with last processed date and stats
- */
-async function updateSyncMetadata(supabaseClient, lastProcessedDate, recordsProcessed, changesDetected, durationMs = null) {
-  const { error } = await supabaseClient
-    .from(METADATA_TABLE)
-    .upsert({
-      sync_type: SYNC_TYPE,
-      last_processed_date: lastProcessedDate,
-      records_processed: recordsProcessed,
-      changes_detected: changesDetected,
-      duration_ms: durationMs,
-      last_sync_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }, {
-      onConflict: 'sync_type'
-    });
-
-  if (error) {
-    throw new Error(`Failed to update sync metadata: ${error.message}`);
+export async function loadReservationChangesCurrentState(supabaseClient, synapseConfig, dateRange, logger = null) {
+  // Pure data loading - logging handled by sync service
+  
+  // Get reservation IDs for sailings within the date range from stg.RES_HEADER
+  const pool = await sql.connect(synapseConfig);
+  
+  try {
+    const activeResQuery = `
+      SELECT DISTINCT RES_ID
+      FROM stg.RES_HEADER
+      WHERE SAIL_DATE_FROM >= '${dateRange.from}'
+        AND SAIL_DATE_FROM <= '${dateRange.to}'
+    `;
+    
+    const activeResResult = await pool.request().query(activeResQuery);
+    const activeResIds = activeResResult.recordset.map(row => row.RES_ID).filter(Boolean);
+    
+    if (activeResIds.length === 0) {
+      return new Map();
+    }
+    
+    // Load current state filtered by active reservation IDs
+    return await loadCurrentState(supabaseClient, dateRange, activeResIds, logger);
+  } finally {
+    await pool.close();
   }
 }
 
@@ -51,12 +45,11 @@ async function updateSyncMetadata(supabaseClient, lastProcessedDate, recordsProc
  * Returns a Map<res_id, currentState>
  * Loads all states and filters in memory to avoid URI length limits
  */
-async function loadCurrentState(supabaseClient, dateRange, activeResIds) {
-  console.log('📥 Loading current reservation state from database...');
+async function loadCurrentState(supabaseClient, dateRange, activeResIds, logger = null) {
+  // Logging removed - SyncOperation handles all logging
   const stateMap = new Map();
   
   if (!activeResIds || activeResIds.length === 0) {
-    console.log('✅ No active reservations to load state for');
     return stateMap;
   }
 
@@ -103,7 +96,6 @@ async function loadCurrentState(supabaseClient, dateRange, activeResIds) {
     }
   }
 
-  console.log(`✅ Loaded ${stateMap.size} reservation states (filtered from ${totalLoaded} total rows)`);
   return stateMap;
 }
 
@@ -112,8 +104,8 @@ async function loadCurrentState(supabaseClient, dateRange, activeResIds) {
  * Only keep reservations for active sailings (within date range)
  * Uses reservation table to identify which res_ids to remove
  */
-async function cleanupOldReservations(supabaseClient, dateRange) {
-  console.log(`🧹 Cleaning up reservations with sailing dates outside range ${dateRange.from} to ${dateRange.to}...`);
+async function cleanupOldReservations(supabaseClient, dateRange, logger = null) {
+  // Logging removed - SyncOperation handles all logging
   
   try {
     // Get reservations from reservation table that are outside the sailing date range
@@ -126,29 +118,22 @@ async function cleanupOldReservations(supabaseClient, dateRange) {
     if (fetchError) {
       // If reservation table doesn't exist or has no data, skip cleanup
       if (fetchError.code === 'PGRST116' || fetchError.code === '42P01') {
-        console.log('ℹ️  Reservation table not available for cleanup check - skipping');
         return;
       }
-      console.warn(`⚠️  Could not fetch old reservations for cleanup: ${fetchError.message}`);
       return;
     }
 
     if (!oldReservations || oldReservations.length === 0) {
-      console.log('✅ No old reservations to clean up');
       return;
     }
 
     const resIdsToRemove = oldReservations.map(r => r.res_id).filter(Boolean);
     if (resIdsToRemove.length === 0) {
-      console.log('✅ No old reservations to clean up');
       return;
     }
-
-    console.log(`🗑️  Removing ${resIdsToRemove.length} old reservations from current_state...`);
     
     // Delete in batches (Supabase has limits on IN clause size)
     const batchSize = 1000;
-    let deletedCount = 0;
     for (let i = 0; i < resIdsToRemove.length; i += batchSize) {
       const batch = resIdsToRemove.slice(i, i + batchSize);
       const { error } = await supabaseClient
@@ -157,24 +142,23 @@ async function cleanupOldReservations(supabaseClient, dateRange) {
         .in('res_id', batch);
 
       if (error) {
-        console.warn(`⚠️  Error cleaning up batch ${i / batchSize + 1}: ${error.message}`);
-      } else {
-        deletedCount += batch.length;
+        // Cleanup is non-critical - continue on error
+        continue;
       }
     }
-
-    console.log(`✅ Cleaned up ${deletedCount} old reservations from current_state`);
   } catch (error) {
-    // Don't fail the sync if cleanup fails
-    console.warn(`⚠️  Cleanup failed (non-fatal): ${error.message}`);
+    // Cleanup failures are non-fatal - continue
   }
 }
 
 /**
  * Update current state table with new reservation states
  * Deduplicates by res_id to keep only the latest snapshot_date
+ * 
+ * Exported for use by sync service batching wrapper
  */
-async function updateCurrentState(supabaseClient, updatedStates) {
+export async function updateReservationChangesCurrentState(supabaseClient, updatedStates, logger = null) {
+  // Pure data update - logging handled by sync service
   if (updatedStates.length === 0) return;
 
   // Deduplicate: keep only the latest snapshot_date for each res_id
@@ -187,8 +171,8 @@ async function updateCurrentState(supabaseClient, updatedStates) {
   }
 
   const deduplicatedStates = Array.from(stateMap.values());
-  console.log(`📝 Updating ${deduplicatedStates.length} reservation states (deduplicated from ${updatedStates.length})...`);
   const batchSize = 1000;
+  let updated = 0;
 
   for (let i = 0; i < deduplicatedStates.length; i += batchSize) {
     const batch = deduplicatedStates.slice(i, i + batchSize);
@@ -201,16 +185,17 @@ async function updateCurrentState(supabaseClient, updatedStates) {
     if (error) {
       throw new Error(`Failed to update current state: ${error.message}`);
     }
+    
+    updated += batch.length;
   }
-
-  console.log(`✅ Updated ${deduplicatedStates.length} reservation states`);
 }
 
 /**
  * Process a batch of snapshots and detect changes compared to current state
  * Returns { changes: [], updatedStates: [] }
+ * Exported for use by sync service batching wrapper
  */
-function processChangesBatch(batch, currentState) {
+export function processReservationChangesBatch(batch, currentState, logger = null) {
   const changes = [];
   const updatedStates = [];
 
@@ -303,11 +288,12 @@ function processChangesBatch(batch, currentState) {
 
 /**
  * Insert changes into reservation_changes table
+ * Exported for use by sync service batching wrapper
  */
-async function insertChanges(supabaseClient, changes) {
+export async function insertReservationChanges(supabaseClient, changes, logger = null) {
+  // Pure data insertion - logging handled by sync service
   if (changes.length === 0) return;
 
-  console.log(`📥 Inserting ${changes.length} reservation change rows...`);
   const batchSize = 1000;
   let inserted = 0;
 
@@ -318,10 +304,7 @@ async function insertChanges(supabaseClient, changes) {
       throw new Error(`Failed to insert reservation change batch: ${error.message}`);
     }
     inserted += batch.length;
-    console.log(`   📊 Inserted ${inserted}/${changes.length} reservation change rows`);
   }
-
-  console.log(`✅ Reservation change insert complete (${inserted} rows)`);
 }
 
 /**
@@ -382,66 +365,91 @@ export async function syncReservationChanges({
   targetTable,
   rowNumberOrder,
   batchSize = 50000,
-  forceFullSync = false
+  forceFullSync = false,
+  dataset = null, // Dataset name for metadata tracking
+  logger = null
 }) {
+  // Define local log functions at the START (per SYNC_PRINCIPLES.md)
+  // These are defined but not used - SyncOperation handles all logging
+  // They exist for consistency and in case error handlers need them
+  // Use console fallback per SYNC_PRINCIPLES.md (even though SyncOperation handles logging)
+  const log = (...args) => logger ? logger.info(...args) : console.log(...args);
+  const logError = (...args) => logger ? logger.error(...args) : console.error(...args);
+  const logWarn = (...args) => logger ? logger.warn(...args) : console.warn(...args);
+  
   const startTime = Date.now();
   
+  // Validate inputs early
   if (!dateRange?.from || !dateRange?.to) {
     throw new Error('Reservation changes sync requires a dateRange with from/to values');
   }
 
-  // Calculate today and yesterday dates (YYYY-MM-DD format)
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const twoDaysAgo = new Date(today);
-  twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-  
-  const todayStr = today.toISOString().split('T')[0];
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
-  const twoDaysAgoStr = twoDaysAgo.toISOString().split('T')[0];
+  // STEP 1: Check source for latest snapshot date FIRST
+  // Logging handled by sync service
+  const latestAvailableSnapshotDate = await SyncMetadataService.getLatestSnapshotDate(
+    synapseConfig,
+    source,
+    SNAPSHOT_COLUMN
+  );
 
-  // Get last processed date
-  let lastProcessedDate = forceFullSync ? null : await getLastProcessedDate(supabaseClient);
+  // STEP 2: Get last processed snapshot date from metadata
+  const lastProcessedSnapshotDate = forceFullSync 
+    ? null 
+    : await SyncMetadataService.getLastProcessedSnapshotDate(supabaseClient, SYNC_TYPE);
+
+  // STEP 3: Determine if sync is needed
+  const isInitialLoad = !lastProcessedSnapshotDate || forceFullSync;
   
-  // If no last_processed_date exists, initialize it to 2 days ago
-  if (!lastProcessedDate && !forceFullSync) {
-    lastProcessedDate = twoDaysAgoStr;
-    console.log(`📅 No last processed date found. Initializing to 2 days ago: ${lastProcessedDate}`);
-    // Store the initial date in metadata
-    await updateSyncMetadata(supabaseClient, lastProcessedDate, 0, 0, null);
+  // Check if we're up to date (incremental sync with no new snapshots)
+  if (!isInitialLoad && latestAvailableSnapshotDate && lastProcessedSnapshotDate) {
+    if (new Date(latestAvailableSnapshotDate) <= new Date(lastProcessedSnapshotDate)) {
+      const duration = Date.now() - startTime;
+      await SyncMetadataService.updateSyncMetadataNoData(
+        supabaseClient,
+        SYNC_TYPE,
+        latestAvailableSnapshotDate,
+        lastProcessedSnapshotDate,
+        duration,
+        dataset
+      );
+      return {
+        success: true,
+        recordsProcessed: 0,
+        changesDetected: 0,
+        duration: duration,
+        message: 'No new snapshots available'
+      };
+    }
   }
-  
-  const isInitialLoad = forceFullSync;
-  
-  // Determine actual date range to process
+
+  // STEP 4: Build WHERE clause
+  // CRITICAL: Always filter by Departure_Date range (dataset requirement)
+  // Use Snapshot_Date only for incremental filtering
   let processFrom, processTo;
   
   if (isInitialLoad) {
     // Initial load: use the configured date range
     processFrom = dateRange.from;
     processTo = dateRange.to;
-    console.log(`🔄 INITIAL LOAD: Processing snapshots from ${processFrom} to ${processTo}`);
   } else {
-    // Incremental sync: process snapshots from last_processed_date up to yesterday
-    // This ensures we catch up if behind, but don't process future dates
-    const lastProcessedDateObj = new Date(lastProcessedDate);
-    const yesterdayObj = new Date(yesterdayStr);
-    
-    // Process from last_processed_date (or yesterday if we're behind)
-    processFrom = lastProcessedDateObj <= yesterdayObj ? lastProcessedDate : yesterdayStr;
+    // Incremental sync: process snapshots from lastProcessedSnapshotDate up to yesterday
+    // Extract date part for SQL comparison (Snapshot_Date is a DATE column)
+    const datePart = lastProcessedSnapshotDate.split('T')[0];
+    processFrom = datePart;
     // CRITICAL: Always set an upper bound to yesterday to prevent processing infinite data
     // This ensures we only process historical snapshots, not future dates
-    processTo = yesterdayStr;
-    console.log(`🔄 INCREMENTAL UPDATE: Processing snapshots from ${processFrom} to ${processTo} (yesterday)`);
+    const yesterday = new Date();
+    yesterday.setHours(0, 0, 0, 0);
+    yesterday.setDate(yesterday.getDate() - 1);
+    processTo = yesterday.toISOString().split('T')[0];
   }
 
   // Clean up old reservations from current_state (sailings that have passed)
-  await cleanupOldReservations(supabaseClient, dateRange);
+  // Logging handled by sync service
+  await cleanupOldReservations(supabaseClient, dateRange, logger);
 
-  // STEP 1: Get reservation IDs for sailings within the date range from stg.RES_HEADER
-  console.log(`🔍 Finding reservations for sailings ${dateRange.from} to ${dateRange.to}...`);
+  // STEP 5: Get reservation IDs for sailings within the date range from stg.RES_HEADER
+  // Logging handled by sync service
   const pool = await sql.connect(synapseConfig);
   
   const activeResQuery = `
@@ -453,27 +461,37 @@ export async function syncReservationChanges({
   
   const activeResResult = await pool.request().query(activeResQuery);
   const activeResIds = activeResResult.recordset.map(row => row.RES_ID).filter(Boolean);
-  console.log(`✅ Found ${activeResIds.length} reservations for sailings in date range`);
   
   if (activeResIds.length === 0) {
-    console.log('✅ No reservations found - nothing to process');
     await pool.close();
+    const duration = Date.now() - startTime;
+    await SyncMetadataService.updateSyncMetadataNoData(
+      supabaseClient,
+      SYNC_TYPE,
+      latestAvailableSnapshotDate,
+      lastProcessedSnapshotDate || latestAvailableSnapshotDate,
+      duration,
+      dataset
+    );
     return {
       success: true,
       recordsProcessed: 0,
       changesDetected: 0,
+      duration: duration,
       message: 'No reservations in sailing date range'
     };
   }
 
-  // STEP 2: Load current state from database (only for active reservations)
-  const currentState = await loadCurrentState(supabaseClient, dateRange, activeResIds);
+  // STEP 6: Load current state from database (only for active reservations)
+  // Use the exported wrapper function that handles getting activeResIds
+  // Logging handled by sync service
+  const currentState = await loadReservationChangesCurrentState(supabaseClient, synapseConfig, dateRange, logger);
 
-  // STEP 3: Process snapshots only for these reservations
+  // STEP 7: Process snapshots only for these reservations
   const allChanges = [];
   const allUpdatedStates = [];
   let totalProcessed = 0;
-  let maxSnapshotDate = null;
+  let maxSnapshotDate = null; // Track actual max snapshot date processed
   const columnsSql = columns.join(', ');
   
   // Process in batches if we have too many reservation IDs
@@ -484,10 +502,6 @@ export async function syncReservationChanges({
     resIdBatches.push(activeResIds.slice(i, i + maxInClauseSize));
   }
   
-  console.log(`📋 Processing ${activeResIds.length} reservations in ${resIdBatches.length} batch(es) of up to ${maxInClauseSize} reservations each`);
-  console.log(`📅 Snapshot date range: ${processFrom} to ${processTo}`);
-  console.log(`📅 Sailing date range: ${dateRange.from} to ${dateRange.to}`);
-  
   try {
     // Process each batch of reservation IDs
     for (let batchIdx = 0; batchIdx < resIdBatches.length; batchIdx++) {
@@ -497,10 +511,13 @@ export async function syncReservationChanges({
       // Build WHERE clause - Filter by snapshot date AND reservation IDs
       // Use alias 'rhs' for RES_HEADER_SNAPSHOT
       // CRITICAL: Only process snapshots for reservations within sailing date range
+      // For incremental syncs, use > lastProcessedSnapshotDate (not processFrom) to ensure we get new snapshots on the same day
       const dateCol = dateColumn.replace(/\[/g, '').replace(/\]/g, '');
-      const whereClause = `rhs.[${dateCol}] >= '${processFrom}' AND rhs.[${dateCol}] <= '${processTo}' AND rhs.RES_ID IN (${resIdsList})`;
+      const snapshotDatePart = lastProcessedSnapshotDate ? lastProcessedSnapshotDate.split('T')[0] : null;
+      const whereClause = isInitialLoad
+        ? `rhs.[${dateCol}] >= '${processFrom}' AND rhs.[${dateCol}] <= '${processTo}' AND rhs.RES_ID IN (${resIdsList})`
+        : `rhs.[${dateCol}] > '${snapshotDatePart}' AND rhs.[${dateCol}] <= '${processTo}' AND rhs.RES_ID IN (${resIdsList})`;
       
-      console.log(`\n📦 Processing reservation batch ${batchIdx + 1}/${resIdBatches.length} (${resIdBatch.length} reservations)...`);
 
       // Count query needs to use the same alias and WHERE clause
       const countQuery = `
@@ -511,15 +528,9 @@ export async function syncReservationChanges({
 
       const countResult = await pool.request().query(countQuery);
       const totalRows = countResult.recordset[0].total;
-      console.log(`  📊 Found ${totalRows.toLocaleString()} snapshot rows for this batch`);
       
       if (totalRows === 0) {
-        console.log(`  ✅ No snapshots found for this batch - skipping`);
         continue; // Skip to next batch
-      }
-      
-      if (totalRows > 500000) {
-        console.log(`  ⚠️  WARNING: Large batch (${totalRows.toLocaleString()} rows) - this may take a while`);
       }
       
       const rowNumberQuery = buildRowNumberQuery({
@@ -531,7 +542,7 @@ export async function syncReservationChanges({
 
       // Process snapshot rows in batches (within each reservation batch)
       const snapshotBatchCount = Math.ceil(totalRows / batchSize);
-      console.log(`  📥 Processing ${totalRows.toLocaleString()} snapshot rows in ${snapshotBatchCount} batch(es) of ${batchSize.toLocaleString()}...`);
+      logger?.info(`📊 Processing ${totalRows.toLocaleString()} snapshot rows in ${snapshotBatchCount} batch(es) for reservation batch ${batchIdx + 1}/${resIdBatches.length}...`);
       
       for (let offset = 0; offset < totalRows; offset += batchSize) {
         const batchQuery = `
@@ -543,15 +554,13 @@ export async function syncReservationChanges({
           ORDER BY rn
         `;
 
-        const batchNum = Math.floor(offset / batchSize) + 1;
-        console.log(`    Processing snapshot batch ${batchNum}/${snapshotBatchCount} (rows ${offset + 1} to ${Math.min(offset + batchSize, totalRows)})...`);
         const batchResult = await pool.request().query(batchQuery);
         const batch = batchResult.recordset;
         if (!batch.length) {
           break;
         }
 
-        const { changes, updatedStates } = processChangesBatch(batch, currentState);
+        const { changes, updatedStates } = processReservationChangesBatch(batch, currentState, logger);
         allChanges.push(...changes);
         allUpdatedStates.push(...updatedStates);
         totalProcessed += batch.length;
@@ -566,18 +575,23 @@ export async function syncReservationChanges({
           }
         }
 
+        // Log progress periodically
+        if (totalProcessed % 50000 === 0 || totalProcessed === totalRows) {
+          logger?.info(`✅ Processed ${totalProcessed.toLocaleString()} snapshot rows (${allChanges.length.toLocaleString()} changes detected so far)`);
+        }
+
         // Insert changes in batches to avoid memory issues
         if (allChanges.length >= 10000) {
-          console.log(`    💾 Flushing ${allChanges.length.toLocaleString()} changes to database...`);
-          await insertChanges(supabaseClient, allChanges);
+          logger?.info(`💾 Flushing ${allChanges.length.toLocaleString()} changes to database...`);
+          await insertReservationChanges(supabaseClient, allChanges, logger);
           allChanges.length = 0;
         }
 
         // Update current state in batches - CRITICAL: Update immediately after each batch
         // to ensure in-memory state matches database state for next batch comparison
         if (allUpdatedStates.length >= 10000) {
-          console.log(`    💾 Flushing ${allUpdatedStates.length.toLocaleString()} state updates to database...`);
-          await updateCurrentState(supabaseClient, allUpdatedStates);
+          logger?.info(`💾 Flushing ${allUpdatedStates.length.toLocaleString()} state updates to database...`);
+          await updateReservationChangesCurrentState(supabaseClient, allUpdatedStates, logger);
           // Update in-memory state map with the states we just saved
           // This is more efficient than reloading from database
           for (const state of allUpdatedStates) {
@@ -590,56 +604,90 @@ export async function syncReservationChanges({
             });
           }
           allUpdatedStates.length = 0;
-          console.log(`    ✅ In-memory state map updated (${currentState.size} reservations)`);
         }
       }
-      
-      console.log(`  ✅ Completed reservation batch ${batchIdx + 1}/${resIdBatches.length} (${totalProcessed.toLocaleString()} total rows processed so far)`);
     }
 
     // Insert remaining changes
     if (allChanges.length > 0) {
-      await insertChanges(supabaseClient, allChanges);
+      logger?.info(`💾 Inserting final ${allChanges.length.toLocaleString()} changes...`);
+      await insertReservationChanges(supabaseClient, allChanges, logger);
     }
 
     // Update remaining states
     if (allUpdatedStates.length > 0) {
-      await updateCurrentState(supabaseClient, allUpdatedStates);
+      logger?.info(`💾 Updating final ${allUpdatedStates.length.toLocaleString()} state records...`);
+      await updateReservationChangesCurrentState(supabaseClient, allUpdatedStates, logger);
     }
+    
+    logger?.info(`✅ Completed processing: ${totalProcessed.toLocaleString()} snapshot rows, ${allChanges.length.toLocaleString()} changes detected`);
 
-    // Update sync metadata with the actual maximum Snapshot_Date processed
-    // For initial load, use processTo; for incremental, use processTo (yesterday)
-    // CRITICAL: last_processed_date should be set to the last date we actually processed
-    let newLastProcessedDate;
-    if (isInitialLoad) {
-      newLastProcessedDate = processTo;
+    // STEP 8: Update metadata
+    // Use the actual max snapshot date processed, or fallback to lastProcessedSnapshotDate if no data
+    // Convert to datetime at midnight
+    let finalProcessedSnapshotDate;
+    if (maxSnapshotDate) {
+      const date = new Date(maxSnapshotDate);
+      date.setHours(0, 0, 0, 0); // Set to midnight
+      finalProcessedSnapshotDate = date.toISOString();
+    } else if (lastProcessedSnapshotDate) {
+      // Ensure it's at midnight
+      const date = new Date(lastProcessedSnapshotDate);
+      date.setHours(0, 0, 0, 0);
+      finalProcessedSnapshotDate = date.toISOString();
+    } else if (latestAvailableSnapshotDate) {
+      finalProcessedSnapshotDate = latestAvailableSnapshotDate;
     } else {
-      // For incremental syncs, use processTo (yesterday) as we always process up to yesterday
-      // Use maxSnapshotDate if it's earlier than processTo (in case there's no data for yesterday)
-      const maxDateStr = maxSnapshotDate ? maxSnapshotDate.toISOString().split('T')[0] : processTo;
-      const maxDateObj = new Date(maxDateStr);
-      const processToObj = new Date(processTo);
-      // Use the earlier of maxSnapshotDate or processTo (but never before processFrom)
-      newLastProcessedDate = maxDateObj <= processToObj ? maxDateStr : processTo;
+      // Fallback to today at midnight
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      finalProcessedSnapshotDate = today.toISOString();
     }
     
     const duration = Date.now() - startTime;
-    await updateSyncMetadata(supabaseClient, newLastProcessedDate, totalProcessed, allChanges.length, duration);
-
-    console.log(`✅ Sync complete: Processed ${totalProcessed} rows, detected ${allChanges.length} changes`);
-    if (!isInitialLoad) {
-      const maxDateStr = maxSnapshotDate ? maxSnapshotDate.toISOString().split('T')[0] : processFrom;
-      console.log(`📅 Max Snapshot_Date processed: ${maxDateStr}`);
-      console.log(`📅 New last processed date: ${newLastProcessedDate} (never before today: ${todayStr})`);
-    }
+    
+    await SyncMetadataService.updateSyncMetadata(
+      supabaseClient,
+      SYNC_TYPE,
+      finalProcessedSnapshotDate,
+      latestAvailableSnapshotDate || finalProcessedSnapshotDate,
+      totalProcessed,
+      allChanges.length,
+      duration,
+      dataset
+    );
 
     return {
       success: true,
       recordsProcessed: totalProcessed,
       changesDetected: allChanges.length,
-      message: `Processed ${totalProcessed} snapshot rows, detected ${allChanges.length} changes`
+      duration: duration,
+      message: `Processed ${totalProcessed.toLocaleString()} snapshot rows, detected ${allChanges.length} changes`
     };
+  } catch (error) {
+    // Even on error, try to update metadata
+    try {
+      const duration = Date.now() - startTime;
+      // Create fallback snapshot date at midnight
+      const fallbackDate = new Date(dateRange.from);
+      fallbackDate.setHours(0, 0, 0, 0);
+      const fallbackSnapshotDate = fallbackDate.toISOString();
+      
+      await SyncMetadataService.updateSyncMetadataNoData(
+        supabaseClient,
+        SYNC_TYPE,
+        latestAvailableSnapshotDate || fallbackSnapshotDate,
+        lastProcessedSnapshotDate || fallbackSnapshotDate,
+        duration,
+        dataset
+      );
+    } catch (metadataError) {
+      // Ignore metadata update errors on sync failure
+    }
+    throw error;
   } finally {
-    await pool.close();
+    if (pool) {
+      await pool.close();
+    }
   }
 }

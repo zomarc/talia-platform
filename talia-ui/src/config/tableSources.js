@@ -10,7 +10,7 @@ export const tableSources = {
     source: 'dwh.Dim_Ship',
     type: 'direct',
     dateColumns: [], // No date columns for ship table
-    syncType: 'ship' // Use table name as syncType for sync_metadata lookup
+    syncType: 'ships' // Match sync.config.json table key (plural)
   },
   cabin_availability: {
     source: 'dwh.Dim_Cabin_Availability',
@@ -21,6 +21,7 @@ export const tableSources = {
   reservation: {
     source: 'stg.RES_HEADER',
     type: 'direct',
+    isLargeDataset: true, // Uses batch loading
     dateColumns: ['sail_from_date', 'sail_to_date'],
     syncType: 'reservation'
   },
@@ -107,6 +108,13 @@ export const tableSources = {
     type: 'unknown',
     dateColumns: [],
     syncType: null
+  },
+  reservation_promotion: {
+    source: 'stg.RES_PROMOTION',
+    type: 'direct',
+    isLargeDataset: true, // Uses batch loading
+    dateColumns: [], // No date columns, linked via res_id
+    syncType: 'reservationPromotion'
   },
   sync_metadata: {
     source: null, // System table

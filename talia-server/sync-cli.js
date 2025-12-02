@@ -129,7 +129,9 @@ async function main() {
           // Check for --force-full-sync flag
           const forceFullSync = process.argv.includes('--force-full-sync');
           
-          // Note: The sync service will log the start message, so we don't duplicate it here
+          console.log(`🔄 Syncing table: ${arg1} (dataset: ${dataset}${forceFullSync ? ', full sync' : ''})`);
+          
+          // Note: Terminal scripts work independently - concurrency is handled by sync service
           const tableResult = await synapseSyncService.syncTable(arg1, dataset, { forceFullSync });
 
           if (tableResult.success) {
@@ -141,9 +143,16 @@ async function main() {
           }
 
           console.log(`\n❌ Table sync failed: ${tableResult.error}`);
+          if (tableResult.detailedLogs && tableResult.detailedLogs.length > 0) {
+            console.log('\n📋 Detailed logs:');
+            tableResult.detailedLogs.forEach(log => console.log(`   ${log}`));
+          }
           process.exit(1);
         } catch (error) {
           console.error(`❌ ${error.message}`);
+          if (error.stack) {
+            console.error(`\nStack trace:\n${error.stack}`);
+          }
           process.exit(1);
         }
         break;

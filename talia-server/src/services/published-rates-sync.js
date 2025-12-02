@@ -1,49 +1,7 @@
-import sql from 'mssql';
-
 const SYNC_TYPE = 'published_rates';
 const CURRENT_STATE_TABLE = 'published_rates_current_state';
 const TARGET_TABLE = 'published_rates_changes';
-const METADATA_TABLE = 'sync_metadata';
-
-/**
- * Get the last processed date from sync metadata
- */
-async function getLastProcessedDate(supabaseClient) {
-  const { data, error } = await supabaseClient
-    .from(METADATA_TABLE)
-    .select('last_processed_date')
-    .eq('sync_type', SYNC_TYPE)
-    .single();
-
-  if (error && error.code !== 'PGRST116') { // PGRST116 = not found
-    throw new Error(`Failed to get last processed date: ${error.message}`);
-  }
-
-  return data?.last_processed_date || null;
-}
-
-/**
- * Update sync metadata with last processed date and stats
- */
-async function updateSyncMetadata(supabaseClient, lastProcessedDate, recordsProcessed, changesDetected, durationMs = null) {
-  const { error } = await supabaseClient
-    .from(METADATA_TABLE)
-    .upsert({
-      sync_type: SYNC_TYPE,
-      last_processed_date: lastProcessedDate,
-      records_processed: recordsProcessed,
-      changes_detected: changesDetected,
-      duration_ms: durationMs,
-      last_sync_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }, {
-      onConflict: 'sync_type'
-    });
-
-  if (error) {
-    throw new Error(`Failed to update sync metadata: ${error.message}`);
-  }
-}
+const SNAPSHOT_COLUMN = 'SNAPSHOT_DATE';
 
 /**
  * Generate a unique key for a published rate record
@@ -63,9 +21,11 @@ function getPublishedRateKey(row) {
 /**
  * Load current state of all published rates from database
  * Returns a Map<rate_key, currentState>
+ * 
+ * Exported for use by sync service batching wrapper
  */
-async function loadCurrentState(supabaseClient) {
-  console.log('📥 Loading current published rates state from database...');
+export async function loadPublishedRatesCurrentState(supabaseClient, logger = null) {
+  // Logging removed - SyncOperation handles all logging
   const stateMap = new Map();
   let page = 0;
   const pageSize = 1000;
@@ -110,7 +70,6 @@ async function loadCurrentState(supabaseClient) {
     }
   }
 
-  console.log(`✅ Loaded ${stateMap.size} published rate states`);
   return stateMap;
 }
 
@@ -118,10 +77,14 @@ async function loadCurrentState(supabaseClient) {
  * Update current state table with new published rate states
  * For initial load: stores all unique rate records
  * For incremental: updates existing records and adds new ones
+ * 
+ * Exported for use by sync service batching wrapper
  */
-async function updateCurrentState(supabaseClient, updatedStates) {
+export async function updatePublishedRatesCurrentState(supabaseClient, updatedStates, logger = null) {
   if (updatedStates.length === 0) return;
-
+  
+  // Pure data update - logging handled by sync service
+  
   // Deduplicate: keep only the latest snapshot_date for each rate_key
   const stateMap = new Map();
   for (const state of updatedStates) {
@@ -134,7 +97,6 @@ async function updateCurrentState(supabaseClient, updatedStates) {
 
   const statesToUpdate = Array.from(stateMap.values());
 
-  console.log(`📝 Updating ${statesToUpdate.length} published rate states (from ${updatedStates.length} processed records)...`);
   const batchSize = 1000;
 
   for (let i = 0; i < statesToUpdate.length; i += batchSize) {
@@ -149,8 +111,6 @@ async function updateCurrentState(supabaseClient, updatedStates) {
       throw new Error(`Failed to update current state: ${error.message}`);
     }
   }
-
-  console.log(`✅ Updated ${statesToUpdate.length} published rate states`);
 }
 
 /**
@@ -183,6 +143,24 @@ function transformRow(row) {
 /**
  * Process a batch of published rate records and detect changes compared to current state
  * Returns { changes: [], updatedStates: [] }
+ * 
+ * This function is used by the sync service's batching wrapper.
+ * The sync service handles all querying, batching, and data insertion.
+ */
+export function processPublishedRatesBatch(batch, currentState, logger = null) {
+  const log = (...args) => logger ? logger.info(...args) : console.log(...args);
+  
+  log(`🔄 Transforming ${batch.length.toLocaleString()} records for published rates...`);
+  const result = processChangesBatch(batch, currentState);
+  log(`✅ Processed ${batch.length.toLocaleString()} records (${result.changes.length} changes detected)`);
+  
+  return result;
+}
+
+/**
+ * Process a batch of published rate records and detect changes compared to current state
+ * Returns { changes: [], updatedStates: [] }
+ * Internal function - use processPublishedRatesBatch instead
  */
 function processChangesBatch(batch, currentState) {
   const changes = [];
@@ -242,13 +220,13 @@ function processChangesBatch(batch, currentState) {
 
 /**
  * Insert changes into published_rates_changes table
+ * Exported for use by sync service batching wrapper
  */
-async function insertChanges(supabaseClient, changes) {
+export async function insertPublishedRatesChanges(supabaseClient, changes, logger = null) {
   if (changes.length === 0) return;
 
-  console.log(`📥 Inserting ${changes.length} published rate change rows...`);
+  // Pure data insertion - logging handled by sync service
   const batchSize = 1000;
-  let inserted = 0;
 
   for (let i = 0; i < changes.length; i += batchSize) {
     const batch = changes.slice(i, i + batchSize);
@@ -256,244 +234,7 @@ async function insertChanges(supabaseClient, changes) {
     if (error) {
       throw new Error(`Failed to insert published rate change batch: ${error.message}`);
     }
-    inserted += batch.length;
-    console.log(`   📊 Inserted ${inserted}/${changes.length} published rate change rows`);
-  }
-
-  console.log(`✅ Published rate change insert complete (${inserted} rows)`);
-}
-
-/**
- * Build row number query for pagination
- */
-function buildRowNumberQuery({ source, columnsSql, whereClause, rowNumberOrder }) {
-  const order = (rowNumberOrder && rowNumberOrder.length > 0)
-    ? rowNumberOrder.join(', ')
-    : '[SNAPSHOT_DATE]';
-
-  return `
-    SELECT ${columnsSql}, ROW_NUMBER() OVER (ORDER BY ${order}) as rn
-    FROM ${source}
-    ${whereClause ? `WHERE ${whereClause}` : ''}
-  `;
-}
-
-/**
- * Sync published rates incrementally
- * 
- * Initial Load:
- *   - If no last_processed_date exists, processes all snapshots in dateRange
- *   - Builds current state, stores only actual changes
- * 
- * Incremental Update:
- *   - Processes only snapshots since last_processed_date
- *   - Compares to current state from database
- *   - Stores only new changes
- *   - Updates current state
- */
-export async function syncPublishedRates({
-  synapseConfig,
-  supabaseClient,
-  source,
-  columns,
-  dateColumn,
-  dateRange,
-  targetTable,
-  rowNumberOrder,
-  batchSize = 50000,
-  forceFullSync = false
-}) {
-  const startTime = Date.now();
-  
-  if (!dateRange?.from || !dateRange?.to) {
-    throw new Error('Published rates sync requires a dateRange with from/to values');
-  }
-
-  // Calculate today and yesterday dates (YYYY-MM-DD format)
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const twoDaysAgo = new Date(today);
-  twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-  
-  const todayStr = today.toISOString().split('T')[0];
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
-  const twoDaysAgoStr = twoDaysAgo.toISOString().split('T')[0];
-
-  // Get last processed date
-  let lastProcessedDate = forceFullSync ? null : await getLastProcessedDate(supabaseClient);
-  
-  // If no last_processed_date exists, initialize it to 2 days ago
-  if (!lastProcessedDate && !forceFullSync) {
-    lastProcessedDate = twoDaysAgoStr;
-    console.log(`📅 No last processed date found. Initializing to 2 days ago: ${lastProcessedDate}`);
-    // Store the initial date in metadata
-    await updateSyncMetadata(supabaseClient, lastProcessedDate, 0, 0, null);
-  }
-  
-  const isInitialLoad = forceFullSync;
-  
-  // Determine actual date range to process
-  let processFrom, processTo;
-  
-  if (isInitialLoad) {
-    // Initial load: use the configured date range
-    processFrom = dateRange.from;
-    processTo = dateRange.to;
-    console.log(`🔄 INITIAL LOAD: Processing snapshots from ${processFrom} to ${processTo}`);
-  } else {
-    // Incremental sync: process from last_processed_date
-    // If we're behind (last_processed_date < yesterday), catch up from there
-    // Otherwise, process from last_processed_date to avoid reprocessing
-    const lastProcessedDateObj = new Date(lastProcessedDate);
-    const yesterdayObj = new Date(yesterdayStr);
-    
-    // Process from last_processed_date (or yesterday if we're behind)
-    processFrom = lastProcessedDateObj < yesterdayObj ? lastProcessedDate : lastProcessedDate;
-    processTo = null; // No upper bound for incremental syncs
-    
-    if (lastProcessedDateObj < yesterdayObj) {
-      console.log(`🔄 INCREMENTAL UPDATE (CATCHING UP): Processing all snapshots since ${processFrom} (behind by ${Math.floor((yesterdayObj - lastProcessedDateObj) / (1000 * 60 * 60 * 24))} days, no upper bound)`);
-    } else {
-      console.log(`🔄 INCREMENTAL UPDATE: Processing all snapshots since ${processFrom} (no upper bound)`);
-    }
-  }
-
-  // Load current state from database
-  const currentState = await loadCurrentState(supabaseClient);
-
-  const pool = await sql.connect(synapseConfig);
-  const allChanges = [];
-  const allUpdatedStates = [];
-  let totalProcessed = 0;
-  let totalChangesDetected = 0; // Track total changes across all batches
-  let maxSnapshotDate = null; // Track the maximum Snapshot_Date processed
-  const columnsSql = columns.join(', ');
-  
-  // Build WHERE clause based on sync type
-  const whereClause = isInitialLoad
-    ? `${dateColumn} >= '${processFrom}' AND ${dateColumn} <= '${processTo}'`
-    : `${dateColumn} > '${processFrom}'`; // Incremental: use > to avoid reprocessing last processed date, no upper bound
-
-  try {
-    const countQuery = `
-      SELECT COUNT(*) as total
-      FROM ${source}
-      WHERE ${whereClause}
-    `;
-
-    const countResult = await pool.request().query(countQuery);
-    const totalRows = countResult.recordset[0].total;
-    console.log(`📊 Total rows to process: ${totalRows.toLocaleString()}`);
-
-    if (totalRows === 0) {
-      console.log('✅ No rows to process');
-      return {
-        success: true,
-        recordsProcessed: 0,
-        recordsUpdated: 0,
-        message: 'No rows to process'
-      };
-    }
-
-    const rowNumberQuery = buildRowNumberQuery({
-      source,
-      columnsSql,
-      whereClause,
-      rowNumberOrder
-    });
-
-    // Process in batches
-    for (let offset = 0; offset < totalRows; offset += batchSize) {
-      const batchQuery = `
-        SELECT *
-        FROM (
-          ${rowNumberQuery}
-        ) AS numbered
-        WHERE rn > ${offset} AND rn <= ${offset + batchSize}
-        ORDER BY rn
-      `;
-
-      console.log(`  Processing batch ${Math.floor(offset / batchSize) + 1}/${Math.ceil(totalRows / batchSize)} (${offset + 1} to ${Math.min(offset + batchSize, totalRows)})...`);
-      const batchResult = await pool.request().query(batchQuery);
-      const batch = batchResult.recordset;
-      if (!batch.length) {
-        break;
-      }
-
-      const { changes, updatedStates } = processChangesBatch(batch, currentState);
-      allChanges.push(...changes);
-      allUpdatedStates.push(...updatedStates);
-      totalProcessed += batch.length;
-      
-      // Track the maximum Snapshot_Date from this batch
-      for (const row of batch) {
-        if (row.SNAPSHOT_DATE) {
-          const snapshotDate = new Date(row.SNAPSHOT_DATE);
-          if (!maxSnapshotDate || snapshotDate > maxSnapshotDate) {
-            maxSnapshotDate = snapshotDate;
-          }
-        }
-      }
-
-      // Insert changes in batches to avoid memory issues
-      if (allChanges.length >= 10000) {
-        await insertChanges(supabaseClient, allChanges);
-        totalChangesDetected += allChanges.length;
-        allChanges.length = 0;
-      }
-
-      // Update current state in batches
-      if (allUpdatedStates.length >= 10000) {
-        await updateCurrentState(supabaseClient, allUpdatedStates);
-        allUpdatedStates.length = 0;
-      }
-    }
-
-    // Insert remaining changes
-    if (allChanges.length > 0) {
-      await insertChanges(supabaseClient, allChanges);
-      totalChangesDetected += allChanges.length;
-    }
-
-    // Update remaining states
-    if (allUpdatedStates.length > 0) {
-      await updateCurrentState(supabaseClient, allUpdatedStates);
-    }
-
-    // Update sync metadata with the actual maximum Snapshot_Date processed
-    // For initial load, use processTo; for incremental, use maxSnapshotDate
-    // CRITICAL: last_processed_date can NEVER be before today
-    let newLastProcessedDate;
-    if (isInitialLoad) {
-      newLastProcessedDate = processTo;
-    } else {
-      // Use maxSnapshotDate if available, otherwise use processFrom
-      const maxDateStr = maxSnapshotDate ? maxSnapshotDate.toISOString().split('T')[0] : processFrom;
-      // Ensure we never set last_processed_date before today
-      const maxDateObj = new Date(maxDateStr);
-      newLastProcessedDate = maxDateObj >= today ? maxDateStr : todayStr;
-    }
-    
-    const duration = Date.now() - startTime;
-    await updateSyncMetadata(supabaseClient, newLastProcessedDate, totalProcessed, totalChangesDetected, duration);
-
-    console.log(`✅ Sync complete: Processed ${totalProcessed.toLocaleString()} rows, detected ${totalChangesDetected} changes`);
-    if (!isInitialLoad) {
-      const maxDateStr = maxSnapshotDate ? maxSnapshotDate.toISOString().split('T')[0] : processFrom;
-      console.log(`📅 Max Snapshot_Date processed: ${maxDateStr}`);
-      console.log(`📅 New last processed date: ${newLastProcessedDate} (never before today: ${todayStr})`);
-    }
-
-    return {
-      success: true,
-      recordsProcessed: totalProcessed,
-      recordsUpdated: totalChangesDetected,
-      message: `Processed ${totalProcessed.toLocaleString()} snapshot rows, detected ${totalChangesDetected} changes`
-    };
-  } finally {
-    await pool.close();
   }
 }
+
 

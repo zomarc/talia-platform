@@ -104,6 +104,43 @@ export const useDatabaseTables = () => {
     }
   }, []);
 
+  // Get latest snapshot date from source table (if it has snapshot_date column)
+  const getLatestSnapshotDate = useCallback(async (tableName, tableConfig) => {
+    // Only check for snapshot_date if the table has it in dateColumns
+    const hasSnapshotDate = tableConfig.dateColumns && tableConfig.dateColumns.includes('snapshot_date');
+    if (!hasSnapshotDate) {
+      return null;
+    }
+
+    try {
+      // First check if table has any rows
+      const { count } = await supabase
+        .from(tableName)
+        .select('*', { count: 'exact', head: true });
+
+      if (!count || count === 0) {
+        return null;
+      }
+
+      // Get the latest snapshot_date
+      const { data, error } = await supabase
+        .from(tableName)
+        .select('snapshot_date')
+        .order('snapshot_date', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.warn(`Error getting latest snapshot date for ${tableName}:`, error);
+        return null;
+      }
+
+      return data && data.length > 0 ? data[0].snapshot_date : null;
+    } catch (err) {
+      console.warn(`Error getting latest snapshot date for ${tableName}:`, err);
+      return null;
+    }
+  }, []);
+
   // Calculate sync status
   const calculateSyncStatus = useCallback((tableConfig, metadata) => {
     if (!tableConfig.syncType) {
@@ -161,10 +198,9 @@ export const useDatabaseTables = () => {
       const metadata = await fetchSyncMetadata();
       setSyncMetadata(metadata);
 
-      // Get list of tables from Supabase
-      // We'll use the MCP tool or query information_schema
-      // For now, we'll use a known list of tables and fetch their metadata
-      const knownTables = [
+      // Dynamically discover tables by trying to query known tables and checking for existence
+      // Start with a comprehensive list that includes all known tables
+      const baseTableList = [
         'ship',
         'cabin_availability',
         'reservation',
@@ -172,6 +208,7 @@ export const useDatabaseTables = () => {
         'sail_by_cabin_occupancy',
         'reservation_changes',
         'reservation_current_state',
+        'reservation_promotion',
         'published_rates',
         'published_rates_changes',
         'published_rates_current_state',
@@ -186,31 +223,69 @@ export const useDatabaseTables = () => {
         'focuses'
       ];
 
+      // Check which tables actually exist by attempting to query them
+      const tableExistenceChecks = await Promise.allSettled(
+        baseTableList.map(async (tableName) => {
+          try {
+            const { error } = await supabase
+              .from(tableName)
+              .select('*', { count: 'exact', head: true })
+              .limit(0);
+            
+            // If no error, table exists (even if empty)
+            return { tableName, exists: !error };
+          } catch (err) {
+            return { tableName, exists: false };
+          }
+        })
+      );
+
+      // Filter to only tables that exist
+      const knownTables = tableExistenceChecks
+        .filter(result => result.status === 'fulfilled' && result.value.exists)
+        .map(result => result.value.tableName);
+
       // Fetch metadata for each table in parallel
       const tablePromises = knownTables.map(async (tableName) => {
         const tableConfig = getTableSource(tableName);
         const rowCount = await getRowCount(tableName);
         const dateRange = await getDateRange(tableName, tableConfig.dateColumns);
+        const latestSnapshotDate = await getLatestSnapshotDate(tableName, tableConfig);
         
         const syncStatus = calculateSyncStatus(tableConfig, metadata);
         const dataStatus = calculateDataStatus(rowCount, dateRange);
         
-        // Get last sync time and duration
+        // Get last sync time, duration, and stats
         let lastSync = null;
         let syncDuration = null;
+        let recordsProcessed = null;
+        let changesDetected = null;
         if (tableConfig.syncType && metadata[tableConfig.syncType]) {
-          lastSync = metadata[tableConfig.syncType].last_sync_at;
-          syncDuration = metadata[tableConfig.syncType].duration_ms;
+          const syncMeta = metadata[tableConfig.syncType];
+          lastSync = syncMeta.last_sync_at;
+          syncDuration = syncMeta.duration_ms;
+          recordsProcessed = syncMeta.records_processed;
+          changesDetected = syncMeta.changes_detected;
         }
+
+        // Determine load method: batch vs direct
+        // Batch = derived tables OR direct tables with isLargeDataset
+        // Direct = small direct tables loaded all at once
+        const loadMethod = tableConfig.type === 'derived' ? 'Batch' : 
+                          (tableConfig.isLargeDataset ? 'Batch' : 'Direct');
 
         return {
           tableName,
           source: tableConfig.source || 'N/A',
           type: tableConfig.type,
+          loadMethod, // Add load method
           rowCount,
           dateRange,
+          latestSnapshotDate,
           lastSync,
           syncDuration,
+          recordsProcessed,
+          changesDetected,
           syncStatus,
           dataStatus,
           status: `${syncStatus} • ${dataStatus}`,
@@ -228,6 +303,148 @@ export const useDatabaseTables = () => {
     }
   }, [fetchSyncMetadata, getRowCount, getDateRange, calculateSyncStatus, calculateDataStatus]);
 
+  // Update a single table's data without full refetch
+  const updateTable = useCallback(async (tableName) => {
+    try {
+      const tableConfig = getTableSource(tableName);
+      
+      // Get row count
+      const { count, error: countError } = await supabase
+        .from(tableName)
+        .select('*', { count: 'exact', head: true });
+      
+      if (countError) {
+        console.warn(`Error getting row count for ${tableName}:`, countError);
+      }
+      const rowCount = count || 0;
+      
+      // Get date range
+      let dateRange = { min: null, max: null };
+      if (tableConfig.dateColumns && tableConfig.dateColumns.length > 0) {
+        try {
+          const dateColumn = tableConfig.dateColumns[0];
+          const { data: minData, error: minError } = await supabase
+            .from(tableName)
+            .select(dateColumn)
+            .order(dateColumn, { ascending: true })
+            .limit(1);
+          const { data: maxData, error: maxError } = await supabase
+            .from(tableName)
+            .select(dateColumn)
+            .order(dateColumn, { ascending: false })
+            .limit(1);
+          
+          if (!minError && !maxError) {
+            dateRange.min = minData && minData.length > 0 ? minData[0][dateColumn] : null;
+            dateRange.max = maxData && maxData.length > 0 ? maxData[0][dateColumn] : null;
+          }
+        } catch (err) {
+          console.warn(`Error getting date range for ${tableName}:`, err);
+        }
+      }
+      
+      // Get latest snapshot date
+      let latestSnapshotDate = null;
+      if (tableConfig.dateColumns && tableConfig.dateColumns.includes('snapshot_date')) {
+        try {
+          const { data, error } = await supabase
+            .from(tableName)
+            .select('snapshot_date')
+            .order('snapshot_date', { ascending: false })
+            .limit(1);
+          
+          if (!error && data && data.length > 0) {
+            latestSnapshotDate = data[0].snapshot_date;
+          }
+        } catch (err) {
+          console.warn(`Error getting latest snapshot date for ${tableName}:`, err);
+        }
+      }
+      
+      // Fetch updated sync metadata
+      const { data: metadataData, error: metadataError } = await supabase
+        .from('sync_metadata')
+        .select('*')
+        .eq('sync_type', tableConfig.syncType || tableName);
+      
+      if (metadataError) {
+        console.warn(`Error fetching sync metadata for ${tableName}:`, metadataError);
+      }
+      
+      const metadataMap = {};
+      if (metadataData && metadataData.length > 0) {
+        metadataData.forEach(record => {
+          metadataMap[record.sync_type] = record;
+        });
+      }
+      
+      // Calculate sync status
+      const syncRecord = metadataMap[tableConfig.syncType || tableName];
+      let syncStatus = 'Not Synced';
+      if (syncRecord) {
+        if (syncRecord.last_sync_at) {
+          const lastSync = new Date(syncRecord.last_sync_at);
+          const now = new Date();
+          const hoursSinceSync = (now - lastSync) / (1000 * 60 * 60);
+          syncStatus = hoursSinceSync < 24 ? 'Synced' : 'Outdated';
+        } else {
+          syncStatus = 'Never Synced';
+        }
+      }
+      
+      // Calculate data status
+      let dataStatus = 'Empty';
+      if (rowCount > 0) {
+        if (!dateRange.max) {
+          dataStatus = 'Has Data';
+        } else {
+          const maxDate = new Date(dateRange.max);
+          const now = new Date();
+          const daysSinceMaxDate = (now - maxDate) / (1000 * 60 * 60 * 24);
+          dataStatus = daysSinceMaxDate > 30 ? 'Stale' : 'Has Data';
+        }
+      }
+      
+      let lastSync = null;
+      let syncDuration = null;
+      let recordsProcessed = null;
+      let changesDetected = null;
+      if (syncRecord) {
+        lastSync = syncRecord.last_sync_at;
+        syncDuration = syncRecord.duration_ms;
+        recordsProcessed = syncRecord.records_processed;
+        changesDetected = syncRecord.changes_detected;
+      }
+      
+      // Recalculate load method
+      const loadMethod = tableConfig.type === 'derived' ? 'Batch' : 
+                        (tableConfig.isLargeDataset ? 'Batch' : 'Direct');
+      
+      // Update the specific table in the tables array
+      setTables(prev => prev.map(t => 
+        t.tableName === tableName 
+          ? {
+              ...t,
+              loadMethod,
+              rowCount,
+              dateRange,
+              latestSnapshotDate,
+              lastSync,
+              syncDuration,
+              recordsProcessed,
+              changesDetected,
+              syncStatus,
+              dataStatus,
+              status: `${syncStatus} • ${dataStatus}`
+            }
+          : t
+      ));
+    } catch (err) {
+      console.error(`Error updating table ${tableName}:`, err);
+      throw err;
+    }
+  }, [calculateSyncStatus, calculateDataStatus]);
+
   useEffect(() => {
     fetchTables();
   }, [fetchTables]);
@@ -241,6 +458,7 @@ export const useDatabaseTables = () => {
     loading,
     error,
     refetch,
+    updateTable,
     syncMetadata
   };
 };

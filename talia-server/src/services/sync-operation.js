@@ -8,11 +8,20 @@
  */
 
 import { SyncLogger } from './sync-logger.js';
+import { syncEventEmitter } from './sync-event-emitter.js';
 
 export class SyncOperation {
   constructor(syncFunction, logger = null, context = {}) {
     this.syncFunction = syncFunction;
-    this.logger = logger || new SyncLogger();
+    // Use provided logger if it has tableName and eventEmitter (for SSE), otherwise create new one with context
+    if (logger && logger.tableName && logger.eventEmitter) {
+      // Logger already has SSE support - use it directly
+      this.logger = logger;
+    } else {
+      // Create new logger with tableName and eventEmitter from context for SSE support
+      const { tableName, syncType } = context;
+      this.logger = new SyncLogger(tableName || syncType, syncEventEmitter);
+    }
     this.context = context; // { tableName, syncType, etc. }
   }
 

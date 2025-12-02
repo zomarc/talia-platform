@@ -1,6 +1,3 @@
-import sql from 'mssql';
-import { SyncMetadataService } from './sync-metadata-service.js';
-
 const SYNC_TYPE = 'competitor';
 const CURRENT_STATE_TABLE = 'competitor_current_state';
 const TARGET_TABLE = 'competitor';
@@ -84,8 +81,10 @@ function getCompetitorKey(row) {
 /**
  * Load current state of all competitors from database
  * Returns a Map<competitor_key, currentState>
+ * 
+ * Exported for use by sync service batching wrapper
  */
-async function loadCurrentState(supabaseClient) {
+export async function loadCompetitorCurrentState(supabaseClient, logger = null) {
   const stateMap = new Map();
   let page = 0;
   const pageSize = 1000;
@@ -134,9 +133,13 @@ async function loadCurrentState(supabaseClient) {
  * Update current state table with new competitor states
  * For initial load: stores all unique competitor records
  * For incremental: updates existing records and adds new ones
+ * 
+ * Exported for use by sync service batching wrapper
  */
-async function updateCurrentState(supabaseClient, updatedStates) {
+export async function updateCompetitorCurrentState(supabaseClient, updatedStates, logger = null) {
   if (updatedStates.length === 0) return;
+  
+  // Logging handled by sync service
 
   // For initial load (all same snapshot_date), just store all unique records
   // For incremental, deduplicate by keeping latest snapshot_date per competitor_key
@@ -169,6 +172,7 @@ async function updateCurrentState(supabaseClient, updatedStates) {
   }
 
   const batchSize = 1000;
+  let updated = 0;
 
   for (let i = 0; i < statesToUpdate.length; i += batchSize) {
     const batch = statesToUpdate.slice(i, i + batchSize);
@@ -181,6 +185,8 @@ async function updateCurrentState(supabaseClient, updatedStates) {
     if (error) {
       throw new Error(`Failed to update current state: ${error.message}`);
     }
+    
+    updated += batch.length;
   }
 }
 
@@ -220,6 +226,24 @@ function transformRow(row) {
 /**
  * Process a batch of competitor records and detect changes compared to current state
  * Returns { changes: [], updatedStates: [] }
+ * 
+ * This function is used by the sync service's batching wrapper.
+ * The sync service handles all querying, batching, and data insertion.
+ */
+export function processCompetitorBatch(batch, currentState, logger = null) {
+  const log = (...args) => logger ? logger.info(...args) : console.log(...args);
+  
+  log(`🔄 Transforming ${batch.length.toLocaleString()} records for competitor...`);
+  const result = processChangesBatch(batch, currentState);
+  log(`✅ Processed ${batch.length.toLocaleString()} records (${result.changes.length} changes detected)`);
+  
+  return result;
+}
+
+/**
+ * Process a batch of competitor records and detect changes compared to current state
+ * Returns { changes: [], updatedStates: [] }
+ * Internal function - use processCompetitorBatch instead
  */
 function processChangesBatch(batch, currentState) {
   const changes = [];
@@ -285,10 +309,12 @@ function processChangesBatch(batch, currentState) {
 
 /**
  * Insert changes into competitor table
+ * Exported for use by sync service batching wrapper
  */
-async function insertChanges(supabaseClient, changes) {
+export async function insertCompetitorChanges(supabaseClient, changes, logger = null) {
   if (changes.length === 0) return;
 
+  // Pure data insertion - logging handled by sync service
   const batchSize = 1000;
   let inserted = 0;
 
@@ -302,293 +328,3 @@ async function insertChanges(supabaseClient, changes) {
   }
 }
 
-/**
- * Build WHERE clause for competitor sync
- * 
- * CRITICAL: Always filter by Departure_Date range (dataset requirement)
- * Use Snapshot_Date only for incremental filtering
- * 
- * @param {string} departureDateFrom - Start of departure date range
- * @param {string} departureDateTo - End of departure date range
- * @param {string|null} lastProcessedSnapshotDate - Last processed snapshot date (for incremental)
- * @returns {string} WHERE clause
- */
-function buildWhereClause(departureDateFrom, departureDateTo, lastProcessedSnapshotDate) {
-  // Always filter by departure date range (dataset requirement)
-  let whereClause = `${DEPARTURE_DATE_COLUMN} >= '${departureDateFrom}' AND ${DEPARTURE_DATE_COLUMN} <= '${departureDateTo}'`;
-  
-  // For incremental syncs, also filter by snapshot date
-  // Convert datetime to date string for SQL comparison (Snapshot_Date is a DATE column)
-  if (lastProcessedSnapshotDate) {
-    const datePart = lastProcessedSnapshotDate.split('T')[0]; // Extract date part from ISO datetime
-    whereClause += ` AND ${SNAPSHOT_COLUMN} > '${datePart}'`;
-  }
-  
-  return whereClause;
-}
-
-/**
- * Build row number query for pagination
- */
-function buildRowNumberQuery({ source, columnsSql, whereClause, rowNumberOrder }) {
-  const order = (rowNumberOrder && rowNumberOrder.length > 0)
-    ? rowNumberOrder.join(', ')
-    : `[${SNAPSHOT_COLUMN}]`;
-
-  return `
-    SELECT ${columnsSql}, ROW_NUMBER() OVER (ORDER BY ${order}) as rn
-    FROM ${source}
-    ${whereClause ? `WHERE ${whereClause}` : ''}
-  `;
-}
-
-/**
- * Sync competitor data incrementally
- * 
- * Key Principles:
- * - Always filter by Departure_Date range (dataset requirement)
- * - Use Snapshot_Date for incremental filtering only
- * - Check source for latest snapshot date first
- * - Update metadata even when no data processed
- * 
- * Initial Load:
- *   - Processes all snapshots where Departure_Date is in dateRange
- *   - Builds current state, stores only actual changes
- * 
- * Incremental Update:
- *   - Processes snapshots where Departure_Date is in dateRange AND Snapshot_Date > lastProcessedSnapshotDate
- *   - Compares to current state from database
- *   - Stores only new changes
- *   - Updates current state
- */
-export async function syncCompetitors({
-  synapseConfig,
-  supabaseClient,
-  source,
-  columns,
-  dateColumn, // This is Snapshot_Date (for reference, but we build WHERE clause ourselves)
-  dateRange,
-  targetTable,
-  rowNumberOrder,
-  batchSize = 50000,
-  forceFullSync = false,
-  dataset = null, // Dataset name for metadata tracking
-  logger = null // Accept logger for consistency, but SyncOperation handles all logging
-}) {
-  // Define local log functions at the START (per SYNC_PRINCIPLES.md)
-  // These are defined but not used - SyncOperation handles all logging
-  // They exist for consistency and in case error handlers need them
-  // Use console fallback per SYNC_PRINCIPLES.md (even though SyncOperation handles logging)
-  const log = (...args) => logger ? logger.info(...args) : console.log(...args);
-  const logError = (...args) => logger ? logger.error(...args) : console.error(...args);
-  const logWarn = (...args) => logger ? logger.warn(...args) : console.warn(...args);
-  
-  const startTime = Date.now();
-  
-  // Validate inputs early
-  if (!dateRange?.from || !dateRange?.to) {
-    throw new Error('Competitor sync requires a dateRange with from/to values');
-  }
-
-  // STEP 1: Check source for latest snapshot date FIRST
-  const latestAvailableSnapshotDate = await SyncMetadataService.getLatestSnapshotDate(
-    synapseConfig,
-    source,
-    SNAPSHOT_COLUMN
-  );
-
-  // STEP 2: Get last processed snapshot date from metadata
-  const lastProcessedSnapshotDate = forceFullSync 
-    ? null 
-    : await SyncMetadataService.getLastProcessedSnapshotDate(supabaseClient, SYNC_TYPE);
-
-  // STEP 3: Determine if sync is needed
-  const isInitialLoad = !lastProcessedSnapshotDate || forceFullSync;
-  
-  // Check if we're up to date (incremental sync with no new snapshots)
-  if (!isInitialLoad && latestAvailableSnapshotDate && lastProcessedSnapshotDate) {
-    if (new Date(latestAvailableSnapshotDate) <= new Date(lastProcessedSnapshotDate)) {
-      const duration = Date.now() - startTime;
-      await SyncMetadataService.updateSyncMetadataNoData(
-        supabaseClient,
-        SYNC_TYPE,
-        latestAvailableSnapshotDate,
-        lastProcessedSnapshotDate,
-        duration,
-        dataset
-      );
-      return {
-        success: true,
-        recordsProcessed: 0,
-        recordsUpdated: 0,
-        duration: duration,
-        message: 'No new snapshots available'
-      };
-    }
-  }
-
-  // STEP 4: Build WHERE clause
-  // CRITICAL: Always filter by Departure_Date range, use Snapshot_Date for incremental only
-  const whereClause = buildWhereClause(
-    dateRange.from,
-    dateRange.to,
-    isInitialLoad ? null : lastProcessedSnapshotDate
-  );
-
-  // STEP 5: Load current state from database
-  const currentState = await loadCurrentState(supabaseClient);
-
-  // STEP 6: Process data in batches
-  let pool = null;
-  const allChanges = [];
-  const allUpdatedStates = [];
-  let totalProcessed = 0;
-  let maxSnapshotDate = null; // Track actual max snapshot date processed
-  const columnsSql = columns.join(', ');
-
-  try {
-    pool = await sql.connect(synapseConfig);
-    
-    const rowNumberQuery = buildRowNumberQuery({
-      source,
-      columnsSql,
-      whereClause,
-      rowNumberOrder
-    });
-
-    // Process in batches
-    let offset = 0;
-    let batchNumber = 1;
-    let hasMoreData = true;
-    
-    while (hasMoreData) {
-      const batchQuery = `
-        SELECT *
-        FROM (
-          ${rowNumberQuery}
-        ) AS numbered
-        WHERE rn > ${offset} AND rn <= ${offset + batchSize}
-        ORDER BY rn
-      `;
-
-      const batchResult = await pool.request().query(batchQuery);
-      const batch = batchResult.recordset;
-      
-      if (!batch.length) {
-        hasMoreData = false;
-        break;
-      }
-
-      const { changes, updatedStates } = processChangesBatch(batch, currentState);
-      allChanges.push(...changes);
-      allUpdatedStates.push(...updatedStates);
-      totalProcessed += batch.length;
-
-      // Track the maximum snapshot date from this batch
-      if (batch.length > 0) {
-        const batchSnapshotDates = batch
-          .map(r => r.Snapshot_Date ? new Date(r.Snapshot_Date).getTime() : null)
-          .filter(d => d !== null);
-        if (batchSnapshotDates.length > 0) {
-          const batchMaxDate = Math.max(...batchSnapshotDates);
-          if (maxSnapshotDate === null || batchMaxDate > maxSnapshotDate) {
-            maxSnapshotDate = batchMaxDate;
-          }
-        }
-      }
-
-      // Insert changes in batches to avoid memory issues
-      if (allChanges.length >= 10000) {
-        await insertChanges(supabaseClient, allChanges);
-        allChanges.length = 0;
-      }
-
-      // Update current state in batches
-      if (allUpdatedStates.length >= 10000) {
-        await updateCurrentState(supabaseClient, allUpdatedStates);
-        allUpdatedStates.length = 0;
-      }
-      
-      offset += batchSize;
-      batchNumber++;
-    }
-
-    // Insert remaining changes
-    if (allChanges.length > 0) {
-      await insertChanges(supabaseClient, allChanges);
-    }
-
-    // Update remaining states
-    if (allUpdatedStates.length > 0) {
-      await updateCurrentState(supabaseClient, allUpdatedStates);
-    }
-
-    // STEP 7: Update metadata
-    // Use the actual max snapshot date processed, or fallback to lastProcessedSnapshotDate if no data
-    // Convert to datetime at midnight
-    let finalProcessedSnapshotDate;
-    if (maxSnapshotDate) {
-      const date = new Date(maxSnapshotDate);
-      date.setHours(0, 0, 0, 0); // Set to midnight
-      finalProcessedSnapshotDate = date.toISOString();
-    } else if (lastProcessedSnapshotDate) {
-      // Ensure it's at midnight
-      const date = new Date(lastProcessedSnapshotDate);
-      date.setHours(0, 0, 0, 0);
-      finalProcessedSnapshotDate = date.toISOString();
-    } else if (latestAvailableSnapshotDate) {
-      finalProcessedSnapshotDate = latestAvailableSnapshotDate;
-    } else {
-      // Fallback to today at midnight
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      finalProcessedSnapshotDate = today.toISOString();
-    }
-    
-    const duration = Date.now() - startTime;
-    
-    await SyncMetadataService.updateSyncMetadata(
-      supabaseClient,
-      SYNC_TYPE,
-      finalProcessedSnapshotDate,
-      latestAvailableSnapshotDate || finalProcessedSnapshotDate,
-      totalProcessed,
-      allChanges.length,
-      duration,
-      dataset
-    );
-
-    return {
-      success: true,
-      recordsProcessed: totalProcessed,
-      recordsUpdated: allChanges.length,
-      duration: duration,
-      message: `Processed ${totalProcessed.toLocaleString()} snapshot rows, detected ${allChanges.length} changes`
-    };
-  } catch (error) {
-    // Even on error, try to update metadata
-    try {
-      const duration = Date.now() - startTime;
-      // Create fallback snapshot date at midnight
-      const fallbackDate = new Date(dateRange.from);
-      fallbackDate.setHours(0, 0, 0, 0);
-      const fallbackSnapshotDate = fallbackDate.toISOString();
-      
-      await SyncMetadataService.updateSyncMetadataNoData(
-        supabaseClient,
-        SYNC_TYPE,
-        latestAvailableSnapshotDate || fallbackSnapshotDate,
-        lastProcessedSnapshotDate || fallbackSnapshotDate,
-        duration,
-        dataset
-      );
-    } catch (metadataError) {
-      // Ignore metadata update errors on sync failure
-    }
-    throw error;
-  } finally {
-    if (pool) {
-      await pool.close();
-    }
-  }
-}

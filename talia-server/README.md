@@ -75,6 +75,17 @@ The UI provides a Data Management page with sync buttons for all tables. Access 
 - Replace strategies are enforced per-table (`delete-all`, `delete-range`, or `none`) ensuring no full database resets occur during sync.
 - Derived tables such as `reservation_changes` run through specialised handlers that respect the configured date range.
 
+### Sync Implementation Patterns
+
+**Reference Implementation**: `competitor-sync.js` is the tested and correct implementation pattern for all derived table syncs. When implementing or modifying sync functions, follow this pattern:
+
+- **Logging**: Helper functions (`loadXxxCurrentState`, `insertXxxChanges`, `updateXxxCurrentState`) should have NO logging. Only batch processor functions (`processXxxBatch`) should log batch-level progress. High-level logging (connection, totals, completion) is handled by the sync service.
+- **Metadata**: Always use `SyncMetadataService` for metadata operations - never write custom metadata code.
+- **Batching**: The sync service handles all batching logic - table sync files only process single batches.
+- **Date Filtering**: Always filter by `Departure_Date` range (dataset requirement). Use `Snapshot_Date` only for incremental filtering.
+
+See `src/services/SYNC_PRINCIPLES.md` for complete guidelines.
+
 ## Architecture
 
 ### Active Components

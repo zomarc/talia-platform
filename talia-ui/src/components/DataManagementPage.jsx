@@ -10,6 +10,7 @@ import { getThemeForMode } from '../themes/modeThemes';
 import { supabase } from '../lib/supabase';
 import { getTableSource } from '../config/tableSources';
 import { SERVER_SERVICES, getAllServiceIds } from '../config/serverServices';
+import { getSyncFreshness, getSyncFreshnessColor } from '../utils/syncFreshness';
 import '../themes/dataMode.css';
 
 const DataManagementPage = () => {
@@ -1293,11 +1294,22 @@ const DataManagementPage = () => {
       const isSyncing = syncingTables.has(table.tableName);
       const progress = syncProgress[table.tableName];
       
+      // Get sync freshness for visual indicator
+      const syncFreshness = getSyncFreshness(table.lastSync);
+      const freshnessStatus = syncFreshness.status;
+      
+      // Build className for sync freshness indicator
+      const syncIndicatorClass = isSyncing 
+        ? 'sync-indicator-syncing'
+        : table.lastSync 
+          ? `sync-indicator-${freshnessStatus}`
+          : 'sync-indicator-none';
+      
       return (
         <tr
           key={table.tableName}
           onClick={() => setSelectedTable(table.tableName === selectedTable ? null : table.tableName)}
-          className={isSelected ? 'table-row-selected' : (isEven ? 'table-row-even' : 'table-row-odd')}
+          className={`${isSelected ? 'table-row-selected' : (isEven ? 'table-row-even' : 'table-row-odd')} ${syncIndicatorClass}`}
           style={{
             borderBottom: `1px solid ${theme.colors.glassBorder}`,
             cursor: 'pointer',
@@ -1307,10 +1319,11 @@ const DataManagementPage = () => {
               : isSelected 
                 ? theme.colors.tableRowSelected 
                 : (isEven ? theme.colors.tableRowEven : theme.colors.tableRowOdd),
-            borderLeft: isSyncing ? '3px solid #ff69b4' : 'none', // Rose border when syncing
             transition: 'all 0.3s ease',
-            animation: isSyncing ? 'pulse 2s ease-in-out infinite' : 'none'
+            animation: isSyncing ? 'pulse 2s ease-in-out infinite' : 'none',
+            position: 'relative'
           }}
+          title={table.lastSync ? syncFreshness.label : 'No sync data available'}
         >
           <td style={{
             padding: '6px 8px',

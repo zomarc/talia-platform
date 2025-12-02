@@ -60,3 +60,46 @@
 .review-table tbody tr td {
   background-color: transparent;
 }
+
+/* Sync Freshness Indicator - Left border overlay */
+.data-management-table tbody tr {
+  position: relative;
+}
+
+/* Sync freshness border indicator - 3px left border with color based on freshness */
+.data-management-table tbody tr.sync-indicator-fresh {
+  border-left: 3px solid #4CAF50; /* Green - synced today */
+}
+
+.data-management-table tbody tr.sync-indicator-recent {
+  border-left: 3px solid #FFC107; /* Yellow - 1-3 days */
+}
+
+.data-management-table tbody tr.sync-indicator-moderate {
+  border-left: 3px solid #FF9800; /* Orange - 3-5 days */
+}
+
+.data-management-table tbody tr.sync-indicator-stale {
+  border-left: 3px solid #F44336; /* Red - 5-7 days */
+}
+
+.data-management-table tbody tr.sync-indicator-very-stale {
+  border-left: 3px solid #D32F2F; /* Dark red - 7+ days */
+}
+
+.data-management-table tbody tr.sync-indicator-syncing {
+  border-left: 3px solid #ff69b4; /* Rose - currently syncing (takes priority) */
+}
+
+.data-management-table tbody tr.sync-indicator-none {
+  border-left: 3px solid transparent; /* No sync data */
+}
+
+.data-management-table tbody tr.sync-indicator-unknown {
+  border-left: 3px solid #888888; /* Gray - unknown status */
+}
+
+/* Smooth color transitions */
+.data-management-table tbody tr[class*="sync-indicator"] {
+  transition: border-left-color 0.3s ease;
+}

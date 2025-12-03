@@ -320,6 +320,106 @@ export const typeDefs = `#graphql
     comparison: ComparisonMetrics
   }
 
+  # Build Curve Types
+  type BuildCurvePoint {
+    weekLabel: String!      # "W-12", "W-10", "W-8", "W-6", "W-4", "W-2", "Sail"
+    weeksUntilSailing: Int!
+    bookings: Int!
+    guests: Int!
+    percentageOfTarget: Float
+    actualVsTarget: Float
+  }
+
+  type BookingProfileWithCurves {
+    sailCode: String!
+    sailDate: String!
+    shipName: String!
+    shipCode: String!
+    currentBookings: Int!
+    currentGuests: Int!
+    bookingDataPoints: [BookingDataPoint!]!
+    bookingVelocity: Float!
+    cancellationRate: Float!
+    daysUntilSailing: Int
+    buildCurves: [BuildCurvePoint!]!  # Incremental build curves at week intervals
+  }
+
+  # Target Profile Types
+  type TargetProfile {
+    id: ID!
+    name: String!
+    description: String
+    sailCode: String
+    shipCode: String
+    packageType: String
+    seasonCode: String
+    geogAreaCode: String
+    buildCurves: [BuildCurvePoint!]!
+    basedOnHistoric: [String!]!
+    createdBy: ID
+    createdAt: String!
+    updatedAt: String!
+    isActive: Boolean!
+  }
+
+  input BuildCurvePointInput {
+    weekLabel: String!
+    weeksUntilSailing: Int!
+    targetBookings: Int!
+    targetGuests: Int!
+  }
+
+  input TargetProfileInput {
+    name: String!
+    description: String
+    sailCode: String
+    shipCode: String
+    packageType: String
+    seasonCode: String
+    geogAreaCode: String
+    buildCurves: [BuildCurvePointInput!]!
+    basedOnHistoric: [String!]
+  }
+
+  input TargetProfileFilters {
+    sailCode: String
+    shipCode: String
+    packageType: String
+    seasonCode: String
+    isActive: Boolean
+  }
+
+  # Competitor Pricing Types
+  type CompetitorPricingData {
+    id: ID!
+    cruiseLine: String!
+    currency: String!
+    shipCode: String
+    shipName: String!
+    cabinType: String!
+    departureDate: String!
+    departurePort: String
+    destination: String!
+    market: String
+    duration: Float!
+    pppd: Float!
+    totalRatePP: Float!
+    snapshotDate: String!
+    availableOffer: String
+    itineraryCode: String
+  }
+
+  input CompetitorPricingFilters {
+    currency: String
+    duration: Float
+    destination: String
+    cabinType: String  # "ALL", "INSIDE", "OUTSIDE", "BALCONY", "SUITE"
+    departureMonth: Int  # 1-12
+    isLatest: Boolean
+    cruiseLine: String
+    market: String
+  }
+
   input ReservationFilters {
     sail_code: String
     ship: String
@@ -403,6 +503,14 @@ export const typeDefs = `#graphql
     # Booking Profile
     bookingProfile(sailCode: String!): BookingProfile
     bookingProfileYearOverYear(sailCode: String!, previousYearSailCode: String): YearOverYearComparison
+    bookingProfileWithCurves(sailCode: String!): BookingProfileWithCurves
+    
+    # Target Profiles
+    targetProfiles(filters: TargetProfileFilters): [TargetProfile!]!
+    targetProfile(id: ID!): TargetProfile
+    
+    # Competitor Pricing
+    competitorPricing(filters: CompetitorPricingFilters): [CompetitorPricingData!]!
     
     # Sync Status (for real-time polling)
     syncStatus(tableName: String!): SyncStatus
@@ -436,6 +544,11 @@ export const typeDefs = `#graphql
     
     # Data Sync
     syncTable(tableName: String!, dataset: String, forceFullSync: Boolean): SyncResult!
+    
+    # Target Profiles
+    createTargetProfile(input: TargetProfileInput!): TargetProfile!
+    updateTargetProfile(id: ID!, input: TargetProfileInput!): TargetProfile!
+    deleteTargetProfile(id: ID!): Boolean!
     
     # Server Management
     restartServer: Boolean!

@@ -586,6 +586,52 @@ export const resolvers = {
       }
     },
 
+    bookingProfileWithCurves: async (parent: any, args: any) => {
+      const { sailCode } = args;
+      try {
+        const profile = await supabaseDataService.getBookingProfileWithCurves(sailCode);
+        console.log(`[resolver] bookingProfileWithCurves for ${sailCode}: ${profile?.buildCurves?.length || 0} curve points`);
+        return profile;
+      } catch (error) {
+        console.error('Error fetching booking profile with curves:', error);
+        throw error;
+      }
+    },
+
+    targetProfiles: async (parent: any, args: any) => {
+      const { filters = {} } = args;
+      try {
+        const profiles = await supabaseDataService.getTargetProfiles(filters);
+        return profiles;
+      } catch (error) {
+        console.error('Error fetching target profiles:', error);
+        throw error;
+      }
+    },
+
+    targetProfile: async (parent: any, args: any) => {
+      const { id } = args;
+      try {
+        const profile = await supabaseDataService.getTargetProfile(id);
+        return profile;
+      } catch (error) {
+        console.error('Error fetching target profile:', error);
+        throw error;
+      }
+    },
+
+    competitorPricing: async (parent: any, args: any) => {
+      const { filters = {} } = args;
+      try {
+        const pricing = await supabaseDataService.getCompetitorPricing(filters);
+        console.log(`[resolver] competitorPricing: ${pricing?.length || 0} records`);
+        return pricing;
+      } catch (error) {
+        console.error('Error fetching competitor pricing:', error);
+        throw error;
+      }
+    },
+
     // Legacy queries (for backward compatibility)
     books: () => {
       return [
@@ -989,6 +1035,41 @@ export const resolvers = {
           duration: null,
           error: error.message
         };
+      }
+    },
+
+    createTargetProfile: async (parent: any, args: any, context: any) => {
+      const { input } = args;
+      try {
+        // Get user ID from context (if available)
+        const userId = context?.user?.id || null;
+        const profile = await supabaseDataService.createTargetProfile(input, userId);
+        return profile;
+      } catch (error) {
+        console.error('Error creating target profile:', error);
+        throw error;
+      }
+    },
+
+    updateTargetProfile: async (parent: any, args: any) => {
+      const { id, input } = args;
+      try {
+        const profile = await supabaseDataService.updateTargetProfile(id, input);
+        return profile;
+      } catch (error) {
+        console.error('Error updating target profile:', error);
+        throw error;
+      }
+    },
+
+    deleteTargetProfile: async (parent: any, args: any) => {
+      const { id } = args;
+      try {
+        const success = await supabaseDataService.deleteTargetProfile(id);
+        return success;
+      } catch (error) {
+        console.error('Error deleting target profile:', error);
+        throw error;
       }
     },
 

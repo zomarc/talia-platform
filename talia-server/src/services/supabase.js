@@ -907,6 +907,428 @@ export class SupabaseDataService {
       throw error;
     }
   }
+
+  /**
+   * Get booking profile with build curves at week intervals (W-12, W-10, W-8, W-6, W-4, W-2, Sail)
+   * @param {string} sailCode - Sail code
+   * @returns {Promise<Object>} Booking profile with build curves
+   */
+  async getBookingProfileWithCurves(sailCode) {
+    try {
+      // Get base booking profile
+      const profile = await this.getBookingProfile(sailCode);
+      
+      if (!profile || !profile.sailDate) {
+        throw new Error(`Sailing not found: ${sailCode}`);
+      }
+
+      const sailDate = new Date(profile.sailDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Define week intervals: W-12, W-10, W-8, W-6, W-4, W-2, Sail (0)
+      const weekIntervals = [12, 10, 8, 6, 4, 2, 0];
+      const buildCurves = [];
+
+      // Calculate bookings at each week interval
+      for (const weeks of weekIntervals) {
+        const targetDate = new Date(sailDate);
+        targetDate.setDate(targetDate.getDate() - (weeks * 7));
+        targetDate.setHours(23, 59, 59, 999);
+        const targetDateStr = targetDate.toISOString().split('T')[0];
+
+        // Find the closest data point on or before this date
+        let bookings = 0;
+        let guests = 0;
+        
+        // Find the latest data point on or before target date
+        for (let i = profile.bookingDataPoints.length - 1; i >= 0; i--) {
+          const point = profile.bookingDataPoints[i];
+          if (point.date <= targetDateStr) {
+            bookings = point.bookings;
+            guests = point.guests;
+            break;
+          }
+        }
+
+        const weekLabel = weeks === 0 ? 'Sail' : `W-${weeks}`;
+        buildCurves.push({
+          weekLabel,
+          weeksUntilSailing: weeks,
+          bookings,
+          guests: Math.round(guests),
+          percentageOfTarget: null, // Will be calculated if target profile exists
+          actualVsTarget: null
+        });
+      }
+
+      return {
+        ...profile,
+        buildCurves
+      };
+    } catch (error) {
+      console.error('Error getting booking profile with curves:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all target profiles with optional filters
+   * @param {Object} filters - Filter options
+   * @returns {Promise<Array>} Array of target profiles
+   */
+  async getTargetProfiles(filters = {}) {
+    try {
+      let query = this.client
+        .from('target_profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      // Apply filters
+      if (filters.sailCode) {
+        query = query.eq('sail_code', filters.sailCode);
+      }
+      if (filters.shipCode) {
+        query = query.eq('ship_code', filters.shipCode);
+      }
+      if (filters.packageType) {
+        query = query.eq('package_type', filters.packageType);
+      }
+      if (filters.seasonCode) {
+        query = query.eq('season_code', filters.seasonCode);
+      }
+      if (filters.isActive !== undefined) {
+        query = query.eq('is_active', filters.isActive);
+      } else {
+        // Default to active only
+        query = query.eq('is_active', true);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw error;
+      }
+
+      // Transform to GraphQL format
+      return (data || []).map(profile => ({
+        id: profile.id,
+        name: profile.name,
+        description: profile.description,
+        sailCode: profile.sail_code,
+        shipCode: profile.ship_code,
+        packageType: profile.package_type,
+        seasonCode: profile.season_code,
+        geogAreaCode: profile.geog_area_code,
+        buildCurves: profile.build_curves || [],
+        basedOnHistoric: profile.based_on_historic || [],
+        createdBy: profile.created_by,
+        createdAt: profile.created_at,
+        updatedAt: profile.updated_at,
+        isActive: profile.is_active
+      }));
+    } catch (error) {
+      console.error('Error getting target profiles:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get single target profile by ID
+   * @param {string} id - Target profile ID
+   * @returns {Promise<Object>} Target profile
+   */
+  async getTargetProfile(id) {
+    try {
+      const { data, error } = await this.client
+        .from('target_profiles')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        return null;
+      }
+
+      // Transform to GraphQL format
+      return {
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        sailCode: data.sail_code,
+        shipCode: data.ship_code,
+        packageType: data.package_type,
+        seasonCode: data.season_code,
+        geogAreaCode: data.geog_area_code,
+        buildCurves: data.build_curves || [],
+        basedOnHistoric: data.based_on_historic || [],
+        createdBy: data.created_by,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        isActive: data.is_active
+      };
+    } catch (error) {
+      console.error('Error getting target profile:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create new target profile
+   * @param {Object} input - Target profile input
+   * @param {string} createdBy - User ID who created this
+   * @returns {Promise<Object>} Created target profile
+   */
+  async createTargetProfile(input, createdBy) {
+    try {
+      const { data, error } = await this.client
+        .from('target_profiles')
+        .insert({
+          name: input.name,
+          description: input.description || null,
+          sail_code: input.sailCode || null,
+          ship_code: input.shipCode || null,
+          package_type: input.packageType || null,
+          season_code: input.seasonCode || null,
+          geog_area_code: input.geogAreaCode || null,
+          build_curves: input.buildCurves || [],
+          based_on_historic: input.basedOnHistoric || [],
+          created_by: createdBy || null,
+          is_active: true
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      // Transform to GraphQL format
+      return {
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        sailCode: data.sail_code,
+        shipCode: data.ship_code,
+        packageType: data.package_type,
+        seasonCode: data.season_code,
+        geogAreaCode: data.geog_area_code,
+        buildCurves: data.build_curves || [],
+        basedOnHistoric: data.based_on_historic || [],
+        createdBy: data.created_by,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        isActive: data.is_active
+      };
+    } catch (error) {
+      console.error('Error creating target profile:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update target profile
+   * @param {string} id - Target profile ID
+   * @param {Object} input - Target profile input
+   * @returns {Promise<Object>} Updated target profile
+   */
+  async updateTargetProfile(id, input) {
+    try {
+      const updateData = {};
+      if (input.name !== undefined) updateData.name = input.name;
+      if (input.description !== undefined) updateData.description = input.description;
+      if (input.sailCode !== undefined) updateData.sail_code = input.sailCode;
+      if (input.shipCode !== undefined) updateData.ship_code = input.shipCode;
+      if (input.packageType !== undefined) updateData.package_type = input.packageType;
+      if (input.seasonCode !== undefined) updateData.season_code = input.seasonCode;
+      if (input.geogAreaCode !== undefined) updateData.geog_area_code = input.geogAreaCode;
+      if (input.buildCurves !== undefined) updateData.build_curves = input.buildCurves;
+      if (input.basedOnHistoric !== undefined) updateData.based_on_historic = input.basedOnHistoric;
+
+      const { data, error } = await this.client
+        .from('target_profiles')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      // Transform to GraphQL format
+      return {
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        sailCode: data.sail_code,
+        shipCode: data.ship_code,
+        packageType: data.package_type,
+        seasonCode: data.season_code,
+        geogAreaCode: data.geog_area_code,
+        buildCurves: data.build_curves || [],
+        basedOnHistoric: data.based_on_historic || [],
+        createdBy: data.created_by,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        isActive: data.is_active
+      };
+    } catch (error) {
+      console.error('Error updating target profile:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete target profile (soft delete)
+   * @param {string} id - Target profile ID
+   * @returns {Promise<boolean>} Success status
+   */
+  async deleteTargetProfile(id) {
+    try {
+      const { error } = await this.client
+        .from('target_profiles')
+        .update({ is_active: false })
+        .eq('id', id);
+
+      if (error) {
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting target profile:', error);
+      throw error;
+    }
+  }
+
+  // Get competitor pricing data
+  async getCompetitorPricing(filters = {}) {
+    try {
+      let queryBuilder = this.client.from('competitor_current_state').select('*');
+      
+      // Apply filters
+      if (filters.currency) {
+        queryBuilder = queryBuilder.eq('currency', filters.currency);
+      }
+      if (filters.duration) {
+        queryBuilder = queryBuilder.eq('duration', filters.duration);
+      }
+      if (filters.destination) {
+        queryBuilder = queryBuilder.ilike('destination', `%${filters.destination}%`);
+      }
+      if (filters.cruiseLine) {
+        queryBuilder = queryBuilder.ilike('cruise_line', `%${filters.cruiseLine}%`);
+      }
+      if (filters.market) {
+        queryBuilder = queryBuilder.eq('market', filters.market);
+      }
+      if (filters.isLatest !== undefined && filters.isLatest) {
+        // Get the latest snapshot_date
+        const { data: latestSnapshot } = await this.client
+          .from('competitor_current_state')
+          .select('snapshot_date')
+          .order('snapshot_date', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (latestSnapshot) {
+          queryBuilder = queryBuilder.eq('snapshot_date', latestSnapshot.snapshot_date);
+        }
+      }
+      
+      // Filter by departure month if provided
+      if (filters.departureMonth) {
+        // We'll filter this in JavaScript after fetching, as Supabase doesn't have easy month extraction
+      }
+      
+      // Apply ordering
+      queryBuilder = queryBuilder.order('departure_date', { ascending: true });
+      
+      const { data, error } = await queryBuilder;
+      
+      if (error) {
+        console.error('Supabase query error for competitor pricing:', error);
+        throw error;
+      }
+      
+      if (!data || data.length === 0) {
+        return [];
+      }
+      
+      // Filter by departure month if provided
+      let filteredData = data;
+      if (filters.departureMonth) {
+        filteredData = data.filter(row => {
+          if (!row.departure_date) return false;
+          const date = new Date(row.departure_date);
+          return date.getMonth() + 1 === filters.departureMonth; // getMonth() returns 0-11
+        });
+      }
+      
+      // Transform data to include all cabin types and calculate PPPD
+      const result = [];
+      const cabinTypes = ['INSIDE', 'OUTSIDE', 'BALCONY', 'SUITE'];
+      const cabinTypeFields = {
+        'INSIDE': 'lowest_inside',
+        'OUTSIDE': 'lowest_outside',
+        'BALCONY': 'lowest_balcony',
+        'SUITE': 'lowest_suite'
+      };
+      
+      for (const row of filteredData) {
+        const duration = parseFloat(row.duration) || 1;
+        
+        // If cabinType filter is "ALL" or not specified, include all cabin types
+        // Otherwise, only include the specified cabin type
+        const cabinTypesToInclude = filters.cabinType && filters.cabinType !== 'ALL'
+          ? [filters.cabinType]
+          : cabinTypes;
+        
+        for (const cabinType of cabinTypesToInclude) {
+          const priceField = cabinTypeFields[cabinType];
+          const price = parseFloat(row[priceField]);
+          
+          // Only include rows with valid prices
+          if (price && price > 0 && duration > 0) {
+            const pppd = price / duration;
+            const totalRatePP = price;
+            
+            // Generate a unique ID for this record
+            const id = `${row.competitor_key}-${cabinType}`;
+            
+            result.push({
+              id,
+              cruiseLine: row.cruise_line || '',
+              currency: row.currency || '',
+              shipCode: null, // Not in competitor_current_state
+              shipName: row.ship_name || '',
+              cabinType: cabinType,
+              departureDate: row.departure_date || '',
+              departurePort: row.departure_port || '',
+              destination: row.destination || '',
+              market: row.market || '',
+              duration: duration,
+              pppd: Math.round(pppd * 100) / 100, // Round to 2 decimal places
+              totalRatePP: Math.round(totalRatePP * 100) / 100,
+              snapshotDate: row.snapshot_date || '',
+              availableOffer: null, // Not in competitor_current_state
+              itineraryCode: null // Not in competitor_current_state
+            });
+          }
+        }
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error querying competitor pricing:', error);
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance

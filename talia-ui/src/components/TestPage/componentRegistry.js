@@ -15,6 +15,8 @@ import ExceptionList from '../focus-panels/ExceptionList';
 import ItineraryList from '../focus-panels/ItineraryList';
 import ReservationCurrentStateContainer from '../focus-panels/ReservationCurrentState';
 import BookingProfileContainer from '../focus-panels/BookingProfile';
+import TargetProfileEditorContainer from '../focus-panels/TargetProfileEditor';
+import CompetitorPricingContainer from '../focus-panels/CompetitorPricing';
 
 /**
  * Component registry with metadata
@@ -120,15 +122,40 @@ export const componentRegistry = {
   BookingProfile: {
     component: BookingProfileContainer,
     category: 'Dashboards',
-    description: 'Booking profile showing booking trends, metrics, and year-over-year comparison for a sailing',
+    description: 'Booking profile showing booking trends, metrics, year-over-year comparison, and build curves for a sailing',
     props: {
       sailCode: { type: 'string', required: true, description: 'Sail code (e.g., "CJ07250901")' },
       includeComparison: { type: 'boolean', required: false, description: 'Include year-over-year comparison' },
       previousYearSailCode: { type: 'string', required: false, description: 'Previous year sail code for comparison' },
+      includeBuildCurves: { type: 'boolean', required: false, description: 'Include incremental build curves (W-12, W-10, W-8, W-6, W-4, W-2, Sail)' },
       theme: { type: 'object', required: false, description: 'Theme object for styling' }
     },
-    dataRequirements: 'Requires GraphQL connection to bookingProfile endpoint',
+    dataRequirements: 'Requires GraphQL connection to bookingProfile and bookingProfileWithCurves endpoints',
     filePath: 'src/components/focus-panels/BookingProfile/index.jsx'
+  },
+  TargetProfileEditor: {
+    component: TargetProfileEditorContainer,
+    category: 'Editors',
+    description: 'Create and edit target booking profiles with build curves based on historic data',
+    props: {
+      targetProfileId: { type: 'string', required: false, description: 'Target profile ID for editing (omit for new profile)' },
+      sailCode: { type: 'string', required: false, description: 'Sail code to associate with target profile' },
+      theme: { type: 'object', required: false, description: 'Theme object for styling' },
+      onSave: { type: 'function', required: false, description: 'Callback when profile is saved' },
+      onCancel: { type: 'function', required: false, description: 'Callback when editing is cancelled' }
+    },
+    dataRequirements: 'Requires GraphQL connection to targetProfiles endpoints (create, update, delete)',
+    filePath: 'src/components/focus-panels/TargetProfileEditor/index.jsx'
+  },
+  CompetitorPricing: {
+    component: CompetitorPricingContainer,
+    category: 'Dashboards',
+    description: 'Competitor pricing analysis with scatter plots by cabin type and detailed pricing table',
+    props: {
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Requires GraphQL connection to competitorPricing endpoint',
+    filePath: 'src/components/focus-panels/CompetitorPricing/index.jsx'
   }
 };
 

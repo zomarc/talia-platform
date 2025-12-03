@@ -26,6 +26,16 @@ const GoogleTrendsPresenter = ({
   });
   const [backfilling, setBackfilling] = useState(false);
   const [sortBy, setSortBy] = useState('mostSearched'); // 'mostSearched' or 'alphabetical'
+  
+  // Initialize date range from trends data when available
+  React.useEffect(() => {
+    if (trends?.dateRange) {
+      setDateRange({
+        startDate: trends.dateRange.from || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        endDate: trends.dateRange.to || new Date().toISOString().split('T')[0]
+      });
+    }
+  }, [trends]);
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
@@ -415,6 +425,125 @@ const GoogleTrendsPresenter = ({
             {trends.region && ` (${trends.region || 'Worldwide'})`}
           </p>
         )}
+        
+        {/* Date Range Filter */}
+        <div style={{
+          marginTop: '16px',
+          padding: '12px',
+          backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
+          borderRadius: '6px',
+          border: `1px solid ${theme?.colors?.border || '#333'}`
+        }}>
+          <div style={{
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'center',
+            flexWrap: 'wrap'
+          }}>
+            <label style={{
+              fontSize: '13px',
+              fontWeight: '500',
+              color: theme?.colors?.foreground || '#e0e0e0'
+            }}>
+              Filter by Date Range:
+            </label>
+            <input
+              type="date"
+              value={dateRange.startDate}
+              onChange={(e) => {
+                const newStartDate = e.target.value;
+                setDateRange(prev => ({ ...prev, startDate: newStartDate }));
+              }}
+              max={dateRange.endDate}
+              style={{
+                padding: '6px 10px',
+                fontSize: '13px',
+                border: `1px solid ${theme?.colors?.border || '#444'}`,
+                borderRadius: '4px',
+                backgroundColor: theme?.colors?.background || '#1e1e1e',
+                color: theme?.colors?.foreground || '#e0e0e0',
+                outline: 'none'
+              }}
+            />
+            <span style={{
+              fontSize: '13px',
+              color: theme?.colors?.textSecondary || '#999'
+            }}>
+              to
+            </span>
+            <input
+              type="date"
+              value={dateRange.endDate}
+              onChange={(e) => {
+                const newEndDate = e.target.value;
+                setDateRange(prev => ({ ...prev, endDate: newEndDate }));
+              }}
+              min={dateRange.startDate}
+              max={new Date().toISOString().split('T')[0]}
+              style={{
+                padding: '6px 10px',
+                fontSize: '13px',
+                border: `1px solid ${theme?.colors?.border || '#444'}`,
+                borderRadius: '4px',
+                backgroundColor: theme?.colors?.background || '#1e1e1e',
+                color: theme?.colors?.foreground || '#e0e0e0',
+                outline: 'none'
+              }}
+            />
+            <button
+              onClick={() => {
+                if (onDateRangeChange && dateRange.startDate && dateRange.endDate) {
+                  onDateRangeChange(dateRange.startDate, dateRange.endDate);
+                }
+              }}
+              disabled={loading || !dateRange.startDate || !dateRange.endDate}
+              style={{
+                padding: '6px 16px',
+                fontSize: '13px',
+                fontWeight: '500',
+                backgroundColor: (loading || !dateRange.startDate || !dateRange.endDate)
+                  ? (theme?.colors?.backgroundSecondary || '#2a2a2a')
+                  : (theme?.colors?.primary || '#1976d2'),
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: (loading || !dateRange.startDate || !dateRange.endDate) ? 'not-allowed' : 'pointer',
+                opacity: (loading || !dateRange.startDate || !dateRange.endDate) ? 0.6 : 1,
+                transition: 'all 0.2s'
+              }}
+            >
+              {loading ? 'Loading...' : 'Apply Filter'}
+            </button>
+            <button
+              onClick={() => {
+                const defaultStart = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                const defaultEnd = new Date().toISOString().split('T')[0];
+                setDateRange({
+                  startDate: defaultStart,
+                  endDate: defaultEnd
+                });
+                if (onDateRangeChange) {
+                  onDateRangeChange(defaultStart, defaultEnd);
+                }
+              }}
+              disabled={loading}
+              style={{
+                padding: '6px 12px',
+                fontSize: '13px',
+                fontWeight: '400',
+                backgroundColor: 'transparent',
+                color: theme?.colors?.textSecondary || '#999',
+                border: `1px solid ${theme?.colors?.border || '#444'}`,
+                borderRadius: '4px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.6 : 1,
+                transition: 'all 0.2s'
+              }}
+            >
+              Reset
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Trends Series */}

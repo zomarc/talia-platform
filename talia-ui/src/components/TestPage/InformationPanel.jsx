@@ -262,7 +262,7 @@ const InformationPanel = ({ selectedComponent, performanceData }) => {
             <div style={{ marginBottom: '6px' }}>
               <strong>GraphQL Endpoint:</strong>
               <div style={{ fontFamily: 'monospace', color: '#333', marginTop: '2px' }}>
-                http://localhost:4000/graphql
+                /api/graphql (proxied to localhost:4000)
               </div>
             </div>
             <div style={{ marginBottom: '6px' }}>

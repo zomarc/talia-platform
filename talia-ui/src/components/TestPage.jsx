@@ -62,6 +62,18 @@ const TestPage = () => {
         theme 
       };
     }
+    if (selectedComponent === 'TargetProfileEditor') {
+      return {
+        theme,
+        onSave: (profile) => {
+          console.log('Target profile saved:', profile);
+          alert(`Target profile "${profile.name}" saved successfully!`);
+        },
+        onCancel: () => {
+          console.log('Target profile editing cancelled');
+        }
+      };
+    }
     return {};
   };
 
@@ -207,7 +219,7 @@ const TestPage = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ color: 'rgba(224, 224, 224, 0.7)', fontWeight: '500' }}>Data Source:</span>
             <span style={{ color: theme.colors.foreground, fontFamily: 'monospace' }}>
-              http://localhost:4000/graphql
+              /api/graphql (proxied to localhost:4000)
             </span>
             {latestQuery && (
               <span style={{ color: '#4caf50', marginLeft: '4px' }}>
@@ -215,6 +227,26 @@ const TestPage = () => {
               </span>
             )}
           </div>
+          {/* Mock Data Indicator */}
+          {componentMeta?.usesMockData || window._componentMockDataFlags?.[selectedComponent] ? (
+            <>
+              <div style={{ width: '1px', height: '20px', background: 'rgba(255, 255, 255, 0.2)' }}></div>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '6px',
+                padding: '4px 8px',
+                background: 'rgba(255, 193, 7, 0.2)',
+                borderRadius: '6px',
+                border: '1px solid rgba(255, 193, 7, 0.4)'
+              }}>
+                <span style={{ fontSize: '14px' }}>🧪</span>
+                <span style={{ color: '#ffc107', fontWeight: '600', fontSize: '11px' }}>
+                  MOCK DATA
+                </span>
+              </div>
+            </>
+          ) : null}
         </div>
 
         {/* Event Content Bar */}

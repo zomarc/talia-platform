@@ -10,8 +10,10 @@ const getGraphQLEndpoint = () => {
     // Production: Use Netlify function endpoint
     return '/api/graphql';
   } else {
-    // Development: Use local GraphQL server
-    return 'http://localhost:4000/graphql';
+    // Development: Use relative path (proxied through Vite to localhost:4000)
+    // This allows the UI to work when exposed via ngrok - requests go through
+    // the same tunnel and get proxied to the local backend
+    return '/api/graphql';
   }
 };
 

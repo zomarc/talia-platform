@@ -17,6 +17,9 @@ import ReservationCurrentStateContainer from '../focus-panels/ReservationCurrent
 import BookingProfileContainer from '../focus-panels/BookingProfile';
 import TargetProfileEditorContainer from '../focus-panels/TargetProfileEditor';
 import CompetitorPricingContainer from '../focus-panels/CompetitorPricing';
+import DemandHeatmapContainer from '../focus-panels/DemandHeatmap';
+import GoogleSearchContainer from '../focus-panels/GoogleSearch';
+import SearchTrendsContainer from '../focus-panels/SearchTrends';
 
 /**
  * Component registry with metadata
@@ -156,6 +159,59 @@ export const componentRegistry = {
     },
     dataRequirements: 'Requires GraphQL connection to competitorPricing endpoint',
     filePath: 'src/components/focus-panels/CompetitorPricing/index.jsx'
+  },
+  DemandHeatmap: {
+    component: DemandHeatmapContainer,
+    category: 'Dashboards',
+    description: 'Viewing demand heatmap showing demand across itineraries by departure month',
+    usesMockData: true, // This component uses mock data from demand_heatmap_data table
+    props: {
+      filters: { 
+        type: 'object', 
+        required: false, 
+        description: 'Filter object with dateFrom, dateTo, region, geogAreaCode' 
+      },
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Uses aggregated demand_heatmap_data table (supports mock data for testing)',
+    filePath: 'src/components/focus-panels/DemandHeatmap/index.jsx'
+  },
+  GoogleSearch: {
+    component: GoogleSearchContainer,
+    category: 'Search',
+    description: 'Google search integration - search the web using Google Custom Search API (public data)',
+    usesMockData: false,
+    props: {
+      initialQuery: { 
+        type: 'string', 
+        required: false, 
+        description: 'Initial search query (optional)' 
+      },
+      searchOptions: { 
+        type: 'object', 
+        required: false, 
+        description: 'Search options (num, start, dateRestrict)' 
+      },
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Requires GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID environment variables. Uses Google Custom Search JSON API for public web search.',
+    filePath: 'src/components/focus-panels/GoogleSearch/index.jsx'
+  },
+  SearchTrends: {
+    component: SearchTrendsContainer,
+    category: 'Dashboards',
+    description: 'Search trends visualization - shows what people are searching for over time with clean, informative UI',
+    usesMockData: false,
+    props: {
+      filters: { 
+        type: 'object', 
+        required: false, 
+        description: 'Filter options (queries, dateFrom, dateTo)' 
+      },
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Requires google_search_trends table. Shows historical search data tracked over time. Use Google Search component to track searches.',
+    filePath: 'src/components/focus-panels/SearchTrends/index.jsx'
   }
 };
 

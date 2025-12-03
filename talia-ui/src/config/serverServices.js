@@ -14,21 +14,16 @@ export const SERVER_SERVICES = [
     check: {
       method: 'graphql',
       endpoint: () => {
-        if (import.meta.env.PROD) {
-          return '/api/graphql';
-        } else {
-          return 'http://localhost:4000/graphql';
-        }
+        // Use relative path - Vite proxy handles routing to localhost:4000
+        // This works both locally and when exposed via ngrok
+        return '/api/graphql';
       },
       query: '{ __typename }'
     },
     display: {
       address: () => {
-        if (import.meta.env.PROD) {
-          return '/api/graphql';
-        } else {
-          return 'http://localhost:4000/graphql';
-        }
+        // Show relative path in UI (actual backend is localhost:4000, proxied through Vite)
+        return '/api/graphql';
       }
     },
     actions: [
@@ -65,11 +60,8 @@ export const SERVER_SERVICES = [
     check: {
       method: 'graphql',
       endpoint: () => {
-        if (import.meta.env.PROD) {
-          return '/api/graphql';
-        } else {
-          return 'http://localhost:4000/graphql';
-        }
+        // Use relative path - Vite proxy handles routing to localhost:4000
+        return '/api/graphql';
       },
       query: `query {
         synapseConnectionStatus {

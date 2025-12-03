@@ -1,3 +1,4 @@
+import dotenv from 'dotenv';
 import { ApolloServer } from '@apollo/server';
 import { startStandaloneServer } from '@apollo/server/standalone';
 import express from 'express';
@@ -5,6 +6,9 @@ import cors from 'cors';
 import { typeDefs } from './api/schema.js';
 import { resolvers } from './api/resolvers.js';
 import { syncEventEmitter } from './services/sync-event-emitter.js';
+
+// Load environment variables from .env file
+dotenv.config();
 
 async function startServer() {
   // Create Apollo Server

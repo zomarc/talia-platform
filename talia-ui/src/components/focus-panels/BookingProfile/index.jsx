@@ -4,16 +4,25 @@
  */
 
 import React from 'react';
-import { useBookingProfile } from '../../../hooks/data/useBookingProfile';
+import { useBookingProfile, useBookingProfileWithCurves } from '../../../hooks/data/useBookingProfile';
 import BookingProfilePresenter from './BookingProfilePresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 
-const BookingProfileContainer = ({ sailCode, includeComparison = false, previousYearSailCode = null, theme }) => {
-  const { data, loading, error, refetch } = useBookingProfile(sailCode, {
+const BookingProfileContainer = ({ sailCode, includeComparison = false, previousYearSailCode = null, includeBuildCurves = false, theme }) => {
+  // Use build curves hook if requested, otherwise use standard hook
+  const standardHook = useBookingProfile(sailCode, {
     includeComparison,
     previousYearSailCode
   });
+  
+  const curvesHook = useBookingProfileWithCurves(sailCode, {
+    includeComparison,
+    previousYearSailCode
+  });
+  
+  // Select which hook to use based on includeBuildCurves flag
+  const { data, loading, error, refetch } = includeBuildCurves ? curvesHook : standardHook;
 
   // Handle loading state
   if (loading) {
@@ -57,6 +66,7 @@ const BookingProfileContainer = ({ sailCode, includeComparison = false, previous
       sailCode={sailCode}
       theme={theme}
       onRefresh={refetch}
+      includeBuildCurves={includeBuildCurves}
     />
   );
 };

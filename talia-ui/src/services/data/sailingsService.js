@@ -5,7 +5,9 @@
 
 import queryTracker from './queryTracker';
 
-const GRAPHQL_URL = 'http://localhost:4000/graphql';
+// Use relative path - Vite proxy handles routing to localhost:4000
+// This works both locally and when exposed via ngrok
+const GRAPHQL_URL = '/api/graphql';
 
 class SailingsService {
   constructor() {

@@ -28,7 +28,9 @@
     "lint:frontend": "cd talia-ui && npm run lint",
     "lint:backend": "cd talia-server && npm run lint",
     "deploy:preview": "netlify deploy",
-    "deploy:production": "netlify deploy --prod"
+    "deploy:production": "netlify deploy --prod",
+    "generate:overview": "node scripts/generate-executive-overview.js",
+    "generate:overview:pdf": "node scripts/generate-pdf.js"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

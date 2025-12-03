@@ -1700,7 +1700,7 @@ const GraphQLPanel = React.memo(function GraphQLPanel(props) {
           Retry
         </button>
         <div style={{ fontSize: `${fontSize - 2}px`, color: theme.colors.textMuted, marginTop: 8 }}>
-          Server: http://localhost:4000/graphql
+          Server: /api/graphql (proxied to localhost:4000)
         </div>
       </div>
     );

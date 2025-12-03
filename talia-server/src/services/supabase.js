@@ -239,6 +239,56 @@ export class SupabaseDataService {
     }
   }
 
+  // Get demand heatmap data
+  async getDemandHeatmapData(filters = {}, includeMockData = true) {
+    try {
+      let queryBuilder = this.client.from('demand_heatmap_data').select('*');
+      
+      // Filter mock data based on includeMockData flag
+      if (!includeMockData) {
+        queryBuilder = queryBuilder.eq('is_mock_data', false);
+      }
+      
+      // Apply filters
+      if (filters.region) {
+        queryBuilder = queryBuilder.eq('region', filters.region);
+      }
+      if (filters.itinerary) {
+        queryBuilder = queryBuilder.ilike('itinerary', `%${filters.itinerary}%`);
+      }
+      if (filters.geog_area_code) {
+        queryBuilder = queryBuilder.eq('geog_area_code', filters.geog_area_code);
+      }
+      if (filters.departure_month_from) {
+        queryBuilder = queryBuilder.gte('departure_month', filters.departure_month_from);
+      }
+      if (filters.departure_month_to) {
+        queryBuilder = queryBuilder.lte('departure_month', filters.departure_month_to);
+      }
+      
+      // Apply ordering
+      queryBuilder = queryBuilder.order('region', { ascending: true });
+      queryBuilder = queryBuilder.order('itinerary', { ascending: true });
+      queryBuilder = queryBuilder.order('departure_month', { ascending: true });
+      
+      // Apply limit
+      const limit = filters.limit || 10000;
+      queryBuilder = queryBuilder.limit(limit);
+      
+      const { data, error } = await queryBuilder;
+      
+      if (error) {
+        console.error('Supabase query error for demand_heatmap_data:', error);
+        throw error;
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error querying demand_heatmap_data:', error);
+      throw error;
+    }
+  }
+
   // Get focuses data
   async getFocuses(filters = {}) {
     try {
@@ -1326,6 +1376,119 @@ export class SupabaseDataService {
       return result;
     } catch (error) {
       console.error('Error querying competitor pricing:', error);
+      throw error;
+    }
+  }
+
+  // ===== Google Search Trends =====
+
+  /**
+   * Store a search trend data point
+   * @param {Object} trendData - Trend data to store
+   * @returns {Promise<Object>} Stored trend record
+   */
+  async storeSearchTrend(trendData) {
+    try {
+      const { data, error } = await this.client
+        .from('google_search_trends')
+        .upsert({
+          query: trendData.query,
+          total_results: trendData.total_results,
+          search_time: trendData.search_time || null,
+          search_date: trendData.search_date || new Date().toISOString().split('T')[0],
+          search_timestamp: trendData.search_timestamp || new Date().toISOString(),
+          notes: trendData.notes || null,
+          created_by: trendData.created_by || null
+        }, {
+          onConflict: 'query,search_date'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase error storing search trend:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error storing search trend:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get search trends data
+   * @param {Object} filters - Filter options
+   * @returns {Promise<Array>} Array of trend data points
+   */
+  async getSearchTrends(filters = {}) {
+    try {
+      let queryBuilder = this.client
+        .from('google_search_trends')
+        .select('*');
+
+      // Filter by query
+      if (filters.query) {
+        queryBuilder = queryBuilder.eq('query', filters.query);
+      }
+
+      // Filter by queries (multiple)
+      if (filters.queries && Array.isArray(filters.queries) && filters.queries.length > 0) {
+        queryBuilder = queryBuilder.in('query', filters.queries);
+      }
+
+      // Filter by date range
+      if (filters.dateFrom) {
+        queryBuilder = queryBuilder.gte('search_date', filters.dateFrom);
+      }
+      if (filters.dateTo) {
+        queryBuilder = queryBuilder.lte('search_date', filters.dateTo);
+      }
+
+      // Order by date
+      queryBuilder = queryBuilder.order('search_date', { ascending: true });
+      queryBuilder = queryBuilder.order('search_timestamp', { ascending: true });
+
+      // Apply limit
+      const limit = filters.limit || 1000;
+      queryBuilder = queryBuilder.limit(limit);
+
+      const { data, error } = await queryBuilder;
+
+      if (error) {
+        console.error('Supabase error getting search trends:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error getting search trends:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get unique search queries from trends
+   * @returns {Promise<Array>} Array of unique query strings
+   */
+  async getTrackedQueries() {
+    try {
+      const { data, error } = await this.client
+        .from('google_search_trends')
+        .select('query')
+        .order('query', { ascending: true });
+
+      if (error) {
+        console.error('Supabase error getting tracked queries:', error);
+        throw error;
+      }
+
+      // Get unique queries
+      const uniqueQueries = [...new Set((data || []).map(item => item.query))];
+      return uniqueQueries;
+    } catch (error) {
+      console.error('Error getting tracked queries:', error);
       throw error;
     }
   }

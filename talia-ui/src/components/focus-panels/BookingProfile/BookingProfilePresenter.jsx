@@ -5,11 +5,12 @@
 
 import React, { useRef, useEffect } from 'react';
 import { Chart, registerables } from 'chart.js';
+import BuildCurveChart from './BuildCurveChart';
 
 // Register Chart.js components
 Chart.register(...registerables);
 
-const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh }) => {
+const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuildCurves = false }) => {
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
 
@@ -294,6 +295,19 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh }) => {
       }}>
         <canvas ref={chartRef} />
       </div>
+
+      {/* Build Curves Chart */}
+      {includeBuildCurves && data?.buildCurves && data.buildCurves.length > 0 && (
+        <div style={{ marginBottom: '24px' }}>
+          <BuildCurveChart
+            buildCurves={data.buildCurves}
+            targetCurves={null} // Can be passed from target profile if available
+            previousYearCurves={data?.previousYear?.buildCurves}
+            theme={theme}
+            sailCode={sailCode}
+          />
+        </div>
+      )}
 
       {/* Year-over-Year Comparison */}
       {isYOY && previousYear && (

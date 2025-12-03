@@ -31,6 +31,39 @@ const GET_BOOKING_PROFILE = gql`
   }
 `;
 
+// GraphQL query for booking profile with build curves
+const GET_BOOKING_PROFILE_WITH_CURVES = gql`
+  query GetBookingProfileWithCurves($sailCode: String!) {
+    bookingProfileWithCurves(sailCode: $sailCode) {
+      sailCode
+      sailDate
+      shipName
+      shipCode
+      currentBookings
+      currentGuests
+      bookingVelocity
+      cancellationRate
+      daysUntilSailing
+      bookingDataPoints {
+        date
+        bookings
+        guests
+        newBookings
+        cancellations
+        netBookings
+      }
+      buildCurves {
+        weekLabel
+        weeksUntilSailing
+        bookings
+        guests
+        percentageOfTarget
+        actualVsTarget
+      }
+    }
+  }
+`;
+
 // GraphQL query for year-over-year comparison
 const GET_BOOKING_PROFILE_YOY = gql`
   query GetBookingProfileYOY($sailCode: String!, $previousYearSailCode: String) {
@@ -135,6 +168,34 @@ class BookingProfileService {
       return data.bookingProfileYearOverYear;
     } catch (error) {
       console.error('[BookingProfileService] Error fetching YOY comparison:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch booking profile with build curves
+   * @param {string} sailCode - Sail code
+   * @returns {Promise<Object>} Booking profile with build curves
+   */
+  async fetchWithBuildCurves(sailCode) {
+    if (!sailCode) {
+      throw new Error('Sail code is required');
+    }
+
+    try {
+      const { data } = await apolloClient.query({
+        query: GET_BOOKING_PROFILE_WITH_CURVES,
+        variables: { sailCode },
+        fetchPolicy: 'network-only'
+      });
+
+      if (!data || !data.bookingProfileWithCurves) {
+        throw new Error('No booking profile with curves data returned from server');
+      }
+
+      return data.bookingProfileWithCurves;
+    } catch (error) {
+      console.error('[BookingProfileService] Error fetching booking profile with curves:', error);
       throw error;
     }
   }

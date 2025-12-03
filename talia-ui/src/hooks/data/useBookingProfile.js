@@ -59,4 +59,58 @@ export const useBookingProfile = (sailCode, options = {}) => {
   };
 };
 
+/**
+ * Hook for fetching booking profile with build curves
+ * @param {string} sailCode - Sail code
+ * @param {Object} options - Options { includeComparison: boolean, previousYearSailCode: string }
+ * @returns {Object} { data, loading, error, refetch }
+ */
+export const useBookingProfileWithCurves = (sailCode, options = {}) => {
+  const { includeComparison = false, previousYearSailCode = null } = options;
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchData = async () => {
+    if (!sailCode) {
+      setLoading(false);
+      setData(null);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    
+    try {
+      let result;
+      if (includeComparison) {
+        const prevSailCode = previousYearSailCode || 
+          bookingProfileService.generatePreviousYearSailCode(sailCode);
+        result = await bookingProfileService.fetchWithComparison(sailCode, prevSailCode);
+        // Note: Comparison doesn't include build curves yet, would need to extend
+      } else {
+        result = await bookingProfileService.fetchWithBuildCurves(sailCode);
+      }
+      setData(result);
+    } catch (err) {
+      console.error('[useBookingProfileWithCurves] Error:', err);
+      setError(err);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [sailCode, includeComparison, previousYearSailCode]);
+
+  return {
+    data,
+    loading,
+    error,
+    refetch: fetchData
+  };
+};
+
 

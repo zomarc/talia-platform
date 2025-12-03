@@ -3,6 +3,7 @@
 import { sampleData } from './schema.js';
 import { supabaseDataService } from '../services/supabase.js';
 import { synapseSyncService } from '../services/synapse-sync.js';
+import { googleSearchService } from '../services/google-search.js';
 
 // Helper function to check user permissions
 const hasPermission = (userRole: string, requiredRole: string): boolean => {
@@ -484,6 +485,238 @@ export const resolvers = {
         console.error('Error fetching exceptions data:', error);
         // Fallback to sample data
         return filterDataByRole(sampleData.exceptions, userRole);
+      }
+    },
+
+    // Google Search
+    googleSearch: async (parent: any, args: any) => {
+      const { filters } = args;
+      try {
+        if (!filters || !filters.query) {
+          throw new Error('Search query is required');
+        }
+
+        const searchOptions = {
+          query: filters.query,
+          num: filters.num || 10,
+          start: filters.start || 1,
+          dateRestrict: filters.dateRestrict || null
+        };
+
+        const results = await googleSearchService.searchPublic(searchOptions);
+        
+        // Optionally track the search for trends (if trackTrend flag is set)
+        if (filters.trackTrend) {
+          try {
+            await supabaseDataService.storeSearchTrend({
+              query: filters.query,
+              total_results: results.totalResults,
+              search_time: results.searchTime,
+              search_date: new Date().toISOString().split('T')[0],
+              search_timestamp: new Date().toISOString()
+            });
+          } catch (error) {
+            console.error('Error tracking search trend:', error);
+            // Don't fail the search if tracking fails
+          }
+        }
+        
+        return {
+          query: results.query,
+          totalResults: results.totalResults,
+          searchTime: results.searchTime,
+          items: results.items,
+          spelling: results.spelling,
+          metadata: results.metadata
+        };
+      } catch (error) {
+        console.error('Error performing Google search:', error);
+        throw error;
+      }
+    },
+
+    googleOAuthUrl: async (parent: any, args: any, context: any) => {
+      const { service } = args;
+      const userId = context.user?.id || 'anonymous';
+      
+      try {
+        const serviceMap = {
+          'ANALYTICS': 'analytics',
+          'ADS': 'ads',
+          'SEARCH_CONSOLE': 'searchConsole'
+        };
+
+        const serviceName = serviceMap[service];
+        if (!serviceName) {
+          throw new Error(`Invalid service: ${service}. Must be one of: ANALYTICS, ADS, SEARCH_CONSOLE`);
+        }
+
+        const authUrl = googleSearchService.getOAuthUrl(serviceName, userId);
+        
+        return {
+          authorizationUrl: authUrl,
+          state: JSON.stringify({ service: serviceName, userId })
+        };
+      } catch (error) {
+        console.error('Error generating OAuth URL:', error);
+        throw error;
+      }
+    },
+
+    googleSearchTrends: async (parent: any, args: any) => {
+      const { filters = {} } = args;
+      try {
+        const rawData = await supabaseDataService.getSearchTrends(filters);
+        
+        if (!rawData || rawData.length === 0) {
+          return {
+            queries: [],
+            series: [],
+            dateRange: {
+              from: filters.dateFrom || new Date().toISOString().split('T')[0],
+              to: filters.dateTo || new Date().toISOString().split('T')[0]
+            },
+            totalDataPoints: 0
+          };
+        }
+
+        // Group by query
+        const queries = [...new Set(rawData.map(item => item.query))];
+        const series = queries.map(query => {
+          const queryData = rawData
+            .filter(item => item.query === query)
+            .sort((a, b) => new Date(a.search_date) - new Date(b.search_date));
+          
+          const dataPoints = queryData.map(item => ({
+            date: item.search_date,
+            totalResults: item.total_results,
+            searchTime: item.search_time || null,
+            timestamp: item.search_timestamp
+          }));
+
+          // Calculate change
+          let change = null;
+          let changePercent = null;
+          if (dataPoints.length >= 2) {
+            const first = dataPoints[0].totalResults;
+            const last = dataPoints[dataPoints.length - 1].totalResults;
+            change = last - first;
+            changePercent = first > 0 ? ((change / first) * 100) : 0;
+          }
+
+          return {
+            query,
+            dataPoints,
+            latestCount: dataPoints.length > 0 ? dataPoints[dataPoints.length - 1].totalResults : 0,
+            change: change || 0,
+            changePercent: changePercent || 0
+          };
+        });
+
+        // Get date range
+        const dates = rawData.map(item => item.search_date).sort();
+        const dateRange = {
+          from: dates[0] || new Date().toISOString().split('T')[0],
+          to: dates[dates.length - 1] || new Date().toISOString().split('T')[0]
+        };
+
+        return {
+          queries,
+          series,
+          dateRange,
+          totalDataPoints: rawData.length
+        };
+      } catch (error) {
+        console.error('Error fetching Google search trends:', error);
+        throw error;
+      }
+    },
+
+    trackedSearchQueries: async () => {
+      try {
+        const queries = await supabaseDataService.getTrackedQueries();
+        return queries;
+      } catch (error) {
+        console.error('Error fetching tracked queries:', error);
+        throw error;
+      }
+    },
+
+    // Demand Heatmap
+    demandHeatmapData: async (parent: any, args: any) => {
+      const { filters = {}, includeMockData = true } = args;
+      try {
+        const rawData = await supabaseDataService.getDemandHeatmapData(filters, includeMockData);
+        
+        if (!rawData || rawData.length === 0) {
+          return {
+            data: [],
+            months: [],
+            containsMockData: false
+          };
+        }
+
+        // Check if any data is mock
+        const containsMockData = rawData.some(row => row.is_mock_data === true);
+
+        // Group by region and itinerary, aggregate by month
+        const groupedMap = new Map();
+        const allMonths = new Set();
+
+        rawData.forEach(row => {
+          const key = `${row.region}|||${row.itinerary}`;
+          if (!groupedMap.has(key)) {
+            groupedMap.set(key, {
+              region: row.region,
+              itinerary: row.itinerary,
+              geog_area_code: row.geog_area_code,
+              months: new Map()
+            });
+          }
+          
+          const group = groupedMap.get(key);
+          const month = row.departure_month;
+          allMonths.add(month);
+          
+          // Sum guest counts for the same month
+          const currentCount = group.months.get(month) || 0;
+          group.months.set(month, currentCount + (parseFloat(row.guest_count) || 0));
+        });
+
+        // Convert to array format with months as object structure
+        const data = Array.from(groupedMap.values()).map(group => {
+          const row = {
+            region: group.region,
+            itinerary: group.itinerary,
+            geog_area_code: group.geog_area_code,
+            months: []
+          };
+          
+          // Add all months with their values
+          Array.from(allMonths).sort().forEach(month => {
+            const guestCount = group.months.get(month) || 0;
+            row.months.push({
+              month,
+              guest_count: parseFloat(guestCount)
+            });
+            // Also add as direct property for backward compatibility
+            row[month] = guestCount;
+          });
+          
+          return row;
+        });
+
+        // Sort months
+        const sortedMonths = Array.from(allMonths).sort();
+
+        return {
+          data,
+          months: sortedMonths,
+          containsMockData
+        };
+      } catch (error) {
+        console.error('Error fetching demand heatmap data:', error);
+        throw error;
       }
     },
 
@@ -1069,6 +1302,59 @@ export const resolvers = {
         return success;
       } catch (error) {
         console.error('Error deleting target profile:', error);
+        throw error;
+      }
+    },
+
+    trackGoogleSearch: async (parent: any, args: any) => {
+      const { query, trackTrend = true } = args;
+      try {
+        if (!query || query.trim() === '') {
+          throw new Error('Search query is required');
+        }
+
+        // Perform the search
+        const searchOptions = {
+          query: query.trim(),
+          num: 10,
+          start: 1
+        };
+
+        const results = await googleSearchService.searchPublic(searchOptions);
+
+        // Store trend data if tracking is enabled
+        if (trackTrend) {
+          try {
+            const trendData = await supabaseDataService.storeSearchTrend({
+              query: query.trim(),
+              total_results: results.totalResults,
+              search_time: results.searchTime,
+              search_date: new Date().toISOString().split('T')[0],
+              search_timestamp: new Date().toISOString()
+            });
+
+            return {
+              success: true,
+              trendId: trendData.id,
+              message: `Search tracked successfully. Found ${results.totalResults.toLocaleString()} results.`
+            };
+          } catch (error) {
+            console.error('Error storing search trend:', error);
+            return {
+              success: false,
+              trendId: null,
+              message: `Search completed but failed to track: ${error.message}`
+            };
+          }
+        }
+
+        return {
+          success: true,
+          trendId: null,
+          message: `Search completed. Found ${results.totalResults.toLocaleString()} results.`
+        };
+      } catch (error) {
+        console.error('Error tracking Google search:', error);
         throw error;
       }
     },

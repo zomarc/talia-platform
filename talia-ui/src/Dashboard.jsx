@@ -9,6 +9,9 @@ import RevenueBreakdown from "./components/focus-panels/RevenueBreakdown";
 import ExceptionList from "./components/focus-panels/ExceptionList";
 import ItineraryList from "./components/focus-panels/ItineraryList";
 import PublishedRates from "./components/focus-panels/PublishedRates/index.jsx";
+import DemandHeatmapContainer from "./components/focus-panels/DemandHeatmap";
+import GoogleSearchContainer from "./components/focus-panels/GoogleSearch";
+import SearchTrendsContainer from "./components/focus-panels/SearchTrends";
 import SailingByCabinCategory from "./components/focus-panels/SailingByCabinCategory";
 import SimpleTable from "./components/focus-panels/SimpleTable";
 import SailingSummary from "./components/focus-panels/SailingSummary";
@@ -1262,7 +1265,8 @@ const GraphQLPanel = React.memo(function GraphQLPanel(props) {
 
       debugLog('Making GraphQL request', { query, dataType });
 
-      const response = await fetch('http://localhost:4000/graphql', {
+      // Use relative path - Vite proxy handles routing to localhost:4000
+      const response = await fetch('/api/graphql', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1349,7 +1353,7 @@ const GraphQLPanel = React.memo(function GraphQLPanel(props) {
           Retry
         </button>
         <div style={{ fontSize: `${fontSize - 2}px`, color: theme.colors.textMuted, marginTop: 8 }}>
-          Server: http://localhost:4000/graphql
+          Server: /api/graphql (proxied to localhost:4000)
         </div>
       </div>
     );
@@ -2307,6 +2311,9 @@ function Dashboard({ user }) {
               "itinerary-list": ItineraryList,
               // Reports components
               "published-rates": PublishedRates,
+              "demand-heatmap": DemandHeatmapContainer,
+              "google-search": GoogleSearchContainer,
+              "search-trends": SearchTrendsContainer,
               "sailing-cabin-category": SailingByCabinCategory,
               "simple-table-test": SimpleTable,
               "sailing-summary": SailingSummary,

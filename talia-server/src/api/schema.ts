@@ -431,6 +431,151 @@ export const typeDefs = `#graphql
     limit: Int
   }
 
+  type DemandHeatmapData {
+    id: Int
+    sail_code: String
+    region: String
+    itinerary: String
+    departure_month: String
+    departure_date: String
+    guest_count: Float
+    reservation_count: Int
+    geog_area_code: String
+    ship_code: String
+    ship_name: String
+    is_mock_data: Boolean
+    data_source: String
+    created_at: String
+    updated_at: String
+  }
+
+  type DemandHeatmapResult {
+    data: [DemandHeatmapRow!]!
+    months: [String!]!
+    containsMockData: Boolean!
+  }
+
+  type DemandHeatmapRow {
+    region: String!
+    itinerary: String!
+    geog_area_code: String
+    months: [DemandHeatmapMonthValue!]!
+  }
+
+  type DemandHeatmapMonthValue {
+    month: String!
+    guest_count: Float!
+  }
+
+  input DemandHeatmapFilters {
+    region: String
+    itinerary: String
+    departure_month_from: String
+    departure_month_to: String
+    geog_area_code: String
+    limit: Int
+  }
+
+  # Google Search Types
+  type GoogleSearchResult {
+    query: String!
+    totalResults: Int!
+    searchTime: Float!
+    items: [GoogleSearchItem!]!
+    spelling: String
+    metadata: GoogleSearchMetadata!
+  }
+
+  type GoogleSearchItem {
+    title: String!
+    link: String!
+    snippet: String!
+    displayLink: String!
+    formattedUrl: String!
+    htmlTitle: String!
+    htmlSnippet: String!
+    pagemap: JSON
+  }
+
+  type GoogleSearchMetadata {
+    apiType: String!
+    timestamp: String!
+  }
+
+  input GoogleSearchFilters {
+    query: String!
+    num: Int
+    start: Int
+    dateRestrict: String
+    trackTrend: Boolean
+  }
+
+  enum GoogleService {
+    ANALYTICS
+    ADS
+    SEARCH_CONSOLE
+  }
+
+  type GoogleOAuthResponse {
+    authorizationUrl: String!
+    state: String!
+  }
+
+  type TrackSearchResult {
+    success: Boolean!
+    trendId: Int
+    message: String!
+  }
+
+  # Google Search Trends Types
+  type GoogleSearchTrend {
+    id: Int!
+    query: String!
+    totalResults: Int!
+    searchTime: Float
+    searchDate: String!
+    searchTimestamp: String!
+    notes: String
+    createdBy: String
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type SearchTrendDataPoint {
+    date: String!
+    totalResults: Int!
+    searchTime: Float
+    timestamp: String!
+  }
+
+  type SearchTrendSeries {
+    query: String!
+    dataPoints: [SearchTrendDataPoint!]!
+    latestCount: Int!
+    change: Float
+    changePercent: Float
+  }
+
+  type GoogleSearchTrendsResult {
+    queries: [String!]!
+    series: [SearchTrendSeries!]!
+    dateRange: DateRange!
+    totalDataPoints: Int!
+  }
+
+  type DateRange {
+    from: String!
+    to: String!
+  }
+
+  input GoogleSearchTrendFilters {
+    queries: [String!]
+    query: String
+    dateFrom: String
+    dateTo: String
+    limit: Int
+  }
+
   # Input Types for Mutations
   input FocusInput {
     name: String!
@@ -500,6 +645,15 @@ export const typeDefs = `#graphql
     kpis(userRole: UserRole): [KPI!]!
     exceptions(userRole: UserRole): [Exception!]!
     
+    # Demand Heatmap
+    demandHeatmapData(filters: DemandHeatmapFilters, includeMockData: Boolean): DemandHeatmapResult!
+    
+    # Google Search
+    googleSearch(filters: GoogleSearchFilters): GoogleSearchResult!
+    googleOAuthUrl(service: GoogleService!): GoogleOAuthResponse!
+    googleSearchTrends(filters: GoogleSearchTrendFilters): GoogleSearchTrendsResult!
+    trackedSearchQueries: [String!]!
+    
     # Booking Profile
     bookingProfile(sailCode: String!): BookingProfile
     bookingProfileYearOverYear(sailCode: String!, previousYearSailCode: String): YearOverYearComparison
@@ -549,6 +703,9 @@ export const typeDefs = `#graphql
     createTargetProfile(input: TargetProfileInput!): TargetProfile!
     updateTargetProfile(id: ID!, input: TargetProfileInput!): TargetProfile!
     deleteTargetProfile(id: ID!): Boolean!
+    
+    # Google Search Trends
+    trackGoogleSearch(query: String!, trackTrend: Boolean): TrackSearchResult!
     
     # Server Management
     restartServer: Boolean!

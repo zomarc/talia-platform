@@ -429,12 +429,9 @@ const DataManagementPage = () => {
   };
 
   // Get GraphQL endpoint (same logic as Apollo client)
+  // Use relative path - Vite proxy handles routing to localhost:4000
   const getGraphQLEndpoint = () => {
-    if (import.meta.env.PROD) {
-      return '/api/graphql';
-    } else {
-      return 'http://localhost:4000/graphql';
-    }
+    return '/api/graphql';
   };
 
   // Handle sync button click

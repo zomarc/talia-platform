@@ -20,6 +20,7 @@ import CompetitorPricingContainer from '../focus-panels/CompetitorPricing';
 import DemandHeatmapContainer from '../focus-panels/DemandHeatmap';
 import GoogleSearchContainer from '../focus-panels/GoogleSearch';
 import SearchTrendsContainer from '../focus-panels/SearchTrends';
+import GoogleTrendsContainer from '../focus-panels/GoogleTrends';
 
 /**
  * Component registry with metadata
@@ -212,6 +213,22 @@ export const componentRegistry = {
     },
     dataRequirements: 'Requires google_search_trends table. Shows historical search data tracked over time. Use Google Search component to track searches.',
     filePath: 'src/components/focus-panels/SearchTrends/index.jsx'
+  },
+  GoogleTrends: {
+    component: GoogleTrendsContainer,
+    category: 'Dashboards',
+    description: 'Google Trends - shows historical search interest (0-100 scores) for generic cruise holiday search terms. What people are searching for globally.',
+    usesMockData: false,
+    props: {
+      filters: { 
+        type: 'object', 
+        required: false, 
+        description: 'Filter options (queries, startDate, endDate, region, granularity)' 
+      },
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Uses google_trends_data table and Google Trends API. Shows historical search interest scores (0-100) for generic cruise holiday terms like "cruise holidays", "Greek islands cruise", etc.',
+    filePath: 'src/components/focus-panels/GoogleTrends/index.jsx'
   }
 };
 

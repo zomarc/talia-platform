@@ -527,6 +527,12 @@ export const typeDefs = `#graphql
     message: String!
   }
 
+  type BackfillResult {
+    query: String!
+    dataPointsStored: Int!
+    dateRange: DateRange!
+  }
+
   # Google Search Trends Types
   type GoogleSearchTrend {
     id: Int!
@@ -568,12 +574,55 @@ export const typeDefs = `#graphql
     to: String!
   }
 
+  type HistoricalTrendPoint {
+    date: String!
+    totalResults: Int!
+    searchTime: Float
+  }
+
   input GoogleSearchTrendFilters {
     queries: [String!]
     query: String
     dateFrom: String
     dateTo: String
     limit: Int
+  }
+
+  # Google Trends Data Types (what people are searching for)
+  type GoogleTrendsDataPoint {
+    id: Int!
+    searchQuery: String!
+    date: String!
+    interestScore: Int! # 0-100 from Google Trends
+    region: String! # Empty = worldwide, or country code
+    category: String
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type GoogleTrendsSeries {
+    query: String!
+    dataPoints: [GoogleTrendsDataPoint!]!
+    minScore: Int!
+    maxScore: Int!
+    avgScore: Float!
+  }
+
+  type GoogleTrendsResult {
+    queries: [String!]!
+    series: [GoogleTrendsSeries!]!
+    dateRange: DateRange!
+    region: String! # Geographic region filter used
+    totalDataPoints: Int!
+  }
+
+  input GoogleTrendsFilters {
+    queries: [String!]! # Array of search queries to fetch trends for
+    startDate: String # Start date (YYYY-MM-DD), default: 5 years ago
+    endDate: String # End date (YYYY-MM-DD), default: today
+    region: String # Geographic region ('' = worldwide, 'US', 'GB', 'GR', etc.)
+    granularity: String # 'daily', 'weekly', 'monthly' (default: 'daily')
+    limit: Int # Limit number of data points
   }
 
   # Input Types for Mutations
@@ -653,6 +702,13 @@ export const typeDefs = `#graphql
     googleOAuthUrl(service: GoogleService!): GoogleOAuthResponse!
     googleSearchTrends(filters: GoogleSearchTrendFilters): GoogleSearchTrendsResult!
     trackedSearchQueries: [String!]!
+    historicalSearchTrends(query: String!, startDate: String!, endDate: String!, intervalDays: Int): [HistoricalTrendPoint!]!
+    
+    # Google Trends (what people are searching for)
+    googleTrends(filters: GoogleTrendsFilters!): GoogleTrendsResult!
+    googleTrendsQueries: [String!]! # Get list of queries we have trends data for
+    googleTrendsCategories: [String!]! # Get list of available query categories
+    googleTrendsQueriesByCategory(category: String!): [String!]! # Get queries for a specific category
     
     # Booking Profile
     bookingProfile(sailCode: String!): BookingProfile
@@ -706,6 +762,13 @@ export const typeDefs = `#graphql
     
     # Google Search Trends
     trackGoogleSearch(query: String!, trackTrend: Boolean): TrackSearchResult!
+    backfillHistoricalTrends(query: String!, monthsBack: Int): BackfillResult!
+    
+    # Google Trends
+    fetchGoogleTrends(queries: [String!]!, startDate: String, endDate: String, region: String, storeResults: Boolean): GoogleTrendsResult!
+    backfillGoogleTrends(queries: [String!]!, startDate: String, endDate: String, region: String): BackfillResult!
+    fetchTrendsForCategory(category: String!, startDate: String, endDate: String, region: String): BackfillResult!
+    fetchTrendsForAllQueries(startDate: String, endDate: String, region: String): BackfillResult!
     
     # Server Management
     restartServer: Boolean!

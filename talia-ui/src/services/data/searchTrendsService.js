@@ -157,6 +157,107 @@ class SearchTrendsService {
       throw error;
     }
   }
+
+  /**
+   * Get historical trends for a query
+   * @param {string} query - Search query
+   * @param {string} startDate - Start date (YYYY-MM-DD)
+   * @param {string} endDate - End date (YYYY-MM-DD)
+   * @param {number} intervalDays - Days between data points (default: 7)
+   * @returns {Promise<Array>} Historical trend data points
+   */
+  async getHistoricalTrends(query, startDate, endDate, intervalDays = 7) {
+    const graphqlQuery = `
+      query GetHistoricalTrends($query: String!, $startDate: String!, $endDate: String!, $intervalDays: Int) {
+        historicalSearchTrends(query: $query, startDate: $startDate, endDate: $endDate, intervalDays: $intervalDays) {
+          date
+          totalResults
+          searchTime
+        }
+      }
+    `;
+
+    const variables = {
+      query,
+      startDate,
+      endDate,
+      intervalDays
+    };
+
+    try {
+      const response = await fetch(this.graphqlUrl, {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify({ query: graphqlQuery, variables }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.errors) {
+        console.error('[SearchTrendsService] GraphQL errors:', result.errors);
+        throw new Error(`GraphQL errors: ${JSON.stringify(result.errors, null, 2)}`);
+      }
+
+      return result.data?.historicalSearchTrends || [];
+    } catch (error) {
+      console.error('[SearchTrendsService] Error fetching historical trends:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Backfill historical trends for a query
+   * @param {string} query - Search query
+   * @param {number} monthsBack - How many months back to go (default: 6)
+   * @returns {Promise<Object>} Backfill result
+   */
+  async backfillHistoricalTrends(query, monthsBack = 6) {
+    const graphqlQuery = `
+      mutation BackfillHistoricalTrends($query: String!, $monthsBack: Int) {
+        backfillHistoricalTrends(query: $query, monthsBack: $monthsBack) {
+          query
+          dataPointsStored
+          dateRange {
+            from
+            to
+          }
+        }
+      }
+    `;
+
+    const variables = {
+      query,
+      monthsBack
+    };
+
+    try {
+      const response = await fetch(this.graphqlUrl, {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify({ query: graphqlQuery, variables }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.errors) {
+        console.error('[SearchTrendsService] GraphQL errors:', result.errors);
+        throw new Error(`GraphQL errors: ${JSON.stringify(result.errors, null, 2)}`);
+      }
+
+      return result.data?.backfillHistoricalTrends;
+    } catch (error) {
+      console.error('[SearchTrendsService] Error backfilling historical trends:', error);
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance

@@ -1492,6 +1492,166 @@ export class SupabaseDataService {
       throw error;
     }
   }
+
+  // ===== Google Trends Data =====
+
+  /**
+   * Store Google Trends data point
+   * @param {Object} trendData - Trend data to store
+   * @param {string} trendData.search_query - Search query
+   * @param {string} trendData.date - Date (YYYY-MM-DD)
+   * @param {number} trendData.interest_score - Interest score (0-100)
+   * @param {string} trendData.region - Geographic region (default: '')
+   * @param {string} trendData.category - Category (optional)
+   * @returns {Promise<Object>} Stored trend record
+   */
+  async storeGoogleTrendsData(trendData) {
+    try {
+      const { data, error } = await this.client
+        .from('google_trends_data')
+        .upsert({
+          search_query: trendData.search_query,
+          date: trendData.date,
+          interest_score: trendData.interest_score,
+          region: trendData.region || '',
+          category: trendData.category || null
+        }, {
+          onConflict: 'search_query,date,region'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase error storing Google Trends data:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error storing Google Trends data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Store multiple Google Trends data points in batch
+   * @param {Array<Object>} trendsData - Array of trend data points
+   * @returns {Promise<Array>} Array of stored records
+   */
+  async storeGoogleTrendsDataBatch(trendsData) {
+    try {
+      const records = trendsData.map(trend => ({
+        search_query: trend.search_query,
+        date: trend.date,
+        interest_score: trend.interest_score,
+        region: trend.region || '',
+        category: trend.category || null
+      }));
+
+      const { data, error } = await this.client
+        .from('google_trends_data')
+        .upsert(records, {
+          onConflict: 'search_query,date,region'
+        })
+        .select();
+
+      if (error) {
+        console.error('Supabase error storing Google Trends data batch:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error storing Google Trends data batch:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get Google Trends data
+   * @param {Object} filters - Filter options
+   * @param {string|Array<string>} filters.queries - Query or queries to filter by
+   * @param {string} filters.startDate - Start date (YYYY-MM-DD)
+   * @param {string} filters.endDate - End date (YYYY-MM-DD)
+   * @param {string} filters.region - Geographic region filter
+   * @param {number} filters.limit - Limit results
+   * @returns {Promise<Array>} Array of trend data points
+   */
+  async getGoogleTrendsData(filters = {}) {
+    try {
+      let queryBuilder = this.client
+        .from('google_trends_data')
+        .select('*');
+
+      // Filter by query/queries
+      if (filters.queries) {
+        if (Array.isArray(filters.queries)) {
+          queryBuilder = queryBuilder.in('search_query', filters.queries);
+        } else {
+          queryBuilder = queryBuilder.eq('search_query', filters.queries);
+        }
+      }
+
+      // Filter by date range
+      if (filters.startDate) {
+        queryBuilder = queryBuilder.gte('date', filters.startDate);
+      }
+      if (filters.endDate) {
+        queryBuilder = queryBuilder.lte('date', filters.endDate);
+      }
+
+      // Filter by region
+      if (filters.region !== undefined) {
+        queryBuilder = queryBuilder.eq('region', filters.region || '');
+      }
+
+      // Order by date
+      queryBuilder = queryBuilder.order('date', { ascending: true });
+      queryBuilder = queryBuilder.order('search_query', { ascending: true });
+
+      // Apply limit
+      if (filters.limit) {
+        queryBuilder = queryBuilder.limit(filters.limit);
+      }
+
+      const { data, error } = await queryBuilder;
+
+      if (error) {
+        console.error('Supabase error getting Google Trends data:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error getting Google Trends data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get unique search queries from Google Trends data
+   * @returns {Promise<Array>} Array of unique query strings
+   */
+  async getGoogleTrendsQueries() {
+    try {
+      const { data, error } = await this.client
+        .from('google_trends_data')
+        .select('search_query')
+        .order('search_query', { ascending: true });
+
+      if (error) {
+        console.error('Supabase error getting Google Trends queries:', error);
+        throw error;
+      }
+
+      // Get unique queries
+      const uniqueQueries = [...new Set((data || []).map(item => item.search_query))];
+      return uniqueQueries;
+    } catch (error) {
+      console.error('Error getting Google Trends queries:', error);
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance

@@ -4,6 +4,9 @@ import { sampleData } from './schema.js';
 import { supabaseDataService } from '../services/supabase.js';
 import { synapseSyncService } from '../services/synapse-sync.js';
 import { googleSearchService } from '../services/google-search.js';
+import { googleTrendsService } from '../services/google-trends.js';
+import { googleTrendsService as googleTrendsApiService } from '../services/google-trends-service.js';
+import { getCategories, getQueriesByCategory, ALL_QUERIES } from '../config/googleTrendsQueries.js';
 
 // Helper function to check user permissions
 const hasPermission = (userRole: string, requiredRole: string): boolean => {
@@ -585,7 +588,7 @@ export const resolvers = {
         const series = queries.map(query => {
           const queryData = rawData
             .filter(item => item.query === query)
-            .sort((a, b) => new Date(a.search_date) - new Date(b.search_date));
+            .sort((a, b) => new Date(a.search_date).getTime() - new Date(b.search_date).getTime());
           
           const dataPoints = queryData.map(item => ({
             date: item.search_date,
@@ -638,6 +641,165 @@ export const resolvers = {
         return queries;
       } catch (error) {
         console.error('Error fetching tracked queries:', error);
+        throw error;
+      }
+    },
+
+    historicalSearchTrends: async (parent: any, args: any) => {
+      const { query, startDate, endDate, intervalDays = 7 } = args;
+      try {
+        if (!query || !startDate || !endDate) {
+          throw new Error('Query, startDate, and endDate are required');
+        }
+
+        const trends = await googleTrendsService.getHistoricalTrends(query, {
+          startDate,
+          endDate,
+          intervalDays
+        });
+
+        return trends.map(point => ({
+          date: point.date,
+          totalResults: point.totalResults,
+          searchTime: point.searchTime || null
+        }));
+      } catch (error) {
+        console.error('Error fetching historical search trends:', error);
+        throw error;
+      }
+    },
+
+    // Google Trends (what people are searching for)
+    googleTrends: async (parent: any, args: any) => {
+      const { filters } = args;
+      try {
+        if (!filters || !filters.queries || filters.queries.length === 0) {
+          throw new Error('At least one query is required in filters.queries');
+        }
+
+        const { queries, startDate, endDate, region = '', granularity = 'daily', limit } = filters;
+
+        // Try to get data from database first
+        let dbData = await supabaseDataService.getGoogleTrendsData({
+          queries,
+          startDate,
+          endDate,
+          region,
+          limit
+        });
+
+        // If no data in DB or incomplete, fetch from Google Trends API
+        if (!dbData || dbData.length === 0) {
+          console.log(`[GoogleTrends Resolver] No data in DB for queries: ${queries.join(', ')}, fetching from API...`);
+          
+          // Fetch from Google Trends API
+          const apiData = await googleTrendsApiService.getHistoricalTrends(queries[0], {
+            startDate: startDate || new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            endDate: endDate || new Date().toISOString().split('T')[0],
+            region,
+            granularity
+          });
+
+          // Store in database
+          if (apiData && apiData.length > 0) {
+            const trendsToStore = apiData.map(point => ({
+              search_query: queries[0],
+              date: point.date,
+              interest_score: point.interestScore,
+              region: region || ''
+            }));
+
+            await supabaseDataService.storeGoogleTrendsDataBatch(trendsToStore);
+            dbData = await supabaseDataService.getGoogleTrendsData({
+              queries: [queries[0]],
+              startDate,
+              endDate,
+              region
+            });
+          }
+        }
+
+        // Group data by query
+        const seriesMap = new Map();
+        
+        dbData.forEach(point => {
+          if (!seriesMap.has(point.search_query)) {
+            seriesMap.set(point.search_query, []);
+          }
+          seriesMap.get(point.search_query).push({
+            id: point.id,
+            searchQuery: point.search_query,
+            date: point.date,
+            interestScore: point.interest_score,
+            region: point.region || '',
+            category: point.category,
+            createdAt: point.created_at,
+            updatedAt: point.updated_at
+          });
+        });
+
+        // Build series with statistics
+        const series = queries.map(query => {
+          const dataPoints = seriesMap.get(query) || [];
+          const scores = dataPoints.map(p => p.interestScore).filter(s => s !== null && s !== undefined);
+          
+          return {
+            query,
+            dataPoints: dataPoints.sort((a, b) => a.date.localeCompare(b.date)),
+            minScore: scores.length > 0 ? Math.min(...scores) : 0,
+            maxScore: scores.length > 0 ? Math.max(...scores) : 0,
+            avgScore: scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0
+          };
+        });
+
+        // Get date range
+        const allDates = dbData.map(item => item.date).sort();
+        const dateRange = {
+          from: allDates[0] || (startDate || new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]),
+          to: allDates[allDates.length - 1] || (endDate || new Date().toISOString().split('T')[0])
+        };
+
+        return {
+          queries,
+          series,
+          dateRange,
+          region: region || '',
+          totalDataPoints: dbData.length
+        };
+      } catch (error) {
+        console.error('Error fetching Google Trends:', error);
+        throw error;
+      }
+    },
+
+    googleTrendsQueries: async () => {
+      try {
+        const queries = await supabaseDataService.getGoogleTrendsQueries();
+        return queries;
+      } catch (error) {
+        console.error('Error fetching Google Trends queries:', error);
+        throw error;
+      }
+    },
+
+    googleTrendsCategories: async () => {
+      try {
+        return getCategories();
+      } catch (error) {
+        console.error('Error fetching Google Trends categories:', error);
+        throw error;
+      }
+    },
+
+    googleTrendsQueriesByCategory: async (parent: any, args: any) => {
+      const { category } = args;
+      try {
+        if (!category) {
+          throw new Error('Category is required');
+        }
+        return getQueriesByCategory(category);
+      } catch (error) {
+        console.error('Error fetching queries by category:', error);
         throw error;
       }
     },
@@ -700,7 +862,7 @@ export const resolvers = {
               guest_count: parseFloat(guestCount)
             });
             // Also add as direct property for backward compatibility
-            row[month] = guestCount;
+            (row as any)[month] = guestCount;
           });
           
           return row;
@@ -1355,6 +1517,283 @@ export const resolvers = {
         };
       } catch (error) {
         console.error('Error tracking Google search:', error);
+        throw error;
+      }
+    },
+
+    backfillHistoricalTrends: async (parent: any, args: any) => {
+      const { query, monthsBack = 6 } = args;
+      try {
+        if (!query || query.trim() === '') {
+          throw new Error('Search query is required');
+        }
+
+        const result = await googleTrendsService.backfillHistoricalTrends(
+          query.trim(),
+          { monthsBack },
+          supabaseDataService
+        );
+
+        return result;
+      } catch (error) {
+        console.error('Error backfilling historical trends:', error);
+        throw error;
+      }
+    },
+
+    // Google Trends Mutations
+    fetchGoogleTrends: async (parent: any, args: any) => {
+      const { queries, startDate, endDate, region = '', storeResults = true } = args;
+      try {
+        if (!queries || queries.length === 0) {
+          throw new Error('At least one query is required');
+        }
+
+        const results = [];
+        
+        for (const query of queries) {
+          const trends = await googleTrendsApiService.getHistoricalTrends(query, {
+            startDate: startDate || new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            endDate: endDate || new Date().toISOString().split('T')[0],
+            region
+          });
+
+          // Store in database if requested
+          if (storeResults && trends && trends.length > 0) {
+            const trendsToStore = trends.map(point => ({
+              search_query: query,
+              date: point.date,
+              interest_score: point.interestScore,
+              region: region || ''
+            }));
+
+            await supabaseDataService.storeGoogleTrendsDataBatch(trendsToStore);
+          }
+
+          results.push(...trends.map(point => ({
+            searchQuery: query,
+            date: point.date,
+            interestScore: point.interestScore,
+            region: region || ''
+          })));
+        }
+
+        // Group by query for series
+        const seriesMap = new Map();
+        results.forEach(point => {
+          if (!seriesMap.has(point.searchQuery)) {
+            seriesMap.set(point.searchQuery, []);
+          }
+          seriesMap.get(point.searchQuery).push(point);
+        });
+
+        const series = queries.map(query => {
+          const dataPoints = seriesMap.get(query) || [];
+          const scores = dataPoints.map(p => p.interestScore).filter(s => s !== null && s !== undefined);
+          
+          return {
+            query,
+            dataPoints: dataPoints.sort((a, b) => a.date.localeCompare(b.date)).map(p => ({
+              id: null,
+              searchQuery: p.searchQuery,
+              date: p.date,
+              interestScore: p.interestScore,
+              region: p.region,
+              category: null,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            })),
+            minScore: scores.length > 0 ? Math.min(...scores) : 0,
+            maxScore: scores.length > 0 ? Math.max(...scores) : 0,
+            avgScore: scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0
+          };
+        });
+
+        const allDates = results.map(r => r.date).sort();
+        const dateRange = {
+          from: allDates[0] || (startDate || new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]),
+          to: allDates[allDates.length - 1] || (endDate || new Date().toISOString().split('T')[0])
+        };
+
+        return {
+          queries,
+          series,
+          dateRange,
+          region: region || '',
+          totalDataPoints: results.length
+        };
+      } catch (error) {
+        console.error('Error fetching Google Trends:', error);
+        throw error;
+      }
+    },
+
+    backfillGoogleTrends: async (parent: any, args: any) => {
+      const { queries, startDate, endDate, region = '' } = args;
+      try {
+        if (!queries || queries.length === 0) {
+          throw new Error('At least one query is required');
+        }
+
+        let totalStored = 0;
+        
+        for (const query of queries) {
+          const trends = await googleTrendsApiService.getHistoricalTrends(query, {
+            startDate: startDate || new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            endDate: endDate || new Date().toISOString().split('T')[0],
+            region
+          });
+
+          if (trends && trends.length > 0) {
+            const trendsToStore = trends.map(point => ({
+              search_query: query,
+              date: point.date,
+              interest_score: point.interestScore,
+              region: region || ''
+            }));
+
+            await supabaseDataService.storeGoogleTrendsDataBatch(trendsToStore);
+            totalStored += trends.length;
+          }
+
+          // Rate limiting - wait between queries
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        return {
+          query: queries.join(', '),
+          dataPointsStored: totalStored,
+          dateRange: {
+            from: startDate || new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            to: endDate || new Date().toISOString().split('T')[0]
+          }
+        };
+      } catch (error) {
+        console.error('Error backfilling Google Trends:', error);
+        throw error;
+      }
+    },
+
+    fetchTrendsForCategory: async (parent: any, args: any) => {
+      const { category, startDate, endDate, region = '' } = args;
+      try {
+        if (!category) {
+          throw new Error('Category is required');
+        }
+
+        const queries = getQueriesByCategory(category);
+        if (!queries || queries.length === 0) {
+          throw new Error(`No queries found for category: ${category}`);
+        }
+
+        let totalStored = 0;
+        
+        for (const query of queries) {
+          try {
+            const trends = await googleTrendsApiService.getHistoricalTrends(query, {
+              startDate: startDate || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+              endDate: endDate || new Date().toISOString().split('T')[0],
+              region
+            });
+
+            if (trends && trends.length > 0) {
+              const trendsToStore = trends.map(point => ({
+                search_query: query,
+                date: point.date,
+                interest_score: point.interestScore,
+                region: region || ''
+              }));
+
+              await supabaseDataService.storeGoogleTrendsDataBatch(trendsToStore);
+              totalStored += trends.length;
+            }
+
+            // Rate limiting - wait between queries
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          } catch (error) {
+            console.error(`Error fetching trends for "${query}":`, error.message);
+            // Continue with next query
+          }
+        }
+
+        return {
+          query: `${category} (${queries.length} queries)`,
+          dataPointsStored: totalStored,
+          dateRange: {
+            from: startDate || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            to: endDate || new Date().toISOString().split('T')[0]
+          }
+        };
+      } catch (error) {
+        console.error('Error fetching trends for category:', error);
+        throw error;
+      }
+    },
+
+    fetchTrendsForAllQueries: async (parent: any, args: any) => {
+      const { startDate, endDate, region = '' } = args;
+      try {
+        const queries = ALL_QUERIES;
+        
+        console.log(`[GoogleTrends] Fetching trends for all ${queries.length} queries...`);
+
+        let totalStored = 0;
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (const query of queries) {
+          try {
+            // Check if data already exists
+            const existing = await supabaseDataService.getGoogleTrendsData({
+              queries: [query],
+              startDate: startDate || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+              endDate: endDate || new Date().toISOString().split('T')[0],
+              region
+            });
+
+            if (existing && existing.length > 0) {
+              console.log(`[GoogleTrends] Skipping "${query}" - already has ${existing.length} data points`);
+              continue;
+            }
+
+            const trends = await googleTrendsApiService.getHistoricalTrends(query, {
+              startDate: startDate || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+              endDate: endDate || new Date().toISOString().split('T')[0],
+              region
+            });
+
+            if (trends && trends.length > 0) {
+              const trendsToStore = trends.map(point => ({
+                search_query: query,
+                date: point.date,
+                interest_score: point.interestScore,
+                region: region || ''
+              }));
+
+              await supabaseDataService.storeGoogleTrendsDataBatch(trendsToStore);
+              totalStored += trends.length;
+              successCount++;
+            }
+
+            // Rate limiting - wait between queries
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          } catch (error) {
+            console.error(`[GoogleTrends] Error fetching trends for "${query}":`, error.message);
+            errorCount++;
+            // Continue with next query
+          }
+        }
+
+        return {
+          query: `All queries (${queries.length} total)`,
+          dataPointsStored: totalStored,
+          dateRange: {
+            from: startDate || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            to: endDate || new Date().toISOString().split('T')[0]
+          }
+        };
+      } catch (error) {
+        console.error('Error fetching trends for all queries:', error);
         throw error;
       }
     },

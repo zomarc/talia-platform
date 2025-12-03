@@ -12,6 +12,7 @@ import PublishedRates from "./components/focus-panels/PublishedRates/index.jsx";
 import DemandHeatmapContainer from "./components/focus-panels/DemandHeatmap";
 import GoogleSearchContainer from "./components/focus-panels/GoogleSearch";
 import SearchTrendsContainer from "./components/focus-panels/SearchTrends";
+import GoogleTrendsContainer from "./components/focus-panels/GoogleTrends";
 import SailingByCabinCategory from "./components/focus-panels/SailingByCabinCategory";
 import SimpleTable from "./components/focus-panels/SimpleTable";
 import SailingSummary from "./components/focus-panels/SailingSummary";
@@ -2314,6 +2315,7 @@ function Dashboard({ user }) {
               "demand-heatmap": DemandHeatmapContainer,
               "google-search": GoogleSearchContainer,
               "search-trends": SearchTrendsContainer,
+              "google-trends": GoogleTrendsContainer,
               "sailing-cabin-category": SailingByCabinCategory,
               "simple-table-test": SimpleTable,
               "sailing-summary": SailingSummary,

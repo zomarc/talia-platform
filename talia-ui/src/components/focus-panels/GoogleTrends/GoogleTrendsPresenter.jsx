@@ -35,6 +35,7 @@ const GoogleTrendsPresenter = ({
   const [backfilling, setBackfilling] = useState(false);
   const [sortBy, setSortBy] = useState('mostSearched'); // 'mostSearched' or 'alphabetical'
   const [quickFilter, setQuickFilter] = useState(null);
+  const [topLimit, setTopLimit] = useState(null); // null = show all, or number for top X
   
   // Load collapse state from localStorage
   const STORAGE_KEY_COLLAPSED = 'googleTrendsSearchTermsCollapsed';
@@ -97,28 +98,33 @@ const GoogleTrendsPresenter = ({
     '#00bcd4', '#8bc34a', '#ff5722', '#673ab7', '#f44336'
   ];
 
-  // Filter out series with no data points and sort
+  // Filter out series with no data points, sort, and apply top limit
   const seriesWithData = useMemo(() => {
     if (!trends || !trends.series) return [];
-    const filtered = trends.series.filter(s => s.dataPoints && s.dataPoints.length > 0);
+    let filtered = trends.series.filter(s => s.dataPoints && s.dataPoints.length > 0);
     
     // Sort based on selected option
     if (sortBy === 'mostSearched') {
       // Sort by average interest score (highest first)
-      return [...filtered].sort((a, b) => {
+      filtered = [...filtered].sort((a, b) => {
         const avgA = a.avgScore || 0;
         const avgB = b.avgScore || 0;
         return avgB - avgA; // Descending (highest first)
       });
     } else if (sortBy === 'alphabetical') {
       // Sort alphabetically by query name
-      return [...filtered].sort((a, b) => 
+      filtered = [...filtered].sort((a, b) => 
         (a.query || '').localeCompare(b.query || '')
       );
     }
     
+    // Apply top limit if set
+    if (topLimit !== null && topLimit > 0) {
+      filtered = filtered.slice(0, topLimit);
+    }
+    
     return filtered;
-  }, [trends, sortBy]);
+  }, [trends, sortBy, topLimit]);
 
   // Calculate max interest score for scaling charts
   const maxScore = useMemo(() => {
@@ -814,8 +820,10 @@ const GoogleTrendsPresenter = ({
                       endDate = new Date().toISOString().split('T')[0];
                     }
                     setDateRange({ startDate, endDate });
-                    // Only update local state - don't trigger refetch/refresh
-                    // The "Apply Filter" button will trigger the query
+                    // Automatically update the display when quick filter is selected
+                    if (onDateRangeChange) {
+                      onDateRangeChange(startDate, endDate);
+                    }
                   }}
                   style={{ cursor: loading ? 'not-allowed' : 'pointer' }}
                 />
@@ -844,6 +852,10 @@ const GoogleTrendsPresenter = ({
                 const newStartDate = e.target.value;
                 setDateRange(prev => ({ ...prev, startDate: newStartDate }));
                 setQuickFilter(null);
+                // Auto-apply when custom date is changed
+                if (onDateRangeChange && newStartDate && dateRange.endDate) {
+                  onDateRangeChange(newStartDate, dateRange.endDate);
+                }
               }}
               max={dateRange.endDate || new Date().toISOString().split('T')[0]}
               style={{
@@ -872,6 +884,10 @@ const GoogleTrendsPresenter = ({
                 const newEndDate = e.target.value;
                 setDateRange(prev => ({ ...prev, endDate: newEndDate }));
                 setQuickFilter(null);
+                // Auto-apply when custom date is changed
+                if (onDateRangeChange && dateRange.startDate && newEndDate) {
+                  onDateRangeChange(dateRange.startDate, newEndDate);
+                }
               }}
               min={dateRange.startDate}
               max={new Date().toISOString().split('T')[0]}
@@ -888,31 +904,33 @@ const GoogleTrendsPresenter = ({
                 minWidth: '140px'
               }}
             />
-            <button
-              onClick={() => {
-                if (onDateRangeChange && dateRange.startDate && dateRange.endDate) {
-                  setQuickFilter(null);
-                  onDateRangeChange(dateRange.startDate, dateRange.endDate);
-                }
-              }}
-              disabled={loading || !dateRange.startDate || !dateRange.endDate}
-              style={{
-                padding: '8px 16px',
-                fontSize: '13px',
-                fontWeight: '500',
-                backgroundColor: (loading || !dateRange.startDate || !dateRange.endDate)
-                  ? (theme?.colors?.backgroundSecondary || '#2a2a2a')
-                  : (theme?.colors?.primary || '#1976d2'),
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: (loading || !dateRange.startDate || !dateRange.endDate) ? 'not-allowed' : 'pointer',
-                opacity: (loading || !dateRange.startDate || !dateRange.endDate) ? 0.6 : 1,
-                transition: 'all 0.2s'
-              }}
-            >
-              {loading ? 'Loading...' : 'Apply'}
-            </button>
+            {/* Apply button only shown when using custom dates (not quick filters) */}
+            {quickFilter === null && (
+              <button
+                onClick={() => {
+                  if (onDateRangeChange && dateRange.startDate && dateRange.endDate) {
+                    onDateRangeChange(dateRange.startDate, dateRange.endDate);
+                  }
+                }}
+                disabled={loading || !dateRange.startDate || !dateRange.endDate}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  backgroundColor: (loading || !dateRange.startDate || !dateRange.endDate)
+                    ? (theme?.colors?.backgroundSecondary || '#2a2a2a')
+                    : (theme?.colors?.primary || '#1976d2'),
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: (loading || !dateRange.startDate || !dateRange.endDate) ? 'not-allowed' : 'pointer',
+                  opacity: (loading || !dateRange.startDate || !dateRange.endDate) ? 0.6 : 1,
+                  transition: 'all 0.2s'
+                }}
+              >
+                {loading ? 'Loading...' : 'Apply'}
+              </button>
+            )}
           </div>
         </div>
       </div>

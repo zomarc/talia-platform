@@ -114,7 +114,45 @@ const GoogleTrendsContainer = () => {
   };
   
   const handleSelectedQueriesChange = async (newQueries) => {
+    const previousQueries = selectedQueries;
     setSelectedQueriesState(newQueries);
+    
+    // Detect new queries that weren't in the previous list
+    const newQueriesList = newQueries.filter(q => !previousQueries.includes(q));
+    
+    // If there are new queries, create them in the database and refresh data for only those
+    if (newQueriesList.length > 0) {
+      try {
+        // Create search terms in database if they don't exist
+        for (const query of newQueriesList) {
+          try {
+            await googleTrendsService.createSearchTerm({
+              searchTerm: query,
+              isActive: true
+            });
+          } catch (err) {
+            // Ignore errors if term already exists (unique constraint)
+            if (!err.message?.includes('already exists') && !err.message?.includes('duplicate')) {
+              console.warn(`[GoogleTrendsContainer] Could not create search term "${query}":`, err.message);
+            }
+          }
+        }
+        
+        // Refresh data for only the new queries
+        const startDate = trends?.dateRange?.from || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const endDate = trends?.dateRange?.to || new Date().toISOString().split('T')[0];
+        
+        await googleTrendsService.refreshTrends({
+          queries: newQueriesList,
+          startDate,
+          endDate
+        });
+      } catch (err) {
+        console.error('[GoogleTrendsContainer] Error refreshing new queries:', err);
+      }
+    }
+    
+    // Refetch all trends data to include the new queries
     await refetch({ queries: newQueries });
   };
 

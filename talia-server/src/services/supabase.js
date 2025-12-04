@@ -1540,18 +1540,80 @@ export class SupabaseDataService {
    */
   async storeGoogleTrendsDataBatch(trendsData) {
     try {
-      const records = trendsData.map(trend => ({
-        search_query: trend.search_query,
-        date: trend.date,
-        interest_score: trend.interest_score,
-        region: trend.region || '',
-        category: trend.category || null
-      }));
+      if (!trendsData || trendsData.length === 0) {
+        return [];
+      }
 
+      // Get unique search queries
+      const uniqueQueries = [...new Set(trendsData.map(t => t.search_query).filter(Boolean))];
+      
+      // Get or create search terms and map to IDs
+      const searchTermMap = new Map();
+      
+      for (const query of uniqueQueries) {
+        // Try to get existing search term
+        let { data: existing, error: getError } = await this.client
+          .from('google_trends_search_terms')
+          .select('id')
+          .eq('search_term', query)
+          .single();
+
+        let searchTermId;
+        
+        if (existing && !getError) {
+          searchTermId = existing.id;
+          // Update last_queried_date
+          await this.client
+            .from('google_trends_search_terms')
+            .update({ 
+              last_queried_date: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', searchTermId);
+        } else {
+          // Create new search term
+          const { data: newTerm, error: createError } = await this.client
+            .from('google_trends_search_terms')
+            .insert({
+              search_term: query,
+              category: trendsData.find(t => t.search_query === query)?.category || null,
+              is_active: true,
+              last_queried_date: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+          if (createError) {
+            console.error(`Error creating search term "${query}":`, createError);
+            continue;
+          }
+          searchTermId = newTerm.id;
+        }
+        
+        searchTermMap.set(query, searchTermId);
+      }
+
+      // Build records with search_term_id
+      const records = trendsData
+        .filter(trend => searchTermMap.has(trend.search_query))
+        .map(trend => ({
+          search_term_id: searchTermMap.get(trend.search_query),
+          date: trend.date,
+          interest_score: trend.interest_score,
+          region: trend.region || '',
+          category: trend.category || null
+        }));
+
+      if (records.length === 0) {
+        return [];
+      }
+
+      // Upsert using search_term_id, date, region as unique constraint
+      // Same pattern as other upserts in this file (e.g., storeSearchTrend)
       const { data, error } = await this.client
         .from('google_trends_data')
         .upsert(records, {
-          onConflict: 'search_query,date,region'
+          onConflict: 'search_term_id,date,region'
         })
         .select();
 
@@ -1579,16 +1641,34 @@ export class SupabaseDataService {
    */
   async getGoogleTrendsData(filters = {}) {
     try {
+      // Join with search_terms table to get search_term
       let queryBuilder = this.client
         .from('google_trends_data')
-        .select('*');
+        .select(`
+          *,
+          google_trends_search_terms!inner(search_term, category)
+        `);
 
-      // Filter by query/queries
+      // Filter by query/queries - need to join with search_terms
       if (filters.queries) {
-        if (Array.isArray(filters.queries)) {
-          queryBuilder = queryBuilder.in('search_query', filters.queries);
+        // First get search_term_ids for the queries
+        const { data: searchTerms, error: searchTermsError } = await this.client
+          .from('google_trends_search_terms')
+          .select('id, search_term')
+          .in('search_term', Array.isArray(filters.queries) ? filters.queries : [filters.queries])
+          .eq('is_active', true);
+
+        if (searchTermsError) {
+          throw searchTermsError;
+        }
+
+        const searchTermIds = (searchTerms || []).map(st => st.id);
+        
+        if (searchTermIds.length > 0) {
+          queryBuilder = queryBuilder.in('search_term_id', searchTermIds);
         } else {
-          queryBuilder = queryBuilder.eq('search_query', filters.queries);
+          // No matching search terms, return empty
+          return [];
         }
       }
 
@@ -1607,12 +1687,10 @@ export class SupabaseDataService {
 
       // Order by date
       queryBuilder = queryBuilder.order('date', { ascending: true });
-      queryBuilder = queryBuilder.order('search_query', { ascending: true });
 
-      // Apply limit
-      if (filters.limit) {
-        queryBuilder = queryBuilder.limit(filters.limit);
-      }
+      // Apply limit - Supabase defaults to 1000 rows, so we need to set a high limit to get all data
+      const limit = filters.limit || 100000; // Default to 100k to get all data (no practical limit)
+      queryBuilder = queryBuilder.limit(limit);
 
       const { data, error } = await queryBuilder;
 
@@ -1621,7 +1699,40 @@ export class SupabaseDataService {
         throw error;
       }
 
-      return data || [];
+      if (!data || data.length === 0) {
+        console.log(`[getGoogleTrendsData] No data found for queries: ${JSON.stringify(filters.queries)}`);
+        return [];
+      }
+
+      // Flatten the response - extract search_term from joined table
+      // Supabase returns nested object: { google_trends_search_terms: { search_term: ... } }
+      const flattenedData = (data || []).map(item => {
+        // Handle nested structure from Supabase join
+        const searchTermObj = item.google_trends_search_terms;
+        const searchTerm = searchTermObj?.search_term || item.search_term || item.search_query;
+        const category = searchTermObj?.category || item.category;
+        
+        if (!searchTerm) {
+          console.warn('[getGoogleTrendsData] Missing search_term for item:', item.id);
+        }
+        
+        return {
+          id: item.id,
+          search_term_id: item.search_term_id,
+          date: item.date,
+          interest_score: item.interest_score,
+          region: item.region || '',
+          category: category,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+          search_query: searchTerm // Ensure search_query is set for resolver compatibility
+        };
+      });
+
+      console.log(`[getGoogleTrendsData] Returning ${flattenedData.length} data points. Sample search_queries:`, 
+        [...new Set(flattenedData.map(d => d.search_query))].slice(0, 5));
+
+      return flattenedData;
     } catch (error) {
       console.error('Error getting Google Trends data:', error);
       throw error;
@@ -1634,22 +1745,259 @@ export class SupabaseDataService {
    */
   async getGoogleTrendsQueries() {
     try {
+      // Get search terms from search_terms table
       const { data, error } = await this.client
-        .from('google_trends_data')
-        .select('search_query')
-        .order('search_query', { ascending: true });
+        .from('google_trends_search_terms')
+        .select('search_term')
+        .eq('is_active', true)
+        .order('search_term', { ascending: true });
 
       if (error) {
         console.error('Supabase error getting Google Trends queries:', error);
         throw error;
       }
 
-      // Get unique queries
-      const uniqueQueries = [...new Set((data || []).map(item => item.search_query))];
-      return uniqueQueries;
+      return (data || []).map(item => item.search_term);
     } catch (error) {
       console.error('Error getting Google Trends queries:', error);
       throw error;
+    }
+  }
+
+  // ===== Google Trends Search Terms =====
+
+  /**
+   * Get all search terms
+   * @returns {Promise<Array>} Array of search terms
+   */
+  async getGoogleTrendsSearchTerms() {
+    try {
+      const { data, error } = await this.client
+        .from('google_trends_search_terms')
+        .select('*')
+        .eq('is_active', true)
+        .order('search_term', { ascending: true });
+
+      if (error) {
+        console.error('Supabase error getting search terms:', error);
+        throw error;
+      }
+
+      return (data || []).map(item => ({
+        id: item.id,
+        searchTerm: item.search_term,
+        category: item.category,
+        isActive: item.is_active,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+        lastQueriedDate: item.last_queried_date
+      }));
+    } catch (error) {
+      console.error('Error getting search terms:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a search term
+   * @param {Object} input - Search term data
+   * @returns {Promise<Object>} Created search term
+   */
+  async createGoogleTrendsSearchTerm(input) {
+    try {
+      const { data, error } = await this.client
+        .from('google_trends_search_terms')
+        .insert({
+          search_term: input.searchTerm,
+          category: input.category || null,
+          is_active: input.isActive !== undefined ? input.isActive : true
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase error creating search term:', error);
+        throw error;
+      }
+
+      return {
+        id: data.id,
+        searchTerm: data.search_term,
+        category: data.category,
+        isActive: data.is_active,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at
+      };
+    } catch (error) {
+      console.error('Error creating search term:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a search term
+   * @param {number} id - Search term ID
+   * @param {Object} input - Updated search term data
+   * @returns {Promise<Object>} Updated search term
+   */
+  async updateGoogleTrendsSearchTerm(id, input) {
+    try {
+      const updateData = {};
+      if (input.searchTerm !== undefined) updateData.search_term = input.searchTerm;
+      if (input.category !== undefined) updateData.category = input.category;
+      if (input.isActive !== undefined) updateData.is_active = input.isActive;
+
+      const { data, error } = await this.client
+        .from('google_trends_search_terms')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase error updating search term:', error);
+        throw error;
+      }
+
+      return {
+        id: data.id,
+        searchTerm: data.search_term,
+        category: data.category,
+        isActive: data.is_active,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at
+      };
+    } catch (error) {
+      console.error('Error updating search term:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a search term
+   * @param {number} id - Search term ID
+   * @returns {Promise<boolean>} Success status
+   */
+  async deleteGoogleTrendsSearchTerm(id) {
+    try {
+      const { error } = await this.client
+        .from('google_trends_search_terms')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Supabase error deleting search term:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting search term:', error);
+      throw error;
+    }
+  }
+
+  // ===== Data Refresh Metadata =====
+
+  /**
+   * Get refresh metadata for a data source
+   * @param {string} dataSource - Data source identifier (e.g., 'google_trends')
+   * @returns {Promise<Object|null>} Refresh metadata or null if not found
+   */
+  async getRefreshMetadata(dataSource) {
+    try {
+      const { data, error } = await this.client
+        .from('data_refresh_metadata')
+        .select('*')
+        .eq('data_source', dataSource)
+        .single();
+
+      // PGRST116 = not found (this is OK - means no metadata yet)
+      if (error && error.code !== 'PGRST116') {
+        // Check if table doesn't exist (42P01 = undefined table)
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('Refresh metadata table does not exist yet. Run migration: 20251206000000_create_data_refresh_metadata_table.sql');
+          return null;
+        }
+        console.error('Supabase error getting refresh metadata:', error);
+        throw error;
+      }
+
+      return data || null;
+    } catch (error) {
+      // If table doesn't exist, return null instead of throwing
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        console.warn('Refresh metadata table does not exist yet.');
+        return null;
+      }
+      console.error('Error getting refresh metadata:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update or create refresh metadata
+   * @param {string} dataSource - Data source identifier
+   * @param {Object} metadata - Metadata to store
+   * @returns {Promise<Object>} Updated metadata
+   */
+  async updateRefreshMetadata(dataSource, metadata) {
+    try {
+      const { data, error } = await this.client
+        .from('data_refresh_metadata')
+        .upsert({
+          data_source: dataSource,
+          last_refreshed_at: metadata.lastRefreshedAt || new Date().toISOString(),
+          refresh_status: metadata.refreshStatus || 'success',
+          refresh_error: metadata.refreshError || null,
+          records_updated: metadata.recordsUpdated || 0,
+          metadata: metadata.metadata || {}
+        }, {
+          onConflict: 'data_source'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        // If table doesn't exist, log warning but don't throw (migration may not be run yet)
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('Refresh metadata table does not exist yet. Run migration: 20251206000000_create_data_refresh_metadata_table.sql');
+          return null;
+        }
+        console.error('Supabase error updating refresh metadata:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      // If table doesn't exist, return null instead of throwing
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        console.warn('Refresh metadata table does not exist yet. Metadata will not be stored.');
+        return null;
+      }
+      console.error('Error updating refresh metadata:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Set refresh status to in_progress
+   * @param {string} dataSource - Data source identifier
+   */
+  async setRefreshInProgress(dataSource) {
+    try {
+      await this.client
+        .from('data_refresh_metadata')
+        .upsert({
+          data_source: dataSource,
+          refresh_status: 'in_progress',
+          last_refreshed_at: null
+        }, {
+          onConflict: 'data_source'
+        });
+    } catch (error) {
+      console.error('Error setting refresh in progress:', error);
+      // Don't throw - this is not critical
     }
   }
 }

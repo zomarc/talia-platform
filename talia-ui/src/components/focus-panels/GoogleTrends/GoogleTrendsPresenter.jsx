@@ -5,20 +5,28 @@
  */
 
 import React, { useMemo, useState } from 'react';
+import RefreshStatus from '../../common/RefreshStatus';
 
 const GoogleTrendsPresenter = ({ 
   trends, 
-  availableQueries, 
+  availableQueries = [],
+  selectedQueries: selectedQueriesProp = [],
   loading, 
-  error, 
-  onQueryChange, 
+  error,
+  refreshMetadata,
+  refreshing,
+  onRefresh,
+  onQueryChange,
+  onSelectedQueriesChange,
   onRegionChange,
   onDateRangeChange,
   onFetchAndStore,
   onBackfill,
   theme 
 }) => {
-  const [selectedQueries, setSelectedQueries] = useState(['cruise holidays']);
+  const [editingQuery, setEditingQuery] = useState(null);
+  const [editingQueryText, setEditingQueryText] = useState('');
+  const [newQueryText, setNewQueryText] = useState('');
   const [selectedRegion, setSelectedRegion] = useState('');
   const [dateRange, setDateRange] = useState({
     startDate: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 year ago
@@ -26,6 +34,36 @@ const GoogleTrendsPresenter = ({
   });
   const [backfilling, setBackfilling] = useState(false);
   const [sortBy, setSortBy] = useState('mostSearched'); // 'mostSearched' or 'alphabetical'
+  const [quickFilter, setQuickFilter] = useState(null);
+  
+  // Load collapse state from localStorage
+  const STORAGE_KEY_COLLAPSED = 'googleTrendsSearchTermsCollapsed';
+  const loadCollapsedState = () => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY_COLLAPSED);
+      return stored === 'true';
+    } catch (e) {
+      return false;
+    }
+  };
+  const [searchTermsCollapsed, setSearchTermsCollapsed] = useState(loadCollapsedState);
+  
+  // Save collapse state to localStorage
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_COLLAPSED, String(searchTermsCollapsed));
+    } catch (e) {
+      console.warn('[GoogleTrendsPresenter] Error saving collapse state:', e);
+    }
+  }, [searchTermsCollapsed]);
+  
+  // Use selectedQueries from props (managed by container with localStorage)
+  const selectedQueries = selectedQueriesProp.length > 0 ? selectedQueriesProp : ['cruise holidays'];
+  
+  // Check if all available queries are selected
+  const allQueriesSelected = availableQueries && Array.isArray(availableQueries) && availableQueries.length > 0 && 
+    availableQueries.every(q => selectedQueries.includes(q)) &&
+    selectedQueries.length === availableQueries.length;
   
   // Initialize date range from trends data when available
   React.useEffect(() => {
@@ -36,6 +74,7 @@ const GoogleTrendsPresenter = ({
       });
     }
   }, [trends]);
+  
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
@@ -165,9 +204,10 @@ const GoogleTrendsPresenter = ({
   }
 
   // Show empty state only if we're not loading and truly have no data
-  const hasData = trends && seriesWithData && seriesWithData.length > 0;
+  // Check if we have any series with data points
+  const hasData = trends && trends.series && trends.series.length > 0 && seriesWithData.length > 0;
   
-  if (!hasData && !loading) {
+  if (!hasData && !loading && !error) {
     return (
       <div style={{ 
         padding: '40px', 
@@ -356,6 +396,18 @@ const GoogleTrendsPresenter = ({
             </p>
           </div>
           
+          {/* Refresh Status */}
+          <div style={{ marginBottom: '16px' }}>
+            <RefreshStatus
+              lastRefreshTime={refreshMetadata?.lastRefreshedAt}
+              isLoading={refreshing || loading}
+              error={refreshMetadata?.refreshStatus === 'error' ? refreshMetadata?.refreshError : null}
+              onRefresh={onRefresh}
+              dataSource="Google Trends"
+              theme={theme}
+            />
+          </div>
+          
           {/* Sort Button */}
           {seriesWithData.length > 1 && (
             <div style={{ 
@@ -421,48 +473,395 @@ const GoogleTrendsPresenter = ({
             fontSize: '13px',
             color: theme?.colors?.textSecondary || '#999'
           }}>
-            {formatDate(trends.dateRange.from)} - {formatDate(trends.dateRange.to)}
+            Current Range: {formatDate(trends.dateRange.from)} - {formatDate(trends.dateRange.to)}
             {trends.region && ` (${trends.region || 'Worldwide'})`}
           </p>
         )}
         
-        {/* Date Range Filter */}
+        {/* Search Terms Selector */}
         <div style={{
           marginTop: '16px',
-          padding: '12px',
+          padding: '12px 16px',
           backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
-          borderRadius: '6px',
+          borderRadius: '8px',
           border: `1px solid ${theme?.colors?.border || '#333'}`
         }}>
           <div style={{
             display: 'flex',
-            gap: '12px',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            flexWrap: 'wrap'
+            marginBottom: '8px'
           }}>
             <label style={{
               fontSize: '13px',
               fontWeight: '500',
               color: theme?.colors?.foreground || '#e0e0e0'
             }}>
-              Filter by Date Range:
+              Search Terms ({selectedQueries.length} selected{allQueriesSelected ? ' - All' : ''}):
             </label>
+            <button
+              onClick={() => setSearchTermsCollapsed(!searchTermsCollapsed)}
+              style={{
+                padding: '4px 8px',
+                fontSize: '12px',
+                backgroundColor: 'transparent',
+                color: theme?.colors?.textSecondary || '#999',
+                border: `1px solid ${theme?.colors?.border || '#444'}`,
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              {searchTermsCollapsed ? '▼ Show' : '▲ Hide'}
+            </button>
+          </div>
+          {!searchTermsCollapsed && (
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '8px',
+              marginBottom: '12px'
+            }}>
+              {selectedQueries.map((query, idx) => (
+              <div
+                key={`${query}-${idx}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 10px',
+                  backgroundColor: theme?.colors?.background || '#1e1e1e',
+                  border: `1px solid ${theme?.colors?.border || '#444'}`,
+                  borderRadius: '4px',
+                  fontSize: '13px'
+                }}
+              >
+                {editingQuery === idx ? (
+                  <>
+                    <input
+                      type="text"
+                      value={editingQueryText}
+                      onChange={(e) => setEditingQueryText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const updated = [...selectedQueries];
+                          updated[idx] = editingQueryText.trim();
+                          if (updated[idx] && onSelectedQueriesChange) {
+                            onSelectedQueriesChange(updated);
+                          }
+                          setEditingQuery(null);
+                          setEditingQueryText('');
+                        } else if (e.key === 'Escape') {
+                          setEditingQuery(null);
+                          setEditingQueryText('');
+                        }
+                      }}
+                      autoFocus
+                      style={{
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        border: `2px solid ${theme?.colors?.border || '#555'}`,
+                        borderRadius: '6px',
+                        backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
+                        color: theme?.colors?.foreground || '#e0e0e0',
+                        outline: 'none',
+                        minWidth: '250px',
+                        fontWeight: '500'
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        const updated = [...selectedQueries];
+                        updated[idx] = editingQueryText.trim();
+                        if (updated[idx] && onSelectedQueriesChange) {
+                          onSelectedQueriesChange(updated);
+                        }
+                        setEditingQuery(null);
+                        setEditingQueryText('');
+                      }}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '11px',
+                        backgroundColor: theme?.colors?.primary || '#1976d2',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ✓
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingQuery(null);
+                        setEditingQueryText('');
+                      }}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '11px',
+                        backgroundColor: 'transparent',
+                        color: theme?.colors?.textSecondary || '#999',
+                        border: `1px solid ${theme?.colors?.border || '#444'}`,
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ color: theme?.colors?.foreground || '#e0e0e0' }}>
+                      {query}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setEditingQuery(idx);
+                        setEditingQueryText(query);
+                      }}
+                      style={{
+                        padding: '2px 6px',
+                        fontSize: '11px',
+                        backgroundColor: 'transparent',
+                        color: theme?.colors?.textSecondary || '#999',
+                        border: 'none',
+                        cursor: 'pointer',
+                        opacity: 0.7
+                      }}
+                      title="Edit query"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={() => {
+                        const updated = selectedQueries.filter((_, i) => i !== idx);
+                        if (onSelectedQueriesChange) {
+                          onSelectedQueriesChange(updated.length > 0 ? updated : ['cruise holidays']);
+                        }
+                      }}
+                      style={{
+                        padding: '2px 6px',
+                        fontSize: '11px',
+                        backgroundColor: 'transparent',
+                        color: theme?.colors?.textSecondary || '#999',
+                        border: 'none',
+                        cursor: 'pointer',
+                        opacity: 0.7
+                      }}
+                      title="Remove query"
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+              </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Add new query - always visible */}
+          <div style={{
+            display: 'flex',
+            gap: '8px',
+            alignItems: 'center',
+            flexWrap: 'wrap'
+          }}>
+            <select
+              value=""
+              onChange={(e) => {
+                if (e.target.value === '__ALL__') {
+                  // Select all available queries
+                  if (onSelectedQueriesChange && availableQueries && availableQueries.length > 0) {
+                    onSelectedQueriesChange([...availableQueries]);
+                  }
+                } else if (e.target.value && !selectedQueries.includes(e.target.value)) {
+                  const updated = [...selectedQueries, e.target.value];
+                  if (onSelectedQueriesChange) {
+                    onSelectedQueriesChange(updated);
+                  }
+                }
+                e.target.value = '';
+              }}
+              style={{
+                padding: '10px 14px',
+                fontSize: '14px',
+                border: `2px solid ${theme?.colors?.border || '#555'}`,
+                borderRadius: '6px',
+                backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
+                color: theme?.colors?.foreground || '#e0e0e0',
+                outline: 'none',
+                minWidth: '240px',
+                cursor: 'pointer',
+                fontWeight: '500'
+              }}
+            >
+              <option value="">Add search term...</option>
+              <option value="__ALL__" style={{ fontWeight: '600' }}>
+                ── Select All Available Queries ──
+              </option>
+              {(availableQueries || [])
+                .filter(q => !selectedQueries.includes(q))
+                .map(query => (
+                  <option key={query} value={query}>{query}</option>
+                ))}
+            </select>
+            <div style={{
+              display: 'flex',
+              gap: '6px',
+              alignItems: 'center'
+            }}>
+              <input
+                type="text"
+                value={newQueryText}
+                onChange={(e) => setNewQueryText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newQueryText.trim()) {
+                    if (!selectedQueries.includes(newQueryText.trim())) {
+                      const updated = [...selectedQueries, newQueryText.trim()];
+                      if (onSelectedQueriesChange) {
+                        onSelectedQueriesChange(updated);
+                      }
+                    }
+                    setNewQueryText('');
+                  }
+                }}
+                placeholder="Or type new query..."
+                style={{
+                  padding: '10px 14px',
+                  fontSize: '14px',
+                  border: `2px solid ${theme?.colors?.border || '#555'}`,
+                  borderRadius: '6px',
+                  backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
+                  color: theme?.colors?.foreground || '#e0e0e0',
+                  outline: 'none',
+                  minWidth: '240px',
+                  fontWeight: '500'
+                }}
+              />
+              {newQueryText.trim() && (
+                <button
+                  onClick={() => {
+                    if (!selectedQueries.includes(newQueryText.trim())) {
+                      const updated = [...selectedQueries, newQueryText.trim()];
+                      if (onSelectedQueriesChange) {
+                        onSelectedQueriesChange(updated);
+                      }
+                    }
+                    setNewQueryText('');
+                  }}
+                  disabled={!newQueryText.trim() || selectedQueries.includes(newQueryText.trim())}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    backgroundColor: (!newQueryText.trim() || selectedQueries.includes(newQueryText.trim()))
+                      ? (theme?.colors?.backgroundSecondary || '#2a2a2a')
+                      : (theme?.colors?.primary || '#1976d2'),
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: (!newQueryText.trim() || selectedQueries.includes(newQueryText.trim())) ? 'not-allowed' : 'pointer',
+                    opacity: (!newQueryText.trim() || selectedQueries.includes(newQueryText.trim())) ? 0.6 : 1
+                  }}
+                >
+                  Add
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* Date Range Filter */}
+        <div style={{
+          marginTop: '16px',
+          padding: '16px',
+          backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
+          borderRadius: '8px',
+          border: `1px solid ${theme?.colors?.border || '#333'}`
+        }}>
+          <label style={{
+            fontSize: '13px',
+            fontWeight: '500',
+            color: theme?.colors?.foreground || '#e0e0e0',
+            marginBottom: '12px',
+            display: 'block'
+          }}>
+            Date Range:
+          </label>
+          <div style={{
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'center',
+            flexWrap: 'wrap'
+          }}>
+            {/* Quick Filter Radio Buttons */}
+            {[
+              { value: 'last-month', label: 'Last Month', days: 30 },
+              { value: 'last-3-months', label: 'Last 3 Months', days: 90 },
+              { value: 'last-6-months', label: 'Last 6 Months', days: 180 },
+              { value: 'last-year', label: 'Last Year', days: 365 },
+              { value: 'all-time', label: 'All Time', days: null }
+            ].map((filter) => (
+              <label key={filter.value} style={{ display: 'flex', alignItems: 'center', cursor: loading ? 'not-allowed' : 'pointer', gap: '6px' }}>
+                <input
+                  type="radio"
+                  name="quick-date-filter"
+                  value={filter.value}
+                  checked={quickFilter === filter.value}
+                  disabled={loading}
+                  onChange={() => {
+                    setQuickFilter(filter.value);
+                    let startDate, endDate;
+                    if (filter.days === null) {
+                      startDate = '2020-01-01';
+                      endDate = new Date().toISOString().split('T')[0];
+                    } else {
+                      startDate = new Date(Date.now() - filter.days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                      endDate = new Date().toISOString().split('T')[0];
+                    }
+                    setDateRange({ startDate, endDate });
+                    // Only update local state - don't trigger refetch/refresh
+                    // The "Apply Filter" button will trigger the query
+                  }}
+                  style={{ cursor: loading ? 'not-allowed' : 'pointer' }}
+                />
+                <span style={{ 
+                  fontSize: '13px',
+                  color: theme?.colors?.foreground || '#e0e0e0',
+                  opacity: loading ? 0.6 : 1
+                }}>
+                  {filter.label}
+                </span>
+              </label>
+            ))}
+            
+            {/* Custom Date Range - inline with quick filters */}
+            <span style={{
+              fontSize: '13px',
+              color: theme?.colors?.textSecondary || '#999',
+              margin: '0 4px'
+            }}>
+              or
+            </span>
             <input
               type="date"
               value={dateRange.startDate}
               onChange={(e) => {
                 const newStartDate = e.target.value;
                 setDateRange(prev => ({ ...prev, startDate: newStartDate }));
+                setQuickFilter(null);
               }}
-              max={dateRange.endDate}
+              max={dateRange.endDate || new Date().toISOString().split('T')[0]}
               style={{
-                padding: '6px 10px',
-                fontSize: '13px',
-                border: `1px solid ${theme?.colors?.border || '#444'}`,
-                borderRadius: '4px',
-                backgroundColor: theme?.colors?.background || '#1e1e1e',
+                padding: '8px 12px',
+                fontSize: '14px',
+                border: `2px solid ${theme?.colors?.border || '#555'}`,
+                borderRadius: '6px',
+                backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
                 color: theme?.colors?.foreground || '#e0e0e0',
-                outline: 'none'
+                outline: 'none',
+                fontWeight: '500',
+                cursor: 'pointer',
+                minWidth: '140px'
               }}
             />
             <span style={{
@@ -477,28 +876,33 @@ const GoogleTrendsPresenter = ({
               onChange={(e) => {
                 const newEndDate = e.target.value;
                 setDateRange(prev => ({ ...prev, endDate: newEndDate }));
+                setQuickFilter(null);
               }}
               min={dateRange.startDate}
               max={new Date().toISOString().split('T')[0]}
               style={{
-                padding: '6px 10px',
-                fontSize: '13px',
-                border: `1px solid ${theme?.colors?.border || '#444'}`,
-                borderRadius: '4px',
-                backgroundColor: theme?.colors?.background || '#1e1e1e',
+                padding: '8px 12px',
+                fontSize: '14px',
+                border: `2px solid ${theme?.colors?.border || '#555'}`,
+                borderRadius: '6px',
+                backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
                 color: theme?.colors?.foreground || '#e0e0e0',
-                outline: 'none'
+                outline: 'none',
+                fontWeight: '500',
+                cursor: 'pointer',
+                minWidth: '140px'
               }}
             />
             <button
               onClick={() => {
                 if (onDateRangeChange && dateRange.startDate && dateRange.endDate) {
+                  setQuickFilter(null);
                   onDateRangeChange(dateRange.startDate, dateRange.endDate);
                 }
               }}
               disabled={loading || !dateRange.startDate || !dateRange.endDate}
               style={{
-                padding: '6px 16px',
+                padding: '8px 16px',
                 fontSize: '13px',
                 fontWeight: '500',
                 backgroundColor: (loading || !dateRange.startDate || !dateRange.endDate)
@@ -506,41 +910,13 @@ const GoogleTrendsPresenter = ({
                   : (theme?.colors?.primary || '#1976d2'),
                 color: '#fff',
                 border: 'none',
-                borderRadius: '4px',
+                borderRadius: '6px',
                 cursor: (loading || !dateRange.startDate || !dateRange.endDate) ? 'not-allowed' : 'pointer',
                 opacity: (loading || !dateRange.startDate || !dateRange.endDate) ? 0.6 : 1,
                 transition: 'all 0.2s'
               }}
             >
-              {loading ? 'Loading...' : 'Apply Filter'}
-            </button>
-            <button
-              onClick={() => {
-                const defaultStart = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-                const defaultEnd = new Date().toISOString().split('T')[0];
-                setDateRange({
-                  startDate: defaultStart,
-                  endDate: defaultEnd
-                });
-                if (onDateRangeChange) {
-                  onDateRangeChange(defaultStart, defaultEnd);
-                }
-              }}
-              disabled={loading}
-              style={{
-                padding: '6px 12px',
-                fontSize: '13px',
-                fontWeight: '400',
-                backgroundColor: 'transparent',
-                color: theme?.colors?.textSecondary || '#999',
-                border: `1px solid ${theme?.colors?.border || '#444'}`,
-                borderRadius: '4px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.6 : 1,
-                transition: 'all 0.2s'
-              }}
-            >
-              Reset
+              {loading ? 'Loading...' : 'Apply'}
             </button>
           </div>
         </div>
@@ -607,29 +983,48 @@ const GoogleTrendsPresenter = ({
                   height: '120px',
                   display: 'flex',
                   alignItems: 'flex-end',
-                  gap: '2px',
+                  gap: '1px',
                   padding: '8px',
                   backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
                   borderRadius: '4px',
-                  position: 'relative'
+                  position: 'relative',
+                  border: `1px solid ${theme?.colors?.border || '#444'}`,
+                  overflowX: 'auto', // Allow horizontal scroll for many data points
+                  overflowY: 'hidden'
                 }}>
                   {series.dataPoints.map((point, pointIdx) => {
-                    const heightPercent = maxScore > 0 
-                      ? (point.interestScore / maxScore) * 100 
+                    // Use series maxScore instead of global maxScore for better visibility
+                    const seriesMaxScore = series.maxScore || maxScore || 100;
+                    const heightPercent = seriesMaxScore > 0 
+                      ? (point.interestScore / seriesMaxScore) * 100 
                       : 0;
+                    const barHeight = Math.max(heightPercent, 1); // Minimum 1% height
+                    
+                    // Calculate bar width based on number of data points
+                    // For many points, use fixed width; for few points, use flex
+                    const totalPoints = series.dataPoints.length;
+                    const barWidth = totalPoints > 100 
+                      ? '2px' // Fixed width for many points
+                      : totalPoints > 50
+                      ? '3px'
+                      : totalPoints > 20
+                      ? '4px'
+                      : undefined; // Use flex for fewer points
                     
                     return (
                       <div
                         key={pointIdx}
                         style={{
-                          flex: 1,
-                          height: `${Math.max(heightPercent, 2)}%`,
+                          ...(barWidth ? { width: barWidth, flexShrink: 0 } : { flex: 1 }),
+                          height: `${barHeight}%`,
+                          minHeight: '2px', // Ensure bars are visible
+                          minWidth: '1px', // Minimum width for visibility
                           backgroundColor: color,
-                          borderRadius: '2px 2px 0 0',
-                          minHeight: '4px',
+                          borderRadius: barWidth ? '1px 1px 0 0' : '2px 2px 0 0',
                           transition: 'height 0.3s ease',
                           position: 'relative',
-                          opacity: 0.8
+                          opacity: 0.9,
+                          border: `1px solid ${color}33` // Subtle border for visibility
                         }}
                         title={`${formatDate(point.date)}: ${point.interestScore}/100`}
                       />
@@ -667,11 +1062,11 @@ const GoogleTrendsPresenter = ({
           color: theme?.colors?.textSecondary || '#999'
         }}>
           <strong style={{ color: theme?.colors?.foreground || '#e0e0e0' }}>
-            {trends.totalDataPoints}
+            {trends.totalDataPoints || 0}
           </strong> total data points across{' '}
           <strong style={{ color: theme?.colors?.foreground || '#e0e0e0' }}>
-            {trends.queries.length}
-          </strong> search {trends.queries.length === 1 ? 'query' : 'queries'}
+            {trends.queries?.length || 0}
+          </strong> search {(trends.queries?.length || 0) === 1 ? 'query' : 'queries'}
         </div>
       )}
     </div>

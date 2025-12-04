@@ -679,8 +679,8 @@ export const resolvers = {
 
         const { queries, startDate, endDate, region = '', granularity = 'daily', limit } = filters;
 
-        // Try to get data from database first
-        let dbData = await supabaseDataService.getGoogleTrendsData({
+        // ONLY query from local database - no API calls for date range filtering
+        const dbData = await supabaseDataService.getGoogleTrendsData({
           queries,
           startDate,
           endDate,
@@ -688,47 +688,32 @@ export const resolvers = {
           limit
         });
 
-        // If no data in DB or incomplete, fetch from Google Trends API
-        if (!dbData || dbData.length === 0) {
-          console.log(`[GoogleTrends Resolver] No data in DB for queries: ${queries.join(', ')}, fetching from API...`);
-          
-          // Fetch from Google Trends API
-          const apiData = await googleTrendsApiService.getHistoricalTrends(queries[0], {
-            startDate: startDate || new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            endDate: endDate || new Date().toISOString().split('T')[0],
-            region,
-            granularity
+        console.log(`[googleTrends resolver] Got ${dbData.length} data points for queries:`, queries);
+        if (dbData.length > 0) {
+          console.log(`[googleTrends resolver] Sample data point:`, {
+            id: dbData[0].id,
+            search_query: dbData[0].search_query,
+            date: dbData[0].date,
+            interest_score: dbData[0].interest_score
           });
-
-          // Store in database
-          if (apiData && apiData.length > 0) {
-            const trendsToStore = apiData.map(point => ({
-              search_query: queries[0],
-              date: point.date,
-              interest_score: point.interestScore,
-              region: region || ''
-            }));
-
-            await supabaseDataService.storeGoogleTrendsDataBatch(trendsToStore);
-            dbData = await supabaseDataService.getGoogleTrendsData({
-              queries: [queries[0]],
-              startDate,
-              endDate,
-              region
-            });
-          }
         }
 
         // Group data by query
         const seriesMap = new Map();
         
         dbData.forEach(point => {
-          if (!seriesMap.has(point.search_query)) {
-            seriesMap.set(point.search_query, []);
+          const searchQuery = point.search_query;
+          if (!searchQuery) {
+            console.warn(`[googleTrends resolver] Missing search_query for point:`, point.id);
+            return;
           }
-          seriesMap.get(point.search_query).push({
+          
+          if (!seriesMap.has(searchQuery)) {
+            seriesMap.set(searchQuery, []);
+          }
+          seriesMap.get(searchQuery).push({
             id: point.id,
-            searchQuery: point.search_query,
+            searchQuery: searchQuery,
             date: point.date,
             interestScore: point.interest_score,
             region: point.region || '',
@@ -737,6 +722,8 @@ export const resolvers = {
             updatedAt: point.updated_at
           });
         });
+
+        console.log(`[googleTrends resolver] Grouped into ${seriesMap.size} series. Keys:`, Array.from(seriesMap.keys()));
 
         // Build series with statistics
         const series = queries.map(query => {
@@ -774,8 +761,9 @@ export const resolvers = {
 
     googleTrendsQueries: async () => {
       try {
-        const queries = await supabaseDataService.getGoogleTrendsQueries();
-        return queries;
+        // Get search terms from search_terms table
+        const searchTerms = await supabaseDataService.getGoogleTrendsSearchTerms();
+        return searchTerms.map(st => st.searchTerm);
       } catch (error) {
         console.error('Error fetching Google Trends queries:', error);
         throw error;
@@ -801,6 +789,52 @@ export const resolvers = {
       } catch (error) {
         console.error('Error fetching queries by category:', error);
         throw error;
+      }
+    },
+
+    googleTrendsSearchTerms: async () => {
+      try {
+        return await supabaseDataService.getGoogleTrendsSearchTerms();
+      } catch (error) {
+        console.error('Error fetching search terms:', error);
+        throw error;
+      }
+    },
+
+    refreshMetadata: async (parent: any, args: any) => {
+      const { dataSource } = args;
+      try {
+        const metadata = await supabaseDataService.getRefreshMetadata(dataSource);
+        if (!metadata) {
+          // Return default metadata if not found (table may not exist yet)
+          return {
+            dataSource,
+            lastRefreshedAt: null,
+            refreshStatus: 'idle',
+            refreshError: null,
+            recordsUpdated: 0,
+            metadata: {}
+          };
+        }
+        return {
+          dataSource: metadata.data_source,
+          lastRefreshedAt: metadata.last_refreshed_at,
+          refreshStatus: metadata.refresh_status || 'idle',
+          refreshError: metadata.refresh_error,
+          recordsUpdated: metadata.records_updated || 0,
+          metadata: metadata.metadata || {}
+        };
+      } catch (error: any) {
+        // Don't throw - return default metadata instead
+        console.warn('Error fetching refresh metadata (table may not exist yet):', error.message);
+        return {
+          dataSource,
+          lastRefreshedAt: null,
+          refreshStatus: 'idle',
+          refreshError: null,
+          recordsUpdated: 0,
+          metadata: {}
+        };
       }
     },
 
@@ -855,7 +889,7 @@ export const resolvers = {
           };
           
           // Add all months with their values
-          Array.from(allMonths).sort().forEach(month => {
+          Array.from(allMonths).sort().forEach((month: string) => {
             const guestCount = group.months.get(month) || 0;
             row.months.push({
               month,
@@ -1798,6 +1832,110 @@ export const resolvers = {
       }
     },
 
+    refreshGoogleTrends: async (parent: any, args: any) => {
+      const { queries = [], startDate, endDate, region = '' } = args;
+      const dataSource = 'google_trends';
+      
+      try {
+        // Set refresh status to in_progress
+        await supabaseDataService.setRefreshInProgress(dataSource);
+        
+        // Get queries to refresh - use provided queries or all active search terms from database
+        let queriesToRefresh = queries;
+        if (!queriesToRefresh || queriesToRefresh.length === 0) {
+          const searchTerms = await supabaseDataService.getGoogleTrendsSearchTerms();
+          queriesToRefresh = searchTerms
+            .filter(term => term.isActive)
+            .map(term => term.searchTerm);
+        }
+        
+        if (!queriesToRefresh || queriesToRefresh.length === 0) {
+          queriesToRefresh = ['cruise holidays']; // Default fallback
+        }
+        
+        console.log(`[refreshGoogleTrends] Refreshing ${queriesToRefresh.length} search terms:`, queriesToRefresh.slice(0, 5));
+        
+        const defaultStartDate = startDate || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const defaultEndDate = endDate || new Date().toISOString().split('T')[0];
+        
+        let totalStored = 0;
+        let successCount = 0;
+        let errorCount = 0;
+        const errors: string[] = [];
+        
+        for (const query of queriesToRefresh) {
+          try {
+            console.log(`[refreshGoogleTrends] Fetching trends for: "${query}"`);
+            // Fetch fresh data from Google Trends API
+            const trends = await googleTrendsApiService.getHistoricalTrends(query, {
+              startDate: defaultStartDate,
+              endDate: defaultEndDate,
+              region,
+              granularity: 'monthly'
+            });
+
+            if (trends && trends.length > 0) {
+              console.log(`[refreshGoogleTrends] Got ${trends.length} data points for "${query}"`);
+              const trendsToStore = trends.map(point => ({
+                search_query: query,
+                date: point.date,
+                interest_score: point.interestScore,
+                region: region || ''
+              }));
+
+              // Store/update in database (upsert via unique constraint)
+              const stored = await supabaseDataService.storeGoogleTrendsDataBatch(trendsToStore);
+              console.log(`[refreshGoogleTrends] Stored ${stored?.length || 0} records for "${query}"`);
+              totalStored += trends.length;
+              successCount++;
+            } else {
+              console.log(`[refreshGoogleTrends] No data returned for "${query}"`);
+            }
+
+            // Rate limiting
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (error: any) {
+            errorCount++;
+            const errorMsg = `Error refreshing "${query}": ${error.message}`;
+            errors.push(errorMsg);
+            console.error(`[refreshGoogleTrends] ${errorMsg}`, error);
+            // Continue with other queries
+          }
+        }
+        
+        const refreshTime = new Date().toISOString();
+        
+        // Update refresh metadata
+        await supabaseDataService.updateRefreshMetadata(dataSource, {
+          lastRefreshedAt: refreshTime,
+          refreshStatus: errorCount > 0 && successCount === 0 ? 'error' : 'success',
+          refreshError: errors.length > 0 ? errors.join('; ') : null,
+          recordsUpdated: totalStored
+        });
+        
+        return {
+          success: successCount > 0,
+          message: `Refreshed ${successCount} queries. ${totalStored} data points updated.${errors.length > 0 ? ` ${errorCount} errors.` : ''}`,
+          lastRefreshedAt: refreshTime,
+          recordsUpdated: totalStored,
+          error: errors.length > 0 ? errors.slice(0, 3).join('; ') : null
+        };
+      } catch (error: any) {
+        const refreshTime = new Date().toISOString();
+        
+        // Update refresh metadata with error
+        await supabaseDataService.updateRefreshMetadata(dataSource, {
+          lastRefreshedAt: refreshTime,
+          refreshStatus: 'error',
+          refreshError: error.message,
+          recordsUpdated: 0
+        });
+        
+        console.error('Error refreshing Google Trends:', error);
+        throw new Error(`Failed to refresh Google Trends: ${error.message}`);
+      }
+    },
+
     restartServer: async () => {
       try {
         console.log('🔄 Restart request received from UI...');
@@ -1841,6 +1979,36 @@ export const resolvers = {
       } catch (error: any) {
         console.error('Error restarting server:', error);
         throw new Error(`Failed to restart server: ${error.message}`);
+      }
+    },
+
+    createGoogleTrendsSearchTerm: async (parent: any, args: any) => {
+      const { input } = args;
+      try {
+        return await supabaseDataService.createGoogleTrendsSearchTerm(input);
+      } catch (error) {
+        console.error('Error creating search term:', error);
+        throw error;
+      }
+    },
+
+    updateGoogleTrendsSearchTerm: async (parent: any, args: any) => {
+      const { id, input } = args;
+      try {
+        return await supabaseDataService.updateGoogleTrendsSearchTerm(id, input);
+      } catch (error) {
+        console.error('Error updating search term:', error);
+        throw error;
+      }
+    },
+
+    deleteGoogleTrendsSearchTerm: async (parent: any, args: any) => {
+      const { id } = args;
+      try {
+        return await supabaseDataService.deleteGoogleTrendsSearchTerm(id);
+      } catch (error) {
+        console.error('Error deleting search term:', error);
+        throw error;
       }
     }
   },

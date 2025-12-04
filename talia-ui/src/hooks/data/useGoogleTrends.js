@@ -52,9 +52,11 @@ export const useGoogleTrends = (filters = {}) => {
     const init = async () => {
       try {
         const queries = await fetchQueries();
-        // Use available queries if we have any, otherwise use default from filters
-        const queriesToFetch = queries.length > 0 ? queries : (filters.queries || ['cruise holidays']);
-        console.log('[useGoogleTrends] Initializing with queries:', queriesToFetch);
+        // Use queries from filters if provided, otherwise use available queries, otherwise default
+        const queriesToFetch = (filters.queries && filters.queries.length > 0) 
+          ? filters.queries 
+          : (queries.length > 0 ? queries : ['cruise holidays']);
+        console.log('[useGoogleTrends] Initializing with queries:', queriesToFetch.length, 'queries');
         await fetchTrends({ queries: queriesToFetch });
       } catch (err) {
         console.error('[useGoogleTrends] Initialization error:', err);

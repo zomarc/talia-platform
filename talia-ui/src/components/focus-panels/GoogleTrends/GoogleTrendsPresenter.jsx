@@ -76,22 +76,20 @@ const GoogleTrendsPresenter = ({
   }, [trends]);
   
 
-  // Memoize formatDate to avoid recreating on every render
-  const formatDate = useMemo(() => {
-    const cache = new Map();
-    return (dateString) => {
-      if (!dateString) return '';
-      if (cache.has(dateString)) return cache.get(dateString);
-      try {
-        const date = new Date(dateString);
-        const formatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        cache.set(dateString, formatted);
-        return formatted;
-      } catch {
-        return dateString;
-      }
-    };
-  }, []);
+  // Optimized date formatter with caching
+  const dateCache = useMemo(() => new Map(), []);
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    if (dateCache.has(dateString)) return dateCache.get(dateString);
+    try {
+      const date = new Date(dateString);
+      const formatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      dateCache.set(dateString, formatted);
+      return formatted;
+    } catch {
+      return dateString;
+    }
+  };
 
   // Color palette for different queries
   const colors = [

@@ -409,62 +409,109 @@ const GoogleTrendsPresenter = ({
             />
           </div>
           
-          {/* Sort Button */}
+          {/* Sort and Top X Controls */}
           {seriesWithData.length > 1 && (
             <div style={{ 
               display: 'flex',
-              gap: '8px',
-              alignItems: 'center'
+              gap: '16px',
+              alignItems: 'center',
+              flexWrap: 'wrap'
             }}>
-              <label style={{
-                fontSize: '13px',
-                color: theme?.colors?.textSecondary || '#999',
-                marginRight: '4px'
+              {/* Sort Controls */}
+              <div style={{ 
+                display: 'flex',
+                gap: '8px',
+                alignItems: 'center'
               }}>
-                Sort:
-              </label>
-              <button
-                onClick={() => setSortBy('mostSearched')}
-                style={{
-                  padding: '6px 12px',
+                <label style={{
                   fontSize: '13px',
-                  fontWeight: sortBy === 'mostSearched' ? '600' : '400',
-                  backgroundColor: sortBy === 'mostSearched'
-                    ? (theme?.colors?.primary || '#1976d2')
-                    : (theme?.colors?.backgroundSecondary || '#2a2a2a'),
-                  color: sortBy === 'mostSearched' ? '#fff' : (theme?.colors?.foreground || '#e0e0e0'),
-                  border: `1px solid ${sortBy === 'mostSearched' 
-                    ? (theme?.colors?.primary || '#1976d2')
-                    : (theme?.colors?.border || '#444')}`,
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                title="Sort by average interest score (most searched first)"
-              >
-                Most Searched
-              </button>
-              <button
-                onClick={() => setSortBy('alphabetical')}
-                style={{
-                  padding: '6px 12px',
+                  color: theme?.colors?.textSecondary || '#999',
+                  marginRight: '4px'
+                }}>
+                  Sort:
+                </label>
+                <button
+                  onClick={() => setSortBy('mostSearched')}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '13px',
+                    fontWeight: sortBy === 'mostSearched' ? '600' : '400',
+                    backgroundColor: sortBy === 'mostSearched'
+                      ? (theme?.colors?.primary || '#1976d2')
+                      : (theme?.colors?.backgroundSecondary || '#2a2a2a'),
+                    color: sortBy === 'mostSearched' ? '#fff' : (theme?.colors?.foreground || '#e0e0e0'),
+                    border: `1px solid ${sortBy === 'mostSearched' 
+                      ? (theme?.colors?.primary || '#1976d2')
+                      : (theme?.colors?.border || '#444')}`,
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  title="Sort by average interest score (most searched first)"
+                >
+                  Most Searched
+                </button>
+                <button
+                  onClick={() => setSortBy('alphabetical')}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '13px',
+                    fontWeight: sortBy === 'alphabetical' ? '600' : '400',
+                    backgroundColor: sortBy === 'alphabetical'
+                      ? (theme?.colors?.primary || '#1976d2')
+                      : (theme?.colors?.backgroundSecondary || '#2a2a2a'),
+                    color: sortBy === 'alphabetical' ? '#fff' : (theme?.colors?.foreground || '#e0e0e0'),
+                    border: `1px solid ${sortBy === 'alphabetical' 
+                      ? (theme?.colors?.primary || '#1976d2')
+                      : (theme?.colors?.border || '#444')}`,
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  title="Sort alphabetically by query name"
+                >
+                  A-Z
+                </button>
+              </div>
+              
+              {/* Top X Filter */}
+              <div style={{ 
+                display: 'flex',
+                gap: '8px',
+                alignItems: 'center'
+              }}>
+                <label style={{
                   fontSize: '13px',
-                  fontWeight: sortBy === 'alphabetical' ? '600' : '400',
-                  backgroundColor: sortBy === 'alphabetical'
-                    ? (theme?.colors?.primary || '#1976d2')
-                    : (theme?.colors?.backgroundSecondary || '#2a2a2a'),
-                  color: sortBy === 'alphabetical' ? '#fff' : (theme?.colors?.foreground || '#e0e0e0'),
-                  border: `1px solid ${sortBy === 'alphabetical' 
-                    ? (theme?.colors?.primary || '#1976d2')
-                    : (theme?.colors?.border || '#444')}`,
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                title="Sort alphabetically by query name"
-              >
-                A-Z
-              </button>
+                  color: theme?.colors?.textSecondary || '#999',
+                  marginRight: '4px'
+                }}>
+                  Show Top:
+                </label>
+                <select
+                  value={topLimit === null ? 'all' : topLimit.toString()}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setTopLimit(value === 'all' ? null : parseInt(value, 10));
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '13px',
+                    backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
+                    color: theme?.colors?.foreground || '#e0e0e0',
+                    border: `1px solid ${theme?.colors?.border || '#444'}`,
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    outline: 'none'
+                  }}
+                >
+                  <option value="all">All</option>
+                  <option value="5">Top 5</option>
+                  <option value="10">Top 10</option>
+                  <option value="15">Top 15</option>
+                  <option value="20">Top 20</option>
+                  <option value="25">Top 25</option>
+                </select>
+              </div>
             </div>
           )}
         </div>

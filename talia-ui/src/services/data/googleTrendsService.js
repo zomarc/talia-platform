@@ -364,6 +364,52 @@ class GoogleTrendsService {
   }
 
   /**
+   * Create a new search term in the database
+   * @param {Object} input - Search term input
+   * @param {string} input.searchTerm - The search term
+   * @param {string} input.category - Optional category
+   * @param {boolean} input.isActive - Whether the term is active
+   * @returns {Promise<Object>} Created search term
+   */
+  async createSearchTerm(input) {
+    const graphqlQuery = `
+      mutation CreateGoogleTrendsSearchTerm($input: GoogleTrendsSearchTermInput!) {
+        createGoogleTrendsSearchTerm(input: $input) {
+          id
+          searchTerm
+          category
+          isActive
+          createdAt
+          updatedAt
+        }
+      }
+    `;
+
+    const variables = { input };
+
+    try {
+      const response = await fetch(this.graphqlUrl, {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify({ query: graphqlQuery, variables }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+
+      return result.data.createGoogleTrendsSearchTerm;
+    } catch (error) {
+      throw new Error(`Failed to create search term: ${error.message}`);
+    }
+  }
+
+  /**
    * Refresh Google Trends data
    * @param {Object} options - Refresh options
    * @param {Array<string>} options.queries - Queries to refresh (optional, uses all if not provided)

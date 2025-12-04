@@ -127,6 +127,24 @@ export const tableSources = {
     type: 'application',
     dateColumns: ['created_at', 'updated_at'],
     syncType: null
+  },
+  google_trends_data: {
+    source: null, // Google Trends API
+    type: 'application',
+    dateColumns: ['date', 'created_at', 'updated_at'],
+    syncType: null
+  },
+  google_trends_search_terms: {
+    source: null, // Application table
+    type: 'application',
+    dateColumns: ['created_at', 'updated_at'],
+    syncType: null
+  },
+  data_refresh_metadata: {
+    source: null, // System table
+    type: 'system',
+    dateColumns: ['last_refreshed_at', 'created_at', 'updated_at'],
+    syncType: null
   }
 };
 

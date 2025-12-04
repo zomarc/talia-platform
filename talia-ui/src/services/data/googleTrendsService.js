@@ -300,6 +300,154 @@ class GoogleTrendsService {
       throw error;
     }
   }
+
+  /**
+   * Get refresh metadata for Google Trends
+   * @returns {Promise<Object>} Refresh metadata
+   */
+  async getRefreshMetadata() {
+    const graphqlQuery = `
+      query GetRefreshMetadata($dataSource: String!) {
+        refreshMetadata(dataSource: $dataSource) {
+          dataSource
+          lastRefreshedAt
+          refreshStatus
+          refreshError
+          recordsUpdated
+          metadata
+        }
+      }
+    `;
+
+    const variables = {
+      dataSource: 'google_trends'
+    };
+
+    try {
+      const response = await fetch(this.graphqlUrl, {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify({ query: graphqlQuery, variables }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.errors) {
+        console.error('[GoogleTrendsService] GraphQL errors:', result.errors);
+        throw new Error(`GraphQL errors: ${JSON.stringify(result.errors, null, 2)}`);
+      }
+
+      return result.data?.refreshMetadata || {
+        dataSource: 'google_trends',
+        lastRefreshedAt: null,
+        refreshStatus: 'idle',
+        refreshError: null,
+        recordsUpdated: 0,
+        metadata: {}
+      };
+    } catch (error) {
+      console.error('[GoogleTrendsService] Error fetching refresh metadata:', error);
+      // Return default metadata on error
+      return {
+        dataSource: 'google_trends',
+        lastRefreshedAt: null,
+        refreshStatus: 'idle',
+        refreshError: null,
+        recordsUpdated: 0,
+        metadata: {}
+      };
+    }
+  }
+
+  /**
+   * Refresh Google Trends data
+   * @param {Object} options - Refresh options
+   * @param {Array<string>} options.queries - Queries to refresh (optional, uses all if not provided)
+   * @param {string} options.startDate - Start date (YYYY-MM-DD)
+   * @param {string} options.endDate - End date (YYYY-MM-DD)
+   * @param {string} options.region - Geographic region
+   * @returns {Promise<Object>} Refresh result
+   */
+  async refreshTrends(options = {}) {
+    const {
+      queries = [],
+      startDate,
+      endDate,
+      region = ''
+    } = options;
+
+    const graphqlQuery = `
+      mutation RefreshGoogleTrends($queries: [String!], $startDate: String, $endDate: String, $region: String) {
+        refreshGoogleTrends(queries: $queries, startDate: $startDate, endDate: $endDate, region: $region) {
+          success
+          message
+          lastRefreshedAt
+          recordsUpdated
+          error
+        }
+      }
+    `;
+
+    const variables = {
+      ...(queries && queries.length > 0 && { queries }),
+      ...(startDate && { startDate }),
+      ...(endDate && { endDate }),
+      ...(region && { region })
+    };
+    
+    // Remove undefined values
+    Object.keys(variables).forEach(key => {
+      if (variables[key] === undefined) {
+        delete variables[key];
+      }
+    });
+
+    try {
+      const response = await fetch(this.graphqlUrl, {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify({ query: graphqlQuery, variables }),
+      });
+
+      if (!response.ok) {
+        // Try to get error details from response
+        let errorDetails = `HTTP error! status: ${response.status}`;
+        try {
+          const errorText = await response.text();
+          try {
+            const errorJson = JSON.parse(errorText);
+            if (errorJson.errors) {
+              errorDetails += ` - ${JSON.stringify(errorJson.errors)}`;
+            } else if (errorJson.message) {
+              errorDetails += ` - ${errorJson.message}`;
+            }
+          } catch (parseError) {
+            errorDetails += ` - ${errorText.substring(0, 200)}`;
+          }
+        } catch (e) {
+          // Couldn't parse error response
+        }
+        throw new Error(errorDetails);
+      }
+
+      const result = await response.json();
+
+      if (result.errors) {
+        console.error('[GoogleTrendsService] GraphQL errors:', result.errors);
+        const errorMessages = result.errors.map(e => e.message).join('; ');
+        throw new Error(`GraphQL errors: ${errorMessages}`);
+      }
+
+      return result.data?.refreshGoogleTrends;
+    } catch (error) {
+      console.error('[GoogleTrendsService] Error refreshing trends:', error);
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance

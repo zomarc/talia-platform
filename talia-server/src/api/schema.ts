@@ -625,6 +625,22 @@ export const typeDefs = `#graphql
     limit: Int # Limit number of data points
   }
 
+  type GoogleTrendsSearchTerm {
+    id: Int!
+    searchTerm: String!
+    category: String
+    isActive: Boolean!
+    createdAt: String!
+    updatedAt: String!
+    lastQueriedDate: String
+  }
+
+  input GoogleTrendsSearchTermInput {
+    searchTerm: String!
+    category: String
+    isActive: Boolean
+  }
+
   # Input Types for Mutations
   input FocusInput {
     name: String!
@@ -709,6 +725,10 @@ export const typeDefs = `#graphql
     googleTrendsQueries: [String!]! # Get list of queries we have trends data for
     googleTrendsCategories: [String!]! # Get list of available query categories
     googleTrendsQueriesByCategory(category: String!): [String!]! # Get queries for a specific category
+    googleTrendsSearchTerms: [GoogleTrendsSearchTerm!]! # Get editable search terms
+    
+    # Data Refresh Metadata
+    refreshMetadata(dataSource: String!): RefreshMetadata
     
     # Booking Profile
     bookingProfile(sailCode: String!): BookingProfile
@@ -769,6 +789,12 @@ export const typeDefs = `#graphql
     backfillGoogleTrends(queries: [String!]!, startDate: String, endDate: String, region: String): BackfillResult!
     fetchTrendsForCategory(category: String!, startDate: String, endDate: String, region: String): BackfillResult!
     fetchTrendsForAllQueries(startDate: String, endDate: String, region: String): BackfillResult!
+    refreshGoogleTrends(queries: [String!], startDate: String, endDate: String, region: String): RefreshResult!
+    
+    # Google Trends Search Terms Management
+    createGoogleTrendsSearchTerm(input: GoogleTrendsSearchTermInput!): GoogleTrendsSearchTerm!
+    updateGoogleTrendsSearchTerm(id: Int!, input: GoogleTrendsSearchTermInput!): GoogleTrendsSearchTerm!
+    deleteGoogleTrendsSearchTerm(id: Int!): Boolean!
     
     # Server Management
     restartServer: Boolean!
@@ -804,6 +830,24 @@ export const typeDefs = `#graphql
     server: String!
     database: String
     lastChecked: String
+    error: String
+  }
+
+  # Data Refresh Metadata
+  type RefreshMetadata {
+    dataSource: String!
+    lastRefreshedAt: String
+    refreshStatus: String! # 'idle', 'in_progress', 'success', 'error'
+    refreshError: String
+    recordsUpdated: Int
+    metadata: JSON
+  }
+
+  type RefreshResult {
+    success: Boolean!
+    message: String!
+    lastRefreshedAt: String!
+    recordsUpdated: Int!
     error: String
   }
 

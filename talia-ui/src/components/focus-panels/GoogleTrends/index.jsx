@@ -4,9 +4,10 @@
  * What people are searching for (not our searches)
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useGoogleTrends } from '../../../hooks/data/useGoogleTrends';
+import googleTrendsService from '../../../services/data/googleTrendsService';
 import GoogleTrendsPresenter from './GoogleTrendsPresenter';
 
 const STORAGE_KEY = 'googleTrendsSelectedQueries';
@@ -45,6 +46,56 @@ const GoogleTrendsContainer = () => {
     queries: selectedQueries,
   });
 
+  // Refresh metadata state
+  const [refreshMetadata, setRefreshMetadata] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Load refresh metadata
+  const loadRefreshMetadata = useCallback(async () => {
+    try {
+      const metadata = await googleTrendsService.getRefreshMetadata();
+      setRefreshMetadata(metadata);
+    } catch (err) {
+      console.error('[GoogleTrendsContainer] Error loading refresh metadata:', err);
+    }
+  }, []);
+
+  // Load refresh metadata on mount
+  useEffect(() => {
+    loadRefreshMetadata();
+  }, [loadRefreshMetadata]);
+
+  // Handle refresh
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return;
+    
+    setRefreshing(true);
+    try {
+      // Use current selected queries and date range
+      const startDate = trends?.dateRange?.from;
+      const endDate = trends?.dateRange?.to;
+      
+      const result = await googleTrendsService.refreshTrends({
+        queries: selectedQueries.length > 0 ? selectedQueries : undefined,
+        startDate,
+        endDate
+      });
+
+      // Update refresh metadata
+      await loadRefreshMetadata();
+
+      // Refetch trends data
+      await refetch({ queries: selectedQueries, startDate, endDate });
+
+    } catch (err) {
+      console.error('[GoogleTrendsContainer] Error refreshing:', err);
+      // Still reload metadata to show error status
+      await loadRefreshMetadata();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshing, selectedQueries, trends, refetch, loadRefreshMetadata]);
+
   // Update selected queries when availableQueries loads - use all available queries if we only have the default
   useEffect(() => {
     if (availableQueries.length > 0 && selectedQueries.length === 1 && selectedQueries[0] === 'cruise holidays') {
@@ -56,21 +107,6 @@ const GoogleTrendsContainer = () => {
     }
   }, [availableQueries, selectedQueries]);
 
-  // Log state for debugging
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[GoogleTrendsContainer] State:', {
-        hasTrends: !!trends,
-        seriesCount: trends?.series?.length,
-        totalDataPoints: trends?.totalDataPoints,
-        availableQueries: availableQueries.length,
-        selectedQueries: selectedQueries.length,
-        selectedQueriesList: selectedQueries,
-        loading,
-        error: error?.message
-      });
-    }
-  }, [trends, availableQueries, selectedQueries, loading, error]);
 
   const handleQueryChange = async (queries) => {
     setSelectedQueriesState(queries);
@@ -87,11 +123,11 @@ const GoogleTrendsContainer = () => {
   };
 
   const handleDateRangeChange = async (startDate, endDate) => {
-    // Preserve currently selected queries when filtering by date
-    const queriesToUse = selectedQueries.length > 0 
+    // CRITICAL: Always use current selectedQueries, explicitly pass them to ensure they're preserved
+    const queriesToUse = selectedQueries && selectedQueries.length > 0 
       ? selectedQueries 
-      : (availableQueries.length > 0 ? availableQueries : ['cruise holidays']);
-    console.log('[GoogleTrendsContainer] Date range change - preserving queries:', queriesToUse.length, 'queries');
+      : (availableQueries && availableQueries.length > 0 ? availableQueries : ['cruise holidays']);
+    // Explicitly pass queries to override any stale filters in the hook
     await refetch({ queries: queriesToUse, startDate, endDate });
   };
 
@@ -123,6 +159,9 @@ const GoogleTrendsContainer = () => {
       selectedQueries={selectedQueries}
       loading={loading}
       error={error}
+      refreshMetadata={refreshMetadata}
+      refreshing={refreshing}
+      onRefresh={handleRefresh}
       onQueryChange={handleQueryChange}
       onSelectedQueriesChange={handleSelectedQueriesChange}
       onRegionChange={handleRegionChange}

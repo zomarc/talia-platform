@@ -688,24 +688,13 @@ export const resolvers = {
           limit
         });
 
-        console.log(`[googleTrends resolver] Got ${dbData.length} data points for queries:`, queries);
-        if (dbData.length > 0) {
-          console.log(`[googleTrends resolver] Sample data point:`, {
-            id: dbData[0].id,
-            search_query: dbData[0].search_query,
-            date: dbData[0].date,
-            interest_score: dbData[0].interest_score
-          });
-        }
-
         // Group data by query
         const seriesMap = new Map();
         
         dbData.forEach(point => {
           const searchQuery = point.search_query;
           if (!searchQuery) {
-            console.warn(`[googleTrends resolver] Missing search_query for point:`, point.id);
-            return;
+            return; // Skip points without search_query
           }
           
           if (!seriesMap.has(searchQuery)) {
@@ -722,8 +711,6 @@ export const resolvers = {
             updatedAt: point.updated_at
           });
         });
-
-        console.log(`[googleTrends resolver] Grouped into ${seriesMap.size} series. Keys:`, Array.from(seriesMap.keys()));
 
         // Build series with statistics
         const series = queries.map(query => {
@@ -1853,8 +1840,6 @@ export const resolvers = {
           queriesToRefresh = ['cruise holidays']; // Default fallback
         }
         
-        console.log(`[refreshGoogleTrends] Refreshing ${queriesToRefresh.length} search terms:`, queriesToRefresh.slice(0, 5));
-        
         const defaultStartDate = startDate || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         const defaultEndDate = endDate || new Date().toISOString().split('T')[0];
         
@@ -1865,7 +1850,6 @@ export const resolvers = {
         
         for (const query of queriesToRefresh) {
           try {
-            console.log(`[refreshGoogleTrends] Fetching trends for: "${query}"`);
             // Fetch fresh data from Google Trends API
             const trends = await googleTrendsApiService.getHistoricalTrends(query, {
               startDate: defaultStartDate,
@@ -1875,7 +1859,6 @@ export const resolvers = {
             });
 
             if (trends && trends.length > 0) {
-              console.log(`[refreshGoogleTrends] Got ${trends.length} data points for "${query}"`);
               const trendsToStore = trends.map(point => ({
                 search_query: query,
                 date: point.date,
@@ -1884,12 +1867,9 @@ export const resolvers = {
               }));
 
               // Store/update in database (upsert via unique constraint)
-              const stored = await supabaseDataService.storeGoogleTrendsDataBatch(trendsToStore);
-              console.log(`[refreshGoogleTrends] Stored ${stored?.length || 0} records for "${query}"`);
+              await supabaseDataService.storeGoogleTrendsDataBatch(trendsToStore);
               totalStored += trends.length;
               successCount++;
-            } else {
-              console.log(`[refreshGoogleTrends] No data returned for "${query}"`);
             }
 
             // Rate limiting

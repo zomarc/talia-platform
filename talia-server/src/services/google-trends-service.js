@@ -57,8 +57,20 @@ class GoogleTrendsService {
         geo: region
       });
 
+      // Check if response is HTML (error page) instead of JSON
+      if (typeof response === 'string' && response.trim().startsWith('<')) {
+        console.error(`[GoogleTrendsService] Received HTML instead of JSON for query "${query}". Response preview:`, response.substring(0, 200));
+        throw new Error('Google Trends API returned an error page. This may be due to rate limiting or API changes.');
+      }
+
       // Parse the response
-      const data = JSON.parse(response);
+      let data;
+      try {
+        data = typeof response === 'string' ? JSON.parse(response) : response;
+      } catch (parseError) {
+        console.error(`[GoogleTrendsService] Failed to parse response for query "${query}". Response preview:`, typeof response === 'string' ? response.substring(0, 200) : response);
+        throw new Error(`Failed to parse Google Trends API response: ${parseError.message}`);
+      }
       
       if (!data.default || !data.default.timelineData) {
         console.warn(`[GoogleTrendsService] No timeline data for query: ${query}`);

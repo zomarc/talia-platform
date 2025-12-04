@@ -1700,7 +1700,6 @@ export class SupabaseDataService {
       }
 
       if (!data || data.length === 0) {
-        console.log(`[getGoogleTrendsData] No data found for queries: ${JSON.stringify(filters.queries)}`);
         return [];
       }
 
@@ -1712,10 +1711,6 @@ export class SupabaseDataService {
         const searchTerm = searchTermObj?.search_term || item.search_term || item.search_query;
         const category = searchTermObj?.category || item.category;
         
-        if (!searchTerm) {
-          console.warn('[getGoogleTrendsData] Missing search_term for item:', item.id);
-        }
-        
         return {
           id: item.id,
           search_term_id: item.search_term_id,
@@ -1725,12 +1720,9 @@ export class SupabaseDataService {
           category: category,
           created_at: item.created_at,
           updated_at: item.updated_at,
-          search_query: searchTerm // Ensure search_query is set for resolver compatibility
+          search_query: searchTerm || '' // Ensure search_query is set for resolver compatibility
         };
       });
-
-      console.log(`[getGoogleTrendsData] Returning ${flattenedData.length} data points. Sample search_queries:`, 
-        [...new Set(flattenedData.map(d => d.search_query))].slice(0, 5));
 
       return flattenedData;
     } catch (error) {

@@ -17,8 +17,23 @@ export const useGoogleTrends = (filters = {}) => {
     setError(null);
 
     try {
+      // CRITICAL: When queries are explicitly passed in newFilters, they MUST override old filters
+      // This ensures queries are always preserved when filtering by date
       const mergedFilters = { ...filters, ...newFilters };
-      console.log('[useGoogleTrends] Fetching trends with filters:', mergedFilters);
+      
+      // Force queries to be set from newFilters if provided, completely overriding old filters
+      if (newFilters.queries && Array.isArray(newFilters.queries) && newFilters.queries.length > 0) {
+        mergedFilters.queries = newFilters.queries;
+      }
+      
+      console.log('[useGoogleTrends] Fetching trends with filters:', {
+        queriesCount: mergedFilters.queries?.length,
+        queries: mergedFilters.queries,
+        startDate: mergedFilters.startDate,
+        endDate: mergedFilters.endDate,
+        hasQueriesInNewFilters: !!newFilters.queries,
+        newFiltersQueriesCount: newFilters.queries?.length
+      });
       const trendsData = await googleTrendsService.getTrends(mergedFilters);
       console.log('[useGoogleTrends] Trends data received:', {
         queries: trendsData?.queries,

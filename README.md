@@ -1,5 +1,15 @@
 # Talia Platform - Revenue and Inventory Management System
 
+> ⛔ **CRITICAL WARNING: NEVER RESET THE DATABASE** ⛔
+> 
+> **DO NOT RUN `supabase db reset` OR ANY COMMAND THAT DROPS/RECREATES THE DATABASE**
+> 
+> The local database contains important synced data from Azure Synapse that is expensive and time-consuming to restore. Database resets will DELETE ALL DATA and require a full re-sync from Azure Synapse which can take hours.
+> 
+> If migrations need to be applied, use `supabase migration up` instead.
+> 
+> **THIS IS THE MOST IMPORTANT RULE - NEVER RESET THE DATABASE**
+
 > ⚠️ **ALPHA VERSION 0.1.0** - This is pre-release software in active development. Expect breaking changes.
 
 **Talia Platform** is a multi-customer revenue and inventory management system designed for the cruise industry. This repository contains the complete monorepo with both frontend UI and backend GraphQL server.

@@ -220,7 +220,10 @@ export const useDatabaseTables = () => {
         'sail_header',
         'ship_cabin',
         'sync_metadata',
-        'focuses'
+        'focuses',
+        'google_trends_data',
+        'google_trends_search_terms',
+        'data_refresh_metadata'
       ];
 
       // Check which tables actually exist by attempting to query them

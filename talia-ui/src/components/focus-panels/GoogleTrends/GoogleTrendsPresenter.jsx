@@ -76,15 +76,22 @@ const GoogleTrendsPresenter = ({
   }, [trends]);
   
 
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    } catch {
-      return dateString;
-    }
-  };
+  // Memoize formatDate to avoid recreating on every render
+  const formatDate = useMemo(() => {
+    const cache = new Map();
+    return (dateString) => {
+      if (!dateString) return '';
+      if (cache.has(dateString)) return cache.get(dateString);
+      try {
+        const date = new Date(dateString);
+        const formatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        cache.set(dateString, formatted);
+        return formatted;
+      } catch {
+        return dateString;
+      }
+    };
+  }, []);
 
   // Color palette for different queries
   const colors = [
@@ -192,16 +199,6 @@ const GoogleTrendsPresenter = ({
   }
 
   // Debug info in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[GoogleTrendsPresenter] Current state:', {
-      hasTrends: !!trends,
-      seriesCount: trends?.series?.length,
-      seriesWithDataCount: seriesWithData?.length,
-      totalDataPoints: trends?.totalDataPoints,
-      loading,
-      error: error?.message
-    });
-  }
 
   // Show empty state only if we're not loading and truly have no data
   // Check if we have any series with data points
@@ -940,24 +937,74 @@ const GoogleTrendsPresenter = ({
                 backgroundColor: theme?.colors?.background || '#1e1e1e',
                 border: `1px solid ${theme?.colors?.border || '#333'}`,
                 borderRadius: '8px',
-                transition: 'all 0.2s'
+                transition: 'all 0.2s',
+                position: 'relative'
               }}
             >
+              {/* Close Button */}
+              <button
+                onClick={() => {
+                  const updatedQueries = selectedQueries.filter(q => q !== series.query);
+                  onSelectedQueriesChange(updatedQueries);
+                }}
+                style={{
+                  position: 'absolute',
+                  top: '12px',
+                  right: '12px',
+                  background: 'transparent',
+                  border: `1px solid ${theme?.colors?.border || '#444'}`,
+                  borderRadius: '4px',
+                  color: theme?.colors?.textSecondary || '#999',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  fontSize: '14px',
+                  lineHeight: '1',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '24px',
+                  height: '24px'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = theme?.colors?.backgroundSecondary || '#2a2a2a';
+                  e.target.style.color = theme?.colors?.foreground || '#e0e0e0';
+                  e.target.style.borderColor = theme?.colors?.border || '#666';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = 'transparent';
+                  e.target.style.color = theme?.colors?.textSecondary || '#999';
+                  e.target.style.borderColor = theme?.colors?.border || '#444';
+                }}
+                title="Remove this graph"
+              >
+                ×
+              </button>
+
               {/* Query Header */}
-              <div style={{ marginBottom: '16px' }}>
-                <h4 style={{ 
-                  margin: '0 0 8px 0',
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  color: theme?.colors?.foreground || '#e0e0e0'
-                }}>
-                  "{series.query}"
+              <div style={{ marginBottom: '16px', minHeight: '60px', paddingRight: '32px' }}>
+                <h4 
+                  style={{ 
+                    margin: '0 0 8px 0',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    color: theme?.colors?.foreground || '#e0e0e0',
+                    height: '24px',
+                    lineHeight: '24px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title={series.query}
+                >
+                  {series.query}
                 </h4>
                 <div style={{ 
                   display: 'flex', 
                   alignItems: 'center',
                   gap: '12px',
-                  fontSize: '14px'
+                  fontSize: '14px',
+                  height: '20px'
                 }}>
                   <span style={{ 
                     color: theme?.colors?.textSecondary || '#999'
@@ -977,61 +1024,57 @@ const GoogleTrendsPresenter = ({
               </div>
 
               {/* Mini Chart */}
-              {series.dataPoints.length > 0 && (
-                <div style={{
-                  marginTop: '16px',
-                  height: '120px',
-                  display: 'flex',
-                  alignItems: 'flex-end',
-                  gap: '1px',
-                  padding: '8px',
-                  backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
-                  borderRadius: '4px',
-                  position: 'relative',
-                  border: `1px solid ${theme?.colors?.border || '#444'}`,
-                  overflowX: 'auto', // Allow horizontal scroll for many data points
-                  overflowY: 'hidden'
-                }}>
-                  {series.dataPoints.map((point, pointIdx) => {
-                    // Use series maxScore instead of global maxScore for better visibility
-                    const seriesMaxScore = series.maxScore || maxScore || 100;
-                    const heightPercent = seriesMaxScore > 0 
-                      ? (point.interestScore / seriesMaxScore) * 100 
-                      : 0;
-                    const barHeight = Math.max(heightPercent, 1); // Minimum 1% height
-                    
-                    // Calculate bar width based on number of data points
-                    // For many points, use fixed width; for few points, use flex
-                    const totalPoints = series.dataPoints.length;
-                    const barWidth = totalPoints > 100 
-                      ? '2px' // Fixed width for many points
-                      : totalPoints > 50
-                      ? '3px'
-                      : totalPoints > 20
-                      ? '4px'
-                      : undefined; // Use flex for fewer points
-                    
-                    return (
-                      <div
-                        key={pointIdx}
-                        style={{
-                          ...(barWidth ? { width: barWidth, flexShrink: 0 } : { flex: 1 }),
-                          height: `${barHeight}%`,
-                          minHeight: '2px', // Ensure bars are visible
-                          minWidth: '1px', // Minimum width for visibility
-                          backgroundColor: color,
-                          borderRadius: barWidth ? '1px 1px 0 0' : '2px 2px 0 0',
-                          transition: 'height 0.3s ease',
-                          position: 'relative',
-                          opacity: 0.9,
-                          border: `1px solid ${color}33` // Subtle border for visibility
-                        }}
-                        title={`${formatDate(point.date)}: ${point.interestScore}/100`}
-                      />
-                    );
-                  })}
-                </div>
-              )}
+              {series.dataPoints.length > 0 && (() => {
+                // Pre-calculate values outside render loop for performance
+                const seriesMaxScore = series.maxScore || 100;
+                const totalPoints = series.dataPoints.length;
+                const barWidth = totalPoints > 100 ? '2px' 
+                  : totalPoints > 50 ? '3px'
+                  : totalPoints > 20 ? '4px'
+                  : undefined;
+                
+                return (
+                  <div style={{
+                    marginTop: '16px',
+                    height: '120px',
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    gap: '1px',
+                    padding: '8px',
+                    backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
+                    borderRadius: '4px',
+                    position: 'relative',
+                    border: `1px solid ${theme?.colors?.border || '#444'}`,
+                    overflowX: 'auto',
+                    overflowY: 'hidden'
+                  }}>
+                    {series.dataPoints.map((point, pointIdx) => {
+                      const heightPercent = seriesMaxScore > 0 
+                        ? (point.interestScore / seriesMaxScore) * 100 
+                        : 0;
+                      const barHeight = Math.max(heightPercent, 1);
+                      
+                      return (
+                        <div
+                          key={`${point.date}-${pointIdx}`}
+                          style={{
+                            ...(barWidth ? { width: barWidth, flexShrink: 0 } : { flex: 1 }),
+                            height: `${barHeight}%`,
+                            minHeight: '2px',
+                            minWidth: '1px',
+                            backgroundColor: color,
+                            borderRadius: barWidth ? '1px 1px 0 0' : '2px 2px 0 0',
+                            position: 'relative',
+                            opacity: 0.9,
+                            border: `1px solid ${color}33`
+                          }}
+                          title={`${formatDate(point.date)}: ${point.interestScore}/100`}
+                        />
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {/* Stats */}
               <div style={{

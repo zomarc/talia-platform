@@ -804,10 +804,10 @@ export const resolvers = {
           };
         }
         return {
-          dataSource: metadata.data_source,
-          lastRefreshedAt: metadata.last_refreshed_at,
-          refreshStatus: metadata.refresh_status || 'idle',
-          refreshError: metadata.refresh_error,
+          dataSource: metadata.data_source || metadata.operation_name,
+          lastRefreshedAt: metadata.last_refreshed_at || metadata.last_run_at,
+          refreshStatus: metadata.refresh_status || metadata.status || 'idle',
+          refreshError: metadata.refresh_error || metadata.error,
           recordsUpdated: metadata.records_updated || 0,
           metadata: metadata.metadata || {}
         };
@@ -959,6 +959,333 @@ export const resolvers = {
       }
     },
 
+    supabaseConnectionStatus: async () => {
+      try {
+        // Test Supabase connection by querying a simple table
+        const { data, error } = await supabaseDataService.client
+          .from('operation_metadata')
+          .select('operation_name')
+          .limit(1);
+        
+        const isOnline = !error;
+        const supabaseUrl = 'http://127.0.0.1:54321'; // Local Supabase URL
+        
+        return {
+          online: isOnline,
+          server: supabaseUrl,
+          database: 'postgres',
+          lastChecked: new Date().toISOString(),
+          error: error ? error.message : null
+        };
+      } catch (error: any) {
+        return {
+          online: false,
+          server: 'http://127.0.0.1:54321',
+          database: 'postgres',
+          lastChecked: new Date().toISOString(),
+          error: error.message || 'Unknown error'
+        };
+      }
+    },
+
+    syncMetadata: async () => {
+      try {
+        // Get all sync operations from unified table
+        const { data, error } = await supabaseDataService.client
+          .from('operation_metadata')
+          .select('*')
+          .eq('operation_type', 'sync');
+        
+        if (error) {
+          console.error('Error fetching sync metadata:', error);
+          return [];
+        }
+        
+        // Map unified schema to legacy format for backward compatibility
+        return (data || []).map(record => ({
+          sync_type: record.operation_name,
+          last_sync_at: record.last_run_at,
+          duration_ms: record.duration_ms,
+          records_processed: record.records_processed,
+          changes_detected: record.changes_detected,
+          status: record.status,
+          error: record.error
+        }));
+      } catch (error: any) {
+        console.error('Error in syncMetadata resolver:', error);
+        return [];
+      }
+    },
+
+    databaseTables: async () => {
+      try {
+        // Get list of known tables to check
+        const knownTables = [
+          'ship', 'cabin_availability', 'reservation', 'master_sail',
+          'sail_by_cabin_occupancy', 'reservation_changes', 'reservation_current_state',
+          'reservation_promotion', 'published_rates', 'published_rates_changes',
+          'published_rates_current_state', 'competitor', 'competitor_current_state',
+          'cabin_allocation', 'itinerary', 'gql_cabin_availability', 'sail_header',
+          'ship_cabin', 'sync_metadata', 'focuses', 'google_trends_data',
+          'google_trends_search_terms', 'data_refresh_metadata'
+        ];
+
+        // Get sync metadata from unified table
+        const { data: syncData } = await supabaseDataService.client
+          .from('operation_metadata')
+          .select('*')
+          .eq('operation_type', 'sync');
+        
+        const syncMetadataMap = {};
+        if (syncData) {
+          syncData.forEach(record => {
+            // Map to legacy format for compatibility
+            syncMetadataMap[record.operation_name] = {
+              sync_type: record.operation_name,
+              last_sync_at: record.last_run_at,
+              duration_ms: record.duration_ms,
+              records_processed: record.records_processed,
+              changes_detected: record.changes_detected,
+              status: record.status,
+              error: record.error,
+              last_processed_date: record.last_processed_date
+            };
+          });
+        }
+
+        // Check which tables exist and get their metadata
+        const tablePromises = knownTables.map(async (tableName) => {
+          try {
+            // Check if table exists by trying to get count
+            const { count, error: countError } = await supabaseDataService.client
+              .from(tableName)
+              .select('*', { count: 'exact', head: true })
+              .limit(0);
+            
+            if (countError) {
+              // Table doesn't exist or error
+              return null;
+            }
+
+            const rowCount = count || 0;
+
+            // Get date range (try common date columns)
+            let dateRange = { min: null, max: null };
+            const dateColumns = ['created_at', 'updated_at', 'snapshot_date', 'sail_date_from'];
+            
+            for (const dateCol of dateColumns) {
+              try {
+                const { data: minData } = await supabaseDataService.client
+                  .from(tableName)
+                  .select(dateCol)
+                  .order(dateCol, { ascending: true })
+                  .limit(1);
+                
+                const { data: maxData } = await supabaseDataService.client
+                  .from(tableName)
+                  .select(dateCol)
+                  .order(dateCol, { ascending: false })
+                  .limit(1);
+                
+                if (minData && minData.length > 0 && maxData && maxData.length > 0) {
+                  dateRange = {
+                    min: minData[0][dateCol],
+                    max: maxData[0][dateCol]
+                  };
+                  break;
+                }
+              } catch (err) {
+                // Column doesn't exist, try next
+                continue;
+              }
+            }
+
+        // Get sync metadata for this table (check by tableName which matches operation_name)
+        const syncRecord = syncMetadataMap[tableName];
+            
+            return {
+              tableName,
+              source: null, // Frontend will get from tableSources config
+              type: null, // Frontend will get from tableSources config
+              loadMethod: null, // Frontend calculates from tableSources config
+              rowCount,
+              dateRange,
+              latestSnapshotDate: dateRange.max,
+              lastSync: syncRecord?.last_sync_at || null,
+              syncDuration: syncRecord?.duration_ms || null,
+              recordsProcessed: syncRecord?.records_processed || null,
+              changesDetected: syncRecord?.changes_detected || null,
+              syncStatus: syncRecord ? (syncRecord.last_sync_at ? 'Synced' : 'Never Synced') : 'Not Synced',
+              dataStatus: rowCount === 0 ? 'Empty' : 'Has Data',
+              status: `${syncRecord ? (syncRecord.last_sync_at ? 'Synced' : 'Never Synced') : 'Not Synced'} • ${rowCount === 0 ? 'Empty' : 'Has Data'}`,
+              syncType: tableName
+            };
+          } catch (err) {
+            // Table doesn't exist or error
+            return null;
+          }
+        });
+
+        const results = await Promise.all(tablePromises);
+        return results.filter(Boolean);
+      } catch (error: any) {
+        console.error('Error in databaseTables resolver:', error);
+        return [];
+      }
+    },
+
+    tableMetadata: async (parent: any, args: any) => {
+      const { tableName } = args;
+      try {
+        // Get row count
+        const { count, error: countError } = await supabaseDataService.client
+          .from(tableName)
+          .select('*', { count: 'exact', head: true });
+        
+        if (countError) {
+          throw new Error(`Table ${tableName} not found or error: ${countError.message}`);
+        }
+
+        const rowCount = count || 0;
+
+        // Get date range
+        let dateRange = { min: null, max: null };
+        const dateColumns = ['created_at', 'updated_at', 'snapshot_date', 'sail_date_from'];
+        
+        for (const dateCol of dateColumns) {
+          try {
+            const { data: minData } = await supabaseDataService.client
+              .from(tableName)
+              .select(dateCol)
+              .order(dateCol, { ascending: true })
+              .limit(1);
+            
+            const { data: maxData } = await supabaseDataService.client
+              .from(tableName)
+              .select(dateCol)
+              .order(dateCol, { ascending: false })
+              .limit(1);
+            
+            if (minData && minData.length > 0 && maxData && maxData.length > 0) {
+              dateRange = {
+                min: minData[0][dateCol],
+                max: maxData[0][dateCol]
+              };
+              break;
+            }
+          } catch (err) {
+            continue;
+          }
+        }
+
+        // Get sync metadata
+        const { data: syncData } = await supabaseDataService.client
+          .from('sync_metadata')
+          .select('*')
+          .eq('sync_type', tableName);
+        
+        const syncRecord = syncData && syncData.length > 0 ? syncData[0] : null;
+
+        return {
+          tableName,
+          source: null, // Frontend will get from tableSources config
+          type: null, // Frontend will get from tableSources config
+          loadMethod: null, // Frontend calculates from tableSources config
+          rowCount,
+          dateRange,
+          latestSnapshotDate: dateRange.max,
+          lastSync: syncRecord?.last_sync_at || null,
+          syncDuration: syncRecord?.duration_ms || null,
+          recordsProcessed: syncRecord?.records_processed || null,
+          changesDetected: syncRecord?.changes_detected || null,
+          syncStatus: syncRecord ? (syncRecord.last_sync_at ? 'Synced' : 'Never Synced') : 'Not Synced',
+          dataStatus: rowCount === 0 ? 'Empty' : 'Has Data',
+          status: `${syncRecord ? (syncRecord.last_sync_at ? 'Synced' : 'Never Synced') : 'Not Synced'} • ${rowCount === 0 ? 'Empty' : 'Has Data'}`,
+          syncType: tableName
+        };
+      } catch (error: any) {
+        console.error(`Error in tableMetadata resolver for ${tableName}:`, error);
+        throw error;
+      }
+    },
+
+    tableData: async (parent: any, args: any) => {
+      const { tableName, limit = 100 } = args;
+      try {
+        // Fetch table data from Supabase via backend (for review functionality)
+        const { data, error } = await supabaseDataService.client
+          .from(tableName)
+          .select('*')
+          .limit(limit);
+        
+        if (error) {
+          console.error(`Error fetching table data for ${tableName}:`, error);
+          throw new Error(`Failed to fetch data from ${tableName}: ${error.message}`);
+        }
+        
+        // Return data as JSON array (GraphQL JSON scalar)
+        return data || [];
+      } catch (error: any) {
+        console.error(`Error in tableData resolver for ${tableName}:`, error);
+        throw error;
+      }
+    },
+
+    backupMetadata: async () => {
+      try {
+        const { data, error } = await supabaseDataService.client
+          .from('operation_metadata')
+          .select('*')
+          .eq('operation_type', 'backup')
+          .eq('operation_name', 'database_backup')
+          .single();
+        
+        if (error && error.code !== 'PGRST116') {
+          console.error('Error fetching backup metadata:', error);
+          // Return default if error
+          return {
+            lastBackupAt: null,
+            backupStatus: 'idle',
+            backupFilePath: null,
+            backupSizeBytes: null,
+            backupSizeHuman: null,
+            error: error.message
+          };
+        }
+        
+        if (!data) {
+          // No backup record yet
+          return {
+            lastBackupAt: null,
+            backupStatus: 'idle',
+            backupFilePath: null,
+            backupSizeBytes: null,
+            backupSizeHuman: null,
+            error: null
+          };
+        }
+        
+        return {
+          lastBackupAt: data.last_run_at,
+          backupStatus: data.backup_status || data.status || 'idle',
+          backupFilePath: data.backup_file_path,
+          backupSizeBytes: data.backup_size_bytes,
+          backupSizeHuman: data.backup_size_human,
+          error: data.error
+        };
+      } catch (error: any) {
+        console.error('Error in backupMetadata resolver:', error);
+        return {
+          lastBackupAt: null,
+          backupStatus: 'idle',
+          backupFilePath: null,
+          backupSizeBytes: null,
+          backupSizeHuman: null,
+          error: error.message
+        };
+      }
+    },
+
     bookingProfileYearOverYear: async (parent: any, args: any) => {
       const { sailCode, previousYearSailCode } = args;
       try {
@@ -1055,6 +1382,256 @@ export const resolvers = {
         { title: 'City of Glass', author: 'Paul Auster' },
         { title: 'The Art of War', author: 'Sun Tzu' },
       ];
+    },
+
+    dataDebugInfo: async () => {
+      try {
+        const client = supabaseDataService.client;
+        
+        // Get all unique ship codes from reservations
+        const { data: shipCodesData } = await client
+          .from('reservation')
+          .select('ship')
+          .not('ship', 'is', null);
+        const shipCodes = [...new Set(shipCodesData?.map(r => r.ship).filter(Boolean) || [])];
+
+        // Aggregate sailing days from reservations
+        const { data: reservationData } = await client
+          .from('reservation')
+          .select('sail_from_date, ship, sail_code, guest_count')
+          .not('sail_from_date', 'is', null)
+          .not('ship', 'is', null);
+
+        // Aggregate capacity from cabin_availability (latest snapshot per sail_code)
+        const { data: cabinData } = await client
+          .from('cabin_availability')
+          .select('snapshot_date, sail_code, total_cabins')
+          .not('sail_code', 'is', null)
+          .order('snapshot_date', { ascending: false });
+
+        // Create a map of latest capacity per sail_code
+        const capacityMap = new Map();
+        cabinData?.forEach(cabin => {
+          if (!capacityMap.has(cabin.sail_code)) {
+            capacityMap.set(cabin.sail_code, cabin.total_cabins || 0);
+          }
+        });
+
+        // Aggregate by sailing day
+        const sailingDaysMap = new Map();
+        let totalBooked = 0;
+        
+        reservationData?.forEach(res => {
+          const date = res.sail_from_date;
+          if (!date) return;
+          
+          const dateStr = date;
+          const key = `${dateStr}_${res.ship}_${res.sail_code || 'unknown'}`;
+          const guestCount = parseFloat(res.guest_count) || 0;
+          totalBooked += guestCount;
+          
+          const existing = sailingDaysMap.get(key) || {
+            date: dateStr,
+            shipCode: res.ship,
+            sailCode: res.sail_code,
+            capacity: capacityMap.get(res.sail_code) || 0,
+            booked: 0,
+            year: new Date(dateStr).getFullYear(),
+            month: new Date(dateStr).getMonth() + 1
+          };
+          existing.booked += guestCount;
+          sailingDaysMap.set(key, existing);
+        });
+
+        const sailingDays = Array.from(sailingDaysMap.values()).map(day => ({
+          date: day.date,
+          shipCode: day.shipCode,
+          sailCode: day.sailCode,
+          capacity: day.capacity,
+          booked: day.booked,
+          available: day.capacity - day.booked,
+          year: day.year,
+          month: day.month
+        }));
+
+        // Aggregate by year/month
+        const yearMonthMap = new Map();
+        sailingDays.forEach(day => {
+          const key = `${day.year}_${day.month}`;
+          const existing = yearMonthMap.get(key) || {
+            year: day.year,
+            month: day.month,
+            capacity: 0,
+            booked: 0,
+            sailingDays: 0
+          };
+          existing.capacity += day.capacity;
+          existing.booked += day.booked;
+          existing.sailingDays += 1;
+          yearMonthMap.set(key, existing);
+        });
+
+        const yearMonthBreakdown = Array.from(yearMonthMap.values()).map(ym => ({
+          year: ym.year,
+          month: ym.month,
+          capacity: ym.capacity,
+          booked: ym.booked,
+          available: ym.capacity - ym.booked,
+          sailingDays: ym.sailingDays
+        }));
+
+        const totalCapacity = sailingDays.reduce((sum, day) => sum + day.capacity, 0);
+
+        // Get table debug info for all synced tables
+        const tablesToCheck = [
+          'reservation',
+          'reservation_changes',
+          'reservation_current_state',
+          'cabin_availability',
+          'master_sail',
+          'inventory_status_by_day',
+          'published_rates',
+          'sail_by_cabin_occupancy',
+          'ship',
+          'competitor_current_state',
+          'published_rates_current_state',
+          'reservation_promotion'
+        ];
+
+        const tableDebugInfos = await Promise.all(
+          tablesToCheck.map(async (tableName) => {
+            try {
+              // Get row count
+              const { count } = await client
+                .from(tableName)
+                .select('*', { count: 'exact', head: true });
+
+              // Get last snapshot date (try snapshot_date, created_at, or updated_at)
+              let lastSnapshotDate = null;
+              const { data: snapshotData } = await client
+                .from(tableName)
+                .select('snapshot_date, created_at, updated_at')
+                .order('snapshot_date', { ascending: false, nullsFirst: false })
+                .limit(1);
+              
+              if (snapshotData && snapshotData.length > 0) {
+                lastSnapshotDate = snapshotData[0].snapshot_date || 
+                                 snapshotData[0].updated_at || 
+                                 snapshotData[0].created_at;
+              }
+
+              // Get changes in last 24 hours (check created_at or updated_at)
+              const twentyFourHoursAgo = new Date();
+              twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+              const iso24h = twentyFourHoursAgo.toISOString();
+              
+              // Try to query with created_at first, fallback to updated_at
+              let count24h = 0;
+              try {
+                const { count: countCreated } = await client
+                  .from(tableName)
+                  .select('*', { count: 'exact', head: true })
+                  .gte('created_at', iso24h);
+                count24h = countCreated || 0;
+              } catch (e) {
+                // If created_at doesn't work, try updated_at
+                try {
+                  const { count: countUpdated } = await client
+                    .from(tableName)
+                    .select('*', { count: 'exact', head: true })
+                    .gte('updated_at', iso24h);
+                  count24h = countUpdated || 0;
+                } catch (e2) {
+                  count24h = 0;
+                }
+              }
+
+              // Get changes in last month
+              const oneMonthAgo = new Date();
+              oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+              const isoMonth = oneMonthAgo.toISOString();
+              
+              let countMonth = 0;
+              try {
+                const { count: countCreated } = await client
+                  .from(tableName)
+                  .select('*', { count: 'exact', head: true })
+                  .gte('created_at', isoMonth);
+                countMonth = countCreated || 0;
+              } catch (e) {
+                try {
+                  const { count: countUpdated } = await client
+                    .from(tableName)
+                    .select('*', { count: 'exact', head: true })
+                    .gte('updated_at', isoMonth);
+                  countMonth = countUpdated || 0;
+                } catch (e2) {
+                  countMonth = 0;
+                }
+              }
+
+              // Get changes from last sync (from sync_metadata)
+              let changesLastSync = null;
+              const syncTypeMap: { [key: string]: string } = {
+                'reservation': 'reservations',
+                'reservation_changes': 'reservation_changes',
+                'reservation_current_state': 'reservation_changes',
+                'cabin_availability': 'cabinAvailability',
+                'master_sail': 'masterSail',
+                'published_rates': 'publishedRates',
+                'sail_by_cabin_occupancy': 'sailByCabinOccupancy',
+                'competitor_current_state': 'competitor'
+              };
+              
+              const syncType = syncTypeMap[tableName];
+              if (syncType) {
+                const { data: syncMeta } = await client
+                  .from('sync_metadata')
+                  .select('changes_detected')
+                  .eq('sync_type', syncType)
+                  .single();
+                if (syncMeta) {
+                  changesLastSync = syncMeta.changes_detected;
+                }
+              }
+
+              return {
+                tableName,
+                rowCount: count || 0,
+                lastSnapshotDate,
+                changesLastSync,
+                changes24Hours: count24h || 0,
+                changesLastMonth: countMonth || 0
+              };
+            } catch (error: any) {
+              // Table might not exist, return default values
+              console.warn(`Error querying table ${tableName}:`, error.message);
+              return {
+                tableName,
+                rowCount: 0,
+                lastSnapshotDate: null,
+                changesLastSync: null,
+                changes24Hours: 0,
+                changesLastMonth: 0
+              };
+            }
+          })
+        );
+
+        return {
+          overview: {
+            shipCodes,
+            sailingDays,
+            yearMonthBreakdown,
+            totalCapacity,
+            totalBooked
+          },
+          tables: tableDebugInfos
+        };
+      } catch (error: any) {
+        console.error('Error fetching data debug info:', error);
+        throw new Error(`Failed to fetch data debug info: ${error.message}`);
+      }
     }
   },
 

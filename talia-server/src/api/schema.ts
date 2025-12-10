@@ -739,6 +739,9 @@ export const typeDefs = `#graphql
     targetProfiles(filters: TargetProfileFilters): [TargetProfile!]!
     targetProfile(id: ID!): TargetProfile
     
+    # Data Debugging
+    dataDebugInfo: DataDebugResponse!
+    
     # Competitor Pricing
     competitorPricing(filters: CompetitorPricingFilters): [CompetitorPricingData!]!
     
@@ -747,6 +750,14 @@ export const typeDefs = `#graphql
     
     # Connection Status
     synapseConnectionStatus: ConnectionStatus!
+    supabaseConnectionStatus: ConnectionStatus!
+    
+    # Database Table Metadata
+    syncMetadata: [SyncMetadataRecord!]!
+    databaseTables: [DatabaseTableMetadata!]!
+    tableMetadata(tableName: String!): DatabaseTableMetadata
+    tableData(tableName: String!, limit: Int): [JSON!]!  # Generic query to fetch table rows for review
+    backupMetadata: BackupMetadata  # Get database backup status and info
     
     # Legacy queries (for backward compatibility)
     books: [Book!]!
@@ -833,6 +844,40 @@ export const typeDefs = `#graphql
     error: String
   }
 
+  # Database Table Metadata Types
+  type SyncMetadataRecord {
+    sync_type: String!
+    last_sync_at: String
+    duration_ms: Int
+    records_processed: Int
+    changes_detected: Int
+    status: String
+    error: String
+  }
+
+  type TableDateRange {
+    min: String
+    max: String
+  }
+
+  type DatabaseTableMetadata {
+    tableName: String!
+    source: String
+    type: String
+    loadMethod: String  # Optional - frontend calculates from tableSources config
+    rowCount: Int!
+    dateRange: TableDateRange!
+    latestSnapshotDate: String
+    lastSync: String
+    syncDuration: Int
+    recordsProcessed: Int
+    changesDetected: Int
+    syncStatus: String!
+    dataStatus: String!
+    status: String!
+    syncType: String
+  }
+
   # Data Refresh Metadata
   type RefreshMetadata {
     dataSource: String!
@@ -841,6 +886,16 @@ export const typeDefs = `#graphql
     refreshError: String
     recordsUpdated: Int
     metadata: JSON
+  }
+
+  # Backup Metadata
+  type BackupMetadata {
+    lastBackupAt: String
+    backupStatus: String! # 'idle', 'in_progress', 'success', 'failed'
+    backupFilePath: String
+    backupSizeBytes: Int
+    backupSizeHuman: String
+    error: String
   }
 
   type RefreshResult {
@@ -871,6 +926,49 @@ export const typeDefs = `#graphql
 
   # JSON scalar type for flexible data
   scalar JSON
+
+  # Data Debugging Types
+  type DataDebugOverview {
+    shipCodes: [String!]!
+    sailingDays: [SailingDayInfo!]!
+    yearMonthBreakdown: [YearMonthInfo!]!
+    totalCapacity: Int!
+    totalBooked: Int!
+  }
+
+  type SailingDayInfo {
+    date: String!
+    shipCode: String
+    sailCode: String
+    capacity: Int!
+    booked: Int!
+    available: Int!
+    year: Int!
+    month: Int!
+  }
+
+  type YearMonthInfo {
+    year: Int!
+    month: Int!
+    capacity: Int!
+    booked: Int!
+    available: Int!
+    sailingDays: Int!
+  }
+
+  type TableDebugInfo {
+    tableName: String!
+    rowCount: Int!
+    lastSnapshotDate: String
+    changesLastSync: Int
+    changes24Hours: Int!
+    changesLastMonth: Int!
+  }
+
+  type DataDebugResponse {
+    overview: DataDebugOverview!
+    tables: [TableDebugInfo!]!
+  }
 `;
 
 // Sample data for development

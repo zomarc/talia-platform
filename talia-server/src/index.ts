@@ -108,6 +108,7 @@ async function startServer() {
     console.log(`📡  SSE Stream endpoint: http://localhost:${SSE_PORT}/api/sync/stream/:tableName`);
     console.log(`📚  Enhanced with Focus Management & Role-based Access`);
     console.log(`🔐  Current user: admin@celestyal.com (ADMIN)`);
+    console.log(`🔄  Running in watch mode - changes will auto-reload`);
   });
 }
 

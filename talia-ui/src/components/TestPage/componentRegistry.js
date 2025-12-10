@@ -21,6 +21,7 @@ import DemandHeatmapContainer from '../focus-panels/DemandHeatmap';
 import GoogleSearchContainer from '../focus-panels/GoogleSearch';
 import SearchTrendsContainer from '../focus-panels/SearchTrends';
 import GoogleTrendsContainer from '../focus-panels/GoogleTrends';
+import DataDebugView from './DataDebugView';
 
 /**
  * Component registry with metadata
@@ -229,6 +230,17 @@ export const componentRegistry = {
     },
     dataRequirements: 'Uses google_trends_data table and Google Trends API. Shows historical search interest scores (0-100) for generic cruise holiday terms like "cruise holidays", "Greek islands cruise", etc.',
     filePath: 'src/components/focus-panels/GoogleTrends/index.jsx'
+  },
+  DataDebugView: {
+    component: DataDebugView,
+    category: 'Debugging',
+    description: 'Data debugging view - shows comprehensive data visibility including ship codes, sailing days, capacity/booked metrics, and table overview with row counts, snapshot dates, and change metrics',
+    usesMockData: false,
+    props: {
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Requires GraphQL connection to dataDebugInfo endpoint. Shows aggregated sailing data and table metadata for all synced tables.',
+    filePath: 'src/components/TestPage/DataDebugView.jsx'
   }
 };
 

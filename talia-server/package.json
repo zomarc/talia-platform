@@ -7,7 +7,7 @@
   "scripts": {
     "clean": "rm -rf dist",
     "compile": "npm run clean && tsc && mkdir -p dist/services dist/config && cp src/services/*.js dist/services/ && cp src/config/*.js dist/config/",
-    "dev": "npx tsx src/index.ts",
+    "dev": "npx tsx watch src/index.ts",
     "start": "./start.sh",
     "stop": "pkill -f 'tsx src/index.ts' || pkill -f 'node.*dist/index.js' || echo 'No server running'",
     "restart": "./restart.sh",

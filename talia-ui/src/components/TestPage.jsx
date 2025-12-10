@@ -3,7 +3,7 @@
  * Compact design with component selector, events, and information panels
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSailingData } from '../hooks/data/useSailingData';
 import { componentRegistry, getComponentsByCategory } from './TestPage/componentRegistry';
 import ComponentWrapper from './TestPage/ComponentWrapper';
@@ -47,6 +47,29 @@ const TestPage = () => {
   const componentFile = componentMeta?.filePath || 'Unknown';
   const categories = getComponentsByCategory();
 
+  // Restore persisted event when component changes
+  const lastDispatchedRef = useRef(null);
+  useEffect(() => {
+    if (selectedComponent && latestEvent && lastDispatchedRef.current !== selectedComponent) {
+      const eventType = latestEvent.name;
+      const eventDetail = latestEvent.detail;
+      
+      if (eventType && eventType.includes('.select') && eventDetail) {
+        lastDispatchedRef.current = selectedComponent;
+        
+        // Use standard CustomEvent and dispatchEvent
+        const restoredEvent = new CustomEvent(eventType, {
+          detail: eventDetail,
+          bubbles: true
+        });
+        
+        setTimeout(() => {
+          window.dispatchEvent(restoredEvent);
+        }, 100);
+      }
+    }
+  }, [selectedComponent]);
+
   // Get component props based on selection
   const getComponentProps = () => {
     if (selectedComponent === 'SailingTable') {
@@ -56,11 +79,17 @@ const TestPage = () => {
       return { data: sailingData };
     }
     if (selectedComponent === 'BookingProfile') {
+      // Use persisted sail code from event if available
+      const sailCodeFromEvent = latestEvent?.detail?.sail_code || latestEvent?.detail?.row_data?.sail_code;
       return { 
-        sailCode: bookingProfileSailCode,
+        sailCode: sailCodeFromEvent || bookingProfileSailCode,
         includeComparison,
         theme 
       };
+    }
+    if (selectedComponent === 'PublishedRates') {
+      // PublishedRates listens to sail events automatically
+      return { theme };
     }
     if (selectedComponent === 'TargetProfileEditor') {
       return {
@@ -73,6 +102,9 @@ const TestPage = () => {
           console.log('Target profile editing cancelled');
         }
       };
+    }
+    if (selectedComponent === 'DataDebugView') {
+      return { theme };
     }
     return {};
   };
@@ -107,40 +139,58 @@ const TestPage = () => {
   const [latestEvent, setLatestEvent] = useState(null);
   const [latestQuery, setLatestQuery] = useState(null);
 
-  // Listen for events - intercept ALL custom events
+  // Load persisted event from localStorage on mount
+  useEffect(() => {
+    try {
+      const persistedEvent = localStorage.getItem('talia:test:lastEvent');
+      if (persistedEvent) {
+        const eventData = JSON.parse(persistedEvent);
+        console.log('[TestPage] Restored persisted event:', eventData);
+        setLatestEvent(eventData);
+      }
+    } catch (e) {
+      console.warn('[TestPage] Error loading persisted event:', e);
+    }
+  }, []);
+
+  // Listen for events using standard addEventListener (library approach)
   useEffect(() => {
     const handleEvent = (event) => {
-      if (event instanceof CustomEvent) {
-        console.log('[TestPage] Event captured:', event.type, event.detail);
-        setLatestEvent({
+      if (event instanceof CustomEvent && event.type.startsWith('talia:')) {
+        const eventData = {
           name: event.type,
           detail: event.detail,
           timestamp: new Date().toLocaleTimeString()
-        });
+        };
+        setLatestEvent(eventData);
+        
+        // Persist to localStorage
+        try {
+          localStorage.setItem('talia:test:lastEvent', JSON.stringify(eventData));
+        } catch (e) {
+          console.warn('[TestPage] Error persisting event:', e);
+        }
       }
     };
     
-    // Intercept dispatchEvent to catch all custom events
-    const originalDispatchEvent = window.dispatchEvent.bind(window);
-    window.dispatchEvent = function(event) {
-      if (event instanceof CustomEvent) {
-        handleEvent(event);
-      }
-      return originalDispatchEvent(event);
-    };
+    // Use standard addEventListener for talia events
+    const eventTypes = [
+      'talia:sail.select',
+      'talia:sail.clear',
+      'talia:publishedRates.select',
+      'talia:publishedRates.clear',
+      'talia:reservation.select',
+      'talia:reservation.clear'
+    ];
     
-    // Also listen directly for talia events
-    window.addEventListener('talia:sailing.select', handleEvent, true);
-    window.addEventListener('talia:sailing.clear', handleEvent, true);
-    window.addEventListener('talia:sail.select', handleEvent, true);
-    window.addEventListener('talia:sail.clear', handleEvent, true);
+    eventTypes.forEach(eventType => {
+      window.addEventListener(eventType, handleEvent, true);
+    });
     
     return () => {
-      window.dispatchEvent = originalDispatchEvent;
-      window.removeEventListener('talia:sailing.select', handleEvent, true);
-      window.removeEventListener('talia:sailing.clear', handleEvent, true);
-      window.removeEventListener('talia:sail.select', handleEvent, true);
-      window.removeEventListener('talia:sail.clear', handleEvent, true);
+      eventTypes.forEach(eventType => {
+        window.removeEventListener(eventType, handleEvent, true);
+      });
     };
   }, []);
 
@@ -214,6 +264,18 @@ const TestPage = () => {
             <span style={{ color: latestEvent ? theme.colors.accent : 'rgba(224, 224, 224, 0.5)' }}>
               {latestEvent ? `${latestEvent.name} (${latestEvent.timestamp})` : 'None'}
             </span>
+            {latestEvent && localStorage.getItem('talia:test:lastEvent') && (
+              <span style={{ 
+                fontSize: '10px', 
+                color: '#4caf50',
+                marginLeft: '4px',
+                padding: '2px 6px',
+                background: 'rgba(76, 175, 80, 0.2)',
+                borderRadius: '4px'
+              }}>
+                💾 Persisted
+              </span>
+            )}
           </div>
           <div style={{ width: '1px', height: '20px', background: 'rgba(255, 255, 255, 0.2)' }}></div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

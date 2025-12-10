@@ -1,0 +1,41 @@
+version: "3"
+
+# ngrok configuration for Talia Platform
+# This file configures the tunnel with access control options
+
+tunnels:
+  celestyal:
+    proto: http
+    addr: 5173
+    domain: taliahub.com
+    # Basic HTTP Authentication (username:password)
+    # Currently ENABLED - users will be prompted for credentials
+    basic_auth:
+      - "demo:celestyal2025"
+      - "andy:test2025"
+      - "test:test2025"
+      # Add more users as needed:
+      # - "client1:password123"
+      # - "client2:password456"
+    
+    # IP Whitelisting - Only allow specific IP addresses or CIDR ranges
+    # COMMENTED OUT - Will be required in future
+    # Uncomment and add IP addresses to enable:
+    # ip_restriction:
+    #   allow_cidrs:
+    #     - "203.0.113.0/24"  # Example: Allow entire subnet
+    #     - "198.51.100.1/32"  # Example: Allow single IP
+    #   deny_cidrs:
+    #     - "0.0.0.0/0"  # Example: Deny all others (only allow_cidrs will work)
+    
+    # Request headers - Add custom headers to all requests
+    # request_header:
+    #   add:
+    #     - "X-Custom-Header: value"
+    
+    # Response headers - Add custom headers to all responses
+    # response_header:
+    #   add:
+    #     - "X-Frame-Options: DENY"
+    #     - "X-Content-Type-Options: nosniff"
+

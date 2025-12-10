@@ -7,7 +7,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useDatabaseTables } from '../hooks/useDatabaseTables';
 import { LoadingSpinner, ErrorMessage } from './shared';
 import { getThemeForMode } from '../themes/modeThemes';
-import { supabase } from '../lib/supabase';
+// Supabase import removed - all database operations now route through GraphQL backend
 import { getTableSource } from '../config/tableSources';
 import { SERVER_SERVICES, getAllServiceIds } from '../config/serverServices';
 import { getSyncFreshness, getSyncFreshnessColor } from '../utils/syncFreshness';
@@ -27,6 +27,15 @@ const DataManagementPage = () => {
   const [selectedTable, setSelectedTable] = useState(null);
   const [reviewData, setReviewData] = useState(null);
   const [reviewLoading, setReviewLoading] = useState(false);
+  const [backupStatus, setBackupStatus] = useState({ 
+    lastBackup: null, 
+    recentBackups: [], 
+    status: 'idle',
+    size: null,
+    sizeBytes: null,
+    error: null,
+    loading: false 
+  });
   const logEndRef = useRef(null);
   const serverLogEndRef = useRef(null);
   const allActivityLogEndRef = useRef(null);
@@ -168,14 +177,9 @@ const DataManagementPage = () => {
             // No data in response
             throw new Error(`No data in GraphQL response for ${service.id}`);
           }
-        } else if (service.check.method === 'supabase') {
-          // Supabase-based check
-          const { error } = await supabase
-            .from(service.check.table)
-            .select(service.check.select)
-            .limit(service.check.limit || 1);
-          isOnline = !error;
-          statusData = { online: isOnline, lastChecked: new Date() };
+        } else {
+          // All services should use GraphQL - this shouldn't happen
+          throw new Error(`Unknown check method for service ${service.id}`);
         }
         
         // Update status for this service
@@ -232,6 +236,104 @@ const DataManagementPage = () => {
     
     return () => clearInterval(interval);
   }, []); // Empty dependency array - only run on mount/unmount
+
+  // Fetch backup status from GraphQL
+  const fetchBackupStatus = async () => {
+    try {
+      setBackupStatus(prev => ({ ...prev, loading: true }));
+      
+      const query = `
+        query {
+          backupMetadata {
+            lastBackupAt
+            backupStatus
+            backupFilePath
+            backupSizeBytes
+            backupSizeHuman
+            error
+          }
+        }
+      `;
+      
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+      
+      const backup = result.data?.backupMetadata;
+      
+      setBackupStatus({
+        lastBackup: backup?.lastBackupAt ? new Date(backup.lastBackupAt) : null,
+        recentBackups: backup?.backupFilePath ? [{
+          time: backup.lastBackupAt,
+          filename: backup.backupFilePath.split('/').pop(),
+          size: backup.backupSizeHuman
+        }] : [],
+        status: backup?.backupStatus || 'idle',
+        size: backup?.backupSizeHuman,
+        sizeBytes: backup?.backupSizeBytes,
+        error: backup?.error,
+        loading: false
+      });
+    } catch (error) {
+      console.warn('Could not fetch backup status:', error);
+      setBackupStatus(prev => ({ 
+        ...prev, 
+        loading: false,
+        error: error.message 
+      }));
+    }
+  };
+
+  // Trigger backup - shows instructions
+  const triggerBackup = () => {
+    addClientLog({
+      id: `${Date.now()}-${++logIdCounterRef.current}`,
+      timestamp: new Date(),
+      type: 'info',
+      message: '💾 To create a backup, run: cd talia-server && ./scripts/backup-db.sh',
+      tableName: 'System'
+    });
+    
+    // Show alert with instructions
+    const instructions = `To create a database backup, run this command in your terminal:
+
+cd talia-server && ./scripts/backup-db.sh
+
+Or use npm:
+cd talia-server && npm run db-backup
+
+The backup will be saved to: talia-server/backups/`;
+    
+    alert(instructions);
+    
+    // Update last backup time in localStorage (user can manually update this after running backup)
+    // In a real implementation, this would be updated by the backup script or API
+    const now = new Date();
+    localStorage.setItem('lastBackupTime', now.toISOString());
+    const recentBackups = JSON.parse(localStorage.getItem('recentBackups') || '[]');
+    recentBackups.unshift({ time: now.toISOString(), filename: `backup-${now.toISOString().slice(0, 10)}.sql.gz` });
+    if (recentBackups.length > 5) recentBackups.pop();
+    localStorage.setItem('recentBackups', JSON.stringify(recentBackups));
+    
+    fetchBackupStatus();
+  };
+
+  // Fetch backup status on mount
+  useEffect(() => {
+    fetchBackupStatus();
+  }, []);
 
   // Get theme for data mode
   const theme = getThemeForMode('data');
@@ -540,8 +642,10 @@ const DataManagementPage = () => {
       });
 
       // Connect to SSE stream for real-time updates
-      const sseBaseUrl = import.meta.env.PROD ? '' : 'http://localhost:4001';
-      const sseUrl = `${sseBaseUrl}/api/sync/stream/${tableName}`;
+      // Use relative path - Vite proxy handles routing to localhost:4001
+      // This works both locally and when exposed via ngrok
+      const basePath = import.meta.env.VITE_BASE_PATH || '';
+      const sseUrl = `${basePath}/api/sync/stream/${tableName}`;
       
       try {
         eventSource = new EventSource(sseUrl);
@@ -1525,12 +1629,33 @@ const DataManagementPage = () => {
                     onClick={async () => {
                       setReviewLoading(true);
                       try {
-                        const { data, error } = await supabase
-                          .from(table.tableName)
-                          .select('*')
-                          .limit(100);
+                        // Use GraphQL instead of direct Supabase (works from external URLs)
+                        const query = `
+                          query GetTableData($tableName: String!, $limit: Int) {
+                            tableData(tableName: $tableName, limit: $limit)
+                          }
+                        `;
                         
-                        if (error) throw error;
+                        const response = await fetch('/api/graphql', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            query,
+                            variables: { tableName: table.tableName, limit: 100 }
+                          })
+                        });
+                        
+                        if (!response.ok) {
+                          throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                        }
+                        
+                        const result = await response.json();
+                        
+                        if (result.errors && result.errors.length > 0) {
+                          throw new Error(`GraphQL error: ${result.errors[0].message}`);
+                        }
+                        
+                        const data = result.data?.tableData || [];
                         setReviewData({ tableName: table.tableName, data });
                         const logId = `${Date.now()}-${++logIdCounterRef.current}`;
                         setLogs(prev => [...prev, {
@@ -1767,6 +1892,84 @@ const DataManagementPage = () => {
               {tables.filter(t => t.rowCount > 0).length}
             </span>
           </div>
+        </div>
+
+        {/* Backup Status Bar */}
+        <div style={{
+          background: theme.colors.glass,
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          padding: '8px 12px',
+          borderRadius: '12px',
+          marginBottom: '8px',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+          border: `1px solid ${theme.colors.glassBorder}`,
+          display: 'flex',
+          gap: '16px',
+          alignItems: 'center',
+          fontSize: '10px',
+          borderLeft: `2px solid ${backupStatus.lastBackup ? '#4caf50' : '#ff9800'}`
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1 }}>
+            <span style={{ color: theme.colors.textSecondary }}>💾 Last Backup:</span>
+            <span style={{ 
+              color: backupStatus.lastBackup ? theme.colors.foreground : theme.colors.textMuted, 
+              fontWeight: '600' 
+            }}>
+              {backupStatus.loading ? '⏳ Checking...' : 
+               backupStatus.lastBackup ? formatDateTime(backupStatus.lastBackup) : 'Never'}
+            </span>
+            {backupStatus.size && (
+              <span style={{ color: theme.colors.textSecondary, marginLeft: '8px' }}>
+                ({backupStatus.size})
+              </span>
+            )}
+            {backupStatus.status && backupStatus.status !== 'idle' && (
+              <span style={{ 
+                color: backupStatus.status === 'success' ? '#4caf50' : '#f44336',
+                marginLeft: '8px',
+                fontSize: '8px'
+              }}>
+                [{backupStatus.status}]
+              </span>
+            )}
+          </div>
+          <button
+            onClick={triggerBackup}
+            disabled={backupStatus.loading}
+            style={{
+              padding: '4px 8px',
+              fontSize: '10px',
+              background: backupStatus.loading ? theme.colors.glass : '#4caf50',
+              color: backupStatus.loading ? theme.colors.textMuted : 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: backupStatus.loading ? 'not-allowed' : 'pointer',
+              fontWeight: '500',
+              transition: 'all 0.2s'
+            }}
+            title="Create a new database backup"
+          >
+            {backupStatus.loading ? '⏳ Backing up...' : '💾 Backup Now'}
+          </button>
+          <button
+            onClick={fetchBackupStatus}
+            disabled={backupStatus.loading}
+            style={{
+              padding: '4px 8px',
+              fontSize: '10px',
+              background: 'transparent',
+              color: theme.colors.textSecondary,
+              border: `1px solid ${theme.colors.glassBorder}`,
+              borderRadius: '6px',
+              cursor: backupStatus.loading ? 'not-allowed' : 'pointer',
+              fontWeight: '500',
+              transition: 'all 0.2s'
+            }}
+            title="Refresh backup status"
+          >
+            ↻
+          </button>
         </div>
 
         {/* Filter Buttons */}

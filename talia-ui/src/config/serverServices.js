@@ -40,17 +40,40 @@ export const SERVER_SERVICES = [
     id: 'supabase',
     name: 'Supabase',
     icon: '🗄️',
-    type: 'supabase',
+    type: 'graphql',
     check: {
-      method: 'supabase',
-      table: 'sync_metadata',
-      select: 'sync_type',
-      limit: 1
+      method: 'graphql',
+      endpoint: () => {
+        // Use relative path - Vite proxy handles routing to localhost:4000
+        // This works both locally and when exposed via ngrok
+        return '/api/graphql';
+      },
+      query: `query {
+        supabaseConnectionStatus {
+          online
+          server
+          database
+          lastChecked
+          error
+        }
+      }`
     },
     display: {
-      address: 'http://127.0.0.1:54323'
+      address: (status) => {
+        if (status?.server) {
+          return status.database 
+            ? `${status.server} / ${status.database}`
+            : status.server;
+        }
+        // Don't show localhost when accessed externally - show generic label
+        const isExternal = typeof window !== 'undefined' && 
+          (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1');
+        return isExternal ? 'Local Supabase' : 'http://127.0.0.1:54321';
+      }
     },
-    offlineMessage: 'Server is offline. Start with: supabase start'
+    offlineMessage: (status) => {
+      return status?.error || 'Connection failed. Please check if Supabase is running.';
+    }
   },
   {
     id: 'synapse',

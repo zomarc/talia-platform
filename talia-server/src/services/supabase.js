@@ -1899,27 +1899,42 @@ export class SupabaseDataService {
   async getRefreshMetadata(dataSource) {
     try {
       const { data, error } = await this.client
-        .from('data_refresh_metadata')
+        .from('operation_metadata')
         .select('*')
-        .eq('data_source', dataSource)
+        .eq('operation_type', 'refresh')
+        .eq('operation_name', dataSource)
         .single();
 
       // PGRST116 = not found (this is OK - means no metadata yet)
       if (error && error.code !== 'PGRST116') {
         // Check if table doesn't exist (42P01 = undefined table)
         if (error.code === '42P01' || error.message?.includes('does not exist')) {
-          console.warn('Refresh metadata table does not exist yet. Run migration: 20251206000000_create_data_refresh_metadata_table.sql');
+          console.warn('Operation metadata table does not exist yet. Run migration: 20251207000000_create_unified_operation_metadata.sql');
           return null;
         }
         console.error('Supabase error getting refresh metadata:', error);
         throw error;
       }
 
-      return data || null;
+      // Map unified schema back to legacy format for backward compatibility
+      if (data) {
+        return {
+          data_source: data.operation_name,
+          last_refreshed_at: data.last_run_at,
+          refresh_status: data.status,
+          refresh_error: data.error,
+          records_updated: data.records_updated,
+          metadata: data.metadata || {},
+          created_at: data.created_at,
+          updated_at: data.updated_at
+        };
+      }
+
+      return null;
     } catch (error) {
       // If table doesn't exist, return null instead of throwing
       if (error.code === '42P01' || error.message?.includes('does not exist')) {
-        console.warn('Refresh metadata table does not exist yet.');
+        console.warn('Operation metadata table does not exist yet.');
         return null;
       }
       console.error('Error getting refresh metadata:', error);
@@ -1936,16 +1951,17 @@ export class SupabaseDataService {
   async updateRefreshMetadata(dataSource, metadata) {
     try {
       const { data, error } = await this.client
-        .from('data_refresh_metadata')
+        .from('operation_metadata')
         .upsert({
-          data_source: dataSource,
-          last_refreshed_at: metadata.lastRefreshedAt || new Date().toISOString(),
-          refresh_status: metadata.refreshStatus || 'success',
-          refresh_error: metadata.refreshError || null,
+          operation_type: 'refresh',
+          operation_name: dataSource,
+          last_run_at: metadata.lastRefreshedAt || new Date().toISOString(),
+          status: metadata.refreshStatus || 'success',
+          error: metadata.refreshError || null,
           records_updated: metadata.recordsUpdated || 0,
           metadata: metadata.metadata || {}
         }, {
-          onConflict: 'data_source'
+          onConflict: 'operation_type,operation_name'
         })
         .select()
         .single();
@@ -1953,18 +1969,30 @@ export class SupabaseDataService {
       if (error) {
         // If table doesn't exist, log warning but don't throw (migration may not be run yet)
         if (error.code === '42P01' || error.message?.includes('does not exist')) {
-          console.warn('Refresh metadata table does not exist yet. Run migration: 20251206000000_create_data_refresh_metadata_table.sql');
+          console.warn('Operation metadata table does not exist yet. Run migration: 20251207000000_create_unified_operation_metadata.sql');
           return null;
         }
         console.error('Supabase error updating refresh metadata:', error);
         throw error;
       }
 
+      // Map back to legacy format
+      if (data) {
+        return {
+          data_source: data.operation_name,
+          last_refreshed_at: data.last_run_at,
+          refresh_status: data.status,
+          refresh_error: data.error,
+          records_updated: data.records_updated,
+          metadata: data.metadata || {}
+        };
+      }
+
       return data;
     } catch (error) {
       // If table doesn't exist, return null instead of throwing
       if (error.code === '42P01' || error.message?.includes('does not exist')) {
-        console.warn('Refresh metadata table does not exist yet. Metadata will not be stored.');
+        console.warn('Operation metadata table does not exist yet. Metadata will not be stored.');
         return null;
       }
       console.error('Error updating refresh metadata:', error);
@@ -1979,13 +2007,14 @@ export class SupabaseDataService {
   async setRefreshInProgress(dataSource) {
     try {
       await this.client
-        .from('data_refresh_metadata')
+        .from('operation_metadata')
         .upsert({
-          data_source: dataSource,
-          refresh_status: 'in_progress',
-          last_refreshed_at: null
+          operation_type: 'refresh',
+          operation_name: dataSource,
+          status: 'in_progress',
+          last_run_at: null
         }, {
-          onConflict: 'data_source'
+          onConflict: 'operation_type,operation_name'
         });
     } catch (error) {
       console.error('Error setting refresh in progress:', error);

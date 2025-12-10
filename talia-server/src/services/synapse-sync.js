@@ -1241,6 +1241,13 @@ class SynapseSyncService {
         }
       }
 
+      // Post-processing note: For reservations table, sail_code should be populated via migration
+      // The migration 20251210182348_populate_reservation_sail_code.sql will backfill sail_code
+      // from master_sail table. New reservations will get sail_code on next migration run.
+      if (runtime.tableName === 'reservations' && totalProcessed > 0) {
+        logger?.info(`ℹ️  Note: Run migration to populate sail_code in reservation table from master_sail`);
+      }
+
       const duration = Date.now() - startTime;
       // Logger automatically emits events via eventEmitter
       logger?.info(`✅ Sync completed for ${runtime.tableName} in ${duration}ms`);

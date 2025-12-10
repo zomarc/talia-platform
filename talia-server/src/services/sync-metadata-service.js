@@ -66,16 +66,34 @@ export class SyncMetadataService {
    */
   static async getSyncMetadata(supabaseClient, syncType) {
     const { data, error } = await supabaseClient
-      .from('sync_metadata')
+      .from('operation_metadata')
       .select('*')
-      .eq('sync_type', syncType)
+      .eq('operation_type', 'sync')
+      .eq('operation_name', syncType)
       .single();
 
     if (error && error.code !== 'PGRST116') { // PGRST116 = not found
       throw new Error(`Failed to get sync metadata: ${error.message}`);
     }
 
-    return data || null;
+    // Map unified schema back to legacy format for backward compatibility
+    if (data) {
+      return {
+        sync_type: data.operation_name,
+        last_processed_date: data.last_processed_date,
+        last_processed_snapshot_date: data.last_processed_date ? new Date(data.last_processed_date).toISOString() : null,
+        last_sync_at: data.last_run_at,
+        records_processed: data.records_processed,
+        changes_detected: data.changes_detected,
+        duration_ms: data.duration_ms,
+        status: data.status,
+        error: data.error,
+        created_at: data.created_at,
+        updated_at: data.updated_at
+      };
+    }
+
+    return null;
   }
 
   /**
@@ -87,11 +105,13 @@ export class SyncMetadataService {
    */
   static async getLastProcessedSnapshotDate(supabaseClient, syncType) {
     const metadata = await this.getSyncMetadata(supabaseClient, syncType);
-    if (!metadata?.last_processed_snapshot_date) {
+    if (!metadata?.last_processed_date) {
       return null;
     }
     // Ensure it's returned as ISO string
-    return new Date(metadata.last_processed_snapshot_date).toISOString();
+    const date = new Date(metadata.last_processed_date);
+    date.setHours(0, 0, 0, 0); // Set to midnight
+    return date.toISOString();
   }
 
   /**
@@ -126,20 +146,31 @@ export class SyncMetadataService {
       return date.toISOString();
     };
     
+    // Convert snapshot dates to DATE format for last_processed_date
+    const formatDate = (dateStr) => {
+      if (!dateStr) return null;
+      const date = new Date(dateStr);
+      return date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    };
+
     const { error } = await supabaseClient
-      .from('sync_metadata')
+      .from('operation_metadata')
       .upsert({
-        sync_type: syncType,
-        last_processed_snapshot_date: formatSnapshotDate(lastProcessedSnapshotDate),
-        latest_available_snapshot_date: formatSnapshotDate(latestAvailableSnapshotDate),
-        dataset: dataset,
+        operation_type: 'sync',
+        operation_name: syncType,
+        last_run_at: now,
+        status: 'completed',
+        duration_ms: durationMs,
+        last_processed_date: formatDate(lastProcessedSnapshotDate),
         records_processed: recordsProcessed,
         changes_detected: changesDetected,
-        duration_ms: durationMs,
-        last_sync_at: now,
+        metadata: {
+          latest_available_snapshot_date: formatSnapshotDate(latestAvailableSnapshotDate),
+          dataset: dataset
+        },
         updated_at: now
       }, {
-        onConflict: 'sync_type'
+        onConflict: 'operation_type,operation_name'
       });
 
     if (error) {

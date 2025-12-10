@@ -64,3 +64,6 @@ coverage/
 *.sql.gz
 *.sql.DS_Store
 *.log
+
+# Development server PID files
+**/.dev-server.pid

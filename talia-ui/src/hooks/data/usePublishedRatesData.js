@@ -63,7 +63,10 @@ export const usePublishedRatesBySail = (options = {}) => {
     if (!listenToSailEvents) return;
 
     const handleSailSelect = (event) => {
-      const sailCode = event.detail;
+      // Extract sail_code from event detail (can be string or object with sail_code property)
+      const sailCode = typeof event.detail === 'string' 
+        ? event.detail 
+        : event.detail?.sail_code || event.detail;
       console.log('[usePublishedRatesBySail] Sail selected:', sailCode);
       setSelectedSailCode(sailCode);
     };

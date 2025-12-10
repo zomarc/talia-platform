@@ -270,7 +270,57 @@ const PublishedRatesPresenter = ({ data, theme, onRefresh, selectedSailCode }) =
     }
   }, [data]);
 
-  return <div ref={tableRef} style={{ width: "100%", height: "100%" }} />;
+  // Default theme fallback
+  const defaultTheme = {
+    colors: {
+      background: '#ffffff',
+      foreground: '#2b2b2b'
+    }
+  };
+
+  const themeValues = theme || defaultTheme;
+
+  return (
+    <div style={{
+      height: "100%",
+      width: "100%",
+      position: "relative",
+      background: themeValues.colors.background,
+      color: themeValues.colors.foreground
+    }}>
+      {onRefresh && (
+        <div style={{
+          position: 'absolute',
+          top: '8px',
+          right: '8px',
+          zIndex: 10
+        }}>
+          <button
+            onClick={onRefresh}
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              background: 'white',
+              fontWeight: '500'
+            }}
+          >
+            ↻ Refresh
+          </button>
+        </div>
+      )}
+      <div 
+        ref={tableRef} 
+        style={{ 
+          height: "100%", 
+          width: "100%",
+          padding: '8px'
+        }} 
+      />
+    </div>
+  );
 };
 
 export default PublishedRatesPresenter;

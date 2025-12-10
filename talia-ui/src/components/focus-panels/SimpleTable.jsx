@@ -35,19 +35,63 @@ const SailingByCabinCategory = React.memo(() => {
   const loadSailingCabinData = async () => {
     try {
       // Direct Supabase query for master_sail table
-      const response = await fetch('http://127.0.0.1:54321/rest/v1/master_sail?select=*&limit=100', {
-        headers: {
-          'apikey': 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
-          'Authorization': 'Bearer sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH'
+      // Use GraphQL instead of direct Supabase (works from external URLs)
+      const query = `
+        query GetMasterSail {
+          masterSail(filters: { limit: 100 }) {
+            id
+            sail_id
+            ship_code
+            ship_name
+            sail_date_from
+            port_from
+            sail_date_to
+            port_to
+            package_id
+            package_type
+            sail_code
+            package_name
+            sail_days
+            geog_area_code
+            vacation_date
+            season_code
+            is_fake
+            is_active
+            is_package_active
+            master_voyage_departure_date
+            master_voyage1
+            master_voyage1_length
+            master_voyage1_sail_days
+            master_voyage2
+            master_voyage2_length
+            master_voyage2_sail_days
+            is_main
+            is_primary
+            created_at
+          }
         }
+      `;
+
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query })
       });
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      const data = await response.json();
-      console.log('[SailingByCabinCategory] Loaded data from Supabase:', data.length, 'records');
+      const result = await response.json();
+      
+      if (result.errors) {
+        throw new Error(`GraphQL error: ${result.errors[0].message}`);
+      }
+      
+      const data = result.data?.masterSail || [];
+      console.log('[SailingByCabinCategory] Loaded data from GraphQL:', data.length, 'records');
       setAllData(data); // Store all data for filtering
       return data;
     } catch (error) {

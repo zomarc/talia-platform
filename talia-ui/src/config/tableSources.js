@@ -116,8 +116,14 @@ export const tableSources = {
     dateColumns: [], // No date columns, linked via res_id
     syncType: 'reservation_promotion' // snake_case - standard naming convention
   },
+  operation_metadata: {
+    source: null, // System table - unified metadata for sync, refresh, and backup
+    type: 'system',
+    dateColumns: ['last_run_at', 'created_at', 'updated_at'],
+    syncType: null
+  },
   sync_metadata: {
-    source: null, // System table
+    source: null, // Archived - use operation_metadata instead
     type: 'system',
     dateColumns: ['last_sync_at', 'created_at', 'updated_at'],
     syncType: null
@@ -141,7 +147,7 @@ export const tableSources = {
     syncType: null
   },
   data_refresh_metadata: {
-    source: null, // System table
+    source: null, // Archived - use operation_metadata instead
     type: 'system',
     dateColumns: ['last_refreshed_at', 'created_at', 'updated_at'],
     syncType: null

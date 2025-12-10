@@ -67,3 +67,7 @@ coverage/
 
 # Development server PID files
 **/.dev-server.pid
+
+# ngrok configuration (may contain credentials)
+ngrok.yml
+.ngrok*.log

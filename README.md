@@ -207,6 +207,75 @@ Deploy the backend to Railway, Render, or AWS using the server configuration.
 
 ---
 
+## 🌐 External Access (ngrok)
+
+For sharing the UI with external clients during development, Talia uses ngrok with a secure architecture:
+
+### Architecture
+
+- ✅ **UI exposed**: Accessible via custom domain (e.g., `taliahub.com`)
+- 🔒 **Backend local-only**: GraphQL server stays on `localhost:4000` (NOT exposed)
+- 🔄 **API proxied**: All API requests go through Vite dev server proxy
+
+### Quick Setup
+
+1. **Install ngrok**: Download from [ngrok.com](https://ngrok.com/download)
+
+2. **Authenticate ngrok**:
+   ```bash
+   ngrok config add-authtoken <your-token>
+   ```
+   Get your token from: https://dashboard.ngrok.com/get-started/your-authtoken
+
+3. **Configure custom domain** (requires paid ngrok plan):
+   - Add domain in [ngrok Dashboard](https://dashboard.ngrok.com/cloud-edge/domains)
+   - Configure DNS as instructed
+   - Wait for DNS propagation
+
+4. **Create ngrok configuration**:
+   ```bash
+   cp ngrok.yml.example ngrok.yml
+   # Edit ngrok.yml with your domain and credentials
+   ```
+
+5. **Start development servers**:
+   ```bash
+   npm run dev
+   ```
+
+6. **Start ngrok tunnel**:
+   ```bash
+   ngrok start --config ngrok.yml celestyal
+   ```
+
+### Security Features
+
+- **Basic HTTP Authentication**: Configured in `ngrok.yml` (DO NOT commit credentials)
+- **IP Whitelisting**: Optional IP restrictions available
+- **Backend Isolation**: Backend never exposed directly to internet
+- **Single Entry Point**: All traffic goes through one secure tunnel
+
+### Important Security Notes
+
+⚠️ **CRITICAL**: 
+- **Never commit `ngrok.yml`** with real credentials (it's in `.gitignore`)
+- Use `ngrok.yml.example` as a template
+- Change default passwords immediately
+- Only expose during client testing, stop when done
+- Consider IP whitelisting for additional security
+
+### Configuration File
+
+The `ngrok.yml` file supports:
+- Custom domain configuration
+- Basic HTTP authentication (username/password)
+- IP whitelisting/blacklisting
+- Custom request/response headers
+
+**See [docs/NGROK-SETUP.md](./docs/NGROK-SETUP.md) for detailed setup instructions and architecture details.**
+
+---
+
 ## 📚 Documentation
 
 - **[Architecture](./docs/ARCHITECTURE.md)** - System architecture and design decisions

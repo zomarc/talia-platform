@@ -1,7 +1,8 @@
 version: "3"
 
 # ngrok configuration for Talia Platform
-# This file configures the tunnel with access control options
+# Copy this file to ngrok.yml and configure with your settings
+# DO NOT commit ngrok.yml with credentials to version control
 
 tunnels:
   celestyal:
@@ -9,17 +10,14 @@ tunnels:
     addr: 5173
     domain: taliahub.com
     # Basic HTTP Authentication (username:password)
-    # Currently ENABLED - users will be prompted for credentials
+    # Add your credentials here - DO NOT commit real passwords
     basic_auth:
-      - "demo:celestyal2025"
-      - "andy:test2025"
-      - "test:test2025"
+      - "username:password"
       # Add more users as needed:
       # - "client1:password123"
       # - "client2:password456"
     
     # IP Whitelisting - Only allow specific IP addresses or CIDR ranges
-    # COMMENTED OUT - Will be required in future
     # Uncomment and add IP addresses to enable:
     # ip_restriction:
     #   allow_cidrs:

@@ -10,6 +10,7 @@ import ExceptionList from "./components/focus-panels/ExceptionList";
 import ItineraryList from "./components/focus-panels/ItineraryList";
 import PublishedRates from "./components/focus-panels/PublishedRates/index.jsx";
 import DemandHeatmapContainer from "./components/focus-panels/DemandHeatmap";
+import DemandHeatmapWithSearchTrendsContainer from "./components/focus-panels/DemandHeatmapWithSearchTrends";
 import GoogleSearchContainer from "./components/focus-panels/GoogleSearch";
 import SearchTrendsContainer from "./components/focus-panels/SearchTrends";
 import GoogleTrendsContainer from "./components/focus-panels/GoogleTrends";
@@ -26,6 +27,8 @@ import { useFocusManagement } from "./hooks/useFocusManagement";
 import graphQLFocusService from "./services/GraphQLFocusService";
 // Admin Components
 import { AdminDashboard, UserMappingTable, TaliaUserTable } from "./components/admin";
+// Context Row Monitor (Admin only)
+import ContextRowMonitor from "./components/focus-panels/ContextRowMonitor/index.jsx";
 // Theme System - using centralized theme context
 import { useTheme } from "./contexts/ThemeContext";
 import { DEFAULT_THEME } from "./config/themes.js";
@@ -2313,6 +2316,7 @@ function Dashboard({ user }) {
               // Reports components
               "published-rates": PublishedRates,
               "demand-heatmap": DemandHeatmapContainer,
+              "demand-heatmap-with-trends": DemandHeatmapWithSearchTrendsContainer,
               "google-search": GoogleSearchContainer,
               "search-trends": SearchTrendsContainer,
               "google-trends": GoogleTrendsContainer,
@@ -2322,7 +2326,8 @@ function Dashboard({ user }) {
               // Admin components
               "admin-dashboard": AdminDashboard,
               "user-mapping-table": UserMappingTable,
-              "talia-user-table": TaliaUserTable
+              "talia-user-table": TaliaUserTable,
+              "context-row-monitor": ContextRowMonitor
             }} 
             onReady={onReady}
             style={{ height: "100%", width: "100%" }} 

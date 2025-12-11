@@ -81,8 +81,6 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
     if (!tableRef.current || !heatmapData || heatmapData.length === 0) return;
     if (initializedRef.current) return;
 
-    let failSafeRef = null;
-
     const initializeTable = async () => {
       try {
         // Load Tabulator
@@ -195,13 +193,6 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
         });
 
         initializedRef.current = true;
-
-        // Clear failSafe
-        if (failSafeRef) {
-          clearTimeout(failSafeRef);
-          failSafeRef = null;
-        }
-
         console.log('[DemandHeatmapWithSearchTrends] Tabulator initialized successfully');
 
         return () => {
@@ -217,14 +208,7 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
         };
       } catch (error) {
         console.error('[DemandHeatmapWithSearchTrends] Error initializing table:', error);
-        if (failSafeRef) {
-          clearTimeout(failSafeRef);
-        }
-        // Retry after delay
-        failSafeRef = setTimeout(() => {
-          initializedRef.current = false;
-          initializeTable();
-        }, 2000);
+        // Error handling - don't retry automatically, let user retry or component remount
       }
     };
 
@@ -241,9 +225,6 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
         instanceRef.current = null;
       }
       initializedRef.current = false;
-      if (failSafeRef) {
-        clearTimeout(failSafeRef);
-      }
     };
   }, [combinedData, heatmapData, months, maxValue, showTrends]);
 

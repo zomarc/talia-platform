@@ -188,10 +188,11 @@ const TemplatePresenter = ({ data, theme, onRefresh, selectedSailCode }) => {
             style={{
               padding: '6px 12px',
               fontSize: '12px',
-              border: '1px solid #ccc',
+              border: `1px solid ${themeValues.colors.border || '#333333'}`,
               borderRadius: '4px',
               cursor: 'pointer',
-              background: 'white',
+              background: themeValues.colors.cardBackground || themeValues.colors.background || '#2a2a2a',
+              color: themeValues.colors.foreground || '#ffffff',
               fontWeight: '500'
             }}
           >

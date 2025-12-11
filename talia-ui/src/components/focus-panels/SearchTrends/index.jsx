@@ -24,8 +24,8 @@ const SearchTrendsContainer = ({ filters = {} }) => {
     try {
       const result = await searchTrendsService.backfillHistoricalTrends(query, monthsBack);
       setBackfillResult(result);
-      // Refresh trends after backfill
-      setTimeout(() => refetch(), 1000);
+      // Refresh trends after backfill - use event-based update instead of delay
+      refetch();
     } catch (err) {
       console.error('Error backfilling:', err);
       setBackfillResult({ error: err.message });

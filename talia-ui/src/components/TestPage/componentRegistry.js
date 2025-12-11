@@ -84,10 +84,12 @@ export const componentRegistry = {
   SailingSummary: {
     component: SailingSummary,
     category: 'Dashboards',
-    description: 'Sailing summary dashboard with key metrics',
-    props: {},
-    dataRequirements: 'Requires sailing data',
-    filePath: 'src/components/focus-panels/SailingSummary.jsx'
+    description: 'Sailing summary dashboard with key metrics - aggregates cabin occupancy data at sail level',
+    props: {
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Requires GraphQL connection to sail_by_cabin_occupancy table. Uses useTableDataWithContext hook.',
+    filePath: 'src/components/focus-panels/SailingSummary/index.jsx'
   },
   SailingByCabinCategory: {
     component: SailingByCabinCategory,

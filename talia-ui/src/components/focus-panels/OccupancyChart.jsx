@@ -1,3 +1,11 @@
+/**
+ * LEGACY COMPONENT - DO NOT MODIFY
+ * This is a legacy demo component used for demonstration purposes only.
+ * Do not update, refactor, or apply standardization fixes to this component.
+ * 
+ * @deprecated Legacy demo component - not part of production codebase
+ */
+
 import React from 'react';
 
 const OccupancyChart = () => {

@@ -60,8 +60,6 @@ const DemandHeatmapPresenter = ({ data, months, theme, onRefresh }) => {
     if (!tableRef.current || !data || data.length === 0) return;
     if (initializedRef.current) return;
 
-    let failSafeRef = null;
-
     const initializeTable = async () => {
       try {
         // Load Tabulator
@@ -146,13 +144,6 @@ const DemandHeatmapPresenter = ({ data, months, theme, onRefresh }) => {
         });
 
         initializedRef.current = true;
-
-        // Clear failSafe
-        if (failSafeRef) {
-          clearTimeout(failSafeRef);
-          failSafeRef = null;
-        }
-
         console.log('[DemandHeatmap] Tabulator initialized successfully');
 
         return () => {
@@ -168,14 +159,7 @@ const DemandHeatmapPresenter = ({ data, months, theme, onRefresh }) => {
         };
       } catch (error) {
         console.error('[DemandHeatmap] Error initializing table:', error);
-        if (failSafeRef) {
-          clearTimeout(failSafeRef);
-        }
-        // Retry after delay
-        failSafeRef = setTimeout(() => {
-          initializedRef.current = false;
-          initializeTable();
-        }, 2000);
+        // Error handling - don't retry automatically, let user retry or component remount
       }
     };
 
@@ -192,9 +176,6 @@ const DemandHeatmapPresenter = ({ data, months, theme, onRefresh }) => {
         instanceRef.current = null;
       }
       initializedRef.current = false;
-      if (failSafeRef) {
-        clearTimeout(failSafeRef);
-      }
     };
   }, [data, months, maxValue]);
 

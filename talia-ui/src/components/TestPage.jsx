@@ -178,6 +178,8 @@ const TestPage = () => {
     const eventTypes = [
       'talia:sail.select',
       'talia:sail.clear',
+      'talia:ship.select',
+      'talia:ship.clear',
       'talia:publishedRates.select',
       'talia:publishedRates.clear',
       'talia:reservation.select',

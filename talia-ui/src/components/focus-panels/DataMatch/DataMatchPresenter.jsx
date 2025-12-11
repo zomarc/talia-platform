@@ -230,20 +230,28 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
           const data = row.getData();
           console.log("[DataMatch] Row selected:", data);
           
+          // Create event detail object
+          const eventDetail = {
+            sail_code: data.sail_code,
+            ship_code: data.ship_code,
+            departure_date: data.departure_date,
+            month_name: data.month_name,
+            row_data: data,
+            timestamp: new Date().toISOString()
+          };
+          
           // Create event with all key fields
           const event = new CustomEvent('talia:sail.select', { 
-            detail: {
-              sail_code: data.sail_code,
-              ship_code: data.ship_code,
-              departure_date: data.departure_date,
-              month_name: data.month_name,
-              row_data: data,
-              timestamp: new Date().toISOString()
-            }
+            detail: eventDetail
           });
           
-          // Store for context restoration (components check this on mount)
+          // Store for context restoration (components check these on mount)
           window.lastSailSelectEvent = event;
+          window.latestEvent = {
+            name: 'talia:sail.select',
+            detail: eventDetail,
+            timestamp: new Date().toLocaleTimeString()
+          };
           
           // Emit sail select event (other components listen to this)
           window.dispatchEvent(event);

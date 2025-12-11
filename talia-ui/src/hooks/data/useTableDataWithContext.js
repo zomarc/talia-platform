@@ -218,7 +218,9 @@ export const useTableDataWithContext = ({
       } catch (err) {
         console.warn('[useTableDataWithContext] Error checking existing context:', err);
       }
-      hasCheckedContextRef.current = true;
+      // Only mark as checked if we actually found and processed context
+      // If no context found, let the event listener setup handle initial fetch
+      // hasCheckedContextRef.current = true; // REMOVED - let event listener handle initial fetch
     };
 
     checkExistingContext();

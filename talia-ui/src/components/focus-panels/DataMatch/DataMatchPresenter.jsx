@@ -106,36 +106,47 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
       width: 120,
       headerFilter: 'input',
       formatter: (cell) => {
-        const value = cell.getValue();
-        if (!value) return '0/0';
-        return value;
-      },
-      sorter: (a, b) => {
-        // Sort by match count (first number)
-        const aMatch = parseInt(a.split('/')[0]) || 0;
-        const bMatch = parseInt(b.split('/')[0]) || 0;
-        return aMatch - bMatch;
-      },
-      cellStyle: (cell) => {
         try {
           const value = cell.getValue();
-          if (!value || typeof value !== 'string') return {};
+          if (!value || typeof value !== 'string') return '<span>0/0</span>';
+          
           const parts = value.split('/');
-          if (parts.length !== 2) return {};
+          if (parts.length !== 2) return `<span>${value}</span>`;
+          
           const match = parseInt(parts[0]) || 0;
           const missing = parseInt(parts[1]) || 0;
           
+          // Determine color based on match/missing counts
+          let bgColor, textColor;
           if (match > 0 && missing === 0) {
-            return { backgroundColor: 'rgba(76, 175, 80, 0.2)', color: '#4caf50', fontWeight: '500' };
+            bgColor = 'rgba(76, 175, 80, 0.2)';
+            textColor = '#4caf50';
           } else if (match === 0 && missing > 0) {
-            return { backgroundColor: 'rgba(244, 67, 54, 0.2)', color: '#f44336', fontWeight: '500' };
+            bgColor = 'rgba(244, 67, 54, 0.2)';
+            textColor = '#f44336';
           } else if (match > 0 && missing > 0) {
-            return { backgroundColor: 'rgba(255, 152, 0, 0.2)', color: '#ff9800', fontWeight: '500' };
+            bgColor = 'rgba(255, 152, 0, 0.2)';
+            textColor = '#ff9800';
+          } else {
+            bgColor = 'transparent';
+            textColor = 'inherit';
           }
-          return {};
+          
+          return `<span style="background-color: ${bgColor}; color: ${textColor}; font-weight: 500; padding: 2px 6px; border-radius: 3px; display: inline-block; width: 100%; text-align: center;">${value}</span>`;
         } catch (e) {
-          console.warn('[DataMatch] Error in cellStyle:', e);
-          return {};
+          console.warn('[DataMatch] Error in formatter:', e);
+          const value = cell.getValue();
+          return `<span>${value || '0/0'}</span>`;
+        }
+      },
+      sorter: (a, b) => {
+        // Sort by match count (first number)
+        try {
+          const aMatch = parseInt(a.split('/')[0]) || 0;
+          const bMatch = parseInt(b.split('/')[0]) || 0;
+          return aMatch - bMatch;
+        } catch (e) {
+          return 0;
         }
       }
     }));

@@ -103,7 +103,8 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
       title: tableName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
       field: tableName,
       hozAlign: 'center',
-      width: 120,
+      widthGrow: 1, // Auto-resize to fill available width
+      minWidth: 100, // Minimum width to ensure readability
       headerFilter: 'input',
       formatter: (cell) => {
         try {
@@ -220,9 +221,13 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
           frozenColumns: 4, // Ship Code, Month, Departure Date, Sail Code
           rowClick: (e, row) => {
             try {
-              console.log('[DataMatch] Row clicked:', row.getData());
-              if (row && typeof row.select === 'function') {
-                row.select();
+              // Check if this is a data row (not a group header)
+              if (row && row.getType && row.getType() === 'row') {
+                const rowData = row.getData();
+                console.log('[DataMatch] Row clicked:', rowData);
+                if (typeof row.select === 'function') {
+                  row.select();
+                }
               }
             } catch (err) {
               console.warn('[DataMatch] Error selecting row:', err);
@@ -231,10 +236,15 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
           rowSelectionChanged: (selectedData, selectedRows) => {
             try {
               console.log('[DataMatch] rowSelectionChanged called:', selectedData, selectedRows);
+              
+              // selectedData is an array of row data objects
+              // selectedRows is an array of row components
               const rec = selectedData && selectedData.length > 0 ? selectedData[0] : null;
-              if (rec) {
+              
+              if (rec && rec.ship_code) {
                 const shipCode = rec.ship_code;
                 console.log('[DataMatch] Row selected, emitting ship select event:', shipCode, rec);
+                
                 const event = new CustomEvent('talia:ship.select', {
                   detail: {
                     ship_code: shipCode,
@@ -242,10 +252,14 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
                     timestamp: new Date().toISOString()
                   }
                 });
+                
                 window.dispatchEvent(event);
                 console.log('[DataMatch] Event dispatched:', event.type, event.detail);
+                
+                // Also store for context restoration
+                window.lastShipSelectEvent = event;
               } else {
-                console.log('[DataMatch] Row deselected');
+                console.log('[DataMatch] Row deselected or invalid row data');
                 const clearEvent = new CustomEvent('talia:ship.clear', {
                   detail: {
                     timestamp: new Date().toISOString()
@@ -253,9 +267,24 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
                 });
                 window.dispatchEvent(clearEvent);
                 console.log('[DataMatch] Clear event dispatched');
+                window.lastShipSelectEvent = null;
               }
             } catch (err) {
               console.error('[DataMatch] Error in rowSelectionChanged:', err);
+            }
+          },
+          cellClick: (e, cell) => {
+            try {
+              // Also handle cell clicks to ensure selection works
+              const row = cell.getRow();
+              if (row && row.getType && row.getType() === 'row') {
+                console.log('[DataMatch] Cell clicked, selecting row');
+                if (typeof row.select === 'function') {
+                  row.select();
+                }
+              }
+            } catch (err) {
+              console.warn('[DataMatch] Error in cellClick:', err);
             }
           }
         });

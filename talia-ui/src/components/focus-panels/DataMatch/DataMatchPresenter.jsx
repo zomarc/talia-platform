@@ -230,11 +230,11 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
           const data = row.getData();
           console.log("[DataMatch] Row selected:", data);
           
-          // Emit ship select event with all key fields
-          window.dispatchEvent(new CustomEvent('talia:ship.select', { 
+          // Emit sail select event (other components listen to this) with all key fields
+          window.dispatchEvent(new CustomEvent('talia:sail.select', { 
             detail: {
+              sail_code: data.sail_code,
               ship_code: data.ship_code,
-              sail_code: data.sail_code, // Include sail_code for event log
               departure_date: data.departure_date,
               month_name: data.month_name,
               row_data: data,
@@ -247,7 +247,7 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
           console.log("[DataMatch] Row deselected");
           
           // Emit clear event
-          window.dispatchEvent(new CustomEvent('talia:ship.clear', {
+          window.dispatchEvent(new CustomEvent('talia:sail.clear', {
             detail: {
               timestamp: new Date().toISOString()
             }

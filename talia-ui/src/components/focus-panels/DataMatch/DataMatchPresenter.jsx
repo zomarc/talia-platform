@@ -117,17 +117,26 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
         return aMatch - bMatch;
       },
       cellStyle: (cell) => {
-        const value = cell.getValue();
-        if (!value) return {};
-        const [match, missing] = value.split('/').map(v => parseInt(v) || 0);
-        if (match > 0 && missing === 0) {
-          return { backgroundColor: 'rgba(76, 175, 80, 0.2)', color: '#4caf50', fontWeight: '500' };
-        } else if (match === 0 && missing > 0) {
-          return { backgroundColor: 'rgba(244, 67, 54, 0.2)', color: '#f44336', fontWeight: '500' };
-        } else if (match > 0 && missing > 0) {
-          return { backgroundColor: 'rgba(255, 152, 0, 0.2)', color: '#ff9800', fontWeight: '500' };
+        try {
+          const value = cell.getValue();
+          if (!value || typeof value !== 'string') return {};
+          const parts = value.split('/');
+          if (parts.length !== 2) return {};
+          const match = parseInt(parts[0]) || 0;
+          const missing = parseInt(parts[1]) || 0;
+          
+          if (match > 0 && missing === 0) {
+            return { backgroundColor: 'rgba(76, 175, 80, 0.2)', color: '#4caf50', fontWeight: '500' };
+          } else if (match === 0 && missing > 0) {
+            return { backgroundColor: 'rgba(244, 67, 54, 0.2)', color: '#f44336', fontWeight: '500' };
+          } else if (match > 0 && missing > 0) {
+            return { backgroundColor: 'rgba(255, 152, 0, 0.2)', color: '#ff9800', fontWeight: '500' };
+          }
+          return {};
+        } catch (e) {
+          console.warn('[DataMatch] Error in cellStyle:', e);
+          return {};
         }
-        return {};
       }
     }));
 
@@ -158,15 +167,21 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
           height: '100%',
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,
+          selectableRows: 1, // Single row selection
           groupBy: ['ship_code', 'month_name'], // Group by ship_code first, then month_name
           groupHeader: (value, count, data, group) => {
             // Custom group header formatting
-            if (group.level === 0) {
-              return `<strong>Ship: ${value}</strong> <span style="color:#999;">(${count} sail${count !== 1 ? 's' : ''})</span>`;
-            } else if (group.level === 1) {
-              return `<strong>Month: ${value}</strong> <span style="color:#999;">(${count} sail${count !== 1 ? 's' : ''})</span>`;
+            try {
+              if (group.level === 0) {
+                return `<strong>Ship: ${value}</strong> <span style="color:#999;">(${count} sail${count !== 1 ? 's' : ''})</span>`;
+              } else if (group.level === 1) {
+                return `<strong>Month: ${value}</strong> <span style="color:#999;">(${count} sail${count !== 1 ? 's' : ''})</span>`;
+              }
+              return value;
+            } catch (e) {
+              console.warn('[DataMatch] Error in groupHeader:', e);
+              return value;
             }
-            return value;
           },
           groupStartOpen: true,
           groupToggleElement: 'header',
@@ -178,7 +193,39 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
             { column: 'departure_date', dir: 'asc' }
           ],
           frozenRows: 0,
-          frozenColumns: 4 // Ship Code, Month, Departure Date, Sail Code
+          frozenColumns: 4, // Ship Code, Month, Departure Date, Sail Code
+          rowClick: (e, row) => {
+            try {
+              row?.select?.();
+            } catch (err) {
+              console.warn('[DataMatch] Error selecting row:', err);
+            }
+          },
+          rowSelectionChanged: (selectedData) => {
+            try {
+              const rec = selectedData && selectedData[0];
+              if (rec) {
+                const shipCode = rec.ship_code;
+                console.log('[DataMatch] Row selected, emitting ship select event:', shipCode);
+                window.dispatchEvent(new CustomEvent('talia:ship.select', {
+                  detail: {
+                    ship_code: shipCode,
+                    row_data: rec,
+                    timestamp: new Date().toISOString()
+                  }
+                }));
+              } else {
+                console.log('[DataMatch] Row deselected');
+                window.dispatchEvent(new CustomEvent('talia:ship.clear', {
+                  detail: {
+                    timestamp: new Date().toISOString()
+                  }
+                }));
+              }
+            } catch (err) {
+              console.error('[DataMatch] Error in rowSelectionChanged:', err);
+            }
+          }
         });
 
         console.log('[DataMatch] Table initialized with', transformedData.length, 'rows');

@@ -18,17 +18,30 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
     if (!data || !data.rows || !data.tables) return [];
 
     return data.rows.map(row => {
+      // Parse date to extract month and year for grouping
+      const date = new Date(row.departure_date);
+      const month = date.getMonth() + 1; // 1-12
+      const year = date.getFullYear();
+      const monthYear = `${year}-${String(month).padStart(2, '0')}`;
+      const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
       const rowData = {
         ship_code: row.ship_code,
         departure_date: row.departure_date,
+        month_year: monthYear,
+        month_name: monthName,
         sail_code: row.sail_code
       };
 
-      // Add columns for each table (matching and missing counts)
+      // Add columns for each table (combined match/missing format)
       data.tables.forEach(tableName => {
         const match = row.tableMatches.find(tm => tm.tableName === tableName);
-        rowData[`${tableName}_matching`] = match?.matchingCount || 0;
-        rowData[`${tableName}_missing`] = match?.missingCount || 0;
+        const matchingCount = match?.matchingCount || 0;
+        const missingCount = match?.missingCount || 0;
+        rowData[tableName] = `${matchingCount}/${missingCount}`;
+        // Store raw values for sorting/filtering
+        rowData[`${tableName}_match`] = matchingCount;
+        rowData[`${tableName}_missing`] = missingCount;
       });
 
       return rowData;
@@ -52,6 +65,17 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
         frozen: true
       },
       {
+        title: 'Month',
+        field: 'month_name',
+        width: 120,
+        headerFilter: 'list',
+        headerFilterParams: {
+          valuesLookup: true,
+          autocomplete: true
+        },
+        frozen: true
+      },
+      {
         title: 'Departure Date',
         field: 'departure_date',
         width: 120,
@@ -61,7 +85,7 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
           const value = cell.getValue();
           if (!value) return '';
           const date = new Date(value);
-          return date.toLocaleDateString();
+          return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
         },
         frozen: true
       },
@@ -74,51 +98,38 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
       }
     ];
 
-    // Add columns for each table
-    const tableColumns = data.tables.flatMap(tableName => [
-      {
-        title: `${tableName.replace(/_/g, ' ')} (Match)`,
-        field: `${tableName}_matching`,
-        hozAlign: 'right',
-        width: 100,
-        headerFilter: 'number',
-        headerFilterParams: {
-          min: 0,
-          step: 1
-        },
-        formatter: (cell) => {
-          const value = cell.getValue();
-          return value > 0 ? value.toLocaleString() : '0';
-        },
-        cellStyle: (cell) => {
-          const value = cell.getValue();
-          return value > 0 
-            ? { backgroundColor: 'rgba(76, 175, 80, 0.2)', color: '#4caf50' }
-            : { backgroundColor: 'rgba(244, 67, 54, 0.2)', color: '#f44336' };
-        }
+    // Add columns for each table (combined match/missing format)
+    const tableColumns = data.tables.map(tableName => ({
+      title: tableName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      field: tableName,
+      hozAlign: 'center',
+      width: 120,
+      headerFilter: 'input',
+      formatter: (cell) => {
+        const value = cell.getValue();
+        if (!value) return '0/0';
+        return value;
       },
-      {
-        title: `${tableName.replace(/_/g, ' ')} (Missing)`,
-        field: `${tableName}_missing`,
-        hozAlign: 'right',
-        width: 100,
-        headerFilter: 'number',
-        headerFilterParams: {
-          min: 0,
-          step: 1
-        },
-        formatter: (cell) => {
-          const value = cell.getValue();
-          return value > 0 ? value.toLocaleString() : '0';
-        },
-        cellStyle: (cell) => {
-          const value = cell.getValue();
-          return value > 0 
-            ? { backgroundColor: 'rgba(244, 67, 54, 0.2)', color: '#f44336' }
-            : { backgroundColor: 'rgba(76, 175, 80, 0.2)', color: '#4caf50' };
+      sorter: (a, b) => {
+        // Sort by match count (first number)
+        const aMatch = parseInt(a.split('/')[0]) || 0;
+        const bMatch = parseInt(b.split('/')[0]) || 0;
+        return aMatch - bMatch;
+      },
+      cellStyle: (cell) => {
+        const value = cell.getValue();
+        if (!value) return {};
+        const [match, missing] = value.split('/').map(v => parseInt(v) || 0);
+        if (match > 0 && missing === 0) {
+          return { backgroundColor: 'rgba(76, 175, 80, 0.2)', color: '#4caf50', fontWeight: '500' };
+        } else if (match === 0 && missing > 0) {
+          return { backgroundColor: 'rgba(244, 67, 54, 0.2)', color: '#f44336', fontWeight: '500' };
+        } else if (match > 0 && missing > 0) {
+          return { backgroundColor: 'rgba(255, 152, 0, 0.2)', color: '#ff9800', fontWeight: '500' };
         }
+        return {};
       }
-    ]);
+    }));
 
     return [...baseColumns, ...tableColumns];
   }, [data]);
@@ -147,15 +158,27 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
           height: '100%',
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,
+          groupBy: ['ship_code', 'month_name'], // Group by ship_code first, then month_name
+          groupHeader: (value, count, data, group) => {
+            // Custom group header formatting
+            if (group.level === 0) {
+              return `<strong>Ship: ${value}</strong> <span style="color:#999;">(${count} sail${count !== 1 ? 's' : ''})</span>`;
+            } else if (group.level === 1) {
+              return `<strong>Month: ${value}</strong> <span style="color:#999;">(${count} sail${count !== 1 ? 's' : ''})</span>`;
+            }
+            return value;
+          },
+          groupStartOpen: true,
+          groupToggleElement: 'header',
           pagination: true,
           paginationSize: 50,
           paginationSizeSelector: [25, 50, 100, 200],
           initialSort: [
-            { column: 'departure_date', dir: 'desc' },
-            { column: 'ship_code', dir: 'asc' }
+            { column: 'ship_code', dir: 'asc' },
+            { column: 'departure_date', dir: 'asc' }
           ],
           frozenRows: 0,
-          frozenColumns: 3 // Ship Code, Departure Date, Sail Code
+          frozenColumns: 4 // Ship Code, Month, Departure Date, Sail Code
         });
 
         console.log('[DataMatch] Table initialized with', transformedData.length, 'rows');

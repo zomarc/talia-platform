@@ -16,7 +16,7 @@ import SearchTrendsContainer from "./components/focus-panels/SearchTrends";
 import GoogleTrendsContainer from "./components/focus-panels/GoogleTrends";
 import SailingByCabinCategory from "./components/focus-panels/SailingByCabinCategory";
 import SimpleTable from "./components/focus-panels/SimpleTable";
-import SailingSummary from "./components/focus-panels/SailingSummary";
+import SailingSummary from "./components/focus-panels/SailingSummary/index";
 import UserProfile from "./components/UserProfile";
 import { useSupabaseAuth } from "./contexts/SupabaseAuthContext";
 import { normalizeRole, isAdmin } from "./utils/roleUtils";

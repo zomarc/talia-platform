@@ -426,7 +426,7 @@ const SailingSummary = React.memo(() => {
           layout: "fitColumns",
           reactiveData: false,
           height: "100%",
-          selectable: 1,                // single-select only (native Tabulator method)
+          selectableRows: 1,                // single-select only (native Tabulator method)
           headerFilterLiveFilter: true, // live filtering as you type
           headerFilterLiveFilterDelay: 300, // delay for live filtering
         });

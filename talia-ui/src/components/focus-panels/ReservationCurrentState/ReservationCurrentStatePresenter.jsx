@@ -173,7 +173,7 @@ const ReservationCurrentStatePresenter = ({ data, theme, onRefresh, selectedSail
             { column: "sail_from_date", dir: "desc" }
           ],
           height: "100%",
-          selectable: 1,
+          selectableRows: 1,
           resizableColumns: true,
           movableColumns: true,
           headerFilterLiveFilter: true,

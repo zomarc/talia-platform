@@ -141,9 +141,12 @@ const CompetitorPricingTable = ({ data, theme }) => {
           }
         ];
 
+        // Clone data to avoid read-only property errors (GraphQL may return frozen objects)
+        const clonedData = (data || []).map(item => ({ ...item }));
+
         // Initialize Tabulator
         instanceRef.current = new Tabulator(tableRef.current, {
-          data: data || [],
+          data: clonedData,
           columns,
           layout: 'fitColumns',
           pagination: true,

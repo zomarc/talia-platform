@@ -109,7 +109,7 @@ export const DEFAULT_TABULATOR_OPTIONS = {
   layout: 'fitColumns',
   reactiveData: false,
   height: '100%',
-  selectable: 1,
+  selectableRows: 1, // Updated from deprecated 'selectable'
   headerFilterLiveFilter: true,
   headerFilterLiveFilterDelay: 300,
   fontSize: 12,

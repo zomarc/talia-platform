@@ -431,6 +431,17 @@ export const typeDefs = `#graphql
     limit: Int
   }
 
+  input TableDataFilters {
+    sail_code: String
+    ship_code: String
+    cabin_category: String
+    ship_name: String
+    package_name: String
+    package_type: String
+    geog_area_code: String
+    # Add other common filters as needed
+  }
+
   type DemandHeatmapData {
     id: Int
     sail_code: String
@@ -756,7 +767,7 @@ export const typeDefs = `#graphql
     syncMetadata: [SyncMetadataRecord!]!
     databaseTables: [DatabaseTableMetadata!]!
     tableMetadata(tableName: String!): DatabaseTableMetadata
-    tableData(tableName: String!, limit: Int): [JSON!]!  # Generic query to fetch table rows for review
+    tableData(tableName: String!, limit: Int, filters: TableDataFilters): [JSON!]!  # Generic query to fetch table rows for review
     backupMetadata: BackupMetadata  # Get database backup status and info
     
     # Legacy queries (for backward compatibility)

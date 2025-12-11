@@ -91,10 +91,12 @@ export const componentRegistry = {
   },
   SailingByCabinCategory: {
     component: SailingByCabinCategory,
-    category: 'Charts',
-    description: 'Sailing data grouped by cabin category',
-    props: {},
-    dataRequirements: 'Requires cabin and sailing data',
+    category: 'Tables',
+    description: 'Sailing data grouped by cabin category - filters based on sail selection events',
+    props: {
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Requires GraphQL connection to sail_by_cabin_occupancy table. Reacts to talia:sail.select events.',
     filePath: 'src/components/focus-panels/SailingByCabinCategory.jsx'
   },
   ExceptionList: {

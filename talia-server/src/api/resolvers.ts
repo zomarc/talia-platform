@@ -1210,18 +1210,55 @@ export const resolvers = {
     },
 
     tableData: async (parent: any, args: any) => {
-      const { tableName, limit = 100 } = args;
+      const { tableName, limit = 100, filters } = args;
       try {
         // Fetch table data from Supabase via backend (for review functionality)
-        const { data, error } = await supabaseDataService.client
+        let query = supabaseDataService.client
           .from(tableName)
-          .select('*')
-          .limit(limit);
+          .select('*');
+        
+        // Apply filters if provided
+        if (filters) {
+          if (filters.sail_code) {
+            query = query.eq('sail_code', filters.sail_code);
+            console.log(`[tableData] Applied filter: sail_code = ${filters.sail_code}`);
+          }
+          if (filters.ship_code) {
+            query = query.eq('ship_code', filters.ship_code);
+            console.log(`[tableData] Applied filter: ship_code = ${filters.ship_code}`);
+          }
+          if (filters.cabin_category) {
+            query = query.eq('cabin_category', filters.cabin_category);
+            console.log(`[tableData] Applied filter: cabin_category = ${filters.cabin_category}`);
+          }
+          if (filters.ship_name) {
+            query = query.eq('ship_name', filters.ship_name);
+            console.log(`[tableData] Applied filter: ship_name = ${filters.ship_name}`);
+          }
+          if (filters.package_name) {
+            query = query.eq('package_name', filters.package_name);
+            console.log(`[tableData] Applied filter: package_name = ${filters.package_name}`);
+          }
+          if (filters.package_type) {
+            query = query.eq('package_type', filters.package_type);
+            console.log(`[tableData] Applied filter: package_type = ${filters.package_type}`);
+          }
+          if (filters.geog_area_code) {
+            query = query.eq('geog_area_code', filters.geog_area_code);
+            console.log(`[tableData] Applied filter: geog_area_code = ${filters.geog_area_code}`);
+          }
+        }
+        
+        query = query.limit(limit);
+        
+        const { data, error } = await query;
         
         if (error) {
           console.error(`Error fetching table data for ${tableName}:`, error);
           throw new Error(`Failed to fetch data from ${tableName}: ${error.message}`);
         }
+        
+        console.log(`[tableData] Fetched ${data?.length || 0} records from ${tableName}${filters ? ' with filters' : ''}`);
         
         // Return data as JSON array (GraphQL JSON scalar)
         return data || [];

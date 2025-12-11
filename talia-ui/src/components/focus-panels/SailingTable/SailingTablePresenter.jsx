@@ -81,17 +81,19 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
     { 
       field: "sail_code", 
       title: "Sail Code",
-      headerFilter: "autocomplete",
+      headerFilter: "list",
       headerFilterParams: {
-        valuesLookup: true  // Automatically lookup unique values from this column
+        valuesLookup: true,  // Automatically lookup unique values from this column
+        autocomplete: true   // Enable autocomplete behavior
       }
     },
     { 
       field: "ship_name", 
       title: "Ship",
-      headerFilter: "autocomplete",
+      headerFilter: "list",
       headerFilterParams: {
-        valuesLookup: true  // Automatically lookup unique values
+        valuesLookup: true,  // Automatically lookup unique values
+        autocomplete: true   // Enable autocomplete behavior
       }
     },
     { 
@@ -102,17 +104,19 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
     { 
       field: "package_type", 
       title: "Package Type",
-      headerFilter: "autocomplete",
+      headerFilter: "list",
       headerFilterParams: {
-        valuesLookup: true  // Automatically lookup unique values
+        valuesLookup: true,  // Automatically lookup unique values
+        autocomplete: true   // Enable autocomplete behavior
       }
     },
     { 
       field: "geog_area_code", 
       title: "Geographic Area",
-      headerFilter: "autocomplete",
+      headerFilter: "list",
       headerFilterParams: {
-        valuesLookup: true  // Automatically lookup unique values
+        valuesLookup: true,  // Automatically lookup unique values
+        autocomplete: true   // Enable autocomplete behavior
       }
     },
     { 
@@ -137,24 +141,26 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
     { 
       field: "port_from", 
       title: "Port From",
-      headerFilter: "autocomplete",
+      headerFilter: "list",
       headerFilterParams: {
-        valuesLookup: true
+        valuesLookup: true,
+        autocomplete: true   // Enable autocomplete behavior
       }
     },
     { 
       field: "port_to", 
       title: "Port To",
-      headerFilter: "autocomplete",
+      headerFilter: "list",
       headerFilterParams: {
-        valuesLookup: true
+        valuesLookup: true,
+        autocomplete: true   // Enable autocomplete behavior
       }
     },
     { 
       field: "is_active", 
       title: "Active",
       hozAlign: "center",
-      headerFilter: "select",
+      headerFilter: "list",
       headerFilterParams: {
         values: {
           "": "All",

@@ -260,10 +260,10 @@ export const useTableDataWithContext = ({
     };
 
     if (!currentEventName) {
-      // If no event name, fetch without filters once (only if not already checked)
-      if (!hasCheckedContextRef.current) {
-        fetchDataRef.current(null);
-      }
+      // If no event name, fetch without filters once
+      // Don't check hasCheckedContextRef - we always want to fetch when eventName is null
+      fetchDataRef.current(null);
+      hasCheckedContextRef.current = true; // Mark as checked to prevent duplicate fetches
       return;
     }
 

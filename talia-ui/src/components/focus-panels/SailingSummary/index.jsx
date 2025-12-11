@@ -9,11 +9,9 @@ import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithCon
 import SailingSummaryPresenter from './SailingSummaryPresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
-import { useTheme } from '../../../contexts/ThemeContext';
-
 const SailingSummaryContainer = ({ theme: themeProp }) => {
-  const { theme: themeContext } = useTheme();
-  const theme = themeProp || themeContext;
+  // Use theme prop if provided, otherwise use default
+  const theme = themeProp || { colors: { foreground: '#ffffff', background: '#1a1a1a' } };
 
   // Use reusable hook for context-based data fetching
   // Note: SailingSummary shows all data (no filtering), but listens to events for selection

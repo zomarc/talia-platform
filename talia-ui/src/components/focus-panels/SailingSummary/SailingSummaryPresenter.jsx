@@ -37,6 +37,7 @@ const aggregateSailingData = (rawData) => {
     }
 
     const sail = sailMap.get(key);
+    // Aggregate cabin capacity (capacity * total_cabins for each cabin category)
     sail.total_cabin_capacity += (record.cabin_capacity || 0) * (record.total_cabins || 0);
     sail.total_cabins += record.total_cabins || 0;
     sail.total_occupied_cabins += record.occupied_cabins || 0;

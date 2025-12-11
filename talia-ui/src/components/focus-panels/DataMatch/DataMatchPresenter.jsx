@@ -218,75 +218,37 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
             { column: 'departure_date', dir: 'asc' }
           ],
           frozenRows: 0,
-          frozenColumns: 4, // Ship Code, Month, Departure Date, Sail Code
-          rowClick: (e, row) => {
-            try {
-              // Check if this is a data row (not a group header)
-              if (row && row.getType && row.getType() === 'row') {
-                const rowData = row.getData();
-                console.log('[DataMatch] Row clicked:', rowData);
-                if (typeof row.select === 'function') {
-                  row.select();
-                }
-              }
-            } catch (err) {
-              console.warn('[DataMatch] Error selecting row:', err);
+          frozenColumns: 4 // Ship Code, Month, Departure Date, Sail Code
+        });
+
+        // Register event listeners using Tabulator's .on() method (same as SailingTablePresenter)
+        instanceRef.current.on("rowClick", (e, row) => {
+          try { row?.select?.(); } catch {}
+        });
+
+        instanceRef.current.on("rowSelected", (row) => {
+          const data = row.getData();
+          console.log("[DataMatch] Row selected:", data);
+          
+          // Emit ship select event
+          window.dispatchEvent(new CustomEvent('talia:ship.select', { 
+            detail: {
+              ship_code: data.ship_code,
+              row_data: data,
+              timestamp: new Date().toISOString()
             }
-          },
-          rowSelectionChanged: (selectedData, selectedRows) => {
-            try {
-              console.log('[DataMatch] rowSelectionChanged called:', selectedData, selectedRows);
-              
-              // selectedData is an array of row data objects
-              // selectedRows is an array of row components
-              const rec = selectedData && selectedData.length > 0 ? selectedData[0] : null;
-              
-              if (rec && rec.ship_code) {
-                const shipCode = rec.ship_code;
-                console.log('[DataMatch] Row selected, emitting ship select event:', shipCode, rec);
-                
-                const event = new CustomEvent('talia:ship.select', {
-                  detail: {
-                    ship_code: shipCode,
-                    row_data: rec,
-                    timestamp: new Date().toISOString()
-                  }
-                });
-                
-                window.dispatchEvent(event);
-                console.log('[DataMatch] Event dispatched:', event.type, event.detail);
-                
-                // Also store for context restoration
-                window.lastShipSelectEvent = event;
-              } else {
-                console.log('[DataMatch] Row deselected or invalid row data');
-                const clearEvent = new CustomEvent('talia:ship.clear', {
-                  detail: {
-                    timestamp: new Date().toISOString()
-                  }
-                });
-                window.dispatchEvent(clearEvent);
-                console.log('[DataMatch] Clear event dispatched');
-                window.lastShipSelectEvent = null;
-              }
-            } catch (err) {
-              console.error('[DataMatch] Error in rowSelectionChanged:', err);
+          }));
+        });
+
+        instanceRef.current.on("rowDeselected", () => {
+          console.log("[DataMatch] Row deselected");
+          
+          // Emit clear event
+          window.dispatchEvent(new CustomEvent('talia:ship.clear', {
+            detail: {
+              timestamp: new Date().toISOString()
             }
-          },
-          cellClick: (e, cell) => {
-            try {
-              // Also handle cell clicks to ensure selection works
-              const row = cell.getRow();
-              if (row && row.getType && row.getType() === 'row') {
-                console.log('[DataMatch] Cell clicked, selecting row');
-                if (typeof row.select === 'function') {
-                  row.select();
-                }
-              }
-            } catch (err) {
-              console.warn('[DataMatch] Error in cellClick:', err);
-            }
-          }
+          }));
         });
 
         console.log('[DataMatch] Table initialized with', transformedData.length, 'rows');

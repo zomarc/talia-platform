@@ -230,8 +230,8 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
           const data = row.getData();
           console.log("[DataMatch] Row selected:", data);
           
-          // Emit sail select event (other components listen to this) with all key fields
-          window.dispatchEvent(new CustomEvent('talia:sail.select', { 
+          // Create event with all key fields
+          const event = new CustomEvent('talia:sail.select', { 
             detail: {
               sail_code: data.sail_code,
               ship_code: data.ship_code,
@@ -240,11 +240,20 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
               row_data: data,
               timestamp: new Date().toISOString()
             }
-          }));
+          });
+          
+          // Store for context restoration (components check this on mount)
+          window.lastSailSelectEvent = event;
+          
+          // Emit sail select event (other components listen to this)
+          window.dispatchEvent(event);
         });
 
         instanceRef.current.on("rowDeselected", () => {
           console.log("[DataMatch] Row deselected");
+          
+          // Clear stored event
+          window.lastSailSelectEvent = null;
           
           // Emit clear event
           window.dispatchEvent(new CustomEvent('talia:sail.clear', {

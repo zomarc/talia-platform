@@ -230,10 +230,13 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
           const data = row.getData();
           console.log("[DataMatch] Row selected:", data);
           
-          // Emit ship select event
+          // Emit ship select event with all key fields
           window.dispatchEvent(new CustomEvent('talia:ship.select', { 
             detail: {
               ship_code: data.ship_code,
+              sail_code: data.sail_code, // Include sail_code for event log
+              departure_date: data.departure_date,
+              month_name: data.month_name,
               row_data: data,
               timestamp: new Date().toISOString()
             }

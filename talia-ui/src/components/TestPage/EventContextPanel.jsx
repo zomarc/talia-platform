@@ -136,11 +136,17 @@ const EventContextPanel = ({ latestEvent, theme, selectedComponent }) => {
 
   const detail = latestEvent.detail;
   const rowData = detail.row_data || detail;
-  const sailCode = detail.sail_code || detail.Sail_Code || rowData?.sail_code || rowData?.Sail_Code || 'N/A';
+  
+  // Extract key fields - support both sail and ship events
+  const sailCode = detail.sail_code || detail.Sail_Code || rowData?.sail_code || rowData?.Sail_Code || null;
+  const shipCode = detail.ship_code || detail.Ship_Code || rowData?.ship_code || rowData?.Ship_Code || null;
+  const departureDate = detail.departure_date || rowData?.departure_date || rowData?.sail_date_from || null;
   
   // Extract filter information
   const filters = {
-    sail_code: sailCode !== 'N/A' ? sailCode : null
+    sail_code: sailCode,
+    ship_code: shipCode,
+    departure_date: departureDate
   };
 
   // Format row data for display (remove quotes, format nicely)
@@ -195,14 +201,30 @@ const EventContextPanel = ({ latestEvent, theme, selectedComponent }) => {
           borderRadius: '4px',
           border: `1px solid ${borderColor}`,
           fontFamily: 'monospace',
-          fontSize: '10px'
+          fontSize: '10px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px'
         }}>
-          {filters.sail_code ? (
+          {filters.sail_code && (
             <div style={{ display: 'flex', gap: '8px' }}>
               <span style={{ color: textSecondary }}>sail_code:</span>
               <span style={{ color: accentColor, fontWeight: '600' }}>{filters.sail_code}</span>
             </div>
-          ) : (
+          )}
+          {filters.ship_code && (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <span style={{ color: textSecondary }}>ship_code:</span>
+              <span style={{ color: accentColor, fontWeight: '600' }}>{filters.ship_code}</span>
+            </div>
+          )}
+          {filters.departure_date && (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <span style={{ color: textSecondary }}>departure_date:</span>
+              <span style={{ color: accentColor, fontWeight: '600' }}>{filters.departure_date}</span>
+            </div>
+          )}
+          {!filters.sail_code && !filters.ship_code && !filters.departure_date && (
             <span style={{ color: textSecondary, fontStyle: 'italic' }}>No filters applied</span>
           )}
         </div>

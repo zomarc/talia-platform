@@ -218,9 +218,8 @@ export const useTableDataWithContext = ({
       } catch (err) {
         console.warn('[useTableDataWithContext] Error checking existing context:', err);
       }
-      // Only mark as checked if we actually found and processed context
-      // If no context found, let the event listener setup handle initial fetch
-      // hasCheckedContextRef.current = true; // REMOVED - let event listener handle initial fetch
+      // Mark as checked even if no context found - event listener will handle initial fetch
+      hasCheckedContextRef.current = true;
     };
 
     checkExistingContext();
@@ -282,9 +281,47 @@ export const useTableDataWithContext = ({
       }
     });
 
-    // Initial fetch without filters (only if no context was found)
+    // Initial fetch: if context was found, it was already fetched in checkExistingContext
+    // If no context found, fetch without filters to show all data
+    // But also check again here in case event was dispatched between context check and listener setup
     if (!hasCheckedContextRef.current) {
-      fetchDataRef.current(null);
+      // Re-check for context one more time (in case event was dispatched between checks)
+      const recheckContext = () => {
+        try {
+          // Check window.latestEvent
+          const testPageEvent = window.latestEvent || null;
+          if (testPageEvent && testPageEvent.name === eventNameRef.current && testPageEvent.detail) {
+            const newFilters = extractFiltersRef.current(testPageEvent.detail);
+            if (newFilters) {
+              console.log('[useTableDataWithContext] Found window.latestEvent in listener setup:', newFilters);
+              setContext(testPageEvent.detail);
+              fetchDataRef.current(newFilters);
+              hasCheckedContextRef.current = true;
+              return;
+            }
+          }
+          // Check lastSailSelectEvent
+          if (eventNameRef.current === 'talia:sail.select') {
+            const lastSailEvent = window.lastSailSelectEvent || null;
+            if (lastSailEvent && lastSailEvent.detail) {
+              const newFilters = extractFiltersRef.current(lastSailEvent.detail);
+              if (newFilters) {
+                console.log('[useTableDataWithContext] Found lastSailSelectEvent in listener setup:', newFilters);
+                setContext(lastSailEvent.detail);
+                fetchDataRef.current(newFilters);
+                hasCheckedContextRef.current = true;
+                return;
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('[useTableDataWithContext] Error rechecking context:', err);
+        }
+        // No context found, fetch without filters
+        fetchDataRef.current(null);
+        hasCheckedContextRef.current = true;
+      };
+      recheckContext();
     }
 
     return () => {

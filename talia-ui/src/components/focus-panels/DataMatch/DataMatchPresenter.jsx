@@ -172,15 +172,28 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
           groupHeader: (value, count, data, group) => {
             // Custom group header formatting
             try {
-              if (group.level === 0) {
+              // Check group structure to determine level
+              // First level groups are by ship_code, second level by month_name
+              const groupKey = group.getKey();
+              if (groupKey && typeof groupKey === 'string') {
+                // Check if this is a ship code (typically 2 characters) or month name
+                if (groupKey.length <= 3 && /^[A-Z]{2,3}$/.test(groupKey)) {
+                  // Likely ship code
+                  return `<strong>Ship: ${value}</strong> <span style="color:#999;">(${count} sail${count !== 1 ? 's' : ''})</span>`;
+                } else {
+                  // Likely month name
+                  return `<strong>Month: ${value}</strong> <span style="color:#999;">(${count} sail${count !== 1 ? 's' : ''})</span>`;
+                }
+              }
+              // Fallback: use count to guess level (first level usually has more items)
+              if (count > 10) {
                 return `<strong>Ship: ${value}</strong> <span style="color:#999;">(${count} sail${count !== 1 ? 's' : ''})</span>`;
-              } else if (group.level === 1) {
+              } else {
                 return `<strong>Month: ${value}</strong> <span style="color:#999;">(${count} sail${count !== 1 ? 's' : ''})</span>`;
               }
-              return value;
             } catch (e) {
               console.warn('[DataMatch] Error in groupHeader:', e);
-              return value;
+              return `${value} (${count})`;
             }
           },
           groupStartOpen: true,

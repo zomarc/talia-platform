@@ -196,31 +196,39 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
           frozenColumns: 4, // Ship Code, Month, Departure Date, Sail Code
           rowClick: (e, row) => {
             try {
-              row?.select?.();
+              console.log('[DataMatch] Row clicked:', row.getData());
+              if (row && typeof row.select === 'function') {
+                row.select();
+              }
             } catch (err) {
               console.warn('[DataMatch] Error selecting row:', err);
             }
           },
-          rowSelectionChanged: (selectedData) => {
+          rowSelectionChanged: (selectedData, selectedRows) => {
             try {
-              const rec = selectedData && selectedData[0];
+              console.log('[DataMatch] rowSelectionChanged called:', selectedData, selectedRows);
+              const rec = selectedData && selectedData.length > 0 ? selectedData[0] : null;
               if (rec) {
                 const shipCode = rec.ship_code;
-                console.log('[DataMatch] Row selected, emitting ship select event:', shipCode);
-                window.dispatchEvent(new CustomEvent('talia:ship.select', {
+                console.log('[DataMatch] Row selected, emitting ship select event:', shipCode, rec);
+                const event = new CustomEvent('talia:ship.select', {
                   detail: {
                     ship_code: shipCode,
                     row_data: rec,
                     timestamp: new Date().toISOString()
                   }
-                }));
+                });
+                window.dispatchEvent(event);
+                console.log('[DataMatch] Event dispatched:', event.type, event.detail);
               } else {
                 console.log('[DataMatch] Row deselected');
-                window.dispatchEvent(new CustomEvent('talia:ship.clear', {
+                const clearEvent = new CustomEvent('talia:ship.clear', {
                   detail: {
                     timestamp: new Date().toISOString()
                   }
-                }));
+                });
+                window.dispatchEvent(clearEvent);
+                console.log('[DataMatch] Clear event dispatched');
               }
             } catch (err) {
               console.error('[DataMatch] Error in rowSelectionChanged:', err);

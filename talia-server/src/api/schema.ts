@@ -769,6 +769,7 @@ export const typeDefs = `#graphql
     tableMetadata(tableName: String!): DatabaseTableMetadata
     tableData(tableName: String!, limit: Int, filters: TableDataFilters): [JSON!]!  # Generic query to fetch table rows for review
     backupMetadata: BackupMetadata  # Get database backup status and info
+    dataMatch(filters: DataMatchFilters): DataMatchResponse!  # Data completeness cross-tab
     
     # Legacy queries (for backward compatibility)
     books: [Book!]!
@@ -979,6 +980,32 @@ export const typeDefs = `#graphql
   type DataDebugResponse {
     overview: DataDebugOverview!
     tables: [TableDebugInfo!]!
+  }
+
+  # Data Match Types
+  type TableMatchCount {
+    tableName: String!
+    matchingCount: Int!
+    missingCount: Int!
+  }
+
+  type DataMatchRow {
+    ship_code: String!
+    departure_date: String!
+    sail_code: String!
+    tableMatches: [TableMatchCount!]!
+  }
+
+  input DataMatchFilters {
+    ship_code: String
+    sail_code: String
+    date_from: String
+    date_to: String
+  }
+
+  type DataMatchResponse {
+    rows: [DataMatchRow!]!
+    tables: [String!]!
   }
 `;
 

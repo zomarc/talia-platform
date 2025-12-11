@@ -1268,6 +1268,145 @@ export const resolvers = {
       }
     },
 
+    dataMatch: async (parent: any, args: any) => {
+      const { filters = {} } = args;
+      try {
+        const client = supabaseDataService.client;
+        
+        // Define the main tables to check for data completeness
+        const tablesToCheck = [
+          'cabin_availability',
+          'reservation',
+          'reservation_current_state',
+          'published_rates',
+          'published_rates_current_state',
+          'sail_by_cabin_occupancy',
+          'competitor_current_state'
+        ];
+
+        // Get all unique sail records from master_sail (baseline)
+        let masterSailQuery = client
+          .from('master_sail')
+          .select('sail_code, ship_code, sail_date_from')
+          .not('sail_code', 'is', null)
+          .not('ship_code', 'is', null)
+          .not('sail_date_from', 'is', null);
+
+        // Apply filters
+        if (filters.ship_code) {
+          masterSailQuery = masterSailQuery.eq('ship_code', filters.ship_code);
+        }
+        if (filters.sail_code) {
+          masterSailQuery = masterSailQuery.eq('sail_code', filters.sail_code);
+        }
+        if (filters.date_from) {
+          masterSailQuery = masterSailQuery.gte('sail_date_from', filters.date_from);
+        }
+        if (filters.date_to) {
+          masterSailQuery = masterSailQuery.lte('sail_date_from', filters.date_to);
+        }
+
+        const { data: masterSailData, error: masterSailError } = await masterSailQuery;
+
+        if (masterSailError) {
+          throw new Error(`Error fetching master_sail: ${masterSailError.message}`);
+        }
+
+        if (!masterSailData || masterSailData.length === 0) {
+          return {
+            rows: [],
+            tables: tablesToCheck
+          };
+        }
+
+        // Get unique sail_code values for efficient querying
+        const sailCodes = [...new Set(masterSailData.map(s => s.sail_code))];
+
+        // For each table, count records per sail_code
+        const tableCountsMap = new Map<string, Map<string, number>>();
+
+        await Promise.all(
+          tablesToCheck.map(async (tableName) => {
+            try {
+              // Get count of records per sail_code for this table
+              const countsMap = new Map<string, number>();
+              
+              // Query in batches to avoid URI length limits
+              const batchSize = 100;
+              for (let i = 0; i < sailCodes.length; i += batchSize) {
+                const batch = sailCodes.slice(i, i + batchSize);
+                
+                // Determine the sail_code column name for this table
+                const sailCodeColumn = 'sail_code'; // Most tables use this
+                
+                const { data: tableData, error: tableError } = await client
+                  .from(tableName)
+                  .select('sail_code')
+                  .in(sailCodeColumn, batch);
+
+                if (tableError) {
+                  console.warn(`[dataMatch] Error querying ${tableName}:`, tableError);
+                  continue;
+                }
+
+                // Count records per sail_code
+                const sailCodeCounts = new Map<string, number>();
+                tableData?.forEach((row: any) => {
+                  const sailCode = row.sail_code;
+                  if (sailCode) {
+                    sailCodeCounts.set(sailCode, (sailCodeCounts.get(sailCode) || 0) + 1);
+                  }
+                });
+
+                // Merge into main counts map
+                sailCodeCounts.forEach((count, sailCode) => {
+                  countsMap.set(sailCode, (countsMap.get(sailCode) || 0) + count);
+                });
+              }
+
+              tableCountsMap.set(tableName, countsMap);
+            } catch (error) {
+              console.error(`[dataMatch] Error processing table ${tableName}:`, error);
+              // Set empty map for this table
+              tableCountsMap.set(tableName, new Map());
+            }
+          })
+        );
+
+        // Build result rows
+        const rows = masterSailData.map((sail: any) => {
+          const tableMatches = tablesToCheck.map(tableName => {
+            const countsMap = tableCountsMap.get(tableName) || new Map();
+            const matchingCount = countsMap.get(sail.sail_code) || 0;
+            const missingCount = matchingCount > 0 ? 0 : 1; // 1 if missing, 0 if present
+
+            return {
+              tableName,
+              matchingCount,
+              missingCount
+            };
+          });
+
+          return {
+            ship_code: sail.ship_code,
+            departure_date: sail.sail_date_from,
+            sail_code: sail.sail_code,
+            tableMatches
+          };
+        });
+
+        console.log(`[dataMatch] Generated ${rows.length} rows for ${tablesToCheck.length} tables`);
+
+        return {
+          rows,
+          tables: tablesToCheck
+        };
+      } catch (error: any) {
+        console.error('[dataMatch] Error:', error);
+        throw error;
+      }
+    },
+
     backupMetadata: async () => {
       try {
         const { data, error } = await supabaseDataService.client

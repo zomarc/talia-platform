@@ -22,6 +22,7 @@ import GoogleSearchContainer from '../focus-panels/GoogleSearch';
 import SearchTrendsContainer from '../focus-panels/SearchTrends';
 import GoogleTrendsContainer from '../focus-panels/GoogleTrends';
 import DataDebugView from './DataDebugView';
+import DataMatch from '../focus-panels/DataMatch';
 
 /**
  * Component registry with metadata
@@ -245,6 +246,17 @@ export const componentRegistry = {
     },
     dataRequirements: 'Requires GraphQL connection to dataDebugInfo endpoint. Shows aggregated sailing data and table metadata for all synced tables.',
     filePath: 'src/components/TestPage/DataDebugView.jsx'
+  },
+  DataMatch: {
+    component: DataMatch,
+    category: 'Debugging',
+    description: 'Data Match - Cross-tab display showing data completeness overview. Shows matching vs missing record counts for each main table per sail (ship_code, departure_date, sail_code)',
+    usesMockData: false,
+    props: {
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Requires GraphQL connection to dataMatch endpoint. Checks data completeness across main tables: cabin_availability, reservation, reservation_current_state, published_rates, published_rates_current_state, sail_by_cabin_occupancy, competitor_current_state.',
+    filePath: 'src/components/focus-panels/DataMatch/index.jsx'
   }
 };
 

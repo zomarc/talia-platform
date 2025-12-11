@@ -4,86 +4,137 @@
  * Enhanced with filtering, export, and grouping
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
-const EventMonitor = ({ componentFilter = null }) => {
+const EventMonitor = ({ componentFilter = null, theme }) => {
   const [events, setEvents] = useState([]);
   const [isPaused, setIsPaused] = useState(false);
   const [filter, setFilter] = useState('');
   const [grouped, setGrouped] = useState(false);
+  const eventIdCounterRef = useRef(0);
+  const lastEventRef = useRef(null);
+
+  // Use theme colors or fallback to defaults
+  const colors = theme?.colors || {};
+  const bgColor = colors.cardBackground || colors.background || '#1a1a1a';
+  const fgColor = colors.foreground || '#ffffff';
+  const textSecondary = colors.textSecondary || '#b0b0b0';
+  const borderColor = colors.border || '#333333';
+  const accentColor = colors.accent || '#b08d57';
+  const cardBg = colors.cardBackground || '#2a2a2a';
 
   // Intercept dispatchEvent to catch ALL custom events - this is the primary capture mechanism
   useEffect(() => {
     if (isPaused) return;
 
     const captureEvent = (event) => {
-      // Capture all CustomEvents
-      if (event instanceof CustomEvent) {
+      // Capture all CustomEvents, especially talia:* events
+      if (event instanceof CustomEvent && (event.type.startsWith('talia:') || event.type.includes('.select') || event.type.includes('.clear'))) {
         const timestamp = new Date().toLocaleTimeString();
+        const eventId = `event-${++eventIdCounterRef.current}`;
+        const now = Date.now();
+        
         console.log('[EventMonitor] ✅ Captured event:', event.type, event.detail);
+        
         setEvents(prev => {
           const newEvent = {
+            id: eventId,
             name: event.type,
             detail: event.detail,
             timestamp,
+            timestampMs: now,
             fullEvent: event
           };
-          // Avoid duplicates by checking if the same event was just added
-          if (prev.length > 0 && prev[0].name === event.type && prev[0].timestamp === timestamp) {
+          
+          // Check for duplicates - compare event type, detail content, and time (within 500ms)
+          const isDuplicate = prev.some(e => 
+            e.name === event.type && 
+            JSON.stringify(e.detail) === JSON.stringify(event.detail) &&
+            Math.abs(e.timestampMs - now) < 500 // Within 500ms
+          );
+          
+          if (isDuplicate) {
+            console.log('[EventMonitor] Skipping duplicate event:', event.type);
             return prev;
           }
+          
+          lastEventRef.current = newEvent;
           return [newEvent, ...prev].slice(0, 100);
         });
       }
     };
 
-    // Store original dispatchEvent
-    const originalDispatchEvent = window.dispatchEvent.bind(window);
+    // Store original dispatchEvent if not already stored
+    if (!window._originalDispatchEvent) {
+      window._originalDispatchEvent = window.dispatchEvent.bind(window);
+    }
     
     // Override dispatchEvent to catch all custom events before they're dispatched
     window.dispatchEvent = function(event) {
       captureEvent(event);
-      return originalDispatchEvent(event);
+      return window._originalDispatchEvent(event);
     };
 
-    // Also listen directly for talia events as a backup
+    // Also listen directly for talia events as a backup (use capture phase)
     const eventTypes = [
       'talia:sail.select',
       'talia:sail.clear',
       'talia:sailing.select',
       'talia:sailing.clear',
-      'publishedRatesSelect',
-      'publishedRatesClear',
-      'sailingCabinSelect',
-      'sailingCabinClear'
+      'talia:publishedRates.select',
+      'talia:publishedRates.clear',
+      'talia:reservation.select',
+      'talia:reservation.clear'
     ];
 
     const directListener = (event) => {
       if (!isPaused && event instanceof CustomEvent) {
         const timestamp = new Date().toLocaleTimeString();
+        const eventId = `event-${++eventIdCounterRef.current}`;
+        const now = Date.now();
+        
         console.log('[EventMonitor] ✅ Direct listener caught:', event.type, event.detail);
+        
         setEvents(prev => {
           const newEvent = {
+            id: eventId,
             name: event.type,
             detail: event.detail,
             timestamp,
+            timestampMs: now,
             fullEvent: event
           };
-          // Avoid duplicates
-          if (prev.length > 0 && prev[0].name === event.type && prev[0].timestamp === timestamp) {
+          
+          // Less aggressive duplicate check - only check if same event within 100ms
+          const isDuplicate = prev.some(e => 
+            e.name === event.type && 
+            JSON.stringify(e.detail) === JSON.stringify(event.detail) &&
+            Math.abs(e.timestampMs - now) < 100 // Reduced from 500ms to 100ms
+          );
+          
+          if (isDuplicate) {
+            console.log('[EventMonitor] Skipping duplicate event (within 100ms):', event.type);
             return prev;
           }
+          
+          lastEventRef.current = newEvent;
+          console.log('[EventMonitor] ✅ Adding event to list:', event.type);
           return [newEvent, ...prev].slice(0, 100);
         });
       }
     };
 
+    // Use capture phase to catch events before they bubble
     eventTypes.forEach(eventType => {
       window.addEventListener(eventType, directListener, true);
     });
 
     return () => {
-      window.dispatchEvent = originalDispatchEvent;
+      // Restore original dispatchEvent if it exists
+      if (window._originalDispatchEvent) {
+        window.dispatchEvent = window._originalDispatchEvent;
+        delete window._originalDispatchEvent;
+      }
       eventTypes.forEach(eventType => {
         window.removeEventListener(eventType, directListener, true);
       });
@@ -92,6 +143,8 @@ const EventMonitor = ({ componentFilter = null }) => {
 
   const clearEvents = () => {
     setEvents([]);
+    eventIdCounterRef.current = 0;
+    lastEventRef.current = null;
   };
 
   const exportEvents = () => {
@@ -125,13 +178,14 @@ const EventMonitor = ({ componentFilter = null }) => {
 
   return (
     <div style={{
-      background: 'white',
+      background: bgColor,
       padding: '12px',
       borderRadius: '8px',
       boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
       height: '100%',
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      color: fgColor
     }}>
       <div style={{ marginBottom: '8px' }}>
         <div style={{
@@ -140,8 +194,8 @@ const EventMonitor = ({ componentFilter = null }) => {
           alignItems: 'center',
           marginBottom: '6px'
         }}>
-          <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '600' }}>
-            📡 Events
+          <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: fgColor }}>
+            📡 Events {events.length > 0 && `(${events.length})`}
           </h4>
           <div style={{ display: 'flex', gap: '4px' }}>
             <button
@@ -164,8 +218,8 @@ const EventMonitor = ({ componentFilter = null }) => {
               onClick={exportEvents}
               style={{
                 padding: '2px 6px',
-                background: '#e0e0e0',
-                color: '#333',
+                background: borderColor,
+                color: fgColor,
                 border: 'none',
                 borderRadius: '3px',
                 cursor: 'pointer',
@@ -179,8 +233,8 @@ const EventMonitor = ({ componentFilter = null }) => {
               onClick={() => setGrouped(!grouped)}
               style={{
                 padding: '2px 6px',
-                background: grouped ? '#b08d57' : '#e0e0e0',
-                color: grouped ? 'white' : '#333',
+                background: grouped ? accentColor : borderColor,
+                color: grouped ? 'white' : fgColor,
                 border: 'none',
                 borderRadius: '3px',
                 cursor: 'pointer',
@@ -194,8 +248,8 @@ const EventMonitor = ({ componentFilter = null }) => {
               onClick={clearEvents}
               style={{
                 padding: '2px 6px',
-                background: '#e0e0e0',
-                color: '#333',
+                background: borderColor,
+                color: fgColor,
                 border: 'none',
                 borderRadius: '3px',
                 cursor: 'pointer',
@@ -215,9 +269,11 @@ const EventMonitor = ({ componentFilter = null }) => {
           style={{
             width: '100%',
             padding: '4px 8px',
-            border: '1px solid #ddd',
+            border: `1px solid ${borderColor}`,
             borderRadius: '3px',
-            fontSize: '11px'
+            fontSize: '11px',
+            background: cardBg,
+            color: fgColor
           }}
         />
       </div>
@@ -226,17 +282,17 @@ const EventMonitor = ({ componentFilter = null }) => {
         <div style={{
           textAlign: 'center',
           padding: '10px',
-          color: '#999',
+          color: textSecondary,
           fontSize: '11px',
           fontStyle: 'italic'
         }}>
-          {isPaused ? 'Paused' : filter ? 'No matching events' : 'No events'}
+          {isPaused ? 'Paused' : filter ? 'No matching events' : 'No events captured yet. Select a sail to trigger events.'}
         </div>
       ) : groupedEvents ? (
         <div style={{
           maxHeight: '280px',
           overflowY: 'auto',
-          border: '1px solid #e0e0e0',
+          border: `1px solid ${borderColor}`,
           borderRadius: '4px',
           padding: '6px',
           flex: 1
@@ -245,7 +301,7 @@ const EventMonitor = ({ componentFilter = null }) => {
             <div key={eventName} style={{ marginBottom: '8px' }}>
               <div style={{
                 padding: '4px 8px',
-                background: '#b08d57',
+                background: accentColor,
                 color: 'white',
                 borderRadius: '3px',
                 fontSize: '11px',
@@ -256,15 +312,16 @@ const EventMonitor = ({ componentFilter = null }) => {
               </div>
               {eventGroup.map((event, index) => (
                 <div
-                  key={index}
+                  key={event.id || index}
                   style={{
                     padding: '4px 8px',
                     marginLeft: '12px',
                     marginBottom: '2px',
-                    background: '#f9f9f9',
-                    border: '1px solid #e0e0e0',
+                    background: cardBg,
+                    border: `1px solid ${borderColor}`,
                     borderRadius: '3px',
-                    fontSize: '10px'
+                    fontSize: '10px',
+                    color: fgColor
                   }}
                 >
                   <div style={{
@@ -272,9 +329,9 @@ const EventMonitor = ({ componentFilter = null }) => {
                     justifyContent: 'space-between',
                     alignItems: 'center'
                   }}>
-                    <span style={{ color: '#666' }}>{event.timestamp}</span>
+                    <span style={{ color: textSecondary }}>{event.timestamp}</span>
                     {event.detail !== undefined && event.detail !== null && (
-                      <span style={{ color: '#999', fontSize: '9px' }}>
+                      <span style={{ color: textSecondary, fontSize: '9px' }}>
                         {typeof event.detail === 'object' ? 'Object' : 'String'}
                       </span>
                     )}
@@ -283,12 +340,13 @@ const EventMonitor = ({ componentFilter = null }) => {
                     <div style={{
                       padding: '4px 6px',
                       marginTop: '4px',
-                      background: '#f0f0f0',
+                      background: bgColor,
                       borderRadius: '2px',
                       fontSize: '9px',
                       fontFamily: 'monospace',
                       maxHeight: '80px',
-                      overflow: 'auto'
+                      overflow: 'auto',
+                      color: fgColor
                     }}>
                       {typeof event.detail === 'object' 
                         ? JSON.stringify(event.detail, null, 2)
@@ -305,21 +363,22 @@ const EventMonitor = ({ componentFilter = null }) => {
         <div style={{
           maxHeight: '280px',
           overflowY: 'auto',
-          border: '1px solid #e0e0e0',
+          border: `1px solid ${borderColor}`,
           borderRadius: '4px',
           padding: '6px',
           flex: 1
         }}>
           {filteredEvents.map((event, index) => (
             <div
-              key={index}
+              key={event.id || index}
               style={{
                 padding: '6px',
                 marginBottom: '3px',
-                background: index === 0 ? '#fff3cd' : '#f9f9f9',
-                border: index === 0 ? '1px solid #ffc107' : '1px solid #e0e0e0',
+                background: index === 0 ? accentColor + '40' : cardBg,
+                border: index === 0 ? `1px solid ${accentColor}` : `1px solid ${borderColor}`,
                 borderRadius: '3px',
-                fontSize: '11px'
+                fontSize: '11px',
+                color: fgColor
               }}
             >
               <div style={{
@@ -328,28 +387,28 @@ const EventMonitor = ({ componentFilter = null }) => {
                 alignItems: 'center',
                 marginBottom: '4px'
               }}>
-                <strong style={{ color: '#b08d57', fontSize: '11px' }}>{event.name}</strong>
-                <span style={{ color: '#999', fontSize: '9px' }}>{event.timestamp}</span>
+                <strong style={{ color: accentColor, fontSize: '11px' }}>{event.name}</strong>
+                <span style={{ color: textSecondary, fontSize: '9px' }}>{event.timestamp}</span>
               </div>
               {event.detail !== undefined && event.detail !== null && (
                 <div style={{
                   padding: '6px 8px',
-                  background: '#f5f5f5',
+                  background: bgColor,
                   borderRadius: '3px',
                   fontFamily: 'monospace',
                   fontSize: '10px',
-                  color: '#333',
+                  color: fgColor,
                   overflowX: 'auto',
                   wordBreak: 'break-word',
                   maxHeight: '150px',
                   overflowY: 'auto',
                   marginTop: '4px',
-                  border: '1px solid #e0e0e0'
+                  border: `1px solid ${borderColor}`
                 }}>
-                  <div style={{ fontWeight: '600', marginBottom: '4px', fontSize: '9px', color: '#666' }}>
+                  <div style={{ fontWeight: '600', marginBottom: '4px', fontSize: '9px', color: textSecondary }}>
                     Event Payload:
                   </div>
-                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: '9px' }}>
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: '9px', color: fgColor }}>
                     {typeof event.detail === 'object' 
                       ? JSON.stringify(event.detail, null, 2)
                       : String(event.detail)
@@ -359,7 +418,7 @@ const EventMonitor = ({ componentFilter = null }) => {
               )}
               {(event.detail === undefined || event.detail === null) && (
                 <div style={{
-                  color: '#999',
+                  color: textSecondary,
                   fontStyle: 'italic',
                   fontSize: '10px',
                   marginTop: '4px'
@@ -376,7 +435,7 @@ const EventMonitor = ({ componentFilter = null }) => {
         <div style={{
           marginTop: '6px',
           textAlign: 'center',
-          color: '#666',
+          color: textSecondary,
           fontSize: '10px'
         }}>
           {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''}
@@ -388,4 +447,3 @@ const EventMonitor = ({ componentFilter = null }) => {
 };
 
 export default EventMonitor;
-

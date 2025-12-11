@@ -1,425 +1,252 @@
 /**
- * Sailing by Cabin Category Component
- * Based on TablePanel structure with Tabulator for displaying sailing cabin occupancy data
- * Loads data from local JSON file for demo purposes
+ * Simple Table Component
+ * Displays master_sail data with server-side filtering based on sail selection events
+ * Uses useTableDataWithContext pattern (same as PublishedRates)
  */
 
-import React, { useRef, useEffect } from 'react';
-
+import React, { useRef, useEffect, useState } from 'react';
 import { initTabulator } from '../../lib/tabulatorConfig';
+import { useTableDataWithContext } from '../../hooks/data/useTableDataWithContext';
 
-// Event system for selection
-const SELECT_EVENT = 'sailingCabinSelect';
-const CLEAR_EVENT = 'sailingCabinClear';
-
-const emitSelect = (rec) => {
-  window.dispatchEvent(new CustomEvent(SELECT_EVENT, { detail: rec }));
-};
-
-// Event system for sail code filtering - separate from existing table/chart events
-const SAIL_SELECT_EVENT = 'talia:sail.select';   // payload: sail_code
-const SAIL_CLEAR_EVENT = 'talia:sail.clear';     // clear selection
-
-const SailingByCabinCategory = React.memo(() => {
-  console.log('[LinkingEvent] [SailingByCabinCategory] Component mounted/rendered');
-  
+const SimpleTable = ({ theme }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
-  const initializedRef = useRef(false);
-  const failSafeRef = useRef(null);
-  const tableBuiltRef = useRef(false); // Track if table is fully built
-  const [selectedSailCode, setSelectedSailCode] = React.useState(null);
-  const [allData, setAllData] = React.useState([]);
+  const [tableInitialized, setTableInitialized] = useState(false);
+  const lastDataRef = useRef(null);
 
-  // Load sailing cabin occupancy data from Supabase
-  const loadSailingCabinData = async () => {
-    try {
-      // Direct Supabase query for master_sail table
-      // Use GraphQL instead of direct Supabase (works from external URLs)
-      const query = `
-        query GetMasterSail {
-          masterSail(filters: { limit: 100 }) {
-            id
-            sail_id
-            ship_code
-            ship_name
-            sail_date_from
-            port_from
-            sail_date_to
-            port_to
-            package_id
-            package_type
-            sail_code
-            package_name
-            sail_days
-            geog_area_code
-            vacation_date
-            season_code
-            is_fake
-            is_active
-            is_package_active
-            master_voyage_departure_date
-            master_voyage1
-            master_voyage1_length
-            master_voyage1_sail_days
-            master_voyage2
-            master_voyage2_length
-            master_voyage2_sail_days
-            is_main
-            is_primary
-            created_at
-          }
-        }
-      `;
+  // Use reusable hook for context-based data fetching
+  // Note: SimpleTable displays master_sail but doesn't filter by sail_code
+  // It just listens to events to emit them when rows are selected
+  const { data, loading, error } = useTableDataWithContext({
+    tableName: 'master_sail',
+    eventName: null, // Don't filter - show all sail data
+    contextMapper: () => null, // No filtering
+    limit: 1000
+  });
 
-      const response = await fetch('/api/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ query })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.errors) {
-        throw new Error(`GraphQL error: ${result.errors[0].message}`);
-      }
-      
-      const data = result.data?.masterSail || [];
-      console.log('[SailingByCabinCategory] Loaded data from GraphQL:', data.length, 'records');
-      setAllData(data); // Store all data for filtering
-      return data;
-    } catch (error) {
-      console.error('[SailingByCabinCategory] Error loading data:', error);
-      // Return empty array and let the UI handle the no-data state
-      return [];
-    }
-  };
-
-  // Event listeners for sail code filtering - set up immediately
+  // Initialize table once when data is ready
   useEffect(() => {
-    console.log('[LinkingEvent] 🔗 [SailingByCabinCategory] Setting up event listeners');
-    
-    const handleSailSelect = (event) => {
-      const sailCode = event.detail;
-      console.log('[LinkingEvent] 🔗 [SailingByCabinCategory] RECEIVED sail selection event:', sailCode);
-      setSelectedSailCode(sailCode);
-    };
+    if (loading || tableInitialized) return;
 
-    const handleSailClear = () => {
-      console.log('[LinkingEvent] 🔗 [SailingByCabinCategory] RECEIVED sail clear event');
-      setSelectedSailCode(null);
-    };
-
-    // Add event listeners
-    window.addEventListener(SAIL_SELECT_EVENT, handleSailSelect);
-    window.addEventListener(SAIL_CLEAR_EVENT, handleSailClear);
-    
-    console.log('[LinkingEvent] 🔗 [SailingByCabinCategory] Event listeners added for:', SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT);
-
-    return () => {
-      console.log('[LinkingEvent] 🔗 [SailingByCabinCategory] Cleaning up event listeners');
-      window.removeEventListener(SAIL_SELECT_EVENT, handleSailSelect);
-      window.removeEventListener(SAIL_CLEAR_EVENT, handleSailClear);
-    };
-  }, []);
-
-  // Filter data based on selected sail code
-  const getFilteredData = () => {
-    if (!selectedSailCode || allData.length === 0) {
-      return allData;
-    }
-    
-    const filtered = allData.filter(record => record.Sail_Code === selectedSailCode);
-    console.log('[SailingByCabinCategory] Filtered data for sail:', selectedSailCode, 'Records:', filtered.length);
-    return filtered;
-  };
-
-  useEffect(() => {
     let cancelled = false;
-    let ro = null;
 
-    const waitForNonZeroSize = (el, timeout = 3000) => new Promise((resolve) => {
-      const start = performance.now();
-      const check = () => {
-        if (!el) return resolve(false);
-        const w = el.clientWidth, h = el.clientHeight;
-        if (w > 0 && h > 0) return resolve({ w, h });
-        if (performance.now() - start > timeout) return resolve(false);
-        requestAnimationFrame(check);
-      };
-      check();
-    });
+    const initTable = async () => {
+      if (!tableRef.current || cancelled) return;
 
-    const renderNoData = () => {
-      if (!tableRef.current) return;
-      if (instanceRef.current) { 
-        console.log('[SailingByCabinCategory] skipped (Tabulator exists)'); 
-        return; 
-      }
-      
-      tableRef.current.innerHTML = `
-        <div style="padding:20px;font-family:ui-sans-serif,system-ui;font-size:14px;text-align:center;color:#666">
-          <div style="margin-bottom:10px;color:#999">⚠️ No data available</div>
-          <div style="color:#888;font-size:12px">Unable to load data from Supabase. Please check the connection.</div>
-        </div>`;
-      
-      console.log('[SailingByCabinCategory] No data message displayed');
-    };
-
-    (async () => {
       try {
-        if (!tableRef.current || initializedRef.current) return;
-
-        // Load sailing cabin occupancy data
-        const sailingCabinData = await loadSailingCabinData();
-        console.log('[LinkingEvent] [SailingByCabinCategory] Loaded data for Tabulator:', sailingCabinData.length, 'records');
-
-        // Load Tabulator using shared config
         const Tabulator = await initTabulator();
-        const TabGlobal = Tabulator;
-        console.log('[SailingByCabinCategory] Tabulator global typeof:', typeof TabGlobal);
-        if (!TabGlobal) { renderNoData(); return; }
+        if (cancelled || !tableRef.current) return;
 
-        // Wait for real size
-        const sz = await waitForNonZeroSize(tableRef.current, 3000);
-        console.log("[SailingByCabinCategory] container size before init:", sz);
+        if (instanceRef.current) {
+          instanceRef.current.destroy();
+        }
 
-        // Safety net: If we haven't finished init in 1200ms, draw fallback
-        if (failSafeRef.current) clearTimeout(failSafeRef.current);
-          failSafeRef.current = setTimeout(() => {
-          console.warn('[SailingByCabinCategory] failSafe fired — showing no data message');
-          if (!instanceRef.current) renderNoData();
-        }, 1200);
-
-        // Define columns for master sail data
         const columns = [
           { 
-            title: "Sail ID", 
             field: "sail_id", 
-            width: 100,
-            headerFilter: "input",
-            headerFilterPlaceholder: "Filter sail ID...",
+            title: "Sail ID",
             formatter: (cell) => {
               const value = cell.getValue();
               return value ? Math.floor(value).toString() : '';
-            }
+            },
+            headerFilter: "input"
           },
           { 
-            title: "Sail Code", 
             field: "sail_code", 
-            width: 120,
-            headerFilter: "input",
-            headerFilterPlaceholder: "Filter sail code..."
+            title: "Sail Code",
+            headerFilter: "list",
+            headerFilterParams: {
+              valuesLookup: true,
+              autocomplete: true
+            }
           },
           { 
-            title: "Ship", 
             field: "ship_name", 
-            width: 150,
+            title: "Ship",
             headerFilter: "list",
             headerFilterParams: {
-              values: { "": "All Ships", "Celestyal Journey": "Celestyal Journey", "Celestyal Discovery": "Celestyal Discovery" },
-              clearable: true
+              valuesLookup: true,
+              autocomplete: true
             }
           },
           { 
-            title: "Package", 
             field: "package_name", 
-            widthGrow: 2,
-            headerFilter: "input",
-            headerFilterPlaceholder: "Filter package..."
+            title: "Package",
+            headerFilter: "input"
           },
           { 
-            title: "Package Type", 
             field: "package_type", 
-            width: 120,
-            headerFilter: "input",
-            headerFilterPlaceholder: "Filter type..."
-          },
-          { 
-            title: "Geographic Area", 
-            field: "geog_area_code", 
-            width: 120,
+            title: "Package Type",
             headerFilter: "list",
             headerFilterParams: {
-              values: { "": "All Areas", "ADRIATIC": "ADRIATIC", "AEGEAN": "AEGEAN", "MEDITERRANEAN": "MEDITERRANEAN" },
-              clearable: true
+              valuesLookup: true,
+              autocomplete: true
             }
           },
           { 
-            title: "Sail Days", 
-            field: "sail_days", 
-            hozAlign: "center", 
-            width: 100,
-            headerFilter: "input",
-            headerFilterPlaceholder: "Days",
-            headerFilterFunc: ">=",
+            field: "geog_area_code", 
+            title: "Geographic Area",
+            headerFilter: "list",
             headerFilterParams: {
-              type: "number"
+              valuesLookup: true,
+              autocomplete: true
             }
           },
           { 
-            title: "Sail Date", 
+            field: "sail_days", 
+            title: "Sail Days",
+            hozAlign: "center",
+            headerFilter: "number",
+            headerFilterParams: {
+              min: 0,
+              step: 1
+            }
+          },
+          { 
             field: "sail_date_from", 
-            width: 120,
-            headerFilter: "input",
-            headerFilterPlaceholder: "YYYY-MM-DD",
+            title: "Sail Date",
             formatter: (cell) => {
               const date = new Date(cell.getValue());
               return date.toLocaleDateString();
+            },
+            headerFilter: "input"
+          },
+          { 
+            field: "port_from", 
+            title: "Port From",
+            headerFilter: "list",
+            headerFilterParams: {
+              valuesLookup: true,
+              autocomplete: true
             }
           },
           { 
-            title: "Port From", 
-            field: "port_from", 
-            width: 100,
-            headerFilter: "input",
-            headerFilterPlaceholder: "From port..."
-          },
-          { 
-            title: "Port To", 
             field: "port_to", 
-            width: 100,
-            headerFilter: "input",
-            headerFilterPlaceholder: "To port..."
+            title: "Port To",
+            headerFilter: "list",
+            headerFilterParams: {
+              valuesLookup: true,
+              autocomplete: true
+            }
           },
           { 
-            title: "Active", 
             field: "is_active", 
-            width: 80,
+            title: "Active",
             hozAlign: "center",
             headerFilter: "list",
             headerFilterParams: {
-              values: { "": "All", "Y": "Yes", "N": "No" },
+              values: {
+                "": "All",
+                "Y": "Yes",
+                "N": "No"
+              },
               clearable: true
             }
           }
         ];
 
-        console.log('[SailingByCabinCategory] initializing Tabulator on', tableRef.current);
-        // Give the layout one more frame to settle
-        await new Promise((r) => requestAnimationFrame(() => r()));
-
-        const TabCtor = TabGlobal;
-        instanceRef.current = new TabCtor(tableRef.current, {
-          data: sailingCabinData,
-          columns,
-          layout: "fitColumns",
-          reactiveData: false,
+        instanceRef.current = new Tabulator(tableRef.current, {
+          data: data || [],
+          columns: columns,
+          layout: "fitData",
+          initialSort: [
+            { column: "sail_date_from", dir: "desc" }
+          ],
           height: "100%",
-          selectable: 1,                // single-select only (native Tabulator method)
-          headerFilterLiveFilter: true, // live filtering as you type
-          headerFilterLiveFilterDelay: 300, // delay for live filtering
+          selectableRows: 1,
+          resizableColumns: true,
+          movableColumns: true,
+          headerFilterLiveFilter: true,
+          headerFilterLiveFilterDelay: 300,
+          pagination: false,
           rowClick: (e, row) => {
             try { row?.select?.(); } catch {}
           },
-          rowSelectionChanged: (selectedData /* array */) => {
+          rowSelectionChanged: (selectedData) => {
             const rec = selectedData && selectedData[0];
             if (rec) {
-              console.log("[SailingByCabinCategory] rowSelectionChanged", rec);
-              emitSelect(rec);
+              console.log("[SimpleTable] Row selected:", rec);
+              // Emit sail selection event
+              window.dispatchEvent(new CustomEvent('talia:sail.select', { 
+                detail: {
+                  sail_code: rec.sail_code,
+                  row_data: rec,
+                  timestamp: new Date().toISOString()
+                }
+              }));
             } else {
-              console.log("[SailingByCabinCategory] rowSelectionChanged — empty selection");
-              emitSelect(null);
+              console.log("[SimpleTable] Row deselected");
+              window.dispatchEvent(new CustomEvent('talia:sail.clear', {
+                detail: {
+                  timestamp: new Date().toISOString()
+                }
+              }));
             }
           },
         });
 
-        // Listen for tableBuilt event
-        instanceRef.current.on("tableBuilt", () => {
-          console.log('[SailingByCabinCategory] Table built successfully');
-          tableBuiltRef.current = true;
-        });
-
-        console.log('[SailingByCabinCategory] Tabulator instance created:', instanceRef.current);
-
-        // Clear failSafe since we succeeded
-        if (failSafeRef.current) {
-          clearTimeout(failSafeRef.current);
-          failSafeRef.current = null;
-        }
-
-        // Mark as initialized
-        initializedRef.current = true;
-
-        return () => {
-          if (instanceRef.current) {
-            try {
-              instanceRef.current.destroy();
-            } catch (e) {
-              console.warn('Failed to destroy SailingByCabinCategory Tabulator instance:', e);
-            }
-            instanceRef.current = null;
-          }
-          initializedRef.current = false;
-        };
-
+        console.log('[SimpleTable] Table initialized with', data?.length || 0, 'records');
+        lastDataRef.current = data ? JSON.stringify(data) : null;
+        setTableInitialized(true);
       } catch (err) {
-        console.error('[SailingByCabinCategory] fatal init error', err);
-        renderNoData();
-      }
-    })();
-
-    return () => { 
-      cancelled = true; 
-      if (failSafeRef.current) {
-        clearTimeout(failSafeRef.current);
-        failSafeRef.current = null;
+        console.error('[SimpleTable] Error initializing table:', err);
       }
     };
-  }, []);
 
-  // Manual refresh function
-  const refreshData = React.useCallback(() => {
-    if (instanceRef.current && tableBuiltRef.current) {
-      const filteredData = getFilteredData();
-      console.log('[SailingByCabinCategory] Manual refresh - updating data with:', filteredData.length, 'records');
-      try {
-        instanceRef.current.replaceData(filteredData);
-      } catch (e) {
-        console.warn('[SailingByCabinCategory] Failed to refresh data:', e);
-      }
-    }
-  }, [selectedSailCode, allData.length]);
+    initTable();
 
-  // Update Tabulator data when selected sail code changes
-  useEffect(() => {
-    console.log('[SailingByCabinCategory] Data update effect triggered - selectedSailCode:', selectedSailCode, 'allData.length:', allData.length, 'tableBuilt:', tableBuiltRef.current);
-    
-    if (instanceRef.current && allData.length > 0 && tableBuiltRef.current) {
-      const filteredData = getFilteredData();
-      console.log('[SailingByCabinCategory] Updating Tabulator data with filtered results:', filteredData.length, 'records');
-      try {
-        instanceRef.current.replaceData(filteredData);
-      } catch (e) {
-        console.warn('[SailingByCabinCategory] Failed to update Tabulator data:', e);
-      }
-    } else if (instanceRef.current && allData.length > 0 && !tableBuiltRef.current) {
-      console.log('[SailingByCabinCategory] Table not yet built, skipping data update');
-    } else if (instanceRef.current && allData.length === 0) {
-      console.log('[SailingByCabinCategory] No data available yet');
-    }
-  }, [selectedSailCode, allData.length]);
-
-  // Expose refresh function globally for testing
-  React.useEffect(() => {
-    window.sailingCabinRefresh = refreshData;
     return () => {
-      delete window.sailingCabinRefresh;
+      cancelled = true;
     };
-  }, [refreshData]);
+  }, [loading]); // Only initialize once when loading completes
 
-  // Note: Font changes are handled via CSS and don't require Tabulator updates
-  // This prevents interference with Dockview's drag and drop system
+  // Update table data when data changes - but only after initialization
+  useEffect(() => {
+    if (!tableInitialized || !instanceRef.current || loading) return;
+    
+    // Check if data actually changed (compare JSON strings)
+    const currentDataStr = data ? JSON.stringify(data) : null;
+    if (lastDataRef.current === currentDataStr) {
+      return;
+    }
+
+    try {
+      console.log('[SimpleTable] Updating table data:', data?.length || 0, 'records');
+      instanceRef.current.replaceData(data || []);
+      lastDataRef.current = currentDataStr;
+    } catch (e) {
+      console.warn('[SimpleTable] Error updating data:', e);
+    }
+  }, [data, tableInitialized, loading]); // Update when data changes
+
+  if (loading) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <p>Loading master sail data...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <p>Error loading data: {error.message}</p>
+        <button onClick={() => window.location.reload()}>Reload</button>
+      </div>
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <p>No data available</p>
+      </div>
+    );
+  }
 
   return <div ref={tableRef} style={{ width: "100%", height: "100%" }} />;
-});
+};
 
-SailingByCabinCategory.displayName = 'SailingByCabinCategory';
+SimpleTable.displayName = 'SimpleTable';
 
-export default SailingByCabinCategory;
+export default SimpleTable;

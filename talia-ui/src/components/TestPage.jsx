@@ -9,6 +9,7 @@ import { componentRegistry, getComponentsByCategory } from './TestPage/component
 import ComponentWrapper from './TestPage/ComponentWrapper';
 import EventMonitor from './shared/EventMonitor';
 import InformationPanel from './TestPage/InformationPanel';
+import EventContextPanel from './TestPage/EventContextPanel';
 import { LoadingSpinner, ErrorMessage } from './shared';
 import queryTracker from '../services/data/queryTracker';
 import { getThemeForMode } from '../themes/modeThemes';
@@ -358,11 +359,10 @@ const TestPage = () => {
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
           borderRadius: '12px 12px 0 0',
+          border: `1px solid ${theme.colors.glassBorder}`,
           borderBottom: `1px solid ${theme.colors.glassBorder}`,
           padding: '0 12px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-          border: `1px solid ${theme.colors.glassBorder}`,
-          borderBottom: `1px solid ${theme.colors.glassBorder}`
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
         }}>
           {tabs.map(tab => (
             <button
@@ -715,11 +715,18 @@ const TestPage = () => {
 
           {/* Events Tab */}
           {activeTab === 'events' && (
-            <div style={{ padding: '12px', height: '600px' }}>
-              <div style={{ marginBottom: '12px', fontSize: '12px', color: 'rgba(224, 224, 224, 0.7)' }}>
+            <div style={{ padding: '12px', height: '600px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ fontSize: '12px', color: 'rgba(224, 224, 224, 0.7)' }}>
                 Showing events for: <strong style={{ color: theme.colors.foreground }}>{selectedComponent}</strong>
               </div>
-              <EventMonitor componentFilter={selectedComponent} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', flex: 1, minHeight: 0 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                  <EventMonitor componentFilter={selectedComponent} theme={theme} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                  <EventContextPanel latestEvent={latestEvent} theme={theme} selectedComponent={selectedComponent} />
+                </div>
+              </div>
             </div>
           )}
 
@@ -729,6 +736,7 @@ const TestPage = () => {
               <InformationPanel 
                 selectedComponent={selectedComponent}
                 performanceData={null} // Will be passed from ComponentWrapper if needed
+                theme={theme}
               />
             </div>
           )}

@@ -10,7 +10,7 @@ Gateway-level authentication via ngrok basic auth has been configured for taliah
 
 **Status**: ✅ Configured
 
-**Location**: `~/.ngrok2/ngrok-taliahub.yml` (on MiniPC)
+**Location**: `~/.ngrok2/ngrok-taliahub.yml` (on staging server)
 
 **Configuration**:
 - **Username**: `talia`
@@ -118,7 +118,7 @@ When SSO is implemented:
 
 ## Files Modified
 
-1. ✅ `~/.ngrok2/ngrok-taliahub.yml` (MiniPC) - Added basic_auth
+1. ✅ `~/.ngrok2/ngrok-taliahub.yml` (staging) - Added basic_auth
 2. ✅ `talia-ui/src/contexts/SupabaseAuthContext.jsx` - Removed commented code
 3. ✅ `talia-ui/src/graphql/queries.js` - Deleted (unused)
 4. ✅ `talia-ui/src/lib/apolloClient.js` - Cleaned up

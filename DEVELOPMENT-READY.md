@@ -4,13 +4,13 @@
 
 ## Environment Status
 
-### ✅ Local Laptop
+### ✅ Local (Development)
 - Supabase: Running locally
 - GraphQL Server: Running locally  
 - UI: Running locally
 - Status: Operational
 
-### ✅ MiniPC (192.168.1.120)
+### ✅ Staging (192.168.1.120)
 - **Public URL**: https://taliahub.com
 - **VPN**: ProtonVPN connected (IP: 149.40.48.92)
 - **Supabase**: Running in Docker, database restored
@@ -20,7 +20,7 @@
 
 ## Quick Access
 
-### MiniPC
+### Staging
 - **Public**: https://taliahub.com
 - **Local**: http://192.168.1.120:5173
 - **GraphQL**: http://192.168.1.120:4000/graphql
@@ -33,10 +33,11 @@
 
 ## Key Reference Documents
 
-- **`MINIPC-SETUP-SUMMARY.md`** - Complete MiniPC reference
+- **`STAGING-SETUP-SUMMARY.md`** - Complete staging reference
 - **`PHASE1-REFERENCE-GUIDE.md`** - ProtonVPN commands
 - **`NGROK-TALIAHUB-SETUP.md`** - ngrok service management
-- **`README-MINIPC.md`** - Quick start guide
+- **`README-STAGING.md`** - Quick start guide
+- **`DEVELOPMENT-WORKFLOW.md`** - Development and deployment guide
 
 ## Archived Documentation
 

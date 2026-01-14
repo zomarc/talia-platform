@@ -2,16 +2,18 @@
 
 ## Environments
 
-### Local Development
+### Local (Development)
 - **UI**: http://localhost:5173
 - **GraphQL**: http://localhost:4000/graphql
 - **Supabase Studio**: http://localhost:54323
+- **Purpose**: Development and testing
 
-### MiniPC (Production-like)
+### Staging (Client Demo)
 - **Public URL**: https://taliahub.com
 - **Local**: http://192.168.1.120:5173
 - **GraphQL**: http://192.168.1.120:4000/graphql
 - **SSH**: `ssh zomarc@192.168.1.120`
+- **Purpose**: Client demos and staging testing
 
 ## Key Documents
 
@@ -27,7 +29,7 @@
 
 ## Service Management
 
-### MiniPC Services
+### Staging Services
 ```bash
 # VPN
 sudo systemctl status protonvpn-openvpn

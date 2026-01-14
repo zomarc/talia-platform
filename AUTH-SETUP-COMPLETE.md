@@ -40,7 +40,7 @@ Password: dev2025tal
 # Then Supabase login with email/password
 ```
 
-### Service Management (MiniPC)
+### Service Management (Staging)
 ```bash
 # Check ngrok status
 ssh zomarc@192.168.1.120

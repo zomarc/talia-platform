@@ -154,3 +154,6 @@ const DemandHeatmapWithSearchTrendsContainer = ({ filters = {} }) => {
 
 export default DemandHeatmapWithSearchTrendsContainer;
 
+
+
+

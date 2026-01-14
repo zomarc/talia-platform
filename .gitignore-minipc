@@ -1,0 +1,3 @@
+# MiniPC specific files (do not commit)
+protonvpn-auth.txt
+*.ovpn

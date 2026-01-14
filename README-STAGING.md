@@ -1,13 +1,13 @@
-# MiniPC Development Environment
+# Staging Development Environment
 
 ## Quick Start
 
-The MiniPC is fully configured and operational at **https://taliahub.com**
+The staging environment is fully configured and operational at **https://taliahub.com**
 
 ### Essential Commands
 
 ```bash
-# SSH to MiniPC
+# SSH to staging
 ssh zomarc@192.168.1.120
 
 # Check services

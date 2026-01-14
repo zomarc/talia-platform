@@ -354,3 +354,6 @@ Talia is designed to evolve into a comprehensive three-tier business intelligenc
 *For detailed technical documentation, see `/docs` directory.*  
 *For development guides, see `/docs/DEVELOPMENT-WORKFLOW.md`.*  
 *For architecture details, see `/docs/ARCHITECTURE.md`.*
+
+
+

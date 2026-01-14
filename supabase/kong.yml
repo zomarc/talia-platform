@@ -1,0 +1,68 @@
+_format_version: "2.1"
+_transform: true
+
+consumers:
+  - username: anon
+    keyauth_credentials:
+      - key: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH
+  - username: service_role
+    keyauth_credentials:
+      - key: sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz
+
+services:
+  - name: auth-v1
+    url: http://supabase-auth:9999/
+    routes:
+      - name: auth-v1
+        strip_path: true
+        paths:
+          - /auth/v1/
+    plugins:
+      - name: cors
+
+  - name: rest-v1
+    url: http://supabase-rest:3000/
+    routes:
+      - name: rest-v1
+        strip_path: true
+        paths:
+          - /rest/v1/
+    plugins:
+      - name: cors
+      # Remove key-auth - Supabase client uses JWT tokens, not API keys
+      # - name: key-auth
+      #   config:
+      #     hide_credentials: false
+
+  - name: realtime-v1
+    url: http://supabase-realtime:4000/socket/
+    routes:
+      - name: realtime-v1
+        strip_path: true
+        paths:
+          - /realtime/v1/
+    plugins:
+      - name: cors
+
+  - name: storage-v1
+    url: http://supabase-storage:5000/storage/v1/
+    routes:
+      - name: storage-v1
+        strip_path: true
+        paths:
+          - /storage/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+
+  - name: meta
+    url: http://supabase-pg-meta:8080/
+    routes:
+      - name: meta
+        strip_path: true
+        paths:
+          - /pg/
+    plugins:
+      - name: cors

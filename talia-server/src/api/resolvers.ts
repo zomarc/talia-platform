@@ -968,7 +968,8 @@ export const resolvers = {
           .limit(1);
         
         const isOnline = !error;
-        const supabaseUrl = 'http://127.0.0.1:54321'; // Local Supabase URL
+        // Use environment variable for Supabase URL, fallback to localhost
+        const supabaseUrl = process.env.SUPABASE_URL || 'http://127.0.0.1:54321';
         
         return {
           online: isOnline,
@@ -978,9 +979,10 @@ export const resolvers = {
           error: error ? error.message : null
         };
       } catch (error: any) {
+        const supabaseUrl = process.env.SUPABASE_URL || 'http://127.0.0.1:54321';
         return {
           online: false,
-          server: 'http://127.0.0.1:54321',
+          server: supabaseUrl,
           database: 'postgres',
           lastChecked: new Date().toISOString(),
           error: error.message || 'Unknown error'

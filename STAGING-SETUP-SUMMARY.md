@@ -1,7 +1,8 @@
-# MiniPC Setup Summary
+# Staging Setup Summary
 
 **Date**: January 14, 2025  
-**Status**: ✅ Fully Operational
+**Status**: ✅ Fully Operational  
+**Environment**: Staging (Client Demo)
 
 ## Quick Reference
 
@@ -33,8 +34,8 @@ docker compose ps
 docker compose restart graphql-server
 ```
 
-### Key Files (MiniPC)
-- Config: `~/talia-docker/docker-compose.talia.yml`
+### Key Files (Staging)
+- Config: `~/talia-docker/docker-compose.yml`
 - VPN Config: `~/protonvpn-uk11.ovpn`
 - VPN Auth: `~/protonvpn-auth.txt`
 - ngrok Service: `/etc/systemd/system/ngrok-taliahub.service`

@@ -22,9 +22,10 @@ cd ~/talia-docker && docker compose restart graphql-server
 
 ## Reference Documents
 
-- **`MINIPC-SETUP-SUMMARY.md`** - Complete setup reference
+- **`STAGING-SETUP-SUMMARY.md`** - Complete setup reference
 - **`PHASE1-REFERENCE-GUIDE.md`** - ProtonVPN commands
 - **`NGROK-TALIAHUB-SETUP.md`** - ngrok service management
+- **`DEVELOPMENT-WORKFLOW.md`** - Development and deployment guide
 
 ## Archived Documentation
 

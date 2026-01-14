@@ -1,10 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { GraphQLUtils } from '../lib/apolloClient';
-// GraphQL queries disabled during database restoration
-// TODO: Re-enable GraphQL queries when database is restored
-// import { useQuery } from '@apollo/client';
-// import { GET_TALIA_USER_BY_EMAIL } from '../graphql/queries';
 
 const SupabaseAuthContext = createContext();
 

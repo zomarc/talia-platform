@@ -31,11 +31,24 @@ export default defineConfig({
         changeOrigin: true,
         ws: true, // WebSocket support for SSE
       },
+      // SSE proxy for btop terminal - MUST come before /api
+      '/api/btop/stream': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+        ws: true, // WebSocket support for SSE
+      },
       // Handle base path for SSE proxy - MUST come before /celestyal/api
       '/celestyal/api/sync/stream': {
         target: 'http://localhost:4001',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/celestyal\/api\/sync\/stream/, '/api/sync/stream'),
+        ws: true,
+      },
+      // Handle base path for btop SSE proxy
+      '/celestyal/api/btop/stream': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/celestyal\/api\/btop\/stream/, '/api/btop/stream'),
         ws: true,
       },
       // General API proxy (GraphQL) - comes after SSE routes

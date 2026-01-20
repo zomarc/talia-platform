@@ -125,7 +125,7 @@ async function startServer() {
         if (isDocker) {
           // In Docker: Use docker run to execute btop with host process access
           // This runs btop in a container with access to host's process tree
-          console.log('Running btop via docker (staging host)...');
+          console.log('Running btop via docker (Dockerized environment)...');
           
           // Run btop in alpine container with host PID namespace to see host processes
           btopProcess = spawn('docker', [
@@ -141,6 +141,7 @@ async function startServer() {
           });
         } else {
           // Not in Docker (local dev): Execute btop directly if available
+          console.log('Running btop directly (local environment)...');
           btopProcess = spawn('btop', [], {
             env: { ...process.env, TERM: 'xterm-256color' },
             stdio: ['ignore', 'pipe', 'pipe']
@@ -162,7 +163,10 @@ async function startServer() {
           console.error('btop process error:', error);
           // If btop not found, provide helpful message
           if (error.message.includes('ENOENT') || error.message.includes('spawn')) {
-            res.write(`data: ${JSON.stringify({ type: 'error', message: 'btop not found. On staging, btop is available on the host. This endpoint needs configuration to access host btop.' })}\n\n`);
+            const errorMsg = isDocker 
+              ? 'btop not found. In Dockerized environments, btop runs via docker run with host access.'
+              : 'btop not found. Please install btop on your local machine.';
+            res.write(`data: ${JSON.stringify({ type: 'error', message: errorMsg })}\n\n`);
           } else {
             res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
           }

@@ -16,8 +16,19 @@ const BtopTerminal = ({ theme: propTheme, mode = 'data' }) => {
   const eventSourceRef = useRef(null);
   const [error, setError] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [serverName, setServerName] = useState('localhost');
   
   const theme = propTheme || getThemeForMode(mode);
+
+  // Determine server name from hostname
+  useEffect(() => {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '') {
+      setServerName('local');
+    } else {
+      setServerName(hostname);
+    }
+  }, []);
 
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -53,7 +64,10 @@ const BtopTerminal = ({ theme: propTheme, mode = 'data' }) => {
     eventSource.onopen = () => {
       setIsConnected(true);
       setError(null);
-      terminal.writeln('\r\n\x1b[32m✓ Connected to staging server...\x1b[0m');
+      const hostname = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === ''
+        ? 'local machine'
+        : window.location.hostname;
+      terminal.writeln(`\r\n\x1b[32m✓ Connected to ${hostname}...\x1b[0m`);
       terminal.writeln('\x1b[33mStarting btop...\x1b[0m\r\n');
     };
 
@@ -79,7 +93,7 @@ const BtopTerminal = ({ theme: propTheme, mode = 'data' }) => {
     eventSource.onerror = (err) => {
       console.error('SSE connection error:', err);
       if (eventSource.readyState === EventSource.CLOSED) {
-        setError('Connection to staging server lost');
+        setError('Connection lost');
         setIsConnected(false);
         terminal.write('\r\n\x1b[31mConnection error. Retrying...\x1b[0m\r\n');
       }
@@ -133,7 +147,7 @@ const BtopTerminal = ({ theme: propTheme, mode = 'data' }) => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span>🖥️</span>
-          <span style={{ fontWeight: '600' }}>System Monitor (btop)</span>
+          <span style={{ fontWeight: '600' }}>System Monitor (btop) - {serverName}</span>
           {isConnected && (
             <span style={{ 
               fontSize: '9px', 

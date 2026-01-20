@@ -149,13 +149,13 @@ async function startServer() {
           // macOS script command format: script [-q] file command
           // -q: quiet mode (suppress start/stop messages)
           // The output file is required but we capture stdout/stderr via pipes
-          // For macOS, we need to detect and use the correct format
+          // Set COLUMNS and LINES so btop can determine terminal size
           btopProcess = spawn('script', [
             '-q',
             '/dev/null',
-            'btop', '--force-utf'
+            'sh', '-c', 'export COLUMNS=120 LINES=30 TERM=xterm-256color LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 && exec btop --force-utf'
           ], {
-            env: { ...process.env, TERM: 'xterm-256color', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' },
+            env: { ...process.env, TERM: 'xterm-256color', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', COLUMNS: '120', LINES: '30' },
             stdio: ['ignore', 'pipe', 'pipe']
           });
         }

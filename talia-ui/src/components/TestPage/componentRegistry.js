@@ -23,6 +23,7 @@ import SearchTrendsContainer from '../focus-panels/SearchTrends';
 import GoogleTrendsContainer from '../focus-panels/GoogleTrends';
 import DataDebugView from './DataDebugView';
 import DataMatch from '../focus-panels/DataMatch';
+import BtopTerminal from '../focus-panels/BtopTerminal';
 
 /**
  * Component registry with metadata
@@ -257,6 +258,18 @@ export const componentRegistry = {
     },
     dataRequirements: 'Requires GraphQL connection to dataMatch endpoint. Checks data completeness across main tables: cabin_availability, reservation, reservation_current_state, published_rates, published_rates_current_state, sail_by_cabin_occupancy, competitor_current_state.',
     filePath: 'src/components/focus-panels/DataMatch/index.jsx'
+  },
+  BtopTerminal: {
+    component: BtopTerminal,
+    category: 'System',
+    description: 'Btop System Monitor - Real-time system monitoring via SSH to staging server. Shows CPU, memory, network, and process information.',
+    usesMockData: false,
+    props: {
+      theme: { type: 'object', required: false, description: 'Theme object for styling' },
+      mode: { type: 'string', required: false, description: 'Mode for theme (data, test, app)' }
+    },
+    dataRequirements: 'Requires SSE connection to /api/btop/stream endpoint. Executes btop on staging server host and streams output.',
+    filePath: 'src/components/focus-panels/BtopTerminal/index.jsx'
   }
 };
 

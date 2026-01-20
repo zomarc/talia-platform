@@ -223,6 +223,8 @@ services:
     ports:
       - "4000:4000"
       - "4001:4001"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       SUPABASE_URL: http://supabase-kong:8000
       SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImlhdCI6MTc2ODk0NTkzMSwiZXhwIjoxODAwNTAzNTMxfQ.L-fOEUmTqH8DSkBJHgEz39E-gf7MTv5kmFFeqc2wDRQ

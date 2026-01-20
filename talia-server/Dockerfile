@@ -2,6 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Install docker CLI for accessing host docker socket (for btop terminal)
+RUN apk add --no-cache docker-cli
+
 # Copy package files
 COPY package*.json ./
 

@@ -100,6 +100,117 @@ async function startServer() {
     });
   });
 
+  // SSE endpoint for btop terminal
+  // Executes btop on the host via docker exec (requires docker socket access)
+  app.get('/api/btop/stream', (req, res) => {
+    // Set headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
+
+    // Import child_process
+    import('child_process').then(({ spawn }) => {
+      // Try to execute btop via docker exec on host
+      // This assumes docker socket is accessible or we're in a privileged container
+      // Alternative: Use docker exec to run in a container with btop installed
+      // For now, try to execute directly - if btop is installed in container
+      let btopProcess;
+
+      // Check if we're in Docker (check for /.dockerenv)
+      import('fs').then((fs) => {
+        const isDocker = fs.existsSync('/.dockerenv');
+        
+        if (isDocker) {
+          // In Docker: Use docker run to execute btop with host process access
+          // This runs btop in a container with access to host's process tree
+          console.log('Running btop via docker (staging host)...');
+          
+          // Run btop in alpine container with host PID namespace to see host processes
+          btopProcess = spawn('docker', [
+            'run', '--rm', '-i', '--tty',
+            '--pid', 'host',
+            '--network', 'host',
+            '--env', 'TERM=xterm-256color',
+            'alpine:latest',
+            'sh', '-c', 'apk add --no-cache btop > /dev/null 2>&1 && exec btop'
+          ], {
+            env: { ...process.env, TERM: 'xterm-256color' },
+            stdio: ['ignore', 'pipe', 'pipe']
+          });
+        } else {
+          // Not in Docker (local dev): Execute btop directly if available
+          btopProcess = spawn('btop', [], {
+            env: { ...process.env, TERM: 'xterm-256color' },
+            stdio: ['ignore', 'pipe', 'pipe']
+          });
+        }
+
+        // Stream stdout to client
+        btopProcess.stdout.on('data', (data) => {
+          res.write(`data: ${JSON.stringify({ type: 'output', data: data.toString() })}\n\n`);
+        });
+
+        // Stream stderr to client
+        btopProcess.stderr.on('data', (data) => {
+          const errorText = data.toString();
+          res.write(`data: ${JSON.stringify({ type: 'output', data: errorText })}\n\n`);
+        });
+
+        btopProcess.on('error', (error) => {
+          console.error('btop process error:', error);
+          // If btop not found, provide helpful message
+          if (error.message.includes('ENOENT') || error.message.includes('spawn')) {
+            res.write(`data: ${JSON.stringify({ type: 'error', message: 'btop not found. On staging, btop is available on the host. This endpoint needs configuration to access host btop.' })}\n\n`);
+          } else {
+            res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+          }
+        });
+
+        btopProcess.on('close', (code) => {
+          res.write(`data: ${JSON.stringify({ type: 'closed', code })}\n\n`);
+          res.end();
+        });
+
+        // Handle client disconnect
+        req.on('close', () => {
+          if (btopProcess) {
+            btopProcess.kill();
+          }
+          res.end();
+        });
+      }).catch((fsError) => {
+        // Fallback: try executing btop directly
+        const btopProcess = spawn('btop', [], {
+          env: { ...process.env, TERM: 'xterm-256color' },
+          stdio: ['ignore', 'pipe', 'pipe']
+        });
+
+        btopProcess.stdout.on('data', (data) => {
+          res.write(`data: ${JSON.stringify({ type: 'output', data: data.toString() })}\n\n`);
+        });
+
+        btopProcess.stderr.on('data', (data) => {
+          res.write(`data: ${JSON.stringify({ type: 'output', data: data.toString() })}\n\n`);
+        });
+
+        btopProcess.on('error', (error) => {
+          res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+        });
+
+        req.on('close', () => {
+          btopProcess.kill();
+          res.end();
+        });
+      });
+    }).catch((error) => {
+      console.error('Error setting up btop stream:', error);
+      res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+      res.end();
+    });
+  });
+
   // Start Express server for SSE on port 4001
   const SSE_PORT = 4001;
   app.listen(SSE_PORT, () => {

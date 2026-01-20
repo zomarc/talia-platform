@@ -2311,6 +2311,11 @@ function Dashboard({ user }) {
               "graphql-books": (props) => <GraphQLPanel {...props} params={{...props.params, dataType: "books"}} />,
               "graphql-ships": (props) => <GraphQLPanel {...props} params={{...props.params, dataType: "ships"}} />,
               "graphql-cabins": (props) => <GraphQLPanel {...props} params={{...props.params, dataType: "cabinAvailability"}} />,
+              // System components
+              "btop-terminal": (props) => {
+                const BtopTerminal = require('./components/focus-panels/BtopTerminal').default;
+                return <BtopTerminal {...props} />;
+              },
               // Focus-specific components
               "kpi-cards": KPICards,
               "occupancy-chart": OccupancyChart,

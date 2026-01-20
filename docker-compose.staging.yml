@@ -4,8 +4,9 @@
 services:
   # Supabase Services (same as local)
   supabase-db:
-    image: public.ecr.aws/supabase/postgres:17.0.0
+    image: public.ecr.aws/supabase/postgres:15.1.0.147
     container_name: talia-supabase-db
+    user: "101:101"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -40,8 +41,8 @@ services:
       DEFAULT_PROJECT_NAME: Default Project
       SUPABASE_URL: http://supabase-kong:8000
       SUPABASE_PUBLIC_URL: http://192.168.1.120:54321
-      SUPABASE_ANON_KEY: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH
-      SUPABASE_SERVICE_KEY: sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz
+      SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImlhdCI6MTc2ODk0NTkzMSwiZXhwIjoxODAwNTAzNTMxfQ.L-fOEUmTqH8DSkBJHgEz39E-gf7MTv5kmFFeqc2wDRQ
+      SUPABASE_SERVICE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiaWF0IjoxNzY4OTQ1OTMxLCJleHAiOjE4MDA1MDM1MzF9._yzlWcAjdzK_UKA0TbY6wJ7RQuk5waO6cag4WXCt2qo
     depends_on:
       supabase-db:
         condition: service_healthy
@@ -168,8 +169,8 @@ services:
       retries: 10
     restart: unless-stopped
     environment:
-      ANON_KEY: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH
-      SERVICE_KEY: sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz
+      ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImlhdCI6MTc2ODk0NTkzMSwiZXhwIjoxODAwNTAzNTMxfQ.L-fOEUmTqH8DSkBJHgEz39E-gf7MTv5kmFFeqc2wDRQ
+      SERVICE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiaWF0IjoxNzY4OTQ1OTMxLCJleHAiOjE4MDA1MDM1MzF9._yzlWcAjdzK_UKA0TbY6wJ7RQuk5waO6cag4WXCt2qo
       POSTGREST_URL: http://supabase-rest:3000
       PGRST_JWT_SECRET: your-super-secret-jwt-token-with-at-least-32-characters-long
       DATABASE_URL: postgres://supabase_storage_admin:your-super-secret-and-long-postgres-password@supabase-db:5432/postgres
@@ -224,8 +225,8 @@ services:
       - "4001:4001"
     environment:
       SUPABASE_URL: http://supabase-kong:8000
-      SUPABASE_ANON_KEY: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH
-      SUPABASE_SERVICE_ROLE_KEY: sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz
+      SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImlhdCI6MTc2ODk0NTkzMSwiZXhwIjoxODAwNTAzNTMxfQ.L-fOEUmTqH8DSkBJHgEz39E-gf7MTv5kmFFeqc2wDRQ
+      SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiaWF0IjoxNzY4OTQ1OTMxLCJleHAiOjE4MDA1MDM1MzF9._yzlWcAjdzK_UKA0TbY6wJ7RQuk5waO6cag4WXCt2qo
       AZURE_SYNAPSE_SERVER: celestyaldataplatform-prd.sql.azuresynapse.net
       AZURE_SYNAPSE_PORT: 1433
       AZURE_SYNAPSE_DATABASE: CDP_Dedicated_SQL_DWH

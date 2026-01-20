@@ -126,6 +126,7 @@ async function startServer() {
           // Run btop in alpine container with host PID namespace to see host processes
           // Use -t flag to allocate a TTY (btop requires it), but don't use -i (interactive)
           // stdin is ignored, so we don't need -i
+          // Set COLUMNS and LINES environment variables for proper terminal size
           btopProcess = spawn('docker', [
             'run', '--rm', '-t',
             '--pid', 'host',
@@ -133,26 +134,26 @@ async function startServer() {
             '--env', 'TERM=xterm-256color',
             '--env', 'LANG=en_US.UTF-8',
             '--env', 'LC_ALL=en_US.UTF-8',
+            '--env', 'COLUMNS=120',
+            '--env', 'LINES=30',
             'alpine:latest',
-            'sh', '-c', 'apk add --no-cache btop > /dev/null 2>&1 && export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 && exec btop --force-utf'
+            'sh', '-c', 'apk add --no-cache btop > /dev/null 2>&1 && export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 COLUMNS=120 LINES=30 && exec btop --force-utf'
           ], {
-            env: { ...process.env, TERM: 'xterm-256color', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' },
+            env: { ...process.env, TERM: 'xterm-256color', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', COLUMNS: '120', LINES: '30' },
             stdio: ['ignore', 'pipe', 'pipe']
           });
         } else {
           // Not in Docker (local dev): Execute btop using script to create a pseudo-TTY
           // btop requires a TTY, so we use 'script' to create one
           console.log('Running btop directly (local environment)...');
-          // script -qefc creates a pseudo-TTY and runs the command
-          // -q: quiet mode (no script start/stop messages)
-          // -e: return exit code
-          // -f: flush output after each write  
-          // -c: command to run
-          // The output file (/dev/null) is required but we capture stdout/stderr via pipes
+          // macOS script command format: script [-q] file command
+          // -q: quiet mode (suppress start/stop messages)
+          // The output file is required but we capture stdout/stderr via pipes
+          // For macOS, we need to detect and use the correct format
           btopProcess = spawn('script', [
-            '-qefc',
-            'btop --force-utf',
-            '/dev/null'
+            '-q',
+            '/dev/null',
+            'btop', '--force-utf'
           ], {
             env: { ...process.env, TERM: 'xterm-256color', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' },
             stdio: ['ignore', 'pipe', 'pipe']

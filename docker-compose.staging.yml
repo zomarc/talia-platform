@@ -250,6 +250,7 @@ services:
         VITE_SUPABASE_URL: http://192.168.1.120:54321
         VITE_SUPABASE_ANON_KEY: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH
         VITE_GRAPHQL_ENDPOINT: http://192.168.1.120:4000/graphql
+        VITE_ENABLE_DEV_MODE: "true"
     container_name: talia-ui
     restart: unless-stopped
     ports:

@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 class TaliaUserService {
   constructor() {
     this.users = [];
-    this.isDevMode = import.meta.env.DEV;
+    this.isDevMode = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_MODE === 'true';
   }
   
   /**

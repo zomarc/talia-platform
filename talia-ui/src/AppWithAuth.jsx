@@ -133,7 +133,7 @@ const AppContent = () => {
   }
 
   // In dev mode, if no user, create mock user
-  const isDevMode = import.meta.env.DEV;
+  const isDevMode = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_MODE === 'true';
   if (!user && isDevMode) {
     // This should be handled by SupabaseAuthContext, but as a fallback:
     console.log('🔧 Dev mode: No user found, should be handled by context');

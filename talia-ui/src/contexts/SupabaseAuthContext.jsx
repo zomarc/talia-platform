@@ -18,8 +18,8 @@ export const SupabaseAuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [session, setSession] = useState(null);
   
-  // Development mode flag
-  const isDevMode = import.meta.env.DEV;
+  // Development mode flag - check both Vite dev mode and custom env var for staging
+  const isDevMode = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_MODE === 'true';
   
   // Create mock user for development
   const createMockUser = () => {

@@ -106,25 +106,81 @@ set -e
 cd $STAGING_GIT_DIR
 
 echo '📥 Pulling latest code...'
-git pull
+git fetch origin
+git reset --hard origin/main
 
 if [ \"$DEPLOY_MODE\" = \"full\" ]; then
   echo '🐳 Rebuilding Docker containers...'
-  docker compose build --no-cache
-  docker compose up -d
+  docker compose -f docker-compose.staging.yml build --no-cache ui graphql-server
+  docker compose -f docker-compose.staging.yml up -d
 else
-  echo '🔄 Restarting services...'
-  docker compose restart graphql-server ui
+  echo '🔄 Restarting all services (code-only)...'
+  # Restart in dependency order to ensure proper startup
+  docker compose -f docker-compose.staging.yml restart supabase-db supabase-rest supabase-kong
+  sleep 3
+  docker compose -f docker-compose.staging.yml restart graphql-server
+  sleep 3
+  docker compose -f docker-compose.staging.yml restart ui
 fi
 
-echo '⏳ Waiting for services to start...'
-sleep 5
+echo '⏳ Waiting for services to be healthy...'
+sleep 10
 
 echo '📊 Checking service status...'
-docker compose ps
+docker compose -f docker-compose.staging.yml ps
 
 echo ''
-echo '✅ Deployment complete!'
+echo '🧪 Testing critical endpoints...'
+
+# Wait for services to be ready
+max_attempts=30
+attempt=0
+
+# Test GraphQL server
+echo -n '  Testing GraphQL server... '
+while [ \$attempt -lt \$max_attempts ]; do
+  if curl -sS -f -X POST http://localhost:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ __typename }\"}' > /dev/null 2>&1; then
+    echo '✅ OK'
+    break
+  fi
+  attempt=\$((attempt + 1))
+  sleep 2
+done
+if [ \$attempt -eq \$max_attempts ]; then
+  echo '❌ FAILED - GraphQL server not responding'
+  exit 1
+fi
+
+# Test Supabase connection via GraphQL
+echo -n '  Testing Supabase connection... '
+supabase_online=\$(curl -sS -f -X POST http://localhost:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ supabaseConnectionStatus { online } }\"}' 2>/dev/null | grep -o '\"online\":true' || echo '')
+if [ -n \"\$supabase_online\" ]; then
+  echo '✅ OK'
+else
+  echo '⚠️  WARNING - Supabase connection may be offline'
+fi
+
+# Test databaseTables query (critical for Data Mode)
+echo -n '  Testing databaseTables query... '
+table_count=\$(curl -sS -X POST http://localhost:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ databaseTables { tableName } }\"}' 2>/dev/null | grep -o '\"tableName\"' | wc -l || echo '0')
+if [ \"\$table_count\" -gt \"0\" ]; then
+  echo \"✅ OK (\$table_count tables)\"
+else
+  echo '❌ FAILED - No tables returned'
+  exit 1
+fi
+
+# Test UI GraphQL proxy
+echo -n '  Testing UI GraphQL proxy... '
+if curl -sS -f -X POST http://localhost:5173/api/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ __typename }\"}' > /dev/null 2>&1; then
+  echo '✅ OK'
+else
+  echo '❌ FAILED - UI proxy not working'
+  exit 1
+fi
+
+echo ''
+echo '✅ Deployment complete and verified!'
 echo '🌐 Verify at: https://taliahub.com'
 "
 

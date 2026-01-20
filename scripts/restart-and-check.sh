@@ -136,8 +136,16 @@ check_staging() {
       sleep 3;
       echo '[staging] restart ngrok taliahub...';
       sudo systemctl restart ngrok-taliahub;
-      echo '[staging] ensure docker stack is up...';
-      cd '${STAGING_DIR}' && docker compose up -d;
+      echo '[staging] restart docker services in order...';
+      cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml restart supabase-db supabase-rest supabase-kong;
+      sleep 5;
+      cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml restart graphql-server;
+      sleep 5;
+      cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml restart ui;
+      echo '[staging] ensure all services are up...';
+      cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml up -d;
+      echo '[staging] waiting for services to be ready...';
+      sleep 10;
     "
   fi
 
@@ -151,13 +159,15 @@ check_staging() {
 
   echo ""
   echo "-- Docker stack --"
-  ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose ps" | sed 's/^/  /'
+  ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml ps" | sed 's/^/  /'
 
   echo ""
   echo "-- Internal service probes (from staging host) --"
   ssh "${STAGING_USER}@${STAGING_HOST}" "set -e;
     echo -n 'ui_http_code='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 3 http://127.0.0.1:5173/ || true;
-    echo -n 'graphql_http_code='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 3 http://127.0.0.1:4000/graphql || true;
+    echo -n 'graphql_http_code='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 3 -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ __typename }\"}' || true;
+    echo -n 'ui_graphql_proxy_code='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 3 -X POST http://127.0.0.1:5173/api/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ __typename }\"}' || true;
+    echo -n 'databaseTables_count='; curl -sS -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ databaseTables { tableName } }\"}' 2>/dev/null | grep -o '\"tableName\"' | wc -l || echo '0';
     echo -n 'storage_http_code='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 3 http://127.0.0.1:5000/status || true;
     echo -n 'gotrue_health_http_code='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 3 http://127.0.0.1:9999/health || true;
     echo -n 'pgmeta_health_http_code='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 3 http://127.0.0.1:8080/health || true;

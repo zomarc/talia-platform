@@ -130,10 +130,12 @@ async function startServer() {
             '--pid', 'host',
             '--network', 'host',
             '--env', 'TERM=xterm-256color',
+            '--env', 'LANG=en_US.UTF-8',
+            '--env', 'LC_ALL=en_US.UTF-8',
             'alpine:latest',
-            'sh', '-c', 'apk add --no-cache btop > /dev/null 2>&1 && exec btop'
+            'sh', '-c', 'apk add --no-cache btop > /dev/null 2>&1 && export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 && exec btop --force-utf'
           ], {
-            env: { ...process.env, TERM: 'xterm-256color' },
+            env: { ...process.env, TERM: 'xterm-256color', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' },
             stdio: ['ignore', 'pipe', 'pipe']
           });
         } else {

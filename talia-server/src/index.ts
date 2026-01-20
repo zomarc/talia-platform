@@ -143,12 +143,16 @@ async function startServer() {
           // Not in Docker (local dev): Execute btop using script to create a pseudo-TTY
           // btop requires a TTY, so we use 'script' to create one
           console.log('Running btop directly (local environment)...');
-          // Check if script command is available (usually available on Linux/macOS)
-          // script -qefc 'command' creates a pseudo-TTY and runs the command
+          // script -qefc creates a pseudo-TTY and runs the command
+          // -q: quiet mode (no script start/stop messages)
+          // -e: return exit code
+          // -f: flush output after each write  
+          // -c: command to run
+          // The output file (/dev/null) is required but we capture stdout/stderr via pipes
           btopProcess = spawn('script', [
             '-qefc',
             'btop --force-utf',
-            '/dev/null' // script needs an output file, but we capture stdout/stderr
+            '/dev/null'
           ], {
             env: { ...process.env, TERM: 'xterm-256color', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' },
             stdio: ['ignore', 'pipe', 'pipe']

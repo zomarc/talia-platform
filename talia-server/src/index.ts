@@ -20,6 +20,7 @@ async function startServer() {
   });
 
   // Start standalone server for GraphQL
+  // Note: CORS is handled by Apollo Server v5 automatically
   const { url } = await startStandaloneServer(server, {
     listen: { port: 4000 },
     context: async ({ req }) => {
@@ -32,11 +33,6 @@ async function startServer() {
           email: 'admin@celestyal.com'
         }
       };
-    },
-    // CORS configuration for GraphQL endpoint
-    cors: {
-      origin: '*',
-      credentials: true
     }
   });
 

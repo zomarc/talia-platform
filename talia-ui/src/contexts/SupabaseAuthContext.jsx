@@ -17,6 +17,61 @@ export const SupabaseAuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [session, setSession] = useState(null);
+  
+  // Development mode flag
+  const isDevMode = import.meta.env.DEV;
+  
+  // Create mock user for development
+  const createMockUser = () => {
+    // Get role from localStorage or default to ADMIN
+    const savedRole = localStorage.getItem('devUserRole') || 'ADMIN';
+    const mockUser = {
+      id: 'dev-user-1',
+      email: 'dev@talia.local',
+      talia_user_id: 1000,
+      role: savedRole,
+      taliaUser: {
+        id: 'dev-user-1',
+        talia_user_id: 1000,
+        email: 'dev@talia.local'
+      }
+    };
+    
+    // Set GraphQL context
+    GraphQLUtils.setUserContext({
+      role: savedRole,
+      email: mockUser.email,
+      id: mockUser.id
+    });
+    
+    return mockUser;
+  };
+  
+  // Update user role (for dev role selector)
+  const updateUserRole = (newRole) => {
+    if (!isDevMode) {
+      console.warn('updateUserRole only works in development mode');
+      return;
+    }
+    
+    localStorage.setItem('devUserRole', newRole);
+    
+    if (user && user.id === 'dev-user-1') {
+      // Update mock user role
+      const updatedUser = {
+        ...user,
+        role: newRole
+      };
+      setUser(updatedUser);
+      
+      // Update GraphQL context
+      GraphQLUtils.setUserContext({
+        role: newRole,
+        email: updatedUser.email,
+        id: updatedUser.id
+      });
+    }
+  };
 
   // Get or create Talia user record
   const getOrCreateTaliaUser = async (supabaseUser) => {
@@ -146,8 +201,16 @@ export const SupabaseAuthProvider = ({ children }) => {
         }
       } else {
         console.log('🔐 No user in session - clearing user state');
-        setUser(null);
-        GraphQLUtils.clearUserContext();
+        
+        // In dev mode, create mock user instead of clearing
+        if (isDevMode && isMounted) {
+          console.log('🔧 Development mode: Creating mock user (no Supabase session)');
+          const mockUser = createMockUser();
+          setUser(mockUser);
+        } else {
+          setUser(null);
+          GraphQLUtils.clearUserContext();
+        }
       }
       
       // Always set loading to false, even if there was an error
@@ -187,7 +250,14 @@ export const SupabaseAuthProvider = ({ children }) => {
         await processSession(session, 'initial');
       } else {
         console.log('🔐 No initial session');
-        if (isMounted) {
+        
+        // In dev mode, create mock user if no Supabase session
+        if (isDevMode && isMounted) {
+          console.log('🔧 Development mode: Creating mock user');
+          const mockUser = createMockUser();
+          setUser(mockUser);
+          setLoading(false);
+        } else if (isMounted) {
           setLoading(false);
         }
       }
@@ -326,6 +396,8 @@ export const SupabaseAuthProvider = ({ children }) => {
     signInWithEmail,
     signInWithPassword,
     signOut,
+    updateUserRole, // Add role update function for dev mode
+    isDevMode, // Expose dev mode flag
     // Add other Supabase auth methods as needed (e.g., signUp, resetPassword)
   };
 

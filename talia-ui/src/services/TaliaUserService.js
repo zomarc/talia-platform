@@ -8,10 +8,42 @@ import { supabase } from '../lib/supabase';
 class TaliaUserService {
   constructor() {
     this.users = [];
+    this.isDevMode = import.meta.env.DEV;
+  }
+  
+  /**
+   * Check if a user is a local/mock user (development only)
+   * @param {Object} user - User object to check
+   * @returns {boolean} - True if user is local/mock
+   */
+  isLocalUser(user) {
+    if (!user) return false;
+    return user.id === 'dev-user-1' || user.id?.startsWith('dev-user-') || user.email === 'dev@talia.local';
+  }
+  
+  /**
+   * Get local mock user data
+   * @returns {Object} - Mock user object
+   */
+  getLocalUser() {
+    const savedRole = localStorage.getItem('devUserRole') || 'ADMIN';
+    return {
+      id: 'dev-user-1',
+      taliaUserId: 1000,
+      email: 'dev@talia.local',
+      name: 'Dev User',
+      taliaRole: savedRole.toLowerCase(),
+      isActive: true,
+      createdAt: new Date().toISOString()
+    };
   }
 
   async getAllTaliaUsers() {
     try {
+      // In dev mode, include local user if using mock authentication
+      const localUser = this.isDevMode ? this.getLocalUser() : null;
+      const users = localUser ? [localUser] : [];
+      
       console.log('🔍 Fetching Talia users from Supabase...');
       
       const { data, error } = await supabase
@@ -21,13 +53,18 @@ class TaliaUserService {
 
       if (error) {
         console.error('❌ Error fetching Talia users:', error);
+        // In dev mode, return local user even if database query fails
+        if (this.isDevMode && localUser) {
+          console.log('🔧 Dev mode: Returning local user due to database error');
+          return users;
+        }
         return [];
       }
 
       console.log(`✅ Found ${data?.length || 0} Talia users`);
       
       // Map Supabase data to expected format
-      return (data || []).map(user => ({
+      const dbUsers = (data || []).map(user => ({
         taliaUserId: user.talia_user_id,
         email: user.email,
         name: user.email?.split('@')[0] || 'Unknown',
@@ -36,8 +73,24 @@ class TaliaUserService {
         createdAt: user.created_at || user.last_login_at,
         id: user.id
       }));
+      
+      // Combine local user with database users (avoid duplicates)
+      const allUsers = [...users];
+      for (const dbUser of dbUsers) {
+        if (!this.isLocalUser(dbUser)) {
+          allUsers.push(dbUser);
+        }
+      }
+      
+      return allUsers;
     } catch (error) {
       console.error('❌ Error in getAllTaliaUsers:', error);
+      // In dev mode, return local user even if there's an error
+      if (this.isDevMode) {
+        const localUser = this.getLocalUser();
+        console.log('🔧 Dev mode: Returning local user due to error');
+        return [localUser];
+      }
       return [];
     }
   }
@@ -54,7 +107,16 @@ class TaliaUserService {
     try {
       console.log(`🔄 Updating user ${taliaUserId} role to ${newRole}`);
       
-      // Find user by talia_user_id
+      // Check if this is a local user
+      const localUser = this.getLocalUser();
+      if (localUser && localUser.taliaUserId === taliaUserId) {
+        // Update local user role in localStorage
+        localStorage.setItem('devUserRole', newRole.toUpperCase());
+        console.log('✅ Local user role updated in localStorage');
+        return await this.getAllTaliaUsers();
+      }
+      
+      // For database users, find by talia_user_id
       const { data: users, error: fetchError } = await supabase
         .from('talia_users')
         .select('*')

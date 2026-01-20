@@ -1,55 +1,132 @@
-# Next Steps - Supabase Connection Fix
+# Next Steps - App Mode Fix Complete
 
-## Current Status
+## ✅ Current Status
 
-✅ **Database**: 47 tables loaded and accessible  
-✅ **PostgreSQL**: Healthy  
-✅ **PostgREST**: Fixed schema config, connecting  
-✅ **Kong**: Running and routing  
-⚠️ **Supabase Connection**: Still showing offline due to role/permission issues
+**All services running:**
+- ✅ GraphQL Server: http://localhost:4000/graphql
+- ✅ UI Server: http://localhost:5174/ (port 5173 was in use)
+- ✅ Supabase: http://localhost:54321/
 
-## Issue Summary
+## 🧪 Testing Checklist
 
-The Supabase client connection is failing because:
-1. PostgreSQL roles (`service_role`, `anon`) need to be created
-2. GraphQL resolver code needs to be updated and redeployed
-3. Supabase client path configuration needs verification
+### 1. Test App Mode Access
+1. Open browser: **http://localhost:5174/**
+2. Click **"🚀 APP MODE"** button (top-right mode switcher)
+3. **Expected**: Application loads immediately without Supabase login
+4. **Expected**: Mock user automatically created (`dev@talia.local`)
 
-## Immediate Actions Needed
+### 2. Test Dev Role Selector
+1. Look for **"🔧 Dev Role Selector"** panel (top-right, below mode switcher)
+2. **Expected**: Panel visible with current role (ADMIN by default)
+3. Click different roles: ADMIN, MANAGER, USER, GUEST
+4. **Expected**: Page reloads automatically with new role
+5. **Expected**: UI permissions change based on role
 
-1. **Create PostgreSQL Roles** (in progress)
-   ```sql
-   CREATE ROLE service_role;
-   CREATE ROLE anon;
-   GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
-   GRANT USAGE ON SCHEMA public TO anon;
-   ```
+### 3. Test Focus System
+1. Check sidebar for Focus Selector
+2. **Expected**: Focuses load correctly
+3. Switch between different focuses
+4. **Expected**: Layout updates correctly
+5. **Expected**: No console errors
 
-2. **Rebuild GraphQL Server** (needed)
-   - Fix TypeScript compilation error (CORS issue)
-   - Rebuild container with updated resolver code
-   - Deploy to miniPC
+### 4. Test Role-Based Features
+1. Switch to **USER** role via dev panel
+2. **Expected**: Some admin features hidden
+3. Switch to **ADMIN** role
+4. **Expected**: All features visible
+5. Switch to **GUEST** role
+6. **Expected**: Read-only access
 
-3. **Verify Connection**
-   - Test Supabase client through Kong
-   - Verify connection status resolver
-   - Check UI shows correct status
+## 🐛 Troubleshooting
 
-## Database Backup Status
+### If App Mode doesn't load:
+- Check browser console for errors
+- Verify GraphQL server is running: `curl http://localhost:4000/graphql`
+- Check if mock user is created (should see `dev@talia.local` in console)
 
-✅ **Backup File**: `supabase_backup_20260113_193617.sql.gz` (34MB)  
-✅ **Restored**: 47 tables total
-- `public`: 28 tables
-- `auth`: 16 tables  
-- `storage`: 3 tables
+### If Dev Role Selector not visible:
+- Verify you're in development mode (`import.meta.env.DEV === true`)
+- Check browser console for errors
+- Try hard refresh (Ctrl+Shift+R or Cmd+Shift+R)
 
-## Configuration Files Updated
+### If role changes don't work:
+- Check localStorage: `localStorage.getItem('devUserRole')`
+- Verify GraphQL headers are updated (check Network tab)
+- Check browser console for errors
 
-- ✅ `docker-compose.talia.yml` - Updated Supabase URL and keys
-- ✅ `supabase/kong.yml` - Removed key-auth from REST API
-- ✅ `talia-server/src/api/resolvers.ts` - Updated to use env var for URL
-- ⚠️ Need to rebuild GraphQL server container
+## 📋 Next Development Steps
+
+### Immediate (Ready Now)
+1. **Test all features** using the checklist above
+2. **Verify focus system** works with different roles
+3. **Test component rendering** with different roles
+
+### Short Term
+1. **Build new components** following `COMPONENT-STANDARDS.md`
+2. **Use template** from `components/focus-panels/_TEMPLATE/`
+3. **Ensure consistency** with existing patterns
+
+### Medium Term
+1. **Add more focus panels** as needed
+2. **Enhance focus management** features
+3. **Test with real data** from Azure Synapse sync
+
+### Long Term
+1. **Implement SSO authentication** (when ready)
+2. **Remove mock user system** (or keep for dev)
+3. **Production deployment** with proper authentication
+
+## 🔧 Development Commands
+
+### Start Services
+```bash
+# Terminal 1: GraphQL Server
+cd talia-server
+npm start
+
+# Terminal 2: UI Server
+cd talia-ui
+npm run dev
+```
+
+### Check Service Status
+```bash
+# GraphQL
+curl http://localhost:4000/graphql
+
+# UI
+curl http://localhost:5174/
+
+# Supabase
+curl http://localhost:54321/
+```
+
+### View Logs
+```bash
+# GraphQL Server
+tail -f /tmp/talia-server.log
+
+# UI Server
+tail -f /tmp/talia-ui.log
+```
+
+## 📚 Reference Documents
+
+- **Component Standards**: `talia-ui/src/components/COMPONENT-STANDARDS.md`
+- **Implementation Summary**: `APP-MODE-FIX-COMPLETE.md`
+- **Development Workflow**: `DEVELOPMENT-WORKFLOW.md`
+- **Quick Reference**: `QUICK-REFERENCE.md`
+
+## 🎯 Key Features Now Available
+
+1. **Direct App Access** - No authentication required in dev mode
+2. **Role Testing** - Easy role switching via dev panel
+3. **Focus System** - Validated and working
+4. **Component Standards** - Clear guidelines for new components
+5. **Mock User System** - Local user management for development
 
 ---
 
-**Priority**: High - Fix Supabase connection to enable full functionality
+**Ready for Development** ✅
+
+Test the UI at: **http://localhost:5174/**

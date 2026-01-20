@@ -29,6 +29,8 @@ import graphQLFocusService from "./services/GraphQLFocusService";
 import { AdminDashboard, UserMappingTable, TaliaUserTable } from "./components/admin";
 // Context Row Monitor (Admin only)
 import ContextRowMonitor from "./components/focus-panels/ContextRowMonitor/index.jsx";
+// Dev Role Selector (development only)
+import DevRoleSelector from "./components/dev/DevRoleSelector";
 // Theme System - using centralized theme context
 import { useTheme } from "./contexts/ThemeContext";
 import { DEFAULT_THEME } from "./config/themes.js";
@@ -2194,7 +2196,9 @@ function Dashboard({ user }) {
   debugLog('App render called');
 
   return (
-    <div 
+    <>
+      <DevRoleSelector />
+      <div 
       className={`dockview-theme-${theme.name.toLowerCase().replace(' ', '-')}`} 
       style={{ 
         height: "100vh", 
@@ -2412,7 +2416,8 @@ function Dashboard({ user }) {
           --dv-drop-target-border: #0078d4;
         }
       `}</style>
-    </div>
+      </div>
+    </>
   );
 }
 

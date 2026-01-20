@@ -1469,13 +1469,17 @@ class SynapseSyncService {
         ? rowNumberOrder.join(', ')
         : runtime.dateColumn ? `[${runtime.dateColumn}]` : '[id]';
 
+      // Add query hints to optimize execution and prevent server-side timeouts
+      // OPTION (MAXDOP 1) - Use single-threaded execution for more predictable performance
+      // OPTION (FAST 1000) - Optimize for first 1000 rows (helps with batching)
       const rowNumberQuery = `
         SELECT ${columnsSql}, ROW_NUMBER() OVER (ORDER BY ${order}) as rn
         FROM ${runtime.source}
         ${whereClause ? `WHERE ${whereClause}` : ''}
+        OPTION (MAXDOP 1, FAST 1000)
       `;
 
-      // Get total count
+      // Get total count with same hints
       const countQuery = `SELECT COUNT(*) as total FROM (${rowNumberQuery}) AS numbered`;
       let totalRecords;
       try {
@@ -1531,6 +1535,9 @@ class SynapseSyncService {
       let batchNumber = 1;
 
       for (let offset = 0; offset < totalRecords; offset += BATCH_SIZE) {
+        // Add query hints to batch queries to prevent server-side cancellation
+        // OPTION (MAXDOP 1) - Single-threaded execution for predictable performance
+        // OPTION (FAST 1000) - Optimize for first rows
         const batchQuery = `
           SELECT *
           FROM (
@@ -1538,6 +1545,7 @@ class SynapseSyncService {
           ) AS numbered
           WHERE rn > ${offset} AND rn <= ${offset + BATCH_SIZE}
           ORDER BY rn
+          OPTION (MAXDOP 1, FAST 1000)
         `;
 
         // Logger automatically emits events via eventEmitter

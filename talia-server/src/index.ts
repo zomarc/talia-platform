@@ -124,8 +124,9 @@ async function startServer() {
           console.log('Running btop via docker (Dockerized environment)...');
           
           // Run btop in alpine container with host PID namespace to see host processes
+          // Note: Remove -i and --tty flags when running in non-interactive mode (SSE)
           btopProcess = spawn('docker', [
-            'run', '--rm', '-i', '--tty',
+            'run', '--rm',
             '--pid', 'host',
             '--network', 'host',
             '--env', 'TERM=xterm-256color',

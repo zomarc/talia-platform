@@ -126,7 +126,7 @@ async function startServer() {
           // Run btop in alpine container with host PID namespace to see host processes
           // Use -t flag to allocate a TTY (btop requires it), but don't use -i (interactive)
           // stdin is ignored, so we don't need -i
-          // Set COLUMNS and LINES environment variables for proper terminal size
+          // Use stty to set terminal size before running btop (btop needs actual terminal dimensions)
           btopProcess = spawn('docker', [
             'run', '--rm', '-t',
             '--pid', 'host',
@@ -137,7 +137,7 @@ async function startServer() {
             '--env', 'COLUMNS=120',
             '--env', 'LINES=30',
             'alpine:latest',
-            'sh', '-c', 'apk add --no-cache btop > /dev/null 2>&1 && export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 COLUMNS=120 LINES=30 && exec btop --force-utf'
+            'sh', '-c', 'apk add --no-cache btop > /dev/null 2>&1 && stty rows 30 cols 120 2>/dev/null && export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 COLUMNS=120 LINES=30 && exec btop --force-utf'
           ], {
             env: { ...process.env, TERM: 'xterm-256color', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', COLUMNS: '120', LINES: '30' },
             stdio: ['ignore', 'pipe', 'pipe']

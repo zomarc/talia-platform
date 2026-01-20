@@ -124,9 +124,10 @@ async function startServer() {
           console.log('Running btop via docker (Dockerized environment)...');
           
           // Run btop in alpine container with host PID namespace to see host processes
-          // Note: Remove -i and --tty flags when running in non-interactive mode (SSE)
+          // Use -t flag to allocate a TTY (btop requires it), but don't use -i (interactive)
+          // stdin is ignored, so we don't need -i
           btopProcess = spawn('docker', [
-            'run', '--rm',
+            'run', '--rm', '-t',
             '--pid', 'host',
             '--network', 'host',
             '--env', 'TERM=xterm-256color',
@@ -139,10 +140,17 @@ async function startServer() {
             stdio: ['ignore', 'pipe', 'pipe']
           });
         } else {
-          // Not in Docker (local dev): Execute btop directly if available
+          // Not in Docker (local dev): Execute btop using script to create a pseudo-TTY
+          // btop requires a TTY, so we use 'script' to create one
           console.log('Running btop directly (local environment)...');
-          btopProcess = spawn('btop', [], {
-            env: { ...process.env, TERM: 'xterm-256color' },
+          // Check if script command is available (usually available on Linux/macOS)
+          // script -qefc 'command' creates a pseudo-TTY and runs the command
+          btopProcess = spawn('script', [
+            '-qefc',
+            'btop --force-utf',
+            '/dev/null' // script needs an output file, but we capture stdout/stderr
+          ], {
+            env: { ...process.env, TERM: 'xterm-256color', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' },
             stdio: ['ignore', 'pipe', 'pipe']
           });
         }

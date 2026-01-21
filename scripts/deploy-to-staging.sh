@@ -120,7 +120,10 @@ else
   sleep 3
   docker compose -f docker-compose.staging.yml restart graphql-server
   sleep 3
-  docker compose -f docker-compose.staging.yml restart ui
+  # UI needs to be rebuilt to include new code changes
+  echo '🔨 Rebuilding UI container with latest code...'
+  docker compose -f docker-compose.staging.yml build ui
+  docker compose -f docker-compose.staging.yml up -d ui
 fi
 
 echo '⏳ Waiting for services to be healthy...'

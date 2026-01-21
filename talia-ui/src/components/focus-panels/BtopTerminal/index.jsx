@@ -129,6 +129,7 @@ const BtopTerminal = ({ theme: propTheme, mode = 'data' }) => {
     // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
+      clearTimeout(resizeTimeout);
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
       }

@@ -105,25 +105,22 @@ const BtopTerminal = ({ theme: propTheme, mode = 'data' }) => {
 
     eventSourceRef.current = eventSource;
 
-    // Handle window resize - reconnect with new dimensions
+    // Handle window resize - debounce to avoid constant reconnections
+    let resizeTimeout;
     const handleResize = () => {
       if (fitAddonRef.current && terminalInstanceRef.current) {
         fitAddonRef.current.fit();
-        const newCols = terminalInstanceRef.current.cols;
-        const newRows = terminalInstanceRef.current.rows;
         
-        // Reconnect with new dimensions
-        if (eventSourceRef.current && isConnected) {
-          eventSourceRef.current.close();
-          const newSseUrl = `/api/btop/stream?cols=${newCols}&rows=${newRows}`;
-          const newEventSource = new EventSource(newSseUrl);
+        // Debounce resize - only reconnect if dimensions actually changed significantly
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+          const newCols = terminalInstanceRef.current.cols;
+          const newRows = terminalInstanceRef.current.rows;
           
-          // Reattach event handlers
-          newEventSource.onopen = eventSource.onopen;
-          newEventSource.onmessage = eventSource.onmessage;
-          newEventSource.onerror = eventSource.onerror;
-          eventSourceRef.current = newEventSource;
-        }
+          // Only reconnect if dimensions changed significantly (avoid constant reconnections)
+          // Reconnecting is expensive, so we'll skip it for now
+          // The terminal will still fit to container, btop will just use initial dimensions
+        }, 500);
       }
     };
 

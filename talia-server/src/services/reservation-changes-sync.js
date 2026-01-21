@@ -347,14 +347,10 @@ function buildRowNumberQuery({ source, columnsSql, whereClause, rowNumberOrder }
     return `${tableAlias}.[${colName}]`;
   }).join(', ');
 
-  // Add query hints to optimize execution and prevent server-side timeouts
-  // OPTION (MAXDOP 1) - Use single-threaded execution for more predictable performance
-  // OPTION (FAST 1000) - Optimize for first 1000 rows (helps with batching)
   return `
     SELECT ${columnsWithAlias}, ROW_NUMBER() OVER (ORDER BY ${orderWithAlias}) as rn
     FROM ${source} ${tableAlias}
     ${whereClause ? `WHERE ${whereClause}` : ''}
-    OPTION (MAXDOP 1, FAST 1000)
   `;
 }
 
@@ -619,9 +615,6 @@ export async function syncReservationChanges({
           throw new Error(`Database connection lost during sync. Please check VPN connection and ensure Azure Synapse is accessible. Original error: ${connError.message}`);
         }
         
-        // Add query hints to batch queries to prevent server-side cancellation
-        // OPTION (MAXDOP 1) - Single-threaded execution for predictable performance
-        // OPTION (FAST 1000) - Optimize for first rows
         const batchQuery = `
           SELECT *
           FROM (
@@ -629,7 +622,6 @@ export async function syncReservationChanges({
           ) AS numbered
           WHERE rn > ${offset} AND rn <= ${offset + batchSize}
           ORDER BY rn
-          OPTION (MAXDOP 1, FAST 1000)
         `;
 
         const batchResult = await pool.request().query(batchQuery);

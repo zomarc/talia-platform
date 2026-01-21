@@ -25,13 +25,17 @@ NGROK_PASS="${NGROK_PASS:-dev2025tal}"
 NGROK_URL="${NGROK_URL:-https://taliahub.com}"
 
 DO_RESTART=false
+TUNNEL_ONLY=false
+TEST_AZURE=false
 
 usage() {
   cat <<EOF
-Usage: $0 <local|staging|all> [--restart]
+Usage: $0 <local|staging|all> [--restart] [--tunnel-only] [--azure]
 
 Options:
-  --restart   Restart key services before checks (safe: no DB reset).
+  --restart      Restart key services before checks (safe: no DB reset).
+  --tunnel-only  Only restart VPN and ngrok (faster, for connectivity issues).
+  --azure        Include Azure Synapse connectivity test.
 
 Env overrides:
   STAGING_USER, STAGING_HOST, STAGING_DIR
@@ -42,6 +46,8 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "${1:-}" in
     --restart) DO_RESTART=true; shift ;;
+    --tunnel-only) TUNNEL_ONLY=true; shift ;;
+    --azure) TEST_AZURE=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) break ;;
   esac
@@ -55,7 +61,7 @@ fi
 
 echo "============================================================"
 echo "Talia Restart + Check"
-echo "target=${TARGET} restart=${DO_RESTART}"
+echo "target=${TARGET} restart=${DO_RESTART} tunnel-only=${TUNNEL_ONLY} azure=${TEST_AZURE}"
 echo "============================================================"
 echo ""
 
@@ -126,33 +132,67 @@ check_staging() {
 
   if $DO_RESTART; then
     echo ""
-    echo "-- Restart staging services (safe) --"
-    ssh "${STAGING_USER}@${STAGING_HOST}" "set -e;
-      echo '[staging] stop conflicting ngrok.service (ssh tunnel)...';
-      sudo systemctl stop ngrok.service >/dev/null 2>&1 || true;
-      sudo systemctl disable ngrok.service >/dev/null 2>&1 || true;
-      echo '[staging] restart VPN...';
-      sudo systemctl restart protonvpn-openvpn;
-      sleep 3;
-      echo '[staging] restart ngrok taliahub...';
-      sudo systemctl restart ngrok-taliahub;
-      echo '[staging] restart docker services in order...';
-      cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml restart supabase-db supabase-rest supabase-kong;
-      sleep 5;
-      cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml restart graphql-server;
-      sleep 5;
-      cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml restart ui;
-      echo '[staging] ensure all services are up...';
-      cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml up -d;
-      echo '[staging] waiting for services to be ready...';
-      sleep 10;
-    "
+    if $TUNNEL_ONLY; then
+      echo "-- Restart VPN and ngrok only (tunnel-only mode) --"
+      ssh "${STAGING_USER}@${STAGING_HOST}" "set -e;
+        echo '[staging] stop conflicting ngrok.service (ssh tunnel)...';
+        sudo systemctl stop ngrok.service >/dev/null 2>&1 || true;
+        sudo systemctl disable ngrok.service >/dev/null 2>&1 || true;
+        echo '[staging] stop ngrok taliahub...';
+        sudo systemctl stop ngrok-taliahub;
+        echo '[staging] restart VPN...';
+        sudo systemctl restart protonvpn-openvpn;
+        sleep 10;
+        echo '[staging] verify VPN IP...';
+        VPN_IP=\$(curl -sS --max-time 10 https://api.ipify.org || echo 'FAILED');
+        echo \"VPN IP: \$VPN_IP\";
+        echo '[staging] restart ngrok taliahub...';
+        sudo systemctl restart ngrok-taliahub;
+        sleep 5;
+        echo '[staging] tunnel restart complete';
+      "
+    else
+      echo "-- Restart staging services (safe) --"
+      ssh "${STAGING_USER}@${STAGING_HOST}" "set -e;
+        echo '[staging] stop conflicting ngrok.service (ssh tunnel)...';
+        sudo systemctl stop ngrok.service >/dev/null 2>&1 || true;
+        sudo systemctl disable ngrok.service >/dev/null 2>&1 || true;
+        echo '[staging] restart VPN...';
+        sudo systemctl restart protonvpn-openvpn;
+        sleep 3;
+        echo '[staging] restart ngrok taliahub...';
+        sudo systemctl restart ngrok-taliahub;
+        echo '[staging] restart docker services in order...';
+        cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml restart supabase-db supabase-rest supabase-kong;
+        sleep 5;
+        cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml restart graphql-server;
+        sleep 5;
+        cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml restart ui;
+        echo '[staging] ensure all services are up...';
+        cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml up -d;
+        echo '[staging] waiting for services to be ready...';
+        sleep 10;
+      "
+    fi
   fi
 
   echo ""
   echo "-- VPN / outbound --"
+  EXPECTED_VPN_IP="149.40.48.92"
   ssh "${STAGING_USER}@${STAGING_HOST}" "set -e;
-    echo -n 'ipify='; curl -sS --max-time 10 https://api.ipify.org || echo '(failed)';
+    echo -n 'ipify='; 
+    VPN_IP=\$(curl -sS --max-time 10 https://api.ipify.org || echo 'FAILED');
+    echo \"\$VPN_IP\";
+    if [[ \"\$VPN_IP\" == \"$EXPECTED_VPN_IP\" ]]; then
+      echo 'VPN_IP_STATUS=OK';
+    elif [[ \"\$VPN_IP\" == \"FAILED\" ]]; then
+      echo 'VPN_IP_STATUS=FAILED';
+    else
+      echo \"VPN_IP_STATUS=WARN (expected $EXPECTED_VPN_IP, got \$VPN_IP)\";
+    fi;
+    echo;
+    echo 'VPN interface check:';
+    ip addr show tun0 2>/dev/null | head -3 || echo 'tun0 not found';
     echo;
     sudo systemctl --no-pager status protonvpn-openvpn | head -12 || true;
   " | sed 's/^/  /'
@@ -172,6 +212,20 @@ check_staging() {
     echo -n 'gotrue_health_http_code='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 3 http://127.0.0.1:9999/health || true;
     echo -n 'pgmeta_health_http_code='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 3 http://127.0.0.1:8080/health || true;
   " | sed 's/^/  /'
+
+  if $TEST_AZURE; then
+    echo ""
+    echo "-- Azure Synapse connectivity (from staging host) --"
+    ssh "${STAGING_USER}@${STAGING_HOST}" "set -e;
+      AZURE_STATUS=\$(curl -sS --max-time 10 -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ synapseConnectionStatus { online error } }\"}' 2>/dev/null | jq -r '.data.synapseConnectionStatus.online // false' 2>/dev/null || echo 'false');
+      if [[ \"\$AZURE_STATUS\" == \"true\" ]]; then
+        echo 'azure_connection=OK';
+      else
+        AZURE_ERROR=\$(curl -sS --max-time 10 -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ synapseConnectionStatus { error } }\"}' 2>/dev/null | jq -r '.data.synapseConnectionStatus.error // \"unknown\"' 2>/dev/null || echo 'unknown');
+        echo \"azure_connection=FAILED (\$AZURE_ERROR)\";
+      fi;
+    " | sed 's/^/  /'
+  fi
 
   echo ""
   echo "-- External taliahub.com probe (from local machine) --"

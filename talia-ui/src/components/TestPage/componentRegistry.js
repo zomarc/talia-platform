@@ -24,6 +24,7 @@ import GoogleTrendsContainer from '../focus-panels/GoogleTrends';
 import DataDebugView from './DataDebugView';
 import DataMatch from '../focus-panels/DataMatch';
 import BtopTerminal from '../focus-panels/BtopTerminal';
+import MasterVoyagePerformanceSummaryContainer from '../focus-panels/MasterVoyagePerformanceSummary';
 
 /**
  * Component registry with metadata
@@ -270,6 +271,18 @@ export const componentRegistry = {
     },
     dataRequirements: 'Requires SSE connection to /api/btop/stream endpoint. Executes btop on staging server host and streams output.',
     filePath: 'src/components/focus-panels/BtopTerminal/index.jsx'
+  },
+  MasterVoyagePerformanceSummary: {
+    component: MasterVoyagePerformanceSummaryContainer,
+    category: 'Dashboards',
+    description: 'Master Voyage Performance Summary - Comprehensive voyage performance data with hierarchical grouping, occupancy, availability, pricing, performance vs budget, and recent performance indicators',
+    usesMockData: true,
+    props: {
+      filters: { type: 'object', required: false, description: 'Filter object (optional)' },
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Uses master_sail table data and generates mock data for missing columns. Transforms data into hierarchical structure with month/category grouping.',
+    filePath: 'src/components/focus-panels/MasterVoyagePerformanceSummary/index.jsx'
   }
 };
 

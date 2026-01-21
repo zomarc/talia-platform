@@ -8,6 +8,7 @@ import OccupancyChart from "./components/focus-panels/OccupancyChart";
 import RevenueBreakdown from "./components/focus-panels/RevenueBreakdown";
 import ExceptionList from "./components/focus-panels/ExceptionList";
 import ItineraryList from "./components/focus-panels/ItineraryList";
+import MasterVoyagePerformanceSummary from "./components/focus-panels/MasterVoyagePerformanceSummary";
 import { apolloClient, GraphQLUtils } from "./lib/apolloClient";
 // Focus Management Integration
 import { FocusSelector, FocusManager } from "./components/focus-management";
@@ -1382,6 +1383,9 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
           <button style={buttonStyle} onClick={() => onAddPanel('graphql-books', 'Books Report')}>
             📚 Books Report
           </button>
+          <button style={buttonStyle} onClick={() => onAddPanel('master-voyage-performance-summary', 'Master Voyage Performance Summary')}>
+            📊 Master Voyage Performance Summary
+          </button>
         </div>
       </div>
 
@@ -2641,7 +2645,11 @@ function App() {
               "occupancy-chart": OccupancyChart,
               "revenue-breakdown": RevenueBreakdown,
               "exception-list": ExceptionList,
-              "itinerary-list": ItineraryList
+              "itinerary-list": ItineraryList,
+              // Master Voyage Performance Summary
+              "master-voyage-performance-summary": (props) => {
+                return <MasterVoyagePerformanceSummary theme={theme} {...props} />;
+              }
             }} 
             onReady={onReady}
             style={{ height: "100%", width: "100%" }} 

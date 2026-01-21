@@ -107,6 +107,9 @@ const TestPage = () => {
     if (selectedComponent === 'DataDebugView') {
       return { theme };
     }
+    if (selectedComponent === 'MasterVoyagePerformanceSummary') {
+      return { theme };
+    }
     return {};
   };
 

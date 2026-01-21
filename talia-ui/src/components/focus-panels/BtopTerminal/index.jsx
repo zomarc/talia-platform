@@ -57,8 +57,12 @@ const BtopTerminal = ({ theme: propTheme, mode = 'data' }) => {
     terminalInstanceRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    // Connect to SSE endpoint for btop output
-    const sseUrl = '/api/btop/stream';
+    // Get terminal dimensions after fitting
+    const cols = terminal.cols;
+    const rows = terminal.rows;
+
+    // Connect to SSE endpoint for btop output with terminal dimensions
+    const sseUrl = `/api/btop/stream?cols=${cols}&rows=${rows}`;
     const eventSource = new EventSource(sseUrl);
 
     eventSource.onopen = () => {
@@ -101,14 +105,24 @@ const BtopTerminal = ({ theme: propTheme, mode = 'data' }) => {
 
     eventSourceRef.current = eventSource;
 
-    // Handle window resize
+    // Handle window resize - reconnect with new dimensions
     const handleResize = () => {
-      if (fitAddonRef.current) {
+      if (fitAddonRef.current && terminalInstanceRef.current) {
         fitAddonRef.current.fit();
-        // Send resize to backend
+        const newCols = terminalInstanceRef.current.cols;
+        const newRows = terminalInstanceRef.current.rows;
+        
+        // Reconnect with new dimensions
         if (eventSourceRef.current && isConnected) {
-          const dims = terminalInstanceRef.current;
-          // We'll add resize handling if needed
+          eventSourceRef.current.close();
+          const newSseUrl = `/api/btop/stream?cols=${newCols}&rows=${newRows}`;
+          const newEventSource = new EventSource(newSseUrl);
+          
+          // Reattach event handlers
+          newEventSource.onopen = eventSource.onopen;
+          newEventSource.onmessage = eventSource.onmessage;
+          newEventSource.onerror = eventSource.onerror;
+          eventSourceRef.current = newEventSource;
         }
       }
     };

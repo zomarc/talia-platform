@@ -99,6 +99,10 @@ async function startServer() {
   // SSE endpoint for btop terminal
   // Executes btop on the host via docker exec (requires docker socket access)
   app.get('/api/btop/stream', (req, res) => {
+    // Get terminal dimensions from query params, default to 120x30
+    const cols = parseInt(req.query.cols as string) || 120;
+    const rows = parseInt(req.query.rows as string) || 30;
+    
     // Set headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -127,6 +131,8 @@ async function startServer() {
           // Use -t flag to allocate a TTY (btop requires it), but don't use -i (interactive)
           // stdin is ignored, so we don't need -i
           // Use stty to set terminal size before running btop (btop needs actual terminal dimensions)
+          const colsStr = cols.toString();
+          const rowsStr = rows.toString();
           btopProcess = spawn('docker', [
             'run', '--rm', '-t',
             '--pid', 'host',
@@ -134,12 +140,12 @@ async function startServer() {
             '--env', 'TERM=xterm-256color',
             '--env', 'LANG=en_US.UTF-8',
             '--env', 'LC_ALL=en_US.UTF-8',
-            '--env', 'COLUMNS=120',
-            '--env', 'LINES=30',
+            '--env', `COLUMNS=${colsStr}`,
+            '--env', `LINES=${rowsStr}`,
             'alpine:latest',
-            'sh', '-c', 'apk add --no-cache btop > /dev/null 2>&1 && stty rows 30 cols 120 2>/dev/null && export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 COLUMNS=120 LINES=30 && exec btop --force-utf'
+            'sh', '-c', `apk add --no-cache btop > /dev/null 2>&1 && stty rows ${rowsStr} cols ${colsStr} 2>/dev/null && export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 COLUMNS=${colsStr} LINES=${rowsStr} && exec btop --force-utf`
           ], {
-            env: { ...process.env, TERM: 'xterm-256color', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', COLUMNS: '120', LINES: '30' },
+            env: { ...process.env, TERM: 'xterm-256color', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', COLUMNS: colsStr, LINES: rowsStr },
             stdio: ['ignore', 'pipe', 'pipe']
           });
         } else {
@@ -150,12 +156,14 @@ async function startServer() {
           // -q: quiet mode (suppress start/stop messages)
           // The output file is required but we capture stdout/stderr via pipes
           // Use stty to set terminal size before running btop (btop needs actual terminal dimensions)
+          const colsStr = cols.toString();
+          const rowsStr = rows.toString();
           btopProcess = spawn('script', [
             '-q',
             '/dev/null',
-            'sh', '-c', 'stty rows 30 cols 120 2>/dev/null; export COLUMNS=120 LINES=30 TERM=xterm-256color LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 && exec btop --force-utf'
+            'sh', '-c', `stty rows ${rowsStr} cols ${colsStr} 2>/dev/null; export COLUMNS=${colsStr} LINES=${rowsStr} TERM=xterm-256color LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 && exec btop --force-utf`
           ], {
-            env: { ...process.env, TERM: 'xterm-256color', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', COLUMNS: '120', LINES: '30' },
+            env: { ...process.env, TERM: 'xterm-256color', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', COLUMNS: colsStr, LINES: rowsStr },
             stdio: ['ignore', 'pipe', 'pipe']
           });
         }

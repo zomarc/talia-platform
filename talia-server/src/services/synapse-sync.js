@@ -1472,15 +1472,15 @@ class SynapseSyncService {
       // Add query hints to optimize execution and prevent server-side timeouts
       // OPTION (MAXDOP 1) - Use single-threaded execution for more predictable performance
       // OPTION (FAST 1000) - Optimize for first 1000 rows (helps with batching)
+      // Note: OPTION must be on outer query, not in subquery
       const rowNumberQuery = `
         SELECT ${columnsSql}, ROW_NUMBER() OVER (ORDER BY ${order}) as rn
         FROM ${runtime.source}
         ${whereClause ? `WHERE ${whereClause}` : ''}
-        OPTION (MAXDOP 1, FAST 1000)
       `;
 
-      // Get total count with same hints
-      const countQuery = `SELECT COUNT(*) as total FROM (${rowNumberQuery}) AS numbered`;
+      // Get total count with same hints - OPTION must be on outer query
+      const countQuery = `SELECT COUNT(*) as total FROM (${rowNumberQuery}) AS numbered OPTION (MAXDOP 1, FAST 1000)`;
       let totalRecords;
       try {
         const countResult = await pool.request().query(countQuery);

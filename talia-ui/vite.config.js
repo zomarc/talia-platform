@@ -7,6 +7,13 @@ export default defineConfig({
   // Base path for deployment - set via environment variable or default to root
   // For celestyal path: VITE_BASE_PATH=/celestyal
   base: process.env.VITE_BASE_PATH || '/',
+  // Build configuration
+  build: {
+    // Disable chunk size warnings - not needed for development
+    chunkSizeWarningLimit: Infinity,
+    // Minification only happens in production builds (npm run build)
+    // Dev mode (npm run dev) does NOT minify
+  },
   server: {
     host: true, // Allow external connections
     allowedHosts: [

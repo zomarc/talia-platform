@@ -1,40 +1,43 @@
 import { StrictMode, useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
+
+// Core styles - order matters
 import './index.css'
-import './styles/theme.css' // Import theme CSS variables
-// Note: Tabulator CSS is loaded dynamically in components via initTabulator()
-// Custom Tabulator styling is injected AFTER Tabulator's CSS loads (see tabulatorConfig.js)
+import './styles/theme.css'           // Theme CSS variables (single source of truth)
+import './styles/tabulator-theme.css' // Tabulator theme (midnight from npm)
+import './styles/components.css'      // Shared component classes
+import './styles/dashboard.css'       // Dashboard-specific styles
+import './styles/dev-components.css' // Dev component styles (separate, does not affect other components)
+
 import AppWithAuth from './AppWithAuth.jsx'
 import TestPage from './components/TestPage.jsx'
 import DataManagementPage from './components/DataManagementPage.jsx'
 import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
-import { applyTheme, DEFAULT_THEME, themes } from './config/themes.js';
-import { loadTabulatorCss } from './lib/tabulatorConfig.js';
+import { applyTheme, DEFAULT_THEME } from './config/themes.js';
+import { initChartDefaults } from './lib/chartConfig.js';
 
 // Apollo Client temporarily disabled during database restoration
 // TODO: Re-enable when database is restored
 // import { ApolloProvider } from '@apollo/client';
 // import apolloClient from './lib/apolloClient.js';
 
-// Apply theme IMMEDIATELY before React renders (ensures CSS variables are set before first render)
-// ALWAYS use DEFAULT_THEME ('data' - dark theme) on first load - ignore localStorage
-// User can change theme via UI, which will save to localStorage for next time
-// This ensures consistent first-load experience
+// Initialize application styling before React renders
 try {
-  console.log('[main.jsx] Applying DEFAULT theme BEFORE React render (ignoring localStorage):', DEFAULT_THEME);
+  // Apply theme CSS variables
   applyTheme(DEFAULT_THEME);
   
-  // Set table spacing CSS variables - always compact
+  // Set table spacing CSS variables
   const root = document.documentElement;
   root.style.setProperty('--theme-table-header-height', '28px');
   root.style.setProperty('--theme-table-row-height', '24px');
   
-  console.log('[main.jsx] CSS variables set BEFORE React render');
+  // Initialize Chart.js with theme defaults
+  initChartDefaults();
+  
+  console.log('[main.jsx] Theme and Chart.js initialized');
 } catch (e) {
-  console.warn('[main.jsx] Error applying theme before render:', e);
-  // Fallback: apply default theme
-  applyTheme(DEFAULT_THEME);
+  console.warn('[main.jsx] Error during initialization:', e);
 }
 
 // Debug logging for main entry point

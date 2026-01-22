@@ -1,0 +1,328 @@
+/**
+ * Mode Selector Styles
+ * 
+ * Discrete, themed mode selection component.
+ * Follows application theme using CSS variables.
+ */
+
+/* ============================================================================
+   Mode Selector Container
+   ============================================================================ */
+
+.mode-selector {
+  position: fixed;
+  top: var(--theme-padding-sm);
+  right: var(--theme-padding-sm);
+  z-index: 9999;
+}
+
+.mode-selector__container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-padding-xs);
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-md);
+  padding: var(--theme-padding-xs);
+  box-shadow: var(--theme-shadow-md);
+  backdrop-filter: blur(10px);
+}
+
+/* ============================================================================
+   Mode Buttons
+   ============================================================================ */
+
+.mode-selector__modes {
+  display: flex;
+  gap: var(--theme-padding-xs);
+  align-items: center;
+}
+
+.mode-selector__btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--theme-padding-xs) var(--theme-padding-sm);
+  background: var(--theme-glass);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  color: var(--theme-fg);
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 50px;
+}
+
+.mode-selector__btn:hover {
+  background: var(--theme-glass-hover);
+  border-color: var(--theme-border-strong);
+  transform: translateY(-1px);
+}
+
+.mode-selector__btn--active {
+  background: var(--theme-accent);
+  border-color: var(--theme-accent);
+  color: #ffffff;
+  box-shadow: 0 0 0 2px var(--theme-accent-light);
+}
+
+.mode-selector__btn--active:hover {
+  background: var(--theme-accent-hover);
+  border-color: var(--theme-accent-hover);
+}
+
+.mode-selector__icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.mode-selector__label {
+  font-size: var(--theme-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ============================================================================
+   App Mode Wrapper (for dropdown)
+   ============================================================================ */
+
+.mode-selector__app-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--theme-padding-xs);
+}
+
+/* ============================================================================
+   Dev Tools Toggle Button
+   ============================================================================ */
+
+.mode-selector__dev-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: var(--theme-glass);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  color: var(--theme-fg);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.mode-selector__dev-toggle:hover {
+  background: var(--theme-glass-hover);
+  border-color: var(--theme-border-strong);
+  transform: translateY(-1px);
+}
+
+.mode-selector__dev-toggle--open {
+  background: var(--theme-warning);
+  border-color: var(--theme-warning);
+  color: #000000;
+}
+
+.mode-selector__dev-toggle--open:hover {
+  background: var(--theme-warning-hover);
+  border-color: var(--theme-warning-hover);
+}
+
+.mode-selector__dev-toggle-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* ============================================================================
+   Dev Role Selector Dropdown
+   ============================================================================ */
+
+.mode-selector__dev-dropdown {
+  position: absolute;
+  top: calc(100% + var(--theme-padding-xs));
+  right: 0;
+  min-width: 280px;
+  max-width: 320px;
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-md);
+  box-shadow: var(--theme-shadow-lg);
+  z-index: 10000;
+  overflow: hidden;
+}
+
+.mode-selector__dev-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--theme-padding-sm) var(--theme-padding-md);
+  border-bottom: 1px solid var(--theme-border);
+  background: var(--theme-glass);
+}
+
+.mode-selector__dev-title {
+  font-size: var(--theme-font-size);
+  font-weight: 600;
+  color: var(--theme-fg);
+}
+
+.mode-selector__dev-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.2s;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mode-selector__dev-close:hover {
+  color: var(--theme-fg);
+}
+
+.mode-selector__dev-content {
+  padding: var(--theme-padding-sm);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Override DevRoleSelector styles when in dropdown */
+.mode-selector__dev-content .dev-role-selector {
+  position: static;
+  top: auto;
+  right: auto;
+  z-index: auto;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+  min-width: auto;
+}
+
+.mode-selector__dev-content .dev-role-selector__header {
+  display: none; /* Hide header since we have our own */
+}
+
+.mode-selector__dev-content .dev-role-selector__footer {
+  display: none; /* Hide footer in dropdown */
+}
+
+.mode-selector__dev-content .dev-role-selector__info {
+  margin-bottom: var(--theme-padding-sm);
+  padding: var(--theme-padding-sm);
+  background: var(--theme-glass);
+  border-radius: var(--theme-radius-sm);
+}
+
+.mode-selector__dev-content .dev-role-selector__roles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-padding-xs);
+}
+
+/* ============================================================================
+   Source & Version Info
+   ============================================================================ */
+
+.mode-selector__info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--theme-padding-xs) var(--theme-padding-sm);
+  border-top: 1px solid var(--theme-border-light);
+  font-size: var(--theme-font-size-xs);
+  gap: var(--theme-padding-sm);
+}
+
+.mode-selector__source {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mode-selector__source-label {
+  color: var(--theme-text-muted);
+  font-size: var(--theme-font-size-xs);
+}
+
+.mode-selector__source-value {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: var(--theme-font-size-xs);
+  letter-spacing: 0.5px;
+}
+
+.mode-selector__source-value--local {
+  color: var(--theme-success);
+}
+
+.mode-selector__source-value--staging {
+  color: var(--theme-warning);
+}
+
+.mode-selector__source-value--production {
+  color: var(--theme-error);
+}
+
+.mode-selector__version {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  color: var(--theme-text-muted);
+  font-family: var(--theme-font-family-monospace);
+}
+
+.mode-selector__version-label {
+  font-size: calc(var(--theme-font-size-xs) - 1px);
+  opacity: 0.7;
+}
+
+.mode-selector__version-value {
+  font-size: var(--theme-font-size-xs);
+  font-weight: 600;
+  color: var(--theme-text-secondary);
+}
+
+/* ============================================================================
+   Responsive Adjustments
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .mode-selector {
+    top: var(--theme-padding-xs);
+    right: var(--theme-padding-xs);
+  }
+
+  .mode-selector__container {
+    padding: var(--theme-padding-xs);
+  }
+
+  .mode-selector__btn {
+    min-width: 45px;
+    padding: 4px 6px;
+  }
+
+  .mode-selector__icon {
+    font-size: 12px;
+  }
+
+  .mode-selector__label {
+    font-size: 9px;
+  }
+
+  .mode-selector__dev-dropdown {
+    min-width: 260px;
+    max-width: 280px;
+  }
+}

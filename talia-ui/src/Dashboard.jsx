@@ -31,8 +31,7 @@ import graphQLFocusService from "./services/GraphQLFocusService";
 import { AdminDashboard, UserMappingTable, TaliaUserTable } from "./components/admin";
 // Context Row Monitor (Admin only)
 import ContextRowMonitor from "./components/focus-panels/ContextRowMonitor/index.jsx";
-// Dev Role Selector (development only)
-import DevRoleSelector from "./components/dev/DevRoleSelector";
+// Dev Role Selector is now integrated into ModeSelector dropdown
 // Theme System - using centralized theme context
 import { useTheme } from "./contexts/ThemeContext";
 import { DEFAULT_THEME } from "./config/themes.js";
@@ -2011,7 +2010,7 @@ function Dashboard({ user }) {
 
   return (
     <>
-      <DevRoleSelector />
+      {/* DevRoleSelector is now in ModeSelector dropdown */}
       <div 
       className={`dockview-theme-${theme.name.toLowerCase().replace(' ', '-')}`} 
       style={{ 

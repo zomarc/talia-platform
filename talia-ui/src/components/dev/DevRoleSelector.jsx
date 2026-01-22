@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import '../../styles/dev-components.css';
 
-const DevRoleSelector = () => {
+const DevRoleSelector = ({ inDropdown = false }) => {
   const { user, updateUserRole, isDevMode } = useSupabaseAuth();
   const [currentRole, setCurrentRole] = useState(user?.role || 'ADMIN');
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -37,6 +37,37 @@ const DevRoleSelector = () => {
     }
   };
 
+  // When in dropdown, always show expanded (no collapsed state)
+  if (inDropdown) {
+    return (
+      <div className="dev-role-selector">
+        <div className="dev-role-selector__info">
+          <div className="dev-role-selector__info-text">
+            Current Role: <strong>{currentRole}</strong>
+          </div>
+          {user?.email && (
+            <div className="dev-role-selector__info-text">
+              User: {user.email}
+            </div>
+          )}
+        </div>
+
+        <div className="dev-role-selector__roles">
+          {roles.map((role) => (
+            <button
+              key={role}
+              onClick={() => handleRoleChange(role)}
+              className={`dev-role-selector__role-btn ${currentRole === role ? 'dev-role-selector__role-btn--active' : ''}`}
+            >
+              {role}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Standalone mode (not in dropdown) - can be collapsed
   if (isCollapsed) {
     return (
       <div

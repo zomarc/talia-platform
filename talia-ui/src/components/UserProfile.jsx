@@ -97,61 +97,26 @@ const UserProfile = ({ isCollapsed, onToggle }) => {
     return colorMap[role] || '#6b7280';
   };
 
+  const roleClass = `dashboard-user-profile__role dashboard-user-profile__role--${(user.role || 'user').toLowerCase()}`;
+
   return (
-    <div style={{
-      borderTop: '1px solid #e5e7eb',
-      padding: '12px',
-      background: '#f9fafb'
-    }}>
+    <div className="dashboard-user-profile">
       {/* User Info */}
       <div 
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          cursor: 'pointer',
-          padding: '8px',
-          borderRadius: '6px',
-          transition: 'background-color 0.2s'
-        }}
+        className="dashboard-user-profile__info"
         onClick={() => setShowProfile(!showProfile)}
-        onMouseEnter={(e) => e.target.style.background = '#e5e7eb'}
-        onMouseLeave={(e) => e.target.style.background = 'transparent'}
       >
         {/* Avatar */}
-        <div style={{
-          width: '32px',
-          height: '32px',
-          borderRadius: '50%',
-          background: '#3b82f6',
-          color: 'white',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '14px',
-          fontWeight: '500',
-          flexShrink: 0
-        }}>
+        <div className="dashboard-user-profile__avatar">
           {user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
         </div>
         
         {!isCollapsed && (
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontSize: '14px',
-              fontWeight: '500',
-              color: '#1f2937',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
-            }}>
+          <div className="dashboard-user-profile__details">
+            <div className="dashboard-user-profile__name">
               {user.name || user.email}
             </div>
-            <div style={{
-              fontSize: '12px',
-              color: getRoleColor(user.role),
-              fontWeight: '500'
-            }}>
+            <div className={roleClass}>
               {getRoleDisplayName(user.role)}
             </div>
           </div>
@@ -159,12 +124,7 @@ const UserProfile = ({ isCollapsed, onToggle }) => {
         
         {/* Dropdown Arrow */}
         {!isCollapsed && (
-          <div style={{
-            fontSize: '12px',
-            color: '#6b7280',
-            transform: showProfile ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'transform 0.2s'
-          }}>
+          <div className={`dashboard-user-profile__dropdown ${showProfile ? 'dashboard-user-profile__dropdown--open' : ''}`}>
             ▼
           </div>
         )}
@@ -172,59 +132,24 @@ const UserProfile = ({ isCollapsed, onToggle }) => {
 
       {/* Profile Dropdown */}
       {showProfile && !isCollapsed && (
-        <div style={{
-          marginTop: '8px',
-          padding: '12px',
-          background: 'white',
-          borderRadius: '6px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-        }}>
+        <div className="dashboard-user-profile__dropdown-panel">
           {/* User Details */}
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{
-              fontSize: '12px',
-              color: '#6b7280',
-              marginBottom: '4px'
-            }}>
-              Email
-            </div>
-            <div style={{
-              fontSize: '14px',
-              color: '#1f2937',
-              wordBreak: 'break-all'
-            }}>
+          <div className="dashboard-user-profile__detail-group">
+            <div className="dashboard-user-profile__detail-label">Email</div>
+            <div className="dashboard-user-profile__detail-value">
               {user.email}
             </div>
           </div>
 
           {/* Role */}
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{
-              fontSize: '12px',
-              color: '#6b7280',
-              marginBottom: '4px'
-            }}>
-              Role
-            </div>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <div style={{
-                fontSize: '14px',
-                color: getRoleColor(user.role || 'user'),
-                fontWeight: '500'
-              }}>
+          <div className="dashboard-user-profile__detail-group">
+            <div className="dashboard-user-profile__detail-label">Role</div>
+            <div className="dashboard-user-profile__detail-row">
+              <div className={roleClass}>
                 {getRoleDisplayName(user.role || 'user')}
               </div>
               {user.role !== 'ADMIN' && user.email !== 'admin@talia.dev' && (
-                <span style={{
-                  fontSize: '10px',
-                  color: '#6b7280',
-                  fontStyle: 'italic'
-                }}>
+                <span className="dashboard-user-profile__hint">
                   (Use Quick Admin Access)
                 </span>
               )}
@@ -232,33 +157,16 @@ const UserProfile = ({ isCollapsed, onToggle }) => {
           </div>
 
           {/* Quick Preferences */}
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{
-              fontSize: '12px',
-              color: '#6b7280',
-              marginBottom: '8px'
-            }}>
-              Quick Settings
-            </div>
+          <div className="dashboard-user-profile__settings-group">
+            <div className="dashboard-user-profile__settings-title">Quick Settings</div>
             
             {/* Theme Toggle */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '6px'
-            }}>
-              <span style={{ fontSize: '12px', color: '#374151' }}>Theme</span>
+            <div className="dashboard-user-profile__settings-row">
+              <span>Theme</span>
               <select
+                className="dashboard-user-profile__settings-select"
                 value={user.preferences?.theme || 'default'}
                 onChange={(e) => handlePreferenceChange('theme', e.target.value)}
-                style={{
-                  fontSize: '12px',
-                  padding: '2px 6px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  background: 'white'
-                }}
               >
                 <option value="default">Default</option>
                 <option value="dark">Dark</option>
@@ -267,23 +175,12 @@ const UserProfile = ({ isCollapsed, onToggle }) => {
             </div>
 
             {/* Font Size */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '6px'
-            }}>
-              <span style={{ fontSize: '12px', color: '#374151' }}>Font Size</span>
+            <div className="dashboard-user-profile__settings-row">
+              <span>Font Size</span>
               <select
+                className="dashboard-user-profile__settings-select"
                 value={user.preferences?.fontSize || 12}
                 onChange={(e) => handlePreferenceChange('fontSize', parseInt(e.target.value))}
-                style={{
-                  fontSize: '12px',
-                  padding: '2px 6px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  background: 'white'
-                }}
               >
                 <option value={8}>8px</option>
                 <option value={10}>10px</option>
@@ -302,25 +199,7 @@ const UserProfile = ({ isCollapsed, onToggle }) => {
             <button
               onClick={handleQuickAdminAccess}
               disabled={switchingToAdmin}
-              style={{
-                width: '100%',
-                background: switchingToAdmin ? '#9ca3af' : '#f59e0b',
-                color: 'white',
-                border: 'none',
-                padding: '8px 12px',
-                borderRadius: '6px',
-                fontSize: '12px',
-                fontWeight: '500',
-                cursor: switchingToAdmin ? 'not-allowed' : 'pointer',
-                transition: 'background-color 0.2s',
-                marginBottom: '8px'
-              }}
-              onMouseEnter={(e) => {
-                if (!switchingToAdmin) e.target.style.background = '#d97706';
-              }}
-              onMouseLeave={(e) => {
-                if (!switchingToAdmin) e.target.style.background = '#f59e0b';
-              }}
+              className={`dashboard-user-profile__action-btn dashboard-user-profile__action-btn--warning`}
             >
               {switchingToAdmin ? 'Switching to Admin...' : '🔑 Quick Admin Access (Dev)'}
             </button>
@@ -330,24 +209,7 @@ const UserProfile = ({ isCollapsed, onToggle }) => {
           <button
             onClick={handleSignOut}
             disabled={switchingToAdmin}
-            style={{
-              width: '100%',
-              background: switchingToAdmin ? '#9ca3af' : '#dc2626',
-              color: 'white',
-              border: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              fontSize: '12px',
-              fontWeight: '500',
-              cursor: switchingToAdmin ? 'not-allowed' : 'pointer',
-              transition: 'background-color 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              if (!switchingToAdmin) e.target.style.background = '#b91c1c';
-            }}
-            onMouseLeave={(e) => {
-              if (!switchingToAdmin) e.target.style.background = '#dc2626';
-            }}
+            className="dashboard-user-profile__action-btn dashboard-user-profile__action-btn--danger"
           >
             Sign Out
           </button>

@@ -76,37 +76,25 @@ const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
 
   if (loading) {
     return (
-      <div className="focus-selector">
-        <div className="loading">Loading focuses...</div>
+      <div className="dashboard-focus-selector">
+        <div className="dashboard-loading">
+          <div className="dashboard-loading__text">Loading focuses...</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="focus-selector" style={{
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      minHeight: '0', // Allow flex child to shrink below content size
-      overflow: 'hidden' // Prevent overflow
-    }}>
+    <div className="dashboard-focus-selector">
       {/* Compact header */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        marginBottom: '8px',
-        paddingBottom: '4px',
-        borderBottom: '1px solid #e0e0e0'
-      }}>
-        <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#2E86AB' }}>
+      <div className="dashboard-focus-selector__header">
+        <span className="dashboard-focus-selector__title">
           Focus Management
         </span>
         {canCreateFocus && (
           <button 
             onClick={() => setShowCreateForm(true)}
-            className="btn btn-sm btn-primary"
-            style={{ fontSize: '10px', padding: '2px 6px' }}
+            className="dashboard-focus-selector__new-btn"
           >
             + New
           </button>
@@ -114,40 +102,44 @@ const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
       </div>
 
       {error && (
-        <div className="error-message">
-          <p>Error: {error}</p>
+        <div className="dashboard-error">
+          <div className="dashboard-error__message">Error: {error}</div>
         </div>
       )}
 
       {showCreateForm && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h4>Create Custom Focus</h4>
+        <div className="dashboard-modal-overlay" onClick={() => {
+          setShowCreateForm(false);
+          setNewFocusName('');
+        }}>
+          <div className="dashboard-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="dashboard-modal__header">
+              <h4 className="dashboard-modal__title">Create Custom Focus</h4>
               <button 
                 onClick={() => {
                   setShowCreateForm(false);
                   setNewFocusName('');
                 }}
-                className="btn-close"
+                className="dashboard-modal__close-btn"
               >
                 ×
               </button>
             </div>
             <form onSubmit={handleCreateCustomFocus}>
-              <div className="form-group">
-                <label htmlFor="focusName">Focus Name</label>
+              <div className="dashboard-modal__form-group">
+                <label htmlFor="focusName" className="dashboard-modal__label">Focus Name</label>
                 <input
                   type="text"
                   id="focusName"
+                  className="dashboard-modal__input"
                   value={newFocusName}
                   onChange={(e) => setNewFocusName(e.target.value)}
                   placeholder="Enter focus name..."
                   required
                 />
               </div>
-              <div className="form-actions">
-                <button type="submit" className="btn btn-primary">
+              <div className="dashboard-modal__actions">
+                <button type="submit" className="dashboard-modal__btn dashboard-modal__btn--primary">
                   Create Focus
                 </button>
                 <button 
@@ -156,7 +148,7 @@ const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
                     setShowCreateForm(false);
                     setNewFocusName('');
                   }}
-                  className="btn btn-secondary"
+                  className="dashboard-modal__btn dashboard-modal__btn--secondary"
                 >
                   Cancel
                 </button>
@@ -166,44 +158,29 @@ const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
         </div>
       )}
 
-      <div className="focus-sections" style={{ 
-        flex: '1', 
-        overflow: 'hidden', 
-        display: 'flex', 
-        flexDirection: 'column',
-        minHeight: '0', // Allow flex child to shrink below content size
-        height: '100%' // Ensure it takes full height
-      }}>
+      <div className="dashboard-focus-selector__sections">
         {/* Current Focus - Compact */}
         {currentFocus && (
-          <div className="focus-section" style={{ flexShrink: '0', marginBottom: '8px' }}>
+          <div className="dashboard-focus-section">
             <div 
-              className={`focus-item current ${currentFocus.isDefault ? 'default' : ''}`}
+              className={`dashboard-focus-item dashboard-focus-item--current`}
               onClick={() => handleFocusSelect(currentFocus.id)}
-              style={{ 
-                padding: '6px 8px', 
-                marginBottom: '6px',
-                border: '2px solid #2E86AB',
-                borderRadius: '4px',
-                background: '#f8f9fa'
-              }}
             >
-              <div className="focus-item-header" style={{ marginBottom: '2px' }}>
-                <span className="focus-name" style={{ fontWeight: 'bold', fontSize: '12px' }}>
+              <div className="dashboard-focus-item__header">
+                <span className="dashboard-focus-item__name">
                   {currentFocus.name}
                 </span>
                 <button 
                   onClick={(e) => handleToggleFavorite(currentFocus.id, e)}
-                  className={`favorite-btn ${favoriteFocuses.find(f => f.id === currentFocus.id) ? 'favorited' : ''}`}
+                  className={`dashboard-focus-item__favorite-btn ${favoriteFocuses.find(f => f.id === currentFocus.id) ? 'dashboard-focus-item__favorite-btn--active' : ''}`}
                   title="Toggle favorite"
-                  style={{ fontSize: '10px' }}
                 >
                   ★
                 </button>
               </div>
-              <div className="focus-meta" style={{ fontSize: '9px', color: '#666' }}>
-                <span className="focus-type">{currentFocus.type}</span>
-                {currentFocus.isDefault && <span className="focus-default">Default</span>}
+              <div className="dashboard-focus-item__meta">
+                <span className="dashboard-focus-item__type">{currentFocus.type}</span>
+                {currentFocus.isDefault && <span>Default</span>}
               </div>
             </div>
             
@@ -213,13 +190,7 @@ const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
                 e.stopPropagation();
                 handleSaveCurrentLayout();
               }}
-              className="btn btn-primary"
-              style={{ 
-                width: '100%', 
-                fontSize: '10px', 
-                padding: '3px 6px',
-                marginBottom: '6px'
-              }}
+              className="dashboard-focus-item__save-btn"
               title="Save current layout to this focus"
             >
               💾 Save Layout
@@ -229,31 +200,32 @@ const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
 
         {/* Favorite Focuses */}
         {favoriteFocuses.length > 0 && (
-          <div className="focus-section">
-            <h4>Favorites</h4>
-            {favoriteFocuses.map(focus => (
-              <div 
-                key={focus.taliaFocusId} 
-                className={`focus-item ${currentTaliaFocus?.taliaFocusId === focus.taliaFocusId ? 'active' : ''}`}
-                onClick={() => handleFocusSelect(focus.taliaFocusId)}
-              >
-                <div className="focus-item-header">
-                  <span className="focus-name">{focus.name}</span>
-                  <button 
-                    onClick={(e) => handleToggleFavorite(focus.id, e)}
-                    className="favorite-btn favorited"
-                    title="Remove from favorites"
-                  >
-                    ★
-                  </button>
+          <div className="dashboard-focus-section">
+            <div className="dashboard-focus-section__title">Favorites</div>
+            <div className="dashboard-focus-section__list">
+              {favoriteFocuses.map(focus => (
+                <div 
+                  key={focus.id || focus.taliaFocusId} 
+                  className={`dashboard-focus-item ${currentFocus?.id === (focus.id || focus.taliaFocusId) ? 'dashboard-focus-item--current' : ''}`}
+                  onClick={() => handleFocusSelect(focus.id || focus.taliaFocusId)}
+                >
+                  <div className="dashboard-focus-item__header">
+                    <span className="dashboard-focus-item__name">{focus.name}</span>
+                    <button 
+                      onClick={(e) => handleToggleFavorite(focus.id || focus.taliaFocusId, e)}
+                      className="dashboard-focus-item__favorite-btn dashboard-focus-item__favorite-btn--active"
+                      title="Remove from favorites"
+                    >
+                      ★
+                    </button>
+                  </div>
+                  <div className="dashboard-focus-item__meta">
+                    <span className="dashboard-focus-item__type">{focus.type}</span>
+                    {focus.isDefault && <span>Default</span>}
+                  </div>
                 </div>
-                <p className="focus-description">{focus.description}</p>
-                <div className="focus-meta">
-                  <span className="focus-type">{focus.type}</span>
-                  {focus.isDefault && <span className="focus-default">Default</span>}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
 
@@ -288,76 +260,33 @@ const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
         )} */}
 
         {/* All Available Focuses - Fill Available Space */}
-        <div className="focus-section" style={{ 
-          flex: '1', 
-          display: 'flex', 
-          flexDirection: 'column',
-          minHeight: '0', // Allow flex child to shrink
-          overflow: 'hidden' // Prevent this section from overflowing
-        }}>
-          <div style={{ 
-            fontSize: '12px', 
-            fontWeight: 'bold', 
-            color: '#2E86AB', 
-            marginBottom: '6px',
-            paddingBottom: '2px',
-            borderBottom: '1px solid #e0e0e0',
-            flexShrink: '0' // Don't shrink the header
-          }}>
+        <div className="dashboard-focus-section dashboard-focus-section--scrollable">
+          <div className="dashboard-focus-section__title">
             All Focuses ({focuses.length})
           </div>
-          <div style={{ 
-            flex: '1', 
-            overflowY: 'auto', 
-            minHeight: '0', // Allow to shrink below content size
-            maxHeight: 'none', // Remove any max height constraints
-            height: '100%' // Ensure it takes full available height
-          }}>
+          <div className="dashboard-focus-section__list">
             {focuses.map(focus => (
               <div 
                 key={focus.id} 
-                className={`focus-item ${currentFocus?.id === focus.id ? 'active' : ''}`}
+                className={`dashboard-focus-item ${currentFocus?.id === focus.id ? 'dashboard-focus-item--current' : ''}`}
                 onClick={() => handleFocusSelect(focus.id)}
-                style={{ 
-                  padding: '6px 8px', 
-                  marginBottom: '4px',
-                  borderRadius: '3px',
-                  border: currentFocus?.id === focus.id ? '1px solid #2E86AB' : '1px solid #e0e0e0',
-                  background: currentFocus?.id === focus.id ? '#f8f9fa' : 'white',
-                  cursor: 'pointer',
-                  fontSize: '11px'
-                }}
               >
-                <div className="focus-item-header" style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center',
-                  marginBottom: '2px'
-                }}>
-                  <span className="focus-name" style={{ 
-                    fontWeight: currentFocus?.id === focus.id ? 'bold' : 'normal',
-                    fontSize: '12px'
-                  }}>
+                <div className="dashboard-focus-item__header">
+                  <span className="dashboard-focus-item__name">
                     {focus.name}
                   </span>
                   <button 
                     onClick={(e) => handleToggleFavorite(focus.id, e)}
-                    className={`favorite-btn ${favoriteFocuses.find(f => f.id === focus.id) ? 'favorited' : ''}`}
+                    className={`dashboard-focus-item__favorite-btn ${favoriteFocuses.find(f => f.id === focus.id) ? 'dashboard-focus-item__favorite-btn--active' : ''}`}
                     title="Toggle favorite"
-                    style={{ fontSize: '10px', padding: '2px' }}
                   >
                     ★
                   </button>
                 </div>
-                <div className="focus-meta" style={{ 
-                  fontSize: '9px', 
-                  color: '#666',
-                  display: 'flex',
-                  gap: '4px'
-                }}>
-                  <span className="focus-type">{focus.type}</span>
-                  {focus.isDefault && <span className="focus-default">Default</span>}
-                  {focus.isStandard && <span className="focus-public">Standard</span>}
+                <div className="dashboard-focus-item__meta">
+                  <span className="dashboard-focus-item__type">{focus.type}</span>
+                  {focus.isDefault && <span>Default</span>}
+                  {focus.isStandard && <span>Standard</span>}
                 </div>
               </div>
             ))}

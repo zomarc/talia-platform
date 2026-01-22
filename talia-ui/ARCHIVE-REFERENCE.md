@@ -37,16 +37,30 @@ This document catalogs files moved to the `archive/` directory for better projec
 - `document-converter.sh` - Document conversion script
 - `push-schema.sh` - Schema push script
 
+### Old Implementation Docs (`archive/docs/old-implementation/`)
+- `BEFORE-AFTER-EXAMPLES.md` - Code refactoring examples
+- `FURTHER-CODE-REDUCTION.md` - Width definition removal docs
+- `TABULATOR-IMPROVEMENTS.md` - Tabulator 5.6.1 improvements
+- `TABULATOR-NATIVE-FEATURES.md` - Tabulator native features guide
+- `TABULATOR-SHARED-CONFIG.md` - Tabulator shared configuration
+- `COMPONENT-ARCHITECTURE-RECOMMENDATIONS.md` - Architecture recommendations
+- `COMPONENT-ARCHITECTURE-REVIEW.md` - Architecture review
+- `NEW-COMPONENTS-FILE-STRUCTURE.md` - Component file structure guide
+- `NEW-COMPONENTS-INTEGRATION-GUIDE.md` - Component integration guide
+
 ## Archive Structure
 ```
 archive/
-├── docs/           # Historical documentation
-├── test-files/     # Test HTML files
-└── old-scripts/    # Utility scripts
+├── docs/
+│   ├── old-implementation/  # Historical implementation docs
+│   └── [other docs]          # Other historical documentation
+├── test-files/               # Test HTML files
+└── old-scripts/              # Utility scripts
 ```
 
 ## Notes
 - All archived files are preserved for reference
 - Main project files remain in root directories
+- Active documentation: `STYLING-GUIDE.md`, `STYLING-STATUS.md`, `NEXT-STEPS.md`, `README.md`
 - Archive was created during project reorganization (October 2025)
 - Files can be restored if needed for development

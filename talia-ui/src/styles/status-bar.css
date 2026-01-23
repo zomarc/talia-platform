@@ -1,0 +1,283 @@
+/**
+ * Status Bar Styles
+ * 
+ * Discrete status bar at the top of the page for status messages,
+ * current event, and persisted event information.
+ */
+
+/* ============================================================================
+   Status Bar Container
+   ============================================================================ */
+
+.status-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  background: var(--theme-bg-elevated);
+  border-bottom: 1px solid var(--theme-border);
+  box-shadow: var(--theme-shadow-sm);
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size-sm);
+  backdrop-filter: blur(10px);
+  /* Always visible - don't hide */
+  display: block;
+  visibility: visible;
+}
+
+.status-bar__container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--theme-padding-md);
+  padding: var(--theme-padding-xs) var(--theme-padding-md);
+  min-height: 32px;
+}
+
+.status-bar__left {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-padding-md);
+  flex: 1;
+  min-width: 0;
+}
+
+.status-bar__right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* ============================================================================
+   Status Messages (Temporary)
+   ============================================================================ */
+
+.status-bar__message {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-padding-xs);
+  padding: var(--theme-padding-xs) var(--theme-padding-sm);
+  border-radius: var(--theme-radius-sm);
+  font-size: var(--theme-font-size-sm);
+  animation: slideIn 0.3s ease-out;
+}
+
+.status-bar__message--success {
+  background: var(--theme-success-light);
+  color: var(--theme-success);
+  border: 1px solid var(--theme-success);
+}
+
+.status-bar__message--error {
+  background: var(--theme-error-light);
+  color: var(--theme-error);
+  border: 1px solid var(--theme-error);
+}
+
+.status-bar__message--info {
+  background: var(--theme-accent-light);
+  color: var(--theme-accent);
+  border: 1px solid var(--theme-accent);
+}
+
+.status-bar__icon {
+  font-weight: 600;
+  font-size: var(--theme-font-size);
+}
+
+.status-bar__text {
+  font-weight: 500;
+}
+
+/* ============================================================================
+   Status Items (Current Event, Persisted Event)
+   ============================================================================ */
+
+.status-bar__item {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-padding-xs);
+  padding: var(--theme-padding-xs) var(--theme-padding-sm);
+  border-radius: var(--theme-radius-sm);
+  background: var(--theme-glass);
+  border: 1px solid var(--theme-border);
+  font-size: var(--theme-font-size-sm);
+  transition: all 0.2s;
+}
+
+.status-bar__item--clickable {
+  cursor: pointer;
+}
+
+.status-bar__item--clickable:hover {
+  background: var(--theme-glass-hover);
+  border-color: var(--theme-border-strong);
+}
+
+.status-bar__label {
+  color: var(--theme-text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: var(--theme-font-size-xs);
+  letter-spacing: 0.5px;
+}
+
+.status-bar__value {
+  color: var(--theme-fg);
+  font-weight: 500;
+}
+
+.status-bar__timestamp {
+  color: var(--theme-text-muted);
+  font-size: var(--theme-font-size-xs);
+  font-family: var(--theme-font-family-monospace);
+  margin-left: auto;
+}
+
+.status-bar__expand {
+  color: var(--theme-text-muted);
+  font-size: var(--theme-font-size-xs);
+  margin-left: var(--theme-padding-xs);
+}
+
+/* ============================================================================
+   Details Panel
+   ============================================================================ */
+
+.status-bar__details {
+  background: var(--theme-bg-elevated);
+  border-top: 1px solid var(--theme-border);
+  box-shadow: var(--theme-shadow-md);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.status-bar__details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--theme-padding-sm) var(--theme-padding-md);
+  border-bottom: 1px solid var(--theme-border);
+  background: var(--theme-glass);
+}
+
+.status-bar__details-title {
+  font-size: var(--theme-font-size);
+  font-weight: 600;
+  color: var(--theme-fg);
+}
+
+.status-bar__details-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.status-bar__details-close:hover {
+  color: var(--theme-fg);
+}
+
+.status-bar__details-content {
+  padding: var(--theme-padding-md);
+}
+
+.status-bar__details-section {
+  margin-bottom: var(--theme-padding-md);
+}
+
+.status-bar__details-section:last-child {
+  margin-bottom: 0;
+}
+
+.status-bar__details-section-title {
+  font-size: var(--theme-font-size);
+  font-weight: 600;
+  color: var(--theme-accent);
+  margin-bottom: var(--theme-padding-sm);
+  padding-bottom: var(--theme-padding-xs);
+  border-bottom: 1px solid var(--theme-border-light);
+}
+
+.status-bar__details-row {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-padding-sm);
+  margin-bottom: var(--theme-padding-xs);
+  font-size: var(--theme-font-size-sm);
+}
+
+.status-bar__details-label {
+  color: var(--theme-text-muted);
+  font-weight: 500;
+  min-width: 80px;
+}
+
+.status-bar__details-value {
+  color: var(--theme-fg);
+  font-family: var(--theme-font-family-monospace);
+}
+
+.status-bar__details-data {
+  margin-top: var(--theme-padding-sm);
+}
+
+.status-bar__details-json {
+  background: var(--theme-bg-solid);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  padding: var(--theme-padding-sm);
+  margin: var(--theme-padding-xs) 0 0 0;
+  font-family: var(--theme-font-family-monospace);
+  font-size: var(--theme-font-size-xs);
+  color: var(--theme-fg);
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* ============================================================================
+   Animations
+   ============================================================================ */
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .status-bar__container {
+    flex-wrap: wrap;
+    gap: var(--theme-padding-xs);
+  }
+
+  .status-bar__item {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .status-bar__timestamp {
+    display: none;
+  }
+}

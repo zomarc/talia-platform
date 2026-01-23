@@ -175,7 +175,7 @@ const AppContent = () => {
 
   return (
     <ThemeProvider>
-      <Dashboard user={user} />
+      <Dashboard user={user} mode={window.__taliaMode} onModeChange={window.__taliaModeChange} />
     </ThemeProvider>
   );
 };

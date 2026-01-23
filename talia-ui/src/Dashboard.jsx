@@ -19,6 +19,7 @@ import SimpleTable from "./components/focus-panels/SimpleTable";
 import SailingSummary from "./components/focus-panels/SailingSummary/index";
 import MasterVoyagePerformanceSummary from "./components/focus-panels/MasterVoyagePerformanceSummary";
 import VoyageReport from "./components/focus-panels/VoyageReport";
+import BtopTerminal from "./components/focus-panels/BtopTerminal";
 import UserProfile from "./components/UserProfile";
 import { useSupabaseAuth } from "./contexts/SupabaseAuthContext";
 import { normalizeRole, isAdmin } from "./utils/roleUtils";
@@ -734,10 +735,31 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
   });
 
   const toggleSection = (section) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
+    setExpandedSections(prev => {
+      // If clicking the same section, toggle it
+      // If clicking a different section, close all others and open only this one
+      const isCurrentlyOpen = prev[section];
+      
+      if (isCurrentlyOpen) {
+        // Close the section that's being clicked
+        return {
+          ...prev,
+          [section]: false
+        };
+      } else {
+        // Close all sections and open only the clicked one
+        return {
+          focus: false,
+          user: false,
+          criteria: false,
+          reports: false,
+          appearance: false,
+          controls: false,
+          admin: false,
+          [section]: true
+        };
+      }
+    });
   };
 
   // Dynamic styles - only for truly dynamic values (width, display)
@@ -782,11 +804,12 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
       {/* Sections Container - Flex container for dynamic sizing */}
       <div className="dashboard-explorer__content">
         {/* Enhanced Focus Section with New Focus Management */}
-      <div className="dashboard-section" style={{ 
-        flex: expandedSections.focus ? '1' : 'none',
+      <div className="dashboard-section dashboard-section--focus" style={{ 
+        flex: expandedSections.focus ? '1' : '0 0 auto',
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '0'
+        minHeight: '0',
+        overflow: 'hidden'
       }}>
         <div 
           className="dashboard-section__header"
@@ -800,7 +823,9 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
         <div className={`dashboard-section__content ${expandedSections.focus ? 'dashboard-section__content--expanded' : ''}`} style={{ 
           display: expandedSections.focus ? 'flex' : 'none',
           flexDirection: 'column',
-          flex: '1'
+          flex: expandedSections.focus ? '1' : '0 0 auto',
+          minHeight: '0',
+          overflow: 'hidden'
         }}>
           {/* Show loading state */}
           {focusLoading && (
@@ -920,6 +945,9 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
           </button>
           <button className="dashboard-btn" onClick={() => onAddPanel('voyage-report', 'Voyage Report')}>
             📈 Voyage Report
+          </button>
+          <button className="dashboard-btn" onClick={() => onAddPanel('btop-terminal', 'System Monitor (btop)')}>
+            🖥️ System Monitor (btop)
           </button>
         </div>
       </div>
@@ -1278,8 +1306,10 @@ const GraphQLPanel = React.memo(function GraphQLPanel(props) {
   );
 });
 
-function Dashboard({ user }) {
+function Dashboard({ user, mode, onModeChange }) {
   const { theme, currentTheme, setCurrentTheme, fontSize, selectedFont, fontFamily, spacingMode, setFontSize, setFontFamily, setSpacingMode } = useTheme();
+  
+  // Status messages use global API (window.__taliaStatus)
   
   // Focus Management Integration
   const {
@@ -1300,6 +1330,8 @@ function Dashboard({ user }) {
   
   // Get role from user or localStorage (normalized)
   const normalizedUserRole = normalizeRole(user?.role || GraphQLUtils.getUserRole() || 'USER');
+  
+  // Events are tracked globally in main.jsx - no need to track here
   
   debugLog('App component initializing');
 
@@ -1486,7 +1518,7 @@ function Dashboard({ user }) {
   // Save current layout to focus
   const handleSaveCurrentLayoutToFocus = useCallback(async (focusId) => {
     if (!apiRef.current) {
-      alert('No layout to save');
+      setStatusMessage('No layout to save');
       return;
     }
 
@@ -1494,6 +1526,10 @@ function Dashboard({ user }) {
       // Get current layout from Dockview
       const currentLayout = apiRef.current.toJSON();
       console.log('Saving current layout to focus:', focusId, currentLayout);
+
+      // Get focus name for status message
+      const focus = taliaFocuses.find(f => f.id === focusId);
+      const focusName = focus?.name || 'focus';
 
       // Update the focus with the current layout
       const success = await updateTaliaFocus(focusId, {
@@ -1504,15 +1540,21 @@ function Dashboard({ user }) {
       });
 
       if (success) {
-        alert('Current layout saved to focus successfully!');
+        if (window.__taliaStatus) {
+          window.__taliaStatus.setStatusMessage(`Layout saved to "${focusName}" successfully`);
+        }
       } else {
-        alert('Failed to save layout to focus');
+        if (window.__taliaStatus) {
+          window.__taliaStatus.setStatusMessage('Failed to save layout to focus');
+        }
       }
     } catch (error) {
       console.error('Error saving layout to focus:', error);
-      alert('Error saving layout: ' + error.message);
+      if (window.__taliaStatus) {
+        window.__taliaStatus.setStatusMessage('Error saving layout: ' + error.message);
+      }
     }
-  }, [updateTaliaFocus]);
+  }, [updateTaliaFocus, taliaFocuses]);
 
   // Extract components from Dockview layout for focus storage
   const extractComponentsFromLayout = useCallback((layout) => {
@@ -2010,6 +2052,7 @@ function Dashboard({ user }) {
 
   return (
     <>
+      {/* Status Bar is now at top level (main.jsx) - not rendered here */}
       {/* DevRoleSelector is now in ModeSelector dropdown */}
       <div 
       className={`dockview-theme-${theme.name.toLowerCase().replace(' ', '-')}`} 
@@ -2126,8 +2169,7 @@ function Dashboard({ user }) {
               "graphql-cabins": (props) => <GraphQLPanel {...props} params={{...props.params, dataType: "cabinAvailability"}} />,
               // System components
               "btop-terminal": (props) => {
-                const BtopTerminal = require('./components/focus-panels/BtopTerminal').default;
-                return <BtopTerminal {...props} />;
+                return <BtopTerminal theme={theme} {...props} />;
               },
               // Focus-specific components
               "kpi-cards": KPICards,

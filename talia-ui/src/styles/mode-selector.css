@@ -10,16 +10,41 @@
    ============================================================================ */
 
 .mode-selector {
-  position: fixed;
-  top: var(--theme-padding-sm);
-  right: var(--theme-padding-sm);
-  z-index: 9999;
+  position: relative;
+  z-index: 1;
+}
+
+/* When in status bar, adjust positioning */
+.status-bar .mode-selector {
+  position: relative;
+  top: 0;
+  right: 0;
+  margin: 0;
 }
 
 .mode-selector__container {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: var(--theme-padding-xs);
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+/* When in status bar, ensure proper layout */
+.status-bar .mode-selector__container {
+  flex-direction: row;
+  align-items: center;
+}
+
+/* When standalone (not in status bar), use original styling */
+body > .mode-selector .mode-selector__container,
+.mode-selector:not(.status-bar .mode-selector) .mode-selector__container {
+  flex-direction: column;
   background: var(--theme-bg-elevated);
   border: 1px solid var(--theme-border);
   border-radius: var(--theme-radius-md);
@@ -236,12 +261,25 @@
    ============================================================================ */
 
 .mode-selector__info {
-  display: flex;
+  display: flex; /* Always show source/version info */
   justify-content: space-between;
   align-items: center;
   padding: var(--theme-padding-xs) var(--theme-padding-sm);
   border-top: 1px solid var(--theme-border-light);
   font-size: var(--theme-font-size-xs);
+  gap: var(--theme-padding-sm);
+  flex-shrink: 0;
+}
+
+/* When in status bar, make it inline (horizontal) */
+.status-bar .mode-selector__info {
+  border-top: none;
+  border-left: 1px solid var(--theme-border-light);
+  padding-left: var(--theme-padding-sm);
+  margin-left: var(--theme-padding-xs);
+  padding-top: 0;
+  padding-bottom: 0;
+  flex-direction: row;
   gap: var(--theme-padding-sm);
 }
 

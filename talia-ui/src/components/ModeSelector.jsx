@@ -127,7 +127,7 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
           </button>
         </div>
 
-        {/* Source & Version Info */}
+        {/* Source & Version Info - Always visible */}
         <div className="mode-selector__info">
           <div className="mode-selector__source">
             <span className="mode-selector__source-label">Source:</span>

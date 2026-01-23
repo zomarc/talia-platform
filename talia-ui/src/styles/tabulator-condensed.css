@@ -1,0 +1,63 @@
+/**
+ * Tabulator Condensed Theme Override
+ * 
+ * Based on: tabulator_midnight theme from npm (tabulator-tables@6.3.1)
+ * Purpose: Provides a more condensed/compact table format
+ * 
+ * This file ONLY adjusts spacing and sizing.
+ * Colors and borders come from the base midnight theme.
+ * 
+ * To adjust density, modify the CSS variables below.
+ */
+
+/* ============================================================================
+   Condensed Sizing - Minimal Overrides
+   Only changes padding and font sizes, preserves all other styles
+   ============================================================================ */
+
+/* Header cells - reduced padding */
+.tabulator .tabulator-header .tabulator-col .tabulator-col-content {
+  padding: 6px 8px;
+}
+
+/* Header title font */
+.tabulator .tabulator-header .tabulator-col .tabulator-col-title {
+  font-size: 12px;
+}
+
+/* Row cells - reduced padding */
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row .tabulator-cell {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* Header filter inputs - smaller */
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter select {
+  height: 24px;
+  font-size: 11px;
+  padding: 2px 6px;
+}
+
+/* Footer - reduced padding */
+.tabulator .tabulator-footer {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.tabulator .tabulator-footer .tabulator-page {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+/* Group rows - reduced padding */
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-group {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* Scrollbar - slightly thinner */
+.tabulator .tabulator-tableholder::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}

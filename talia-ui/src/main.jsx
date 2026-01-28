@@ -58,9 +58,21 @@ const DataManagementUnavailable = () => (
   </div>
 );
 
+const AdminLiteUnavailable = () => (
+  <div style={{ padding: '16px', fontSize: '12px', color: '#c7c7d1' }}>
+    Admin Lite is currently unavailable.
+  </div>
+);
+
 const DataManagementPage = lazy(() =>
   import('./components/admin/data-management/DataManagementPage.jsx').catch(() => ({
     default: DataManagementUnavailable
+  }))
+);
+
+const AdminLite = lazy(() =>
+  import('./components/admin/admin-lite/AdminLite.jsx').catch(() => ({
+    default: AdminLiteUnavailable
   }))
 );
 
@@ -103,6 +115,7 @@ const DevSwitcher = () => {
     currentEvent: null,
     persistedEvent: null
   });
+  const isAdminLite = import.meta.env.DEV && window.location.pathname === '/admin-lite';
   
   // Check localStorage for saved preference on mount
   useEffect(() => {
@@ -225,6 +238,23 @@ const DevSwitcher = () => {
         return <AppWithAuth />;
     }
   };
+
+  if (isAdminLite) {
+    try {
+      document.title = 'Talia - DEV Admin';
+    } catch (e) {
+      console.warn('[DevSwitcher] Failed to set title:', e);
+    }
+    return (
+      <StrictMode>
+        <ErrorBoundary fallback={<AdminLiteUnavailable />}>
+          <Suspense fallback={<AdminLiteUnavailable />}>
+            <AdminLite />
+          </Suspense>
+        </ErrorBoundary>
+      </StrictMode>
+    );
+  }
 
   // Status bar is always visible (has mode selector), so always add padding
   const statusBarHeight = 38;

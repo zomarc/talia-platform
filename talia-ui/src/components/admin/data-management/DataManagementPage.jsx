@@ -4,17 +4,17 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useDatabaseTables } from '../hooks/useDatabaseTables';
-import { LoadingSpinner, ErrorMessage } from './shared';
-import { getThemeForMode } from '../themes/modeThemes';
+import { useDatabaseTables } from '../../hooks/useDatabaseTables';
+import { LoadingSpinner, ErrorMessage } from '../../shared';
+import { getThemeForMode } from '../../themes/modeThemes';
 // Supabase import removed - all database operations now route through GraphQL backend
-import { getTableSource } from '../config/tableSources';
-import { SERVER_SERVICES, getAllServiceIds } from '../config/serverServices';
-import { getSyncFreshness, getSyncFreshnessColor } from '../utils/syncFreshness';
+import { getTableSource } from '../../config/tableSources';
+import { SERVER_SERVICES, getAllServiceIds } from '../../config/serverServices';
+import { getSyncFreshness, getSyncFreshnessColor } from '../../utils/syncFreshness';
 import SummaryBar from './SummaryBar.jsx';
 import BackupStatusBar from './BackupStatusBar.jsx';
 import { getRootStyle } from './styles.js';
-import '../themes/dataMode.css';
+import '../../themes/dataMode.css';
 
 const DataManagementPage = () => {
   const { tables, loading, error, refetch, updateTable } = useDatabaseTables();

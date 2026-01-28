@@ -1,4 +1,4 @@
-import { StrictMode, useState, useEffect } from 'react'
+import { StrictMode, useState, useEffect, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 
 // Core styles - order matters
@@ -14,8 +14,8 @@ import './styles/status-bar.css'     // Status bar styles
 
 import AppWithAuth from './AppWithAuth.jsx'
 import TestPage from './components/TestPage.jsx'
-import DataManagementPage from './components/admin/data-management/DataManagementPage.jsx'
 import StatusBar from './components/shared/StatusBar.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
 import { applyTheme, DEFAULT_THEME } from './config/themes.js';
@@ -52,6 +52,18 @@ console.log('🌐 Window object:', typeof window);
 console.log('📱 Document ready state:', document.readyState);
 
 // Global status and event state (shared across all modes)
+const DataManagementUnavailable = () => (
+  <div style={{ padding: '16px', fontSize: '12px', color: '#c7c7d1' }}>
+    Data Management is currently unavailable.
+  </div>
+);
+
+const DataManagementPage = lazy(() =>
+  import('./components/admin/data-management/DataManagementPage.jsx').catch(() => ({
+    default: DataManagementUnavailable
+  }))
+);
+
 const globalStatusState = {
   statusMessage: null,
   currentEvent: null,
@@ -200,7 +212,13 @@ const DevSwitcher = () => {
         return <TestPage />;
       case 'data':
         console.log('📋 Rendering DataManagementPage');
-        return <DataManagementPage />;
+        return (
+          <ErrorBoundary fallback={<DataManagementUnavailable />}>
+            <Suspense fallback={<DataManagementUnavailable />}>
+              <DataManagementPage />
+            </Suspense>
+          </ErrorBoundary>
+        );
       case 'app':
       default:
         console.log('📋 Rendering AppWithAuth');

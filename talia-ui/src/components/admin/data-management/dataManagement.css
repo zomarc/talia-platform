@@ -1,0 +1,28 @@
+.dm-table-header-row {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.dm-table-header-cell {
+  padding: 6px 8px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-size: 10px;
+  user-select: none;
+}
+
+.dm-table-header-cell-sortable {
+  cursor: pointer;
+}
+
+.dm-table-header-cell-left {
+  text-align: left;
+}
+
+.dm-table-header-cell-right {
+  text-align: right;
+}
+
+.dm-table-header-cell-center {
+  text-align: center;
+}

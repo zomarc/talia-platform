@@ -20,8 +20,10 @@ import TablesSection from './TablesSection.jsx';
 import LogsPanel from './LogsPanel.jsx';
 import ServerStatusPanel from './ServerStatusPanel.jsx';
 import TableRow from './TableRow.jsx';
+import TableHeader from './TableHeader.jsx';
 import { getRootStyle } from './styles.js';
 import '../../../themes/dataMode.css';
+import './dataManagement.css';
 
 const DataManagementPage = () => {
   const { tables, loading, error, refetch, updateTable } = useDatabaseTables();
@@ -1194,204 +1196,12 @@ The backup will be saved to: talia-server/backups/`;
 
   // Render table header
   const renderTableHeader = () => (
-    <thead>
-      <tr style={{
-        background: theme.colors.glass,
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
-        borderBottom: `1px solid ${theme.colors.glassBorder}`
-      }}>
-        <th
-          onClick={() => handleSort('tableName')}
-          style={{
-            padding: '6px 8px',
-            textAlign: 'left',
-            fontWeight: '600',
-            color: theme.colors.textSecondary,
-            cursor: 'pointer',
-            userSelect: 'none',
-            whiteSpace: 'nowrap',
-            fontSize: '10px',
-            width: columnWidths.tableName
-          }}
-        >
-          Table Name<SortIcon column="tableName" />
-        </th>
-        <th
-          onClick={() => handleSort('source')}
-          style={{
-            padding: '6px 8px',
-            textAlign: 'left',
-            fontWeight: '600',
-            color: theme.colors.textSecondary,
-            cursor: 'pointer',
-            userSelect: 'none',
-            whiteSpace: 'nowrap',
-            fontSize: '10px',
-            width: columnWidths.source
-          }}
-        >
-          Source<SortIcon column="source" />
-        </th>
-        <th
-          onClick={() => handleSort('loadMethod')}
-          style={{
-            padding: '6px 8px',
-            textAlign: 'left',
-            fontWeight: '600',
-            color: theme.colors.textSecondary,
-            cursor: 'pointer',
-            userSelect: 'none',
-            whiteSpace: 'nowrap',
-            fontSize: '10px',
-            width: columnWidths.loadMethod
-          }}
-        >
-          Load Method<SortIcon column="loadMethod" />
-        </th>
-        <th
-          onClick={() => handleSort('rowCount')}
-          style={{
-            padding: '6px 8px',
-            textAlign: 'right',
-            fontWeight: '600',
-            color: theme.colors.textSecondary,
-            cursor: 'pointer',
-            userSelect: 'none',
-            whiteSpace: 'nowrap',
-            fontSize: '10px',
-            width: columnWidths.rowCount
-          }}
-        >
-          Rows<SortIcon column="rowCount" />
-        </th>
-        <th
-          onClick={() => handleSort('dateRange')}
-          style={{
-            padding: '6px 8px',
-            textAlign: 'left',
-            fontWeight: '600',
-            color: theme.colors.textSecondary,
-            cursor: 'pointer',
-            userSelect: 'none',
-            whiteSpace: 'nowrap',
-            fontSize: '10px',
-            width: columnWidths.dateRange
-          }}
-        >
-          Data Range<SortIcon column="dateRange" />
-        </th>
-        <th
-          onClick={() => handleSort('lastSync')}
-          style={{
-            padding: '6px 8px',
-            textAlign: 'left',
-            fontWeight: '600',
-            color: theme.colors.textSecondary,
-            cursor: 'pointer',
-            userSelect: 'none',
-            whiteSpace: 'nowrap',
-            fontSize: '10px',
-            width: columnWidths.lastSync
-          }}
-        >
-          Last Sync<SortIcon column="lastSync" />
-        </th>
-        <th
-          onClick={() => handleSort('latestSnapshot')}
-          style={{
-            padding: '6px 8px',
-            textAlign: 'left',
-            fontWeight: '600',
-            color: theme.colors.textSecondary,
-            cursor: 'pointer',
-            userSelect: 'none',
-            whiteSpace: 'nowrap',
-            fontSize: '10px',
-            width: columnWidths.latestSnapshot
-          }}
-        >
-          Latest Snapshot<SortIcon column="latestSnapshot" />
-        </th>
-        <th
-          onClick={() => handleSort('recordsProcessed')}
-          style={{
-            padding: '6px 8px',
-            textAlign: 'right',
-            fontWeight: '600',
-            color: theme.colors.textSecondary,
-            cursor: 'pointer',
-            userSelect: 'none',
-            whiteSpace: 'nowrap',
-            fontSize: '10px',
-            width: columnWidths.recordsProcessed
-          }}
-        >
-          Records<SortIcon column="recordsProcessed" />
-        </th>
-        <th
-          onClick={() => handleSort('changesDetected')}
-          style={{
-            padding: '6px 8px',
-            textAlign: 'right',
-            fontWeight: '600',
-            color: theme.colors.textSecondary,
-            cursor: 'pointer',
-            userSelect: 'none',
-            whiteSpace: 'nowrap',
-            fontSize: '10px',
-            width: columnWidths.changesDetected
-          }}
-        >
-          Changes<SortIcon column="changesDetected" />
-        </th>
-        <th
-          onClick={() => handleSort('syncDuration')}
-          style={{
-            padding: '6px 8px',
-            textAlign: 'left',
-            fontWeight: '600',
-            color: theme.colors.textSecondary,
-            cursor: 'pointer',
-            userSelect: 'none',
-            whiteSpace: 'nowrap',
-            fontSize: '10px',
-            width: columnWidths.syncDuration
-          }}
-        >
-          Duration<SortIcon column="syncDuration" />
-        </th>
-        <th
-          onClick={() => handleSort('status')}
-          style={{
-            padding: '6px 8px',
-            textAlign: 'left',
-            fontWeight: '600',
-            color: theme.colors.textSecondary,
-            cursor: 'pointer',
-            userSelect: 'none',
-            whiteSpace: 'nowrap',
-            fontSize: '10px',
-            width: columnWidths.status
-          }}
-        >
-          Status<SortIcon column="status" />
-        </th>
-        <th
-          style={{
-            padding: '6px 8px',
-            textAlign: 'center',
-            fontWeight: '600',
-            color: theme.colors.textSecondary,
-            whiteSpace: 'nowrap',
-            fontSize: '10px',
-            width: columnWidths.actions
-          }}
-        >
-          Actions
-        </th>
-      </tr>
-    </thead>
+    <TableHeader
+      theme={theme}
+      columnWidths={columnWidths}
+      handleSort={handleSort}
+      SortIcon={SortIcon}
+    />
   );
 
   const renderTableRows = (tableList) => (

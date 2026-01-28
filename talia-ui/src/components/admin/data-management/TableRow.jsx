@@ -1,4 +1,5 @@
 import React from 'react';
+import SyncStatusCell from './SyncStatusCell.jsx';
 
 const TableRow = ({
   table,
@@ -167,84 +168,13 @@ const TableRow = ({
         className="dm-table-cell"
         style={{ width: columnWidths.status }}
       >
-        {isSyncing ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '140px' }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              fontSize: '8px',
-              color: '#ff69b4',
-              fontWeight: '600'
-            }}>
-              <span>🔄 Syncing...</span>
-              <span>{progress?.percentage || 0}%</span>
-            </div>
-            <div style={{
-              width: '100%',
-              height: '6px',
-              background: 'rgba(255, 105, 180, 0.2)',
-              borderRadius: '3px',
-              overflow: 'hidden',
-              position: 'relative'
-            }}>
-              <div style={{
-                width: `${progress?.percentage || 0}%`,
-                height: '100%',
-                background: 'linear-gradient(90deg, #ff69b4, #ff1493)',
-                borderRadius: '3px',
-                transition: 'width 0.3s ease',
-                boxShadow: '0 0 6px rgba(255, 105, 180, 0.6)',
-                position: 'relative'
-              }}>
-                <div style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
-                  animation: 'shimmer 2s infinite'
-                }} />
-              </div>
-            </div>
-            {progress?.message && (
-              <div style={{ fontSize: '7px', color: theme.colors.textMuted, maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {progress.message}
-              </div>
-            )}
-            {progress?.type === 'batch' && !progress.message && (
-              <div style={{ fontSize: '7px', color: theme.colors.textMuted }}>
-                Batch {progress.current}/{progress.total}
-              </div>
-            )}
-            {progress?.type === 'insert' && !progress.message && (
-              <div style={{ fontSize: '7px', color: theme.colors.textMuted }}>
-                Inserted {progress.current.toLocaleString()}/{progress.total.toLocaleString()}
-              </div>
-            )}
-            {progress?.type === 'records' && !progress.message && progress.total > 0 && (
-              <div style={{ fontSize: '7px', color: theme.colors.textMuted }}>
-                {progress.current.toLocaleString()}/{progress.total.toLocaleString()} records
-              </div>
-            )}
-            {(!progress || progress.percentage === 0) && (
-              <div style={{ fontSize: '7px', color: theme.colors.textMuted }}>
-                Initializing...
-              </div>
-            )}
-          </div>
-        ) : (
-          <span
-            className="dm-status-badge"
-            style={{
-              background: statusColors.bg,
-              color: statusColors.text
-            }}
-          >
-            {table.status}
-          </span>
-        )}
+        <SyncStatusCell
+          isSyncing={isSyncing}
+          progress={progress}
+          statusColors={statusColors}
+          statusLabel={table.status}
+          theme={theme}
+        />
       </td>
       <td
         className="dm-table-cell dm-table-actions"

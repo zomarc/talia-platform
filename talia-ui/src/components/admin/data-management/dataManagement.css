@@ -93,3 +93,56 @@
   font-size: 9px;
   font-weight: 500;
 }
+
+.dm-sync-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.dm-sync-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 8px;
+  color: #ff69b4;
+  font-weight: 600;
+}
+
+.dm-sync-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 105, 180, 0.2);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.dm-sync-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff69b4, #ff1493);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 6px rgba(255, 105, 180, 0.6);
+  position: relative;
+}
+
+.dm-sync-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: shimmer 2s infinite;
+}
+
+.dm-sync-message {
+  font-size: 7px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dm-sync-submessage {
+  font-size: 7px;
+}

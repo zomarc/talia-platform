@@ -114,16 +114,15 @@ if [ \"$DEPLOY_MODE\" = \"full\" ]; then
   docker compose -f docker-compose.staging.yml build --no-cache ui graphql-server
   docker compose -f docker-compose.staging.yml up -d
 else
-  echo '🔄 Restarting all services (code-only)...'
-  # Restart in dependency order to ensure proper startup
+  echo '🔄 Restarting base services (code-only)...'
   docker compose -f docker-compose.staging.yml restart supabase-db supabase-rest supabase-kong
   sleep 3
-  docker compose -f docker-compose.staging.yml restart graphql-server
-  sleep 3
-  # UI needs to be rebuilt to include new code changes
+  # Rebuild GraphQL server and UI so staging gets latest schema and frontend
+  echo '🔨 Rebuilding GraphQL server with latest schema...'
+  docker compose -f docker-compose.staging.yml build graphql-server
   echo '🔨 Rebuilding UI container with latest code...'
   docker compose -f docker-compose.staging.yml build ui
-  docker compose -f docker-compose.staging.yml up -d ui
+  docker compose -f docker-compose.staging.yml up -d graphql-server ui
 fi
 
 echo '⏳ Waiting for services to be healthy...'

@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../../lib/supabase';
 
 const UserMappingTable = () => {
   const [mappings, setMappings] = useState([]);
@@ -20,7 +20,7 @@ const UserMappingTable = () => {
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const { data, error: fetchError } = await supabase
         .from('talia_users')
         .select('id, talia_user_id, email')
@@ -30,10 +30,9 @@ const UserMappingTable = () => {
         throw fetchError;
       }
 
-      // Map Supabase data to mapping format
       const mappedData = (data || []).map(user => ({
         taliaUserId: user.talia_user_id,
-        supabaseAuthId: user.id, // Supabase auth user ID
+        supabaseAuthId: user.id,
         email: user.email
       }));
 
@@ -213,7 +212,6 @@ const styles = {
   }
 };
 
-// Add hover effect for data rows
 const styleSheet = document.createElement('style');
 styleSheet.textContent = `
   table tbody tr:hover {

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useTaliaFocusManagement } from '../../hooks/useTaliaFocusManagement';
+import { useTaliaFocusManagement } from '../../../hooks/useTaliaFocusManagement';
 
 const FocusGroupsManager = () => {
   const {
@@ -166,7 +166,6 @@ const FocusGroupsManager = () => {
           </div>
         )}
 
-        {/* Create/Edit Form */}
         {(showCreateForm || editingGroup) && (
           <div style={{
             padding: '20px',
@@ -260,7 +259,6 @@ const FocusGroupsManager = () => {
           </div>
         )}
 
-        {/* Groups List */}
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center' }}>
             <div>Loading focus groups...</div>
@@ -370,6 +368,3 @@ const FocusGroupsManager = () => {
 };
 
 export default FocusGroupsManager;
-
-
-

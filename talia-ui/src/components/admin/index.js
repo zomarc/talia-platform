@@ -3,6 +3,7 @@
  * Export all admin-related components
  */
 
-export { default as AdminDashboard } from './AdminDashboard';
-export { default as UserMappingTable } from './UserMappingTable';
-export { default as TaliaUserTable } from './TaliaUserTable';
+export { default as AdminDashboard } from './dashboard/AdminDashboard';
+export { default as UserMappingTable } from './users/UserMappingTable';
+export { default as TaliaUserTable } from './users/TaliaUserTable';
+export { default as FocusGroupsManager } from './focus-groups/FocusGroupsManager';

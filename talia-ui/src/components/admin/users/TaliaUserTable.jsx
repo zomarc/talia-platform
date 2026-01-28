@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import taliaUserService from '../../services/TaliaUserService';
+import taliaUserService from '../../../services/TaliaUserService';
 
 const TaliaUserTable = () => {
   const [users, setUsers] = useState([]);
@@ -35,7 +35,7 @@ const TaliaUserTable = () => {
     if (newRole) {
       try {
         await taliaUserService.updateTaliaUserRole(taliaUserId, newRole);
-        await loadUsers(); // Reload users after update
+        await loadUsers();
         setEditingUser(null);
         setNewRole('');
       } catch (err) {

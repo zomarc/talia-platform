@@ -4,10 +4,10 @@
  */
 
 import React, { useState } from 'react';
-import UserMappingTable from './UserMappingTable';
-import TaliaUserTable from './TaliaUserTable';
-import FocusManager from '../focus-management/FocusManager';
-import { useTaliaFocusManagement } from '../../hooks/useTaliaFocusManagement';
+import UserMappingTable from '../users/UserMappingTable';
+import TaliaUserTable from '../users/TaliaUserTable';
+import FocusManager from '../../focus-management/FocusManager';
+import { useTaliaFocusManagement } from '../../../hooks/useTaliaFocusManagement';
 
 const AdminDashboard = () => {
   const { taliaUser, isAdmin } = useTaliaFocusManagement();

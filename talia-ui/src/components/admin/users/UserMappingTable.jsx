@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
+import '../admin.css';
 
 const UserMappingTable = () => {
   const [mappings, setMappings] = useState([]);
@@ -47,61 +48,65 @@ const UserMappingTable = () => {
 
   if (isLoading) {
     return (
-      <div style={styles.container}>
-        <h2 style={styles.title}>User Mapping Table</h2>
-        <div style={styles.loading}>Loading mappings...</div>
+      <div className="admin-section">
+        <h2 className="admin-title">User Mapping Table</h2>
+        <div className="admin-loading">Loading mappings...</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={styles.container}>
-        <h2 style={styles.title}>User Mapping Table</h2>
-        <div style={styles.error}>Error: {error}</div>
+      <div className="admin-section">
+        <h2 className="admin-title">User Mapping Table</h2>
+        <div className="admin-error">Error: {error}</div>
       </div>
     );
   }
 
   return (
-    <div style={styles.container}>
-      <h2 style={styles.title}>User Mapping Table</h2>
-      <p style={styles.subtitle}>
+    <div className="admin-section">
+      <h2 className="admin-title">User Mapping Table</h2>
+      <p className="admin-subtitle">
         Simple mapping: Supabase Auth ID → Talia User ID
         <br />
         <em>Maps Supabase authentication users to Talia internal user IDs</em>
       </p>
 
       {mappings.length === 0 ? (
-        <div style={styles.empty}>No user mappings yet. Sign in to create the first mapping.</div>
+        <div className="admin-empty">No user mappings yet. Sign in to create the first mapping.</div>
       ) : (
-        <table style={styles.table}>
+        <table className="admin-table">
           <thead>
-            <tr style={styles.headerRow}>
-              <th style={styles.headerCell}>Talia User ID</th>
-              <th style={styles.headerCell}>Supabase Auth ID</th>
-              <th style={styles.headerCell}>Email</th>
+            <tr className="admin-table-header-row">
+              <th className="admin-table-header-cell">Talia User ID</th>
+              <th className="admin-table-header-cell">Supabase Auth ID</th>
+              <th className="admin-table-header-cell">Email</th>
             </tr>
           </thead>
           <tbody>
             {mappings.map((mapping, index) => (
-              <tr key={index} style={styles.dataRow}>
-                <td style={styles.dataCell}>
-                  <strong style={styles.taliaId}>{mapping.taliaUserId}</strong>
+              <tr key={index} className="admin-table-row">
+                <td className="admin-table-cell">
+                  <strong className="admin-mono" style={{ color: '#2E86AB', fontSize: '16px' }}>
+                    {mapping.taliaUserId}
+                  </strong>
                 </td>
-                <td style={styles.dataCell}>
-                  <code style={styles.authId}>{mapping.supabaseAuthId}</code>
+                <td className="admin-table-cell">
+                  <code className="admin-mono" style={{ fontSize: '12px', color: '#6C757D', background: '#f8f9fa', padding: '2px 6px', borderRadius: '3px' }}>
+                    {mapping.supabaseAuthId}
+                  </code>
                 </td>
-                <td style={styles.dataCell}>{mapping.email}</td>
+                <td className="admin-table-cell">{mapping.email}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
 
-      <div style={styles.info}>
-        <h3 style={styles.infoTitle}>User Mapping</h3>
-        <ul style={styles.infoList}>
+      <div className="admin-info">
+        <h3 className="admin-info-title">User Mapping</h3>
+        <ul className="admin-info-list">
           <li><strong>supabaseAuthId:</strong> From Supabase Auth (unique UUID)</li>
           <li><strong>taliaUserId:</strong> Talia's internal ID (unique, 1000+)</li>
           <li><strong>Purpose:</strong> Map logged-in user to Talia user ID</li>
@@ -111,113 +116,5 @@ const UserMappingTable = () => {
     </div>
   );
 };
-
-const styles = {
-  container: {
-    padding: '20px',
-    maxWidth: '1200px',
-    margin: '0 auto'
-  },
-  title: {
-    fontSize: '24px',
-    fontWeight: 'bold',
-    color: '#2E86AB',
-    marginBottom: '8px'
-  },
-  subtitle: {
-    fontSize: '14px',
-    color: '#6C757D',
-    marginBottom: '20px',
-    lineHeight: '1.6'
-  },
-  loading: {
-    padding: '20px',
-    textAlign: 'center',
-    color: '#6C757D'
-  },
-  error: {
-    padding: '20px',
-    backgroundColor: '#f8d7da',
-    color: '#721c24',
-    borderRadius: '4px',
-    border: '1px solid #f5c6cb'
-  },
-  empty: {
-    padding: '40px',
-    textAlign: 'center',
-    color: '#6C757D',
-    backgroundColor: '#f8f9fa',
-    borderRadius: '4px',
-    border: '1px solid #dee2e6'
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    backgroundColor: 'white',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-    borderRadius: '4px',
-    overflow: 'hidden'
-  },
-  headerRow: {
-    backgroundColor: '#2E86AB',
-    color: 'white'
-  },
-  headerCell: {
-    padding: '12px',
-    textAlign: 'left',
-    fontWeight: 'bold',
-    fontSize: '14px'
-  },
-  dataRow: {
-    borderBottom: '1px solid #dee2e6',
-    ':hover': {
-      backgroundColor: '#f8f9fa'
-    }
-  },
-  dataCell: {
-    padding: '12px',
-    fontSize: '14px',
-    color: '#212529'
-  },
-  taliaId: {
-    color: '#2E86AB',
-    fontSize: '16px',
-    fontFamily: 'monospace'
-  },
-  authId: {
-    fontSize: '12px',
-    color: '#6C757D',
-    backgroundColor: '#f8f9fa',
-    padding: '2px 6px',
-    borderRadius: '3px',
-    fontFamily: 'monospace'
-  },
-  info: {
-    marginTop: '30px',
-    padding: '20px',
-    backgroundColor: '#e7f3ff',
-    borderRadius: '4px',
-    border: '1px solid #b3d9ff'
-  },
-  infoTitle: {
-    fontSize: '18px',
-    fontWeight: 'bold',
-    color: '#2E86AB',
-    marginBottom: '12px'
-  },
-  infoList: {
-    listStyle: 'none',
-    padding: 0,
-    margin: 0
-  }
-};
-
-const styleSheet = document.createElement('style');
-styleSheet.textContent = `
-  table tbody tr:hover {
-    background-color: #f8f9fa !important;
-  }
-`;
-document.head.appendChild(styleSheet);
 
 export default UserMappingTable;

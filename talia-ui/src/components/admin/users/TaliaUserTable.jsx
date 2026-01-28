@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import taliaUserService from '../../../services/TaliaUserService';
+import '../admin.css';
 
 const TaliaUserTable = () => {
   const [users, setUsers] = useState([]);
@@ -77,47 +78,49 @@ const TaliaUserTable = () => {
   };
 
   return (
-    <div style={styles.container}>
-      <h2 style={styles.title}>Talia Users</h2>
-      <p style={styles.subtitle}>
+    <div className="admin-section">
+      <h2 className="admin-title">Talia Users</h2>
+      <p className="admin-subtitle">
         Internal Talia user system - manages user roles and permissions.
         <br />
         <em>Note: This is independent of authentication. Users are identified by Talia user ID.</em>
       </p>
 
       {loading ? (
-        <div style={styles.empty}>Loading Talia users...</div>
+        <div className="admin-empty">Loading Talia users...</div>
       ) : error ? (
-        <div style={styles.empty}>Error loading users: {error}</div>
+        <div className="admin-empty">Error loading users: {error}</div>
       ) : users.length === 0 ? (
-        <div style={styles.empty}>No Talia users yet. Sign in to create the first user.</div>
+        <div className="admin-empty">No Talia users yet. Sign in to create the first user.</div>
       ) : (
-        <table style={styles.table}>
+        <table className="admin-table">
           <thead>
-            <tr style={styles.headerRow}>
-              <th style={styles.headerCell}>Talia User ID</th>
-              <th style={styles.headerCell}>Email</th>
-              <th style={styles.headerCell}>Name</th>
-              <th style={styles.headerCell}>Role</th>
-              <th style={styles.headerCell}>Status</th>
-              <th style={styles.headerCell}>Created</th>
-              <th style={styles.headerCell}>Actions</th>
+            <tr className="admin-table-header-row">
+              <th className="admin-table-header-cell">Talia User ID</th>
+              <th className="admin-table-header-cell">Email</th>
+              <th className="admin-table-header-cell">Name</th>
+              <th className="admin-table-header-cell">Role</th>
+              <th className="admin-table-header-cell">Status</th>
+              <th className="admin-table-header-cell">Created</th>
+              <th className="admin-table-header-cell">Actions</th>
             </tr>
           </thead>
           <tbody>
             {users.map((user) => (
-              <tr key={user.taliaUserId} style={styles.dataRow}>
-                <td style={styles.dataCell}>
-                  <strong style={styles.taliaId}>{user.taliaUserId}</strong>
+              <tr key={user.taliaUserId} className="admin-table-row">
+                <td className="admin-table-cell">
+                  <strong className="admin-mono" style={{ color: '#2E86AB', fontSize: '16px' }}>
+                    {user.taliaUserId}
+                  </strong>
                 </td>
-                <td style={styles.dataCell}>{user.email}</td>
-                <td style={styles.dataCell}>{user.name}</td>
-                <td style={styles.dataCell}>
+                <td className="admin-table-cell">{user.email}</td>
+                <td className="admin-table-cell">{user.name}</td>
+                <td className="admin-table-cell">
                   {editingUser === user.taliaUserId ? (
                     <select
                       value={newRole}
                       onChange={(e) => setNewRole(e.target.value)}
-                      style={styles.roleSelect}
+                      className="admin-select"
                     >
                       <option value="user">User</option>
                       <option value="manager">Manager</option>
@@ -130,30 +133,26 @@ const TaliaUserTable = () => {
                     </span>
                   )}
                 </td>
-                <td style={styles.dataCell}>
-                  <span style={{
-                    ...styles.statusBadge,
-                    backgroundColor: user.isActive ? '#d4edda' : '#f8d7da',
-                    color: user.isActive ? '#155724' : '#721c24'
-                  }}>
+                <td className="admin-table-cell">
+                  <span className={`admin-badge ${user.isActive ? 'admin-badge-active' : 'admin-badge-inactive'}`}>
                     {user.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </td>
-                <td style={styles.dataCell}>
+                <td className="admin-table-cell">
                   {new Date(user.createdAt).toLocaleDateString()}
                 </td>
-                <td style={styles.dataCell}>
+                <td className="admin-table-cell">
                   {editingUser === user.taliaUserId ? (
-                    <div style={styles.actionButtons}>
+                    <div className="admin-actions">
                       <button
                         onClick={() => handleRoleChange(user.taliaUserId)}
-                        style={styles.saveButton}
+                        className="admin-btn admin-btn-success"
                       >
                         Save
                       </button>
                       <button
                         onClick={cancelEditing}
-                        style={styles.cancelButton}
+                        className="admin-btn admin-btn-muted"
                       >
                         Cancel
                       </button>
@@ -161,7 +160,7 @@ const TaliaUserTable = () => {
                   ) : (
                     <button
                       onClick={() => startEditing(user)}
-                      style={styles.editButton}
+                      className="admin-btn admin-btn-primary"
                     >
                       Edit Role
                     </button>
@@ -173,9 +172,9 @@ const TaliaUserTable = () => {
         </table>
       )}
 
-      <div style={styles.info}>
-        <h3 style={styles.infoTitle}>About Talia Users</h3>
-        <ul style={styles.infoList}>
+      <div className="admin-info">
+        <h3 className="admin-info-title">About Talia Users</h3>
+        <ul className="admin-info-list">
           <li><strong>Talia User ID:</strong> Internal numerical ID used throughout the application</li>
           <li><strong>Role-Based Access:</strong> Admin, Manager, User, Guest roles with different permissions</li>
           <li><strong>Independent:</strong> Not tied to any specific authentication system</li>
@@ -184,127 +183,6 @@ const TaliaUserTable = () => {
       </div>
     </div>
   );
-};
-
-const styles = {
-  container: {
-    padding: '20px'
-  },
-  title: {
-    fontSize: '24px',
-    fontWeight: 'bold',
-    color: '#2E86AB',
-    marginBottom: '8px'
-  },
-  subtitle: {
-    fontSize: '14px',
-    color: '#6C757D',
-    marginBottom: '20px',
-    lineHeight: '1.6'
-  },
-  empty: {
-    padding: '40px',
-    textAlign: 'center',
-    color: '#6C757D',
-    backgroundColor: '#f8f9fa',
-    borderRadius: '4px',
-    border: '1px solid #dee2e6'
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    backgroundColor: 'white',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-    borderRadius: '4px',
-    overflow: 'hidden'
-  },
-  headerRow: {
-    backgroundColor: '#2E86AB',
-    color: 'white'
-  },
-  headerCell: {
-    padding: '12px',
-    textAlign: 'left',
-    fontWeight: 'bold',
-    fontSize: '14px'
-  },
-  dataRow: {
-    borderBottom: '1px solid #dee2e6'
-  },
-  dataCell: {
-    padding: '12px',
-    fontSize: '14px',
-    color: '#212529'
-  },
-  taliaId: {
-    color: '#2E86AB',
-    fontSize: '16px',
-    fontFamily: 'monospace'
-  },
-  statusBadge: {
-    padding: '4px 12px',
-    borderRadius: '12px',
-    fontSize: '12px',
-    fontWeight: 'bold'
-  },
-  roleSelect: {
-    padding: '4px 8px',
-    borderRadius: '4px',
-    border: '1px solid #dee2e6',
-    fontSize: '14px'
-  },
-  actionButtons: {
-    display: 'flex',
-    gap: '8px'
-  },
-  editButton: {
-    padding: '6px 12px',
-    backgroundColor: '#2E86AB',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: 'bold'
-  },
-  saveButton: {
-    padding: '6px 12px',
-    backgroundColor: '#28a745',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: 'bold'
-  },
-  cancelButton: {
-    padding: '6px 12px',
-    backgroundColor: '#6c757d',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: 'bold'
-  },
-  info: {
-    marginTop: '30px',
-    padding: '20px',
-    backgroundColor: '#e7f3ff',
-    borderRadius: '4px',
-    border: '1px solid #b3d9ff'
-  },
-  infoTitle: {
-    fontSize: '18px',
-    fontWeight: 'bold',
-    color: '#2E86AB',
-    marginBottom: '12px'
-  },
-  infoList: {
-    listStyle: 'none',
-    padding: 0,
-    margin: 0
-  }
 };
 
 export default TaliaUserTable;

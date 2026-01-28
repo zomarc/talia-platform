@@ -64,6 +64,10 @@
   flex-wrap: wrap;
 }
 
+.dm-action-placeholder {
+  font-size: 9px;
+}
+
 .dm-action-button {
   padding: 4px 8px;
   font-size: 9px;

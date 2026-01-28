@@ -32,6 +32,17 @@ const DataManagementPage = () => {
   const [reviewData, setReviewData] = useState(null);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [statusTable, setStatusTable] = useState(null);
+  const statusConfig = statusTable ? getTableSource(statusTable.tableName) : null;
+  const statusDateColumns = statusConfig?.dateColumns || [];
+  const statusProvider = statusTable
+    ? (statusTable.type === 'application'
+        ? 'Supabase (App)'
+        : statusTable.type === 'system'
+          ? 'Supabase (System)'
+          : (statusTable.source && statusTable.source !== 'N/A')
+            ? 'Azure Synapse'
+            : 'Supabase')
+    : '';
   const [backupStatus, setBackupStatus] = useState({ 
     lastBackup: null, 
     recentBackups: [], 
@@ -2487,15 +2498,21 @@ The backup will be saved to: talia-server/backups/`;
               </button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px', fontSize: '10px' }}>
-              <div><strong>Source:</strong> {statusTable.source || 'N/A'}</div>
+              <div><strong>Provider:</strong> {statusProvider || 'N/A'}</div>
+              <div><strong>Source:</strong> {statusTable.source || statusConfig?.source || 'N/A'}</div>
+              <div><strong>Source Query:</strong> {statusConfig?.source || 'N/A'}</div>
+              <div><strong>Sync Key:</strong> {statusConfig?.syncType || 'N/A'}</div>
+              <div><strong>Date Columns:</strong> {statusDateColumns.length > 0 ? statusDateColumns.join(', ') : 'None'}</div>
               <div><strong>Type:</strong> {statusTable.type || 'N/A'}</div>
               <div><strong>Load Method:</strong> {statusTable.loadMethod || 'N/A'}</div>
               <div><strong>Rows:</strong> {(statusTable.rowCount || 0).toLocaleString()}</div>
-              <div><strong>Data Range:</strong> {formatDateRange(statusTable.dateRange)}</div>
+              <div><strong>Last Requested:</strong> {formatDateRange(statusTable.dateRange)}</div>
+              <div><strong>Current Data:</strong> {formatDateRange(statusTable.actualDataRange)}</div>
               <div><strong>Last Sync:</strong> {statusTable.lastSync ? formatDateTime(statusTable.lastSync) : 'N/A'}</div>
               <div><strong>Latest Snapshot:</strong> {statusTable.latestSnapshot ? formatDateTime(statusTable.latestSnapshot) : 'N/A'}</div>
               <div><strong>Records Processed:</strong> {(statusTable.recordsProcessed || 0).toLocaleString()}</div>
               <div><strong>Changes Detected:</strong> {(statusTable.changesDetected || 0).toLocaleString()}</div>
+              <div><strong>Last Error:</strong> {statusTable.lastError || 'None'}</div>
               <div><strong>Sync Status:</strong> {statusTable.syncStatus || 'N/A'}</div>
               <div><strong>Status:</strong> {statusTable.status || 'N/A'}</div>
             </div>

@@ -17,6 +17,8 @@ import FiltersBar from './FiltersBar.jsx';
 import StatusModal from './StatusModal.jsx';
 import ReviewModal from './ReviewModal.jsx';
 import TablesSection from './TablesSection.jsx';
+import LogsPanel from './LogsPanel.jsx';
+import ServerStatusPanel from './ServerStatusPanel.jsx';
 import { getRootStyle } from './styles.js';
 import '../../../themes/dataMode.css';
 
@@ -35,6 +37,7 @@ const DataManagementPage = () => {
   const [reviewData, setReviewData] = useState(null);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [statusTable, setStatusTable] = useState(null);
+  const [showBottomPanels, setShowBottomPanels] = useState(true);
   const [backupStatus, setBackupStatus] = useState({ 
     lastBackup: null, 
     recentBackups: [], 
@@ -1823,6 +1826,20 @@ The backup will be saved to: talia-server/backups/`;
 
   // Set CSS variables for theme colors
   const rootStyle = getRootStyle(theme);
+  const clientLogStyle = (log) => {
+    if (log.type === 'error') return { background: 'rgba(244, 67, 54, 0.1)', color: '#f44336', borderColor: '#f44336' };
+    if (log.type === 'success') return { background: 'rgba(76, 175, 80, 0.1)', color: '#4caf50', borderColor: '#4caf50' };
+    return { background: 'rgba(255, 255, 255, 0.02)', color: theme.colors.textSecondary, borderColor: theme.colors.accent };
+  };
+  const serverLogStyle = (log) => {
+    if (log.message.includes('[ERROR]') || log.message.includes('❌')) {
+      return { background: 'rgba(244, 67, 54, 0.1)', color: '#f44336', borderColor: '#f44336' };
+    }
+    if (log.message.includes('✅') || log.message.includes('Successfully')) {
+      return { background: 'rgba(76, 175, 80, 0.1)', color: '#4caf50', borderColor: '#4caf50' };
+    }
+    return { background: 'rgba(255, 255, 255, 0.02)', color: theme.colors.textSecondary, borderColor: theme.colors.accent };
+  };
 
   return (
     <div style={rootStyle}>
@@ -1846,25 +1863,44 @@ The backup will be saved to: talia-server/backups/`;
               📊 Data Management
             </h1>
           </div>
-          <button
-            onClick={refetch}
-            disabled={loading}
-            style={{
-              padding: '4px 8px',
-              background: loading ? theme.colors.glass : theme.colors.accent,
-              color: loading ? theme.colors.textMuted : '#0f0f23',
-              border: loading ? `1px solid ${theme.colors.glassBorder}` : 'none',
-              borderRadius: '6px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: '10px',
-              fontWeight: '500',
-              backdropFilter: loading ? 'blur(10px)' : 'none',
-              WebkitBackdropFilter: loading ? 'blur(10px)' : 'none',
-              transition: 'all 0.2s'
-            }}
-          >
-            {loading ? '⏳' : '↻'} Refresh
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              onClick={() => setShowBottomPanels(prev => !prev)}
+              style={{
+                padding: '4px 8px',
+                background: showBottomPanels ? theme.colors.accent : 'transparent',
+                color: showBottomPanels ? '#0f0f23' : theme.colors.textSecondary,
+                border: showBottomPanels ? 'none' : `1px solid ${theme.colors.glassBorder}`,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '10px',
+                fontWeight: '500',
+                transition: 'all 0.2s'
+              }}
+              title="Toggle activity panels"
+            >
+              {showBottomPanels ? 'Hide Panels' : 'Show Panels'}
+            </button>
+            <button
+              onClick={refetch}
+              disabled={loading}
+              style={{
+                padding: '4px 8px',
+                background: loading ? theme.colors.glass : theme.colors.accent,
+                color: loading ? theme.colors.textMuted : '#0f0f23',
+                border: loading ? `1px solid ${theme.colors.glassBorder}` : 'none',
+                borderRadius: '6px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontSize: '10px',
+                fontWeight: '500',
+                backdropFilter: loading ? 'blur(10px)' : 'none',
+                WebkitBackdropFilter: loading ? 'blur(10px)' : 'none',
+                transition: 'all 0.2s'
+              }}
+            >
+              {loading ? '⏳' : '↻'} Refresh
+            </button>
+          </div>
         </div>
 
         <SummaryBar theme={theme} tables={tables} />
@@ -1945,425 +1981,59 @@ The backup will be saved to: talia-server/backups/`;
       </div>
 
       {/* Bottom Panel - Split into Client Activity Log, Server Logs, All Activity, and Server Status */}
-      <div style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: '200px',
-        display: 'flex',
-        gap: '8px',
-        padding: '0 8px 8px 8px',
-        zIndex: 1000
-      }}>
-        {/* Client Activity Log Panel */}
+      {showBottomPanels && (
         <div style={{
-          flex: 1,
-          background: theme.colors.glass,
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderTop: `1px solid ${theme.colors.glassBorder}`,
-          borderRadius: '12px 12px 0 0',
-          boxShadow: '0 -8px 32px rgba(0, 0, 0, 0.3)',
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '200px',
           display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden'
+          gap: '8px',
+          padding: '0 8px 8px 8px',
+          zIndex: 1000
         }}>
-          <div style={{
-            padding: '8px 12px',
-            borderBottom: `1px solid ${theme.colors.glassBorder}`,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <div style={{ fontSize: '11px', fontWeight: '600', color: theme.colors.foreground }}>
-              📋 Client Activity
-            </div>
-            <button
-              onClick={() => setLogs([])}
-              style={{
-                padding: '2px 6px',
-                fontSize: '9px',
-                background: 'transparent',
-                color: theme.colors.textSecondary,
-                border: `1px solid ${theme.colors.glassBorder}`,
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              Clear
-            </button>
-          </div>
-          <div style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '8px',
-            fontFamily: 'monospace',
-            fontSize: '9px'
-          }}
-          ref={logEndRef}
-          >
-            {logs.length === 0 ? (
-              <div style={{ color: theme.colors.textMuted, textAlign: 'center', padding: '20px' }}>
-                No activity yet
-              </div>
-            ) : (
-              logs.map(log => (
-                <div
-                  key={log.id}
-                  style={{
-                    padding: '4px 8px',
-                    marginBottom: '2px',
-                    borderRadius: '4px',
-                    background: log.type === 'error' 
-                      ? 'rgba(244, 67, 54, 0.1)' 
-                      : log.type === 'success' 
-                        ? 'rgba(76, 175, 80, 0.1)' 
-                        : 'rgba(255, 255, 255, 0.02)',
-                    color: log.type === 'error' 
-                      ? '#f44336' 
-                      : log.type === 'success' 
-                        ? '#4caf50' 
-                        : theme.colors.textSecondary,
-                    borderLeft: `3px solid ${
-                      log.type === 'error' 
-                        ? '#f44336' 
-                        : log.type === 'success' 
-                          ? '#4caf50' 
-                          : theme.colors.accent
-                    }`
-                  }}
-                >
-                  <span style={{ color: theme.colors.textMuted }}>
-                    {log.timestamp.toLocaleTimeString()}
-                  </span>
-                  {' '}
-                  <span style={{ fontWeight: '600' }}>[{log.tableName}]</span>
-                  {' '}
-                  {log.message}
-                </div>
-              ))
-            )}
-          </div>
+          <LogsPanel
+            theme={theme}
+            title="📋 Client Activity"
+            logs={logs}
+            emptyMessage="No activity yet"
+            onClear={() => setLogs([])}
+            logRef={logEndRef}
+            getLogStyle={clientLogStyle}
+          />
+          <LogsPanel
+            theme={theme}
+            title="🔧 Server Logs"
+            logs={serverLogs}
+            emptyMessage="No server logs yet"
+            onClear={() => setServerLogs([])}
+            logRef={serverLogEndRef}
+            getLogStyle={serverLogStyle}
+          />
+          <ServerStatusPanel
+            theme={theme}
+            serverServices={SERVER_SERVICES}
+            serverStatus={serverStatus}
+            expandedServices={expandedServices}
+            setExpandedServices={setExpandedServices}
+            isRefreshingStatus={isRefreshingStatus}
+            checkServerStatus={checkServerStatus}
+            formatDateTime={formatDateTime}
+            onRestartGraphQL={handleRestartGraphQL}
+            onLogInfo={(message) => {
+              const logId = `${Date.now()}-${++logIdCounterRef.current}`;
+              setLogs(prev => [...prev, {
+                id: logId,
+                timestamp: new Date(),
+                type: 'info',
+                message,
+                tableName: 'System'
+              }]);
+            }}
+          />
         </div>
-
-        {/* Server Detailed Logs Panel */}
-        <div style={{
-          flex: 1,
-          background: theme.colors.glass,
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderTop: `1px solid ${theme.colors.glassBorder}`,
-          borderRadius: '12px 12px 0 0',
-          boxShadow: '0 -8px 32px rgba(0, 0, 0, 0.3)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            padding: '8px 12px',
-            borderBottom: `1px solid ${theme.colors.glassBorder}`,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <div style={{ fontSize: '11px', fontWeight: '600', color: theme.colors.foreground }}>
-              🔧 Server Logs
-            </div>
-            <button
-              onClick={() => setServerLogs([])}
-              style={{
-                padding: '2px 6px',
-                fontSize: '9px',
-                background: 'transparent',
-                color: theme.colors.textSecondary,
-                border: `1px solid ${theme.colors.glassBorder}`,
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              Clear
-            </button>
-          </div>
-          <div style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '8px',
-            fontFamily: 'monospace',
-            fontSize: '9px'
-          }}
-          ref={serverLogEndRef}
-          >
-            {serverLogs.length === 0 ? (
-              <div style={{ color: theme.colors.textMuted, textAlign: 'center', padding: '20px' }}>
-                No server logs yet
-              </div>
-            ) : (
-              serverLogs.map(log => (
-                <div
-                  key={log.id}
-                  style={{
-                    padding: '4px 8px',
-                    marginBottom: '2px',
-                    borderRadius: '4px',
-                    background: log.message.includes('[ERROR]') || log.message.includes('❌')
-                      ? 'rgba(244, 67, 54, 0.1)' 
-                      : log.message.includes('✅') || log.message.includes('Successfully')
-                        ? 'rgba(76, 175, 80, 0.1)' 
-                        : 'rgba(255, 255, 255, 0.02)',
-                    color: log.message.includes('[ERROR]') || log.message.includes('❌')
-                      ? '#f44336' 
-                      : log.message.includes('✅') || log.message.includes('Successfully')
-                        ? '#4caf50' 
-                        : theme.colors.textSecondary,
-                    borderLeft: `3px solid ${
-                      log.message.includes('[ERROR]') || log.message.includes('❌')
-                        ? '#f44336' 
-                        : log.message.includes('✅') || log.message.includes('Successfully')
-                          ? '#4caf50' 
-                          : theme.colors.accent
-                    }`
-                  }}
-                >
-                  <span style={{ color: theme.colors.textMuted }}>
-                    {log.timestamp.toLocaleTimeString()}
-                  </span>
-                  {' '}
-                  <span style={{ fontWeight: '600' }}>[{log.tableName}]</span>
-                  {' '}
-                  {log.message}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Server Status Panel */}
-        <div style={{
-          width: '300px',
-          background: theme.colors.glass,
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderTop: `1px solid ${theme.colors.glassBorder}`,
-          borderRadius: '12px 12px 0 0',
-          boxShadow: '0 -8px 32px rgba(0, 0, 0, 0.3)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden'
-        }}>
-          {/* Header with title and refresh button */}
-          <div style={{
-            padding: '8px 12px',
-            borderBottom: `1px solid ${theme.colors.glassBorder}`,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <div style={{ fontSize: '11px', fontWeight: '600', color: theme.colors.foreground, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              🖥️ Server Status
-              {/* Compact summary */}
-              <span style={{ 
-                fontSize: '9px', 
-                fontWeight: '400', 
-                color: theme.colors.textSecondary,
-                marginLeft: '4px'
-              }}>
-                ({SERVER_SERVICES.filter(service => serverStatus[service.id]?.online).length}/{SERVER_SERVICES.length} Online)
-              </span>
-            </div>
-            <button
-              onClick={checkServerStatus}
-              disabled={isRefreshingStatus}
-              style={{
-                padding: '4px 8px',
-                fontSize: '10px',
-                background: isRefreshingStatus ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.05)',
-                color: theme.colors.textSecondary,
-                border: `1px solid ${theme.colors.glassBorder}`,
-                borderRadius: '4px',
-                cursor: isRefreshingStatus ? 'wait' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                transition: 'all 0.2s ease',
-                minWidth: '24px',
-                justifyContent: 'center'
-              }}
-              onMouseEnter={(e) => {
-                if (!isRefreshingStatus) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-              }}
-              onMouseLeave={(e) => {
-                if (!isRefreshingStatus) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-              }}
-              title="Refresh Status"
-            >
-              <span style={{
-                display: 'inline-block',
-                transform: isRefreshingStatus ? 'rotate(360deg)' : 'rotate(0deg)',
-                transition: 'transform 0.5s ease',
-                transformOrigin: 'center'
-              }}>
-                ⟳
-              </span>
-            </button>
-          </div>
-          
-          {/* Services List - Always visible, each service expandable */}
-          <div style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '8px',
-            fontSize: '9px',
-            maxHeight: '400px'
-          }}>
-            {/* Services - Rendered generically from configuration */}
-            {SERVER_SERVICES.map(service => {
-              const status = serverStatus[service.id] || { online: false };
-              const isExpanded = expandedServices[service.id] || false;
-              
-              return (
-                <div key={service.id} style={{
-                  marginBottom: '8px',
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  borderRadius: '6px',
-                  border: `1px solid ${theme.colors.glassBorder}`,
-                  overflow: 'hidden'
-                }}>
-                  {/* Service Header - Clickable */}
-                  <div 
-                    onClick={() => setExpandedServices(prev => ({ ...prev, [service.id]: !prev[service.id] }))}
-                    style={{
-                      padding: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer',
-                      userSelect: 'none',
-                      transition: 'background 0.2s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (e.currentTarget) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (e.currentTarget) e.currentTarget.style.background = 'transparent';
-                    }}
-                  >
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      flex: 1
-                    }}>
-                      <div style={{
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '50%',
-                        background: status.online ? '#4caf50' : '#f44336',
-                        boxShadow: status.online ? '0 0 4px #4caf50' : 'none',
-                        flexShrink: 0
-                      }} />
-                      <span style={{ fontWeight: '600', color: theme.colors.foreground }}>
-                        {service.icon} {service.name}
-                      </span>
-                      <span style={{ 
-                        fontSize: '8px', 
-                        color: theme.colors.textSecondary,
-                        marginLeft: '4px'
-                      }}>
-                        {status.online ? 'Online' : 'Offline'}
-                      </span>
-                    </div>
-                    <div style={{ 
-                      fontSize: '8px', 
-                      color: theme.colors.textSecondary,
-                      transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                      transition: 'transform 0.2s ease',
-                      marginLeft: '8px'
-                    }}>
-                      ▼
-                    </div>
-                  </div>
-                  
-                  {/* Expanded Details */}
-                  {isExpanded && (
-                    <div style={{ padding: '8px', paddingTop: '0', borderTop: `1px solid ${theme.colors.glassBorder}` }}>
-                      {/* Display address */}
-                      {service.display?.address && (
-                        <div style={{ color: theme.colors.textSecondary, fontSize: '8px', marginTop: '4px' }}>
-                          {typeof service.display.address === 'function' 
-                            ? service.display.address(status)
-                            : service.display.address}
-                        </div>
-                      )}
-                      
-                      {/* Last started/checked timestamp */}
-                      {(status.lastStarted || status.lastChecked) && (
-                        <div style={{ color: theme.colors.textMuted, fontSize: '8px', marginTop: '4px' }}>
-                          {status.lastStarted 
-                            ? `Last seen online: ${formatDateTime(status.lastStarted)}`
-                            : `Last checked: ${formatDateTime(status.lastChecked)}`}
-                        </div>
-                      )}
-                      
-                      {/* Error message if offline */}
-                      {!status.online && (
-                        <div style={{ 
-                          marginTop: '6px',
-                          padding: '4px 6px',
-                          background: 'rgba(244, 67, 54, 0.1)',
-                          borderRadius: '4px',
-                          fontSize: '8px',
-                          color: '#f44336'
-                        }}>
-                          {typeof service.offlineMessage === 'function'
-                            ? service.offlineMessage(status)
-                            : service.offlineMessage}
-                        </div>
-                      )}
-                      
-                      {/* Service-specific actions */}
-                      {service.actions && status.online && service.actions.map(action => {
-                        if (action.handler === 'restartGraphQL') {
-                          return (
-                            <button
-                              key={action.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const logId = `${Date.now()}-${++logIdCounterRef.current}`;
-                                setLogs(prev => [...prev, {
-                                  id: logId,
-                                  timestamp: new Date(),
-                                  type: 'info',
-                                  message: `🔄 Restarting ${service.name}...`,
-                                  tableName: 'System'
-                                }]);
-                                handleRestartGraphQL();
-                              }}
-                              style={{
-                                marginTop: '6px',
-                                padding: '4px 8px',
-                                fontSize: '8px',
-                                background: 'rgba(255, 152, 0, 0.2)',
-                                color: '#ff9800',
-                                border: `1px solid #ff9800`,
-                                borderRadius: '4px',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              {action.icon} {action.label}
-                            </button>
-                          );
-                        }
-                        return null;
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      )}
 
       <StatusModal
         theme={theme}
@@ -2379,7 +2049,7 @@ The backup will be saved to: talia-server/backups/`;
         onClose={() => setReviewData(null)}
       />
 
-      <div style={{ height: '200px' }} /> {/* Spacer for fixed log panel */}
+      {showBottomPanels && <div style={{ height: '200px' }} />} {/* Spacer for fixed log panel */}
     </div>
   );
 };

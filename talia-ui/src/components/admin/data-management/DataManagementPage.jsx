@@ -11,6 +11,9 @@ import { getThemeForMode } from '../themes/modeThemes';
 import { getTableSource } from '../config/tableSources';
 import { SERVER_SERVICES, getAllServiceIds } from '../config/serverServices';
 import { getSyncFreshness, getSyncFreshnessColor } from '../utils/syncFreshness';
+import SummaryBar from './SummaryBar.jsx';
+import BackupStatusBar from './BackupStatusBar.jsx';
+import { getRootStyle } from './styles.js';
 import '../themes/dataMode.css';
 
 const DataManagementPage = () => {
@@ -1797,23 +1800,7 @@ The backup will be saved to: talia-server/backups/`;
   }, []);
 
   // Set CSS variables for theme colors
-  const rootStyle = {
-    padding: '8px',
-    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
-    backgroundAttachment: 'fixed',
-    minHeight: '100vh',
-    position: 'relative',
-    '--table-row-even': theme.colors.tableRowEven,
-    '--table-row-odd': theme.colors.tableRowOdd,
-    '--table-row-hover': theme.colors.tableRowHover,
-    '--table-row-selected': theme.colors.tableRowSelected,
-    '--table-row-selected-hover': theme.colors.tableRowSelectedHover,
-    '--glass-border': theme.colors.glassBorder,
-    '--foreground': theme.colors.foreground,
-    '--text-secondary': theme.colors.textSecondary,
-    '--text-muted': theme.colors.textMuted
-  };
+  const rootStyle = getRootStyle(theme);
 
   return (
     <div style={rootStyle}>
@@ -1858,119 +1845,15 @@ The backup will be saved to: talia-server/backups/`;
           </button>
         </div>
 
-        {/* Summary Bar */}
-        <div style={{
-          background: theme.colors.glass,
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          padding: '6px 12px',
-          borderRadius: '12px',
-          marginBottom: '8px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-          border: `1px solid ${theme.colors.glassBorder}`,
-          display: 'flex',
-          gap: '16px',
-          alignItems: 'center',
-          fontSize: '10px',
-          borderLeft: `2px solid ${theme.colors.accent}`
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ color: theme.colors.textSecondary }}>Total:</span>
-            <span style={{ color: theme.colors.foreground, fontWeight: '600' }}>{tables.length}</span>
-          </div>
-          <div style={{ width: '1px', height: '16px', background: theme.colors.glassBorder }}></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ color: theme.colors.textSecondary }}>Synced:</span>
-            <span style={{ color: '#4caf50', fontWeight: '600' }}>
-              {tables.filter(t => t.syncStatus === 'Synced').length}
-            </span>
-          </div>
-          <div style={{ width: '1px', height: '16px', background: theme.colors.glassBorder }}></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ color: theme.colors.textSecondary }}>With Data:</span>
-            <span style={{ color: theme.colors.foreground, fontWeight: '600' }}>
-              {tables.filter(t => t.rowCount > 0).length}
-            </span>
-          </div>
-        </div>
+        <SummaryBar theme={theme} tables={tables} />
 
-        {/* Backup Status Bar */}
-        <div style={{
-          background: theme.colors.glass,
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          padding: '8px 12px',
-          borderRadius: '12px',
-          marginBottom: '8px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-          border: `1px solid ${theme.colors.glassBorder}`,
-          display: 'flex',
-          gap: '16px',
-          alignItems: 'center',
-          fontSize: '10px',
-          borderLeft: `2px solid ${backupStatus.lastBackup ? '#4caf50' : '#ff9800'}`
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1 }}>
-            <span style={{ color: theme.colors.textSecondary }}>💾 Last Backup:</span>
-            <span style={{ 
-              color: backupStatus.lastBackup ? theme.colors.foreground : theme.colors.textMuted, 
-              fontWeight: '600' 
-            }}>
-              {backupStatus.loading ? '⏳ Checking...' : 
-               backupStatus.lastBackup ? formatDateTime(backupStatus.lastBackup) : 'Never'}
-            </span>
-            {backupStatus.size && (
-              <span style={{ color: theme.colors.textSecondary, marginLeft: '8px' }}>
-                ({backupStatus.size})
-              </span>
-            )}
-            {backupStatus.status && backupStatus.status !== 'idle' && (
-              <span style={{ 
-                color: backupStatus.status === 'success' ? '#4caf50' : '#f44336',
-                marginLeft: '8px',
-                fontSize: '8px'
-              }}>
-                [{backupStatus.status}]
-              </span>
-            )}
-          </div>
-          <button
-            onClick={triggerBackup}
-            disabled={backupStatus.loading}
-            style={{
-              padding: '4px 8px',
-              fontSize: '10px',
-              background: backupStatus.loading ? theme.colors.glass : '#4caf50',
-              color: backupStatus.loading ? theme.colors.textMuted : 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: backupStatus.loading ? 'not-allowed' : 'pointer',
-              fontWeight: '500',
-              transition: 'all 0.2s'
-            }}
-            title="Create a new database backup"
-          >
-            {backupStatus.loading ? '⏳ Backing up...' : '💾 Backup Now'}
-          </button>
-          <button
-            onClick={fetchBackupStatus}
-            disabled={backupStatus.loading}
-            style={{
-              padding: '4px 8px',
-              fontSize: '10px',
-              background: 'transparent',
-              color: theme.colors.textSecondary,
-              border: `1px solid ${theme.colors.glassBorder}`,
-              borderRadius: '6px',
-              cursor: backupStatus.loading ? 'not-allowed' : 'pointer',
-              fontWeight: '500',
-              transition: 'all 0.2s'
-            }}
-            title="Refresh backup status"
-          >
-            ↻
-          </button>
-        </div>
+        <BackupStatusBar
+          theme={theme}
+          backupStatus={backupStatus}
+          formatDateTime={formatDateTime}
+          triggerBackup={triggerBackup}
+          fetchBackupStatus={fetchBackupStatus}
+        />
 
         {/* Filter Buttons */}
         <div style={{

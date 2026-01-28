@@ -33,7 +33,7 @@
 2. Click **"Add"** button
 3. Configure your search engine:
    - **Sites to search**: 
-     - Option A: Enter specific websites (e.g., `celestyal.com`, `cruisecritic.com`)
+     - Option A: Enter specific websites (e.g., `example.com`, `example.org`)
      - Option B: Leave blank to search the entire web
    - **Name**: Give it a name (e.g., "Talia Search Engine")
    - **Language**: Select your preferred language
@@ -142,7 +142,7 @@ $env:GOOGLE_SEARCH_ENGINE_ID="your-actual-search-engine-id-here"
    - Start the UI: `cd talia-ui && npm run dev`
    - Navigate to Test Page
    - Select "GoogleSearch" component
-   - Enter a search query (e.g., "Celestyal Cruises")
+   - Enter a search query (e.g., "Example query")
    - If configured correctly, you should see search results
 
 ---

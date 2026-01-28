@@ -31,7 +31,7 @@
    - Click **"Add"** button
    - **Sites to search**: 
      - Leave blank to search entire web, OR
-     - Enter specific sites (e.g., `celestyal.com`)
+     - Enter specific sites (e.g., `example.com`)
    - **Name**: "Talia Search Engine" (or any name)
    - Click **"Create"**
 3. **Get Search Engine ID**
@@ -95,7 +95,7 @@ The server needs to restart to load the new environment variables.
    - Navigate to: http://localhost:5173
    - Go to the Test Page
    - Select "GoogleSearch" from the component list
-   - Enter a search query (e.g., "Celestyal Cruises")
+   - Enter a search query (e.g., "Example query")
    - Click "Search"
    - You should see Google search results!
 
@@ -112,7 +112,7 @@ SUPABASE_ANON_KEY=your-anon-key-here
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
 
 # Azure Synapse Configuration (Production Data)
-AZURE_SYNAPSE_SERVER=celestyaldataplatform-prd.sql.azuresynapse.net
+AZURE_SYNAPSE_SERVER=your-synapse.sql.azuresynapse.net
 AZURE_SYNAPSE_PORT=1433
 AZURE_SYNAPSE_DATABASE=CDP_Dedicated_SQL_DWH
 AZURE_SYNAPSE_USERNAME=RBryer

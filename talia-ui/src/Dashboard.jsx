@@ -20,6 +20,7 @@ import SailingSummary from "./components/focus-panels/SailingSummary/index";
 import MasterVoyagePerformanceSummary from "./components/focus-panels/MasterVoyagePerformanceSummary";
 import VoyageReport from "./components/focus-panels/VoyageReport";
 import BtopTerminal from "./components/focus-panels/BtopTerminal";
+import DirectSourceRequest from "./components/focus-panels/DirectSourceRequest";
 import UserProfile from "./components/UserProfile";
 import { useSupabaseAuth } from "./contexts/SupabaseAuthContext";
 import { normalizeRole, isAdmin } from "./utils/roleUtils";
@@ -948,6 +949,9 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
           </button>
           <button className="dashboard-btn" onClick={() => onAddPanel('btop-terminal', 'System Monitor (btop)')}>
             🖥️ System Monitor (btop)
+          </button>
+          <button className="dashboard-btn" onClick={() => onAddPanel('direct-source-request', 'Direct Source Request')}>
+            🔗 Direct Source Request
           </button>
         </div>
       </div>
@@ -2192,6 +2196,10 @@ function Dashboard({ user, mode, onModeChange }) {
               },
               "voyage-report": (props) => {
                 return <VoyageReport theme={theme} {...props} />;
+              },
+              // Direct Source Request - external GraphQL queries
+              "direct-source-request": (props) => {
+                return <DirectSourceRequest theme={theme} {...props} />;
               },
               // Admin components
               "admin-dashboard": AdminDashboard,

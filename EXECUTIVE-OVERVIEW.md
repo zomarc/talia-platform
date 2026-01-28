@@ -11,19 +11,19 @@
 
 ### What is Talia?
 
-**Talia Platform** is a comprehensive revenue and inventory management system designed specifically for the cruise industry. It provides real-time analytics, pricing optimization, and capacity management capabilities through an intuitive, customizable dashboard interface.
+**Talia Platform** is a comprehensive revenue and inventory management system. It provides real-time analytics, pricing optimization, and capacity management capabilities through an intuitive, customizable dashboard interface.
 
 ### Core Value Proposition
 
 - **Revenue Optimization**: Dynamic pricing analysis and revenue management tools
 - **Inventory Management**: Real-time cabin availability tracking and capacity planning
 - **Business Intelligence**: Interactive dashboards with customizable focus layouts
-- **Multi-Customer Ready**: Environment-based configuration supporting multiple cruise lines
+- **Multi-Customer Ready**: Environment-based configuration supporting multiple customers
 - **Data Integration**: Seamless synchronization with Azure Synapse Analytics
 
 ### Current Implementation
 
-**Reference Customer**: Celestyal Cruises  
+**Reference Implementation**: Internal demo data  
 **Deployment Status**: 0.1.0 (Pre-production), actively developing
 
 ---
@@ -84,7 +84,7 @@ Talia follows a **monorepo architecture** with clear separation between frontend
 
 1. **Separation of Concerns**: Clear boundaries between UI, API, and data layers
 2. **API-First Design**: GraphQL as the central data access layer
-3. **Multi-Customer Ready**: Environment-based configuration for different cruise lines
+3. **Multi-Customer Ready**: Environment-based configuration for different customers
 4. **Secure External Access**: UI exposed via ngrok tunnel, backend remains local-only
 5. **Modular Components**: Reusable UI components and focus panels
 
@@ -256,13 +256,13 @@ Talia is designed to evolve into a comprehensive three-tier business intelligenc
 
 ### Planned Enhancements
 
-#### Phase 2: Server Evolution (v2.1.0 - v2.3.0)
+#### Phase 2: Server Evolution (v0.3.0 - v0.5.0)
 - **Real-time Subscriptions**: Live data updates via GraphQL subscriptions
 - **Advanced Caching**: Redis integration for performance
 - **External Integrations**: API connections to additional data sources
 - **Microservices Preparation**: Service decomposition for scalability
 
-#### Phase 3: Analytics Engine (v3.0.0 - v3.2.0)
+#### Phase 3: Analytics Engine (v1.0.0 - v1.2.0)
 - **Python Analytics Platform**: Containerized analytics services
 - **Machine Learning**: Predictive modeling for bookings and revenue
 - **Statistical Analysis**: Advanced forecasting and trend analysis
@@ -322,7 +322,7 @@ Talia is designed to evolve into a comprehensive three-tier business intelligenc
 - **Status**: 0.1.0 (Alpha - Active Development) - Active development
 - **Core Features**: Implemented and functional
 - **Stability**: Pre-release, not production-ready
-- **Customer**: Celestyal Cruises (reference implementation)
+- **Customer**: Reference implementation
 
 ### Key Strengths
 - ✅ Modern, scalable architecture
@@ -335,7 +335,7 @@ Talia is designed to evolve into a comprehensive three-tier business intelligenc
 1. Continue feature development toward v1.0.0
 2. Prepare for beta release (v0.9.0)
 3. Plan production deployment
-4. Begin analytics engine development (v3.0.0)
+4. Begin analytics engine development (v1.0.0)
 
 ### Investment Areas
 - **Development**: Feature completion and testing

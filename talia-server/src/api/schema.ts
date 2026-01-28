@@ -585,6 +585,68 @@ export const typeDefs = `#graphql
     to: String!
   }
 
+  type DateRangeConfig {
+    environment: String!
+    hasOverride: Boolean!
+    dateRange: DateRange
+    source: String!  # "environment variables" or "sync.config.json"
+    datasetDefault: DateRange  # Default from dataset config (if available)
+  }
+
+  # ============================================================================
+  # Talia Configuration Types (Database-backed)
+  # ============================================================================
+  
+  type TaliaEnvironment {
+    name: String!
+    description: String
+  }
+  
+  type IntegrationDateRange {
+    id: Int!
+    integrationName: String!
+    displayName: String!
+    description: String
+    dateFrom: String!
+    dateTo: String!
+    dateColumn: String
+    isActive: Boolean!
+    isDefault: Boolean!
+    createdAt: String
+    updatedAt: String
+  }
+  
+  type DataSource {
+    id: Int!
+    sourceName: String!
+    displayName: String!
+    sourceType: String!
+    isActive: Boolean!
+    isAvailable: Boolean
+    healthStatus: String
+    lastHealthCheck: String
+    description: String
+  }
+  
+  type TaliaConfigSummary {
+    environment: TaliaEnvironment!
+    defaultDateRange: IntegrationDateRange
+    dateRanges: [IntegrationDateRange!]!
+    dataSources: [DataSource!]!
+    settings: JSON
+  }
+  
+  input IntegrationDateRangeInput {
+    integrationName: String
+    displayName: String
+    description: String
+    dateFrom: String!
+    dateTo: String!
+    dateColumn: String
+    isActive: Boolean
+    isDefault: Boolean
+  }
+
   type HistoricalTrendPoint {
     date: String!
     totalResults: Int!
@@ -771,6 +833,15 @@ export const typeDefs = `#graphql
     backupMetadata: BackupMetadata  # Get database backup status and info
     dataMatch(filters: DataMatchFilters): DataMatchResponse!  # Data completeness cross-tab
     
+    # Date Range Configuration (legacy - env vars)
+    dateRangeConfig: DateRangeConfig!
+    
+    # Talia Configuration (database-backed)
+    taliaConfig: TaliaConfigSummary!
+    integrationDateRanges: [IntegrationDateRange!]!
+    integrationDateRange(id: Int!): IntegrationDateRange
+    dataSources: [DataSource!]!
+    
     # Legacy queries (for backward compatibility)
     books: [Book!]!
   }
@@ -797,6 +868,12 @@ export const typeDefs = `#graphql
     
     # Data Sync
     syncTable(tableName: String!, dataset: String, forceFullSync: Boolean): SyncResult!
+    syncInventoryStatus(dateFrom: String!, dateTo: String!): SyncResult!
+    
+    # Configuration Management
+    updateIntegrationDateRange(id: Int!, input: IntegrationDateRangeInput!): IntegrationDateRange!
+    createIntegrationDateRange(input: IntegrationDateRangeInput!): IntegrationDateRange!
+    setDefaultDateRange(id: Int!): IntegrationDateRange!
     
     # Target Profiles
     createTargetProfile(input: TargetProfileInput!): TargetProfile!
@@ -878,12 +955,14 @@ export const typeDefs = `#graphql
     type: String
     loadMethod: String  # Optional - frontend calculates from tableSources config
     rowCount: Int!
-    dateRange: TableDateRange!
+    dateRange: TableDateRange!  # Configured sync date range (what should be synced)
+    actualDataRange: TableDateRange  # Actual data range in table (what's actually loaded)
     latestSnapshotDate: String
     lastSync: String
     syncDuration: Int
     recordsProcessed: Int
     changesDetected: Int
+    lastError: String
     syncStatus: String!
     dataStatus: String!
     status: String!

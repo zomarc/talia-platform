@@ -15,7 +15,7 @@ This guide covers deploying the complete Talia stack (Supabase + GraphQL server)
 **On your laptop:**
 
 ```bash
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
+cd /path/to/talia
 ./copy-to-minipc-docker.sh
 ```
 
@@ -60,7 +60,7 @@ If you need to customize environment variables, create `.env` file:
 ```bash
 cd ~/talia-docker
 cat > .env << EOF
-AZURE_SYNAPSE_SERVER=celestyaldataplatform-prd.sql.azuresynapse.net
+AZURE_SYNAPSE_SERVER=your-synapse.sql.azuresynapse.net
 AZURE_SYNAPSE_PORT=1433
 AZURE_SYNAPSE_DATABASE=CDP_Dedicated_SQL_DWH
 AZURE_SYNAPSE_USERNAME=RBryer

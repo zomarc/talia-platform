@@ -1,11 +1,11 @@
-# Talia Business Intelligence Dashboard v2.0.0
-## Enhanced Dual-Project Baseline
+# Talia Business Intelligence Dashboard v0.1.0
+## Initial Product Baseline
 
 A comprehensive business intelligence dashboard with enhanced GraphQL integration, focus management, and role-based access control. Built with React, Apollo GraphQL, and Dockview.
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](./VERSION-2.0.0.md)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](./VERSION-0.2.0.md)
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](./LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-Version%202.0.0-green.svg)](./VERSION-2.0.0.md)
+[![Documentation](https://img.shields.io/badge/docs-Version%200.2.0-green.svg)](./VERSION-0.2.0.md)
 
 ---
 
@@ -13,7 +13,7 @@ A comprehensive business intelligence dashboard with enhanced GraphQL integratio
 
 ```bash
 # 1. Start both servers
-cd /Users/russell/Work/AA-Celestyal/Dev
+cd /path/to/talia
 ./start-dev.sh
 
 # 2. Access applications
@@ -23,12 +23,12 @@ cd /Users/russell/Work/AA-Celestyal/Dev
 # 3. Add panels from sidebar to test integration
 ```
 
-## 🎯 **What's New in v2.0.0**
+## 🎯 **What's New in v0.1.0**
 
-### **Enhanced Dual-Project Architecture**
-- **Frontend (talia-ui v2.0.0)**: React dashboard with Apollo Client integration
-- **Backend (talia-graphql-server v2.0.0)**: Enhanced GraphQL server with focus management
-- **Monorepo Configuration**: Seamless development workflow
+### **Product Architecture**
+- **Frontend (talia-ui v0.1.0)**: React dashboard with Apollo Client integration
+- **Backend (talia-server v0.1.0)**: GraphQL server with core data access
+- **Monorepo Configuration**: Unified development workflow
 
 ### **Advanced Features**
 - ✅ **Role-Based Access Control**: ADMIN, MANAGER, USER, GUEST permissions
@@ -41,7 +41,7 @@ cd /Users/russell/Work/AA-Celestyal/Dev
 
 ## 🏗️ **Architecture**
 
-### **Current Architecture (v2.0.0)**
+### **Current Architecture (v0.1.0)**
 ```
 Frontend (React + Apollo) ←→ GraphQL Server ←→ Data Sources
      ↓                           ↓
@@ -50,7 +50,7 @@ Role-Based UI              Role-Based Access
 User Interactions         Focus Management
 ```
 
-### **Future Architecture (v3.0.0+)**
+### **Future Architecture (v1.0.0+)**
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   talia-ui      │    │  talia-server   │    │  talia-engine   │
@@ -63,9 +63,9 @@ User Interactions         Focus Management
 
 ### **Project Structure**
 ```
-talia-monorepo v2.0.0/
-├── talia-ui v2.0.0/              # React Frontend
-├── talia-graphql-server v2.0.0/  # GraphQL Backend
+talia-monorepo v0.1.0/
+├── talia-ui v0.1.0/              # React Frontend
+├── talia-server v0.1.0/          # GraphQL Backend
 ├── netlify/                      # Deployment config
 ├── start-dev.sh                  # Development script
 └── package.json                  # Monorepo config
@@ -137,7 +137,7 @@ npm run deploy:production
 
 ## 📊 **Technical Stack**
 
-### **Frontend (talia-ui v2.0.0)**
+### **Frontend (talia-ui v0.1.0)**
 - **Framework**: React 19.1.1
 - **Build Tool**: Vite 7.1.2
 - **GraphQL**: Apollo Client 4.0.3
@@ -146,7 +146,7 @@ npm run deploy:production
 - **Tables**: Tabulator 5.6.1
 - **Auth**: Supabase Authentication
 
-### **Backend (talia-graphql-server v2.0.0)**
+### **Backend (talia-server v0.1.0)**
 - **Server**: Apollo Server 5.0.0
 - **Language**: TypeScript 5.9.2
 - **Runtime**: Node.js 18+
@@ -160,7 +160,7 @@ npm run deploy:production
 ### **Quick Start & Development**
 - **[Quick Start Guide](./QUICK-START-GUIDE.md)** - 3-step setup guide
 - **[Development Workflow](./DEVELOPMENT-WORKFLOW.md)** - Comprehensive development guide
-- **[Version 2.0.0 Details](./VERSION-2.0.0.md)** - Detailed version documentation
+- **[Version 0.2.0 Details](./VERSION-0.2.0.md)** - Detailed version documentation
 
 ### **Configuration**
 - **[Changelog](./CHANGELOG.md)** - Version history and changes
@@ -210,34 +210,34 @@ query GetKPIs {
 
 ### **v2.x.x Series - Two-Tier Architecture** (Stable/Demonstrable)
 
-#### **v2.1.0 - Focus Management**
+#### **v0.3.0 - Focus Management**
 - Real InstantDB authentication integration
 - Focus management UI implementation
 - Custom focus creation interface
 
-#### **v2.2.0 - Real-time Features**
+#### **v0.4.0 - Real-time Features**
 - GraphQL subscriptions for live data
 - Real-time collaboration features
 - Advanced data visualization
 
-#### **v2.3.0 - Server Evolution**
+#### **v0.5.0 - Server Evolution**
 - talia-graphql-server → talia-server transformation
 - Enhanced data integration capabilities
 - Performance optimization
 
 ### **v3.x.x Series - Three-Tier Architecture** (Production Ready)
 
-#### **v3.0.0 - Analytics Engine Introduction**
+#### **v1.0.0 - Analytics Engine Introduction**
 - talia-engine implementation (Python analytics)
 - Containerized Python services
 - Integration with talia-server
 
-#### **v3.1.0 - Advanced Analytics**
+#### **v1.1.0 - Advanced Analytics**
 - Machine learning pipelines
 - Predictive modeling capabilities
 - Statistical analysis tools
 
-#### **v3.2.0 - Platform Integration**
+#### **v1.2.0 - Platform Integration**
 - Full three-tier platform
 - Advanced collaboration features
 - Enterprise scalability
@@ -265,7 +265,7 @@ query GetKPIs {
 
 ## 📄 **License**
 
-This project is proprietary software developed for Celestyal Cruises. All rights reserved.
+This project is proprietary software developed for Talia. All rights reserved.
 
 ---
 
@@ -284,7 +284,7 @@ This project is proprietary software developed for Celestyal Cruises. All rights
 
 ---
 
-**Talia v2.0.0 - Enhanced Dual-Project Baseline**  
+**Talia v0.1.0 - Initial Product Baseline**
 *Empowering business intelligence through modern, role-based dashboards*
 
-Built with ❤️ for Celestyal Cruises
+Built for Talia

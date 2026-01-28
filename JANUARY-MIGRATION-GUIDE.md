@@ -433,7 +433,7 @@ ngrok config add-authtoken <your-ngrok-token>
 ### Step 5.3: Create ngrok Configuration
 
 ```bash
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
+cd /path/to/talia
 
 # Copy example config
 cp ngrok.yml.example ngrok.yml
@@ -448,7 +448,7 @@ Example `ngrok.yml`:
 version: "3"
 
 tunnels:
-  celestyal:
+  talia:
     proto: http
     addr: 5173
     domain: taliahub.com  # Or remove for free ngrok URL
@@ -462,10 +462,10 @@ tunnels:
 
 **Terminal 3 - ngrok:**
 ```bash
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
+cd /path/to/talia
 
 # Start ngrok with config file
-ngrok start --config ngrok.yml celestyal
+ngrok start --config ngrok.yml talia
 
 # Or without config file (free tier):
 ngrok http 5173
@@ -517,7 +517,7 @@ Provide your client with:
 
 4. **Start ngrok** (when client needs access):
    ```bash
-   ngrok start --config ngrok.yml celestyal
+   ngrok start --config ngrok.yml talia
    ```
 
 ### Make Supabase Run as Service (Optional)
@@ -657,7 +657,7 @@ supabase status
 # Start everything locally
 cd talia-server && npm start &
 cd talia-ui && npm run dev &
-ngrok start --config ngrok.yml celestyal
+ngrok start --config ngrok.yml talia
 
 # Database backup
 cd talia-server && npm run db-backup

@@ -489,6 +489,55 @@ When running `npm run sync-all`:
 
 ## Configuration
 
+### Date Range Configuration
+
+Date ranges for data integration can be configured via environment variables to override the defaults in `sync.config.json`. This allows different environments to use different data subsets without modifying configuration files.
+
+#### Environment Variables
+
+Add these to your `.env` file:
+
+```bash
+# Date Range Configuration for Data Integration
+# Override date ranges from sync.config.json datasets
+# Leave empty to use dataset defaults from sync.config.json
+SYNC_DATE_RANGE_FROM=
+SYNC_DATE_RANGE_TO=
+ENVIRONMENT=local
+```
+
+#### Configuration Examples
+
+**Local Development (Smaller Subset):**
+```bash
+SYNC_DATE_RANGE_FROM=2025-11-01
+SYNC_DATE_RANGE_TO=2025-12-31
+ENVIRONMENT=local
+```
+
+**Staging (Larger Complete Set):**
+```bash
+SYNC_DATE_RANGE_FROM=2025-09-01
+SYNC_DATE_RANGE_TO=2025-12-31
+ENVIRONMENT=staging
+```
+
+#### How It Works
+
+1. **Priority**: Environment variables override dataset date ranges in `sync.config.json`
+2. **Application**: Date ranges are applied to:
+   - All table filters with `operator: "between"`
+   - All replace strategies with `from` and `to` dates
+   - WHERE clauses in SQL queries
+3. **Fallback**: If environment variables are not set, the system uses date ranges from the dataset configuration
+4. **Validation**: Both `SYNC_DATE_RANGE_FROM` and `SYNC_DATE_RANGE_TO` must be set together (YYYY-MM-DD format)
+
+#### Logging
+
+When a sync operation starts, the system logs which date range source is being used:
+- `📅 Date range override active (local): Using 2025-11-01 to 2025-12-31 (overriding dataset default: 2025-09-01 to 2025-12-31)`
+- `📅 Date range from dataset config: 2025-09-01 to 2025-12-31`
+
 ### Sync Configuration (`sync.config.json`)
 
 The sync system is fully configuration-driven. Key sections:

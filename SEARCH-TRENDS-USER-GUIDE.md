@@ -53,7 +53,7 @@ To start tracking a query like "cruise holidays":
 - "Mediterranean cruises"
 - "Greek islands cruise"
 - "cruise packages 2026"
-- "Celestyal cruises"
+- "Example search term"
 
 ## Visual Guide
 

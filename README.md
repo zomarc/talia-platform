@@ -1,6 +1,6 @@
 # Talia Platform
 
-Business Intelligence Dashboard for Celestyal Cruises
+Revenue and inventory management system
 
 ## Quick Start
 
@@ -45,7 +45,7 @@ cd talia-ui && npm run dev
 - **GraphQL**: http://localhost:4000/graphql
 - **Supabase Studio**: http://localhost:54323
 
-### Staging (Production Demo)
+### Staging (Review)
 - **Public URL**: https://taliahub.com
 - **Local Access**: http://192.168.1.120:5173
 - **GraphQL**: http://192.168.1.120:4000/graphql

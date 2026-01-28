@@ -3,7 +3,7 @@
 
 **Vision Document**  
 **Date**: January 2, 2025  
-**Current Baseline**: v2.0.0 Enhanced Dual-Project  
+**Current Baseline**: v0.1.0 Initial Product Baseline  
 
 ---
 
@@ -51,11 +51,11 @@ Talia will evolve into a comprehensive three-tier business intelligence platform
 - **Future**: Advanced React patterns, real-time subscriptions, mobile support
 
 #### **Key Features**
-- ✅ **Current**: Enhanced dual-project baseline
+- ✅ **Current**: Initial product baseline
 - 🔮 **Future**: Advanced focus management, real-time collaboration, mobile responsive
 
 ### **🔌 talia-server (Data Gateway)**
-**Current**: talia-graphql-server  
+**Current**: talia-server  
 **Future**: Comprehensive data access layer
 
 #### **Responsibilities**
@@ -98,12 +98,12 @@ Talia will evolve into a comprehensive three-tier business intelligence platform
 
 ## 🔄 **Data Flow Architecture**
 
-### **Current Flow (v2.0.0)**
+### **Current Flow (v0.1.0)**
 ```
-talia-ui ←→ talia-graphql-server ←→ Static Data
+talia-ui ←→ talia-server ←→ Data Sources
 ```
 
-### **Future Flow (v3.0.0+)**
+### **Future Flow (v1.0.0+)**
 ```
 talia-ui ←→ talia-server ←→ talia-engine
     ↓           ↓              ↓
@@ -125,52 +125,52 @@ Dockview   External APIs  ML Pipelines
 
 ## 🚀 **Evolution Roadmap**
 
-### **Phase 1: Current (v2.0.0)** ✅
-**Status**: Enhanced Dual-Project Baseline
-- ✅ talia-ui with enhanced GraphQL integration
-- ✅ talia-graphql-server with comprehensive schema
+### **Phase 1: Current (v0.1.0)** ✅
+**Status**: Initial Product Baseline
+- ✅ talia-ui with GraphQL integration
+- ✅ talia-server with core schema
 - ✅ Development workflow and documentation
 
-### **Phase 2: Server Evolution (v2.1.0 - v2.3.0)**
+### **Phase 2: Server Evolution (v0.3.0 - v0.5.0)**
 **Target**: Transform talia-graphql-server → talia-server
 
-#### **v2.1.0 - Focus Management**
+#### **v0.3.0 - Focus Management**
 - Enhanced GraphQL schema for focus management
 - Real-time subscriptions
 - Advanced caching strategies
 
-#### **v2.2.0 - Data Integration**
+#### **v0.4.0 - Data Integration**
 - External system integrations
 - Advanced data transformation
 - Real-time data pipelines
 
-#### **v2.3.0 - Server Optimization**
+#### **v0.5.0 - Server Optimization**
 - Performance optimization
 - Advanced GraphQL features
 - Microservices preparation
 
-### **Phase 3: Engine Introduction (v3.0.0 - v3.2.0)**
+### **Phase 3: Engine Introduction (v1.0.0 - v1.2.0)**
 **Target**: Introduce talia-engine
 
-#### **v3.0.0 - Engine Foundation**
+#### **v1.0.0 - Engine Foundation**
 - Python containerized services
 - Basic analytics models
 - Integration with talia-server
 
-#### **v3.1.0 - Advanced Analytics**
+#### **v1.1.0 - Advanced Analytics**
 - Machine learning pipelines
 - Predictive modeling
 - Statistical analysis
 
-#### **v3.2.0 - AI Integration**
+#### **v1.2.0 - AI Integration**
 - Advanced AI features
 - Automated insights
 - Business intelligence automation
 
-### **Phase 4: Platform Integration (v4.0.0+)**
+### **Phase 4: Platform Integration (v2.x.x+)**
 **Target**: Full three-tier platform
 
-#### **v4.0.0 - Enterprise Platform**
+#### **v2.x.x - Enterprise Platform**
 - Complete three-tier architecture
 - Advanced collaboration features
 - Enterprise security and scalability

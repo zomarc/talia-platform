@@ -11,7 +11,7 @@ This guide sets up Supabase as Docker containers on your miniPC (192.168.1.120).
 **On your laptop:**
 
 ```bash
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
+cd /path/to/talia
 scp setup-docker-supabase.sh zomarc@192.168.1.120:~/
 ```
 

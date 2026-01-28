@@ -1,7 +1,7 @@
-# Talia Dual Project Development Workflow
+# Talia Development Workflow
 
 ## 🎯 Overview
-This document outlines the development workflow for working with both `talia-ui` (frontend) and `talia-graphql-server` (backend) simultaneously.
+This document outlines the development workflow for working with both `talia-ui` (frontend) and `talia-server` (backend) simultaneously.
 
 **📋 Versioning Strategy**: See [VERSIONING-STRATEGY.md](./VERSIONING-STRATEGY.md) for our official stability-driven versioning approach.
 
@@ -12,7 +12,7 @@ This document outlines the development workflow for working with both `talia-ui`
 │   ├── src/
 │   ├── package.json
 │   └── vite.config.js
-└── talia-graphql-server/     # GraphQL backend
+└── talia-server/             # GraphQL backend
     ├── src/
     ├── data/
     ├── package.json
@@ -23,14 +23,14 @@ This document outlines the development workflow for working with both `talia-ui`
 
 ### Terminal 1: Frontend (talia-ui)
 ```bash
-cd /Users/russell/Work/AA-Celestyal/Dev/talia-ui
+cd /path/to/talia/talia-ui
 npm run dev
 # Runs on http://localhost:5173
 ```
 
-### Terminal 2: Backend (talia-graphql-server)
+### Terminal 2: Backend (talia-server)
 ```bash
-cd /Users/russell/Work/AA-Celestyal/Dev/talia-graphql-server
+cd /path/to/talia/talia-server
 npm run start
 # Runs on http://localhost:4000
 ```
@@ -38,12 +38,12 @@ npm run start
 ### Terminal 3: Development Commands
 ```bash
 # Navigate between projects
-cd /Users/russell/Work/AA-Celestyal/Dev/talia-ui      # Frontend
-cd /Users/russell/Work/AA-Celestyal/Dev/talia-graphql-server  # Backend
+cd /path/to/talia/talia-ui      # Frontend
+cd /path/to/talia/talia-server  # Backend
 
 # Or use aliases (add to ~/.zshrc)
-alias talia-ui="cd /Users/russell/Work/AA-Celestyal/Dev/talia-ui"
-alias talia-api="cd /Users/russell/Work/AA-Celestyal/Dev/talia-graphql-server"
+alias talia-ui="cd /path/to/talia/talia-ui"
+alias talia-api="cd /path/to/talia/talia-server"
 ```
 
 ## 🔄 Development Workflow

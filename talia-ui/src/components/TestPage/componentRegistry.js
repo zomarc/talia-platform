@@ -27,6 +27,7 @@ import BtopTerminal from '../focus-panels/BtopTerminal';
 import DataTypesValidation from '../dev/DataTypesValidation';
 import MasterVoyagePerformanceSummaryContainer from '../focus-panels/MasterVoyagePerformanceSummary';
 import VoyageReportContainer from '../focus-panels/VoyageReport';
+import DirectSourceRequestContainer from '../focus-panels/DirectSourceRequest';
 
 /**
  * Component registry with metadata
@@ -307,6 +308,17 @@ export const componentRegistry = {
     },
     dataRequirements: 'Uses master_sail table data with shared formatters from dataTypes library.',
     filePath: 'src/components/focus-panels/VoyageReport/index.jsx'
+  },
+  DirectSourceRequest: {
+    component: DirectSourceRequestContainer,
+    category: 'External',
+    description: 'Direct Source Request - Queries external GraphQL endpoints (Celestyal B2B API) directly based on current persisted event context. Displays voyage availability data.',
+    usesMockData: false,
+    props: {
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Queries external GraphQL endpoint at https://thaliatest.b2b.celestyal.com:3000/graphql. Uses availableVoyages query. Responds to persisted events and talia:sail.select events.',
+    filePath: 'src/components/focus-panels/DirectSourceRequest/index.jsx'
   }
 };
 

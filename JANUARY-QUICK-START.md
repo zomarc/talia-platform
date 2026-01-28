@@ -218,7 +218,7 @@ ngrok config add-authtoken <your-token>
 
 ### ✅ Create ngrok Config
 ```bash
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
+cd /path/to/talia
 cp ngrok.yml.example ngrok.yml
 # Edit ngrok.yml with your domain and basic auth credentials
 ```
@@ -226,8 +226,8 @@ cp ngrok.yml.example ngrok.yml
 ### ✅ Start ngrok
 **Terminal 3:**
 ```bash
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
-ngrok start --config ngrok.yml celestyal
+cd /path/to/talia
+ngrok start --config ngrok.yml talia
 # Or free tier: ngrok http 5173
 ```
 
@@ -264,7 +264,7 @@ cd talia-server && npm start
 cd talia-ui && npm run dev
 
 # Terminal 3 (when client needs access)
-ngrok start --config ngrok.yml celestyal
+ngrok start --config ngrok.yml talia
 ```
 
 ---

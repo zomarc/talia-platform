@@ -26,7 +26,7 @@
 ## Environment Architecture
 
 ### 1. **Local (Laptop)**
-- **Path**: `/Users/russell/Work/AA-Celestyal/Dev/talia`
+- **Path**: `/path/to/talia`
 - **Purpose**: Development environment
 - **Services**:
   - Supabase (Docker): `localhost:54321`

@@ -169,7 +169,7 @@ Add to your crontab:
 crontab -e
 
 # Add this line (runs every Monday at 9 AM)
-0 9 * * 1 cd /Users/russell/Work/AA-Celestyal/Dev/talia && npm run generate:overview
+0 9 * * 1 cd /path/to/talia && npm run generate:overview
 ```
 
 ### Git Hook (Pre-commit)
@@ -177,7 +177,7 @@ crontab -e
 Create `.git/hooks/pre-commit`:
 ```bash
 #!/bin/bash
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
+cd /path/to/talia
 npm run generate:overview
 git add EXECUTIVE-OVERVIEW.md
 ```
@@ -231,7 +231,7 @@ Add to your CI/CD pipeline:
 **Error: "Cannot find module"**
 ```bash
 # Make sure you're in the project root
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
+cd /path/to/talia
 npm run generate:overview
 ```
 

@@ -139,7 +139,7 @@ query SearchGoogle($filters: GoogleSearchFilters!) {
 ```json
 {
   "filters": {
-    "query": "Celestyal Cruises",
+    "query": "Example query",
     "num": 10,
     "start": 1,
     "dateRestrict": "m1"
@@ -153,7 +153,7 @@ query SearchGoogle($filters: GoogleSearchFilters!) {
 import GoogleSearchContainer from './components/focus-panels/GoogleSearch';
 
 // With initial query
-<GoogleSearchContainer initialQuery="Celestyal Cruises" />
+<GoogleSearchContainer initialQuery="Example query" />
 
 // With search options
 <GoogleSearchContainer 

@@ -9,86 +9,60 @@
 
 ## 🎯 **Strategy Overview**
 
-Talia uses a **stability-driven versioning strategy** designed for development-stage projects that require stable, demonstrable artifacts while allowing for experimental feature development.
+Talia uses a **development-first versioning strategy**. All releases before production use `0.y.z`. The first production release starts at `1.0.0`.
 
 ### **Core Principle**
-*"Every major version (x.0.0) represents a stable, confirmed, deployable baseline that can be demonstrated to stakeholders with confidence."*
+*"0.x.y indicates development baselines and testable releases. 1.x.x marks the first production release."*
 
 ---
 
 ## 📋 **Version Format: x.y.z**
 
-### **x (Major - Stability Level)**
-Defines the **stability and maturity level** of the system:
+### **x (Major - Production Level)**
+- **0.x.x** = Development only (not production)
+- **1.x.x** = First production release
+- **2.x.x** = Enterprise/advanced production series
 
-| Version | Stability Level | Description | Demonstration Status |
-|---------|----------------|-------------|---------------------|
-| **1.x.x** | Experimental | Development/Proof-of-Concept | Internal only |
-| **2.x.x** | Stable/Demonstrable | Working baseline, feature complete | Stakeholder ready |
-| **3.x.x** | Production Ready | Deployed, monitored, supported | Customer ready |
-| **4.x.x** | Enterprise/Advanced | Advanced features, scalability | Enterprise ready |
+### **y (Minor - Baseline / Feature Release)**
+- **0.y.0** = Baseline or major feature release
+- **0.y.z** = Testable dev iterations within that baseline
 
-### **y (Minor - Feature/Release)**
-Represents **feature branches and major additions** to the current stability level:
-
-- **x.0.x** = Baseline for stability level
-- **x.1.x** = First major feature set
-- **x.2.x** = Second major feature set
-- **x.3.x** = Third major feature set
-- etc.
-
-### **z (Patch - Iterations)**
-Handles **minor enhancements and bug fixes** to the main development path:
-
-- **x.y.0** = Initial feature implementation
-- **x.y.1** = Bug fixes and refinements
-- **x.y.2** = Minor enhancements
-- **x.y.3** = Additional refinements
-- etc.
+### **z (Patch - Testable Dev Release)**
+- **0.y.1, 0.y.2, ...** = Testable dev iterations
 
 ---
 
 ## 🚀 **Current Version Status**
 
-### **Talia v2.0.0 - Stable/Demonstrable Baseline**
-- **Status**: ✅ **STABLE & DEMONSTRABLE**
-- **Description**: Enhanced dual-project baseline with GraphQL integration
-- **Demonstration Ready**: ✅ Stakeholder presentations
-- **Deployment Ready**: ✅ Netlify configuration
-- **Next Target**: v2.1.0 (Focus Management Features)
+### **Talia v0.1.0 - Dev Baseline**
+- **Status**: ✅ **DEV BASELINE**
+- **Description**: Initial product baseline with core revenue and inventory features
+- **Next Target**: v0.2.0 (Enhanced data features)
 
 ### **Version Roadmap**
 
-#### **v2.x.x Series - Stable/Demonstrable (Two-Tier Architecture)**
-- **v2.0.0** ✅ - Enhanced dual-project baseline (Current)
-- **v2.1.0** 🎯 - Focus management implementation
-- **v2.2.0** 🔮 - Real-time features and subscriptions
-- **v2.3.0** 🔮 - talia-graphql-server → talia-server evolution
+#### **v0.x.x Series - Development (Two-Tier Architecture)**
+- **v0.1.0** ✅ - Initial dev baseline (Current)
+- **v0.2.0** 🎯 - Enhanced data features
+- **v0.3.0** 🔮 - Focus management implementation
+- **v0.4.0** 🔮 - Real-time features and subscriptions
+- **v0.5.0** 🔮 - talia-graphql-server → talia-server evolution
 
-#### **v3.x.x Series - Production Ready (Three-Tier Architecture)**
-- **v3.0.0** 🔮 - talia-engine introduction (Python analytics)
-- **v3.1.0** 🔮 - Advanced analytics and ML pipelines
-- **v3.2.0** 🔮 - Full three-tier platform integration
+#### **v1.x.x Series - Production Ready (Three-Tier Architecture)**
+- **v1.0.0** 🔮 - First production release
+- **v1.1.0** 🔮 - Advanced analytics and ML pipelines
+- **v1.2.0** 🔮 - Full three-tier platform integration
 
-#### **v4.x.x Series - Enterprise/Advanced**
-- **v4.0.0** 🔮 - Enterprise features and scalability
-- **v4.1.0** 🔮 - Advanced AI and automation
-- **v4.2.0** 🔮 - Multi-tenant and advanced collaboration
+#### **v2.x.x Series - Enterprise/Advanced**
+- **v2.x.x** 🔮 - Enterprise features and scalability
+- **v2.x.x** 🔮 - Advanced AI and automation
+- **v2.x.x** 🔮 - Multi-tenant and advanced collaboration
 
 ---
 
 ## 📊 **Version Promotion Criteria**
 
-### **Promoting to Next Major Version (x → x+1)**
-
-#### **1.x.x → 2.x.x (Experimental → Stable)**
-- ✅ All core features implemented and tested
-- ✅ Comprehensive documentation complete
-- ✅ Deployment configuration ready
-- ✅ Stakeholder demonstration approved
-- ✅ Development workflow established
-
-#### **2.x.x → 3.x.x (Stable → Production)**
+### **Promoting to Production (0.x.x → 1.0.0)**
 - ✅ Production deployment successful
 - ✅ Performance benchmarks met
 - ✅ Security audit completed
@@ -96,7 +70,7 @@ Handles **minor enhancements and bug fixes** to the main development path:
 - ✅ Support procedures established
 - ✅ Customer acceptance testing passed
 
-#### **3.x.x → 4.x.x (Production → Enterprise)**
+### **Promoting to Enterprise (1.x.x → 2.x.x)**
 - ✅ Enterprise security requirements met
 - ✅ Scalability testing completed
 - ✅ Multi-tenant support implemented
@@ -121,25 +95,19 @@ Handles **minor enhancements and bug fixes** to the main development path:
 
 ## 🎮 **Demonstration Guidelines**
 
-### **v1.x.x - Experimental**
-- **Audience**: Development team only
-- **Purpose**: Proof-of-concept validation
-- **Stability**: May break, experimental features
-- **Documentation**: Internal notes only
+### **v0.x.x - Development**
+- **Audience**: Internal + external review
+- **Purpose**: Demonstrable dev baseline
+- **Stability**: May change, not production
+- **Documentation**: Development and review guides
 
-### **v2.x.x - Stable/Demonstrable** ✅ **CURRENT**
-- **Audience**: Stakeholders, management, potential users
-- **Purpose**: Feature demonstration, progress validation
-- **Stability**: Stable core, new features may be experimental
-- **Documentation**: Complete user and developer guides
-
-### **v3.x.x - Production Ready**
+### **v1.x.x - Production**
 - **Audience**: End users, customers
 - **Purpose**: Live system operation
 - **Stability**: Fully stable, supported, monitored
 - **Documentation**: Production deployment and support guides
 
-### **v4.x.x - Enterprise/Advanced**
+### **v2.x.x - Enterprise/Advanced**
 - **Audience**: Enterprise customers, advanced users
 - **Purpose**: Advanced business intelligence features
 - **Stability**: Enterprise-grade reliability
@@ -149,17 +117,17 @@ Handles **minor enhancements and bug fixes** to the main development path:
 
 ## 🔧 **Development Workflow**
 
-### **Stable Baseline Development (v2.0.x)**
+### **Dev Baseline Development (v0.2.x)**
 ```bash
 # Work on stable baseline improvements
 git checkout main
 git pull origin main
 # Make bug fixes and minor enhancements
 git commit -m "fix: resolve GraphQL query issue"
-git tag v2.0.1
+git tag v0.2.1
 ```
 
-### **Feature Branch Development (v2.1.x)**
+### **Feature Branch Development (v0.3.x)**
 ```bash
 # Create feature branch
 git checkout -b feature/focus-management
@@ -167,22 +135,22 @@ git checkout -b feature/focus-management
 git commit -m "feat: implement focus management UI"
 # Test and refine
 git commit -m "fix: resolve focus persistence issue"
-git tag v2.1.0
+git tag v0.3.0
 # Merge to main when ready
 git checkout main
 git merge feature/focus-management
 ```
 
-### **Major Version Promotion (v2.x.x → v3.0.0)**
+### **Major Version Promotion (v0.x.x → v1.0.0)**
 ```bash
 # Create release branch
-git checkout -b release/v3.0.0
+git checkout -b release/v1.0.0
 # Complete production readiness tasks
 git commit -m "feat: production deployment configuration"
-git tag v3.0.0
+git tag v1.0.0
 # Merge to main
 git checkout main
-git merge release/v3.0.0
+git merge release/v1.0.0
 ```
 
 ---
@@ -190,39 +158,39 @@ git merge release/v3.0.0
 ## 📈 **Version History Tracking**
 
 ### **Current Status**
-- **v2.0.0** ✅ - Enhanced Dual-Project Baseline (January 2, 2025)
+- **v0.1.0** ✅ - Initial dev baseline (2025)
 - **Commit**: `2c6553c`
-- **Tags**: `v2.0.0`, `talia-ui-v2.0.0`, `talia-graphql-server-v2.0.0`
+- **Tags**: `v0.1.0`, `talia-ui-v0.1.0`, `talia-server-v0.1.0`
 
 ### **Planned Releases**
 
-#### **Q1 2025 - v2.1.0 Series**
-- **v2.1.0** - Focus management implementation
-- **v2.1.1** - Focus management refinements
-- **v2.1.2** - Focus sharing features
+#### **Q1 2025 - v0.3.0 Series**
+- **v0.3.0** - Focus management implementation
+- **v0.3.1** - Focus management refinements
+- **v0.3.2** - Focus sharing features
 
-#### **Q2 2025 - v2.2.0 Series**
-- **v2.2.0** - Real-time features and subscriptions
-- **v2.2.1** - Real-time performance optimization
-- **v2.2.2** - Real-time collaboration features
+#### **Q2 2025 - v0.4.0 Series**
+- **v0.4.0** - Real-time features and subscriptions
+- **v0.4.1** - Real-time performance optimization
+- **v0.4.2** - Real-time collaboration features
 
-#### **Q3 2025 - v3.0.0 Series**
-- **v3.0.0** - Production-ready deployment
-- **v3.0.1** - Production monitoring and alerting
-- **v3.0.2** - Production performance optimization
+#### **Q3 2025 - v1.0.0 Series**
+- **v1.0.0** - First production release
+- **v1.0.1** - Production monitoring and alerting
+- **v1.0.2** - Production performance optimization
 
 ---
 
 ## ✅ **Version Quality Gates**
 
-### **Stable/Demonstrable (v2.x.x) Requirements**
+### **Dev Baseline (v0.x.x) Requirements**
 - ✅ All core features working
 - ✅ Comprehensive documentation
 - ✅ Development environment setup
 - ✅ Basic testing coverage
-- ✅ Stakeholder demonstration ready
+- ✅ External review ready
 
-### **Production Ready (v3.x.x) Requirements**
+### **Production Ready (v1.x.x) Requirements**
 - ✅ Production deployment successful
 - ✅ Performance benchmarks met
 - ✅ Security audit completed
@@ -230,7 +198,7 @@ git merge release/v3.0.0
 - ✅ Support procedures
 - ✅ Customer acceptance testing
 
-### **Enterprise (v4.x.x) Requirements**
+### **Enterprise (v2.x.x) Requirements**
 - ✅ Enterprise security compliance
 - ✅ Scalability testing passed
 - ✅ Multi-tenant support
@@ -242,18 +210,18 @@ git merge release/v3.0.0
 ## 🎯 **Benefits of This Strategy**
 
 ### **For Development**
-- **Clear Stability Levels**: Always know what's stable vs experimental
-- **Safe Experimentation**: Feature branches don't affect stable baseline
-- **Incremental Progress**: Clear path from experimental to production
+- **Clear Dev Baselines**: Always know what's stable for review
+- **Safe Experimentation**: Feature releases don't affect baseline
+- **Incremental Progress**: Clear path from dev to production
 
 ### **For Stakeholders**
-- **Reliable Demonstrations**: v2.x.x is always demonstrable
+- **Reliable Demonstrations**: v0.x.x is always dev-review ready
 - **Clear Progress Tracking**: Version numbers indicate maturity
-- **Risk Management**: Stable baselines for important presentations
+- **Risk Management**: Dev baselines for important reviews
 
 ### **For Deployment**
-- **Confident Deployments**: Major versions are guaranteed stable
-- **Rollback Safety**: Always have stable baseline to return to
+- **Confident Deployments**: v0.x.x is dev-only; v1.x.x is production
+- **Rollback Safety**: Always have a dev baseline to return to
 - **Environment Alignment**: Dev, staging, production version clarity
 
 ---

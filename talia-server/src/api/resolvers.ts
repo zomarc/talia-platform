@@ -7,6 +7,12 @@ import { googleSearchService } from '../services/google-search.js';
 import { googleTrendsService } from '../services/google-trends.js';
 import { googleTrendsService as googleTrendsApiService } from '../services/google-trends-service.js';
 import { getCategories, getQueriesByCategory, ALL_QUERIES } from '../config/googleTrendsQueries.js';
+import { syncInventoryStatusByDay } from '../services/inventory-status-sync.js';
+import { SyncLogger } from '../services/sync-logger.js';
+import { SyncOperation } from '../services/sync-operation.js';
+import { syncEventEmitter } from '../services/sync-event-emitter.js';
+import { getDateRangeConfigSummary, getDateRange } from '../config/date-range-config.js';
+import { configService } from '../services/config-service.js';
 
 // Helper function to check user permissions
 const hasPermission = (userRole: string, requiredRole: string): boolean => {
@@ -26,6 +32,75 @@ const filterDataByRole = (data: any[], userRole: string, roleField?: string) => 
   
   // For now, return all data. In production, implement role-based filtering
   return data;
+};
+
+const getDateColumnsForTable = (tableName: string): string[] => {
+  const tableDateColumns: { [key: string]: string[] } = {
+    'reservation': ['sail_from_date', 'sail_to_date'],
+    'master_sail': ['sail_date_from', 'sail_date_to'],
+    'sail_by_cabin_occupancy': ['sail_date_from', 'sail_itinerary_date'],
+    'published_rates': ['departure_date', 'snapshot_date'],
+    'published_rates_changes': ['departure_date', 'snapshot_date'],
+    'published_rates_current_state': ['departure_date', 'snapshot_date'],
+    'reservation_changes': ['snapshot_date'],
+    'reservation_current_state': ['snapshot_date'],
+    'competitor': ['departure_date', 'snapshot_date'],
+    'competitor_current_state': ['departure_date', 'snapshot_date'],
+    'cabin_availability': ['snapshot_date'],
+    'inventory_status_by_day': ['snapshot_date', 'sail_date'],
+    'google_trends_data': ['date'],
+    'sail_header': ['sail_date_from', 'sail_date_to'],
+    'itinerary': ['sail_date'],
+    'cabin_allocation': ['allocation_date']
+  };
+  
+  return tableDateColumns[tableName] || 
+    ['sail_date_from', 'sail_date_to', 'departure_date', 'snapshot_date', 
+     'sail_from_date', 'sail_to_date', 'created_at', 'updated_at'];
+};
+
+const fetchActualDataRange = async (tableName: string, rowCount: number) => {
+  if (!rowCount || rowCount <= 0) {
+    return { min: null, max: null };
+  }
+
+  const dateColumns = getDateColumnsForTable(tableName);
+
+  for (const dateCol of dateColumns) {
+    const { data: minData, error: minError } = await supabaseDataService.client
+      .from(tableName)
+      .select(dateCol)
+      .not(dateCol, 'is', null)
+      .order(dateCol, { ascending: true })
+      .limit(1);
+
+    if (minError) {
+      continue;
+    }
+
+    const { data: maxData, error: maxError } = await supabaseDataService.client
+      .from(tableName)
+      .select(dateCol)
+      .not(dateCol, 'is', null)
+      .order(dateCol, { ascending: false })
+      .limit(1);
+
+    if (maxError) {
+      continue;
+    }
+
+    const minValue = minData?.[0]?.[dateCol];
+    const maxValue = maxData?.[0]?.[dateCol];
+
+    if (minValue != null && maxValue != null && minValue !== '' && maxValue !== '') {
+      return {
+        min: String(minValue),
+        max: String(maxValue)
+      };
+    }
+  }
+
+  return { min: null, max: null };
 };
 
 // Helper function to map database focus to GraphQL Focus format
@@ -1021,6 +1096,13 @@ export const resolvers = {
 
     databaseTables: async () => {
       try {
+        // Get the active/default date range from configuration
+        const activeDateRange = await configService.getActiveDateRange('synapse_default');
+        const configuredDateRange = activeDateRange ? {
+          min: activeDateRange.date_from,
+          max: activeDateRange.date_to
+        } : { min: null, max: null };
+
         // Get list of known tables to check
         const knownTables = [
           'ship', 'cabin_availability', 'reservation', 'master_sail',
@@ -1050,7 +1132,9 @@ export const resolvers = {
               changes_detected: record.changes_detected,
               status: record.status,
               error: record.error,
-              last_processed_date: record.last_processed_date
+              last_processed_date: record.last_processed_date,
+              // Get latest snapshot date from metadata JSONB field
+              latest_available_snapshot_date: record.metadata?.latest_available_snapshot_date || null
             };
           });
         }
@@ -1071,39 +1155,26 @@ export const resolvers = {
 
             const rowCount = count || 0;
 
-            // Get date range (try common date columns)
-            let dateRange = { min: null, max: null };
-            const dateColumns = ['created_at', 'updated_at', 'snapshot_date', 'sail_date_from'];
-            
-            for (const dateCol of dateColumns) {
-              try {
-                const { data: minData } = await supabaseDataService.client
-                  .from(tableName)
-                  .select(dateCol)
-                  .order(dateCol, { ascending: true })
-                  .limit(1);
-                
-                const { data: maxData } = await supabaseDataService.client
-                  .from(tableName)
-                  .select(dateCol)
-                  .order(dateCol, { ascending: false })
-                  .limit(1);
-                
-                if (minData && minData.length > 0 && maxData && maxData.length > 0) {
-                  dateRange = {
-                    min: minData[0][dateCol],
-                    max: maxData[0][dateCol]
-                  };
-                  break;
-                }
-              } catch (err) {
-                // Column doesn't exist, try next
-                continue;
-              }
-            }
+            const actualDataRange = await fetchActualDataRange(tableName, rowCount);
 
-        // Get sync metadata for this table (check by tableName which matches operation_name)
-        const syncRecord = syncMetadataMap[tableName];
+            // Configured date range (what should be synced)
+            const dateRange = configuredDateRange;
+
+            // Get sync metadata for this table (check by tableName which matches operation_name)
+            // Note: operation_name in operation_metadata matches syncType, not always tableName
+            // Try tableName first, then check if there's a syncType mapping
+            const syncRecord = syncMetadataMap[tableName];
+            
+            // Get latest snapshot date from sync metadata (most accurate)
+            // Fall back to last_processed_date if latest_available_snapshot_date is not available
+            let latestSnapshotDate = null;
+            if (syncRecord) {
+              latestSnapshotDate = syncRecord.latest_available_snapshot_date || 
+                                   (syncRecord.last_processed_date ? new Date(syncRecord.last_processed_date).toISOString() : null);
+            }
+            
+            // Format lastSync - use last_sync_at from syncRecord (which is mapped from last_run_at)
+            const lastSync = syncRecord?.last_sync_at || null;
             
             return {
               tableName,
@@ -1111,15 +1182,17 @@ export const resolvers = {
               type: null, // Frontend will get from tableSources config
               loadMethod: null, // Frontend calculates from tableSources config
               rowCount,
-              dateRange,
-              latestSnapshotDate: dateRange.max,
-              lastSync: syncRecord?.last_sync_at || null,
+              dateRange, // Configured sync range
+              actualDataRange, // Actual data in table (may be {min: null, max: null} if no date columns found)
+              latestSnapshotDate,
+              lastSync,
               syncDuration: syncRecord?.duration_ms || null,
               recordsProcessed: syncRecord?.records_processed || null,
               changesDetected: syncRecord?.changes_detected || null,
-              syncStatus: syncRecord ? (syncRecord.last_sync_at ? 'Synced' : 'Never Synced') : 'Not Synced',
+              lastError: syncRecord?.error || null,
+              syncStatus: syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced',
               dataStatus: rowCount === 0 ? 'Empty' : 'Has Data',
-              status: `${syncRecord ? (syncRecord.last_sync_at ? 'Synced' : 'Never Synced') : 'Not Synced'} • ${rowCount === 0 ? 'Empty' : 'Has Data'}`,
+              status: `${syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced'} • ${rowCount === 0 ? 'Empty' : 'Has Data'}`,
               syncType: tableName
             };
           } catch (err) {
@@ -1150,43 +1223,32 @@ export const resolvers = {
 
         const rowCount = count || 0;
 
-        // Get date range
-        let dateRange = { min: null, max: null };
-        const dateColumns = ['created_at', 'updated_at', 'snapshot_date', 'sail_date_from'];
-        
-        for (const dateCol of dateColumns) {
-          try {
-            const { data: minData } = await supabaseDataService.client
-              .from(tableName)
-              .select(dateCol)
-              .order(dateCol, { ascending: true })
-              .limit(1);
-            
-            const { data: maxData } = await supabaseDataService.client
-              .from(tableName)
-              .select(dateCol)
-              .order(dateCol, { ascending: false })
-              .limit(1);
-            
-            if (minData && minData.length > 0 && maxData && maxData.length > 0) {
-              dateRange = {
-                min: minData[0][dateCol],
-                max: maxData[0][dateCol]
-              };
-              break;
-            }
-          } catch (err) {
-            continue;
-          }
-        }
+        // Configured date range
+        const activeDateRange = await configService.getActiveDateRange('synapse_default');
+        const dateRange = activeDateRange ? {
+          min: activeDateRange.date_from,
+          max: activeDateRange.date_to
+        } : { min: null, max: null };
 
-        // Get sync metadata
+        const actualDataRange = await fetchActualDataRange(tableName, rowCount);
+
+        // Get sync metadata from unified table
         const { data: syncData } = await supabaseDataService.client
-          .from('sync_metadata')
+          .from('operation_metadata')
           .select('*')
-          .eq('sync_type', tableName);
+          .eq('operation_type', 'sync')
+          .eq('operation_name', tableName)
+          .limit(1);
         
         const syncRecord = syncData && syncData.length > 0 ? syncData[0] : null;
+
+        let latestSnapshotDate = null;
+        if (syncRecord) {
+          latestSnapshotDate = syncRecord.metadata?.latest_available_snapshot_date || 
+                               (syncRecord.last_processed_date ? new Date(syncRecord.last_processed_date).toISOString() : null);
+        }
+
+        const lastSync = syncRecord?.last_run_at || null;
 
         return {
           tableName,
@@ -1195,14 +1257,16 @@ export const resolvers = {
           loadMethod: null, // Frontend calculates from tableSources config
           rowCount,
           dateRange,
-          latestSnapshotDate: dateRange.max,
-          lastSync: syncRecord?.last_sync_at || null,
+          actualDataRange,
+          latestSnapshotDate,
+          lastSync,
           syncDuration: syncRecord?.duration_ms || null,
           recordsProcessed: syncRecord?.records_processed || null,
           changesDetected: syncRecord?.changes_detected || null,
-          syncStatus: syncRecord ? (syncRecord.last_sync_at ? 'Synced' : 'Never Synced') : 'Not Synced',
+          lastError: syncRecord?.error || null,
+          syncStatus: syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced',
           dataStatus: rowCount === 0 ? 'Empty' : 'Has Data',
-          status: `${syncRecord ? (syncRecord.last_sync_at ? 'Synced' : 'Never Synced') : 'Not Synced'} • ${rowCount === 0 ? 'Empty' : 'Has Data'}`,
+          status: `${syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced'} • ${rowCount === 0 ? 'Empty' : 'Has Data'}`,
           syncType: tableName
         };
       } catch (error: any) {
@@ -1406,6 +1470,132 @@ export const resolvers = {
       } catch (error: any) {
         console.error('[dataMatch] Error:', error);
         throw error;
+      }
+    },
+
+    dateRangeConfig: async () => {
+      try {
+        const configSummary = getDateRangeConfigSummary();
+        const envDateRange = getDateRange();
+        
+        // Get dataset default date range from sync config
+        let datasetDefault = null;
+        try {
+          const defaultDataset = synapseSyncService.getDefaultDataset();
+          if (defaultDataset) {
+            const datasetConfig = synapseSyncService.getDatasetConfig(defaultDataset);
+            // Try to extract date range from first table's filters or replace
+            const firstTable = Object.keys(datasetConfig.tables || {})[0];
+            if (firstTable) {
+              const tableConfig = datasetConfig.tables[firstTable];
+              const betweenFilter = tableConfig.filters?.find((f: any) => f.operator === 'between');
+              if (betweenFilter) {
+                datasetDefault = { from: betweenFilter.from, to: betweenFilter.to };
+              } else if (tableConfig.replace?.from && tableConfig.replace?.to) {
+                datasetDefault = { from: tableConfig.replace.from, to: tableConfig.replace.to };
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('Could not get dataset default date range:', error);
+        }
+        
+        return {
+          environment: configSummary.environment,
+          hasOverride: configSummary.hasOverride,
+          dateRange: envDateRange ? { from: envDateRange.from, to: envDateRange.to } : null,
+          source: configSummary.source,
+          datasetDefault: datasetDefault
+        };
+      } catch (error: any) {
+        console.error('Error getting date range config:', error);
+        throw new Error(`Failed to get date range config: ${error.message}`);
+      }
+    },
+
+    // ============================================================================
+    // Talia Configuration Queries (Database-backed)
+    // ============================================================================
+    
+    taliaConfig: async () => {
+      try {
+        return await configService.getConfigSummary();
+      } catch (error: any) {
+        console.error('Error getting talia config:', error);
+        throw new Error(`Failed to get configuration: ${error.message}`);
+      }
+    },
+
+    integrationDateRanges: async () => {
+      try {
+        const ranges = await configService.getIntegrationDateRanges();
+        return ranges.map((r: any) => ({
+          id: r.id,
+          integrationName: r.integration_name,
+          displayName: r.display_name,
+          description: r.description,
+          dateFrom: r.date_from,
+          dateTo: r.date_to,
+          dateColumn: r.date_column,
+          isActive: r.is_active,
+          isDefault: r.is_default,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at
+        }));
+      } catch (error: any) {
+        console.error('Error getting date ranges:', error);
+        throw new Error(`Failed to get date ranges: ${error.message}`);
+      }
+    },
+
+    integrationDateRange: async (parent: any, args: any) => {
+      const { id } = args;
+      try {
+        const { data, error } = await supabaseDataService.client
+          .from('integration_date_range')
+          .select('*')
+          .eq('id', id)
+          .single();
+
+        if (error) throw error;
+        if (!data) return null;
+
+        return {
+          id: data.id,
+          integrationName: data.integration_name,
+          displayName: data.display_name,
+          description: data.description,
+          dateFrom: data.date_from,
+          dateTo: data.date_to,
+          dateColumn: data.date_column,
+          isActive: data.is_active,
+          isDefault: data.is_default,
+          createdAt: data.created_at,
+          updatedAt: data.updated_at
+        };
+      } catch (error: any) {
+        console.error('Error getting date range:', error);
+        throw new Error(`Failed to get date range: ${error.message}`);
+      }
+    },
+
+    dataSources: async () => {
+      try {
+        const sources = await configService.getDataSources();
+        return sources.map((s: any) => ({
+          id: s.id,
+          sourceName: s.source_name,
+          displayName: s.display_name,
+          sourceType: s.source_type,
+          isActive: s.is_active,
+          isAvailable: s.is_available,
+          healthStatus: s.health_status,
+          lastHealthCheck: s.last_health_check,
+          description: s.description
+        }));
+      } catch (error: any) {
+        console.error('Error getting data sources:', error);
+        throw new Error(`Failed to get data sources: ${error.message}`);
       }
     },
 
@@ -2206,6 +2396,165 @@ export const resolvers = {
           duration: null,
           error: error.message
         };
+      }
+    },
+
+    syncInventoryStatus: async (parent: any, args: any) => {
+      const { dateFrom, dateTo } = args;
+      const tableName = 'inventory_status_by_day';
+      
+      try {
+        // Validate date format
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(dateFrom) || !dateRegex.test(dateTo)) {
+          return {
+            success: false,
+            tableName,
+            message: 'Invalid date format. Expected YYYY-MM-DD',
+            recordsProcessed: null,
+            duration: null,
+            error: 'Invalid date format',
+            detailedLogs: []
+          };
+        }
+        
+        if (dateFrom > dateTo) {
+          return {
+            success: false,
+            tableName,
+            message: 'dateFrom must be before or equal to dateTo',
+            recordsProcessed: null,
+            duration: null,
+            error: 'Invalid date range',
+            detailedLogs: []
+          };
+        }
+        
+        // Create logger for sync operation
+        const logger = new SyncLogger(tableName, syncEventEmitter);
+        const syncOp = new SyncOperation(syncInventoryStatusByDay, logger, {
+          tableName,
+          syncType: 'inventory_status'
+        });
+        
+        const result = await syncOp.execute({
+          dateFrom,
+          dateTo,
+          logger
+        });
+        
+        return {
+          success: result.success,
+          tableName,
+          message: result.message || 'Inventory status sync completed',
+          recordsProcessed: result.recordsProcessed || null,
+          duration: result.duration || null,
+          error: result.error || null,
+          detailedLogs: result.detailedLogs || []
+        };
+      } catch (error: any) {
+        console.error('Error syncing inventory status:', error);
+        return {
+          success: false,
+          tableName,
+          message: `Inventory status sync failed: ${error.message}`,
+          recordsProcessed: null,
+          duration: null,
+          error: error.message,
+          detailedLogs: []
+        };
+      }
+    },
+
+    // ============================================================================
+    // Configuration Management Mutations
+    // ============================================================================
+
+    updateIntegrationDateRange: async (parent: any, args: any) => {
+      const { id, input } = args;
+      try {
+        const result = await configService.updateDateRange(id, {
+          dateFrom: input.dateFrom,
+          dateTo: input.dateTo,
+          displayName: input.displayName,
+          description: input.description,
+          isActive: input.isActive,
+          isDefault: input.isDefault
+        });
+
+        return {
+          id: result.id,
+          integrationName: result.integration_name,
+          displayName: result.display_name,
+          description: result.description,
+          dateFrom: result.date_from,
+          dateTo: result.date_to,
+          dateColumn: result.date_column,
+          isActive: result.is_active,
+          isDefault: result.is_default,
+          createdAt: result.created_at,
+          updatedAt: result.updated_at
+        };
+      } catch (error: any) {
+        console.error('Error updating date range:', error);
+        throw new Error(`Failed to update date range: ${error.message}`);
+      }
+    },
+
+    createIntegrationDateRange: async (parent: any, args: any) => {
+      const { input } = args;
+      try {
+        const result = await configService.createDateRange({
+          integrationName: input.integrationName,
+          displayName: input.displayName,
+          description: input.description,
+          dateFrom: input.dateFrom,
+          dateTo: input.dateTo,
+          dateColumn: input.dateColumn,
+          isActive: input.isActive,
+          isDefault: input.isDefault
+        });
+
+        return {
+          id: result.id,
+          integrationName: result.integration_name,
+          displayName: result.display_name,
+          description: result.description,
+          dateFrom: result.date_from,
+          dateTo: result.date_to,
+          dateColumn: result.date_column,
+          isActive: result.is_active,
+          isDefault: result.is_default,
+          createdAt: result.created_at,
+          updatedAt: result.updated_at
+        };
+      } catch (error: any) {
+        console.error('Error creating date range:', error);
+        throw new Error(`Failed to create date range: ${error.message}`);
+      }
+    },
+
+    setDefaultDateRange: async (parent: any, args: any) => {
+      const { id } = args;
+      try {
+        const result = await configService.setDefaultDateRange(id);
+
+        return {
+          id: result.id,
+          integrationName: result.integration_name,
+          displayName: result.display_name,
+          description: result.description,
+          dateFrom: result.date_from,
+          dateTo: result.date_to,
+          dateColumn: result.date_column,
+          isActive: result.is_active,
+          isDefault: result.is_default,
+          createdAt: result.created_at,
+          updatedAt: result.updated_at
+        };
+      } catch (error: any) {
+        console.error('Error setting default date range:', error);
+        throw new Error(`Failed to set default date range: ${error.message}`);
       }
     },
 

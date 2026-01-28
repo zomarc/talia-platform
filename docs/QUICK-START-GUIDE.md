@@ -10,16 +10,16 @@
 ### Step 1: Start Both Servers
 ```bash
 # Option A: Use the startup script (Recommended)
-cd /Users/russell/Work/AA-Celestyal/Dev
+cd /path/to/talia
 ./start-dev.sh
 
 # Option B: Manual startup (2 terminals)
 # Terminal 1 - Backend
-cd /Users/russell/Work/AA-Celestyal/Dev/talia-graphql-server
+cd /path/to/talia/talia-server
 npm run start
 
 # Terminal 2 - Frontend  
-cd /Users/russell/Work/AA-Celestyal/Dev/talia-ui
+cd /path/to/talia/talia-ui
 npm run dev
 ```
 

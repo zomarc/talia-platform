@@ -96,11 +96,16 @@ export const useDatabaseTables = () => {
               min
               max
             }
+            actualDataRange {
+              min
+              max
+            }
             latestSnapshotDate
             lastSync
             syncDuration
             recordsProcessed
             changesDetected
+            lastError
             syncStatus
             dataStatus
             status
@@ -133,11 +138,13 @@ export const useDatabaseTables = () => {
           loadMethod, // Calculated from tableConfig, not from GraphQL
           rowCount: table.rowCount || 0,
           dateRange: table.dateRange || { min: null, max: null },
+          actualDataRange: table.actualDataRange || { min: null, max: null },
           latestSnapshotDate: table.latestSnapshotDate || table.dateRange?.max || null,
           lastSync: table.lastSync,
           syncDuration: table.syncDuration,
           recordsProcessed: table.recordsProcessed,
           changesDetected: table.changesDetected,
+          lastError: table.lastError || null,
           syncStatus: table.syncStatus || 'Not Synced',
           dataStatus: table.dataStatus || 'Empty',
           status: table.status || `${table.syncStatus || 'Not Synced'} • ${table.dataStatus || 'Empty'}`,
@@ -169,11 +176,16 @@ export const useDatabaseTables = () => {
               min
               max
             }
+            actualDataRange {
+              min
+              max
+            }
             latestSnapshotDate
             lastSync
             syncDuration
             recordsProcessed
             changesDetected
+            lastError
             syncStatus
             dataStatus
             status
@@ -203,11 +215,13 @@ export const useDatabaseTables = () => {
               loadMethod,
               rowCount: table.rowCount || 0,
               dateRange: table.dateRange || { min: null, max: null },
+              actualDataRange: table.actualDataRange || { min: null, max: null },
               latestSnapshotDate: table.latestSnapshotDate || table.dateRange?.max || null,
               lastSync: table.lastSync,
               syncDuration: table.syncDuration,
               recordsProcessed: table.recordsProcessed,
               changesDetected: table.changesDetected,
+              lastError: table.lastError || null,
               syncStatus: table.syncStatus || 'Not Synced',
               dataStatus: table.dataStatus || 'Empty',
               status: table.status || `${table.syncStatus || 'Not Synced'} • ${table.dataStatus || 'Empty'}`

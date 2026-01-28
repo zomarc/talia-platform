@@ -20,7 +20,7 @@ Talia Platform v0.1.0 (Alpha) - System Architecture
 
 ## 🎯 Overview
 
-Talia Platform is a **monorepo-based revenue and inventory management system** designed for multi-customer deployment in the cruise industry. The architecture separates concerns between frontend (UI), backend (API), and authentication while maintaining flexibility for independent deployment.
+Talia Platform is a **monorepo-based revenue and inventory management system** designed for multi-customer deployment. The architecture separates concerns between frontend (UI), backend (API), and authentication while maintaining flexibility for independent deployment.
 
 ### Key Architectural Principles
 
@@ -237,7 +237,7 @@ export const resolvers = {
 **Future**:
 - PostgreSQL for persistent storage
 - Redis for caching
-- Real-time data sync with cruise systems
+- Real-time data sync with external systems
 
 ---
 
@@ -417,7 +417,7 @@ class TaliaUserService {
 
 ```env
 # Customer-specific settings
-VITE_CUSTOMER_NAME=Celestyal
+VITE_CUSTOMER_NAME=CustomerOne
 VITE_CUSTOMER_LOGO=/assets/celestyal-logo.png
 VITE_CUSTOMER_PRIMARY_COLOR=#2E86AB
 VITE_CUSTOMER_THEME=celestyal
@@ -489,7 +489,7 @@ VITE_CUSTOMER_THEME=celestyal
 **Real-Time Features**:
 - WebSocket subscriptions for live updates
 - Real-time collaboration
-- Live data sync with cruise systems
+- Live data sync with external systems
 
 **Microservices**:
 - Separate services for revenue, inventory, reporting

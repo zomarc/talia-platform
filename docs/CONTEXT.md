@@ -1,18 +1,18 @@
 # TALIA UI - Development Context & Structure
 
 ## 🎯 **Project Overview**
-Talia is a comprehensive Business Intelligence Dashboard for Celestyal Cruises, providing real-time analytics, focus management, and role-based access control.
+Talia is a revenue and inventory management system providing analytics, focus management, and role-based access control.
 
 ## 📁 **Project Structure**
 
 ### **Monorepo Organization**
 ```
-/Users/russell/Work/AA-Celestyal/Dev/
+/path/to/talia/
 ├── talia-ui/                    # Frontend React Application
-├── talia-graphql-server/        # Backend GraphQL Server
+├── talia-server/                # Backend GraphQL Server
 ├── CONTEXT.md                   # This file - development context
 ├── README.md                    # Main project documentation
-├── VERSION-2.0.0.md            # Current baseline documentation
+├── VERSION-0.1.0.md            # Current baseline documentation
 ├── CHANGELOG.md                # Version history
 └── VERSIONING-STRATEGY.md      # Versioning approach
 ```
@@ -29,7 +29,7 @@ Talia is a comprehensive Business Intelligence Dashboard for Celestyal Cruises, 
   - `AppWithAuth.jsx`: Authentication provider and routing
   - `Dashboard.jsx`: **Main dashboard component** (the actual app)
 
-### **Backend (talia-graphql-server)**
+### **Backend (talia-server)**
 - **Main Entry**: `dist/index.js` (compiled from `src/index.ts`)
   - Apollo GraphQL Server on port 4000
   - Enhanced with Focus Management & Role-based Access
@@ -102,12 +102,12 @@ cd talia-ui && npm run dev
 # Runs on http://localhost:5173
 
 # Terminal 2: Backend  
-cd talia-graphql-server && npm run start
+cd talia-server && npm run start
 # Runs on http://localhost:4000
 ```
 
-### **Current Status (v2.0.0)**
-- ✅ **Stable Baseline**: Committed and tagged
+### **Current Status (v0.1.0)**
+- ✅ **Dev Baseline**: Committed and tagged
 - ✅ **Focus Management**: Fully integrated
 - ✅ **Authentication**: InstantDB-based
 - ✅ **Role-Based Access**: Admin, Manager, User, Guest
@@ -173,9 +173,9 @@ cd talia-graphql-server && npm run start
 - **Environment**: Production and staging environments
 
 ### **Versioning Strategy**
-- **x.y.z Format**: Stability.Feature.Iteration
-- **Current Version**: 2.0.0 (Stable Baseline)
-- **Development**: Feature branches with clear artifacts
+- **x.y.z Format**: Production.BaselineOrFeature.DevRelease
+- **Current Version**: 0.2.0 (Dev Baseline)
+- **Development**: Feature releases increment y, testable increments z
 
 ## 📝 **Development Notes**
 

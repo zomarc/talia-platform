@@ -38,7 +38,7 @@ Talia Platform is designed as a **multi-customer revenue and inventory managemen
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │              Talia Platform (GitHub Repo)                   │
-│                  zomarc/talia-platform                      │
+│                  talia-platform                             │
 └─────────────────────────────────────────────────────────────┘
                            │
                            │ Deploy with different configs
@@ -47,10 +47,10 @@ Talia Platform is designed as a **multi-customer revenue and inventory managemen
         │                  │                  │
         ▼                  ▼                  ▼
 ┌───────────────┐  ┌───────────────┐  ┌───────────────┐
-│  Celestyal    │  │  Customer A   │  │  Customer B   │
+│  Customer 1   │  │  Customer A   │  │  Customer B   │
 │  Deployment   │  │  Deployment   │  │  Deployment   │
 │               │  │               │  │               │
-│  ENV: Celestyal│  │  ENV: Acme   │  │  ENV: Beta   │
+│  ENV: Cust1   │  │  ENV: Acme   │  │  ENV: Beta   │
 │  Data: DB1    │  │  Data: DB2   │  │  Data: DB3   │
 └───────────────┘  └───────────────┘  └───────────────┘
 ```
@@ -89,29 +89,29 @@ All customer-specific settings are managed through environment variables. No cod
 
 ```env
 # Customer identity
-VITE_CUSTOMER_NAME=Celestyal
+VITE_CUSTOMER_NAME=CustomerOne
 
 # Visual branding
-VITE_CUSTOMER_LOGO=/assets/celestyal-logo.png
+VITE_CUSTOMER_LOGO=/assets/customer-logo.png
 VITE_CUSTOMER_PRIMARY_COLOR=#2E86AB
-VITE_CUSTOMER_THEME=celestyal
+VITE_CUSTOMER_THEME=customer
 
 # Optional: Custom domain
-VITE_CUSTOMER_DOMAIN=talia.celestyal.com
+VITE_CUSTOMER_DOMAIN=talia.customer.com
 ```
 
 #### Authentication
 
 ```env
 # InstantDB (separate app per customer)
-VITE_INSTANT_APP_ID=celestyal-app-id
+VITE_INSTANT_APP_ID=customer-app-id
 ```
 
 #### API Configuration
 
 ```env
 # GraphQL endpoint (can be shared or separate)
-VITE_GRAPHQL_ENDPOINT=https://api.celestyal.talia.com/graphql
+VITE_GRAPHQL_ENDPOINT=https://api.customer.talia.com/graphql
 ```
 
 #### Feature Flags (Future)
@@ -125,17 +125,17 @@ VITE_FEATURE_CUSTOM_REPORTS=false
 
 ### Example: Three Customers
 
-**Celestyal (Reference Implementation)**
+**Customer One (Reference Implementation)**
 ```env
-VITE_CUSTOMER_NAME=Celestyal
-VITE_CUSTOMER_LOGO=/assets/celestyal-logo.png
+VITE_CUSTOMER_NAME=CustomerOne
+VITE_CUSTOMER_LOGO=/assets/customer-logo.png
 VITE_CUSTOMER_PRIMARY_COLOR=#2E86AB
 VITE_INSTANT_APP_ID=1c2b040a-7bb2-4eb5-8490-ce5832e19dd0
 ```
 
-**Acme Cruises**
+**Acme**
 ```env
-VITE_CUSTOMER_NAME=Acme Cruises
+VITE_CUSTOMER_NAME=Acme
 VITE_CUSTOMER_LOGO=/assets/acme-logo.png
 VITE_CUSTOMER_PRIMARY_COLOR=#FF6B35
 VITE_INSTANT_APP_ID=acme-app-id-here
@@ -272,8 +272,8 @@ CREATE POLICY customer_isolation ON users
 
 1. Go to Netlify dashboard
 2. Click "Add new site" → "Import an existing project"
-3. Connect to `zomarc/talia-platform`
-4. Name site: `talia-[customer-name]` (e.g., `talia-celestyal`)
+3. Connect to `talia-platform`
+4. Name site: `talia-[customer-name]` (e.g., `talia-customerone`)
 
 #### Step 2: Configure Build
 
@@ -304,14 +304,14 @@ VITE_GRAPHQL_ENDPOINT=[api-url]
 ### Custom Domains
 
 **Subdomain Approach**:
-- `celestyal.talia.com`
+- `customer.talia.com`
 - `acme.talia.com`
 - `beta.talia.com`
 
 **Custom Domain Approach**:
-- `talia.celestyal.com`
-- `analytics.acmecruises.com`
-- `dashboard.betalines.com`
+- `talia.customer.com`
+- `analytics.acme.com`
+- `dashboard.beta.com`
 
 **Configuration**:
 1. Add custom domain in Netlify

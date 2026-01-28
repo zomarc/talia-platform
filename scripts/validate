@@ -1,0 +1,443 @@
+#!/bin/bash
+#
+# Interactive Talia Validation Menu
+# Calls underlying validation scripts based on user selection
+#
+# Usage:
+#   ./scripts/validate           # Interactive menu
+#   ./scripts/validate 1         # Run option 1 directly
+#   ./scripts/validate local     # Run local checks
+#   ./scripts/validate staging   # Run staging checks
+#   ./scripts/validate all       # Run all checks
+#
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
+
+# Detect environment
+HOSTNAME=$(hostname)
+IS_ON_STAGING=false
+if [[ "$HOSTNAME" == "zomarcsvr" ]] || [[ -f /home/zomarc/talia-docker/docker-compose.staging.yml ]]; then
+  IS_ON_STAGING=true
+fi
+
+print_header() {
+  clear
+  echo ""
+  echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
+  echo -e "${CYAN}║${NC}${BOLD}            TALIA VALIDATION MENU                           ${NC}${CYAN}║${NC}"
+  echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
+  echo ""
+  echo -e "  ${DIM}Host: ${HOSTNAME}${NC}"
+  echo -e "  ${DIM}Time: $(date '+%Y-%m-%d %H:%M:%S')${NC}"
+  echo ""
+}
+
+print_menu() {
+  echo -e "${BOLD}Select an option:${NC}"
+  echo ""
+  
+  if $IS_ON_STAGING; then
+    # On staging server
+    echo -e "  ${GREEN}1)${NC} Validate staging (local checks)"
+    echo -e "  ${GREEN}2)${NC} Check Docker containers"
+    echo -e "  ${GREEN}3)${NC} Check VPN status"
+    echo -e "  ${GREEN}4)${NC} Check ngrok tunnel"
+    echo -e "  ${GREEN}5)${NC} Restart VPN + ngrok"
+    echo -e "  ${CYAN}6)${NC} ${BOLD}FULL CHECK${NC} (all services + docker + network)"
+    echo ""
+    echo -e "  ${YELLOW}0)${NC} Exit"
+  else
+    # On Mac/remote
+    echo -e "  ${GREEN}1)${NC} Validate local (Mac development)"
+    echo -e "  ${GREEN}2)${NC} Validate staging (MiniPC via SSH)"
+    echo -e "  ${GREEN}3)${NC} Validate all (local + staging)"
+    echo -e "  ${GREEN}4)${NC} Quick connectivity test"
+    echo -e "  ${GREEN}5)${NC} Restart staging services"
+    echo -e "  ${GREEN}6)${NC} Fix staging connectivity"
+    echo -e "  ${CYAN}7)${NC} ${BOLD}FULL CHECK${NC} (all + docker + network performance)"
+    echo ""
+    echo -e "  ${YELLOW}0)${NC} Exit"
+  fi
+  echo ""
+}
+
+run_script() {
+  local script="$1"
+  local args="${2:-}"
+  
+  if [[ -f "${SCRIPT_DIR}/${script}" ]]; then
+    echo ""
+    echo -e "${CYAN}Running: ${script} ${args}${NC}"
+    echo -e "${DIM}────────────────────────────────────────────────────────────${NC}"
+    echo ""
+    "${SCRIPT_DIR}/${script}" $args
+    local exit_code=$?
+    echo ""
+    echo -e "${DIM}────────────────────────────────────────────────────────────${NC}"
+    return $exit_code
+  else
+    echo -e "${RED}Error: Script not found: ${script}${NC}"
+    return 1
+  fi
+}
+
+run_command() {
+  local cmd="$1"
+  local desc="$2"
+  
+  echo ""
+  echo -e "${CYAN}${desc}${NC}"
+  echo -e "${DIM}────────────────────────────────────────────────────────────${NC}"
+  echo ""
+  eval "$cmd"
+  echo ""
+  echo -e "${DIM}────────────────────────────────────────────────────────────${NC}"
+}
+
+wait_for_key() {
+  echo ""
+  echo -e "${DIM}Press any key to continue...${NC}"
+  read -n 1 -s
+}
+
+check_duplicate_dev_servers() {
+  local auto_fix="${1:-false}"
+  echo -e "${BOLD}Dev Server Instances:${NC}"
+
+  if ! command -v lsof >/dev/null 2>&1; then
+    echo -e "  ${YELLOW}⚠️  lsof not available; skipping duplicate checks${NC}"
+    return 0
+  fi
+
+  # Check for multiple Vite processes
+  local vite_count
+  vite_count=$(ps aux | grep -E "[v]ite" | grep -v grep | wc -l | tr -d ' ')
+  local vite_pids
+  vite_pids=$(ps aux | grep -E "[v]ite" | grep -v grep | awk '{print $2}' | tr '\n' ' ' | xargs)
+
+  # Check for processes on dev server ports
+  local port_5173 port_5174 port_5175 total_ports
+  port_5173=$(lsof -ti:5173 2>/dev/null | wc -l | tr -d ' ')
+  port_5174=$(lsof -ti:5174 2>/dev/null | wc -l | tr -d ' ')
+  port_5175=$(lsof -ti:5175 2>/dev/null | wc -l | tr -d ' ')
+  total_ports=$((port_5173 + port_5174 + port_5175))
+
+  local has_duplicates=false
+  [[ "$vite_count" -gt 1 ]] && has_duplicates=true
+  [[ "$total_ports" -gt 1 ]] && has_duplicates=true
+
+  if $has_duplicates && [[ "$auto_fix" == "true" ]]; then
+    echo -e "  ${YELLOW}⚠️  Duplicate dev servers detected. Stopping all UI instances...${NC}"
+    local port_pids
+    port_pids=$(lsof -ti:5173,5174,5175 2>/dev/null | tr '\n' ' ' | xargs)
+    if [[ -n "$port_pids" ]]; then
+      kill $port_pids 2>/dev/null || true
+      sleep 1
+      kill -9 $port_pids 2>/dev/null || true
+    fi
+    if [[ -n "$vite_pids" ]]; then
+      kill $vite_pids 2>/dev/null || true
+      sleep 1
+      kill -9 $vite_pids 2>/dev/null || true
+    fi
+    echo -e "  ${GREEN}✓${NC} Stopped all Vite/dev-port processes"
+    return 0
+  fi
+
+  if [[ "$vite_count" -gt 1 ]]; then
+    echo -e "  ${RED}⚠️  Multiple Vite processes detected: ${vite_count}${NC}"
+    echo -e "  ${YELLOW}   PIDs: ${vite_pids}${NC}"
+    echo -e "  ${DIM}   Run: pkill -f 'vite' && cd talia-ui && npm run dev${NC}"
+    return 1
+  elif [[ "$vite_count" -eq 1 ]]; then
+    echo -e "  ${GREEN}✓${NC} Vite processes: ${vite_count} (OK)"
+  else
+    echo -e "  ${YELLOW}⚠️  No Vite processes found${NC}"
+  fi
+
+  if [[ "$total_ports" -gt 1 ]]; then
+    echo -e "  ${RED}⚠️  Multiple processes on dev ports (5173/5174/5175): ${total_ports}${NC}"
+    if [[ "$port_5173" -gt 0 ]]; then
+      local pids_5173
+      pids_5173=$(lsof -ti:5173 2>/dev/null | tr '\n' ' ' | xargs)
+      echo -e "  ${YELLOW}   Port 5173: ${port_5173} process(es) - PIDs: ${pids_5173}${NC}"
+    fi
+    if [[ "$port_5174" -gt 0 ]]; then
+      local pids_5174
+      pids_5174=$(lsof -ti:5174 2>/dev/null | tr '\n' ' ' | xargs)
+      echo -e "  ${YELLOW}   Port 5174: ${port_5174} process(es) - PIDs: ${pids_5174}${NC}"
+    fi
+    if [[ "$port_5175" -gt 0 ]]; then
+      local pids_5175
+      pids_5175=$(lsof -ti:5175 2>/dev/null | tr '\n' ' ' | xargs)
+      echo -e "  ${YELLOW}   Port 5175: ${port_5175} process(es) - PIDs: ${pids_5175}${NC}"
+    fi
+    echo -e "  ${DIM}   Run: lsof -ti:5173,5174,5175 | xargs kill -9${NC}"
+    return 1
+  elif [[ "$total_ports" -eq 1 ]]; then
+    local active_port=""
+    [[ "$port_5173" -eq 1 ]] && active_port="5173"
+    [[ "$port_5174" -eq 1 ]] && active_port="5174"
+    [[ "$port_5175" -eq 1 ]] && active_port="5175"
+    echo -e "  ${GREEN}✓${NC} Dev server ports: 1 process on port ${active_port} (OK)"
+  else
+    echo -e "  ${YELLOW}⚠️  No processes on dev server ports${NC}"
+  fi
+
+  return 0
+}
+
+handle_staging_menu() {
+  local choice="$1"
+  
+  case "$choice" in
+    1|local|staging)
+      run_script "validate-staging-local.sh"
+      ;;
+    2|docker)
+      run_command "docker compose -f /home/zomarc/talia-docker/docker-compose.staging.yml ps" "Docker Containers"
+      ;;
+    3|vpn)
+      run_command "sudo systemctl status protonvpn-openvpn --no-pager && echo '' && echo 'VPN IP:' && curl -s https://api.ipify.org && echo ''" "VPN Status"
+      ;;
+    4|ngrok)
+      run_command "sudo systemctl status ngrok-taliahub --no-pager && echo '' && echo 'Tunnel:' && curl -s http://localhost:4040/api/tunnels | grep -o 'taliahub.com' || echo 'No tunnel'" "ngrok Status"
+      ;;
+    5|restart)
+      run_command "sudo systemctl restart protonvpn-openvpn && sleep 10 && sudo systemctl restart ngrok-taliahub && sleep 5 && echo 'Services restarted' && curl -s http://localhost:4040/api/tunnels | grep -o 'taliahub.com' && echo ' tunnel active'" "Restart VPN + ngrok"
+      ;;
+    6|full)
+      echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
+      echo -e "${CYAN}║${NC}${BOLD}                    FULL SYSTEM CHECK                        ${NC}${CYAN}║${NC}"
+      echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
+      echo ""
+      
+      # Services
+      echo -e "${BOLD}=== SERVICES ===${NC}"
+      run_script "validate-staging-local.sh"
+      
+      # Docker detailed
+      echo ""
+      echo -e "${BOLD}=== DOCKER CONTAINERS (detailed) ===${NC}"
+      docker compose -f /home/zomarc/talia-docker/docker-compose.staging.yml ps
+      echo ""
+      docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" 2>/dev/null | head -15 || true
+      
+      # Network
+      echo ""
+      echo -e "${BOLD}=== NETWORK ===${NC}"
+      echo -n "  VPN IP: "
+      curl -s --max-time 5 https://api.ipify.org && echo "" || echo "timeout"
+      echo -n "  VPN Interface: "
+      ip addr show tun0 2>/dev/null | grep "inet " | awk '{print $2}' || echo "not found"
+      echo -n "  ngrok tunnel: "
+      curl -s http://localhost:4040/api/tunnels | grep -o '"public_url":"[^"]*"' | head -1 || echo "not active"
+      
+      # Disk
+      echo ""
+      echo -e "${BOLD}=== DISK USAGE ===${NC}"
+      df -h / /home 2>/dev/null | grep -v "^Filesystem" | awk '{print "  " $6 ": " $3 " used / " $2 " total (" $5 " full)"}'
+      
+      # Memory
+      echo ""
+      echo -e "${BOLD}=== MEMORY ===${NC}"
+      free -h | grep -E "^(Mem|Swap)" | awk '{print "  " $1 " " $3 " used / " $2 " total"}'
+      
+      echo ""
+      echo -e "${GREEN}✅ Full check complete${NC}"
+      ;;
+    0|q|quit|exit)
+      echo -e "${GREEN}Goodbye!${NC}"
+      exit 0
+      ;;
+    *)
+      echo -e "${RED}Invalid option: ${choice}${NC}"
+      return 1
+      ;;
+  esac
+}
+
+handle_remote_menu() {
+  local choice="$1"
+  
+  case "$choice" in
+    1|local)
+      run_script "validate-staging-connectivity.sh" "" 2>/dev/null || {
+        # Fallback to inline local check
+        echo -e "${BOLD}Local Environment Check${NC}"
+        echo ""
+        
+        # Check for duplicate dev servers first
+        check_duplicate_dev_servers true
+        echo ""
+        
+        echo -n "  GraphQL (localhost:4000): "
+        local gql=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:4000/graphql 2>/dev/null || echo "000")
+        [[ "$gql" == "200" || "$gql" == "400" ]] && echo -e "${GREEN}OK${NC} (HTTP $gql)" || echo -e "${RED}FAIL${NC} (HTTP $gql)"
+        
+        echo -n "  UI (localhost:5173): "
+        local ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo "000")
+        [[ "$ui" == "200" ]] && echo -e "${GREEN}OK${NC}" || echo -e "${YELLOW}Not running${NC}"
+        
+        echo -n "  Supabase (localhost:54321): "
+        local sb=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:54321/ 2>/dev/null || echo "000")
+        [[ "$sb" != "000" ]] && echo -e "${GREEN}OK${NC} (HTTP $sb)" || echo -e "${RED}FAIL${NC}"
+        
+        echo ""
+        echo -e "${BOLD}Docker Containers:${NC}"
+        docker ps --format "table {{.Names}}\t{{.Status}}" 2>/dev/null | grep -E "(NAMES|supabase_)" || echo "  No Supabase containers"
+      }
+      ;;
+    2|staging)
+      run_script "validate-staging-connectivity.sh"
+      ;;
+    3|all)
+      echo -e "${BOLD}=== LOCAL ===${NC}"
+      handle_remote_menu "1"
+      echo ""
+      echo -e "${BOLD}=== STAGING ===${NC}"
+      run_script "validate-staging-connectivity.sh"
+      ;;
+    4|quick|test)
+      echo -e "${BOLD}Quick Connectivity Test${NC}"
+      echo ""
+      echo -n "  Ping staging (192.168.1.120): "
+      ping -c 1 -t 3 192.168.1.120 >/dev/null 2>&1 && echo -e "${GREEN}OK${NC}" || echo -e "${RED}FAIL${NC}"
+      
+      echo -n "  SSH to staging: "
+      ssh -o ConnectTimeout=5 -o BatchMode=yes zomarc@192.168.1.120 "echo ok" >/dev/null 2>&1 && echo -e "${GREEN}OK${NC}" || echo -e "${RED}FAIL${NC}"
+      
+      echo -n "  taliahub.com (public): "
+      local talia=$(curl -sS --basic -u talia:dev2025tal -o /dev/null -w '%{http_code}' --max-time 10 https://taliahub.com 2>/dev/null || echo "000")
+      [[ "$talia" == "200" ]] && echo -e "${GREEN}OK${NC}" || echo -e "${RED}HTTP $talia${NC}"
+      ;;
+    5|restart)
+      run_script "restart-staging-tunnel.sh"
+      ;;
+    6|fix)
+      run_script "fix-staging-connectivity.sh"
+      ;;
+    7|full)
+      echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
+      echo -e "${CYAN}║${NC}${BOLD}                    FULL SYSTEM CHECK                        ${NC}${CYAN}║${NC}"
+      echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
+      echo ""
+      
+      # Local environment
+      echo -e "${BOLD}━━━ LOCAL ENVIRONMENT (Mac) ━━━${NC}"
+      echo ""
+      
+      # Check for duplicate dev servers first
+      check_duplicate_dev_servers true
+      echo ""
+      
+      echo -e "  ${BOLD}Services:${NC}"
+      echo -n "    GraphQL (localhost:4000): "
+      local gql=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:4000/graphql 2>/dev/null || echo "000")
+      [[ "$gql" == "200" || "$gql" == "400" ]] && echo -e "${GREEN}OK${NC} (HTTP $gql)" || echo -e "${RED}FAIL${NC} (HTTP $gql)"
+      
+      echo -n "    UI (localhost:5173): "
+      local ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo "000")
+      [[ "$ui" == "200" ]] && echo -e "${GREEN}OK${NC}" || echo -e "${YELLOW}Not running${NC}"
+      
+      echo -n "    Supabase Kong (localhost:54321): "
+      local sb=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:54321/ 2>/dev/null || echo "000")
+      [[ "$sb" != "000" ]] && echo -e "${GREEN}OK${NC} (HTTP $sb)" || echo -e "${RED}FAIL${NC}"
+      
+      echo ""
+      echo -e "  ${BOLD}Docker Containers:${NC}"
+      docker ps --format "table {{.Names}}\t{{.Status}}" 2>/dev/null | grep -E "(NAMES|supabase_)" | sed 's/^/    /' || echo "    No Supabase containers"
+      
+      # Network to staging
+      echo ""
+      echo -e "${BOLD}━━━ NETWORK TO STAGING ━━━${NC}"
+      echo ""
+      echo -n "  Ping (192.168.1.120): "
+      local ping_result=$(ping -c 3 -q 192.168.1.120 2>/dev/null)
+      if [[ $? -eq 0 ]]; then
+        local ping_avg=$(echo "$ping_result" | grep "round-trip" | cut -d'/' -f5)
+        local ping_loss=$(echo "$ping_result" | grep "packet loss" | grep -oE '[0-9.]+%' | head -1)
+        echo -e "${GREEN}OK${NC} (avg ${ping_avg}ms, ${ping_loss} loss)"
+      else
+        echo -e "${RED}FAIL${NC}"
+      fi
+      
+      echo -n "  SSH connection: "
+      ssh -o ConnectTimeout=5 -o BatchMode=yes zomarc@192.168.1.120 "echo ok" >/dev/null 2>&1 && echo -e "${GREEN}OK${NC}" || echo -e "${RED}FAIL${NC}"
+      
+      echo -n "  taliahub.com (public): "
+      local talia=$(curl -sS --basic -u talia:dev2025tal -o /dev/null -w '%{http_code}' --max-time 10 https://taliahub.com 2>/dev/null || echo "000")
+      [[ "$talia" == "200" ]] && echo -e "${GREEN}OK${NC} (HTTP 200)" || echo -e "${RED}FAIL${NC} (HTTP $talia)"
+      
+      # Staging environment
+      echo ""
+      echo -e "${BOLD}━━━ STAGING ENVIRONMENT (MiniPC) ━━━${NC}"
+      echo ""
+      run_script "validate-staging-connectivity.sh"
+      
+      # Staging Docker
+      echo ""
+      echo -e "  ${BOLD}Docker Containers (staging):${NC}"
+      ssh zomarc@192.168.1.120 "docker compose -f /home/zomarc/talia-docker/docker-compose.staging.yml ps --format 'table {{.Name}}\t{{.Status}}'" 2>/dev/null | sed 's/^/    /' || true
+      
+      # Staging resources
+      echo ""
+      echo -e "  ${BOLD}Staging Resources:${NC}"
+      ssh zomarc@192.168.1.120 "echo -n '    Disk: '; df -h / | tail -1 | awk '{print \$3 \" used / \" \$2 \" (\" \$5 \" full)\"}'; echo -n '    Memory: '; free -h | grep Mem | awk '{print \$3 \" used / \" \$2}'" 2>/dev/null || true
+      
+      echo ""
+      echo -e "${GREEN}✅ Full check complete${NC}"
+      ;;
+    0|q|quit|exit)
+      echo -e "${GREEN}Goodbye!${NC}"
+      exit 0
+      ;;
+    *)
+      echo -e "${RED}Invalid option: ${choice}${NC}"
+      return 1
+      ;;
+  esac
+}
+
+# Main
+main() {
+  # If argument provided, run directly without menu
+  if [[ $# -gt 0 ]]; then
+    if $IS_ON_STAGING; then
+      handle_staging_menu "$1"
+    else
+      handle_remote_menu "$1"
+    fi
+    exit $?
+  fi
+  
+  # Interactive menu loop
+  while true; do
+    print_header
+    print_menu
+    
+    echo -n -e "${BOLD}Enter choice: ${NC}"
+    read -r choice
+    
+    if $IS_ON_STAGING; then
+      handle_staging_menu "$choice" || true
+    else
+      handle_remote_menu "$choice" || true
+    fi
+    
+    wait_for_key
+  done
+}
+
+main "$@"

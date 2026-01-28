@@ -9,7 +9,7 @@
 
 ## EXECUTIVE SUMMARY
 
-The Talia Business Intelligence Platform v2.0.0 provides a comprehensive solution for managing critical business operations across pricing, inventory, and forecasting. This document outlines the key business actions and goals that Talia supports, organized by functional area with clear technical requirements and business impact.
+The Talia Business Intelligence Platform v0.2.0 provides a comprehensive solution for managing critical business operations across pricing, inventory, and forecasting. This document outlines the key business actions and goals that Talia supports, organized by functional area with clear technical requirements and business impact.
 
 **Key Benefits:**
 - Real-time pricing and inventory management
@@ -167,21 +167,21 @@ The Talia Business Intelligence Platform v2.0.0 provides a comprehensive solutio
 
 ## 6. IMPLEMENTATION ROADMAP
 
-### Phase 1 (v2.1.0 - Q1 2025)
+### Phase 1 (v0.3.0 - Q1 2025)
 - Enhanced pricing management interfaces
 - Advanced inventory controls
 - Real-time occupancy dashboard
 - **Timeline:** 4-6 weeks
 - **Investment:** [To be determined]
 
-### Phase 2 (v2.2.0 - Q2 2025)
+### Phase 2 (v0.4.0 - Q2 2025)
 - Promotional pricing management
 - Market and channel controls
 - Staff allocation optimization
 - **Timeline:** 6-8 weeks
 - **Investment:** [To be determined]
 
-### Phase 3 (v3.0.0 - Q3 2025)
+### Phase 3 (v1.0.0 - Q3 2025)
 - Probability modeling integration
 - Advanced demand forecasting
 - AI-powered optimization

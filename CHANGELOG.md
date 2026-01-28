@@ -3,7 +3,7 @@
 All notable changes to Talia Platform will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
@@ -55,8 +55,8 @@ First alpha release of Talia Platform with core features for revenue and invento
 - Multi-customer support architecture
 
 ### Reference Implementation
-- Celestyal Cruises as initial customer
-- Demo data and branding for Celestyal
+- Reference implementation for initial customer
+- Demo data and branding for product validation
 - Sample sailing and cabin data
 
 ### Known Limitations

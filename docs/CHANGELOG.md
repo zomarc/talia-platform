@@ -2,18 +2,18 @@
 
 All notable changes to the Talia Business Intelligence Dashboard will be documented in this file.
 
-**Versioning Strategy**: Talia uses a **stability-driven versioning approach** where major versions (x.0.0) represent stable, demonstrable baselines. See [VERSIONING-STRATEGY.md](./VERSIONING-STRATEGY.md) for complete details.
+**Versioning Strategy**: Talia uses a **development-first versioning approach** where `0.y.z` is dev-only and `1.0.0` is the first production release. See [VERSIONING-STRATEGY.md](./VERSIONING-STRATEGY.md) for complete details.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [2.0.0] - 2025-01-02 - "Enhanced Dual-Project Baseline"
+## [0.2.0] - 2025-01-02 - "Enhanced Baseline"
 
 ### 🎯 Major Release - Complete Architecture Overhaul
 
-This release establishes a comprehensive dual-project architecture with enhanced GraphQL integration, focus management capabilities, and production-ready deployment configuration.
+This release establishes a comprehensive frontend/backend architecture with enhanced GraphQL integration, focus management capabilities, and production-ready deployment configuration.
 
 ### Added
-- **Enhanced GraphQL Server (talia-graphql-server v2.0.0)**
+- **Enhanced GraphQL Server (talia-graphql-server v0.2.0)**
   - Comprehensive GraphQL schema with focus management
   - Role-based access control (ADMIN, MANAGER, USER, GUEST)
   - Advanced data types: Sailings, KPIs, Exceptions, Ships, Cabin Availability
@@ -22,7 +22,7 @@ This release establishes a comprehensive dual-project architecture with enhanced
   - CORS configuration for development
   - Netlify Functions wrapper for production deployment
 
-- **Enhanced Frontend (talia-ui v2.0.0)**
+- **Enhanced Frontend (talia-ui v0.2.0)**
   - Apollo Client integration with advanced caching
   - Enhanced GraphQL data panels for all data types
   - Role-based UI with dynamic permissions
@@ -31,7 +31,7 @@ This release establishes a comprehensive dual-project architecture with enhanced
   - Environment-based configuration (dev/prod)
 
 - **Development Workflow**
-  - Dual-project development setup
+  - Frontend/backend development setup
   - Startup script (`./start-dev.sh`) for one-command development
   - Monorepo configuration with workspace management
   - Comprehensive development documentation
@@ -46,12 +46,12 @@ This release establishes a comprehensive dual-project architecture with enhanced
 - **Documentation**
   - `QUICK-START-GUIDE.md` - 3-step development setup
   - `DEVELOPMENT-WORKFLOW.md` - Comprehensive development guide
-  - `VERSION-2.0.0.md` - Detailed version documentation
+  - `VERSION-0.2.0.md` - Detailed version documentation
   - `netlify.toml` - Deployment configuration
   - Inline code documentation throughout
 
 ### Changed
-- **Architecture**: Moved from single-project to dual-project architecture
+- **Architecture**: Moved from single project to frontend/backend architecture
 - **GraphQL Integration**: Enhanced from basic fetch to full Apollo Client integration
 - **Data Access**: Implemented role-based data filtering and access control
 - **Development Experience**: Streamlined development workflow with automated scripts
@@ -80,7 +80,7 @@ This release establishes a comprehensive dual-project architecture with enhanced
 
 ---
 
-## [1.0.0] - 2024-12-01 - "Initial Release"
+## [0.1.0] - 2024-12-01 - "Initial Release"
 
 ### Added
 - Basic React dashboard with Dockview integration
@@ -101,7 +101,7 @@ This release establishes a comprehensive dual-project architecture with enhanced
 
 ---
 
-## [0.9.0] - 2024-11-15 - "Pre-Release"
+## [0.0.9] - 2024-11-15 - "Pre-Release"
 
 ### Added
 - Initial project setup
@@ -115,32 +115,32 @@ This release establishes a comprehensive dual-project architecture with enhanced
 
 | Version | Date | Codename | Major Changes |
 |---------|------|----------|---------------|
-| 2.0.0 | 2025-01-02 | Enhanced Dual-Project Baseline | Complete architecture overhaul, GraphQL integration, role-based access |
-| 1.0.0 | 2024-12-01 | Initial Release | Basic dashboard with Dockview and GraphQL |
-| 0.9.0 | 2024-11-15 | Pre-Release | Initial project setup and structure |
+| 0.2.0 | 2025-01-02 | Enhanced Baseline | Complete architecture overhaul, GraphQL integration, role-based access |
+| 0.1.0 | 2024-12-01 | Initial Release | Basic dashboard with Dockview and GraphQL |
+| 0.0.9 | 2024-11-15 | Pre-Release | Initial project setup and structure |
 
 ---
 
 ## Development Notes
 
-### Breaking Changes in v2.0.0
+### Breaking Changes in v0.2.0
 - **Architecture Change**: Moved to dual-project structure
 - **GraphQL Integration**: Replaced direct fetch with Apollo Client
 - **Data Access**: Implemented role-based filtering (may affect existing queries)
 - **Configuration**: Updated development and deployment configuration
 
-### Migration Guide for v2.0.0
+### Migration Guide for v0.2.0
 1. **Update Development Setup**: Use new startup script `./start-dev.sh`
 2. **GraphQL Queries**: Update queries to use new Apollo Client integration
 3. **Data Access**: Implement role-based user context for data filtering
 4. **Deployment**: Use new Netlify configuration for production deployment
 
 ### Future Roadmap
-- **v2.1.0**: Real InstantDB authentication, Focus management UI
-- **v2.2.0**: Custom focus creation, Real-time subscriptions
-- **v2.3.0**: Advanced analytics, Mobile responsiveness
-- **v3.0.0**: Enterprise features, Advanced collaboration
+- **v0.3.0**: Real auth integration, Focus management UI
+- **v0.4.0**: Custom focus creation, Real-time subscriptions
+- **v0.5.0**: Advanced analytics, Mobile responsiveness
+- **v1.0.0**: First production release, Advanced collaboration
 
 ---
 
-*For detailed technical information, see [VERSION-2.0.0.md](./VERSION-2.0.0.md)*
+*For detailed technical information, see [VERSION-0.2.0.md](./VERSION-0.2.0.md)*

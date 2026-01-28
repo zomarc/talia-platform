@@ -7,7 +7,7 @@ The staging server (MiniPC) now has a proper git repository set up in `~/talia-d
 ## Environment Architecture
 
 ### 1. **Local (Laptop)**
-- **Location**: `/Users/russell/Work/AA-Celestyal/Dev/talia`
+- **Location**: `/path/to/talia`
 - **Purpose**: Development environment
 - **Services**: 
   - Supabase (Docker) on `localhost:54321`

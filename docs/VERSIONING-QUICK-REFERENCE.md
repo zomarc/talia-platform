@@ -1,51 +1,46 @@
 # Talia Versioning - Quick Reference Card
 
 ## 🎯 **Core Strategy**
-**Stability-driven versioning for development-stage projects requiring demonstrable artifacts**
+**Development-first versioning with a clear production threshold**
 
 ## 📋 **Format: x.y.z**
 
-### **x (Major) - Stability Level**
+### **x (Major) - Production Level**
 | Version | Status | Audience | Purpose |
 |---------|--------|----------|---------|
-| **1.x.x** | Experimental | Dev team | Proof-of-concept |
-| **2.x.x** | **Stable/Demonstrable** | **Stakeholders** | **Feature demos** ✅ **CURRENT** |
-| **3.x.x** | Production Ready | End users | Live operation |
-| **4.x.x** | Enterprise | Enterprise | Advanced features |
+| **0.x.x** | Development | Internal/Review | Dev baselines |
+| **1.x.x** | Production | End users | Live operation |
+| **2.x.x** | Enterprise | Enterprise | Advanced features |
 
-### **y (Minor) - Feature Branches**
-- **x.0.x** = Baseline for stability level
-- **x.1.x** = First major feature set
-- **x.2.x** = Second major feature set
-- etc.
+### **y (Minor) - Baseline / Feature Releases**
+- **0.y.0** = Baseline or major feature release
+- **0.y.z** = Testable dev iterations
 
-### **z (Patch) - Iterations**
-- **x.y.0** = Initial feature implementation
-- **x.y.1** = Bug fixes and refinements
-- **x.y.2** = Minor enhancements
-- etc.
+### **z (Patch) - Testable Dev Releases**
+- **0.y.1, 0.y.2, ...** = Testable dev iterations
 
 ## 🚀 **Current Status**
 
-### **v2.0.0 - Stable/Demonstrable Baseline** ✅
-- **Status**: Stable, demonstrable, stakeholder-ready
-- **Features**: Enhanced dual-project with GraphQL
-- **Next**: v2.1.0 (Focus Management)
+### **v0.1.0 - Dev Baseline** ✅
+- **Status**: Dev baseline, review-ready
+- **Features**: Core revenue and inventory management
+- **Next**: v0.2.0 (Enhanced data features)
 
 ### **Upcoming Releases**
-- **v2.1.0** - Focus management implementation
-- **v2.2.0** - Real-time features and subscriptions
-- **v3.0.0** - Production-ready deployment
+- **v0.2.0** - Enhanced data features
+- **v0.3.0** - Focus management implementation
+- **v0.4.0** - Real-time features and subscriptions
+- **v1.0.0** - First production release
 
 ## ✅ **Quality Gates**
 
-### **Stable/Demonstrable (v2.x.x)**
+### **Dev Baseline (v0.x.x)**
 - ✅ All core features working
 - ✅ Comprehensive documentation
-- ✅ Stakeholder demonstration ready
+- ✅ Review-ready
 - ✅ Development environment setup
 
-### **Production Ready (v3.x.x)**
+### **Production Ready (v1.x.x)**
 - ✅ Production deployment successful
 - ✅ Performance benchmarks met
 - ✅ Security audit completed
@@ -53,22 +48,21 @@
 
 ## 🎮 **Demonstration Guidelines**
 
-- **v1.x.x**: Development team only
-- **v2.x.x**: Stakeholders, management ✅ **CURRENT**
-- **v3.x.x**: End users, customers
-- **v4.x.x**: Enterprise customers
+- **v0.x.x**: Internal + external review
+- **v1.x.x**: End users, customers
+- **v2.x.x**: Enterprise customers
 
 ## 🔧 **Quick Commands**
 
 ```bash
 # Check current version
-git tag -l | grep v2
+git tag -l | grep v0
 
 # Create feature branch
 git checkout -b feature/focus-management
 
 # Tag new version
-git tag -a v2.1.0 -m "Focus management implementation"
+git tag -a v0.3.0 -m "Focus management implementation"
 
 # View version history
 git log --oneline --decorate
@@ -78,4 +72,4 @@ git log --oneline --decorate
 
 **📋 Full Strategy**: See [VERSIONING-STRATEGY.md](./VERSIONING-STRATEGY.md) for complete details
 
-**🎯 Key Principle**: *"Every major version (x.0.0) represents a stable, confirmed, deployable baseline that can be demonstrated to stakeholders with confidence."*
+**🎯 Key Principle**: *"All development baselines are 0.y.z; production begins at 1.x.x."*

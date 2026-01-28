@@ -20,7 +20,7 @@ Integrate Google Trends API to fetch historical search trends for cruise-related
 - Search terms: `region + "cruise"`, `region + "cruise holidays"`
 
 ### 3. **Ships** (from `master_sail.ship_name`)
-- Examples: "Celestyal Olympia", "Celestyal Crystal"
+- Examples: "Example Brand A", "Example Brand B"
 - Search terms: `ship_name + "cruise"`, `ship_name + "reviews"`
 
 ### 4. **Destinations/Ports** (from `itinerary.port_name`, `master_sail.port_from`, `master_sail.port_to`)
@@ -80,7 +80,7 @@ npm install google-trends-api
 "AEGEAN" → ["Aegean cruise", "Aegean cruise holidays", "Greek cruise"]
 
 // Ship → Queries
-"Celestyal Olympia" → ["Celestyal Olympia", "Celestyal Olympia cruise", "Celestyal cruise reviews"]
+"Example Brand A" → ["Example Brand A", "Example Brand A reviews", "Example brand reviews"]
 
 // Port → Queries
 "Mykonos" → ["Mykonos cruise", "Mykonos cruise port", "cruise to Mykonos"]

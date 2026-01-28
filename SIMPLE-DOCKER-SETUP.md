@@ -11,7 +11,7 @@ Just move your existing Supabase Docker setup to the miniPC. No Kong, no complex
 **On your laptop:**
 
 ```bash
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
+cd /path/to/talia
 scp setup-simple-docker-supabase.sh zomarc@192.168.1.120:~/
 ```
 

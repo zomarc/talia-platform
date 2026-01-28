@@ -25,6 +25,7 @@ import { SyncLogger } from './sync-logger.js';
 import { SyncOperation } from './sync-operation.js';
 import { SyncMetadataService } from './sync-metadata-service.js';
 import { syncEventEmitter } from './sync-event-emitter.js';
+import { getDateRange, getDateRangeConfigSummary } from '../config/date-range-config.js';
 
 const require = createRequire(import.meta.url);
 const syncConfig = require('../../sync.config.json');
@@ -458,6 +459,63 @@ class SynapseSyncService {
       if (betweenFilter?.from && betweenFilter?.to) {
         dateRange = { from: betweenFilter.from, to: betweenFilter.to };
       }
+    }
+
+    // Apply environment variable date range override if configured
+    const envDateRange = getDateRange(datasetName);
+    if (envDateRange) {
+      // Override date range
+      if (dateRange) {
+        // Log the override
+        const configSummary = getDateRangeConfigSummary();
+        console.log(`📅 Date range override active (${configSummary.environment}): Using ${envDateRange.from} to ${envDateRange.to} (overriding dataset default: ${dateRange.from} to ${dateRange.to})`);
+      } else {
+        // Environment override but no dataset date range - use env override
+        const configSummary = getDateRangeConfigSummary();
+        console.log(`📅 Date range from environment (${configSummary.environment}): Using ${envDateRange.from} to ${envDateRange.to}`);
+      }
+      dateRange = envDateRange;
+      
+      // Also update filters and replace strategies to use the overridden date range
+      // This ensures WHERE clauses use the correct dates
+      filters.forEach(filter => {
+        if (filter.operator === 'between') {
+          filter.from = envDateRange.from;
+          filter.to = envDateRange.to;
+        }
+      });
+      
+      if (replace && replace.from && replace.to) {
+        replace.from = envDateRange.from;
+        replace.to = envDateRange.to;
+      }
+      
+      // Rebuild whereClause with updated filters
+      const updatedWhereClause = this.buildWhereClause(filters);
+      const updatedSelectQuery = `SELECT ${columnsSql} FROM ${definition.source}${updatedWhereClause ? ` WHERE ${updatedWhereClause}` : ''}`;
+      
+      return {
+        tableName,
+        datasetName,
+        type: definition.type || 'direct',
+        source: definition.source,
+        targetTable: definition.target,
+        columnsSql,
+        whereClause: updatedWhereClause,
+        selectQuery: updatedSelectQuery,
+        replace,
+        definition,
+        overrides,
+        transformKey: definition.transformKey || tableName,
+        isLargeDataset: Boolean(definition.isLargeDataset),
+        rowNumberOrder: definition.rowNumberOrder || [],
+        dateColumn: definition.dateColumn,
+        supabaseDateColumn: definition.supabaseDateColumn,
+        dateRange
+      };
+    } else if (dateRange) {
+      // Using dataset default
+      console.log(`📅 Date range from dataset config: ${dateRange.from} to ${dateRange.to}`);
     }
 
     return {

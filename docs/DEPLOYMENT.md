@@ -230,10 +230,10 @@ CMD ["node", "./dist/index.js"]
 
 ```env
 # Customer Configuration
-CUSTOMER_NAME=Celestyal
-CUSTOMER_LOGO_URL=/assets/celestyal-logo.png
+CUSTOMER_NAME=CustomerOne
+CUSTOMER_LOGO_URL=/assets/customer-logo.png
 CUSTOMER_PRIMARY_COLOR=#2E86AB
-CUSTOMER_THEME=celestyal
+CUSTOMER_THEME=customer
 
 # InstantDB
 VITE_INSTANT_APP_ID=your-app-id
@@ -246,8 +246,8 @@ VITE_GRAPHQL_ENDPOINT=http://localhost:4000/graphql
 
 ```env
 # Customer Branding
-VITE_CUSTOMER_NAME=Celestyal
-VITE_CUSTOMER_LOGO=/assets/celestyal-logo.png
+VITE_CUSTOMER_NAME=CustomerOne
+VITE_CUSTOMER_LOGO=/assets/customer-logo.png
 VITE_CUSTOMER_PRIMARY_COLOR=#2E86AB
 
 # InstantDB

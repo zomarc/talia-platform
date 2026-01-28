@@ -85,6 +85,37 @@ The UI provides a Data Management page with sync buttons for all tables. Access 
 - Replace strategies are enforced per-table (`delete-all`, `delete-range`, or `none`) ensuring no full database resets occur during sync.
 - Derived tables such as `reservation_changes` run through specialised handlers that respect the configured date range.
 
+### Date Range Configuration
+
+Date ranges for data integration can be configured via environment variables to override the defaults in `sync.config.json`. This allows different environments (local vs staging) to use different data subsets.
+
+**Environment Variables:**
+- `SYNC_DATE_RANGE_FROM` - Start date (YYYY-MM-DD format, e.g., `2025-11-01`)
+- `SYNC_DATE_RANGE_TO` - End date (YYYY-MM-DD format, e.g., `2025-12-31`)
+- `ENVIRONMENT` - Environment name (local, staging, production) - used for logging
+
+**Configuration Examples:**
+
+```bash
+# Local environment (smaller subset for faster development)
+SYNC_DATE_RANGE_FROM=2025-11-01
+SYNC_DATE_RANGE_TO=2025-12-31
+ENVIRONMENT=local
+
+# Staging environment (larger complete set)
+SYNC_DATE_RANGE_FROM=2025-09-01
+SYNC_DATE_RANGE_TO=2025-12-31
+ENVIRONMENT=staging
+```
+
+**Behavior:**
+- If environment variables are set, they override the date ranges defined in `sync.config.json` datasets
+- If environment variables are not set, the system uses date ranges from the dataset configuration
+- Date ranges are applied to all table filters and replace strategies automatically
+- The configured date range is logged when sync operations start
+
+**Note:** Both `SYNC_DATE_RANGE_FROM` and `SYNC_DATE_RANGE_TO` must be set together. If only one is set, it will be ignored and dataset defaults will be used.
+
 ### Sync Implementation Patterns
 
 **Reference Implementation**: `competitor-sync.js` is the tested and correct implementation pattern for all derived table syncs. When implementing or modifying sync functions, follow this pattern:

@@ -172,6 +172,17 @@ else
   exit 1
 fi
 
+# Test schema compatibility for Admin Lite metadata fields
+echo -n '  Testing Admin Lite metadata fields... '
+schema_check=\$(curl -sS -X POST http://localhost:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ databaseTables { tableName actualDataRange { min max } lastError } }\"}' 2>/dev/null)
+if echo \"\$schema_check\" | grep -q '\"errors\"'; then
+  echo '❌ FAILED - Admin Lite schema mismatch'
+  echo \"\$schema_check\"
+  exit 1
+else
+  echo '✅ OK'
+fi
+
 # Test UI GraphQL proxy
 echo -n '  Testing UI GraphQL proxy... '
 if curl -sS -f -X POST http://localhost:5173/api/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ __typename }\"}' > /dev/null 2>&1; then

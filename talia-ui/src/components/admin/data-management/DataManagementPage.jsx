@@ -21,6 +21,7 @@ import LogsPanel from './LogsPanel.jsx';
 import ServerStatusPanel from './ServerStatusPanel.jsx';
 import TableRow from './TableRow.jsx';
 import TableHeader from './TableHeader.jsx';
+import { createTableActions } from './tableActions.js';
 import { getRootStyle } from './styles.js';
 import '../../../themes/dataMode.css';
 import './dataManagement.css';
@@ -1204,6 +1205,14 @@ The backup will be saved to: talia-server/backups/`;
     />
   );
 
+  const tableActions = createTableActions({
+    setReviewLoading,
+    setReviewData,
+    addClientLog,
+    handleSync,
+    logIdCounterRef
+  });
+
   const renderTableRows = (tableList) => (
     tableList.map((table, idx) => (
       <TableRow
@@ -1224,21 +1233,7 @@ The backup will be saved to: talia-server/backups/`;
         formatDuration={formatDuration}
         setStatusTable={setStatusTable}
         reviewLoading={reviewLoading}
-        setReviewLoading={setReviewLoading}
-        setReviewData={setReviewData}
-        addClientLog={addClientLog}
-        handleSync={handleSync}
-        handleFullSync={(tableName) => {
-          addClientLog({
-            id: `${Date.now()}-${++logIdCounterRef.current}`,
-            timestamp: new Date(),
-            type: 'info',
-            message: `⚡ Starting full refresh for "${tableName}" (will sync all data, not just changes)...`,
-            tableName
-          });
-          handleSync(tableName, true);
-        }}
-        logIdCounterRef={logIdCounterRef}
+        tableActions={tableActions}
       />
     ))
   );

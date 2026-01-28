@@ -26,3 +26,70 @@
 .dm-table-header-cell-center {
   text-align: center;
 }
+
+.dm-table-cell {
+  padding: 6px 8px;
+  font-size: 10px;
+}
+
+.dm-table-cell-sm {
+  font-size: 11px;
+}
+
+.dm-table-cell-mono {
+  font-family: monospace;
+}
+
+.dm-table-cell-left {
+  text-align: left;
+}
+
+.dm-table-cell-right {
+  text-align: right;
+}
+
+.dm-table-cell-center {
+  text-align: center;
+}
+
+.dm-table-actions {
+  text-align: center;
+}
+
+.dm-action-group {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.dm-action-button {
+  padding: 4px 8px;
+  font-size: 9px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dm-action-button-regular {
+  font-weight: 500;
+}
+
+.dm-action-button-bold {
+  font-weight: 600;
+}
+
+.dm-load-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.dm-status-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 500;
+}

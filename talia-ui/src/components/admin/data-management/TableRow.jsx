@@ -17,12 +17,7 @@ const TableRow = ({
   formatDuration,
   setStatusTable,
   reviewLoading,
-  setReviewLoading,
-  setReviewData,
-  addClientLog,
-  handleSync,
-  handleFullSync,
-  logIdCounterRef
+  tableActions
 }) => {
   const statusColors = getStatusColor(table.status);
   const isSelected = table.tableName === selectedTable;
@@ -57,116 +52,121 @@ const TableRow = ({
       }}
       title={table.lastSync ? syncFreshness.label : 'No sync data available'}
     >
-      <td style={{
-        padding: '6px 8px',
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        fontWeight: '500',
-        width: columnWidths.tableName
-      }}>
+      <td
+        className="dm-table-cell dm-table-cell-mono"
+        style={{
+          fontWeight: '500',
+          width: columnWidths.tableName
+        }}
+      >
         {table.tableName}
       </td>
-      <td style={{
-        padding: '6px 8px',
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        color: table.source === 'N/A' ? theme.colors.textMuted : theme.colors.foreground,
-        width: columnWidths.source
-      }}>
+      <td
+        className="dm-table-cell dm-table-cell-mono"
+        style={{
+          color: table.source === 'N/A' ? theme.colors.textMuted : theme.colors.foreground,
+          width: columnWidths.source
+        }}
+      >
         {table.source}
       </td>
-      <td style={{
-        padding: '6px 8px',
-        textAlign: 'center',
-        fontSize: '9px',
-        fontWeight: '600',
-        width: columnWidths.loadMethod
-      }}>
-        <span style={{
-          display: 'inline-block',
-          padding: '2px 6px',
-          borderRadius: '3px',
-          background: table.loadMethod === 'Batch'
-            ? 'rgba(33, 150, 243, 0.2)'
-            : 'rgba(76, 175, 80, 0.2)',
-          color: table.loadMethod === 'Batch'
-            ? '#2196F3'
-            : '#4CAF50',
-          border: `1px solid ${table.loadMethod === 'Batch' ? '#2196F3' : '#4CAF50'}`
-        }}>
+      <td
+        className="dm-table-cell dm-table-cell-center"
+        style={{
+          fontSize: '9px',
+          fontWeight: '600',
+          width: columnWidths.loadMethod
+        }}
+      >
+        <span
+          className="dm-load-badge"
+          style={{
+            background: table.loadMethod === 'Batch'
+              ? 'rgba(33, 150, 243, 0.2)'
+              : 'rgba(76, 175, 80, 0.2)',
+            color: table.loadMethod === 'Batch'
+              ? '#2196F3'
+              : '#4CAF50',
+            border: `1px solid ${table.loadMethod === 'Batch' ? '#2196F3' : '#4CAF50'}`
+          }}
+        >
           {table.loadMethod || 'N/A'}
         </span>
       </td>
-      <td style={{
-        padding: '6px 8px',
-        textAlign: 'right',
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        width: columnWidths.rowCount
-      }}>
+      <td
+        className="dm-table-cell dm-table-cell-mono dm-table-cell-right"
+        style={{ width: columnWidths.rowCount }}
+      >
         {table.rowCount.toLocaleString()}
       </td>
-      <td style={{
-        padding: '8px 12px',
-        fontSize: '11px',
-        width: columnWidths.dateRange,
-        color: theme.colors.textSecondary
-      }}>
+      <td
+        className="dm-table-cell dm-table-cell-sm"
+        style={{
+          padding: '8px 12px',
+          width: columnWidths.dateRange,
+          color: theme.colors.textSecondary
+        }}
+      >
         {formatDateRange(table.dateRange)}
       </td>
-      <td style={{
-        padding: '8px 12px',
-        fontSize: '11px',
-        width: columnWidths.lastSync,
-        color: theme.colors.textSecondary
-      }}>
+      <td
+        className="dm-table-cell dm-table-cell-sm"
+        style={{
+          padding: '8px 12px',
+          width: columnWidths.lastSync,
+          color: theme.colors.textSecondary
+        }}
+      >
         {formatDateTime(table.lastSync)}
       </td>
-      <td style={{
-        padding: '8px 12px',
-        fontSize: '11px',
-        width: columnWidths.latestSnapshot,
-        color: table.latestSnapshotDate ? theme.colors.textSecondary : theme.colors.textMuted
-      }}>
+      <td
+        className="dm-table-cell dm-table-cell-sm"
+        style={{
+          padding: '8px 12px',
+          width: columnWidths.latestSnapshot,
+          color: table.latestSnapshotDate ? theme.colors.textSecondary : theme.colors.textMuted
+        }}
+      >
         {table.latestSnapshotDate ? formatDate(table.latestSnapshotDate) : 'N/A'}
       </td>
-      <td style={{
-        padding: '8px 12px',
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        textAlign: 'right',
-        color: table.recordsProcessed !== null && table.recordsProcessed !== undefined ? theme.colors.textSecondary : theme.colors.textMuted,
-        width: columnWidths.recordsProcessed
-      }}>
+      <td
+        className="dm-table-cell dm-table-cell-mono dm-table-cell-right"
+        style={{
+          padding: '8px 12px',
+          color: table.recordsProcessed !== null && table.recordsProcessed !== undefined ? theme.colors.textSecondary : theme.colors.textMuted,
+          width: columnWidths.recordsProcessed
+        }}
+      >
         {table.recordsProcessed !== null && table.recordsProcessed !== undefined
           ? table.recordsProcessed.toLocaleString()
           : '—'}
       </td>
-      <td style={{
-        padding: '8px 12px',
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        textAlign: 'right',
-        color: table.changesDetected !== null && table.changesDetected !== undefined ? theme.colors.textSecondary : theme.colors.textMuted,
-        width: columnWidths.changesDetected
-      }}>
+      <td
+        className="dm-table-cell dm-table-cell-mono dm-table-cell-right"
+        style={{
+          padding: '8px 12px',
+          color: table.changesDetected !== null && table.changesDetected !== undefined ? theme.colors.textSecondary : theme.colors.textMuted,
+          width: columnWidths.changesDetected
+        }}
+      >
         {table.changesDetected !== null && table.changesDetected !== undefined
           ? table.changesDetected.toLocaleString()
           : '—'}
       </td>
-      <td style={{
-        padding: '8px 12px',
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        color: table.syncDuration === null ? theme.colors.textMuted : theme.colors.textSecondary,
-        width: columnWidths.syncDuration
-      }}>
+      <td
+        className="dm-table-cell dm-table-cell-sm dm-table-cell-mono"
+        style={{
+          padding: '8px 12px',
+          color: table.syncDuration === null ? theme.colors.textMuted : theme.colors.textSecondary,
+          width: columnWidths.syncDuration
+        }}
+      >
         {formatDuration(table.syncDuration)}
       </td>
-      <td style={{
-        padding: '6px 8px',
-        width: columnWidths.status
-      }}>
+      <td
+        className="dm-table-cell"
+        style={{ width: columnWidths.status }}
+      >
         {isSyncing ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '140px' }}>
             <div style={{
@@ -235,41 +235,31 @@ const TableRow = ({
             )}
           </div>
         ) : (
-          <span style={{
-            display: 'inline-block',
-            padding: '2px 6px',
-            borderRadius: '3px',
-            fontSize: '9px',
-            fontWeight: '500',
-            background: statusColors.bg,
-            color: statusColors.text
-          }}>
+          <span
+            className="dm-status-badge"
+            style={{
+              background: statusColors.bg,
+              color: statusColors.text
+            }}
+          >
             {table.status}
           </span>
         )}
       </td>
       <td
-        style={{
-          padding: '6px 8px',
-          textAlign: 'center',
-          width: columnWidths.actions
-        }}
+        className="dm-table-cell dm-table-actions"
+        style={{ width: columnWidths.actions }}
         onClick={(e) => e.stopPropagation()}
       >
         {table.source !== 'N/A' && table.type !== 'unknown' && table.type !== 'system' && table.type !== 'application' ? (
-          <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="dm-action-group">
             <button
               onClick={() => setStatusTable(table)}
+              className="dm-action-button dm-action-button-regular"
               style={{
-                padding: '4px 8px',
-                fontSize: '9px',
                 background: 'rgba(255, 255, 255, 0.06)',
                 color: theme.colors.foreground,
-                border: `1px solid ${theme.colors.glassBorder}`,
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: '500',
-                transition: 'all 0.2s'
+                border: `1px solid ${theme.colors.glassBorder}`
               }}
               title="View table status details"
             >
@@ -277,67 +267,15 @@ const TableRow = ({
             </button>
             {selectedTable === table.tableName && (
               <button
-                onClick={async () => {
-                  setReviewLoading(true);
-                  try {
-                    const query = `
-                          query GetTableData($tableName: String!, $limit: Int) {
-                            tableData(tableName: $tableName, limit: $limit)
-                          }
-                        `;
-
-                    const response = await fetch('/api/graphql', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        query,
-                        variables: { tableName: table.tableName, limit: 100 }
-                      })
-                    });
-
-                    if (!response.ok) {
-                      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-                    }
-
-                    const result = await response.json();
-
-                    if (result.errors && result.errors.length > 0) {
-                      throw new Error(`GraphQL error: ${result.errors[0].message}`);
-                    }
-
-                    const data = result.data?.tableData || [];
-                    setReviewData({ tableName: table.tableName, data });
-                    addClientLog({
-                      id: `${Date.now()}-${++logIdCounterRef.current}`,
-                      timestamp: new Date(),
-                      type: 'info',
-                      message: `Loaded ${data.length} rows from ${table.tableName}`,
-                      tableName: table.tableName
-                    });
-                  } catch (err) {
-                    addClientLog({
-                      id: `${Date.now()}-${++logIdCounterRef.current}`,
-                      timestamp: new Date(),
-                      type: 'error',
-                      message: `❌ Failed to load data for ${table.tableName}: ${err.message}`,
-                      tableName: table.tableName
-                    });
-                  } finally {
-                    setReviewLoading(false);
-                  }
-                }}
+                onClick={() => tableActions.handleReview(table)}
                 disabled={reviewLoading}
+                className="dm-action-button dm-action-button-bold"
                 style={{
-                  padding: '4px 8px',
-                  fontSize: '9px',
                   background: reviewLoading ? theme.colors.textMuted : '#4caf50',
                   color: reviewLoading ? theme.colors.textSecondary : '#ffffff',
                   border: 'none',
-                  borderRadius: '4px',
                   cursor: reviewLoading ? 'not-allowed' : 'pointer',
-                  fontWeight: '600',
-                  opacity: reviewLoading ? 0.6 : 1,
-                  transition: 'all 0.2s'
+                  opacity: reviewLoading ? 0.6 : 1
                 }}
                 title="Review top 100 rows"
               >
@@ -345,11 +283,10 @@ const TableRow = ({
               </button>
             )}
             <button
-              onClick={() => handleSync(table.tableName, false)}
+              onClick={() => tableActions.handleIncrementalSync(table)}
               disabled={isSyncing}
+              className="dm-action-button dm-action-button-regular"
               style={{
-                padding: '4px 8px',
-                fontSize: '9px',
                 background: isSyncing
                   ? theme.colors.textMuted
                   : theme.colors.accent,
@@ -357,22 +294,18 @@ const TableRow = ({
                   ? theme.colors.textSecondary
                   : '#0f0f23',
                 border: 'none',
-                borderRadius: '4px',
                 cursor: isSyncing ? 'not-allowed' : 'pointer',
-                fontWeight: '500',
-                opacity: isSyncing ? 0.6 : 1,
-                transition: 'all 0.2s'
+                opacity: isSyncing ? 0.6 : 1
               }}
               title="Incremental sync"
             >
               {isSyncing ? '⏳ Syncing...' : '🔄 Sync'}
             </button>
             <button
-              onClick={() => handleFullSync(table.tableName)}
+              onClick={() => tableActions.handleFullSync(table)}
               disabled={isSyncing}
+              className="dm-action-button dm-action-button-bold"
               style={{
-                padding: '4px 8px',
-                fontSize: '9px',
                 background: isSyncing
                   ? theme.colors.textMuted
                   : '#ff6b35',
@@ -380,11 +313,8 @@ const TableRow = ({
                   ? theme.colors.textSecondary
                   : '#ffffff',
                 border: 'none',
-                borderRadius: '4px',
                 cursor: isSyncing ? 'not-allowed' : 'pointer',
-                fontWeight: '600',
-                opacity: isSyncing ? 0.6 : 1,
-                transition: 'all 0.2s'
+                opacity: isSyncing ? 0.6 : 1
               }}
               title="Force full refresh (syncs all data)"
             >

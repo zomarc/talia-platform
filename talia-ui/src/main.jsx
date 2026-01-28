@@ -115,7 +115,7 @@ const DevSwitcher = () => {
     currentEvent: null,
     persistedEvent: null
   });
-  const isAdminLite = import.meta.env.DEV && window.location.pathname === '/admin-lite';
+  const isAdminLite = window.location.pathname === '/admin-lite';
   
   // Check localStorage for saved preference on mount
   useEffect(() => {

@@ -1,0 +1,449 @@
+/**
+ * Component Base Styles
+ * 
+ * Shared CSS classes for all components. Components should use these
+ * classes instead of inline styles for consistent, maintainable styling.
+ * 
+ * Naming Convention:
+ *   .talia-{component}        - Component container
+ *   .talia-{component}__{el}  - Component element (BEM-style)
+ *   .talia--{modifier}        - Global modifier
+ */
+
+/* ============================================================================
+   Report Container
+   Standard wrapper for all report/panel components
+   Clean, minimal design with focus on content
+   ============================================================================ */
+
+.talia-report {
+  height: 100%;
+  width: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  font-family: var(--theme-font-family);
+  font-size: 11px;
+}
+
+/* Minimal header - compact, clean */
+.talia-report__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--theme-glass);
+  border-bottom: 1px solid var(--theme-border-light);
+  flex-shrink: 0;
+  min-height: 32px;
+}
+
+.talia-report__header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.talia-report__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--theme-fg);
+  letter-spacing: 0.3px;
+}
+
+.talia-report__subtitle {
+  margin: 0;
+  font-size: 10px;
+  color: var(--theme-text-muted);
+  font-weight: 400;
+}
+
+.talia-report__actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Content area - minimal padding, let table breathe */
+.talia-report__content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+/* Minimal footer - subtle, informational */
+.talia-report__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  background: var(--theme-glass);
+  border-top: 1px solid var(--theme-border-light);
+  font-size: 9px;
+  color: var(--theme-text-muted);
+  flex-shrink: 0;
+  min-height: 22px;
+  font-family: var(--theme-font-family-monospace);
+  letter-spacing: 0.3px;
+}
+
+.talia-report__footer span {
+  opacity: 0.8;
+}
+
+/* No header variant - table only */
+.talia-report--minimal .talia-report__header,
+.talia-report--minimal .talia-report__footer {
+  display: none;
+}
+
+.talia-report--minimal .talia-report__content {
+  padding: 0;
+}
+
+/* ============================================================================
+   Table Container
+   Wrapper for Tabulator tables
+   ============================================================================ */
+
+.talia-table {
+  height: 100%;
+  width: 100%;
+}
+
+.talia-table--bordered {
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+}
+
+/* ============================================================================
+   Chart Container
+   Wrapper for Chart.js charts
+   ============================================================================ */
+
+.talia-chart {
+  height: 100%;
+  width: 100%;
+  position: relative;
+}
+
+.talia-chart__canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ============================================================================
+   Buttons - Clean, minimal design
+   ============================================================================ */
+
+.talia-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-family: var(--theme-font-family);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--theme-text-secondary);
+  background: transparent;
+  border: 1px solid var(--theme-border-light);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
+.talia-btn:hover {
+  color: var(--theme-fg);
+  background: var(--theme-glass);
+  border-color: var(--theme-border);
+}
+
+.talia-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--theme-accent-light);
+}
+
+.talia-btn:active {
+  transform: translateY(1px);
+}
+
+.talia-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.talia-btn--primary {
+  background: var(--theme-accent);
+  border-color: var(--theme-accent);
+  color: #ffffff;
+}
+
+.talia-btn--primary:hover {
+  background: var(--theme-accent-hover);
+  border-color: var(--theme-accent-hover);
+}
+
+.talia-btn--small {
+  padding: 2px 6px;
+  font-size: 9px;
+}
+
+.talia-btn--icon {
+  padding: 4px;
+  min-width: 22px;
+}
+
+.talia-btn--ghost {
+  border-color: transparent;
+}
+
+.talia-btn--ghost:hover {
+  border-color: var(--theme-border-light);
+}
+
+/* ============================================================================
+   Loading & Empty States
+   ============================================================================ */
+
+.talia-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+  gap: var(--theme-padding-md);
+  color: var(--theme-text-muted);
+}
+
+.talia-loading__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--theme-border);
+  border-top-color: var(--theme-accent);
+  border-radius: 50%;
+  animation: talia-spin 0.8s linear infinite;
+}
+
+.talia-loading__text {
+  font-size: var(--theme-font-size-sm);
+}
+
+@keyframes talia-spin {
+  to { transform: rotate(360deg); }
+}
+
+.talia-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+  gap: var(--theme-padding-sm);
+  color: var(--theme-text-muted);
+  text-align: center;
+  padding: var(--theme-padding-xl);
+}
+
+.talia-empty__icon {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+.talia-empty__title {
+  font-size: var(--theme-font-size-lg);
+  font-weight: 500;
+  color: var(--theme-text-secondary);
+}
+
+.talia-empty__message {
+  font-size: var(--theme-font-size-sm);
+  max-width: 300px;
+}
+
+/* ============================================================================
+   Error State
+   ============================================================================ */
+
+.talia-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+  gap: var(--theme-padding-sm);
+  padding: var(--theme-padding-xl);
+  text-align: center;
+}
+
+.talia-error__icon {
+  font-size: 48px;
+  color: var(--theme-error);
+}
+
+.talia-error__title {
+  font-size: var(--theme-font-size-lg);
+  font-weight: 500;
+  color: var(--theme-error);
+}
+
+.talia-error__message {
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-muted);
+  max-width: 400px;
+}
+
+/* ============================================================================
+   Card Component
+   ============================================================================ */
+
+.talia-card {
+  background: var(--theme-glass);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-md);
+  padding: var(--theme-padding-md);
+}
+
+.talia-card--elevated {
+  box-shadow: var(--theme-shadow-md);
+}
+
+.talia-card__header {
+  margin-bottom: var(--theme-padding-md);
+}
+
+.talia-card__title {
+  margin: 0;
+  font-size: var(--theme-font-size-lg);
+  font-weight: 600;
+}
+
+/* ============================================================================
+   Metrics/KPI Display
+   ============================================================================ */
+
+.talia-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.talia-metric__label {
+  font-size: var(--theme-font-size-xs);
+  color: var(--theme-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.talia-metric__value {
+  font-size: var(--theme-font-size-xl);
+  font-weight: 600;
+  font-family: var(--theme-font-family-monospace);
+}
+
+.talia-metric__value--positive {
+  color: var(--theme-delta-positive);
+}
+
+.talia-metric__value--negative {
+  color: var(--theme-delta-negative);
+}
+
+.talia-metric__change {
+  font-size: var(--theme-font-size-xs);
+  color: var(--theme-text-muted);
+}
+
+/* ============================================================================
+   Grid Layout
+   ============================================================================ */
+
+.talia-grid {
+  display: grid;
+  gap: var(--theme-padding-md);
+}
+
+.talia-grid--2 { grid-template-columns: repeat(2, 1fr); }
+.talia-grid--3 { grid-template-columns: repeat(3, 1fr); }
+.talia-grid--4 { grid-template-columns: repeat(4, 1fr); }
+
+@media (max-width: 768px) {
+  .talia-grid--2,
+  .talia-grid--3,
+  .talia-grid--4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================================
+   Accessibility
+   ============================================================================ */
+
+/* Focus visible for keyboard navigation */
+.talia-btn:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}
+
+/* Screen reader only */
+.talia-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Skip link for keyboard navigation */
+.talia-skip-link {
+  position: absolute;
+  top: -100px;
+  left: 0;
+  padding: var(--theme-padding-sm) var(--theme-padding-md);
+  background: var(--theme-accent);
+  color: #fff;
+  z-index: 9999;
+}
+
+.talia-skip-link:focus {
+  top: 0;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .talia-report,
+  .talia-card {
+    border-width: 2px;
+  }
+  
+  .talia-btn {
+    border-width: 2px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .talia-loading__spinner {
+    animation: none;
+  }
+  
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}

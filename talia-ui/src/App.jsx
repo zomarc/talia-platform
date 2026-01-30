@@ -9,6 +9,7 @@ import RevenueBreakdown from "./components/focus-panels/RevenueBreakdown";
 import ExceptionList from "./components/focus-panels/ExceptionList";
 import ItineraryList from "./components/focus-panels/ItineraryList";
 import MasterVoyagePerformanceSummary from "./components/focus-panels/MasterVoyagePerformanceSummary";
+import VoyageReport from "./components/focus-panels/VoyageReport";
 import { apolloClient, GraphQLUtils } from "./lib/apolloClient";
 // Focus Management Integration
 import { FocusSelector, FocusManager } from "./components/focus-management";
@@ -1386,6 +1387,9 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
           <button style={buttonStyle} onClick={() => onAddPanel('master-voyage-performance-summary', 'Master Voyage Performance Summary')}>
             📊 Master Voyage Performance Summary
           </button>
+          <button style={buttonStyle} onClick={() => onAddPanel('voyage-report', 'Voyage Report')}>
+            📈 Voyage Report
+          </button>
         </div>
       </div>
 
@@ -2649,6 +2653,10 @@ function App() {
               // Master Voyage Performance Summary
               "master-voyage-performance-summary": (props) => {
                 return <MasterVoyagePerformanceSummary theme={theme} {...props} />;
+              },
+              // Voyage Report (standardized template)
+              "voyage-report": (props) => {
+                return <VoyageReport theme={theme} {...props} />;
               }
             }} 
             onReady={onReady}

@@ -110,6 +110,9 @@ const TestPage = () => {
     if (selectedComponent === 'MasterVoyagePerformanceSummary') {
       return { theme };
     }
+    if (selectedComponent === 'DataTypesValidation') {
+      return { theme };
+    }
     return {};
   };
 

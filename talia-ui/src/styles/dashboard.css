@@ -1,0 +1,492 @@
+/**
+ * Dashboard Component Styles
+ * 
+ * All Dashboard-specific styling using theme CSS variables.
+ * No inline styles - all styling externalized.
+ */
+
+/* ============================================================================
+   Sidebar Styles
+   ============================================================================ */
+
+.dashboard-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--theme-sidebar);
+  border-right: 1px solid var(--theme-sidebar-border);
+  overflow-y: auto;
+}
+
+.dashboard-sidebar__header {
+  padding: var(--theme-padding-sm);
+  text-align: center;
+  border-bottom: 1px solid var(--theme-sidebar-border);
+}
+
+.dashboard-sidebar__close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--theme-fg);
+  padding: var(--theme-padding-xs);
+}
+
+.dashboard-sidebar__close-btn:hover {
+  color: var(--theme-accent);
+}
+
+.dashboard-sidebar__nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--theme-padding-sm);
+  gap: var(--theme-padding-sm);
+}
+
+.dashboard-sidebar__nav-btn {
+  width: 32px;
+  height: 32px;
+  margin-bottom: var(--theme-padding-sm);
+  background: var(--theme-glass);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  color: var(--theme-fg);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dashboard-sidebar__nav-btn:hover {
+  background: var(--theme-glass-hover);
+  border-color: var(--theme-border-strong);
+}
+
+/* ============================================================================
+   Sidebar Explorer
+   ============================================================================ */
+
+.dashboard-explorer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--theme-bg-solid);
+}
+
+.dashboard-explorer__header {
+  padding: var(--theme-padding-sm) var(--theme-padding-md);
+  border-bottom: 1px solid var(--theme-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dashboard-explorer__title {
+  font-size: var(--theme-font-size-lg);
+  font-weight: 600;
+  color: var(--theme-fg);
+}
+
+.dashboard-explorer__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ============================================================================
+   Sidebar Sections
+   ============================================================================ */
+
+.dashboard-section {
+  border-bottom: 1px solid var(--theme-border-light);
+}
+
+.dashboard-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--theme-padding-sm) var(--theme-padding-md);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+.dashboard-section__header:hover {
+  background: var(--theme-glass);
+}
+
+.dashboard-section__title {
+  font-size: var(--theme-font-size);
+  font-weight: 500;
+  color: var(--theme-fg);
+}
+
+.dashboard-section__icon {
+  font-size: 10px;
+  color: var(--theme-text-muted);
+  transition: transform 0.2s;
+}
+
+.dashboard-section__icon--expanded {
+  transform: rotate(90deg);
+}
+
+.dashboard-section__content {
+  padding: var(--theme-padding-sm) var(--theme-padding-md);
+  display: none;
+}
+
+.dashboard-section__content--expanded {
+  display: block;
+}
+
+.dashboard-section--expanded {
+  flex: 1;
+}
+
+/* ============================================================================
+   Form Elements in Sidebar
+   ============================================================================ */
+
+.dashboard-form-group {
+  margin-bottom: var(--theme-padding-sm);
+}
+
+.dashboard-form-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: var(--theme-font-size-sm);
+  font-weight: 500;
+  color: var(--theme-fg);
+}
+
+.dashboard-form-input {
+  width: 100%;
+  background-color: var(--theme-bg-solid);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  color: var(--theme-fg);
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size);
+  padding: var(--theme-padding-xs) var(--theme-padding-sm);
+}
+
+.dashboard-form-input:focus {
+  outline: none;
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 2px var(--theme-accent-light);
+}
+
+.dashboard-form-hint {
+  font-size: calc(var(--theme-font-size) - 2px);
+  color: var(--theme-text-muted);
+  margin-top: 2px;
+}
+
+/* ============================================================================
+   Sidebar Buttons
+   ============================================================================ */
+
+.dashboard-btn {
+  width: 100%;
+  padding: var(--theme-padding-xs) var(--theme-padding-sm);
+  margin-bottom: var(--theme-padding-xs);
+  background: var(--theme-glass);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  color: var(--theme-fg);
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.dashboard-btn:hover {
+  background: var(--theme-glass-hover);
+  border-color: var(--theme-border-strong);
+}
+
+.dashboard-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--theme-accent-light);
+}
+
+.dashboard-btn--small {
+  font-size: calc(var(--theme-font-size) - 2px);
+  padding: 2px 6px;
+}
+
+.dashboard-btn-group {
+  display: flex;
+  gap: 4px;
+  margin-top: var(--theme-padding-sm);
+  flex-wrap: wrap;
+}
+
+/* ============================================================================
+   Focus Management
+   ============================================================================ */
+
+.dashboard-focus-card {
+  background: var(--theme-glass);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  padding: var(--theme-padding-sm);
+  margin-bottom: var(--theme-padding-xs);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dashboard-focus-card:hover {
+  background: var(--theme-glass-hover);
+  border-color: var(--theme-border-strong);
+}
+
+.dashboard-focus-card--selected {
+  background: var(--theme-selected);
+  border-color: var(--theme-accent);
+}
+
+.dashboard-focus-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.dashboard-focus-card__name {
+  font-size: var(--theme-font-size);
+  font-weight: 500;
+  color: var(--theme-fg);
+}
+
+.dashboard-focus-card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-padding-xs);
+  margin-top: 4px;
+  font-size: var(--theme-font-size-xs);
+  color: var(--theme-text-muted);
+}
+
+/* ============================================================================
+   User Info Footer
+   ============================================================================ */
+
+.dashboard-user-info {
+  margin-top: auto;
+  padding: var(--theme-padding-sm) var(--theme-padding-md);
+  border-top: 1px solid var(--theme-border);
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-muted);
+}
+
+/* ============================================================================
+   Main Content Area
+   ============================================================================ */
+
+.dashboard-main {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--theme-bg-solid);
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--theme-padding-sm) var(--theme-padding-md);
+  background: var(--theme-glass);
+  border-bottom: 1px solid var(--theme-border);
+  flex-shrink: 0;
+}
+
+.dashboard-header__left {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-padding-sm);
+}
+
+.dashboard-header__right {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-padding-sm);
+}
+
+/* ============================================================================
+   Mode Selectors
+   ============================================================================ */
+
+.dashboard-mode-btn {
+  padding: var(--theme-padding-xs) var(--theme-padding-sm);
+  background: var(--theme-glass);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dashboard-mode-btn:hover {
+  background: var(--theme-glass-hover);
+}
+
+.dashboard-mode-btn--active {
+  background: var(--theme-accent);
+  border-color: var(--theme-accent);
+  color: #ffffff;
+}
+
+/* ============================================================================
+   Loading & Error States
+   ============================================================================ */
+
+.dashboard-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--theme-padding-md);
+  color: var(--theme-text-muted);
+}
+
+.dashboard-loading__icon {
+  font-size: calc(var(--theme-font-size) + 4px);
+  color: var(--theme-accent);
+  margin-bottom: var(--theme-padding-sm);
+}
+
+.dashboard-loading__text {
+  font-size: calc(var(--theme-font-size) - 1px);
+  color: var(--theme-text-secondary);
+}
+
+.dashboard-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--theme-padding-sm);
+  padding: var(--theme-padding-xl);
+  text-align: center;
+}
+
+.dashboard-error__icon {
+  font-size: calc(var(--theme-font-size) + 4px);
+  color: var(--theme-error);
+  margin-bottom: var(--theme-padding-sm);
+}
+
+.dashboard-error__title {
+  font-size: var(--theme-font-size-lg);
+  font-weight: 600;
+  color: var(--theme-error);
+  margin-bottom: var(--theme-padding-sm);
+}
+
+.dashboard-error__message {
+  font-size: calc(var(--theme-font-size) - 1px);
+  color: var(--theme-text-secondary);
+  margin-bottom: var(--theme-padding-md);
+}
+
+.dashboard-error__details {
+  font-size: calc(var(--theme-font-size) - 2px);
+  color: var(--theme-text-muted);
+  margin-top: var(--theme-padding-sm);
+  font-family: var(--theme-font-family-monospace);
+}
+
+/* ============================================================================
+   Generic Panel
+   ============================================================================ */
+
+.dashboard-panel {
+  padding: var(--theme-padding-md);
+  height: 100%;
+  overflow: auto;
+}
+
+.dashboard-panel__title {
+  margin: 0;
+  margin-bottom: var(--theme-padding-sm);
+  font-weight: 600;
+  font-size: var(--theme-font-size-lg);
+  color: var(--theme-fg);
+}
+
+.dashboard-panel__content {
+  color: var(--theme-text-secondary);
+  font-size: var(--theme-font-size);
+}
+
+/* ============================================================================
+   GraphQL Data Display
+   ============================================================================ */
+
+.dashboard-graphql-container {
+  padding: var(--theme-padding-md);
+  height: 100%;
+  overflow: auto;
+}
+
+.dashboard-graphql-header {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-padding-sm);
+  margin-bottom: var(--theme-padding-md);
+}
+
+.dashboard-graphql-title {
+  font-size: calc(var(--theme-font-size) + 2px);
+  font-weight: 600;
+  color: var(--theme-fg);
+}
+
+.dashboard-graphql-grid {
+  display: grid;
+  gap: var(--theme-padding-md);
+}
+
+.dashboard-graphql-grid--2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.dashboard-graphql-grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.dashboard-graphql-grid--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.dashboard-graphql-card {
+  background: var(--theme-glass);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-md);
+  padding: var(--theme-padding-md);
+}
+
+.dashboard-graphql-card__label {
+  font-size: var(--theme-font-size-xs);
+  color: var(--theme-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.dashboard-graphql-card__value {
+  font-size: var(--theme-font-size-xl);
+  font-weight: 600;
+  font-family: var(--theme-font-family-monospace);
+  color: var(--theme-fg);
+}

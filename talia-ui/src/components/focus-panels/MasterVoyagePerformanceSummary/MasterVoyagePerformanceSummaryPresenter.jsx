@@ -6,120 +6,60 @@
  * - No custom filter generation → Uses valuesLookup
  * - No custom styling → Uses Tabulator themes
  * - No custom sorting → Uses Tabulator initialSort
- * - Conditional formatting via cellFormatter
+ * - Conditional formatting via shared formatters from dataTypes library
  */
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
+import {
+  createPerformanceFormatter,
+  createDeltaFormatter,
+  createRowFormatter,
+  isEmpty,
+  parseNumber
+} from '../../../lib/dataTypes';
 
 /**
- * Helper function to format currency
+ * Helper function to format currency (uses shared parseNumber)
  */
 const formatCurrency = (value) => {
-  if (value == null || value === '') return '';
+  if (isEmpty(value)) return '';
+  const num = parseNumber(value);
+  if (num === null) return '';
   return new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
-  }).format(value);
+  }).format(num);
 };
 
 /**
  * Helper function to format percentage
  */
 const formatPercentage = (value) => {
-  if (value == null || value === '') return '';
-  return `${parseFloat(value).toFixed(2)}%`;
+  if (isEmpty(value)) return '';
+  const num = parseNumber(value);
+  if (num === null) return '';
+  return `${num.toFixed(2)}%`;
 };
 
 /**
  * Helper function to format number
  */
 const formatNumber = (value) => {
-  if (value == null || value === '') return '';
-  return new Intl.NumberFormat('en-US').format(parseFloat(value));
+  if (isEmpty(value)) return '';
+  const num = parseNumber(value);
+  if (num === null) return '';
+  return new Intl.NumberFormat('en-US').format(num);
 };
 
-/**
- * Conditional formatter for performance indicators
- * Returns green for good, red for bad, orange for warning
- */
+// Use shared formatters from dataTypes library
 const performanceFormatter = (cell, threshold = 100) => {
-  const value = cell.getValue();
-  if (value == null || value === '') return '';
-  
-  const element = cell.getElement();
-  const numValue = parseFloat(value);
-  
-  // Reset styles
-  element.style.backgroundColor = '';
-  element.style.color = '';
-  element.style.fontWeight = '';
-  
-  // Apply conditional formatting
-  if (numValue >= threshold) {
-    element.style.backgroundColor = '#d4edda'; // Green
-    element.style.color = '#155724';
-  } else if (numValue < threshold * 0.8) {
-    element.style.backgroundColor = '#f8d7da'; // Red
-    element.style.color = '#721c24';
-  } else {
-    element.style.backgroundColor = '#fff3cd'; // Orange/Yellow
-    element.style.color = '#856404';
-  }
-  
-  // Bold summary rows
-  const rowData = cell.getRow().getData();
-  if (rowData.rowType === 'month' || rowData.rowType === 'category' || rowData.rowType === 'total') {
-    element.style.fontWeight = 'bold';
-  }
-  
-  return formatPercentage(value);
+  return createPerformanceFormatter(threshold)(cell);
 };
 
-/**
- * Conditional formatter for negative/positive indicators
- */
-const deltaFormatter = (cell) => {
-  const value = cell.getValue();
-  if (value == null || value === '') return '';
-  
-  const element = cell.getElement();
-  const numValue = parseFloat(value);
-  
-  // Reset styles
-  element.style.backgroundColor = '';
-  element.style.color = '';
-  
-  // Apply conditional formatting
-  if (numValue > 0) {
-    element.style.backgroundColor = '#d4edda'; // Green
-    element.style.color = '#155724';
-  } else if (numValue < 0) {
-    element.style.backgroundColor = '#f8d7da'; // Red
-    element.style.color = '#721c24';
-  } else {
-    element.style.backgroundColor = '#f0f0f0'; // Neutral
-  }
-  
-  return formatPercentage(value);
-};
+const deltaFormatter = createDeltaFormatter();
 
-/**
- * Row formatter to style summary rows
- */
-const rowFormatter = (row) => {
-  const data = row.getData();
-  const element = row.getElement();
-  
-  // Style summary rows differently
-  if (data.rowType === 'month' || data.rowType === 'total') {
-    element.style.fontWeight = 'bold';
-    element.style.backgroundColor = '#f5f5f5';
-  } else if (data.rowType === 'category') {
-    element.style.fontStyle = 'italic';
-    element.style.backgroundColor = '#fafafa';
-  }
-};
+const rowFormatter = createRowFormatter();
 
 /**
  * Presentational component for Master Voyage Performance Summary

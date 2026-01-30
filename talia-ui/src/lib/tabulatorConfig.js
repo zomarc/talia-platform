@@ -1,135 +1,56 @@
 /**
- * Shared Tabulator Configuration
- * Centralized configuration for all Tabulator table instances
+ * Tabulator Configuration
+ * 
+ * Local installation via npm - tabulator-tables@6.3.1
+ * Uses midnight theme as base with custom overrides in tabulator-theme.css
  */
 
-// CDN URLs for Tabulator - using default theme
-export const TABULATOR_CONFIG = {
-  css: 'https://unpkg.com/tabulator-tables@5.6.1/dist/css/tabulator.min.css',
-  js: 'https://unpkg.com/tabulator-tables@5.6.1/dist/js/tabulator.min.js'
-};
+// Import Tabulator from npm package
+import { TabulatorFull as Tabulator } from 'tabulator-tables';
+
+// Import Tabulator midnight theme CSS
+import 'tabulator-tables/dist/css/tabulator_midnight.min.css';
 
 /**
- * Load Tabulator CSS from CDN
- * @param {string} url - CSS URL
- * @returns {Promise} Resolves when CSS is loaded
- */
-export const loadTabulatorCss = (url = TABULATOR_CONFIG.css) => {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`link[href="${url}"]`)) {
-      resolve();
-      return;
-    }
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = url;
-    link.onload = () => resolve();
-    link.onerror = () => reject(new Error(`Failed to load Tabulator CSS: ${url}`));
-    document.head.appendChild(link);
-  });
-};
-
-/**
- * Load Tabulator JS from CDN
- * @param {string} url - JS URL
- * @returns {Promise<Tabulator>} Resolves with Tabulator constructor
- */
-export const loadTabulatorJs = (url = TABULATOR_CONFIG.js) => {
-  return new Promise((resolve, reject) => {
-    if (window.Tabulator || window.TabulatorFull) {
-      resolve(window.Tabulator || window.TabulatorFull);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = url;
-    script.onload = () => resolve(window.Tabulator || window.TabulatorFull);
-    script.onerror = () => reject(new Error(`Failed to load Tabulator JS: ${url}`));
-    document.head.appendChild(script);
-  });
-};
-
-/**
- * Inject global Tabulator custom CSS after theme CSS loads
- * REMOVED - Using Tabulator defaults only
- */
-export const injectGlobalTabulatorCss = () => {
-  // No custom CSS - using Tabulator defaults
-  return;
-};
-
-/**
- * Initialize Tabulator (loads both CSS and JS)
- * Loads midnight theme CSS, then injects our global custom CSS
- * @returns {Promise<Tabulator>} Resolves with Tabulator constructor
+ * Initialize Tabulator
+ * Returns the Tabulator constructor (already loaded via npm)
  */
 export const initTabulator = async () => {
-  await loadTabulatorCss();
-  // Inject global custom CSS after theme CSS loads
-  injectGlobalTabulatorCss();
-  const Tabulator = await loadTabulatorJs();
   return Tabulator;
 };
 
 /**
- * Get theme-aware Tabulator options
- * Merges default options with theme-specific settings
- * @param {Object} options - Additional options to merge
- * @param {Object} themeContext - Theme context from useTheme hook (optional)
- * @returns {Object} Tabulator configuration object
+ * Get Tabulator options with defaults
  */
-export const getTabulatorOptions = (options = {}, themeContext = null) => {
-  const baseOptions = {
+export const getTabulatorOptions = (options = {}) => {
+  return {
     ...DEFAULT_TABULATOR_OPTIONS,
     ...options
   };
-
-  // Apply theme-aware settings if theme context is provided
-  if (themeContext) {
-    const { fontSize, spacingMode } = themeContext;
-    
-    // Override with theme-aware values
-    if (fontSize !== undefined) {
-      baseOptions.fontSize = fontSize;
-      baseOptions.headerHeight = spacingMode === 'compact' 
-        ? Math.max(28, fontSize + 6) 
-        : Math.max(35, fontSize + 12);
-      baseOptions.rowHeight = spacingMode === 'compact' 
-        ? Math.max(24, fontSize + 4) 
-        : Math.max(32, fontSize + 8);
-    }
-  }
-
-  return baseOptions;
 };
 
 /**
- * Default Tabulator options for consistent styling
+ * Default Tabulator options
  */
 export const DEFAULT_TABULATOR_OPTIONS = {
   layout: 'fitColumns',
   reactiveData: false,
   height: '100%',
-  selectableRows: 1, // Updated from deprecated 'selectable'
+  selectableRows: 1,
   headerFilterLiveFilter: true,
   headerFilterLiveFilterDelay: 300,
-  fontSize: 12,
-  headerHeight: 35,
-  rowHeight: 32,
-  theme: 'midnight'
 };
 
 /**
- * Common Tabulator column types
+ * Common column type builders
  */
 export const COMMON_COLUMN_TYPES = {
-  // Input filter column
   input: (config = {}) => ({
     headerFilter: 'input',
     headerFilterPlaceholder: config.placeholder || 'Filter...',
     ...config
   }),
 
-  // Dropdown filter column
   dropdown: (config = {}) => ({
     headerFilter: 'list',
     headerFilterParams: {
@@ -139,19 +60,14 @@ export const COMMON_COLUMN_TYPES = {
     ...config
   }),
 
-  // Number filter column
   number: (config = {}) => ({
     headerFilter: 'input',
     headerFilterPlaceholder: config.placeholder || 'Enter number...',
     headerFilterFunc: config.operator || '>=',
-    headerFilterParams: {
-      type: 'number'
-    },
     hozAlign: 'center',
     ...config
   }),
 
-  // Date filter column
   date: (config = {}) => ({
     headerFilter: 'input',
     headerFilterPlaceholder: config.placeholder || 'YYYY-MM-DD',
@@ -164,7 +80,6 @@ export const COMMON_COLUMN_TYPES = {
     ...config
   }),
 
-  // Boolean/Yes-No column
   boolean: (config = {}) => ({
     hozAlign: 'center',
     formatter: (cell) => {
@@ -175,3 +90,4 @@ export const COMMON_COLUMN_TYPES = {
   })
 };
 
+export default Tabulator;

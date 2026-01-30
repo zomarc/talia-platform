@@ -17,6 +17,8 @@ import GoogleTrendsContainer from "./components/focus-panels/GoogleTrends";
 import SailingByCabinCategory from "./components/focus-panels/SailingByCabinCategory";
 import SimpleTable from "./components/focus-panels/SimpleTable";
 import SailingSummary from "./components/focus-panels/SailingSummary/index";
+import MasterVoyagePerformanceSummary from "./components/focus-panels/MasterVoyagePerformanceSummary";
+import VoyageReport from "./components/focus-panels/VoyageReport";
 import UserProfile from "./components/UserProfile";
 import { useSupabaseAuth } from "./contexts/SupabaseAuthContext";
 import { normalizeRole, isAdmin } from "./utils/roleUtils";
@@ -34,6 +36,10 @@ import DevRoleSelector from "./components/dev/DevRoleSelector";
 // Theme System - using centralized theme context
 import { useTheme } from "./contexts/ThemeContext";
 import { DEFAULT_THEME } from "./config/themes.js";
+// Tabulator - using npm package
+import Tabulator from "./lib/tabulatorConfig.js";
+// Chart.js - using npm package
+import { Chart } from "chart.js/auto";
 // Removed Apollo Client - using direct fetch instead
 
 // Debug logging
@@ -112,70 +118,9 @@ if (!window.__taliaGlobalErrorInstalled) {
 // ----------------- GraphQL Client Setup -----------------
 // Using direct fetch instead of Apollo Client for simplicity
 
-// ----------------- Lightweight CDN loader (idempotent) -----------------
-const CDN = {
-  tabulatorCss: [
-    "https://cdnjs.cloudflare.com/ajax/libs/tabulator/5.6.1/css/tabulator.min.css",
-    "https://cdnjs.cloudflare.com/ajax/libs/tabulator-tables/5.6.1/css/tabulator.min.css",
-    "https://unpkg.com/tabulator-tables@5.6.1/dist/css/tabulator.min.css",
-  ],
-  tabulatorJs: [
-    "https://cdnjs.cloudflare.com/ajax/libs/tabulator/5.6.1/js/tabulator.min.js",
-    "https://cdnjs.cloudflare.com/ajax/libs/tabulator-tables/5.6.1/js/tabulator.min.js",
-    "https://unpkg.com/tabulator-tables@5.6.1/dist/js/tabulator.min.js",
-  ],
-  chartJs: [
-    "https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js",
-    "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js",
-    "https://unpkg.com/chart.js@4.4.3/dist/chart.umd.min.js",
-  ],
-};
-
-const _loaded = new Set();
-function loadCssOnce(href) {
-  return new Promise((resolve, reject) => {
-    if (_loaded.has(href) || document.querySelector(`link[href="${href}"]`)) return resolve(href);
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = href;
-    link.onload = () => { _loaded.add(href); resolve(href); };
-    link.onerror = (e) => { console.warn("[CDN] CSS failed:", href, e); reject(e); };
-    document.head.appendChild(link);
-  });
-}
-function loadScriptOnce(src, checkGlobal) {
-  return new Promise((resolve, reject) => {
-    try {
-      if (typeof checkGlobal === "function") {
-        const g = checkGlobal();
-        if (g) return resolve(g);
-      }
-    } catch {}
-    if (_loaded.has(src) || document.querySelector(`script[src="${src}"]`)) return resolve(src);
-    const s = document.createElement("script");
-    s.src = src;
-    s.async = true;
-    s.onload = () => { _loaded.add(src); resolve(src); };
-    s.onerror = (e) => { console.warn("[CDN] JS failed:", src, e); reject(e); };
-    document.head.appendChild(s);
-  });
-}
-async function loadCssFromList(urls) {
-  for (const href of urls) { try { await loadCssOnce(href); console.log("[CDN] CSS loaded:", href); return true; } catch {} }
-  return false;
-}
-async function loadScriptFromList(urls, checkGlobal) {
-  for (const src of urls) {
-    try {
-      await loadScriptOnce(src, checkGlobal);
-      if (typeof checkGlobal === "function") {
-        const g = checkGlobal();
-        if (g) { console.log("[CDN] JS loaded:", src); return g; }
-      } else { console.log("[CDN] JS loaded:", src); return true; }
-    } catch {}
-  }
-  return null;
-}
+// CDN loading removed - using npm packages instead
+// Tabulator: tabulator-tables@6.3.1 (imported above)
+// Chart.js: chart.js (imported above)
 
 // ----------------- Demo booking curves by sailing id -----------------
 const curveLabels = ["W-12", "W-10", "W-8", "W-6", "W-4", "W-2", "Sail"];
@@ -291,13 +236,12 @@ const TablePanel = React.memo(function TablePanel() {
       try {
         if (!tableRef.current || initializedRef.current) return;
 
-        // Ensure Tabulator is available (via CDN)
-        const cssOk = await loadCssFromList(CDN.tabulatorCss);
-        await loadScriptFromList(CDN.tabulatorJs, () => window.Tabulator || window.TabulatorFull);
-        const TabGlobal = window.Tabulator || window.TabulatorFull;
-        console.log('[CDN] Tabulator global typeof:', typeof TabGlobal);
-        if (!cssOk) console.warn("[CDN] Tabulator CSS failed to load from all sources");
-        if (!TabGlobal) { renderFallbackTable(); return; }
+        // Tabulator is available via npm import
+        if (!Tabulator) { 
+          console.warn('[TablePanel] Tabulator not available');
+          renderFallbackTable(); 
+          return; 
+        }
 
         // Wait for real size
         const sz = await waitForNonZeroSize(tableRef.current, 3000);
@@ -492,33 +436,17 @@ const TablePanel = React.memo(function TablePanel() {
   // This prevents interference with Dockview's drag and drop system
 
   return (
-    <div style={{ 
-      height: "100%", 
-      width: "100%", 
-      display: "flex", 
-      flexDirection: "column",
-      background: theme.colors.background,
-      color: theme.colors.foreground,
-      fontSize: `${fontSize}px`,
-      fontFamily: selectedFont.value
-    }}>
-      <div style={{ 
-        padding: "8px 12px", 
-        background: theme.colors.sidebarHeader, 
-        borderBottom: `1px solid ${theme.colors.sidebarBorder}`,
-        fontSize: `${fontSize - 1}px`,
-        color: theme.colors.textSecondary
-      }}>
+    <div className="talia-report" style={{ height: "100%", width: "100%" }}>
+      <div className="talia-report__header" style={{ padding: "8px 12px" }}>
         <strong>Table Filters:</strong> Use the filter controls in column headers to filter data. 
-        <span style={{ marginLeft: "8px", color: theme.colors.accent }}>
+        <span style={{ marginLeft: "8px", color: "var(--theme-accent)" }}>
           💡 Tip: Click filter icons in column headers to filter by Ship, Sailing, Status, or numeric values
         </span>
       </div>
       <div 
         ref={tableRef} 
-        style={{ height: "100%", width: "100%", flex: 1 }} 
+        className="talia-table"
       />
-      {/* Tabulator styling configured via initTabulator() - CSS injected after Tabulator loads */}
     </div>
   );
 });
@@ -565,10 +493,8 @@ const ChartPanel = React.memo(function ChartPanel() {
         const ctx = canvasRef.current.getContext('2d');
         ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
-        // Ensure Chart.js is available (via CDN)
-        await loadScriptFromList(CDN.chartJs, () => window.Chart);
-        const ChartGlobal = window.Chart;
-        if (!ChartGlobal) { console.error("Chart.js not available after CDN load"); return; }
+        // Chart.js is available via npm import
+        if (!Chart) { console.error("Chart.js not available"); return; }
 
         // ctx already declared above
 
@@ -615,7 +541,7 @@ const ChartPanel = React.memo(function ChartPanel() {
           console.warn('Failed to clean up existing charts:', e);
         }
         
-        chartRef.current = new ChartGlobal(ctx, {
+        chartRef.current = new Chart(ctx, {
           id: chartId,
           type: "line",
           data: { labels: curveLabels, datasets: buildDatasets(null) },
@@ -740,18 +666,10 @@ const ChartPanel = React.memo(function ChartPanel() {
   // This prevents interference with Dockview's drag and drop system
 
   return (
-    <div style={{ 
-      height: "100%", 
-      width: "100%", 
-      position: "relative",
-      background: theme.colors.background,
-      color: theme.colors.foreground,
-      fontSize: `${fontSize}px`,
-      fontFamily: selectedFont.value
-    }}>
+    <div className="talia-chart">
       <canvas 
         ref={canvasRef} 
-        style={{ height: "100%", width: "100%" }} 
+        className="talia-chart__canvas"
       />
     </div>
   );
@@ -759,28 +677,18 @@ const ChartPanel = React.memo(function ChartPanel() {
 
 // ---- Simple text panel (fallback/info) ----
 function InfoPanel(props) {
-  const { theme, fontSize, selectedFont, fontFamily } = useTheme();
   const title = props?.params?.panel?.title || props?.params?.title || "Panel";
   return (
-    <div style={{ 
-      height: "100%", 
-      width: "100%", 
-      padding: 16, 
-      fontSize: `${fontSize}px`, 
-      fontFamily: selectedFont.value,
-      lineHeight: 1.5, 
-      color: theme.colors.foreground, 
-      background: theme.colors.background 
-    }}>
-      <p style={{ margin: 0, marginBottom: 8, fontWeight: 600 }}>{title}</p>
-      <p style={{ margin: 0 }}>This is a generic panel. Drag the tab to dock/split.</p>
+    <div className="dashboard-panel">
+      <p className="dashboard-panel__title">{title}</p>
+      <p className="dashboard-panel__content">This is a generic panel. Drag the tab to dock/split.</p>
     </div>
   );
 }
 
 // ---- VS Code-style Sidebar Component ----
 function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFiltersChange, width, saveLayout, loadLayout, addPanel, clearSelection, clearFilters, resetLayout, createLayoutPreset, currentFocus, onFocusChange, userRole, taliaFocuses, focusLoading, focusError, initializeStandardTaliaFocuses, onSaveCurrentLayout }) {
-  const { theme, currentTheme, setCurrentTheme, fontSize, setFontSize, fontFamily, setFontFamily, selectedFont, spacingMode, setSpacingMode, fontFamilies, availableThemes } = useTheme();
+  const { theme, fontSize, setFontSize, fontFamily, setFontFamily, selectedFont, fontFamilies } = useTheme();
 
   const [expandedSections, setExpandedSections] = React.useState({
     focus: true,  // Only Focus Management open by default
@@ -799,160 +707,76 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
     }));
   };
 
-  const sidebarStyle = {
-    width: isCollapsed ? '48px' : `${width}px`,
-    height: '100vh', // Fill full viewport height
-    background: theme.colors.sidebar,
-    borderRight: `1px solid ${theme.colors.sidebarBorder}`,
-    display: 'flex',
-    flexDirection: 'column',
-    transition: isCollapsed ? 'width 0.2s ease' : 'none',
-    overflow: 'hidden',
-    position: 'relative',
-    flexShrink: 0,
-    fontSize: `${fontSize}px`,
-    fontFamily: selectedFont.value
-  };
-
-  const sectionStyle = {
-    borderBottom: `1px solid ${theme.colors.sidebarBorder}`
-  };
-
-  const sectionHeaderStyle = {
-    padding: '8px 12px',
-    background: theme.colors.sidebarHeader,
-    borderBottom: `1px solid ${theme.colors.sidebarBorder}`,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    fontSize: `${fontSize}px`,
-    fontWeight: '600',
-    color: theme.colors.foreground,
-    userSelect: 'none'
-  };
-
-  const sectionContentStyle = {
-    padding: '6px 8px',
-    fontSize: `${fontSize}px`,
-    color: theme.colors.foreground,
-    overflow: 'auto'
-  };
-
-  const inputStyle = {
-    width: '100%',
-    padding: '6px 8px',
-    border: `1px solid ${theme.colors.border}`,
-    borderRadius: '4px',
-    fontSize: `${fontSize - 1}px`,
-    marginBottom: '6px',
-    background: theme.colors.background,
-    color: theme.colors.foreground,
-    boxSizing: 'border-box'
-  };
-
-  const buttonStyle = {
-    width: '100%',
-    padding: '8px 6px',
-    background: theme.colors.accent,
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    fontSize: `${fontSize - 1}px`,
-    cursor: 'pointer',
-    marginBottom: '6px',
-    textAlign: 'left',
-    boxSizing: 'border-box'
-  };
-
-  const iconStyle = {
-    fontSize: '14px',
-    transition: 'transform 0.2s ease'
-  };
+  // Dynamic width for sidebar (only dynamic value)
+  const sidebarWidth = isCollapsed ? '48px' : `${width}px`;
 
   if (isCollapsed) {
     return (
-      <div style={sidebarStyle}>
-        <div style={{ padding: '8px', textAlign: 'center' }}>
+      <div className="dashboard-sidebar" style={{ width: sidebarWidth, transition: isCollapsed ? 'width 0.2s ease' : 'none' }}>
+        <div className="dashboard-sidebar__header">
           <button
             onClick={onToggle}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}
+            className="dashboard-sidebar__close-btn"
           >
             ☰
           </button>
         </div>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px' }}>
-          <button style={{ ...buttonStyle, width: '32px', height: '32px', marginBottom: '8px' }} title="Default Criteria">📊</button>
-          <button style={{ ...buttonStyle, width: '32px', height: '32px', marginBottom: '8px' }} title="Reports">📋</button>
-          <button style={{ ...buttonStyle, width: '32px', height: '32px', marginBottom: '8px' }} title="Appearance">🎨</button>
+        <div className="dashboard-sidebar__nav">
+          <button className="dashboard-sidebar__nav-btn" title="Default Criteria">📊</button>
+          <button className="dashboard-sidebar__nav-btn" title="Reports">📋</button>
+          <button className="dashboard-sidebar__nav-btn" title="Appearance">🎨</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={sidebarStyle}>
+    <div className="dashboard-sidebar" style={{ width: sidebarWidth }}>
       {/* Header */}
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid #e8dfd0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '14px', fontWeight: '600', color: '#2b2b2b' }}>Explorer</span>
+      <div className="dashboard-explorer__header">
+        <span className="dashboard-explorer__title">Explorer</span>
         <button
           onClick={onToggle}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}
+          className="dashboard-sidebar__close-btn"
         >
           ◀
         </button>
       </div>
 
       {/* Sections Container - Flex container for dynamic sizing */}
-      <div style={{ flex: '1', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="dashboard-explorer__content">
         {/* Enhanced Focus Section with New Focus Management */}
-      <div style={{ 
-        ...sectionStyle, 
-        flex: expandedSections.focus ? '1' : 'none', // Expand to use available space when open
+      <div className={`dashboard-section ${expandedSections.focus ? 'dashboard-section--expanded' : ''}`} style={{ 
+        flex: expandedSections.focus ? '1' : 'none',
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '0' // Allow flex child to shrink below content size
+        minHeight: '0'
       }}>
         <div 
-          style={sectionHeaderStyle}
+          className="dashboard-section__header"
           onClick={() => toggleSection('focus')}
         >
-          <span>Focus Management</span>
-          <span style={{ ...iconStyle, transform: expandedSections.focus ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+          <span className="dashboard-section__title">Focus Management</span>
+          <span className={`dashboard-section__icon ${expandedSections.focus ? 'dashboard-section__icon--expanded' : ''}`}>
             ▶
           </span>
         </div>
-        <div style={{ 
-          ...sectionContentStyle, 
+        <div className={`dashboard-section__content ${expandedSections.focus ? 'dashboard-section__content--expanded' : ''}`} style={{ 
           display: expandedSections.focus ? 'flex' : 'none',
           flexDirection: 'column',
-          flex: '1' // Use all available space in the section
+          flex: '1'
         }}>
           {/* Show loading state */}
           {focusLoading && (
-            <div style={{ 
-              background: '#d1ecf1', 
-              color: '#0c5460', 
-              padding: '8px', 
-              borderRadius: '4px', 
-              marginBottom: '10px',
-              fontSize: `${fontSize - 2}px`
-            }}>
-              Loading focuses...
+            <div className="talia-loading">
+              <div className="talia-loading__text">Loading focuses...</div>
             </div>
           )}
           
           {/* Show focus management error if any */}
           {focusError && (
-            <div style={{ 
-              background: '#f8d7da', 
-              color: '#721c24', 
-              padding: '8px', 
-              borderRadius: '4px', 
-              marginBottom: '10px',
-              fontSize: `${fontSize - 2}px`
-            }}>
-              Focus Error: {focusError}
+            <div className="talia-error">
+              <div className="talia-error__message">Focus Error: {focusError}</div>
             </div>
           )}
           
@@ -971,21 +795,21 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
       </div>
 
       {/* Default Criteria Section - Fixed Height */}
-      <div style={sectionStyle}>
+      <div className="dashboard-section">
         <div 
-          style={sectionHeaderStyle}
+          className="dashboard-section__header"
           onClick={() => toggleSection('criteria')}
         >
-          <span>Default Criteria</span>
-          <span style={{ ...iconStyle, transform: expandedSections.criteria ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+          <span className="dashboard-section__title">Default Criteria</span>
+          <span className={`dashboard-section__icon ${expandedSections.criteria ? 'dashboard-section__icon--expanded' : ''}`}>
             ▶
           </span>
         </div>
-        <div style={{ ...sectionContentStyle, display: expandedSections.criteria ? 'block' : 'none' }}>
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '500' }}>Ship Filter:</label>
+        <div className={`dashboard-section__content ${expandedSections.criteria ? 'dashboard-section__content--expanded' : ''}`}>
+          <div className="dashboard-form-group">
+            <label className="dashboard-form-label">Ship Filter:</label>
             <select 
-              style={inputStyle}
+              className="dashboard-form-input"
               value={globalFilters.ship || ''}
               onChange={(e) => onGlobalFiltersChange({ ...globalFilters, ship: e.target.value })}
             >
@@ -994,20 +818,20 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
               <option value="Celestyal Journey">Celestyal Journey</option>
             </select>
           </div>
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '500' }}>Date From:</label>
+          <div className="dashboard-form-group">
+            <label className="dashboard-form-label">Date From:</label>
             <input
               type="date"
-              style={inputStyle}
+              className="dashboard-form-input"
               value={globalFilters.dateFrom || ''}
               onChange={(e) => onGlobalFiltersChange({ ...globalFilters, dateFrom: e.target.value })}
             />
           </div>
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '500' }}>Date To:</label>
+          <div className="dashboard-form-group">
+            <label className="dashboard-form-label">Date To:</label>
             <input
               type="date"
-              style={inputStyle}
+              className="dashboard-form-input"
               value={globalFilters.dateTo || ''}
               onChange={(e) => onGlobalFiltersChange({ ...globalFilters, dateTo: e.target.value })}
             />
@@ -1016,77 +840,69 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
       </div>
 
       {/* Reports Section */}
-      <div style={sectionStyle}>
+      <div className="dashboard-section">
         <div 
-          style={sectionHeaderStyle}
+          className="dashboard-section__header"
           onClick={() => toggleSection('reports')}
         >
-          <span>Reports</span>
-          <span style={{ ...iconStyle, transform: expandedSections.reports ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+          <span className="dashboard-section__title">Reports</span>
+          <span className={`dashboard-section__icon ${expandedSections.reports ? 'dashboard-section__icon--expanded' : ''}`}>
             ▶
           </span>
         </div>
-        <div style={{ ...sectionContentStyle, display: expandedSections.reports ? 'block' : 'none' }}>
-          <button style={buttonStyle} onClick={() => onAddPanel('table', 'New Table')}>
+        <div className={`dashboard-section__content ${expandedSections.reports ? 'dashboard-section__content--expanded' : ''}`}>
+          <button className="dashboard-btn" onClick={() => onAddPanel('table', 'New Table')}>
             📊 New Table
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('simple-table-test', 'Simple Table Test')}>
+          <button className="dashboard-btn" onClick={() => onAddPanel('simple-table-test', 'Simple Table Test')}>
             🧪 Simple Table Test
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('chart', 'New Chart')}>
+          <button className="dashboard-btn" onClick={() => onAddPanel('chart', 'New Chart')}>
             📈 New Chart
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('published-rates', 'Published Rates')}>
+          <button className="dashboard-btn" onClick={() => onAddPanel('published-rates', 'Published Rates')}>
             💰 Published Rates
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('sailing-cabin-category', 'Sailing by Cabin Category')}>
+          <button className="dashboard-btn" onClick={() => onAddPanel('sailing-cabin-category', 'Sailing by Cabin Category')}>
             🚢 Sailing by Cabin Category
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('sailing-summary', 'Sailing Summary')}>
+          <button className="dashboard-btn" onClick={() => onAddPanel('sailing-summary', 'Sailing Summary')}>
             📊 Sailing Summary
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('graphql-books', 'Books Report')}>
+          <button className="dashboard-btn" onClick={() => onAddPanel('graphql-books', 'Books Report')}>
             📚 Books Report
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('graphql-ships', 'Ships Report')}>
+          <button className="dashboard-btn" onClick={() => onAddPanel('graphql-ships', 'Ships Report')}>
             🚢 Ships Report
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('graphql-cabins', 'Cabins Report')}>
+          <button className="dashboard-btn" onClick={() => onAddPanel('graphql-cabins', 'Cabins Report')}>
             🏠 Cabins Report
+          </button>
+          <button className="dashboard-btn" onClick={() => onAddPanel('master-voyage-performance-summary', 'Master Voyage Performance Summary')}>
+            📊 Master Voyage Performance Summary
+          </button>
+          <button className="dashboard-btn" onClick={() => onAddPanel('voyage-report', 'Voyage Report')}>
+            📈 Voyage Report
           </button>
         </div>
       </div>
 
       {/* Appearance Section */}
-      <div style={sectionStyle}>
+      <div className="dashboard-section">
         <div 
-          style={sectionHeaderStyle}
+          className="dashboard-section__header"
           onClick={() => toggleSection('appearance')}
         >
-          <span>Appearance</span>
-          <span style={{ ...iconStyle, transform: expandedSections.appearance ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+          <span className="dashboard-section__title">Appearance</span>
+          <span className={`dashboard-section__icon ${expandedSections.appearance ? 'dashboard-section__icon--expanded' : ''}`}>
             ▶
           </span>
         </div>
-        <div style={{ ...sectionContentStyle, display: expandedSections.appearance ? 'block' : 'none' }}>
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: `${fontSize - 1}px`, fontWeight: '500', color: theme.colors.foreground }}>Theme:</label>
+        <div className={`dashboard-section__content ${expandedSections.appearance ? 'dashboard-section__content--expanded' : ''}`}>
+          <div className="dashboard-form-group">
+            <label className="dashboard-form-label">Font Family:</label>
             <select 
-              style={inputStyle}
-              value={currentTheme}
-              onChange={(e) => setCurrentTheme(e.target.value)}
-            >
-              {availableThemes.map((themeOption) => (
-                <option key={themeOption.key} value={themeOption.key}>
-                  {themeOption.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: `${fontSize - 1}px`, fontWeight: '500', color: theme.colors.foreground }}>Font Family:</label>
-            <select 
-              style={inputStyle}
+              className="dashboard-form-input"
               value={fontFamily}
               onChange={(e) => setFontFamily(e.target.value)}
             >
@@ -1094,7 +910,7 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
                 <option key={key} value={key}>{font.name}</option>
               ))}
             </select>
-            <div style={{ fontSize: `${fontSize - 2}px`, color: theme.colors.textMuted, marginTop: '2px' }}>
+            <div className="dashboard-form-hint">
               {selectedFont.description}
             </div>
           </div>
@@ -1102,52 +918,52 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
       </div>
 
       {/* Control Centre Section */}
-      <div style={sectionStyle}>
+      <div className="dashboard-section">
         <div
-          style={sectionHeaderStyle}
+          className="dashboard-section__header"
           onClick={() => toggleSection('controls')}
         >
-          <span>Control Centre</span>
-          <span style={{ ...iconStyle, transform: expandedSections.controls ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+          <span className="dashboard-section__title">Control Centre</span>
+          <span className={`dashboard-section__icon ${expandedSections.controls ? 'dashboard-section__icon--expanded' : ''}`}>
             ▶
           </span>
         </div>
-        <div style={{ ...sectionContentStyle, display: expandedSections.controls ? 'block' : 'none' }}>
+        <div className={`dashboard-section__content ${expandedSections.controls ? 'dashboard-section__content--expanded' : ''}`}>
           <button
-            style={buttonStyle}
+            className="dashboard-btn"
             onClick={saveLayout}
           >
             💾 Save Layout
           </button>
           <button
-            style={buttonStyle}
+            className="dashboard-btn"
             onClick={loadLayout}
           >
             📂 Load Layout
           </button>
           <button
-            style={buttonStyle}
+            className="dashboard-btn"
             onClick={addPanel}
           >
             ➕ Add Panel
           </button>
           
           {/* Layout Preset Buttons */}
-          <div style={{ display: "flex", gap: "4px", marginTop: "8px", flexWrap: "wrap" }}>
+          <div className="dashboard-btn-group">
             <button
-              style={{...buttonStyle, fontSize: `${fontSize - 2}px`, padding: "2px 6px"}}
+              className="dashboard-btn dashboard-btn--small"
               onClick={() => createLayoutPreset('grid')}
             >
               🔲 Grid
             </button>
             <button
-              style={{...buttonStyle, fontSize: `${fontSize - 2}px`, padding: "2px 6px"}}
+              className="dashboard-btn dashboard-btn--small"
               onClick={() => createLayoutPreset('horizontal')}
             >
               ↔️ Horizontal
             </button>
             <button
-              style={{...buttonStyle, fontSize: `${fontSize - 2}px`, padding: "2px 6px"}}
+              className="dashboard-btn dashboard-btn--small"
               onClick={() => createLayoutPreset('vertical')}
             >
               ↕️ Vertical
@@ -1155,19 +971,19 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
           </div>
           
           <button
-            style={buttonStyle}
+            className="dashboard-btn"
             onClick={clearSelection}
           >
             ❌ Clear Selection
           </button>
           <button
-            style={buttonStyle}
+            className="dashboard-btn"
             onClick={clearFilters}
           >
             🔄 Clear Filters
           </button>
           <button
-            style={buttonStyle}
+            className="dashboard-btn"
             onClick={resetLayout}
           >
             🔄 Reset Layout
@@ -1177,43 +993,36 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
 
       {/* Admin Section - Only visible to admins */}
       {isAdmin(userRole) && (
-        <div style={sectionStyle}>
+        <div className="dashboard-section">
           <div
-            style={sectionHeaderStyle}
+            className="dashboard-section__header"
             onClick={() => toggleSection('admin')}
           >
-            <span>Admin Dashboard</span>
-            <span style={{ ...iconStyle, transform: expandedSections.admin ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+            <span className="dashboard-section__title">Admin Dashboard</span>
+            <span className={`dashboard-section__icon ${expandedSections.admin ? 'dashboard-section__icon--expanded' : ''}`}>
               ▶
             </span>
           </div>
-          <div style={{ ...sectionContentStyle, display: expandedSections.admin ? 'block' : 'none' }}>
+          <div className={`dashboard-section__content ${expandedSections.admin ? 'dashboard-section__content--expanded' : ''}`}>
             <button
-              style={buttonStyle}
+              className="dashboard-btn"
               onClick={() => onAddPanel('admin-dashboard', '⚙️ Admin Dashboard')}
             >
               ⚙️ Open Admin Dashboard
             </button>
             <button
-              style={buttonStyle}
+              className="dashboard-btn"
               onClick={() => onAddPanel('user-mapping-table', '🔗 User Mappings')}
             >
               🔗 User Mappings
             </button>
             <button
-              style={buttonStyle}
+              className="dashboard-btn"
               onClick={() => onAddPanel('talia-user-table', '👥 Talia Users')}
             >
               👥 Talia Users
             </button>
-            <div style={{
-              fontSize: `${fontSize - 3}px`,
-              color: theme.colors.textMuted,
-              marginTop: '8px',
-              padding: '4px',
-              background: theme.colors.hover,
-              borderRadius: '4px'
-            }}>
+            <div className="dashboard-form-hint" style={{ marginTop: '8px', padding: '4px', background: 'var(--theme-hover)', borderRadius: '4px' }}>
               💡 Admin tools for managing users and system configuration
             </div>
           </div>
@@ -1226,7 +1035,7 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
       <UserProfile isCollapsed={isCollapsed} onToggle={onToggle} />
 
       {/* Footer */}
-      <div style={{ marginTop: 'auto', padding: '8px 12px', borderTop: '1px solid #e8dfd0', fontSize: '10px', color: '#6b6b6b' }}>
+      <div className="dashboard-user-info">
         Dockview v4.6.2
       </div>
       
@@ -1306,59 +1115,28 @@ const GraphQLPanel = React.memo(function GraphQLPanel(props) {
 
   if (loading) {
     return (
-      <div style={{ 
-        height: "100%", 
-        width: "100%", 
-        padding: 16, 
-        display: "flex", 
-        alignItems: "center", 
-        justifyContent: "center", 
-        flexDirection: "column",
-        background: theme.colors.background,
-        color: theme.colors.foreground,
-        fontSize: `${fontSize}px`,
-        fontFamily: selectedFont.value
-      }}>
-        <div style={{ fontSize: `${fontSize + 4}px`, color: theme.colors.accent, marginBottom: 8 }}>🔄 Loading {dataType}...</div>
-        <div style={{ fontSize: `${fontSize - 1}px`, color: theme.colors.textSecondary }}>Fetching data from GraphQL server</div>
+      <div className="dashboard-loading">
+        <div className="dashboard-loading__icon">🔄 Loading {dataType}...</div>
+        <div className="dashboard-loading__text">Fetching data from GraphQL server</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={{ 
-        height: "100%", 
-        width: "100%", 
-        padding: 16, 
-        display: "flex", 
-        alignItems: "center", 
-        justifyContent: "center", 
-        flexDirection: "column",
-        background: theme.colors.background,
-        color: theme.colors.foreground,
-        fontSize: `${fontSize}px`,
-        fontFamily: selectedFont.value
-      }}>
-        <div style={{ fontSize: `${fontSize + 4}px`, color: "#d32f2f", marginBottom: 8 }}>❌ GraphQL Error</div>
-        <div style={{ fontSize: `${fontSize - 1}px`, color: theme.colors.textSecondary, textAlign: "center", marginBottom: 16 }}>
+      <div className="dashboard-error">
+        <div className="dashboard-error__icon">❌ GraphQL Error</div>
+        <div className="dashboard-error__title">Error</div>
+        <div className="dashboard-error__message">
           {error}
         </div>
         <button 
           onClick={handleRefresh}
-          style={{ 
-            padding: "8px 16px", 
-            background: theme.colors.accent, 
-            color: "white", 
-            border: "none", 
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontSize: `${fontSize - 1}px`
-          }}
+          className="talia-btn talia-btn--primary"
         >
           Retry
         </button>
-        <div style={{ fontSize: `${fontSize - 2}px`, color: theme.colors.textMuted, marginTop: 8 }}>
+        <div className="dashboard-error__details">
           Server: /api/graphql (proxied to localhost:4000)
         </div>
       </div>
@@ -2332,6 +2110,12 @@ function Dashboard({ user }) {
               "sailing-cabin-category": SailingByCabinCategory,
               "simple-table-test": SimpleTable,
               "sailing-summary": SailingSummary,
+              "master-voyage-performance-summary": (props) => {
+                return <MasterVoyagePerformanceSummary theme={theme} {...props} />;
+              },
+              "voyage-report": (props) => {
+                return <VoyageReport theme={theme} {...props} />;
+              },
               // Admin components
               "admin-dashboard": AdminDashboard,
               "user-mapping-table": UserMappingTable,

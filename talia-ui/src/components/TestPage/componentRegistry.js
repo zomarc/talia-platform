@@ -24,7 +24,9 @@ import GoogleTrendsContainer from '../focus-panels/GoogleTrends';
 import DataDebugView from './DataDebugView';
 import DataMatch from '../focus-panels/DataMatch';
 import BtopTerminal from '../focus-panels/BtopTerminal';
+import DataTypesValidation from '../dev/DataTypesValidation';
 import MasterVoyagePerformanceSummaryContainer from '../focus-panels/MasterVoyagePerformanceSummary';
+import VoyageReportContainer from '../focus-panels/VoyageReport';
 
 /**
  * Component registry with metadata
@@ -272,6 +274,17 @@ export const componentRegistry = {
     dataRequirements: 'Requires SSE connection to /api/btop/stream endpoint. Executes btop on staging server host and streams output.',
     filePath: 'src/components/focus-panels/BtopTerminal/index.jsx'
   },
+  DataTypesValidation: {
+    component: DataTypesValidation,
+    category: 'Debugging',
+    description: 'Data Types Library Validation - Tests the shared data types library (Currency, Percentage, Date, Number) with Tabulator to ensure all formatters, sorters, and filters work correctly',
+    usesMockData: true,
+    props: {
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Uses mock test data. Validates that data types library works correctly.',
+    filePath: 'src/components/dev/DataTypesValidation.jsx'
+  },
   MasterVoyagePerformanceSummary: {
     component: MasterVoyagePerformanceSummaryContainer,
     category: 'Dashboards',
@@ -283,6 +296,17 @@ export const componentRegistry = {
     },
     dataRequirements: 'Uses master_sail table data and generates mock data for missing columns. Transforms data into hierarchical structure with month/category grouping.',
     filePath: 'src/components/focus-panels/MasterVoyagePerformanceSummary/index.jsx'
+  },
+  VoyageReport: {
+    component: VoyageReportContainer,
+    category: 'Reports',
+    description: 'Voyage Report - Standardized report using shared dataTypes library. Demonstrates the recommended pattern for new components.',
+    usesMockData: true,
+    props: {
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Uses master_sail table data with shared formatters from dataTypes library.',
+    filePath: 'src/components/focus-panels/VoyageReport/index.jsx'
   }
 };
 

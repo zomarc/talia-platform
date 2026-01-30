@@ -1,90 +1,274 @@
 /**
- * Theme CSS Variables
+ * Application Theme - Single Consistent Design
  * 
- * All theme colors are defined as CSS variables.
- * These variables are set by the ThemeProvider via JavaScript.
+ * This file defines THE application theme. All colors, fonts, and spacing
+ * are defined here as CSS variables. Components should use these variables
+ * for consistent styling across the entire application.
  * 
- * Components should use these CSS variables instead of hardcoded colors.
- * 
- * Example usage:
- *   background-color: var(--theme-bg);
+ * Usage in CSS:
+ *   background-color: var(--theme-bg-solid);
  *   color: var(--theme-fg);
- *   border-color: var(--theme-border);
+ *   border: 1px solid var(--theme-border);
+ * 
+ * Usage in React (inline styles):
+ *   style={{ background: 'var(--theme-bg-solid)', color: 'var(--theme-fg)' }}
  */
 
 :root {
-  /* Default theme variables - Dark Modern (data theme) */
-  /* These are set by ThemeProvider, but provide Dark Modern as fallback */
+  /* ============================================================================
+     Core Colors - Modern Professional Dark Theme
+     ============================================================================ */
+  
+  /* Background colors */
   --theme-bg: linear-gradient(135deg, #0a0a1a 0%, #151528 50%, #1a1a2e 100%);
   --theme-bg-solid: #151528;
+  --theme-bg-elevated: #1a1a2e;
+  
+  /* Foreground/text colors */
   --theme-fg: #e8e8f0;
   --theme-text-secondary: rgba(232, 232, 240, 0.75);
   --theme-text-muted: rgba(232, 232, 240, 0.55);
-  --theme-sidebar: rgba(255, 255, 255, 0.05);
-  --theme-sidebar-border: rgba(255, 255, 255, 0.12);
-  --theme-sidebar-header: rgba(255, 255, 255, 0.08);
+  
+  /* Accent color (blue) */
   --theme-accent: #5b9bd5;
   --theme-accent-hover: #4a8bc2;
   --theme-accent-light: rgba(91, 155, 213, 0.15);
+  
+  /* ============================================================================
+     UI Element Colors
+     ============================================================================ */
+  
+  /* Borders */
+  --theme-border: rgba(255, 255, 255, 0.15);
+  --theme-border-light: rgba(255, 255, 255, 0.08);
+  --theme-border-strong: rgba(255, 255, 255, 0.25);
+  
+  /* Glass morphism (panels, cards) */
   --theme-glass: rgba(255, 255, 255, 0.08);
   --theme-glass-border: rgba(255, 255, 255, 0.15);
   --theme-glass-hover: rgba(255, 255, 255, 0.12);
-  --theme-border: rgba(255, 255, 255, 0.15);
+  
+  /* Sidebar */
+  --theme-sidebar: rgba(255, 255, 255, 0.05);
+  --theme-sidebar-border: rgba(255, 255, 255, 0.12);
+  --theme-sidebar-header: rgba(255, 255, 255, 0.08);
+  
+  /* Interactive states */
   --theme-hover: rgba(91, 155, 213, 0.25);
   --theme-selected: rgba(91, 155, 213, 0.15);
+  --theme-focus: rgba(91, 155, 213, 0.4);
+  
+  /* Status colors */
+  --theme-success: #4caf50;
+  --theme-success-light: rgba(76, 175, 80, 0.15);
+  --theme-warning: #ff9800;
+  --theme-warning-light: rgba(255, 152, 0, 0.15);
+  --theme-error: #f44336;
+  --theme-error-light: rgba(244, 67, 54, 0.15);
+  
+  /* ============================================================================
+     Table/Data Grid Colors
+     ============================================================================ */
+  
+  /* Row colors */
   --theme-table-row-even: transparent;
   --theme-table-row-odd: rgba(0, 0, 0, 0.2);
-  --theme-table-row-hover: rgba(66, 133, 244, 0.5);
+  --theme-table-row-hover: rgba(66, 133, 244, 0.35);
   --theme-table-row-selected: rgba(66, 133, 244, 0.25);
-  --theme-table-row-selected-hover: rgba(66, 133, 244, 0.6);
+  --theme-table-row-selected-hover: rgba(66, 133, 244, 0.45);
   
-  /* Glass morphism effects */
-  --theme-glass: rgba(255, 255, 255, 0.08);
-  --theme-glass-border: rgba(255, 255, 255, 0.15);
-  --theme-glass-hover: rgba(255, 255, 255, 0.12);
-  
-  /* Text colors (for consistency with Data Mode) */
-  --theme-text-secondary: rgba(232, 232, 240, 0.75);
-  --theme-text-muted: rgba(232, 232, 240, 0.55);
-  
-  /* Tabulator-specific theme variables */
+  /* Tabulator-specific */
   --theme-tabulator-header-bg: rgba(255, 255, 255, 0.08);
-  --theme-tabulator-header-text: rgba(232, 232, 240, 0.75);
+  --theme-tabulator-header-text: #e8e8f0;
   --theme-tabulator-filter-bg: #151528;
   --theme-tabulator-filter-border: rgba(255, 255, 255, 0.15);
   --theme-tabulator-sort-active: #5b9bd5;
   
-  /* Font settings - set dynamically by ThemeContext */
-  --theme-font-size: 12px;
-  --theme-font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --theme-font-family-monospace: monospace;
+  /* ============================================================================
+     Typography
+     ============================================================================ */
   
-  /* Table-specific font settings - Data Mode uses 10px monospace */
+  /* Font families */
+  --theme-font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --theme-font-family-monospace: "JetBrains Mono", "SF Mono", "Monaco", "Consolas", monospace;
+  
+  /* Base font sizes - compact and readable */
+  --theme-font-size: 11px;
+  --theme-font-size-sm: 10px;
+  --theme-font-size-xs: 9px;
+  --theme-font-size-lg: 12px;
+  --theme-font-size-xl: 14px;
+  
+  /* Table-specific typography - optimized for data density */
   --theme-table-font-size: 10px;
-  --theme-table-font-family: monospace;
-  --theme-table-header-font-size: 10px;
+  --theme-table-font-family: var(--theme-font-family);
+  --theme-table-header-font-size: 9px;
   --theme-table-header-font-weight: 600;
+  
+  /* ============================================================================
+     Spacing & Layout
+     ============================================================================ */
+  
+  /* Table dimensions */
   --theme-table-header-height: 28px;
   --theme-table-row-height: 24px;
+  
+  /* Padding */
+  --theme-padding-xs: 4px;
+  --theme-padding-sm: 8px;
+  --theme-padding-md: 12px;
+  --theme-padding-lg: 16px;
+  --theme-padding-xl: 24px;
+  
+  /* Border radius */
+  --theme-radius-sm: 4px;
+  --theme-radius-md: 8px;
+  --theme-radius-lg: 12px;
+  
+  /* ============================================================================
+     Shadows
+     ============================================================================ */
+  
+  --theme-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
+  --theme-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --theme-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --theme-shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  
+  /* ============================================================================
+     Conditional Formatting Colors (for data visualization)
+     ============================================================================ */
+  
+  /* Performance indicators */
+  --theme-perf-good: #4caf50;
+  --theme-perf-good-bg: rgba(76, 175, 80, 0.15);
+  --theme-perf-warning: #daa520;
+  --theme-perf-warning-bg: rgba(218, 165, 32, 0.15);
+  --theme-perf-bad: #f44336;
+  --theme-perf-bad-bg: rgba(244, 67, 54, 0.15);
+  
+  /* Delta/change indicators */
+  --theme-delta-positive: #4caf50;
+  --theme-delta-negative: #f44336;
+  --theme-delta-neutral: var(--theme-text-muted);
 }
 
-/* Apply theme background to body */
+/* ============================================================================
+   Base Element Styles
+   ============================================================================ */
+
+html {
+  font-size: var(--theme-font-size);
+  font-family: var(--theme-font-family);
+}
+
 body {
   background: var(--theme-bg);
   color: var(--theme-fg);
-  transition: background-color 0.3s ease, color 0.3s ease;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
 }
 
-/* Theme-specific utility classes */
-.theme-data {
-  /* Additional styles for data theme if needed */
+/* ============================================================================
+   Form Elements (consistent styling)
+   ============================================================================ */
+
+input, select, textarea {
+  background-color: var(--theme-bg-solid);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  color: var(--theme-fg);
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size);
+  padding: var(--theme-padding-xs) var(--theme-padding-sm);
 }
 
-.theme-default {
-  /* Additional styles for default theme if needed */
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 2px var(--theme-accent-light);
 }
 
-.theme-dark {
-  /* Additional styles for dark theme if needed */
+input::placeholder, textarea::placeholder {
+  color: var(--theme-text-muted);
 }
 
+/* ============================================================================
+   Button Base Styles
+   ============================================================================ */
+
+button {
+  background-color: var(--theme-glass);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  color: var(--theme-fg);
+  cursor: pointer;
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size);
+  padding: var(--theme-padding-xs) var(--theme-padding-sm);
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+button:hover {
+  background-color: var(--theme-glass-hover);
+  border-color: var(--theme-border-strong);
+}
+
+button:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--theme-accent-light);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Primary button variant */
+button.primary {
+  background-color: var(--theme-accent);
+  border-color: var(--theme-accent);
+  color: #ffffff;
+}
+
+button.primary:hover {
+  background-color: var(--theme-accent-hover);
+  border-color: var(--theme-accent-hover);
+}
+
+/* ============================================================================
+   Scrollbar Styling
+   ============================================================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--theme-bg-solid);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--theme-glass-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--theme-text-muted);
+}
+
+/* ============================================================================
+   Utility Classes
+   ============================================================================ */
+
+.text-muted { color: var(--theme-text-muted); }
+.text-secondary { color: var(--theme-text-secondary); }
+.text-accent { color: var(--theme-accent); }
+.text-success { color: var(--theme-success); }
+.text-warning { color: var(--theme-warning); }
+.text-error { color: var(--theme-error); }
+
+.bg-solid { background-color: var(--theme-bg-solid); }
+.bg-elevated { background-color: var(--theme-bg-elevated); }
+.bg-glass { background-color: var(--theme-glass); }

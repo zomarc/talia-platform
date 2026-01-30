@@ -1,16 +1,24 @@
 /**
  * Theme Context Provider
  * 
- * Centralized theme management using CSS variables.
- * Themes are separated from application code and applied via CSS variables.
+ * Provides theme values to components. The actual styling is done via
+ * CSS variables in /src/styles/theme.css. This context provides:
+ * - JavaScript access to theme values (for inline styles when needed)
+ * - Font size/family settings (user-adjustable)
+ * 
+ * Components should prefer CSS variables over context values:
+ *   PREFERRED: style={{ background: 'var(--theme-bg-solid)' }}
+ *   FALLBACK:  style={{ background: theme.colors.background }}
  */
 
-import React, { createContext, useContext, useState, useEffect, useLayoutEffect } from 'react';
-import { themes, DEFAULT_THEME, getTheme, applyTheme, getThemeColors } from '../config/themes';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import theme from '../config/themes';
 
 const ThemeContext = createContext();
 
-// Font families for data visualization - defined outside component for use in useState initializers
+/**
+ * Font families available in the application
+ */
 const FONT_FAMILIES = {
   'Inter': {
     name: 'Inter',
@@ -44,6 +52,9 @@ const FONT_FAMILIES = {
   }
 };
 
+/**
+ * Hook to access theme values
+ */
 export const useTheme = () => {
   const context = useContext(ThemeContext);
   if (!context) {
@@ -54,59 +65,10 @@ export const useTheme = () => {
 
 /**
  * Theme Provider Component
- * Manages theme state and applies themes via CSS variables
+ * Provides theme values and font settings to the application
  */
 export const ThemeProvider = ({ children }) => {
-  // Initialize theme - ALWAYS start with DEFAULT_THEME, then load from localStorage if available
-  // This ensures consistent first-load experience
-  const [currentTheme, setCurrentTheme] = useState(() => {
-    // Theme is already applied in main.jsx, so just read from localStorage for UI state
-    // but don't re-apply it (it's already applied)
-    let themeToApply = DEFAULT_THEME;
-    try {
-      const saved = localStorage.getItem('talia-theme');
-      if (saved && themes[saved] && saved !== 'default') {
-        // Only use saved theme if it's not the old 'default' theme
-        themeToApply = saved;
-      } else {
-        // Check legacy localStorage key
-        const legacySaved = localStorage.getItem("taliaLayout");
-        if (legacySaved) {
-          try {
-            const parsed = JSON.parse(legacySaved);
-            const legacyTheme = parsed.fontSettings?.theme;
-            if (legacyTheme && themes[legacyTheme] && legacyTheme !== 'default') {
-              themeToApply = legacyTheme;
-            }
-          } catch (e) {
-            // Ignore parse errors
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to load theme from localStorage:', e);
-    }
-    // Don't re-apply theme here - it's already applied in main.jsx
-    // Just return the theme name for React state
-    console.log('[ThemeContext] Theme state initialized (theme already applied in main.jsx):', themeToApply);
-    return themeToApply;
-  });
-
-  // Apply theme when it changes (for runtime theme switching)
-  useEffect(() => {
-    applyTheme(currentTheme);
-    try {
-      localStorage.setItem('talia-theme', currentTheme);
-    } catch (e) {
-      console.warn('Failed to save theme to localStorage:', e);
-    }
-  }, [currentTheme]);
-
-  // Get current theme object
-  const theme = getTheme(currentTheme);
-  const themeColors = getThemeColors(currentTheme);
-
-  // Font settings (kept here for backward compatibility with existing code)
+  // Font size setting (user-adjustable)
   const [fontSize, setFontSize] = useState(() => {
     let initialFontSize = 12;
     try {
@@ -116,26 +78,12 @@ export const ThemeProvider = ({ children }) => {
         initialFontSize = parsed.fontSettings?.fontSize || 12;
       }
     } catch (e) {
-      console.warn('Failed to load fontSize from localStorage:', e);
+      // Use default
     }
-    // Set font CSS variable IMMEDIATELY during initialization (before first render)
-    const root = document.documentElement;
-    root.style.setProperty('--theme-font-size', `${initialFontSize}px`);
-    // Scale table font size proportionally (Data Mode baseline: fontSize 12 = table 10px)
-    const tableFontSize = Math.max(8, Math.round((initialFontSize / 12) * 10));
-    root.style.setProperty('--theme-table-font-size', `${tableFontSize}px`);
-    root.style.setProperty('--theme-table-header-font-size', `${tableFontSize}px`);
-    root.style.setProperty('--theme-table-header-font-weight', '600');
-    // Initial spacing (will be updated by useEffect when spacingMode loads)
-    root.style.setProperty('--theme-table-header-height', '28px');
-    root.style.setProperty('--theme-table-row-height', '24px');
-    console.log('[ThemeContext] Set font CSS variables synchronously:', {
-      fontSize: initialFontSize,
-      tableFontSize: tableFontSize
-    });
     return initialFontSize;
   });
 
+  // Font family setting (user-adjustable)
   const [fontFamily, setFontFamily] = useState(() => {
     let initialFontFamily = 'Inter';
     try {
@@ -145,91 +93,51 @@ export const ThemeProvider = ({ children }) => {
         initialFontFamily = parsed.fontSettings?.fontFamily || 'Inter';
       }
     } catch (e) {
-      console.warn('Failed to load fontFamily from localStorage:', e);
+      // Use default
     }
-    // Set font family CSS variable IMMEDIATELY during initialization
-    const root = document.documentElement;
-    const selectedFont = FONT_FAMILIES[initialFontFamily] || FONT_FAMILIES['Inter'];
-    root.style.setProperty('--theme-font-family', selectedFont.value);
-    root.style.setProperty('--theme-font-family-monospace', 'monospace');
-    // Table font family uses selected font (will be updated by useEffect when fontFamily changes)
-    root.style.setProperty('--theme-table-font-family', selectedFont.value);
-    console.log('[ThemeContext] Set font family CSS variables synchronously:', {
-      fontFamily: initialFontFamily,
-      fontFamilyValue: selectedFont.value,
-      tableFontFamily: selectedFont.value
-    });
     return initialFontFamily;
   });
 
-  // Spacing mode is always compact - no user control
-  const [spacingMode] = useState('compact');
-  const setSpacingMode = () => {}; // No-op function for compatibility
-
-  // FONT_FAMILIES is now defined outside component (above) for use in useState initializers
-
   const selectedFont = FONT_FAMILIES[fontFamily] || FONT_FAMILIES['Inter'];
 
-  // Update font CSS variables when fontSize, fontFamily, or spacingMode changes (for runtime updates)
-  // Note: Initial values are set synchronously in useState initializers above
+  // Update CSS variables when font settings change
   useEffect(() => {
     const root = document.documentElement;
+    
+    // Base font settings
     root.style.setProperty('--theme-font-size', `${fontSize}px`);
     root.style.setProperty('--theme-font-family', selectedFont.value);
-    root.style.setProperty('--theme-font-family-monospace', 'monospace');
     
-    // Table-specific font settings
-    // Scale table font size proportionally with theme fontSize (Data Mode baseline: fontSize 12 = table 10px)
-    // Formula: tableFontSize = (fontSize / 12) * 10, minimum 8px
+    // Table font settings (scaled proportionally)
     const tableFontSize = Math.max(8, Math.round((fontSize / 12) * 10));
     root.style.setProperty('--theme-table-font-size', `${tableFontSize}px`);
-    
-    // Table font family: Use selected font family (allows user to change table fonts)
-    // Falls back to monospace if font family not available
     root.style.setProperty('--theme-table-font-family', selectedFont.value);
-    
     root.style.setProperty('--theme-table-header-font-size', `${tableFontSize}px`);
-    root.style.setProperty('--theme-table-header-font-weight', '600');
-    
-    // Table spacing: Always compact
-    const tableHeaderHeight = 28;
-    const tableRowHeight = 24;
-    
-    root.style.setProperty('--theme-table-header-height', `${tableHeaderHeight}px`);
-    root.style.setProperty('--theme-table-row-height', `${tableRowHeight}px`);
-    
-    console.log('[ThemeContext] Updated font and spacing CSS variables:', {
-      fontSize: `${fontSize}px`,
-      tableFontSize: `${tableFontSize}px`,
-      fontFamily: selectedFont.value,
-      spacingMode: spacingMode,
-      tableHeaderHeight: `${tableHeaderHeight}px`,
-      tableRowHeight: `${tableRowHeight}px`
-    });
-  }, [fontSize, selectedFont, spacingMode]);
+  }, [fontSize, selectedFont]);
 
+  // Context value - provide theme and font settings
   const value = {
-    // Theme
+    // Theme object (for components that need JS access to colors)
     theme,
-    themeColors, // Legacy colors object for backward compatibility
-    currentTheme,
-    setCurrentTheme,
-    availableThemes: Object.keys(themes).map(key => ({
-      key,
-      name: themes[key].name,
-      description: themes[key].description
-    })),
     
-    // Font settings
+    // Legacy aliases for backward compatibility
+    currentTheme: 'talia',
+    setCurrentTheme: () => {}, // No-op - single theme
+    availableThemes: [{ key: 'talia', name: 'Talia Professional' }],
+    themeColors: theme.colors,
+    
+    // Font settings (user-adjustable)
     fontSize,
     setFontSize,
     fontFamily,
     setFontFamily,
     selectedFont,
-    spacingMode,
-    setSpacingMode,
     fontFamilies: FONT_FAMILIES,
-    scaledFontSize: fontSize
+    
+    // Legacy - kept for compatibility
+    spacingMode: 'compact',
+    setSpacingMode: () => {},
+    scaledFontSize: fontSize,
   };
 
   return (
@@ -240,4 +148,3 @@ export const ThemeProvider = ({ children }) => {
 };
 
 export default ThemeProvider;
-

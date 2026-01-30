@@ -144,6 +144,7 @@ services:
       ERL_AFLAGS: -proto_dist inet_tcp
       ENABLE_TAILSCALE: "false"
       DNS_NODES: "''"
+      RLIMIT_NOFILE: "100000"
     command: >
       sh -c "/app/bin/realtime eval 'Realtime.Release.migrate()' &&
       /app/bin/realtime start"

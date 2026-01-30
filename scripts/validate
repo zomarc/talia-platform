@@ -326,7 +326,10 @@ handle_remote_menu() {
   
   case "$choice" in
     1|local)
-      run_script "validate-staging-connectivity.sh" "" 2>/dev/null || {
+      # Always run local checks when on a local dev machine
+      if [[ -f "${SCRIPT_DIR}/validate-staging.sh" ]]; then
+        run_script "validate-staging.sh" "local"
+      else
         # Fallback to inline local check
         echo -e "${BOLD}Local Environment Check${NC}"
         echo ""
@@ -350,7 +353,7 @@ handle_remote_menu() {
         echo ""
         echo -e "${BOLD}Docker Containers:${NC}"
         docker ps --format "table {{.Names}}\t{{.Status}}" 2>/dev/null | grep -E "(NAMES|supabase_)" || echo "  No Supabase containers"
-      }
+      fi
       ;;
     2|staging)
       run_script "validate-staging-connectivity.sh"

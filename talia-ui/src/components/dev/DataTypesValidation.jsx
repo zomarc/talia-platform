@@ -11,12 +11,11 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { initTabulator } from '../../lib/tabulatorConfig';
 import { Currency, Percentage, DateType, Number } from '../../lib/dataTypes';
-import '../../styles/dev-components.css';
 
 /**
  * Validation component for data types library
  */
-const DataTypesValidation = () => {
+const DataTypesValidation = ({ theme }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const [tableInitialized, setTableInitialized] = useState(false);
@@ -247,34 +246,60 @@ const DataTypesValidation = () => {
     };
   }, []);
 
+  const defaultTheme = {
+    colors: {
+      background: '#ffffff',
+      foreground: '#2b2b2b'
+    }
+  };
+
+  const themeValues = theme || defaultTheme;
+
   const allTestsPassed = Object.values(validationResults).every(result => result === true);
 
   return (
-    <div className="dev-validation-container">
+    <div style={{
+      height: '100%',
+      width: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      background: themeValues.colors.background,
+      color: themeValues.colors.foreground,
+      padding: '16px'
+    }}>
       {/* Validation Status */}
-      <div className={`dev-validation-status ${allTestsPassed ? 'dev-validation-status--pass' : 'dev-validation-status--fail'}`}>
-        <h3 className="dev-validation-title">
+      <div style={{
+        marginBottom: '16px',
+        padding: '12px',
+        background: allTestsPassed ? '#d4edda' : '#fff3cd',
+        border: `1px solid ${allTestsPassed ? '#c3e6cb' : '#ffeaa7'}`,
+        borderRadius: '4px'
+      }}>
+        <h3 style={{ margin: '0 0 8px 0', fontSize: '16px' }}>
           Data Types Library Validation
         </h3>
-        <div className="dev-validation-list">
+        <div style={{ fontSize: '14px' }}>
           <div>✓ Imports: {validationResults.imports ? 'PASS' : 'FAIL'}</div>
           <div>✓ Formatters: {validationResults.formatters ? 'PASS' : 'FAIL'}</div>
           <div>✓ Column Builders: {validationResults.columnBuilders ? 'PASS' : 'FAIL'}</div>
           <div>✓ Table Rendering: {validationResults.tableRendering ? 'PASS' : 'FAIL'}</div>
         </div>
         {allTestsPassed && (
-          <div className="dev-validation-success">
+          <div style={{ marginTop: '8px', fontWeight: 'bold', color: '#155724' }}>
             ✓ All validation tests passed!
           </div>
         )}
       </div>
 
       {/* Test Table */}
-      <div className="dev-validation-table-container">
-        <h4 className="dev-validation-table-title">Test Table Using Data Types</h4>
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        <h4 style={{ margin: '0 0 8px 0', fontSize: '14px' }}>Test Table Using Data Types</h4>
         <div 
           ref={tableRef} 
-          className="dev-validation-table-wrapper"
+          style={{ 
+            height: '100%', 
+            width: '100%'
+          }} 
         />
       </div>
     </div>

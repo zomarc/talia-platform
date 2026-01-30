@@ -56,7 +56,6 @@
   /* Interactive states */
   --theme-hover: rgba(91, 155, 213, 0.25);
   --theme-selected: rgba(91, 155, 213, 0.15);
-  --theme-selected-hover: rgba(91, 155, 213, 0.25);
   --theme-focus: rgba(91, 155, 213, 0.4);
   
   /* Status colors */
@@ -64,10 +63,8 @@
   --theme-success-light: rgba(76, 175, 80, 0.15);
   --theme-warning: #ff9800;
   --theme-warning-light: rgba(255, 152, 0, 0.15);
-  --theme-warning-hover: #ffa726;
   --theme-error: #f44336;
   --theme-error-light: rgba(244, 67, 54, 0.15);
-  --theme-error-hover: #e53935;
   
   /* ============================================================================
      Table/Data Grid Colors

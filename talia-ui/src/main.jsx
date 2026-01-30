@@ -1,21 +1,16 @@
-import { StrictMode, useState, useEffect, Suspense, lazy } from 'react'
+import { StrictMode, useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 
 // Core styles - order matters
 import './index.css'
 import './styles/theme.css'           // Theme CSS variables (single source of truth)
 import './styles/tabulator-theme.css' // Tabulator theme (midnight from npm)
-import './styles/tabulator-condensed.css' // Condensed overrides (spacing/sizing only)
 import './styles/components.css'      // Shared component classes
 import './styles/dashboard.css'       // Dashboard-specific styles
-import './styles/dev-components.css' // Dev component styles (separate, does not affect other components)
-import './styles/mode-selector.css'  // Mode selector styles
-import './styles/status-bar.css'     // Status bar styles
 
 import AppWithAuth from './AppWithAuth.jsx'
 import TestPage from './components/TestPage.jsx'
-import StatusBar from './components/shared/StatusBar.jsx'
-import ErrorBoundary from './components/ErrorBoundary.jsx'
+import DataManagementPage from './components/DataManagementPage.jsx'
 import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
 import { applyTheme, DEFAULT_THEME } from './config/themes.js';
@@ -51,71 +46,9 @@ console.log('🎯 Root element:', document.getElementById('root'));
 console.log('🌐 Window object:', typeof window);
 console.log('📱 Document ready state:', document.readyState);
 
-// Global status and event state (shared across all modes)
-const DataManagementUnavailable = () => (
-  <div style={{ padding: '16px', fontSize: '12px', color: '#c7c7d1' }}>
-    Data Management is currently unavailable.
-  </div>
-);
-
-const AdminLiteUnavailable = () => (
-  <div style={{ padding: '16px', fontSize: '12px', color: '#c7c7d1' }}>
-    Admin Lite is currently unavailable.
-  </div>
-);
-
-const DataManagementPage = lazy(() =>
-  import('./components/admin/data-management/DataManagementPage.jsx').catch(() => ({
-    default: DataManagementUnavailable
-  }))
-);
-
-const AdminLite = lazy(() =>
-  import('./components/admin/admin-lite/AdminLite.jsx').catch(() => ({
-    default: AdminLiteUnavailable
-  }))
-);
-
-const globalStatusState = {
-  statusMessage: null,
-  currentEvent: null,
-  persistedEvent: null,
-  listeners: new Set()
-};
-
-// Global status API
-window.__taliaStatus = {
-  setStatusMessage: (message) => {
-    globalStatusState.statusMessage = message;
-    globalStatusState.listeners.forEach(listener => listener());
-    // Auto-clear after 5 seconds
-    if (message) {
-      setTimeout(() => {
-        globalStatusState.statusMessage = null;
-        globalStatusState.listeners.forEach(listener => listener());
-      }, 5000);
-    }
-  },
-  subscribe: (listener) => {
-    globalStatusState.listeners.add(listener);
-    return () => globalStatusState.listeners.delete(listener);
-  },
-  getState: () => ({
-    statusMessage: globalStatusState.statusMessage,
-    currentEvent: globalStatusState.currentEvent,
-    persistedEvent: globalStatusState.persistedEvent
-  })
-};
-
 // Dev Mode Switcher Component
 const DevSwitcher = () => {
   const [mode, setMode] = useState('app'); // 'app', 'test', or 'data'
-  const [statusState, setStatusState] = useState({
-    statusMessage: null,
-    currentEvent: null,
-    persistedEvent: null
-  });
-  const isAdminLite = window.location.pathname === '/admin-lite';
   
   // Check localStorage for saved preference on mount
   useEffect(() => {
@@ -125,97 +58,85 @@ const DevSwitcher = () => {
     }
   }, []);
 
-  const handleModeChange = (newMode) => {
-    setMode(newMode);
-    localStorage.setItem('devMode', newMode);
+  const toggleToTest = () => {
+    setMode('test');
+    localStorage.setItem('devMode', 'test');
   };
 
-  // Subscribe to global status updates
-  useEffect(() => {
-    const updateStatus = () => {
-      const state = window.__taliaStatus.getState();
-      setStatusState(state);
-    };
-    
-    const unsubscribe = window.__taliaStatus.subscribe(updateStatus);
-    // Initial load - get current state
-    updateStatus();
-    
-    // Also force update on mount to ensure state is synced
-    setTimeout(updateStatus, 100);
-    
-    return unsubscribe;
-  }, []);
+  const toggleToApp = () => {
+    setMode('app');
+    localStorage.setItem('devMode', 'app');
+  };
 
-  // Track events globally (works across all modes)
-  useEffect(() => {
-    const handleEvent = (event) => {
-      if (event instanceof CustomEvent && event.type.startsWith('talia:')) {
-        const eventData = {
-          name: event.type,
-          detail: event.detail || {},
-          timestamp: new Date().toLocaleTimeString(),
-          source: event.type.replace('talia:', '').replace('.select', '').replace('.clear', '')
-        };
-        
-        // Only track select events, not clear events
-        if (event.type.includes('.select')) {
-          globalStatusState.currentEvent = eventData;
-          
-          // Also persist to localStorage
-          try {
-            localStorage.setItem('talia:persisted:lastEvent', JSON.stringify(eventData));
-            globalStatusState.persistedEvent = eventData;
-          } catch (e) {
-            console.warn('[DevSwitcher] Error persisting event:', e);
-          }
-        } else if (event.type.includes('.clear')) {
-          globalStatusState.currentEvent = null;
-        }
-        
-        // Notify listeners
-        globalStatusState.listeners.forEach(listener => listener());
-      }
-    };
+  const toggleToData = () => {
+    setMode('data');
+    localStorage.setItem('devMode', 'data');
+  };
 
-    // Listen to all talia events
-    const eventTypes = [
-      'talia:sail.select',
-      'talia:sail.clear',
-      'talia:ship.select',
-      'talia:ship.clear',
-      'talia:sailing.select',
-      'talia:sailing.clear',
-      'talia:publishedRates.select',
-      'talia:publishedRates.clear',
-      'talia:reservation.select',
-      'talia:reservation.clear',
-      'talia:booking.select',
-      'talia:booking.clear'
-    ];
-
-    eventTypes.forEach(eventType => {
-      window.addEventListener(eventType, handleEvent, true);
-    });
-
-    // Load persisted event on mount
-    try {
-      const persisted = localStorage.getItem('talia:persisted:lastEvent');
-      if (persisted) {
-        const eventData = JSON.parse(persisted);
-        globalStatusState.persistedEvent = eventData;
-        globalStatusState.listeners.forEach(listener => listener());
-      }
-    } catch (e) {
-      console.warn('[DevSwitcher] Error loading persisted event:', e);
-    }
-
-    return () => {
-      eventTypes.forEach(eventType => {
-        window.removeEventListener(eventType, handleEvent, true);
-      });
-    };
-  }, []);
+  const ModeToggle = () => (
+    <div style={{
+      position: 'fixed',
+      top: '10px',
+      right: '10px',
+      zIndex: 9999,
+      background: 'white',
+      padding: '8px',
+      borderRadius: '8px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+      display: 'flex',
+      gap: '8px',
+      alignItems: 'center'
+    }}>
+      <button
+        onClick={toggleToTest}
+        style={{
+          padding: '6px 12px',
+          background: mode === 'test' ? '#b08d57' : '#e8e8e8',
+          color: mode === 'test' ? 'white' : '#333',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '12px',
+          fontWeight: '500',
+          transition: 'all 0.2s'
+        }}
+      >
+        🧪 TEST MODE
+      </button>
+      <button
+        onClick={toggleToApp}
+        style={{
+          padding: '6px 12px',
+          background: mode === 'app' ? '#b08d57' : '#e8e8e8',
+          color: mode === 'app' ? 'white' : '#333',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '12px',
+          fontWeight: '500',
+          transition: 'all 0.2s'
+        }}
+      >
+        🚀 APP MODE
+      </button>
+      <button
+        onClick={toggleToData}
+        style={{
+          padding: '6px 12px',
+          background: mode === 'data' ? '#b08d57' : '#e8e8e8',
+          color: mode === 'data' ? 'white' : '#333',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '12px',
+          fontWeight: '500',
+          transition: 'all 0.2s'
+        }}
+      >
+        📊 DATA MODE
+      </button>
+    </div>
+  );
 
   const renderContent = () => {
     console.log('🎯 renderContent called with mode:', mode);
@@ -225,13 +146,7 @@ const DevSwitcher = () => {
         return <TestPage />;
       case 'data':
         console.log('📋 Rendering DataManagementPage');
-        return (
-          <ErrorBoundary fallback={<DataManagementUnavailable />}>
-            <Suspense fallback={<DataManagementUnavailable />}>
-              <DataManagementPage />
-            </Suspense>
-          </ErrorBoundary>
-        );
+        return <DataManagementPage />;
       case 'app':
       default:
         console.log('📋 Rendering AppWithAuth');
@@ -239,47 +154,10 @@ const DevSwitcher = () => {
     }
   };
 
-  if (isAdminLite) {
-    try {
-      document.title = 'Talia - DEV Admin';
-    } catch (e) {
-      console.warn('[DevSwitcher] Failed to set title:', e);
-    }
-    return (
-      <StrictMode>
-        <ErrorBoundary fallback={<AdminLiteUnavailable />}>
-          <Suspense fallback={<AdminLiteUnavailable />}>
-            <AdminLite />
-          </Suspense>
-        </ErrorBoundary>
-      </StrictMode>
-    );
-  }
-
-  // Status bar is always visible (has mode selector), so always add padding
-  const statusBarHeight = 38;
-
   return (
     <StrictMode>
-      {/* Global Status Bar - visible in all modes */}
-      <StatusBar 
-        statusMessage={statusState.statusMessage}
-        currentEvent={statusState.currentEvent}
-        persistedEvent={statusState.persistedEvent}
-        currentMode={mode}
-        onModeChange={handleModeChange}
-      />
-      
-      {/* Content with padding for status bar (always present) */}
-      <div style={{
-        paddingTop: `${statusBarHeight}px`,
-        transition: 'padding-top 0.3s ease',
-        minHeight: `calc(100vh - ${statusBarHeight}px)`,
-        height: `calc(100vh - ${statusBarHeight}px)`,
-        overflow: 'hidden'
-      }}>
-        {renderContent()}
-      </div>
+      <ModeToggle />
+      {renderContent()}
     </StrictMode>
   );
 };

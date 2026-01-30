@@ -10,7 +10,7 @@ import './styles/dashboard.css'       // Dashboard-specific styles
 
 import AppWithAuth from './AppWithAuth.jsx'
 import TestPage from './components/TestPage.jsx'
-import DataManagementPage from './components/DataManagementPage.jsx'
+import { DataManagementPage } from './components/admin/data-management/index.js'
 import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
 import { applyTheme, DEFAULT_THEME } from './config/themes.js';

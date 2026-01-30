@@ -149,7 +149,7 @@ services:
       /app/bin/realtime start"
 
   supabase-storage:
-    image: public.ecr.aws/supabase/storage-api:v1.8.0
+    image: public.ecr.aws/supabase/storage-api:v1.28.2
     container_name: talia-supabase-storage
     depends_on:
       supabase-db:

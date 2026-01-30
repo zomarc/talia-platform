@@ -13,6 +13,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # Colors
 RED='\033[0;31m'
@@ -55,6 +56,8 @@ print_menu() {
     echo -e "  ${GREEN}4)${NC} Check ngrok tunnel"
     echo -e "  ${GREEN}5)${NC} Restart VPN + ngrok"
     echo -e "  ${CYAN}6)${NC} ${BOLD}FULL CHECK${NC} (all services + docker + network)"
+    echo -e "  ${CYAN}7)${NC} ${BOLD}RESTART ALL${NC} (VPN + ngrok + Docker)"
+    echo -e "  ${CYAN}8)${NC} ${BOLD}COMPREHENSIVE CHECK${NC} (versions + schema + ports)"
     echo ""
     echo -e "  ${YELLOW}0)${NC} Exit"
   else
@@ -66,6 +69,8 @@ print_menu() {
     echo -e "  ${GREEN}5)${NC} Restart staging services"
     echo -e "  ${GREEN}6)${NC} Fix staging connectivity"
     echo -e "  ${CYAN}7)${NC} ${BOLD}FULL CHECK${NC} (all + docker + network performance)"
+    echo -e "  ${CYAN}8)${NC} ${BOLD}COMPREHENSIVE CHECK${NC} (versions + schema + ports)"
+    echo -e "  ${CYAN}9)${NC} ${BOLD}RESTART ALL${NC} (VPN + ngrok + Docker)"
     echo ""
     echo -e "  ${YELLOW}0)${NC} Exit"
   fi
@@ -198,6 +203,48 @@ check_duplicate_dev_servers() {
   return 0
 }
 
+run_comprehensive_check() {
+  echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
+  echo -e "${CYAN}║${NC}${BOLD}                 COMPREHENSIVE VALIDATION                    ${NC}${CYAN}║${NC}"
+  echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
+  echo ""
+
+  echo -e "${BOLD}=== VERSIONS / COMMITS ===${NC}"
+  if git -C "$ROOT_DIR" rev-parse HEAD >/dev/null 2>&1; then
+    git -C "$ROOT_DIR" fetch origin >/dev/null 2>&1 || true
+    local head
+    local origin
+    head=$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    origin=$(git -C "$ROOT_DIR" rev-parse --short origin/main 2>/dev/null || echo "unknown")
+    local status
+    status=$(git -C "$ROOT_DIR" status --porcelain | wc -l | tr -d ' ')
+    if [[ "$head" == "$origin" ]]; then
+      echo -e "  ${GREEN}✓${NC} Local HEAD ${head} matches origin/main"
+    else
+      echo -e "  ${YELLOW}⚠️${NC} Local HEAD ${head}, origin/main ${origin}"
+    fi
+    if [[ "$status" -eq 0 ]]; then
+      echo -e "  ${GREEN}✓${NC} Working tree clean"
+    else
+      echo -e "  ${YELLOW}⚠️${NC} Working tree has ${status} change(s)"
+    fi
+  else
+    echo -e "  ${YELLOW}⚠️${NC} Not a git repository: ${ROOT_DIR}"
+  fi
+
+  echo ""
+  echo -e "${BOLD}=== CONNECTIVITY / STATUS ===${NC}"
+  run_script "validate-staging.sh"
+}
+
+restart_all_staging() {
+  if $IS_ON_STAGING; then
+    run_command "sudo systemctl stop ngrok.service >/dev/null 2>&1 || true; sudo systemctl disable ngrok.service >/dev/null 2>&1 || true; sudo systemctl restart protonvpn-openvpn; sleep 5; sudo systemctl restart ngrok-taliahub; sleep 5; cd /home/zomarc/talia-docker && docker compose -f docker-compose.staging.yml restart supabase-db supabase-rest supabase-kong; sleep 5; docker compose -f docker-compose.staging.yml restart graphql-server; sleep 5; docker compose -f docker-compose.staging.yml restart ui; docker compose -f docker-compose.staging.yml up -d; sleep 10; docker compose -f docker-compose.staging.yml ps" "Restart ALL staging services"
+  else
+    run_script "restart-and-check.sh" "staging --restart"
+  fi
+}
+
 handle_staging_menu() {
   local choice="$1"
   
@@ -256,6 +303,12 @@ handle_staging_menu() {
       
       echo ""
       echo -e "${GREEN}✅ Full check complete${NC}"
+      ;;
+    7|restart-all)
+      restart_all_staging
+      ;;
+    8|comprehensive)
+      run_script "validate-staging-local.sh"
       ;;
     0|q|quit|exit)
       echo -e "${GREEN}Goodbye!${NC}"
@@ -398,6 +451,12 @@ handle_remote_menu() {
       
       echo ""
       echo -e "${GREEN}✅ Full check complete${NC}"
+      ;;
+    8|comprehensive)
+      run_comprehensive_check
+      ;;
+    9|restart-all)
+      restart_all_staging
       ;;
     0|q|quit|exit)
       echo -e "${GREEN}Goodbye!${NC}"

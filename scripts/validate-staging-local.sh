@@ -96,6 +96,31 @@ fi
 echo ""
 echo -e "${BLUE}=== Internal Services ===${NC}"
 
+# Check expected ports are listening
+echo -e "${BLUE}=== Ports ===${NC}"
+check_port() {
+  local port="$1"
+  local label="$2"
+  local found=false
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE ":${port}$" && found=true
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -ti :"${port}" >/dev/null 2>&1 && found=true
+  fi
+
+  if $found; then
+    check_status "$label port :${port}" "OK" "listening"
+  else
+    check_status "$label port :${port}" "FAIL" "not listening"
+  fi
+}
+
+check_port 5173 "UI"
+check_port 4000 "GraphQL"
+check_port 8000 "Supabase Kong"
+check_port 5432 "Postgres"
+
+# Check UI service
 # Check UI service
 UI_CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo '000')
 if [[ "$UI_CODE" == "200" ]]; then
@@ -112,11 +137,79 @@ else
   check_status "GraphQL service (localhost:4000)" "FAIL" "HTTP $GQL_CODE"
 fi
 
+# Check GraphQL schema compatibility for Admin Lite
+SCHEMA_CHECK=$(curl -sS -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{"query":"{ databaseTables { tableName actualDataRange { min max } lastError } }"}' 2>/dev/null || echo 'FAILED')
+if [[ "$SCHEMA_CHECK" == "FAILED" ]]; then
+  check_status "Admin Lite schema" "FAIL" "could not query GraphQL"
+elif echo "$SCHEMA_CHECK" | grep -q '"errors"'; then
+  check_status "Admin Lite schema" "FAIL" "schema mismatch"
+else
+  check_status "Admin Lite schema" "OK" "actualDataRange + lastError"
+fi
+
+# Check databaseTables data presence
+TABLE_COUNT=$(curl -sS -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{"query":"{ databaseTables { tableName } }"}' 2>/dev/null | grep -o '"tableName"' | wc -l || echo '0')
+if [[ "$TABLE_COUNT" -gt 0 ]]; then
+  check_status "Database tables" "OK" "${TABLE_COUNT} tables"
+else
+  check_status "Database tables" "FAIL" "no tables returned"
+fi
+
 # Check Docker services
 echo ""
 echo -e "${BLUE}=== Docker Containers ===${NC}"
 cd "$STAGING_DIR" 2>/dev/null || cd /home/zomarc/talia-docker
 docker compose -f docker-compose.staging.yml ps --format "table {{.Name}}\t{{.Status}}" 2>/dev/null | head -15
+
+# Validate expected services are running (no extras, no missing)
+echo ""
+echo -e "${BLUE}=== Docker Services (Expected vs Running) ===${NC}"
+EXPECTED_SERVICES=$(docker compose -f docker-compose.staging.yml config --services 2>/dev/null | tr '\n' ' ')
+RUNNING_SERVICES=$(docker compose -f docker-compose.staging.yml ps --services --status running 2>/dev/null | tr '\n' ' ')
+
+missing_services=""
+for svc in $EXPECTED_SERVICES; do
+  echo "$RUNNING_SERVICES" | grep -qE "(^| )${svc}($| )" || missing_services="${missing_services}${svc} "
+done
+
+extra_services=""
+for svc in $RUNNING_SERVICES; do
+  echo "$EXPECTED_SERVICES" | grep -qE "(^| )${svc}($| )" || extra_services="${extra_services}${svc} "
+done
+
+if [[ -z "$missing_services" ]]; then
+  check_status "Expected services running" "OK" "all present"
+else
+  check_status "Expected services running" "FAIL" "missing: ${missing_services}"
+fi
+
+if [[ -z "$extra_services" ]]; then
+  check_status "Unexpected services" "OK" "none"
+else
+  check_status "Unexpected services" "WARN" "extra: ${extra_services}"
+fi
+
+duplicate_services=$(docker compose -f docker-compose.staging.yml ps --services --status running 2>/dev/null | sort | uniq -d | tr '\n' ' ')
+if [[ -n "$duplicate_services" ]]; then
+  check_status "Duplicate services" "WARN" "duplicates: ${duplicate_services}"
+else
+  check_status "Duplicate services" "OK" "none"
+fi
+
+echo ""
+echo -e "${BLUE}=== Versions / Deploy Commit ===${NC}"
+if git -C "$STAGING_DIR" rev-parse HEAD >/dev/null 2>&1; then
+  git -C "$STAGING_DIR" fetch origin >/dev/null 2>&1 || true
+  STAGING_HEAD=$(git -C "$STAGING_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+  STAGING_ORIGIN=$(git -C "$STAGING_DIR" rev-parse --short origin/main 2>/dev/null || echo "unknown")
+  if [[ "$STAGING_HEAD" == "$STAGING_ORIGIN" ]]; then
+    check_status "Staging git" "OK" "HEAD ${STAGING_HEAD} (matches origin/main)"
+  else
+    check_status "Staging git" "WARN" "HEAD ${STAGING_HEAD}, origin/main ${STAGING_ORIGIN}"
+  fi
+else
+  check_status "Staging git" "WARN" "repo not found"
+fi
 
 echo ""
 echo -e "${BLUE}============================================================${NC}"

@@ -9,6 +9,9 @@
 #
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
 STAGING_USER="${STAGING_USER:-zomarc}"
 STAGING_HOST="${STAGING_HOST:-192.168.1.120}"
 STAGING_DIR="${STAGING_DIR:-/home/${STAGING_USER}/talia-docker}"
@@ -139,6 +142,24 @@ fi
 echo ""
 echo -e "${BLUE}=== Internal Services ===${NC}"
 
+# Check expected ports are listening on staging host
+check_port_remote() {
+  local port="$1"
+  local label="$2"
+  local port_open="false"
+  port_open=$(ssh "${STAGING_USER}@${STAGING_HOST}" "if command -v ss >/dev/null 2>&1; then ss -ltn | awk '{print \$4}' | grep -qE ':${port}$' && echo true || echo false; elif command -v lsof >/dev/null 2>&1; then lsof -ti :${port} >/dev/null 2>&1 && echo true || echo false; else echo false; fi" 2>/dev/null || echo "false")
+  if [[ "$port_open" == "true" ]]; then
+    check_status "${label} port :${port}" "OK" "listening"
+  else
+    check_status "${label} port :${port}" "FAIL" "not listening"
+  fi
+}
+
+check_port_remote 5173 "UI"
+check_port_remote 4000 "GraphQL"
+check_port_remote 8000 "Supabase Kong"
+check_port_remote 5432 "Postgres"
+
 # Check UI service
 UI_CODE=$(ssh "${STAGING_USER}@${STAGING_HOST}" "curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo '000'" 2>/dev/null || echo "000")
 if [[ "$UI_CODE" == "200" ]]; then
@@ -155,12 +176,82 @@ else
   check_status "GraphQL service" "FAIL" "HTTP $GQL_CODE"
 fi
 
+# Check GraphQL schema compatibility for Admin Lite
+SCHEMA_CHECK=$(ssh "${STAGING_USER}@${STAGING_HOST}" "curl -sS -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ databaseTables { tableName actualDataRange { min max } lastError } }\"}' 2>/dev/null" 2>/dev/null || echo "FAILED")
+if [[ "$SCHEMA_CHECK" == "FAILED" ]]; then
+  check_status "Admin Lite schema" "FAIL" "could not query GraphQL"
+elif echo "$SCHEMA_CHECK" | grep -q '"errors"'; then
+  check_status "Admin Lite schema" "FAIL" "schema mismatch"
+else
+  check_status "Admin Lite schema" "OK" "actualDataRange + lastError"
+fi
+
+# Check databaseTables data presence
+TABLE_COUNT=$(ssh "${STAGING_USER}@${STAGING_HOST}" "curl -sS -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ databaseTables { tableName } }\"}' 2>/dev/null | grep -o '\"tableName\"' | wc -l || echo '0'" 2>/dev/null || echo "0")
+if [[ "$TABLE_COUNT" -gt 0 ]]; then
+  check_status "Database tables" "OK" "${TABLE_COUNT} tables"
+else
+  check_status "Database tables" "FAIL" "no tables returned"
+fi
+
 # Check Docker services
 DOCKER_PS=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml ps --format json 2>/dev/null | jq -r '.[] | select(.State != \"running\") | .Name' | head -5" 2>/dev/null || echo "ERROR")
 if [[ -z "$DOCKER_PS" ]] || [[ "$DOCKER_PS" == "ERROR" ]]; then
   check_status "Docker services" "OK" "all running"
 else
   check_status "Docker services" "WARN" "some containers not running: $DOCKER_PS"
+fi
+
+# Check expected vs running services (no extras, no missing)
+EXPECTED_SERVICES=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml config --services 2>/dev/null | tr '\n' ' '" 2>/dev/null || echo "")
+RUNNING_SERVICES=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml ps --services --status running 2>/dev/null | tr '\n' ' '" 2>/dev/null || echo "")
+
+missing_services=""
+for svc in $EXPECTED_SERVICES; do
+  echo "$RUNNING_SERVICES" | grep -qE "(^| )${svc}($| )" || missing_services="${missing_services}${svc} "
+done
+
+extra_services=""
+for svc in $RUNNING_SERVICES; do
+  echo "$EXPECTED_SERVICES" | grep -qE "(^| )${svc}($| )" || extra_services="${extra_services}${svc} "
+done
+
+if [[ -z "$missing_services" ]]; then
+  check_status "Expected services running" "OK" "all present"
+else
+  check_status "Expected services running" "FAIL" "missing: ${missing_services}"
+fi
+
+if [[ -z "$extra_services" ]]; then
+  check_status "Unexpected services" "OK" "none"
+else
+  check_status "Unexpected services" "WARN" "extra: ${extra_services}"
+fi
+
+echo ""
+echo -e "${BLUE}=== Versions / Deploy Commit ===${NC}"
+
+# Local repo version
+if git -C "$ROOT_DIR" rev-parse HEAD >/dev/null 2>&1; then
+  git -C "$ROOT_DIR" fetch origin >/dev/null 2>&1 || true
+  LOCAL_HEAD=$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+  LOCAL_ORIGIN=$(git -C "$ROOT_DIR" rev-parse --short origin/main 2>/dev/null || echo "unknown")
+  if [[ "$LOCAL_HEAD" == "$LOCAL_ORIGIN" ]]; then
+    check_status "Local git" "OK" "HEAD ${LOCAL_HEAD} (matches origin/main)"
+  else
+    check_status "Local git" "WARN" "HEAD ${LOCAL_HEAD}, origin/main ${LOCAL_ORIGIN}"
+  fi
+else
+  check_status "Local git" "WARN" "not a git repo"
+fi
+
+# Staging repo version
+STAGING_HEAD=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && git rev-parse --short HEAD 2>/dev/null || echo 'unknown'" 2>/dev/null || echo "unknown")
+STAGING_ORIGIN=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && git fetch origin >/dev/null 2>&1 && git rev-parse --short origin/main 2>/dev/null || echo 'unknown'" 2>/dev/null || echo "unknown")
+if [[ "$STAGING_HEAD" == "$STAGING_ORIGIN" ]]; then
+  check_status "Staging git" "OK" "HEAD ${STAGING_HEAD} (matches origin/main)"
+else
+  check_status "Staging git" "WARN" "HEAD ${STAGING_HEAD}, origin/main ${STAGING_ORIGIN}"
 fi
 
 if [[ "$TEST_AZURE" == "true" ]]; then

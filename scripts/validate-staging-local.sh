@@ -11,6 +11,7 @@ set -euo pipefail
 STAGING_DIR="${STAGING_DIR:-/home/zomarc/talia-docker}"
 NGROK_URL="${NGROK_URL:-https://taliahub.com}"
 EXPECTED_VPN_IP="149.40.48.92"
+SCRIPT_VERSION="2026-01-30.1"
 
 # Colors
 RED='\033[0;31m'
@@ -22,6 +23,8 @@ NC='\033[0m'
 echo -e "${BLUE}============================================================${NC}"
 echo -e "${BLUE}Staging Local Validation (run on MiniPC)${NC}"
 echo -e "${BLUE}============================================================${NC}"
+echo ""
+echo -e "${BLUE}Version:${NC} ${SCRIPT_VERSION}"
 echo ""
 
 ISSUES=0

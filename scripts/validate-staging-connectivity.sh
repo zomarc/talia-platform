@@ -11,6 +11,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_VERSION="2026-01-30.1"
 
 STAGING_USER="${STAGING_USER:-zomarc}"
 STAGING_HOST="${STAGING_HOST:-192.168.1.120}"
@@ -44,6 +45,8 @@ done
 echo -e "${BLUE}============================================================${NC}"
 echo -e "${BLUE}Staging Connectivity Validation${NC}"
 echo -e "${BLUE}============================================================${NC}"
+echo ""
+echo -e "${BLUE}Version:${NC} ${SCRIPT_VERSION}"
 echo ""
 
 # Track overall status

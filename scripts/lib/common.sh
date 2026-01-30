@@ -43,6 +43,9 @@ print_header() {
   echo ""
   echo -e "${BLUE}Host:${NC}      $(hostname)"
   echo -e "${BLUE}Timestamp:${NC} $(date '+%Y-%m-%d %H:%M:%S %Z')"
+  if [[ -n "${SCRIPT_VERSION:-}" ]]; then
+    echo -e "${BLUE}Version:${NC}   ${SCRIPT_VERSION}"
+  fi
   echo ""
 }
 

@@ -60,6 +60,7 @@ print_menu() {
     echo -e "  ${CYAN}6)${NC} ${BOLD}FULL CHECK${NC} (all services + docker + network)"
     echo -e "  ${CYAN}7)${NC} ${BOLD}RESTART ALL${NC} (VPN + ngrok + Docker)"
     echo -e "  ${CYAN}8)${NC} ${BOLD}COMPREHENSIVE CHECK${NC} (versions + schema + ports)"
+    echo -e "  ${DIM}9) RESTART ALL (remote) — unavailable on staging${NC}"
     echo ""
     echo -e "  ${YELLOW}0)${NC} Exit"
   else
@@ -311,6 +312,10 @@ handle_staging_menu() {
       ;;
     8|comprehensive)
       run_script "validate-staging-local.sh"
+      ;;
+    9)
+      echo -e "${YELLOW}Option 9 is only available from local (remote restart).${NC}"
+      return 1
       ;;
     0|q|quit|exit)
       echo -e "${GREEN}Goodbye!${NC}"

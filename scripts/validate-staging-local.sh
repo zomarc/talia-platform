@@ -121,7 +121,7 @@ check_port 8000 "Supabase Kong"
 
 # Postgres may not be exposed on host; validate mapping and health instead
 DB_MAPPING=$(docker compose -f "$STAGING_DIR/docker-compose.staging.yml" port supabase-db 5432 2>/dev/null || echo "")
-if [[ -n "$DB_MAPPING" ]]; then
+if [[ -n "$DB_MAPPING" ]] && ! echo "$DB_MAPPING" | grep -qE '(:0)$'; then
   DB_HOST_PORT="${DB_MAPPING##*:}"
   check_port "$DB_HOST_PORT" "Postgres host port"
 else

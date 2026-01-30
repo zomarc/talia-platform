@@ -161,7 +161,7 @@ check_port_remote 8000 "Supabase Kong"
 
 # Postgres may not be exposed on host; validate mapping and health instead
 DB_MAPPING=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml port supabase-db 5432 2>/dev/null || echo ''" 2>/dev/null || echo "")
-if [[ -n "$DB_MAPPING" ]]; then
+if [[ -n "$DB_MAPPING" ]] && ! echo "$DB_MAPPING" | grep -qE '(:0)$'; then
   DB_HOST_PORT="${DB_MAPPING##*:}"
   check_port_remote "${DB_HOST_PORT}" "Postgres host port"
 else

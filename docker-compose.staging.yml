@@ -117,7 +117,7 @@ services:
       PGRST_APP_SETTINGS_JWT_EXP: 3600
 
   supabase-realtime:
-    image: public.ecr.aws/supabase/realtime:v2.25.35
+    image: public.ecr.aws/supabase/realtime:v2.57.3
     container_name: talia-supabase-realtime
     depends_on:
       supabase-db:
@@ -132,7 +132,7 @@ services:
       PORT: 4000
       DB_HOST: supabase-db
       DB_PORT: 5432
-      DB_USER: supabase_realtime_admin
+      DB_USER: postgres
       DB_PASSWORD: your-super-secret-and-long-postgres-password
       DB_NAME: postgres
       DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'

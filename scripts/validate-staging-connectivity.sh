@@ -158,7 +158,22 @@ check_port_remote() {
 check_port_remote 5173 "UI"
 check_port_remote 4000 "GraphQL"
 check_port_remote 8000 "Supabase Kong"
-check_port_remote 5432 "Postgres"
+
+# Postgres may not be exposed on host; validate mapping and health instead
+DB_MAPPING=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml port supabase-db 5432 2>/dev/null || echo ''" 2>/dev/null || echo "")
+if [[ -n "$DB_MAPPING" ]]; then
+  DB_HOST_PORT="${DB_MAPPING##*:}"
+  check_port_remote "${DB_HOST_PORT}" "Postgres host port"
+else
+  check_status "Postgres port exposure" "OK" "not exposed on host"
+fi
+
+DB_HEALTH=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml exec -T supabase-db pg_isready -U postgres >/dev/null 2>&1 && echo ok || echo fail" 2>/dev/null || echo "fail")
+if [[ "$DB_HEALTH" == "ok" ]]; then
+  check_status "Postgres health" "OK" "pg_isready"
+else
+  check_status "Postgres health" "FAIL" "pg_isready failed"
+fi
 
 # Check UI service
 UI_CODE=$(ssh "${STAGING_USER}@${STAGING_HOST}" "curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo '000'" 2>/dev/null || echo "000")

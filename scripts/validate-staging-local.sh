@@ -118,7 +118,21 @@ check_port() {
 check_port 5173 "UI"
 check_port 4000 "GraphQL"
 check_port 8000 "Supabase Kong"
-check_port 5432 "Postgres"
+
+# Postgres may not be exposed on host; validate mapping and health instead
+DB_MAPPING=$(docker compose -f "$STAGING_DIR/docker-compose.staging.yml" port supabase-db 5432 2>/dev/null || echo "")
+if [[ -n "$DB_MAPPING" ]]; then
+  DB_HOST_PORT="${DB_MAPPING##*:}"
+  check_port "$DB_HOST_PORT" "Postgres host port"
+else
+  check_status "Postgres port exposure" "OK" "not exposed on host"
+fi
+
+if docker compose -f "$STAGING_DIR/docker-compose.staging.yml" exec -T supabase-db pg_isready -U postgres >/dev/null 2>&1; then
+  check_status "Postgres health" "OK" "pg_isready"
+else
+  check_status "Postgres health" "FAIL" "pg_isready failed"
+fi
 
 # Check UI service
 # Check UI service

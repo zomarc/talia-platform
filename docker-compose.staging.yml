@@ -24,7 +24,7 @@ services:
     restart: unless-stopped
 
   supabase-studio:
-    image: public.ecr.aws/supabase/studio:20240118-8c99c0d
+    image: public.ecr.aws/supabase/studio:latest
     container_name: talia-supabase-studio
     restart: unless-stopped
     healthcheck:

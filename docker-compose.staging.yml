@@ -145,13 +145,7 @@ services:
       ENABLE_TAILSCALE: "false"
       DNS_NODES: "''"
     command: >
-      sh -c "/usr/local/bin/gen_jwt
-      --key=/config/realtime.key
-      --iss=realtime
-      --claims='{\"role\":\"authenticated\",\"iss\":\"realtime\"}'
-      --exp=$(date -d '+1 hour' +%s)
-      > /tmp/realtime.token &&
-      /app/bin/realtime eval 'Realtime.Release.migrate()' &&
+      sh -c "/app/bin/realtime eval 'Realtime.Release.migrate()' &&
       /app/bin/realtime start"
 
   supabase-storage:

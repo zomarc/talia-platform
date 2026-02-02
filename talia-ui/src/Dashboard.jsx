@@ -19,6 +19,8 @@ import SimpleTable from "./components/focus-panels/SimpleTable";
 import SailingSummary from "./components/focus-panels/SailingSummary/index";
 import MasterVoyagePerformanceSummary from "./components/focus-panels/MasterVoyagePerformanceSummary";
 import VoyageReport from "./components/focus-panels/VoyageReport";
+import BtopTerminal from "./components/focus-panels/BtopTerminal";
+import DirectSourceRequest from "./components/focus-panels/DirectSourceRequest";
 import UserProfile from "./components/UserProfile";
 import { useSupabaseAuth } from "./contexts/SupabaseAuthContext";
 import { normalizeRole, isAdmin } from "./utils/roleUtils";
@@ -31,8 +33,7 @@ import graphQLFocusService from "./services/GraphQLFocusService";
 import { AdminDashboard, UserMappingTable, TaliaUserTable } from "./components/admin";
 // Context Row Monitor (Admin only)
 import ContextRowMonitor from "./components/focus-panels/ContextRowMonitor/index.jsx";
-// Dev Role Selector (development only)
-import DevRoleSelector from "./components/dev/DevRoleSelector";
+// Dev Role Selector is now integrated into ModeSelector dropdown
 // Theme System - using centralized theme context
 import { useTheme } from "./contexts/ThemeContext";
 import { DEFAULT_THEME } from "./config/themes.js";
@@ -436,17 +437,33 @@ const TablePanel = React.memo(function TablePanel() {
   // This prevents interference with Dockview's drag and drop system
 
   return (
-    <div className="talia-report" style={{ height: "100%", width: "100%" }}>
-      <div className="talia-report__header" style={{ padding: "8px 12px" }}>
+    <div style={{ 
+      height: "100%", 
+      width: "100%", 
+      display: "flex", 
+      flexDirection: "column",
+      background: theme.colors.background,
+      color: theme.colors.foreground,
+      fontSize: `${fontSize}px`,
+      fontFamily: selectedFont.value
+    }}>
+      <div style={{ 
+        padding: "8px 12px", 
+        background: theme.colors.sidebarHeader, 
+        borderBottom: `1px solid ${theme.colors.sidebarBorder}`,
+        fontSize: `${fontSize - 1}px`,
+        color: theme.colors.textSecondary
+      }}>
         <strong>Table Filters:</strong> Use the filter controls in column headers to filter data. 
-        <span style={{ marginLeft: "8px", color: "var(--theme-accent)" }}>
+        <span style={{ marginLeft: "8px", color: theme.colors.accent }}>
           💡 Tip: Click filter icons in column headers to filter by Ship, Sailing, Status, or numeric values
         </span>
       </div>
       <div 
         ref={tableRef} 
-        className="talia-table"
+        style={{ height: "100%", width: "100%", flex: 1 }} 
       />
+      {/* Tabulator styling configured via initTabulator() - CSS injected after Tabulator loads */}
     </div>
   );
 });
@@ -666,10 +683,18 @@ const ChartPanel = React.memo(function ChartPanel() {
   // This prevents interference with Dockview's drag and drop system
 
   return (
-    <div className="talia-chart">
+    <div style={{ 
+      height: "100%", 
+      width: "100%", 
+      position: "relative",
+      background: theme.colors.background,
+      color: theme.colors.foreground,
+      fontSize: `${fontSize}px`,
+      fontFamily: selectedFont.value
+    }}>
       <canvas 
         ref={canvasRef} 
-        className="talia-chart__canvas"
+        style={{ height: "100%", width: "100%" }} 
       />
     </div>
   );
@@ -677,11 +702,21 @@ const ChartPanel = React.memo(function ChartPanel() {
 
 // ---- Simple text panel (fallback/info) ----
 function InfoPanel(props) {
+  const { theme, fontSize, selectedFont, fontFamily } = useTheme();
   const title = props?.params?.panel?.title || props?.params?.title || "Panel";
   return (
-    <div className="dashboard-panel">
-      <p className="dashboard-panel__title">{title}</p>
-      <p className="dashboard-panel__content">This is a generic panel. Drag the tab to dock/split.</p>
+    <div style={{ 
+      height: "100%", 
+      width: "100%", 
+      padding: 16, 
+      fontSize: `${fontSize}px`, 
+      fontFamily: selectedFont.value,
+      lineHeight: 1.5, 
+      color: theme.colors.foreground, 
+      background: theme.colors.background 
+    }}>
+      <p style={{ margin: 0, marginBottom: 8, fontWeight: 600 }}>{title}</p>
+      <p style={{ margin: 0 }}>This is a generic panel. Drag the tab to dock/split.</p>
     </div>
   );
 }
@@ -701,18 +736,42 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
   });
 
   const toggleSection = (section) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
+    setExpandedSections(prev => {
+      // If clicking the same section, toggle it
+      // If clicking a different section, close all others and open only this one
+      const isCurrentlyOpen = prev[section];
+      
+      if (isCurrentlyOpen) {
+        // Close the section that's being clicked
+        return {
+          ...prev,
+          [section]: false
+        };
+      } else {
+        // Close all sections and open only the clicked one
+        return {
+          focus: false,
+          user: false,
+          criteria: false,
+          reports: false,
+          appearance: false,
+          controls: false,
+          admin: false,
+          [section]: true
+        };
+      }
+    });
   };
 
-  // Dynamic width for sidebar (only dynamic value)
-  const sidebarWidth = isCollapsed ? '48px' : `${width}px`;
+  // Dynamic styles - only for truly dynamic values (width, display)
+  const sidebarDynamicStyle = {
+    width: isCollapsed ? '48px' : `${width}px`,
+    transition: isCollapsed ? 'width 0.2s ease' : 'none',
+  };
 
   if (isCollapsed) {
     return (
-      <div className="dashboard-sidebar" style={{ width: sidebarWidth, transition: isCollapsed ? 'width 0.2s ease' : 'none' }}>
+      <div className="dashboard-sidebar" style={sidebarDynamicStyle}>
         <div className="dashboard-sidebar__header">
           <button
             onClick={onToggle}
@@ -731,7 +790,7 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
   }
 
   return (
-    <div className="dashboard-sidebar" style={{ width: sidebarWidth }}>
+    <div className="dashboard-sidebar" style={sidebarDynamicStyle}>
       {/* Header */}
       <div className="dashboard-explorer__header">
         <span className="dashboard-explorer__title">Explorer</span>
@@ -746,11 +805,12 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
       {/* Sections Container - Flex container for dynamic sizing */}
       <div className="dashboard-explorer__content">
         {/* Enhanced Focus Section with New Focus Management */}
-      <div className={`dashboard-section ${expandedSections.focus ? 'dashboard-section--expanded' : ''}`} style={{ 
-        flex: expandedSections.focus ? '1' : 'none',
+      <div className="dashboard-section dashboard-section--focus" style={{ 
+        flex: expandedSections.focus ? '1' : '0 0 auto',
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '0'
+        minHeight: '0',
+        overflow: 'hidden'
       }}>
         <div 
           className="dashboard-section__header"
@@ -764,19 +824,22 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
         <div className={`dashboard-section__content ${expandedSections.focus ? 'dashboard-section__content--expanded' : ''}`} style={{ 
           display: expandedSections.focus ? 'flex' : 'none',
           flexDirection: 'column',
-          flex: '1'
+          flex: expandedSections.focus ? '1' : '0 0 auto',
+          minHeight: '0',
+          overflow: 'hidden'
         }}>
           {/* Show loading state */}
           {focusLoading && (
-            <div className="talia-loading">
-              <div className="talia-loading__text">Loading focuses...</div>
+            <div className="dashboard-loading">
+              <div className="dashboard-loading__text">Loading focuses...</div>
             </div>
           )}
           
           {/* Show focus management error if any */}
           {focusError && (
-            <div className="talia-error">
-              <div className="talia-error__message">Focus Error: {focusError}</div>
+            <div className="dashboard-error">
+              <div className="dashboard-error__title">Focus Error</div>
+              <div className="dashboard-error__message">{focusError}</div>
             </div>
           )}
           
@@ -883,6 +946,12 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
           </button>
           <button className="dashboard-btn" onClick={() => onAddPanel('voyage-report', 'Voyage Report')}>
             📈 Voyage Report
+          </button>
+          <button className="dashboard-btn" onClick={() => onAddPanel('btop-terminal', 'System Monitor (btop)')}>
+            🖥️ System Monitor (btop)
+          </button>
+          <button className="dashboard-btn" onClick={() => onAddPanel('direct-source-request', 'Direct Source Request')}>
+            🔗 Direct Source Request
           </button>
         </div>
       </div>
@@ -1125,16 +1194,14 @@ const GraphQLPanel = React.memo(function GraphQLPanel(props) {
   if (error) {
     return (
       <div className="dashboard-error">
-        <div className="dashboard-error__icon">❌ GraphQL Error</div>
-        <div className="dashboard-error__title">Error</div>
-        <div className="dashboard-error__message">
-          {error}
-        </div>
+        <div className="dashboard-error__icon">❌</div>
+        <div className="dashboard-error__title">GraphQL Error</div>
+        <div className="dashboard-error__message">{error}</div>
         <button 
+          className="dashboard-btn dashboard-btn--primary"
           onClick={handleRefresh}
-          className="talia-btn talia-btn--primary"
         >
-          Retry
+          🔄 Retry
         </button>
         <div className="dashboard-error__details">
           Server: /api/graphql (proxied to localhost:4000)
@@ -1243,8 +1310,15 @@ const GraphQLPanel = React.memo(function GraphQLPanel(props) {
   );
 });
 
-function Dashboard({ user }) {
+function Dashboard({ user, mode, onModeChange }) {
   const { theme, currentTheme, setCurrentTheme, fontSize, selectedFont, fontFamily, spacingMode, setFontSize, setFontFamily, setSpacingMode } = useTheme();
+  
+  // Status messages use global API (window.__taliaStatus)
+  const setStatusMessage = (message) => {
+    if (window.__taliaStatus) {
+      window.__taliaStatus.setStatusMessage(message);
+    }
+  };
   
   // Focus Management Integration
   const {
@@ -1265,6 +1339,8 @@ function Dashboard({ user }) {
   
   // Get role from user or localStorage (normalized)
   const normalizedUserRole = normalizeRole(user?.role || GraphQLUtils.getUserRole() || 'USER');
+  
+  // Events are tracked globally in main.jsx - no need to track here
   
   debugLog('App component initializing');
 
@@ -1451,7 +1527,7 @@ function Dashboard({ user }) {
   // Save current layout to focus
   const handleSaveCurrentLayoutToFocus = useCallback(async (focusId) => {
     if (!apiRef.current) {
-      alert('No layout to save');
+      setStatusMessage('No layout to save');
       return;
     }
 
@@ -1459,6 +1535,10 @@ function Dashboard({ user }) {
       // Get current layout from Dockview
       const currentLayout = apiRef.current.toJSON();
       console.log('Saving current layout to focus:', focusId, currentLayout);
+
+      // Get focus name for status message
+      const focus = taliaFocuses.find(f => f.id === focusId);
+      const focusName = focus?.name || 'focus';
 
       // Update the focus with the current layout
       const success = await updateTaliaFocus(focusId, {
@@ -1469,15 +1549,15 @@ function Dashboard({ user }) {
       });
 
       if (success) {
-        alert('Current layout saved to focus successfully!');
+        setStatusMessage(`Layout saved to "${focusName}" successfully`);
       } else {
-        alert('Failed to save layout to focus');
+        setStatusMessage('Failed to save layout to focus');
       }
     } catch (error) {
       console.error('Error saving layout to focus:', error);
-      alert('Error saving layout: ' + error.message);
+      setStatusMessage('Error saving layout: ' + error.message);
     }
-  }, [updateTaliaFocus]);
+  }, [updateTaliaFocus, taliaFocuses]);
 
   // Extract components from Dockview layout for focus storage
   const extractComponentsFromLayout = useCallback((layout) => {
@@ -1975,7 +2055,8 @@ function Dashboard({ user }) {
 
   return (
     <>
-      <DevRoleSelector />
+      {/* Status Bar is now at top level (main.jsx) - not rendered here */}
+      {/* DevRoleSelector is now in ModeSelector dropdown */}
       <div 
       className={`dockview-theme-${theme.name.toLowerCase().replace(' ', '-')}`} 
       style={{ 
@@ -2091,8 +2172,7 @@ function Dashboard({ user }) {
               "graphql-cabins": (props) => <GraphQLPanel {...props} params={{...props.params, dataType: "cabinAvailability"}} />,
               // System components
               "btop-terminal": (props) => {
-                const BtopTerminal = require('./components/focus-panels/BtopTerminal').default;
-                return <BtopTerminal {...props} />;
+                return <BtopTerminal theme={theme} {...props} />;
               },
               // Focus-specific components
               "kpi-cards": KPICards,
@@ -2115,6 +2195,10 @@ function Dashboard({ user }) {
               },
               "voyage-report": (props) => {
                 return <VoyageReport theme={theme} {...props} />;
+              },
+              // Direct Source Request - external GraphQL queries
+              "direct-source-request": (props) => {
+                return <DirectSourceRequest theme={theme} {...props} />;
               },
               // Admin components
               "admin-dashboard": AdminDashboard,

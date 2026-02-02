@@ -12,7 +12,7 @@ import '../../styles/dev-components.css';
 const DevRoleSelector = ({ inDropdown = false }) => {
   const { user, updateUserRole, isDevMode } = useSupabaseAuth();
   const [currentRole, setCurrentRole] = useState(user?.role || 'ADMIN');
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true); // Closed by default
 
   // Only show in dev mode
   if (!isDevMode) {

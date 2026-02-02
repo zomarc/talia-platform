@@ -23,10 +23,10 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
 
   // Get version from package.json (would need to be injected at build time)
   useEffect(() => {
-    // In production, this could come from build-time env var
     const envVersion = import.meta.env.VITE_APP_VERSION || '0.1.0';
     setVersion(envVersion);
   }, []);
+
 
   const isDevMode = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_MODE === 'true';
 
@@ -127,7 +127,7 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
           </button>
         </div>
 
-        {/* Source & Version Info - Always visible */}
+        {/* Source & Version Info */}
         <div className="mode-selector__info">
           <div className="mode-selector__source">
             <span className="mode-selector__source-label">Source:</span>

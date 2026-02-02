@@ -113,6 +113,9 @@ const TestPage = () => {
     if (selectedComponent === 'DataTypesValidation') {
       return { theme };
     }
+    if (selectedComponent === 'DirectSourceRequest') {
+      return { theme };
+    }
     return {};
   };
 

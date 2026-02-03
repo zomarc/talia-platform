@@ -81,8 +81,6 @@ const EventMonitor = ({ componentFilter = null, theme }) => {
       'talia:sail.clear',
       'talia:ship.select',
       'talia:ship.clear',
-      'talia:sailing.select',
-      'talia:sailing.clear',
       'talia:publishedRates.select',
       'talia:publishedRates.clear',
       'talia:reservation.select',

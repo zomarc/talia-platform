@@ -8,7 +8,7 @@
  * 
  * @param {Object} options - Hook configuration
  * @param {string} options.tableName - Name of the table to query
- * @param {string|string[]} options.eventName - Event name(s) to listen to (e.g., 'talia:sail.select')
+ * @param {string|string[]} options.eventName - Event name(s) to listen to (e.g., SAIL_SELECT_EVENT)
  * @param {Function} options.contextMapper - Maps event detail to GraphQL filters object
  * @param {number} [options.limit=1000] - Maximum number of records to fetch
  * @param {boolean} [options.enabled=true] - Whether the hook is enabled
@@ -16,6 +16,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import queryTracker from '../../services/data/queryTracker';
+import { SAIL_SELECT_EVENT } from '../../lib/eventBus';
 
 const GRAPHQL_URL = '/api/graphql';
 
@@ -202,7 +203,7 @@ export const useTableDataWithContext = ({
         }
 
         // Also check for lastSailSelectEvent (for sail events)
-        if (eventNameRef.current === 'talia:sail.select') {
+        if (eventNameRef.current === SAIL_SELECT_EVENT) {
           const lastSailEvent = window.lastSailSelectEvent || null;
           if (lastSailEvent && lastSailEvent.detail) {
             const newFilters = extractFiltersRef.current(lastSailEvent.detail);
@@ -243,7 +244,7 @@ export const useTableDataWithContext = ({
       fetchDataRef.current(newFilters);
       
       // Store for context restoration (for sail events)
-      if (event.type === 'talia:sail.select') {
+      if (event.type === SAIL_SELECT_EVENT) {
         window.lastSailSelectEvent = event;
       }
     };
@@ -255,7 +256,7 @@ export const useTableDataWithContext = ({
       fetchDataRef.current(null);
       
       // Clear stored event
-      if (currentEventName === 'talia:sail.select') {
+      if (currentEventName === SAIL_SELECT_EVENT) {
         window.lastSailSelectEvent = null;
       }
     };
@@ -301,7 +302,7 @@ export const useTableDataWithContext = ({
             }
           }
           // Check lastSailSelectEvent
-          if (eventNameRef.current === 'talia:sail.select') {
+          if (eventNameRef.current === SAIL_SELECT_EVENT) {
             const lastSailEvent = window.lastSailSelectEvent || null;
             if (lastSailEvent && lastSailEvent.detail) {
               const newFilters = extractFiltersRef.current(lastSailEvent.detail);

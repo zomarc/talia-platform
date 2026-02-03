@@ -29,6 +29,7 @@ import { GraphQLUtils } from "./lib/apolloClient";
 import { FocusSelector, FocusManager } from "./components/focus-management";
 import { useFocusManagement } from "./hooks/useFocusManagement";
 import graphQLFocusService from "./services/GraphQLFocusService";
+import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT, emitSailClear, emitSailSelect } from "./lib/eventBus";
 // Admin Components
 import { AdminDashboard, UserMappingTable, TaliaUserTable } from "./components/admin";
 // Context Row Monitor (Admin only)
@@ -97,11 +98,15 @@ console.log('🔧 Dockview imported:', !!DockviewReact);
  */
 
 // ----------------- Cross-panel event channel -----------------
-const SELECT_EVENT = "talia:sailing.select";   // payload: one record
-const CLEAR_EVENT  = "talia:sailing.clear";    // clear selection
+const SELECT_EVENT = SAIL_SELECT_EVENT;   // payload: one record
+const CLEAR_EVENT = SAIL_CLEAR_EVENT;     // clear selection
 
 function emitSelect(record) {
-  try { window.dispatchEvent(new CustomEvent(SELECT_EVENT, { detail: record })); } catch (e) { console.warn("emitSelect failed", e); }
+  if (record) {
+    emitSailSelect(record);
+  } else {
+    emitSailClear({ timestamp: new Date().toISOString() });
+  }
 }
 
 // Global error taps so canvas won't just stop silently
@@ -1722,7 +1727,7 @@ function Dashboard({ user, mode, onModeChange }) {
     window.location.reload();
   };
 
-  const clearSelection = () => { window.dispatchEvent(new Event(CLEAR_EVENT)); };
+  const clearSelection = () => { emitSailClear({ timestamp: new Date().toISOString() }); };
   const clearFilters = () => { 
     if (window.clearTableFilters) {
       window.clearTableFilters();

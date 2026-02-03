@@ -20,6 +20,7 @@ import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
 import { applyTheme, DEFAULT_THEME } from './config/themes.js';
 import { initChartDefaults } from './lib/chartConfig.js';
+import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from './lib/eventBus.js';
 
 // Apollo Client temporarily disabled during database restoration
 // TODO: Re-enable when database is restored
@@ -180,12 +181,10 @@ const DevSwitcher = () => {
 
     // Listen to all talia events
     const eventTypes = [
-      'talia:sail.select',
-      'talia:sail.clear',
+      SAIL_SELECT_EVENT,
+      SAIL_CLEAR_EVENT,
       'talia:ship.select',
       'talia:ship.clear',
-      'talia:sailing.select',
-      'talia:sailing.clear',
       'talia:publishedRates.select',
       'talia:publishedRates.clear',
       'talia:reservation.select',

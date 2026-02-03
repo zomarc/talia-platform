@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import reservationsService from '../../services/data/reservationsService';
+import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../lib/eventBus';
 
 /**
  * Hook for fetching reservation data
@@ -80,12 +81,12 @@ export const useReservationsBySail = (options = {}) => {
       setSelectedSailCode(null);
     };
 
-    window.addEventListener('talia:sail.select', handleSailSelect);
-    window.addEventListener('talia:sail.clear', handleSailClear);
+    window.addEventListener(SAIL_SELECT_EVENT, handleSailSelect);
+    window.addEventListener(SAIL_CLEAR_EVENT, handleSailClear);
 
     return () => {
-      window.removeEventListener('talia:sail.select', handleSailSelect);
-      window.removeEventListener('talia:sail.clear', handleSailClear);
+      window.removeEventListener(SAIL_SELECT_EVENT, handleSailSelect);
+      window.removeEventListener(SAIL_CLEAR_EVENT, handleSailClear);
     };
   }, [listenToSailEvents]);
 

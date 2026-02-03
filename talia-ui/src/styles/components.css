@@ -233,6 +233,28 @@
   animation: talia-spin 0.8s linear infinite;
 }
 
+.talia-loading__spinner--small {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+}
+
+.talia-loading__spinner--large {
+  width: 56px;
+  height: 56px;
+  border-width: 4px;
+}
+
+.talia-loading--fullscreen {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: color-mix(in srgb, var(--theme-bg-solid) 80%, transparent);
+  z-index: 9999;
+}
+
 .talia-loading__text {
   font-size: var(--theme-font-size-sm);
 }
@@ -364,6 +386,90 @@
   color: var(--theme-text-muted);
 }
 
+.talia-metric__change--positive {
+  color: var(--theme-delta-positive);
+}
+
+.talia-metric__change--negative {
+  color: var(--theme-delta-negative);
+}
+
+.talia-metric__change--neutral {
+  color: var(--theme-text-muted);
+}
+
+/* ============================================================================
+   Lists & Badges
+   ============================================================================ */
+
+.talia-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-padding-md);
+  padding: var(--theme-padding-md);
+}
+
+.talia-list__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-padding-sm);
+}
+
+.talia-list__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--theme-padding-sm);
+}
+
+.talia-list__title {
+  margin: 0;
+  font-size: var(--theme-font-size-md);
+  font-weight: 600;
+  color: var(--theme-fg);
+}
+
+.talia-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--theme-padding-sm);
+  font-size: var(--theme-font-size-xs);
+  color: var(--theme-text-muted);
+}
+
+.talia-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  background: var(--theme-border-light);
+  color: var(--theme-fg);
+}
+
+.talia-pill--success {
+  background: color-mix(in srgb, var(--theme-delta-positive) 25%, transparent);
+  color: var(--theme-delta-positive);
+}
+
+.talia-pill--warning {
+  background: color-mix(in srgb, var(--theme-warning) 25%, transparent);
+  color: var(--theme-warning);
+}
+
+.talia-pill--danger {
+  background: color-mix(in srgb, var(--theme-error) 25%, transparent);
+  color: var(--theme-error);
+}
+
+.talia-pill--neutral {
+  background: var(--theme-border-light);
+  color: var(--theme-text-muted);
+}
 /* ============================================================================
    Grid Layout
    ============================================================================ */

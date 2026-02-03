@@ -48,12 +48,9 @@ export const componentRegistry = {
     component: SimpleTable,
     category: 'Tables',
     description: 'Simple table component for displaying tabular data',
-    props: {
-      data: { type: 'array', required: true, description: 'Array of data objects' },
-      columns: { type: 'array', required: false, description: 'Column definitions' }
-    },
-    dataRequirements: 'Requires data prop',
-    filePath: 'src/components/focus-panels/SimpleTable.jsx'
+    props: {},
+    dataRequirements: 'Requires GraphQL connection to master_sail table. Emits talia:sail.select events.',
+    filePath: 'src/components/focus-panels/SimpleTable/index.jsx'
   },
   KPICards: {
     component: KPICards,
@@ -61,7 +58,7 @@ export const componentRegistry = {
     description: 'Key Performance Indicator cards displaying metrics',
     props: {},
     dataRequirements: 'Uses mock data',
-    filePath: 'src/components/focus-panels/KPICards.jsx'
+    filePath: 'src/components/focus-panels/KPICards/index.jsx'
   },
   PublishedRates: {
     component: PublishedRates,
@@ -77,7 +74,7 @@ export const componentRegistry = {
     description: 'Occupancy visualization chart',
     props: {},
     dataRequirements: 'Requires occupancy data',
-    filePath: 'src/components/focus-panels/OccupancyChart.jsx'
+    filePath: 'src/components/focus-panels/OccupancyChart/index.jsx'
   },
   RevenueBreakdown: {
     component: RevenueBreakdown,
@@ -85,7 +82,7 @@ export const componentRegistry = {
     description: 'Revenue breakdown visualization',
     props: {},
     dataRequirements: 'Requires revenue data',
-    filePath: 'src/components/focus-panels/RevenueBreakdown.jsx'
+    filePath: 'src/components/focus-panels/RevenueBreakdown/index.jsx'
   },
   SailingSummary: {
     component: SailingSummary,
@@ -105,7 +102,7 @@ export const componentRegistry = {
       theme: { type: 'object', required: false, description: 'Theme object for styling' }
     },
     dataRequirements: 'Requires GraphQL connection to sail_by_cabin_occupancy table. Reacts to talia:sail.select events.',
-    filePath: 'src/components/focus-panels/SailingByCabinCategory.jsx'
+    filePath: 'src/components/focus-panels/SailingByCabinCategory/index.jsx'
   },
   ExceptionList: {
     component: ExceptionList,
@@ -113,7 +110,7 @@ export const componentRegistry = {
     description: 'List of exceptions and alerts',
     props: {},
     dataRequirements: 'Uses mock data',
-    filePath: 'src/components/focus-panels/ExceptionList.jsx'
+    filePath: 'src/components/focus-panels/ExceptionList/index.jsx'
   },
   ItineraryList: {
     component: ItineraryList,
@@ -121,7 +118,7 @@ export const componentRegistry = {
     description: 'List of cruise itineraries',
     props: {},
     dataRequirements: 'Uses mock data',
-    filePath: 'src/components/focus-panels/ItineraryList.jsx'
+    filePath: 'src/components/focus-panels/ItineraryList/index.jsx'
   },
   ReservationCurrentState: {
     component: ReservationCurrentStateContainer,

@@ -20,6 +20,28 @@ src/
         └── YourReportPresenter.jsx  # Presenter (UI only)
 ```
 
+## Event Bus (Report Linking)
+
+Use the shared event bus for cross-panel linking. Standard sail selection events are:
+
+- `talia:sail.select` - payload `{ sail_code, row_data, timestamp }`
+- `talia:sail.clear` - payload `{ timestamp }`
+
+Use the shared helpers from `src/lib/eventBus.js` to emit events:
+
+```jsx
+import { emitSailSelect, emitSailClear, SAIL_SELECT_EVENT } from '../../lib/eventBus';
+
+// Emit selection
+emitSailSelect({ sail_code: rec.sail_code, row_data: rec, timestamp: new Date().toISOString() });
+
+// Emit clear
+emitSailClear({ timestamp: new Date().toISOString() });
+
+// Listen for selection
+window.addEventListener(SAIL_SELECT_EVENT, handler);
+```
+
 ## Creating a New Report
 
 ### 1. Container Component (`index.jsx`)

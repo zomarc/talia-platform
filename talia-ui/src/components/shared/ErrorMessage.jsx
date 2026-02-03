@@ -12,71 +12,20 @@ const ErrorMessage = ({
   const errorMessage = error?.message || error?.toString() || 'An unknown error occurred';
   
   return (
-    <div style={{
-      padding: '40px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      textAlign: 'center'
-    }}>
-      <div style={{ 
-        fontSize: '48px', 
-        marginBottom: '16px' 
-      }}>
-        ⚠️
-      </div>
-      
-      <h3 style={{
-        margin: '0 0 8px 0',
-        fontSize: '18px',
-        fontWeight: '600',
-        color: '#333'
-      }}>
-        {title}
-      </h3>
-      
-      <p style={{
-        color: '#666',
-        fontSize: '14px',
-        margin: '0 0 24px 0',
-        maxWidth: '500px'
-      }}>
-        {errorMessage}
-      </p>
-      
+    <div className="talia-error" role="alert">
+      <span className="talia-error__icon" aria-hidden="true">⚠️</span>
+      <h3 className="talia-error__title">{title}</h3>
+      <p className="talia-error__message">{errorMessage}</p>
+
       {(onRetry || onDismiss) && (
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div className="talia-report__actions">
           {onRetry && (
-            <button
-              onClick={onRetry}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: '#b08d57',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500'
-              }}
-            >
+            <button className="talia-btn talia-btn--primary" onClick={onRetry}>
               Retry
             </button>
           )}
           {onDismiss && (
-            <button
-              onClick={onDismiss}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: '#e0e0e0',
-                color: '#333',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
-            >
+            <button className="talia-btn" onClick={onDismiss}>
               Dismiss
             </button>
           )}

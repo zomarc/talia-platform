@@ -11,6 +11,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
+import { emitSailClear, emitSailSelect } from '../../../lib/eventBus';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { apolloClient } from '../../../lib/apolloClient';
 import { gql } from '@apollo/client';
@@ -219,13 +220,11 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
           updateSelectedSail(data.sail_code);
           
           // Emit selection event for other components with full row data
-          window.dispatchEvent(new CustomEvent('talia:sail.select', { 
-            detail: {
-              sail_code: data.sail_code,
-              row_data: data,
-              timestamp: new Date().toISOString()
-            }
-          }));
+        emitSailSelect({
+          sail_code: data.sail_code,
+          row_data: data,
+          timestamp: new Date().toISOString()
+        });
         });
 
         instanceRef.current.on("rowDeselected", () => {
@@ -235,11 +234,7 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
           updateSelectedSail(null);
           
           // Emit clear event
-          window.dispatchEvent(new CustomEvent('talia:sail.clear', {
-            detail: {
-              timestamp: new Date().toISOString()
-            }
-          }));
+        emitSailClear({ timestamp: new Date().toISOString() });
         });
 
         console.log('[SailingTable] Table initialized with event listeners');

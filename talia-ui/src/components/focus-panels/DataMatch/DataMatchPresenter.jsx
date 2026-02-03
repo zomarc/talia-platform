@@ -6,6 +6,7 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
+import { emitSailClear, emitSailSelect, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
 const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }) => {
   const tableRef = useRef(null);
@@ -240,21 +241,19 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
             timestamp: new Date().toISOString()
           };
           
-          // Create event with all key fields
-          const event = new CustomEvent('talia:sail.select', { 
-            detail: eventDetail
-          });
+        // Create event with all key fields for persistence
+        const event = new CustomEvent(SAIL_SELECT_EVENT, { detail: eventDetail });
           
           // Store for context restoration (components check these on mount)
           window.lastSailSelectEvent = event;
-          window.latestEvent = {
-            name: 'talia:sail.select',
+        window.latestEvent = {
+          name: SAIL_SELECT_EVENT,
             detail: eventDetail,
             timestamp: new Date().toLocaleTimeString()
           };
           
           // Emit sail select event (other components listen to this)
-          window.dispatchEvent(event);
+        emitSailSelect(eventDetail);
         });
 
         instanceRef.current.on("rowDeselected", () => {
@@ -264,11 +263,7 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
           window.lastSailSelectEvent = null;
           
           // Emit clear event
-          window.dispatchEvent(new CustomEvent('talia:sail.clear', {
-            detail: {
-              timestamp: new Date().toISOString()
-            }
-          }));
+        emitSailClear({ timestamp: new Date().toISOString() });
         });
 
         console.log('[DataMatch] Table initialized with', transformedData.length, 'rows');

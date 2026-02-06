@@ -191,6 +191,17 @@
   border-color: var(--theme-accent-hover);
 }
 
+.talia-btn--active {
+  background: var(--theme-accent);
+  border-color: var(--theme-accent);
+  color: #ffffff;
+}
+
+.talia-btn--active:hover {
+  background: var(--theme-accent-hover);
+  border-color: var(--theme-accent-hover);
+}
+
 .talia-btn--small {
   padding: 2px 6px;
   font-size: 9px;
@@ -469,6 +480,106 @@
 .talia-pill--neutral {
   background: var(--theme-border-light);
   color: var(--theme-text-muted);
+}
+
+/* ============================================================================
+   Report Event Meta
+   ============================================================================ */
+
+.talia-report-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+}
+
+.talia-report-shell__header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--theme-border-light);
+  background: var(--theme-glass);
+}
+
+.talia-report-shell__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+}
+
+.talia-report-shell__content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.talia-dockview-tab__button {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.talia-dockview-tab__button:hover {
+  border-color: var(--theme-border-light);
+  background: var(--theme-glass);
+}
+
+.talia-dockview-tab__button--active {
+  border-color: var(--theme-accent);
+  color: var(--theme-accent);
+}
+
+.talia-event-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--theme-padding-sm);
+  padding: 4px 10px;
+  border-top: 1px solid var(--theme-border-light);
+  background: var(--theme-glass);
+  font-size: 9px;
+  color: var(--theme-text-muted);
+}
+
+.talia-event-meta__group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.talia-event-meta__label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--theme-text-secondary);
+}
+
+.talia-event-meta__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.talia-event-meta__chip {
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: var(--theme-border-light);
+  color: var(--theme-fg);
+}
+
+.talia-event-meta__chip--secondary {
+  background: color-mix(in srgb, var(--theme-accent) 15%, transparent);
+  color: var(--theme-accent);
 }
 /* ============================================================================
    Grid Layout

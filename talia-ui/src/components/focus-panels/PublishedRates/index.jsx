@@ -10,6 +10,7 @@ import PublishedRatesPresenter from './PublishedRatesPresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
 const PublishedRatesContainer = ({ filters = {} }) => {
   const { theme } = useTheme();
@@ -19,7 +20,7 @@ const PublishedRatesContainer = ({ filters = {} }) => {
   // Use reusable hook for context-based data fetching with server-side filtering
   const { data, loading, error, refetch, context } = useTableDataWithContext({
     tableName: 'published_rates_current_state',
-    eventName: 'talia:sail.select',
+    eventName: SAIL_SELECT_EVENT,
     contextMapper: (detail) => {
       // Extract sail_code from event detail (supports multiple formats)
       const sailCode = detail?.sail_code || detail?.Sail_Code || detail?.row_data?.sail_code || (typeof detail === 'string' ? detail : null);
@@ -32,6 +33,18 @@ const PublishedRatesContainer = ({ filters = {} }) => {
   const selectedSailCode = context?.sail_code || context?.row_data?.sail_code || (typeof context === 'string' ? context : null);
 
   console.log('[PublishedRatesContainer] State:', { loading, error: error?.message, dataLength: data?.length, selectedSailCode });
+
+  React.useEffect(() => {
+    const handleRefresh = (event) => {
+      if (event?.detail?.panelId === 'published-rates') {
+        refetch();
+      }
+    };
+    window.addEventListener('talia:report.refresh', handleRefresh);
+    return () => {
+      window.removeEventListener('talia:report.refresh', handleRefresh);
+    };
+  }, [refetch]);
 
   // Transform data to match expected format (uppercase field names) if needed
   const transformedData = data && data.length > 0 ? data.map(row => ({
@@ -108,7 +121,6 @@ const PublishedRatesContainer = ({ filters = {} }) => {
     <PublishedRatesPresenter 
       data={transformedData} 
       theme={theme}
-      onRefresh={refetch}
       selectedSailCode={selectedSailCode}
     />
   );

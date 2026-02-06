@@ -35,6 +35,7 @@ export const useTableDataWithContext = ({
   // Use refs to prevent infinite loops and store latest values
   const fetchingRef = useRef(false);
   const lastFiltersRef = useRef(null);
+  const pendingRef = useRef({ hasPending: false, filters: null });
   const contextMapperRef = useRef(contextMapper);
   const tableNameRef = useRef(tableName);
   const limitRef = useRef(limit);
@@ -75,6 +76,7 @@ export const useTableDataWithContext = ({
   fetchDataRef.current = async (currentFilters = null) => {
     // Prevent concurrent fetches
     if (fetchingRef.current) {
+      pendingRef.current = { hasPending: true, filters: currentFilters };
       return;
     }
 
@@ -157,6 +159,12 @@ export const useTableDataWithContext = ({
     } finally {
       setLoading(false);
       fetchingRef.current = false;
+      if (pendingRef.current.hasPending) {
+        const nextFilters = pendingRef.current.filters;
+        pendingRef.current = { hasPending: false, filters: null };
+        // Trigger the latest pending fetch (if any)
+        fetchDataRef.current(nextFilters);
+      }
     }
   };
 
@@ -169,9 +177,10 @@ export const useTableDataWithContext = ({
     // Check for existing context from TestPage's latestEvent or window state
     const checkExistingContext = () => {
       try {
-        // Check localStorage for persisted event (TestPage stores it here)
-        const persistedEventStr = localStorage.getItem('talia:test:lastEvent');
-        if (persistedEventStr) {
+        const persistedStores = ['talia:test:lastEvent', 'talia:persisted:lastEvent'];
+        for (const storageKey of persistedStores) {
+          const persistedEventStr = localStorage.getItem(storageKey);
+          if (!persistedEventStr) continue;
           try {
             const persistedEvent = JSON.parse(persistedEventStr);
             if (persistedEvent && persistedEvent.name === eventNameRef.current && persistedEvent.detail) {
@@ -299,6 +308,27 @@ export const useTableDataWithContext = ({
               fetchDataRef.current(newFilters);
               hasCheckedContextRef.current = true;
               return;
+            }
+          }
+          // Check persisted app/test event
+          const persistedStores = ['talia:test:lastEvent', 'talia:persisted:lastEvent'];
+          for (const storageKey of persistedStores) {
+            const persistedEventStr = localStorage.getItem(storageKey);
+            if (!persistedEventStr) continue;
+            try {
+              const persistedEvent = JSON.parse(persistedEventStr);
+              if (persistedEvent && persistedEvent.name === eventNameRef.current && persistedEvent.detail) {
+                const newFilters = extractFiltersRef.current(persistedEvent.detail);
+                if (newFilters) {
+                  console.log('[useTableDataWithContext] Found persisted event in listener setup:', newFilters);
+                  setContext(persistedEvent.detail);
+                  fetchDataRef.current(newFilters);
+                  hasCheckedContextRef.current = true;
+                  return;
+                }
+              }
+            } catch (e) {
+              console.warn('[useTableDataWithContext] Error parsing persisted event:', e);
             }
           }
           // Check lastSailSelectEvent

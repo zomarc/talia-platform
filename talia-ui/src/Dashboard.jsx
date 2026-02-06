@@ -3,24 +3,8 @@ import { DockviewReact } from "dockview";
 import "dockview/dist/styles/dockview.css"; // required Dockview CSS
 // Legacy focus layouts - keeping for fallback only
 import { getFocusLayout, getAvailableFocuses } from "./data/focusLayouts";
-import KPICards from "./components/focus-panels/KPICards";
-import OccupancyChart from "./components/focus-panels/OccupancyChart";
-import RevenueBreakdown from "./components/focus-panels/RevenueBreakdown";
-import ExceptionList from "./components/focus-panels/ExceptionList";
-import ItineraryList from "./components/focus-panels/ItineraryList";
-import PublishedRates from "./components/focus-panels/PublishedRates/index.jsx";
-import DemandHeatmapContainer from "./components/focus-panels/DemandHeatmap";
-import DemandHeatmapWithSearchTrendsContainer from "./components/focus-panels/DemandHeatmapWithSearchTrends";
-import GoogleSearchContainer from "./components/focus-panels/GoogleSearch";
-import SearchTrendsContainer from "./components/focus-panels/SearchTrends";
-import GoogleTrendsContainer from "./components/focus-panels/GoogleTrends";
-import SailingByCabinCategory from "./components/focus-panels/SailingByCabinCategory";
-import SimpleTable from "./components/focus-panels/SimpleTable";
-import SailingSummary from "./components/focus-panels/SailingSummary/index";
-import MasterVoyagePerformanceSummary from "./components/focus-panels/MasterVoyagePerformanceSummary";
-import VoyageReport from "./components/focus-panels/VoyageReport";
-import BtopTerminal from "./components/focus-panels/BtopTerminal";
-import DirectSourceRequest from "./components/focus-panels/DirectSourceRequest";
+import reportRegistry from "./components/focus-panels/registry";
+import ReportEventMeta from "./components/shared/ReportEventMeta";
 import UserProfile from "./components/UserProfile";
 import { useSupabaseAuth } from "./contexts/SupabaseAuthContext";
 import { normalizeRole, isAdmin } from "./utils/roleUtils";
@@ -47,6 +31,47 @@ import { Chart } from "chart.js/auto";
 // Debug logging
 const debugLog = (message, data = null) => {
   console.log(`[App Debug] ${message}`, data || '');
+};
+
+const REPORT_REFRESH_EVENT = 'talia:report.refresh';
+
+const ReportShell = ({ report, children }) => {
+  const emits = report?.events?.emits || [];
+  const respondsTo = report?.events?.respondsTo || [];
+  const [showDetails, setShowDetails] = useState(false);
+  const supportsRefresh = report?.supportsRefresh;
+
+  const handleRefresh = () => {
+    if (!report?.panelId) return;
+    window.dispatchEvent(new CustomEvent(REPORT_REFRESH_EVENT, { detail: { panelId: report.panelId } }));
+  };
+
+  return (
+    <div className="talia-report-shell">
+      <div className="talia-report-shell__header">
+        <div className="talia-report-shell__header-actions">
+          {supportsRefresh && (
+            <button type="button" className="talia-btn talia-btn--small" onClick={handleRefresh}>
+              Refresh
+            </button>
+          )}
+        </div>
+        <button
+          type="button"
+          className={`talia-btn talia-btn--small ${showDetails ? 'talia-btn--active' : ''}`}
+          onClick={() => setShowDetails((prev) => !prev)}
+          aria-pressed={showDetails}
+          title="Show event contract"
+        >
+          Details
+        </button>
+      </div>
+      {showDetails && (
+        <ReportEventMeta emits={emits} respondsTo={respondsTo} />
+      )}
+      <div className="talia-report-shell__content">{children}</div>
+    </div>
+  );
 };
 
 // IMPORTANT: DO NOT MESS WITH DOCKVIEW'S LAYOUT SYSTEM
@@ -730,6 +755,21 @@ function InfoPanel(props) {
 function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFiltersChange, width, saveLayout, loadLayout, addPanel, clearSelection, clearFilters, resetLayout, createLayoutPreset, currentFocus, onFocusChange, userRole, taliaFocuses, focusLoading, focusError, initializeStandardTaliaFocuses, onSaveCurrentLayout }) {
   const { theme, fontSize, setFontSize, fontFamily, setFontFamily, selectedFont, fontFamilies } = useTheme();
 
+  const reportGroups = React.useMemo(() => {
+    const items = Object.values(reportRegistry)
+      .filter((report) => report.showInReports && report.panelId)
+      .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    const grouped = {};
+    items.forEach((report) => {
+      const category = report.category || 'Other';
+      if (!grouped[category]) {
+        grouped[category] = [];
+      }
+      grouped[category].push(report);
+    });
+    return grouped;
+  }, []);
+
   const [expandedSections, setExpandedSections] = React.useState({
     focus: true,  // Only Focus Management open by default
     user: false,
@@ -919,45 +959,21 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
           </span>
         </div>
         <div className={`dashboard-section__content ${expandedSections.reports ? 'dashboard-section__content--expanded' : ''}`}>
-          <button className="dashboard-btn" onClick={() => onAddPanel('table', 'New Table')}>
-            📊 New Table
-          </button>
-          <button className="dashboard-btn" onClick={() => onAddPanel('simple-table-test', 'Simple Table Test')}>
-            🧪 Simple Table Test
-          </button>
-          <button className="dashboard-btn" onClick={() => onAddPanel('chart', 'New Chart')}>
-            📈 New Chart
-          </button>
-          <button className="dashboard-btn" onClick={() => onAddPanel('published-rates', 'Published Rates')}>
-            💰 Published Rates
-          </button>
-          <button className="dashboard-btn" onClick={() => onAddPanel('sailing-cabin-category', 'Sailing by Cabin Category')}>
-            🚢 Sailing by Cabin Category
-          </button>
-          <button className="dashboard-btn" onClick={() => onAddPanel('sailing-summary', 'Sailing Summary')}>
-            📊 Sailing Summary
-          </button>
-          <button className="dashboard-btn" onClick={() => onAddPanel('graphql-books', 'Books Report')}>
-            📚 Books Report
-          </button>
-          <button className="dashboard-btn" onClick={() => onAddPanel('graphql-ships', 'Ships Report')}>
-            🚢 Ships Report
-          </button>
-          <button className="dashboard-btn" onClick={() => onAddPanel('graphql-cabins', 'Cabins Report')}>
-            🏠 Cabins Report
-          </button>
-          <button className="dashboard-btn" onClick={() => onAddPanel('master-voyage-performance-summary', 'Master Voyage Performance Summary')}>
-            📊 Master Voyage Performance Summary
-          </button>
-          <button className="dashboard-btn" onClick={() => onAddPanel('voyage-report', 'Voyage Report')}>
-            📈 Voyage Report
-          </button>
-          <button className="dashboard-btn" onClick={() => onAddPanel('btop-terminal', 'System Monitor (btop)')}>
-            🖥️ System Monitor (btop)
-          </button>
-          <button className="dashboard-btn" onClick={() => onAddPanel('direct-source-request', 'Direct Source Request')}>
-            🔗 Direct Source Request
-          </button>
+          {Object.entries(reportGroups).sort(([a], [b]) => a.localeCompare(b)).map(([category, reports]) => (
+            <div key={category} className="dashboard-section__group">
+              <div className="dashboard-section__subtitle">{category}</div>
+              {reports.map((report) => (
+                <button
+                  key={report.panelId}
+                  className="dashboard-btn"
+                  onClick={() => onAddPanel(report.panelId, report.title, { reportId: report.panelId })}
+                  title={report.description}
+                >
+                  {report.title}
+                </button>
+              ))}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1317,6 +1333,22 @@ const GraphQLPanel = React.memo(function GraphQLPanel(props) {
 
 function Dashboard({ user, mode, onModeChange }) {
   const { theme, currentTheme, setCurrentTheme, fontSize, selectedFont, fontFamily, spacingMode, setFontSize, setFontFamily, setSpacingMode } = useTheme();
+
+  const reportComponentMap = React.useMemo(() => {
+    const map = {};
+    Object.values(reportRegistry).forEach((report) => {
+      if (!report.panelId) {
+        return;
+      }
+      const Component = report.component;
+      map[report.panelId] = (props) => (
+        <ReportShell report={report}>
+          <Component theme={theme} {...props} />
+        </ReportShell>
+      );
+    });
+    return map;
+  }, [theme]);
   
   // Status messages use global API (window.__taliaStatus)
   const setStatusMessage = (message) => {
@@ -1739,7 +1771,7 @@ function Dashboard({ user, mode, onModeChange }) {
     setSidebarCollapsed(!sidebarCollapsed);
   };
 
-  const addNewPanel = (componentType, title) => {
+  const addNewPanel = (componentType, title, panelParams = {}) => {
     if (!apiRef.current) return;
     const id = "win-" + Date.now();
     
@@ -1782,7 +1814,8 @@ function Dashboard({ user, mode, onModeChange }) {
       id, 
       component: componentType, 
       title: title || "New Panel",
-      position
+      position,
+      params: panelParams
     });
   };
 
@@ -2175,36 +2208,7 @@ function Dashboard({ user, mode, onModeChange }) {
               "graphql-books": (props) => <GraphQLPanel {...props} params={{...props.params, dataType: "books"}} />,
               "graphql-ships": (props) => <GraphQLPanel {...props} params={{...props.params, dataType: "ships"}} />,
               "graphql-cabins": (props) => <GraphQLPanel {...props} params={{...props.params, dataType: "cabinAvailability"}} />,
-              // System components
-              "btop-terminal": (props) => {
-                return <BtopTerminal theme={theme} {...props} />;
-              },
-              // Focus-specific components
-              "kpi-cards": KPICards,
-              "occupancy-chart": OccupancyChart,
-              "revenue-breakdown": RevenueBreakdown,
-              "exception-list": ExceptionList,
-              "itinerary-list": ItineraryList,
-              // Reports components
-              "published-rates": PublishedRates,
-              "demand-heatmap": DemandHeatmapContainer,
-              "demand-heatmap-with-trends": DemandHeatmapWithSearchTrendsContainer,
-              "google-search": GoogleSearchContainer,
-              "search-trends": SearchTrendsContainer,
-              "google-trends": GoogleTrendsContainer,
-              "sailing-cabin-category": SailingByCabinCategory,
-              "simple-table-test": SimpleTable,
-              "sailing-summary": SailingSummary,
-              "master-voyage-performance-summary": (props) => {
-                return <MasterVoyagePerformanceSummary theme={theme} {...props} />;
-              },
-              "voyage-report": (props) => {
-                return <VoyageReport theme={theme} {...props} />;
-              },
-              // Direct Source Request - external GraphQL queries
-              "direct-source-request": (props) => {
-                return <DirectSourceRequest theme={theme} {...props} />;
-              },
+              ...reportComponentMap,
               // Admin components
               "admin-dashboard": AdminDashboard,
               "user-mapping-table": UserMappingTable,

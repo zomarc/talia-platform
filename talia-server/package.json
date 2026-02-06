@@ -1,6 +1,6 @@
 {
   "name": "talia-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Talia Platform - GraphQL Server (Alpha)",
   "main": "index.js",
   "type": "module",

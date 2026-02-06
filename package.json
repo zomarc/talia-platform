@@ -1,6 +1,6 @@
 {
   "name": "talia-platform",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Talia Platform - Multi-Customer Revenue and Inventory Management System (Alpha)",
   "private": true,
   "workspaces": [

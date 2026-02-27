@@ -34,29 +34,80 @@ const filterDataByRole = (data: any[], userRole: string, roleField?: string) => 
   return data;
 };
 
+const TABLE_SYNC_MAP: Record<string, string> = {
+  'ship': 'ships',
+  'cabin_availability': 'cabin_availability',
+  'reservation': 'reservation',
+  'reservation_promotion': 'reservation_promotion',
+  'master_sail': 'master_sail',
+  'sail_by_cabin_occupancy': 'sail_by_cabin_occupancy',
+  'reservation_changes': 'reservation_changes',
+  'reservation_current_state': 'reservation_changes',
+  'published_rates': 'published_rates',
+  'published_rates_changes': 'published_rates',
+  'published_rates_current_state': 'published_rates',
+  'competitor': 'competitor',
+  'competitor_current_state': 'competitor'
+};
+
+const TABLE_SYNC_CONFIG_MAP: Record<string, string> = {
+  'ship': 'ships',
+  'cabin_availability': 'cabinAvailability',
+  'reservation': 'reservations',
+  'reservation_promotion': 'reservationPromotion',
+  'master_sail': 'masterSail',
+  'sail_by_cabin_occupancy': 'sailByCabinOccupancy',
+  'reservation_changes': 'reservationChanges',
+  'reservation_current_state': 'reservationChanges',
+  'published_rates': 'publishedRates',
+  'published_rates_changes': 'publishedRates',
+  'published_rates_current_state': 'publishedRates',
+  'competitor': 'competitor',
+  'competitor_current_state': 'competitor'
+};
+
+const getSyncTypeForTable = (tableName: string): string => {
+  return TABLE_SYNC_MAP[tableName] || tableName;
+};
+
+const getSyncConfigNameForTable = (tableName: string): string => {
+  return TABLE_SYNC_CONFIG_MAP[tableName] || tableName;
+};
+
 const getDateColumnsForTable = (tableName: string): string[] => {
   const tableDateColumns: { [key: string]: string[] } = {
+    'ship': [],
+    'ship_cabin': [],
+    'cabin_availability': ['snapshot_date'],
+    'gql_cabin_availability': ['snapshot_date'],
     'reservation': ['sail_from_date', 'sail_to_date'],
-    'master_sail': ['sail_date_from', 'sail_date_to'],
+    'reservation_promotion': [],
+    'master_sail': ['sail_date_from', 'sail_date_to', 'vacation_date', 'master_voyage_departure_date'],
     'sail_by_cabin_occupancy': ['sail_date_from', 'sail_itinerary_date'],
-    'published_rates': ['departure_date', 'snapshot_date'],
-    'published_rates_changes': ['departure_date', 'snapshot_date'],
-    'published_rates_current_state': ['departure_date', 'snapshot_date'],
     'reservation_changes': ['snapshot_date'],
     'reservation_current_state': ['snapshot_date'],
-    'competitor': ['departure_date', 'snapshot_date'],
-    'competitor_current_state': ['departure_date', 'snapshot_date'],
-    'cabin_availability': ['snapshot_date'],
+    'published_rates': ['snapshot_date', 'departure_date'],
+    'published_rates_changes': ['snapshot_date', 'departure_date'],
+    'published_rates_current_state': ['snapshot_date', 'departure_date'],
+    'competitor': ['snapshot_date', 'departure_date'],
+    'competitor_current_state': ['snapshot_date', 'departure_date'],
     'inventory_status_by_day': ['snapshot_date', 'sail_date'],
     'google_trends_data': ['date'],
+    'google_trends_search_terms': ['created_at', 'updated_at'],
     'sail_header': ['sail_date_from', 'sail_date_to'],
     'itinerary': ['sail_date'],
-    'cabin_allocation': ['allocation_date']
+    'cabin_allocation': ['allocation_date'],
+    'sync_metadata': ['last_sync_at', 'created_at', 'updated_at'],
+    'focuses': ['created_at', 'updated_at'],
+    'data_refresh_metadata': ['last_refreshed_at', 'created_at', 'updated_at']
   };
   
-  return tableDateColumns[tableName] || 
-    ['sail_date_from', 'sail_date_to', 'departure_date', 'snapshot_date', 
-     'sail_from_date', 'sail_to_date', 'created_at', 'updated_at'];
+  if (tableName in tableDateColumns) {
+    return tableDateColumns[tableName];
+  }
+
+  return ['sail_date_from', 'sail_date_to', 'departure_date', 'snapshot_date',
+    'sail_from_date', 'sail_to_date', 'created_at', 'updated_at'];
 };
 
 const fetchActualDataRange = async (tableName: string, rowCount: number) => {
@@ -101,6 +152,51 @@ const fetchActualDataRange = async (tableName: string, rowCount: number) => {
   }
 
   return { min: null, max: null };
+};
+
+const fetchLatestAvailableData = async (tableName: string, rowCount: number) => {
+  if (!rowCount || rowCount <= 0) {
+    return null;
+  }
+
+  const dateColumns = getDateColumnsForTable(tableName);
+  const candidateColumns: string[] = [];
+
+  if (dateColumns.includes('snapshot_date')) {
+    candidateColumns.push('snapshot_date');
+  }
+
+  dateColumns.forEach((column) => {
+    if (column !== 'snapshot_date' && !candidateColumns.includes(column)) {
+      candidateColumns.push(column);
+    }
+  });
+
+  ['created_at', 'updated_at'].forEach((column) => {
+    if (!candidateColumns.includes(column)) {
+      candidateColumns.push(column);
+    }
+  });
+
+  for (const dateCol of candidateColumns) {
+    const { data, error } = await supabaseDataService.client
+      .from(tableName)
+      .select(dateCol)
+      .not(dateCol, 'is', null)
+      .order(dateCol, { ascending: false })
+      .limit(1);
+
+    if (error) {
+      continue;
+    }
+
+    const value = data?.[0]?.[dateCol];
+    if (value != null && value !== '') {
+      return String(value);
+    }
+  }
+
+  return null;
 };
 
 // Helper function to map database focus to GraphQL Focus format
@@ -1123,19 +1219,25 @@ export const resolvers = {
         const syncMetadataMap = {};
         if (syncData) {
           syncData.forEach(record => {
-            // Map to legacy format for compatibility
-            syncMetadataMap[record.operation_name] = {
-              sync_type: record.operation_name,
-              last_sync_at: record.last_run_at,
-              duration_ms: record.duration_ms,
-              records_processed: record.records_processed,
-              changes_detected: record.changes_detected,
-              status: record.status,
-              error: record.error,
-              last_processed_date: record.last_processed_date,
-              // Get latest snapshot date from metadata JSONB field
-              latest_available_snapshot_date: record.metadata?.latest_available_snapshot_date || null
-            };
+            const key = record.operation_name;
+            const existing = syncMetadataMap[key];
+            const recordTime = record.last_run_at ? Date.parse(record.last_run_at) : 0;
+            const existingTime = existing?.last_sync_at ? Date.parse(existing.last_sync_at) : 0;
+            if (!existing || recordTime > existingTime) {
+              // Map to legacy format for compatibility (latest record wins)
+              syncMetadataMap[key] = {
+                sync_type: record.operation_name,
+                last_sync_at: record.last_run_at,
+                duration_ms: record.duration_ms,
+                records_processed: record.records_processed,
+                changes_detected: record.changes_detected,
+                status: record.status,
+                error: record.error,
+                last_processed_date: record.last_processed_date,
+                // Get latest snapshot date from metadata JSONB field
+                latest_available_snapshot_date: record.metadata?.latest_available_snapshot_date || null
+              };
+            }
           });
         }
 
@@ -1156,6 +1258,7 @@ export const resolvers = {
             const rowCount = count || 0;
 
             const actualDataRange = await fetchActualDataRange(tableName, rowCount);
+            const latestAvailableData = await fetchLatestAvailableData(tableName, rowCount);
 
             // Configured date range (what should be synced)
             const dateRange = configuredDateRange;
@@ -1163,7 +1266,8 @@ export const resolvers = {
             // Get sync metadata for this table (check by tableName which matches operation_name)
             // Note: operation_name in operation_metadata matches syncType, not always tableName
             // Try tableName first, then check if there's a syncType mapping
-            const syncRecord = syncMetadataMap[tableName];
+            const syncKey = getSyncTypeForTable(tableName);
+            const syncRecord = syncMetadataMap[syncKey];
             
             // Get latest snapshot date from sync metadata (most accurate)
             // Fall back to last_processed_date if latest_available_snapshot_date is not available
@@ -1185,6 +1289,7 @@ export const resolvers = {
               dateRange, // Configured sync range
               actualDataRange, // Actual data in table (may be {min: null, max: null} if no date columns found)
               latestSnapshotDate,
+              latestAvailableData,
               lastSync,
               syncDuration: syncRecord?.duration_ms || null,
               recordsProcessed: syncRecord?.records_processed || null,
@@ -1193,7 +1298,7 @@ export const resolvers = {
               syncStatus: syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced',
               dataStatus: rowCount === 0 ? 'Empty' : 'Has Data',
               status: `${syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced'} • ${rowCount === 0 ? 'Empty' : 'Has Data'}`,
-              syncType: tableName
+              syncType: syncKey
             };
           } catch (err) {
             // Table doesn't exist or error
@@ -1231,13 +1336,16 @@ export const resolvers = {
         } : { min: null, max: null };
 
         const actualDataRange = await fetchActualDataRange(tableName, rowCount);
+        const latestAvailableData = await fetchLatestAvailableData(tableName, rowCount);
 
         // Get sync metadata from unified table
+        const syncKey = getSyncTypeForTable(tableName);
         const { data: syncData } = await supabaseDataService.client
           .from('operation_metadata')
           .select('*')
           .eq('operation_type', 'sync')
-          .eq('operation_name', tableName)
+          .eq('operation_name', syncKey)
+          .order('last_run_at', { ascending: false })
           .limit(1);
         
         const syncRecord = syncData && syncData.length > 0 ? syncData[0] : null;
@@ -1259,6 +1367,7 @@ export const resolvers = {
           dateRange,
           actualDataRange,
           latestSnapshotDate,
+          latestAvailableData,
           lastSync,
           syncDuration: syncRecord?.duration_ms || null,
           recordsProcessed: syncRecord?.records_processed || null,
@@ -1267,7 +1376,7 @@ export const resolvers = {
           syncStatus: syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced',
           dataStatus: rowCount === 0 ? 'Empty' : 'Has Data',
           status: `${syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced'} • ${rowCount === 0 ? 'Empty' : 'Has Data'}`,
-          syncType: tableName
+          syncType: syncKey
         };
       } catch (error: any) {
         console.error(`Error in tableMetadata resolver for ${tableName}:`, error);
@@ -2321,37 +2430,20 @@ export const resolvers = {
           };
         }
         
-        // Map Supabase table names to sync config table names
-        const tableNameMap: Record<string, string> = {
-          'ship': 'ships',
-          'cabin_availability': 'cabinAvailability',
-          'reservation': 'reservations',
-          'reservation_promotion': 'reservationPromotion',
-          'master_sail': 'masterSail',
-          'sail_by_cabin_occupancy': 'sailByCabinOccupancy',
-          'reservation_changes': 'reservationChanges',
-          'reservation_current_state': 'reservationChanges', // Uses same sync
-          'published_rates': 'publishedRates',
-          'published_rates_changes': 'publishedRates', // Uses same sync
-          'published_rates_current_state': 'publishedRates', // Uses same sync
-          'competitor': 'competitor',
-          'competitor_current_state': 'competitor' // Uses same sync
-        };
-
         // Check if table has a sync configuration BEFORE using it
-        if (!tableNameMap[tableName]) {
+        if (!TABLE_SYNC_CONFIG_MAP[tableName]) {
           return {
             success: false,
             tableName,
             message: `Table "${tableName}" does not have a sync configuration`,
             recordsProcessed: null,
             duration: null,
-            error: `No sync configuration found for table: ${tableName}. Available tables: ${Object.keys(tableNameMap).join(', ')}`,
+            error: `No sync configuration found for table: ${tableName}. Available tables: ${Object.keys(TABLE_SYNC_CONFIG_MAP).join(', ')}`,
             detailedLogs: []
           };
         }
 
-        const syncTableName = tableNameMap[tableName];
+        const syncTableName = getSyncConfigNameForTable(tableName);
         
         // Check for concurrent sync
         const existingSync = synapseSyncService.getSyncStatus(syncTableName);
@@ -2369,12 +2461,31 @@ export const resolvers = {
 
         // Handle dataset parameter - use undefined instead of null
         const datasetName = dataset && dataset !== 'null' ? dataset : undefined;
+
+        // Apply configured UI date range override if available
+        let dateRangeOverride = null;
+        try {
+          const activeDateRange = await configService.getActiveDateRange('synapse_default');
+          if (activeDateRange?.date_from && activeDateRange?.date_to) {
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+            const from = activeDateRange.date_from;
+            const to = activeDateRange.date_to;
+            if (dateRegex.test(from) && dateRegex.test(to) && from <= to) {
+              dateRangeOverride = { from, to };
+            } else {
+              console.warn(`Invalid active date range in config: ${from} to ${to}. Ignoring override.`);
+            }
+          }
+        } catch (rangeError) {
+          console.warn('Failed to load active date range. Using dataset defaults.', rangeError?.message || rangeError);
+        }
         
         // CRITICAL: Pass original tableName for event emission (UI listens to this)
         // syncTableName is used for sync config lookup, but tableName is used for logger/events
         const result = await synapseSyncService.syncTable(syncTableName, datasetName, { 
           forceFullSync: forceFullSync || false,
-          uiTableName: tableName // Pass original tableName for event emission
+          uiTableName: tableName, // Pass original tableName for event emission
+          ...(dateRangeOverride ? { dateRangeOverride } : {})
         });
 
         return {

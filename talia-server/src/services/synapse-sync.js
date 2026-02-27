@@ -434,22 +434,22 @@ class SynapseSyncService {
     return clauses.join(' AND ');
   }
 
-  buildRuntimeConfig(tableName, datasetName = this.defaultDataset) {
+  buildRuntimeConfig(tableName, datasetName = this.defaultDataset, runtimeOverrides = {}) {
     const definition = this.getTableDefinition(tableName);
     const dataset = this.getDatasetConfig(datasetName);
     const datasetTables = dataset.tables || {};
-    const overrides = datasetTables[tableName] || {};
+    const datasetOverrides = datasetTables[tableName] || {};
 
     const filters = [
       ...(definition.defaultFilters || []),
-      ...(overrides.filters || [])
+      ...(datasetOverrides.filters || [])
     ];
 
-    const whereClause = this.buildWhereClause(filters);
+    let whereClause = this.buildWhereClause(filters);
     const columnsSql = definition.columns?.join(', ') || '*';
-    const selectQuery = `SELECT ${columnsSql} FROM ${definition.source}${whereClause ? ` WHERE ${whereClause}` : ''}`;
+    let selectQuery = `SELECT ${columnsSql} FROM ${definition.source}${whereClause ? ` WHERE ${whereClause}` : ''}`;
 
-    const replace = overrides.replace || definition.defaultReplace || null;
+    let replace = datasetOverrides.replace || definition.defaultReplace || null;
 
     let dateRange = null;
     if (replace?.from && replace?.to) {
@@ -461,59 +461,47 @@ class SynapseSyncService {
       }
     }
 
-    // Apply environment variable date range override if configured
-    const envDateRange = getDateRange(datasetName);
-    if (envDateRange) {
-      // Override date range
-      if (dateRange) {
-        // Log the override
-        const configSummary = getDateRangeConfigSummary();
-        console.log(`📅 Date range override active (${configSummary.environment}): Using ${envDateRange.from} to ${envDateRange.to} (overriding dataset default: ${dateRange.from} to ${dateRange.to})`);
-      } else {
-        // Environment override but no dataset date range - use env override
-        const configSummary = getDateRangeConfigSummary();
-        console.log(`📅 Date range from environment (${configSummary.environment}): Using ${envDateRange.from} to ${envDateRange.to}`);
+    const isValidDateRange = (range) => {
+      if (!range?.from || !range?.to) return false;
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      return dateRegex.test(range.from) && dateRegex.test(range.to) && range.from <= range.to;
+    };
+
+    const applyDateRangeOverride = (overrideRange, sourceLabel) => {
+      if (!isValidDateRange(overrideRange)) {
+        console.warn(`⚠️  Invalid date range override (${sourceLabel}). Ignoring.`);
+        return false;
       }
-      dateRange = envDateRange;
-      
-      // Also update filters and replace strategies to use the overridden date range
-      // This ensures WHERE clauses use the correct dates
+      dateRange = { from: overrideRange.from, to: overrideRange.to };
       filters.forEach(filter => {
         if (filter.operator === 'between') {
-          filter.from = envDateRange.from;
-          filter.to = envDateRange.to;
+          filter.from = overrideRange.from;
+          filter.to = overrideRange.to;
         }
       });
-      
       if (replace && replace.from && replace.to) {
-        replace.from = envDateRange.from;
-        replace.to = envDateRange.to;
+        replace.from = overrideRange.from;
+        replace.to = overrideRange.to;
       }
-      
-      // Rebuild whereClause with updated filters
-      const updatedWhereClause = this.buildWhereClause(filters);
-      const updatedSelectQuery = `SELECT ${columnsSql} FROM ${definition.source}${updatedWhereClause ? ` WHERE ${updatedWhereClause}` : ''}`;
-      
-      return {
-        tableName,
-        datasetName,
-        type: definition.type || 'direct',
-        source: definition.source,
-        targetTable: definition.target,
-        columnsSql,
-        whereClause: updatedWhereClause,
-        selectQuery: updatedSelectQuery,
-        replace,
-        definition,
-        overrides,
-        transformKey: definition.transformKey || tableName,
-        isLargeDataset: Boolean(definition.isLargeDataset),
-        rowNumberOrder: definition.rowNumberOrder || [],
-        dateColumn: definition.dateColumn,
-        supabaseDateColumn: definition.supabaseDateColumn,
-        dateRange
-      };
-    } else if (dateRange) {
+      whereClause = this.buildWhereClause(filters);
+      selectQuery = `SELECT ${columnsSql} FROM ${definition.source}${whereClause ? ` WHERE ${whereClause}` : ''}`;
+      if (sourceLabel) {
+        console.log(`📅 Date range override (${sourceLabel}): ${overrideRange.from} to ${overrideRange.to}`);
+      }
+      return true;
+    };
+
+    const uiOverrideApplied = runtimeOverrides?.dateRangeOverride
+      ? applyDateRangeOverride(runtimeOverrides.dateRangeOverride, 'UI')
+      : false;
+
+    // Apply environment variable date range override if configured (highest precedence)
+    const envDateRange = getDateRange(datasetName);
+    if (envDateRange) {
+      const configSummary = getDateRangeConfigSummary();
+      const label = `environment (${configSummary.environment})`;
+      applyDateRangeOverride(envDateRange, label);
+    } else if (dateRange && !uiOverrideApplied) {
       // Using dataset default
       console.log(`📅 Date range from dataset config: ${dateRange.from} to ${dateRange.to}`);
     }
@@ -529,13 +517,14 @@ class SynapseSyncService {
       selectQuery,
       replace,
       definition,
-      overrides,
+      overrides: datasetOverrides,
       transformKey: definition.transformKey || tableName,
       isLargeDataset: Boolean(definition.isLargeDataset),
       rowNumberOrder: definition.rowNumberOrder || [],
       dateColumn: definition.dateColumn,
       supabaseDateColumn: definition.supabaseDateColumn,
-      dateRange
+      dateRange,
+      uiOverrideApplied
     };
   }
 
@@ -568,13 +557,30 @@ class SynapseSyncService {
   }
 
   async applyReplaceStrategy(runtime) {
-    const replace = runtime.replace;
+    let replace = runtime.replace;
     if (!replace || replace.strategy === 'none') {
       console.log(`ℹ️  No replace strategy configured for ${runtime.targetTable}. Existing data will remain.`);
       return;
     }
 
     const table = runtime.targetTable;
+    if (replace.strategy === 'delete-all' && runtime.uiOverrideApplied) {
+      const column = replace.column || runtime.supabaseDateColumn || runtime.dateColumn;
+      if (column && runtime.dateRange?.from && runtime.dateRange?.to) {
+        replace = {
+          ...replace,
+          strategy: 'delete-range',
+          column,
+          from: runtime.dateRange.from,
+          to: runtime.dateRange.to
+        };
+        console.log(`🛑 UI date range set; converting delete-all to delete-range on ${table} (${column})...`);
+      } else {
+        console.warn(`⚠️  UI date range set but no date column found for ${table}. Skipping delete-all to preserve historical data.`);
+        return;
+      }
+    }
+
     console.log(`🗑️  Applying replace strategy (${replace.strategy}) on ${table}...`);
 
     switch (replace.strategy) {
@@ -2038,7 +2044,7 @@ class SynapseSyncService {
     });
     
     try {
-      const runtime = this.buildRuntimeConfig(tableName, datasetName);
+      const runtime = this.buildRuntimeConfig(tableName, datasetName, overrides);
       
       // Merge overrides into runtime config
       if (overrides.forceFullSync !== undefined) {

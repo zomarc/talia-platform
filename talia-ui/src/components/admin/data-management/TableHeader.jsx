@@ -1,135 +1,99 @@
 import React from 'react';
 
-const TableHeader = ({ theme, columnWidths, handleSort, SortIcon }) => (
-  <thead>
+const TableHeader = ({ handleSort, SortIcon }) => {
+  const SortIconComponent = SortIcon;
+  return (
+    <thead>
     <tr
       className="dm-table-header-row"
-      style={{
-        background: theme.colors.glass,
-        borderBottom: `1px solid ${theme.colors.glassBorder}`
-      }}
     >
       <th
         onClick={() => handleSort('tableName')}
-        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable"
-        style={{
-          color: theme.colors.textSecondary,
-          width: columnWidths.tableName
-        }}
+        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable dm-col-table-name"
       >
-        Table Name<SortIcon column="tableName" />
+        Table Name<SortIconComponent column="tableName" />
       </th>
       <th
         onClick={() => handleSort('source')}
-        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable"
-        style={{
-          color: theme.colors.textSecondary,
-          width: columnWidths.source
-        }}
+        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable dm-col-source"
       >
-        Source<SortIcon column="source" />
+        Source<SortIconComponent column="source" />
       </th>
       <th
         onClick={() => handleSort('loadMethod')}
-        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable"
-        style={{
-          color: theme.colors.textSecondary,
-          width: columnWidths.loadMethod
-        }}
+        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable dm-col-load-method"
       >
-        Load Method<SortIcon column="loadMethod" />
+        Load Method<SortIconComponent column="loadMethod" />
       </th>
       <th
         onClick={() => handleSort('rowCount')}
-        className="dm-table-header-cell dm-table-header-cell-right dm-table-header-cell-sortable"
-        style={{
-          color: theme.colors.textSecondary,
-          width: columnWidths.rowCount
-        }}
+        className="dm-table-header-cell dm-table-header-cell-right dm-table-header-cell-sortable dm-col-row-count"
       >
-        Rows<SortIcon column="rowCount" />
+        Rows<SortIconComponent column="rowCount" />
       </th>
       <th
         onClick={() => handleSort('dateRange')}
-        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable"
-        style={{
-          color: theme.colors.textSecondary,
-          width: columnWidths.dateRange
-        }}
+        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable dm-col-date-range"
       >
-        Data Range<SortIcon column="dateRange" />
+        Data Range<SortIconComponent column="dateRange" />
       </th>
       <th
         onClick={() => handleSort('lastSync')}
-        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable"
-        style={{
-          color: theme.colors.textSecondary,
-          width: columnWidths.lastSync
-        }}
+        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable dm-col-last-sync"
       >
-        Last Sync<SortIcon column="lastSync" />
+        Last Sync<SortIconComponent column="lastSync" />
       </th>
       <th
         onClick={() => handleSort('latestSnapshot')}
-        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable"
-        style={{
-          color: theme.colors.textSecondary,
-          width: columnWidths.latestSnapshot
-        }}
+        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable dm-col-latest-snapshot"
       >
-        Latest Snapshot<SortIcon column="latestSnapshot" />
+        Latest Snapshot<SortIconComponent column="latestSnapshot" />
+      </th>
+      <th
+        onClick={() => handleSort('latestAvailableData')}
+        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable dm-col-latest-available"
+        title="Latest data timestamp from the table (prefers snapshot_date, otherwise created/updated)"
+      >
+        Latest Data (Table)<SortIconComponent column="latestAvailableData" />
+      </th>
+      <th
+        className="dm-table-header-cell dm-table-header-cell-center dm-col-data-health"
+        title="Coverage vs lag using configured range and latest data"
+      >
+        Data Quality
       </th>
       <th
         onClick={() => handleSort('recordsProcessed')}
-        className="dm-table-header-cell dm-table-header-cell-right dm-table-header-cell-sortable"
-        style={{
-          color: theme.colors.textSecondary,
-          width: columnWidths.recordsProcessed
-        }}
+        className="dm-table-header-cell dm-table-header-cell-right dm-table-header-cell-sortable dm-col-records-processed"
       >
-        Records<SortIcon column="recordsProcessed" />
+        Records<SortIconComponent column="recordsProcessed" />
       </th>
       <th
         onClick={() => handleSort('changesDetected')}
-        className="dm-table-header-cell dm-table-header-cell-right dm-table-header-cell-sortable"
-        style={{
-          color: theme.colors.textSecondary,
-          width: columnWidths.changesDetected
-        }}
+        className="dm-table-header-cell dm-table-header-cell-right dm-table-header-cell-sortable dm-col-changes-detected"
       >
-        Changes<SortIcon column="changesDetected" />
+        Changes<SortIconComponent column="changesDetected" />
       </th>
       <th
         onClick={() => handleSort('syncDuration')}
-        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable"
-        style={{
-          color: theme.colors.textSecondary,
-          width: columnWidths.syncDuration
-        }}
+        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable dm-col-sync-duration"
       >
-        Duration<SortIcon column="syncDuration" />
+        Duration<SortIconComponent column="syncDuration" />
       </th>
       <th
         onClick={() => handleSort('status')}
-        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable"
-        style={{
-          color: theme.colors.textSecondary,
-          width: columnWidths.status
-        }}
+        className="dm-table-header-cell dm-table-header-cell-left dm-table-header-cell-sortable dm-col-status"
       >
-        Status<SortIcon column="status" />
+        Status<SortIconComponent column="status" />
       </th>
       <th
-        className="dm-table-header-cell dm-table-header-cell-center"
-        style={{
-          color: theme.colors.textSecondary,
-          width: columnWidths.actions
-        }}
+        className="dm-table-header-cell dm-table-header-cell-center dm-col-actions"
       >
         Actions
       </th>
     </tr>
   </thead>
-);
+  );
+};
 
 export default TableHeader;

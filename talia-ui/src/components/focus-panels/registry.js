@@ -2,9 +2,11 @@ import SailingTableContainer from './SailingTable';
 import SimpleTable from './SimpleTable';
 import KPICards from './KPICards';
 import PublishedRates from './PublishedRates';
+import PublishedRatesGrid from './PublishedRatesGrid';
 import OccupancyChart from './OccupancyChart';
 import RevenueBreakdown from './RevenueBreakdown';
 import SailingSummary from './SailingSummary';
+import SailingOverview from './SailingOverview';
 import SailingByCabinCategory from './SailingByCabinCategory';
 import ExceptionList from './ExceptionList';
 import ItineraryList from './ItineraryList';
@@ -101,6 +103,22 @@ export const componentRegistry = {
     showInReports: true,
     filePath: 'src/components/focus-panels/PublishedRates/index.jsx'
   },
+  PublishedRatesGrid: {
+    component: PublishedRatesGrid,
+    panelId: 'published-rates-grid',
+    category: 'Tables',
+    title: 'Published Rates Grid',
+    description: 'Promo-filtered cabin grid with price history for selected sailing',
+    props: {},
+    dataRequirements: 'Requires GraphQL connection to published_rates_changes table',
+    events: {
+      emits: [],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+    },
+    supportsRefresh: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/PublishedRatesGrid/index.jsx'
+  },
   OccupancyChart: {
     component: OccupancyChart,
     panelId: 'occupancy-chart',
@@ -143,6 +161,23 @@ export const componentRegistry = {
     },
     showInReports: true,
     filePath: 'src/components/focus-panels/SailingSummary/index.jsx'
+  },
+  SailingOverview: {
+    component: SailingOverview,
+    panelId: 'sailing-overview',
+    category: 'Dashboards',
+    title: 'Sailing Overview',
+    description: 'Quick summary panel for the selected sailing event',
+    props: {
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Responds to talia:sail.select events and fetches published_rates_current_state for pricing',
+    events: {
+      emits: [],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+    },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/SailingOverview/index.jsx'
   },
   SailingByCabinCategory: {
     component: SailingByCabinCategory,
@@ -212,7 +247,7 @@ export const componentRegistry = {
     title: 'Booking Profile',
     description: 'Booking profile showing trends, metrics, and build curves for a sailing',
     props: {
-      sailCode: { type: 'string', required: true, description: 'Sail code (e.g., \"CJ07250901\")' },
+      sailCode: { type: 'string', required: true, description: 'Sail code (e.g., "CJ07250901")' },
       includeComparison: { type: 'boolean', required: false, description: 'Include year-over-year comparison' },
       previousYearSailCode: { type: 'string', required: false, description: 'Previous year sail code for comparison' },
       includeBuildCurves: { type: 'boolean', required: false, description: 'Include incremental build curves' },

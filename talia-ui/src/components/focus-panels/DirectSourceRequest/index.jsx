@@ -26,10 +26,21 @@ const DEFAULT_QUERY = `query Availability($effectiveDate: DateTime!, $startDateF
       startDateRange: { from: $startDateFrom, to: $startDateTo }
     }
   ) {
+    sail {
+      from {
+        dateTime
+        sailRefIdent
+      }
+      to {
+        dateTime
+        sailRefIdent
+      }
+    }
     pkg {
       code
       name
       sailDays
+      sailIdent
     }
     availableCategories {
       cabinCategory {
@@ -52,11 +63,20 @@ const DirectSourceRequestContainer = () => {
 
   // Get today's date in ISO format for defaults
   const getTodayISO = () => new Date().toISOString().split('T')[0];
+  const toISODate = (date) => new Date(date).toISOString().split('T')[0];
+  const shiftDate = (date, days) => {
+    const next = new Date(date);
+    next.setDate(next.getDate() + days);
+    return next;
+  };
   const getDefaultEndDate = () => {
     const date = new Date();
     date.setDate(date.getDate() + 28); // 4 weeks
     return date.toISOString().split('T')[0];
   };
+
+  const RANGE_DAYS_BEFORE = 14;
+  const RANGE_DAYS_AFTER = 14;
 
   // State
   const [data, setData] = useState(null);
@@ -89,6 +109,7 @@ const DirectSourceRequestContainer = () => {
 
     const detail = event.detail;
     const rowData = detail.row_data || detail;
+    const sailCode = rowData.sail_code || rowData.Sail_Code || detail.sail_code || null;
 
     // Try to extract date information from various possible field names
     const sailDate = rowData.sail_date_from || 
@@ -106,23 +127,17 @@ const DirectSourceRequestContainer = () => {
     if (sailDate) {
       const date = new Date(sailDate);
       if (!isNaN(date.getTime())) {
-        // Use the sail date as the start
-        startDateFrom = date.toISOString().split('T')[0];
-        
-        // End 4 weeks after sail date
-        const endDate = new Date(date);
-        endDate.setDate(endDate.getDate() + 28);
-        startDateTo = endDate.toISOString().split('T')[0];
+        // Use a window around the sail date (before + after)
+        startDateFrom = toISODate(shiftDate(date, -RANGE_DAYS_BEFORE));
+        startDateTo = toISODate(shiftDate(date, RANGE_DAYS_AFTER));
       }
     }
 
     // Default to next 4 weeks if no sail date found
     if (!startDateFrom) {
       const today = new Date();
-      startDateFrom = today.toISOString().split('T')[0];
-      const fourWeeksLater = new Date(today);
-      fourWeeksLater.setDate(fourWeeksLater.getDate() + 28);
-      startDateTo = fourWeeksLater.toISOString().split('T')[0];
+      startDateFrom = toISODate(today);
+      startDateTo = toISODate(shiftDate(today, 28));
     }
 
     // Effective date is now
@@ -131,7 +146,6 @@ const DirectSourceRequestContainer = () => {
     // Include context info for display only (not filtering)
     const shipName = rowData.ship_name || rowData.Ship_Name || rowData.ship || null;
     const packageName = rowData.package_name || rowData.Package_Name || rowData.sailing || rowData.package || null;
-    const sailCode = rowData.sail_code || rowData.Sail_Code || null;
 
     return {
       effectiveDate,
@@ -143,6 +157,8 @@ const DirectSourceRequestContainer = () => {
         shipName,
         packageName,
         sailDate,
+        rangeDaysBefore: RANGE_DAYS_BEFORE,
+        rangeDaysAfter: RANGE_DAYS_AFTER,
         source: 'persisted-event'
       }
     };
@@ -194,7 +210,7 @@ const DirectSourceRequestContainer = () => {
       console.log('[DirectSourceRequest] Received', voyages.length, 'voyages');
 
       // Flatten the data for table display
-      const flattenedData = flattenVoyageData(voyages);
+      const flattenedData = flattenVoyageData(voyages, variables?._context?.sailCode);
       console.log('[DirectSourceRequest] Flattened to', flattenedData.length, 'records');
 
       // If no data and this wasn't already a fallback query, retry with next 4 weeks
@@ -212,6 +228,8 @@ const DirectSourceRequestContainer = () => {
           _context: {
             ...(variables._context || {}),
             fallbackReason: 'No data for original date range - showing next 4 weeks',
+            rangeDaysBefore: 0,
+            rangeDaysAfter: 28,
             source: 'fallback'
           },
           _isFallback: true
@@ -247,20 +265,37 @@ const DirectSourceRequestContainer = () => {
   }, []);
 
   // Flatten nested voyage data for Tabulator display
-  const flattenVoyageData = (voyages) => {
+  const matchesSelectedSail = (selectedSailCode, record) => {
+    if (!selectedSailCode) return false;
+    const normalized = String(selectedSailCode).toLowerCase();
+    const packageCode = record.packageCode ? String(record.packageCode).toLowerCase() : '';
+    const sailRefIdent = record.sailRefIdent ? String(record.sailRefIdent) : '';
+    const sailIdent = record.sailIdent ? String(record.sailIdent) : '';
+    if (packageCode === normalized || packageCode.includes(normalized)) return true;
+    if (sailRefIdent && sailRefIdent === String(selectedSailCode)) return true;
+    if (sailIdent && sailIdent === String(selectedSailCode)) return true;
+    return false;
+  };
+
+  const flattenVoyageData = (voyages, selectedSailCode) => {
     const flattened = [];
 
     voyages.forEach((voyage, voyageIndex) => {
       const pkg = voyage.pkg || {};
+      const sailFrom = voyage.sail?.from?.dateTime || null;
+      const sailRefIdent = voyage.sail?.from?.sailRefIdent || null;
       const categories = voyage.availableCategories || [];
 
       if (categories.length === 0) {
         // If no categories, still show the package info
-        flattened.push({
+        const baseRecord = {
           id: `${voyageIndex}-0`,
           packageCode: pkg.code || 'N/A',
           packageName: pkg.name || 'N/A',
           sailDays: pkg.sailDays || 0,
+          sailDate: sailFrom,
+          sailRefIdent: sailRefIdent || null,
+          sailIdent: pkg.sailIdent || null,
           cabinCategoryCode: 'N/A',
           availabilityResult: 'N/A',
           canBookNestedCabins: false,
@@ -269,15 +304,20 @@ const DirectSourceRequestContainer = () => {
           availableCabins: 0,
           totalAvailableAbsolute: 0,
           totalAvailableWeighted: 0
-        });
+        };
+        baseRecord.isSelectedSail = matchesSelectedSail(selectedSailCode, baseRecord);
+        flattened.push(baseRecord);
       } else {
         categories.forEach((cat, catIndex) => {
           const availability = cat.availability || {};
-          flattened.push({
+          const record = {
             id: `${voyageIndex}-${catIndex}`,
             packageCode: pkg.code || 'N/A',
             packageName: pkg.name || 'N/A',
             sailDays: pkg.sailDays || 0,
+            sailDate: sailFrom,
+            sailRefIdent: sailRefIdent || null,
+            sailIdent: pkg.sailIdent || null,
             cabinCategoryCode: cat.cabinCategory?.code || 'N/A',
             availabilityResult: cat.availabilityResult || 'N/A',
             canBookNestedCabins: cat.canBookNestedCabins || false,
@@ -286,7 +326,9 @@ const DirectSourceRequestContainer = () => {
             availableCabins: availability.availableCabins || 0,
             totalAvailableAbsolute: availability.totalAvailableAbsolute || 0,
             totalAvailableWeighted: availability.totalAvailableWeighted || 0
-          });
+          };
+          record.isSelectedSail = matchesSelectedSail(selectedSailCode, record);
+          flattened.push(record);
         });
       }
     });
@@ -323,6 +365,29 @@ const DirectSourceRequestContainer = () => {
               console.log('[DirectSourceRequest] Auto-fetching with context:', params._context);
               fetchData(params);
             }
+          }
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // Check last sail select event (global event bus)
+    const checkLastSailSelect = () => {
+      if (window.lastSailSelectEvent?.detail) {
+        const persistedEvent = window.lastSailSelectEvent;
+        console.log('[DirectSourceRequest] Found lastSailSelectEvent on mount:', persistedEvent);
+        setPersistedEvent(persistedEvent);
+        const params = extractQueryParams(persistedEvent);
+        if (params) {
+          setManualDates({
+            effectiveDate: getTodayISO(),
+            startDate: params.startDateFrom,
+            endDate: params.startDateTo
+          });
+          if (!hasInitialFetch) {
+            hasInitialFetch = true;
+            fetchData(params);
           }
           return true;
         }
@@ -404,7 +469,7 @@ const DirectSourceRequestContainer = () => {
     window.addEventListener(SAIL_SELECT_EVENT, handleSailSelect);
 
     // Check on mount - try multiple sources
-    const foundContext = checkPersistedEvent() || checkLocalStorage();
+    const foundContext = checkPersistedEvent() || checkLastSailSelect() || checkLocalStorage();
     
     if (!foundContext) {
       console.log('[DirectSourceRequest] No context found on mount - waiting for selection');
@@ -441,7 +506,9 @@ const DirectSourceRequestContainer = () => {
         startDateTo: fourWeeksLater.toISOString().split('T')[0],
         _context: {
           source: 'default',
-          range: 'next-4-weeks'
+          range: 'next-4-weeks',
+          rangeDaysBefore: 0,
+          rangeDaysAfter: 28
         }
       });
     }
@@ -457,7 +524,9 @@ const DirectSourceRequestContainer = () => {
       startDateTo: manualDates.endDate,
       _context: {
         testMode: true,
-        manualSelection: true
+        manualSelection: true,
+        rangeDaysBefore: null,
+        rangeDaysAfter: null
       }
     });
   }, [manualDates, fetchData]);

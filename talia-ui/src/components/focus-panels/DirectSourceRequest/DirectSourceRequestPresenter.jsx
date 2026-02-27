@@ -7,7 +7,7 @@
  * Pure UI component - receives data as props
  */
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
 
 const DirectSourceRequestPresenter = ({ 
@@ -45,6 +45,19 @@ const DirectSourceRequestPresenter = ({
       headerFilterParams: {
         valuesLookup: true,
         autocomplete: true
+      }
+    },
+    { 
+      title: "Sail Date", 
+      field: "sailDate",
+      width: 120,
+      sorter: "date",
+      formatter: (cell) => {
+        const value = cell.getValue();
+        if (!value) return 'N/A';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return 'N/A';
+        return date.toLocaleDateString();
       }
     },
     { 
@@ -146,6 +159,67 @@ const DirectSourceRequestPresenter = ({
     }
   ];
 
+  const context = queryInfo?.variables?._context || {};
+  const selectedSailCode = context?.sailCode || null;
+  const selectedSailDate = context?.sailDate || null;
+  const rangeDaysBefore = context?.rangeDaysBefore;
+  const rangeDaysAfter = context?.rangeDaysAfter;
+
+  const availabilitySummary = useMemo(() => {
+    if (!data || data.length === 0) {
+      return {
+        beforeAvailable: 0,
+        afterAvailable: 0,
+        selectedAvailable: 0,
+        beforeCount: 0,
+        afterCount: 0,
+        selectedCount: 0,
+        matchedCount: 0
+      };
+    }
+
+    const anchorDate = selectedSailDate ? new Date(selectedSailDate) : null;
+    const anchorDay = anchorDate && !Number.isNaN(anchorDate.getTime())
+      ? anchorDate.toISOString().split('T')[0]
+      : null;
+
+    let beforeAvailable = 0;
+    let afterAvailable = 0;
+    let selectedAvailable = 0;
+    let beforeCount = 0;
+    let afterCount = 0;
+    let selectedCount = 0;
+    let matchedCount = 0;
+
+    data.forEach((row) => {
+      if (row?.isSelectedSail) matchedCount += 1;
+      if (!anchorDay || !row?.sailDate) return;
+      const rowDate = new Date(row.sailDate);
+      if (Number.isNaN(rowDate.getTime())) return;
+      const rowDay = rowDate.toISOString().split('T')[0];
+      if (rowDay < anchorDay) {
+        beforeAvailable += Number(row.availableCabins || 0);
+        beforeCount += 1;
+      } else if (rowDay > anchorDay) {
+        afterAvailable += Number(row.availableCabins || 0);
+        afterCount += 1;
+      } else {
+        selectedAvailable += Number(row.availableCabins || 0);
+        selectedCount += 1;
+      }
+    });
+
+    return {
+      beforeAvailable,
+      afterAvailable,
+      selectedAvailable,
+      beforeCount,
+      afterCount,
+      selectedCount,
+      matchedCount
+    };
+  }, [data, selectedSailDate]);
+
   // Initialize table
   useEffect(() => {
     if (!data || data.length === 0 || tableInitialized) return;
@@ -179,6 +253,15 @@ const DirectSourceRequestPresenter = ({
           ],
           rowClick: (e, row) => {
             try { row?.select?.(); } catch { /* noop */ }
+          },
+          rowFormatter: (row) => {
+            const rowElement = row.getElement();
+            const rowData = row.getData();
+            if (rowData?.isSelectedSail) {
+              rowElement.classList.add('direct-source__row--selected');
+            } else {
+              rowElement.classList.remove('direct-source__row--selected');
+            }
           },
           rowSelectionChanged: (selectedData) => {
             const rec = selectedData && selectedData[0];
@@ -236,6 +319,18 @@ const DirectSourceRequestPresenter = ({
     }
   }, [data, tableInitialized]);
 
+  const formatDateLabel = (value) => {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+  };
+
+  const formatNumber = (value) => {
+    if (value === null || value === undefined) return '0';
+    const numberValue = Number(value);
+    return Number.isNaN(numberValue) ? '0' : numberValue.toLocaleString();
+  };
+
   // Format context info for display
   const getContextDisplay = () => {
     const ctx = queryInfo?.variables?._context || {};
@@ -287,6 +382,50 @@ const DirectSourceRequestPresenter = ({
           >
             {loading ? '...' : '↻'} Refresh
           </button>
+        </div>
+      </div>
+
+      {/* Summary Panel */}
+      <div className="direct-source__summary">
+        <div className="direct-source__summary-card">
+          <div className="direct-source__summary-label">Sail Code</div>
+          <div className="direct-source__summary-value">{selectedSailCode || '—'}</div>
+          {availabilitySummary.matchedCount > 0 && (
+            <div className="direct-source__summary-meta">
+              {availabilitySummary.matchedCount.toLocaleString()} matches in data
+            </div>
+          )}
+        </div>
+        <div className="direct-source__summary-card">
+          <div className="direct-source__summary-label">Sail Date</div>
+          <div className="direct-source__summary-value">{formatDateLabel(selectedSailDate)}</div>
+          {availabilitySummary.selectedCount > 0 && (
+            <div className="direct-source__summary-meta">
+              Selected day cabins: {formatNumber(availabilitySummary.selectedAvailable)}
+            </div>
+          )}
+        </div>
+        <div className="direct-source__summary-card">
+          <div className="direct-source__summary-label">Query Window</div>
+          <div className="direct-source__summary-value">
+            {queryInfo?.variables ? `${queryInfo.variables.startDateFrom} → ${queryInfo.variables.startDateTo}` : '—'}
+          </div>
+          {Number.isFinite(rangeDaysBefore) && Number.isFinite(rangeDaysAfter) && (
+            <div className="direct-source__summary-meta">
+              {rangeDaysBefore} days before / {rangeDaysAfter} days after
+            </div>
+          )}
+        </div>
+        <div className="direct-source__summary-card">
+          <div className="direct-source__summary-label">Availability</div>
+          <div className="direct-source__summary-value">
+            Before {formatNumber(availabilitySummary.beforeAvailable)} • After {formatNumber(availabilitySummary.afterAvailable)}
+          </div>
+          {(availabilitySummary.beforeCount > 0 || availabilitySummary.afterCount > 0) && (
+            <div className="direct-source__summary-meta">
+              {availabilitySummary.beforeCount + availabilitySummary.afterCount} rows around selection
+            </div>
+          )}
         </div>
       </div>
 

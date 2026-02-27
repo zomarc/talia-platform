@@ -1,10 +1,18 @@
 /* eslint-env node */
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+
+const appVersion = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf-8')
+).version
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion)
+  },
   // Base path for deployment - set via environment variable or default to root
   // For celestyal path: VITE_BASE_PATH=/celestyal
   base: globalThis.process?.env?.VITE_BASE_PATH || '/',

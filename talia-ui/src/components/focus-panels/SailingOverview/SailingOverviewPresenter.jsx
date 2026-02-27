@@ -156,7 +156,7 @@ const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
       : null;
 
   return (
-    <div className="talia-report" role="region" aria-label="Sailing overview">
+    <div className="talia-report sailing-overview" role="region" aria-label="Sailing overview">
       <header className="talia-report__header">
         <div>
           <h2 className="talia-report__title">Sailing Overview</h2>
@@ -172,7 +172,7 @@ const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
         </div>
       </header>
 
-      <main className="talia-report__content">
+      <main className="talia-report__content sailing-overview__content">
         {!sailing ? (
           <div className="talia-empty" role="status">
             <span className="talia-empty__icon" aria-hidden="true">i</span>
@@ -185,7 +185,7 @@ const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
               <div className="talia-card__header">
                 <h3 className="talia-card__title">Sailing Details</h3>
               </div>
-              <div className="talia-meta">
+              <div className="talia-meta talia-meta--stacked">
                 <span><strong>Sail Code:</strong> {sailCode || 'Not available'}</span>
                 <span><strong>Sail ID:</strong> {sailId || 'Not available'}</span>
                 <span><strong>Route:</strong> {route || 'Not available'}</span>
@@ -206,7 +206,7 @@ const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
               {priceInfo?.loading ? (
                 <LoadingSpinner message="Loading price..." fullScreen={false} size="small" />
               ) : (
-                <div className="talia-metric">
+                <div className="talia-metric sailing-overview__metric">
                   <span className="talia-metric__label">Current Price</span>
                   <span className="talia-metric__value">
                     {formatCurrency(resolvedPriceValue, resolvedPriceCurrency)}
@@ -218,7 +218,7 @@ const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
               )}
 
               {priceInfo?.error && (
-                <div className="talia-meta">
+                <div className="talia-meta talia-meta--stacked">
                   <span>Price lookup failed. Using available sailing data if present.</span>
                 </div>
               )}
@@ -228,7 +228,7 @@ const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
               </div>
 
               {competitorInfo.hasData ? (
-                <div className="talia-meta">
+                <div className="talia-meta talia-meta--stacked">
                   <span><strong>Competitor:</strong> {competitorInfo.name || 'Competitor'}</span>
                   <span>
                     <strong>Competitor Rate:</strong>{' '}
@@ -238,7 +238,7 @@ const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
                   </span>
                 </div>
               ) : (
-                <div className="talia-meta">
+                <div className="talia-meta talia-meta--stacked">
                   <span><strong>Competitor:</strong> Not available</span>
                 </div>
               )}

@@ -23,11 +23,12 @@
   --theme-bg: linear-gradient(135deg, #0a0a1a 0%, #151528 50%, #1a1a2e 100%);
   --theme-bg-solid: #151528;
   --theme-bg-elevated: #1a1a2e;
+  --theme-panel-bg: #20203b;
   
   /* Foreground/text colors */
   --theme-fg: #e8e8f0;
-  --theme-text-secondary: rgba(232, 232, 240, 0.75);
-  --theme-text-muted: rgba(232, 232, 240, 0.55);
+  --theme-text-secondary: rgba(232, 232, 240, 0.82);
+  --theme-text-muted: rgba(232, 232, 240, 0.62);
   
   /* Accent color (blue) */
   --theme-accent: #5b9bd5;
@@ -75,24 +76,24 @@
   
   /* Row colors */
   --theme-table-row-even: transparent;
-  --theme-table-row-odd: rgba(0, 0, 0, 0.2);
-  --theme-table-row-hover: rgba(66, 133, 244, 0.35);
-  --theme-table-row-selected: rgba(66, 133, 244, 0.25);
-  --theme-table-row-selected-hover: rgba(66, 133, 244, 0.45);
+  --theme-table-row-odd: rgba(255, 255, 255, 0.02);
+  --theme-table-row-hover: rgba(91, 155, 213, 0.25);
+  --theme-table-row-selected: rgba(91, 155, 213, 0.35);
+  --theme-table-row-selected-hover: rgba(91, 155, 213, 0.45);
   
   /* Tabulator-specific */
-  --theme-tabulator-header-bg: rgba(255, 255, 255, 0.08);
-  --theme-tabulator-header-text: #e8e8f0;
-  --theme-tabulator-filter-bg: #151528;
-  --theme-tabulator-filter-border: rgba(255, 255, 255, 0.15);
-  --theme-tabulator-sort-active: #5b9bd5;
+  --theme-tabulator-header-bg: rgba(255, 255, 255, 0.12);
+  --theme-tabulator-header-text: #f2f2f7;
+  --theme-tabulator-filter-bg: #10101f;
+  --theme-tabulator-filter-border: rgba(255, 255, 255, 0.2);
+  --theme-tabulator-sort-active: #7db3ea;
   
   /* ============================================================================
      Typography
      ============================================================================ */
   
   /* Font families */
-  --theme-font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --theme-font-family: "IBM Plex Sans", "Source Sans 3", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --theme-font-family-monospace: "JetBrains Mono", "SF Mono", "Monaco", "Consolas", monospace;
   
   /* Base font sizes - compact and readable */
@@ -100,12 +101,12 @@
   --theme-font-size-sm: 10px;
   --theme-font-size-xs: 9px;
   --theme-font-size-lg: 12px;
-  --theme-font-size-xl: 14px;
+  --theme-font-size-xl: 13px;
   
   /* Table-specific typography - optimized for data density */
-  --theme-table-font-size: 10px;
+  --theme-table-font-size: var(--theme-font-size);
   --theme-table-font-family: var(--theme-font-family);
-  --theme-table-header-font-size: 9px;
+  --theme-table-header-font-size: var(--theme-font-size);
   --theme-table-header-font-weight: 600;
   
   /* ============================================================================
@@ -113,15 +114,18 @@
      ============================================================================ */
   
   /* Table dimensions */
-  --theme-table-header-height: 28px;
-  --theme-table-row-height: 24px;
+  --theme-table-header-height: 24px;
+  --theme-table-row-height: 22px;
+  --theme-table-cell-padding-y: 3px;
+  --theme-table-cell-padding-x: 6px;
+  --theme-table-filter-height: 20px;
   
   /* Padding */
-  --theme-padding-xs: 4px;
-  --theme-padding-sm: 8px;
-  --theme-padding-md: 12px;
-  --theme-padding-lg: 16px;
-  --theme-padding-xl: 24px;
+  --theme-padding-xs: 3px;
+  --theme-padding-sm: 6px;
+  --theme-padding-md: 10px;
+  --theme-padding-lg: 14px;
+  --theme-padding-xl: 20px;
   
   /* Border radius */
   --theme-radius-sm: 4px;

@@ -49,7 +49,7 @@
 }
 
 .focus-panel-empty__detail {
-  font-size: 12px;
+  font-size: var(--theme-font-size-sm);
   color: var(--theme-text-secondary);
   margin-top: 8px;
 }
@@ -65,6 +65,7 @@
   background: var(--theme-bg-solid);
   color: var(--theme-fg);
   min-height: 0;
+  font-size: var(--theme-font-size);
 }
 
 .published-rates-grid__header {
@@ -80,13 +81,13 @@
 
 .published-rates-grid__title {
   margin: 0 0 4px 0;
-  font-size: 16px;
+  font-size: var(--theme-font-size-xl);
   font-weight: 600;
 }
 
 .published-rates-grid__subtitle {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--theme-font-size-sm);
   color: var(--theme-text-secondary);
 }
 
@@ -98,13 +99,13 @@
 }
 
 .published-rates-grid__select-label {
-  font-size: 12px;
+  font-size: var(--theme-font-size-sm);
   color: var(--theme-text-secondary);
 }
 
 .published-rates-grid__select {
   padding: 4px 8px;
-  font-size: 11px;
+  font-size: var(--theme-font-size-sm);
   border: 1px solid var(--theme-border);
   border-radius: 4px;
   background: var(--theme-bg-solid);
@@ -114,7 +115,7 @@
 
 .published-rates-grid__button {
   padding: 4px 10px;
-  font-size: 11px;
+  font-size: var(--theme-font-size-sm);
   border-radius: 4px;
   border: 1px solid var(--theme-border);
   background: var(--theme-bg-elevated);
@@ -135,7 +136,7 @@
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  font-size: 11px;
+  font-size: var(--theme-font-size-sm);
 }
 
 .published-rates-grid__detail {
@@ -172,13 +173,13 @@
 
 .published-rates-grid__section-title {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--theme-font-size-lg);
   font-weight: 600;
 }
 
 .published-rates-grid__section-subtitle {
   margin: 4px 0 0 0;
-  font-size: 12px;
+  font-size: var(--theme-font-size-sm);
   color: var(--theme-text-secondary);
 }
 
@@ -212,18 +213,18 @@
 }
 
 .published-rates-grid__current-label {
-  font-size: 12px;
+  font-size: var(--theme-font-size-sm);
   color: var(--theme-text-secondary);
   font-weight: 600;
 }
 
 .published-rates-grid__current-value {
-  font-size: 14px;
+  font-size: var(--theme-font-size-lg);
   font-weight: 700;
 }
 
 .published-rates-grid__current-meta {
-  font-size: 11px;
+  font-size: var(--theme-font-size-sm);
   color: var(--theme-text-secondary);
 }
 
@@ -239,7 +240,7 @@
 .published-rates-grid__table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: var(--theme-font-size);
 }
 
 .published-rates-grid__th,
@@ -285,13 +286,13 @@
 
 .published-rates-grid__details-title {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--theme-font-size-lg);
   font-weight: 600;
 }
 
 .published-rates-grid__details-subtitle {
   margin: 4px 0 0 0;
-  font-size: 11px;
+  font-size: var(--theme-font-size-sm);
   color: var(--theme-text-secondary);
 }
 
@@ -306,7 +307,7 @@
 .published-rates-grid__details-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: var(--theme-font-size);
 }
 
 .published-rates-grid__details-table th,
@@ -373,7 +374,7 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 11px;
+  font-size: var(--theme-font-size-sm);
   color: var(--theme-text-secondary);
 }
 
@@ -1330,6 +1331,8 @@
   height: 100%;
   background: var(--theme-bg-solid);
   color: var(--theme-fg);
+  min-height: 0;
+  overflow: auto;
 }
 
 .competitor-pricing__title {
@@ -1342,15 +1345,16 @@
 
 .competitor-pricing__content {
   display: flex;
-  flex: 1;
-  overflow: hidden;
+  flex: 0 0 auto;
+  overflow: visible;
 }
 
 .competitor-pricing__left {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: auto;
+  overflow: visible;
+  min-height: 0;
 }
 
 .competitor-pricing__right {
@@ -1436,6 +1440,10 @@
   padding: 16px;
   background: var(--theme-glass);
   border-top: 1px solid var(--theme-border);
+  flex: 1 0 auto;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
 }
 
 .competitor-table__empty {
@@ -1445,6 +1453,8 @@
 
 .competitor-table__host {
   background: var(--theme-bg-solid);
+  flex: 1;
+  min-height: 320px;
 }
 
 /* ============================================================================

@@ -684,7 +684,7 @@ function InfoPanel(props) {
 
 // ---- VS Code-style Sidebar Component ----
 function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFiltersChange, saveLayout, loadLayout, addPanel, clearSelection, clearFilters, resetLayout, createLayoutPreset, currentFocus, onFocusChange, userRole, focusLoading, focusError, onSaveCurrentLayout }) {
-  const { fontFamily, setFontFamily, selectedFont, fontFamilies } = useTheme();
+  const { fontFamily, setFontFamily, selectedFont, fontFamilies, fontSize, setFontSize } = useTheme();
 
   const reportGroups = React.useMemo(() => {
     const items = Object.values(reportRegistry)
@@ -915,6 +915,21 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
             </select>
             <div className="dashboard-form-hint">
               {selectedFont.description}
+            </div>
+          </div>
+          <div className="dashboard-form-group">
+            <label className="dashboard-form-label">Font Size: {fontSize}px</label>
+            <input
+              type="range"
+              min="9"
+              max="13"
+              step="0.5"
+              value={fontSize}
+              onChange={(e) => setFontSize(Number(e.target.value))}
+              className="dashboard-form-input dashboard-form-input--range"
+            />
+            <div className="dashboard-form-hint">
+              Compact range tuned for dense layouts.
             </div>
           </div>
         </div>

@@ -2,5 +2,114 @@
  * Tabulator Theme
  * 
  * Using tabulator_midnight theme from npm package (tabulator-tables@6.3.1)
- * No overrides - standard theme only
+ * Compact overrides to align with application theme variables
  */
+
+.tabulator {
+  font-family: var(--theme-table-font-family) !important;
+  font-size: var(--theme-table-font-size) !important;
+  color: var(--theme-fg);
+  background: var(--theme-bg-solid) !important;
+  border: 1px solid var(--theme-border) !important;
+  border-radius: 6px;
+}
+
+.tabulator .tabulator-header {
+  background: var(--theme-bg-solid) !important;
+  color: var(--theme-tabulator-header-text);
+  border-bottom: 1px solid var(--theme-border) !important;
+  font-size: var(--theme-table-header-font-size) !important;
+  font-family: var(--theme-table-font-family) !important;
+  min-height: var(--theme-table-header-height);
+  height: auto;
+}
+
+.tabulator .tabulator-header .tabulator-col {
+  background: transparent;
+  border-right: 1px solid var(--theme-border-light) !important;
+}
+
+.tabulator .tabulator-header .tabulator-col .tabulator-col-content {
+  padding: var(--theme-table-cell-padding-y) var(--theme-table-cell-padding-x);
+  font-size: var(--theme-table-header-font-size) !important;
+  font-weight: var(--theme-table-header-font-weight);
+  line-height: 1.2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tabulator .tabulator-header .tabulator-col .tabulator-col-title {
+  font-size: var(--theme-table-header-font-size) !important;
+  font-family: var(--theme-table-font-family) !important;
+}
+
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter {
+  margin-top: 2px;
+}
+
+.tabulator .tabulator-header input,
+.tabulator .tabulator-header select {
+  background: var(--theme-tabulator-filter-bg);
+  border: 1px solid var(--theme-tabulator-filter-border);
+  color: var(--theme-fg);
+  font-size: var(--theme-table-font-size) !important;
+  font-family: var(--theme-table-font-family) !important;
+  padding: var(--theme-table-cell-padding-y) var(--theme-table-cell-padding-x);
+  height: var(--theme-table-filter-height);
+}
+
+.tabulator .tabulator-tableHolder {
+  background: var(--theme-bg-solid) !important;
+}
+
+.tabulator .tabulator-tableholder .tabulator-table {
+  background: transparent !important;
+}
+
+.tabulator .tabulator-row,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row {
+  min-height: var(--theme-table-row-height);
+  height: var(--theme-table-row-height);
+  border-bottom: 1px solid var(--theme-border) !important;
+}
+
+.tabulator .tabulator-row.tabulator-row-even,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row-even {
+  background: transparent !important;
+}
+
+.tabulator .tabulator-row.tabulator-row-odd,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row-odd {
+  background: transparent !important;
+}
+
+.tabulator .tabulator-row:hover,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row:hover {
+  background: var(--theme-glass) !important;
+}
+
+.tabulator .tabulator-row.tabulator-selected,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected {
+  background: var(--theme-accent-light) !important;
+}
+
+.tabulator .tabulator-row.tabulator-selected:hover,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected:hover {
+  background: var(--theme-accent-light) !important;
+}
+
+.tabulator .tabulator-cell {
+  padding: var(--theme-table-cell-padding-y) var(--theme-table-cell-padding-x);
+  line-height: 1.25;
+  font-size: var(--theme-table-font-size) !important;
+  font-family: var(--theme-table-font-family) !important;
+  height: var(--theme-table-row-height);
+}
+
+.tabulator .tabulator-footer {
+  background: var(--theme-bg-elevated) !important;
+  border-top: 1px solid var(--theme-border) !important;
+  color: var(--theme-text-muted);
+  font-size: var(--theme-font-size-xs);
+}

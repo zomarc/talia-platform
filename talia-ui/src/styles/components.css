@@ -25,7 +25,8 @@
   background: var(--theme-bg-solid);
   color: var(--theme-fg);
   font-family: var(--theme-font-family);
-  font-size: 11px;
+  font-size: var(--theme-font-size);
+  line-height: 1.35;
 }
 
 /* Minimal header - compact, clean */
@@ -33,11 +34,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 12px;
+  padding: 4px 10px;
   background: var(--theme-glass);
   border-bottom: 1px solid var(--theme-border-light);
   flex-shrink: 0;
-  min-height: 32px;
+  min-height: 28px;
 }
 
 .talia-report__header-left {
@@ -48,7 +49,7 @@
 
 .talia-report__title {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--theme-font-size-lg);
   font-weight: 600;
   color: var(--theme-fg);
   letter-spacing: 0.3px;
@@ -56,7 +57,7 @@
 
 .talia-report__subtitle {
   margin: 0;
-  font-size: 10px;
+  font-size: var(--theme-font-size-sm);
   color: var(--theme-text-muted);
   font-weight: 400;
 }
@@ -80,13 +81,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 12px;
+  padding: 3px 10px;
   background: var(--theme-glass);
   border-top: 1px solid var(--theme-border-light);
-  font-size: 9px;
+  font-size: var(--theme-font-size-xs);
   color: var(--theme-text-muted);
   flex-shrink: 0;
-  min-height: 22px;
+  min-height: 20px;
   font-family: var(--theme-font-family-monospace);
   letter-spacing: 0.3px;
 }
@@ -145,9 +146,9 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 3px 8px;
+  padding: 2px 6px;
   font-family: var(--theme-font-family);
-  font-size: 10px;
+  font-size: var(--theme-font-size-sm);
   font-weight: 500;
   color: var(--theme-text-secondary);
   background: transparent;
@@ -157,6 +158,7 @@
   transition: all 0.15s ease;
   white-space: nowrap;
   letter-spacing: 0.2px;
+  line-height: 1.2;
 }
 
 .talia-btn:hover {
@@ -203,8 +205,8 @@
 }
 
 .talia-btn--small {
-  padding: 2px 6px;
-  font-size: 9px;
+  padding: 1px 5px;
+  font-size: var(--theme-font-size-xs);
 }
 
 .talia-btn--icon {
@@ -230,7 +232,7 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  min-height: 200px;
+  min-height: 140px;
   gap: var(--theme-padding-md);
   color: var(--theme-text-muted);
 }
@@ -714,7 +716,7 @@
    ============================================================================ */
 
 .talia-card {
-  background: var(--theme-glass);
+  background: var(--theme-panel-bg, var(--theme-bg-elevated));
   border: 1px solid var(--theme-border);
   border-radius: var(--theme-radius-md);
   padding: var(--theme-padding-md);
@@ -817,8 +819,43 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--theme-padding-sm);
-  font-size: var(--theme-font-size-xs);
+  font-size: var(--theme-font-size-sm);
   color: var(--theme-text-muted);
+  line-height: 1.35;
+}
+
+.talia-meta--stacked {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--theme-padding-sm);
+  font-size: var(--theme-font-size);
+  line-height: 1.4;
+  color: var(--theme-text-secondary);
+}
+
+.talia-meta--stacked span {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.talia-meta--stacked strong {
+  color: var(--theme-fg);
+  font-weight: 600;
+}
+
+.sailing-overview .talia-report__content {
+  padding: var(--theme-padding-md);
+  overflow: auto;
+}
+
+.sailing-overview .talia-card {
+  background: var(--theme-bg-elevated);
+  border-color: var(--theme-border-strong);
+}
+
+.sailing-overview__metric {
+  margin-bottom: var(--theme-padding-sm);
 }
 
 .talia-pill {
@@ -899,7 +936,7 @@
   border: 1px solid transparent;
   background: transparent;
   color: inherit;
-  font-size: 11px;
+  font-size: var(--theme-font-size-sm);
   cursor: pointer;
 }
 
@@ -911,6 +948,62 @@
 .talia-dockview-tab__button--active {
   border-color: var(--theme-accent);
   color: var(--theme-accent);
+}
+
+.dockview-theme-talia .dv-tab,
+.dockview-theme-default .dv-tab,
+.dockview-theme-dark .dv-tab,
+.dockview-theme-light .dv-tab {
+  font-size: var(--theme-font-size-sm);
+  font-family: var(--theme-font-family);
+}
+
+.dockview-theme-talia,
+.dockview-theme-default,
+.dockview-theme-dark,
+.dockview-theme-light {
+  --dv-tab-font-size: var(--theme-font-size-sm) !important;
+  --dv-tabs-and-actions-container-font-size: var(--theme-font-size-sm) !important;
+}
+
+.dockview-theme-talia .dv-tabs-and-actions-container,
+.dockview-theme-default .dv-tabs-and-actions-container,
+.dockview-theme-dark .dv-tabs-and-actions-container,
+.dockview-theme-light .dv-tabs-and-actions-container {
+  font-size: var(--theme-font-size-sm) !important;
+  font-family: var(--theme-font-family) !important;
+}
+
+.dockview-theme-talia .dv-tab,
+.dockview-theme-default .dv-tab,
+.dockview-theme-dark .dv-tab,
+.dockview-theme-light .dv-tab {
+  font-size: var(--theme-font-size-sm) !important;
+  font-family: var(--theme-font-family) !important;
+}
+
+.dockview-theme-talia .dv-default-tab-content,
+.dockview-theme-default .dv-default-tab-content,
+.dockview-theme-dark .dv-default-tab-content,
+.dockview-theme-light .dv-default-tab-content {
+  font-size: inherit;
+  font-family: inherit;
+}
+
+.dockview-theme-talia .dv-tabs-overflow-dropdown-default,
+.dockview-theme-default .dv-tabs-overflow-dropdown-default,
+.dockview-theme-dark .dv-tabs-overflow-dropdown-default,
+.dockview-theme-light .dv-tabs-overflow-dropdown-default {
+  font-size: var(--theme-font-size-sm) !important;
+  font-family: var(--theme-font-family) !important;
+}
+
+.dockview-theme-talia .dv-tab .dv-tab-content,
+.dockview-theme-default .dv-tab .dv-tab-content,
+.dockview-theme-dark .dv-tab .dv-tab-content,
+.dockview-theme-light .dv-tab .dv-tab-content {
+  font-size: inherit;
+  font-family: inherit;
 }
 
 .talia-event-meta {

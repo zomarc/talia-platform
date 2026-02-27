@@ -10,8 +10,9 @@ import ReservationCurrentStatePresenter from './ReservationCurrentStatePresenter
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
-const ReservationCurrentStateContainer = ({ filters = {} }) => {
+const ReservationCurrentStateContainer = () => {
   const { theme } = useTheme();
   
   console.log('[ReservationCurrentStateContainer] Component rendering');
@@ -19,7 +20,7 @@ const ReservationCurrentStateContainer = ({ filters = {} }) => {
   // Use reusable hook for context-based data fetching with server-side filtering
   const { data, loading, error, refetch, context } = useTableDataWithContext({
     tableName: 'reservation_current_state',
-    eventName: 'talia:sail.select',
+    eventName: SAIL_SELECT_EVENT,
     contextMapper: (detail) => {
       // Extract sail_code from event detail (supports multiple formats)
       const sailCode = detail?.sail_code || detail?.Sail_Code || detail?.row_data?.sail_code || (typeof detail === 'string' ? detail : null);
@@ -52,30 +53,20 @@ const ReservationCurrentStateContainer = ({ filters = {} }) => {
   // Handle empty data
   if (!data || data.length === 0) {
     return (
-      <div style={{ 
-        padding: '40px', 
-        textAlign: 'center',
-        color: 'var(--theme-fg)'
-      }}>
+      <div className="focus-panel-empty">
         <p>
           {selectedSailCode 
             ? `No reservations found for sail code: ${selectedSailCode}`
             : 'No reservation data available'}
         </p>
-        <button 
-          onClick={refetch}
-          style={{
-            marginTop: '16px',
-            padding: '8px 16px',
-            backgroundColor: 'var(--theme-accent)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Retry
-        </button>
+        <div className="focus-panel-empty__action">
+          <button 
+            onClick={refetch}
+            className="talia-btn talia-btn--primary"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }

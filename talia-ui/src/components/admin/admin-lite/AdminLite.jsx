@@ -1,9 +1,10 @@
 import React, { Suspense, lazy, useState } from 'react';
 import AdminDashboard from '../dashboard/AdminDashboard.jsx';
 import ErrorBoundary from '../../ErrorBoundary.jsx';
+import '../admin.css';
 
 const DataManagementUnavailable = () => (
-  <div style={{ padding: '16px', fontSize: '12px', color: '#c7c7d1' }}>
+  <div className="admin-lite__unavailable">
     Data Management is currently unavailable.
   </div>
 );
@@ -18,47 +19,33 @@ const AdminLite = () => {
   const [activeTab, setActiveTab] = useState('admin');
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0f0f23', color: '#e7e7ef' }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <div style={{ fontSize: '18px', fontWeight: 600 }}>Admin Lite (Local)</div>
-        <div style={{ fontSize: '12px', color: '#9ea0b5' }}>
+    <div className="admin-lite">
+      <div className="admin-lite__header">
+        <div className="admin-lite__title">Admin Lite (Local)</div>
+        <div className="admin-lite__subtitle">
           Minimal local admin access — no auth, dev only.
         </div>
-        <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+        <div className="admin-lite__tabs">
           <button
             onClick={() => setActiveTab('admin')}
-            style={{
-              padding: '6px 10px',
-              fontSize: '12px',
-              borderRadius: '6px',
-              border: '1px solid rgba(255,255,255,0.15)',
-              background: activeTab === 'admin' ? '#b08d57' : 'transparent',
-              color: activeTab === 'admin' ? '#0f0f23' : '#e7e7ef',
-              cursor: 'pointer'
-            }}
+            className="admin-lite__tab"
+            data-active={activeTab === 'admin'}
           >
             Admin
           </button>
           <button
             onClick={() => setActiveTab('data')}
-            style={{
-              padding: '6px 10px',
-              fontSize: '12px',
-              borderRadius: '6px',
-              border: '1px solid rgba(255,255,255,0.15)',
-              background: activeTab === 'data' ? '#b08d57' : 'transparent',
-              color: activeTab === 'data' ? '#0f0f23' : '#e7e7ef',
-              cursor: 'pointer'
-            }}
+            className="admin-lite__tab"
+            data-active={activeTab === 'data'}
           >
             Data Management
           </button>
         </div>
       </div>
 
-      <div style={{ padding: '12px 16px' }}>
+      <div className="admin-lite__content">
         {activeTab === 'admin' ? (
-          <div style={{ background: '#ffffff', color: '#0f0f23', borderRadius: '8px' }}>
+          <div className="admin-lite__panel">
             <AdminDashboard skipAuth />
           </div>
         ) : (

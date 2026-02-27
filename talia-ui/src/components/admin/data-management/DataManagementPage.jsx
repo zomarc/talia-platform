@@ -6,11 +6,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useDatabaseTables } from '../../../hooks/useDatabaseTables';
 import { LoadingSpinner, ErrorMessage } from '../../../components/shared';
-import { getThemeForMode } from '../../../themes/modeThemes';
 // Supabase import removed - all database operations now route through GraphQL backend
-import { getTableSource } from '../../../config/tableSources';
-import { SERVER_SERVICES, getAllServiceIds } from '../../../config/serverServices';
-import { getSyncFreshness, getSyncFreshnessColor } from '../../../utils/syncFreshness';
+import { SERVER_SERVICES } from '../../../config/serverServices';
+import { getSyncFreshness } from '../../../utils/syncFreshness';
 import SummaryBar from './SummaryBar.jsx';
 import BackupStatusBar from './BackupStatusBar.jsx';
 import FiltersBar from './FiltersBar.jsx';
@@ -22,7 +20,6 @@ import ServerStatusPanel from './ServerStatusPanel.jsx';
 import TableRow from './TableRow.jsx';
 import TableHeader from './TableHeader.jsx';
 import { createTableActions } from './tableActions.js';
-import { getRootStyle } from './styles.js';
 import '../../../themes/dataMode.css';
 import './dataManagement.css';
 
@@ -42,6 +39,14 @@ const DataManagementPage = () => {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [statusTable, setStatusTable] = useState(null);
   const [showBottomPanels, setShowBottomPanels] = useState(true);
+  const [showBackupBar, setShowBackupBar] = useState(true);
+  const [expandedPanel, setExpandedPanel] = useState(null);
+  const [globalRange, setGlobalRange] = useState(null);
+  const [rangeDraft, setRangeDraft] = useState({ from: '', to: '' });
+  const [rangeSaving, setRangeSaving] = useState(false);
+  const [rangeError, setRangeError] = useState(null);
+  const [bulkSyncing, setBulkSyncing] = useState(false);
+  const [bulkMode, setBulkMode] = useState(null);
   const [backupStatus, setBackupStatus] = useState({ 
     lastBackup: null, 
     recentBackups: [], 
@@ -350,9 +355,6 @@ The backup will be saved to: talia-server/backups/`;
     fetchBackupStatus();
   }, []);
 
-  // Get theme for data mode
-  const theme = getThemeForMode('data');
-
   // Format date for display (condensed)
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -417,21 +419,21 @@ The backup will be saved to: talia-server/backups/`;
     }
   };
 
-  // Get status badge color
-  const getStatusColor = (status) => {
+  // Get status badge variant
+  const getStatusVariant = (status) => {
     if (status.includes('Synced') && status.includes('Has Data')) {
-      return { bg: '#e8f5e9', text: '#2e7d32' };
+      return 'synced';
     }
     if (status.includes('Outdated') || status.includes('Stale')) {
-      return { bg: '#fff3e0', text: '#e65100' };
+      return 'outdated';
     }
     if (status.includes('Never Synced') || status.includes('Not Synced')) {
-      return { bg: '#fce4ec', text: '#c2185b' };
+      return 'never';
     }
     if (status.includes('Empty')) {
-      return { bg: '#f5f5f5', text: '#757575' };
+      return 'empty';
     }
-    return { bg: '#e3f2fd', text: '#1976d2' };
+    return 'default';
   };
 
   // Sort tables
@@ -455,6 +457,12 @@ The backup will be saved to: talia-server/backups/`;
     if (sortColumn === 'latestSnapshot') {
       aVal = a.latestSnapshotDate ? new Date(a.latestSnapshotDate).getTime() : 0;
       bVal = b.latestSnapshotDate ? new Date(b.latestSnapshotDate).getTime() : 0;
+    }
+
+    // Handle latest available data date
+    if (sortColumn === 'latestAvailableData') {
+      aVal = a.latestAvailableData ? new Date(a.latestAvailableData).getTime() : 0;
+      bVal = b.latestAvailableData ? new Date(b.latestAvailableData).getTime() : 0;
     }
 
     // Handle records processed
@@ -529,26 +537,188 @@ The backup will be saved to: talia-server/backups/`;
     return sortDirection === 'asc' ? ' ↑' : ' ↓';
   };
 
-  // Column widths configuration - shared between both tables
-  const columnWidths = {
-    tableName: '11%',
-    source: '14%',
-    loadMethod: '6%', // New column for batch/direct
-    rowCount: '5%',
-    dateRange: '11%',
-    lastSync: '7%',
-    latestSnapshot: '7%',
-    recordsProcessed: '5%',
-    changesDetected: '5%',
-    syncDuration: '6%',
-    status: '9%',
-    actions: '10%'
-  };
+  const runningSyncTables = Array.from(syncingTables);
+  const runningSyncCount = runningSyncTables.length;
+  const runningProgress = runningSyncCount
+    ? Math.round(runningSyncTables.reduce((total, tableName) => {
+        const progress = syncProgress[tableName]?.percentage || 0;
+        return total + progress;
+      }, 0) / runningSyncCount)
+    : 0;
+
 
   // Get GraphQL endpoint (same logic as Apollo client)
   // Use relative path - Vite proxy handles routing to localhost:4000
   const getGraphQLEndpoint = () => {
     return '/api/graphql';
+  };
+
+  const graphqlRequest = async (query, variables = {}) => {
+    const response = await fetch(getGraphQLEndpoint(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables })
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    }
+    const result = await response.json();
+    if (result.errors && result.errors.length > 0) {
+      throw new Error(result.errors[0].message || 'GraphQL error');
+    }
+    return result.data;
+  };
+
+  const loadGlobalRange = async () => {
+    try {
+      setRangeError(null);
+      const query = `
+        query {
+          integrationDateRanges {
+            id
+            integrationName
+            displayName
+            description
+            dateFrom
+            dateTo
+            dateColumn
+            isActive
+            isDefault
+          }
+        }
+      `;
+      const data = await graphqlRequest(query);
+      const ranges = data?.integrationDateRanges || [];
+      const active = ranges.find(r => r.integrationName === 'synapse_default' && r.isActive) ||
+                     ranges.find(r => r.isDefault && r.isActive) ||
+                     ranges.find(r => r.isActive) ||
+                     ranges[0];
+      if (active) {
+        setGlobalRange(active);
+        setRangeDraft({ from: active.dateFrom || '', to: active.dateTo || '' });
+      }
+    } catch (err) {
+      setRangeError(err.message || 'Failed to load date range');
+    }
+  };
+
+  useEffect(() => {
+    loadGlobalRange();
+  }, []);
+
+  const getGlobalActualRange = (list) => {
+    let min = null;
+    let max = null;
+    list.forEach((table) => {
+      const range = table.actualDataRange;
+      if (!range?.min || !range?.max) return;
+      const minTime = Date.parse(range.min);
+      const maxTime = Date.parse(range.max);
+      if (!Number.isFinite(minTime) || !Number.isFinite(maxTime)) return;
+      if (!min || minTime < Date.parse(min)) min = range.min;
+      if (!max || maxTime > Date.parse(max)) max = range.max;
+    });
+    return min || max ? { min, max } : null;
+  };
+
+  const globalActualRange = React.useMemo(() => getGlobalActualRange(tables), [tables]);
+  const globalLastSync = React.useMemo(() => {
+    let latest = null;
+    tables.forEach((table) => {
+      if (!table.lastSync) return;
+      const time = Date.parse(table.lastSync);
+      if (!Number.isFinite(time)) return;
+      if (!latest || time > Date.parse(latest)) {
+        latest = table.lastSync;
+      }
+    });
+    return latest;
+  }, [tables]);
+  const configuredRange = React.useMemo(() => {
+    if (globalRange?.dateFrom || globalRange?.dateTo) {
+      return { min: globalRange.dateFrom || null, max: globalRange.dateTo || null };
+    }
+    return tables[0]?.dateRange || null;
+  }, [globalRange, tables]);
+
+  useEffect(() => {
+    if (window.__taliaStatus?.setDataStatus) {
+      window.__taliaStatus.setDataStatus({
+        globalRange: configuredRange,
+        actualRange: globalActualRange,
+        lastSync: globalLastSync
+      });
+    }
+  }, [configuredRange, globalActualRange, globalLastSync]);
+
+  const handleSaveRange = async () => {
+    if (!globalRange?.id) return;
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(rangeDraft.from) || !dateRegex.test(rangeDraft.to)) {
+      setRangeError('Date range must be YYYY-MM-DD');
+      return;
+    }
+    setRangeSaving(true);
+    setRangeError(null);
+    try {
+      const mutation = `
+        mutation UpdateRange($id: Int!, $input: IntegrationDateRangeInput!) {
+          updateIntegrationDateRange(id: $id, input: $input) {
+            id
+            integrationName
+            displayName
+            description
+            dateFrom
+            dateTo
+            dateColumn
+            isActive
+            isDefault
+          }
+        }
+      `;
+      const input = {
+        integrationName: globalRange.integrationName,
+        displayName: globalRange.displayName,
+        description: globalRange.description,
+        dateFrom: rangeDraft.from,
+        dateTo: rangeDraft.to,
+        dateColumn: globalRange.dateColumn,
+        isActive: globalRange.isActive !== false,
+        isDefault: globalRange.isDefault !== false
+      };
+      const data = await graphqlRequest(mutation, { id: globalRange.id, input });
+      const updated = data?.updateIntegrationDateRange;
+      if (updated) {
+        setGlobalRange(updated);
+        setRangeDraft({ from: updated.dateFrom || '', to: updated.dateTo || '' });
+        refetch();
+      }
+    } catch (err) {
+      setRangeError(err.message || 'Failed to update range');
+    } finally {
+      setRangeSaving(false);
+    }
+  };
+
+  const handleSyncAll = async (forceFullSync) => {
+    if (bulkSyncing) return;
+    const syncableTables = tables.filter(t => t.source !== 'N/A' && t.type !== 'unknown' && t.type !== 'system' && t.type !== 'application');
+    if (syncableTables.length === 0) return;
+    setBulkSyncing(true);
+    setBulkMode(forceFullSync ? 'full' : 'sync');
+    addClientLog({
+      id: `${Date.now()}-${++logIdCounterRef.current}`,
+      timestamp: new Date(),
+      type: 'info',
+      message: `🔄 Starting ${forceFullSync ? 'full update' : 'sync'} for ${syncableTables.length} tables`,
+      tableName: 'System'
+    });
+    for (const table of syncableTables) {
+      // Sequential to avoid overlapping syncs
+      await handleSync(table.tableName, forceFullSync);
+    }
+    setBulkSyncing(false);
+    setBulkMode(null);
   };
 
   // Handle sync button click
@@ -897,6 +1067,7 @@ The backup will be saved to: talia-server/backups/`;
           }));
         }
       };
+      void parseProgressFromLog;
 
       let response;
       try {
@@ -974,9 +1145,6 @@ The backup will be saved to: talia-server/backups/`;
 
       // Check for GraphQL errors
       if (result.errors && result.errors.length > 0) {
-        const graphqlErrors = result.errors.map(e => e.message).join('; ');
-        const errorMsg = `GraphQL Error: ${graphqlErrors}`;
-        
         // Log each error separately for better visibility
         result.errors.forEach((error, idx) => {
           addClientLog({
@@ -1098,10 +1266,7 @@ The backup will be saved to: talia-server/backups/`;
       // Unexpected error
       const errorName = err.name || 'Error';
       const errorMessage = err.message || 'Unknown error occurred';
-      const errorStack = err.stack ? `\n\nStack trace:\n${err.stack}` : '';
-      
-      const detailedError = `Unexpected error during sync: [${errorName}] ${errorMessage}${errorStack}`;
-      
+
       console.error('Sync error:', err);
       
       addClientLog({
@@ -1198,8 +1363,6 @@ The backup will be saved to: talia-server/backups/`;
   // Render table header
   const renderTableHeader = () => (
     <TableHeader
-      theme={theme}
-      columnWidths={columnWidths}
       handleSort={handleSort}
       SortIcon={SortIcon}
     />
@@ -1219,13 +1382,11 @@ The backup will be saved to: talia-server/backups/`;
         key={table.tableName}
         table={table}
         index={idx}
-        theme={theme}
-        columnWidths={columnWidths}
         selectedTable={selectedTable}
         setSelectedTable={setSelectedTable}
         syncingTables={syncingTables}
         syncProgress={syncProgress}
-        getStatusColor={getStatusColor}
+        getStatusVariant={getStatusVariant}
         getSyncFreshness={getSyncFreshness}
         formatDateRange={formatDateRange}
         formatDateTime={formatDateTime}
@@ -1238,130 +1399,194 @@ The backup will be saved to: talia-server/backups/`;
     ))
   );
 
-  // Add CSS animations for pulsing and shimmer effects
-  useEffect(() => {
-    const styleTag = document.createElement('style');
-    styleTag.textContent = `
-      @keyframes pulse {
-        0%, 100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.85;
-        }
-      }
-      @keyframes shimmer {
-        0% {
-          transform: translateX(-100%);
-        }
-        100% {
-          transform: translateX(100%);
-        }
-      }
-    `;
-    styleTag.setAttribute('data-sync-animations', 'true');
-    if (!document.head.querySelector('style[data-sync-animations]')) {
-      document.head.appendChild(styleTag);
-    }
-    return () => {
-      const existing = document.head.querySelector('style[data-sync-animations]');
-      if (existing) {
-        document.head.removeChild(existing);
-      }
-    };
-  }, []);
 
-  // Set CSS variables for theme colors
-  const rootStyle = getRootStyle(theme);
-  const clientLogStyle = (log) => {
-    if (log.type === 'error') return { background: 'rgba(244, 67, 54, 0.1)', color: '#f44336', borderColor: '#f44336' };
-    if (log.type === 'success') return { background: 'rgba(76, 175, 80, 0.1)', color: '#4caf50', borderColor: '#4caf50' };
-    return { background: 'rgba(255, 255, 255, 0.02)', color: theme.colors.textSecondary, borderColor: theme.colors.accent };
-  };
-  const serverLogStyle = (log) => {
-    if (log.message.includes('[ERROR]') || log.message.includes('❌')) {
-      return { background: 'rgba(244, 67, 54, 0.1)', color: '#f44336', borderColor: '#f44336' };
+  const renderExpandedPanel = () => {
+    if (!expandedPanel) return null;
+    const commonProps = { onMinimize: () => setExpandedPanel(null), isMaximized: true, fullHeight: true };
+    let content = null;
+    if (expandedPanel === 'client') {
+      content = (
+        <LogsPanel
+          {...commonProps}
+          title="📋 Client Activity"
+          logs={logs}
+          emptyMessage="No activity yet"
+          onClear={() => setLogs([])}
+          logRef={logEndRef}
+        />
+      );
+    } else if (expandedPanel === 'server') {
+      content = (
+        <LogsPanel
+          {...commonProps}
+          title="🔧 Server Logs"
+          logs={serverLogs}
+          emptyMessage="No server logs yet"
+          onClear={() => setServerLogs([])}
+          logRef={serverLogEndRef}
+        />
+      );
+    } else if (expandedPanel === 'status') {
+      content = (
+        <ServerStatusPanel
+          {...commonProps}
+          serverServices={SERVER_SERVICES}
+          serverStatus={serverStatus}
+          expandedServices={expandedServices}
+          setExpandedServices={setExpandedServices}
+          isRefreshingStatus={isRefreshingStatus}
+          checkServerStatus={checkServerStatus}
+          formatDateTime={formatDateTime}
+          onRestartGraphQL={handleRestartGraphQL}
+          onLogInfo={(message) => {
+            const logId = `${Date.now()}-${++logIdCounterRef.current}`;
+            setLogs(prev => [...prev, {
+              id: logId,
+              timestamp: new Date(),
+              type: 'info',
+              message,
+              tableName: 'System'
+            }]);
+          }}
+        />
+      );
     }
-    if (log.message.includes('✅') || log.message.includes('Successfully')) {
-      return { background: 'rgba(76, 175, 80, 0.1)', color: '#4caf50', borderColor: '#4caf50' };
-    }
-    return { background: 'rgba(255, 255, 255, 0.02)', color: theme.colors.textSecondary, borderColor: theme.colors.accent };
+    return (
+      <div
+        onClick={() => setExpandedPanel(null)}
+        className="dm-overlay"
+      >
+        <div
+          onClick={(event) => event.stopPropagation()}
+          className="dm-overlay__panel"
+        >
+          {content}
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div style={rootStyle}>
-      <div style={{ maxWidth: '100%', margin: '0 auto' }}>
+    <div className="data-management-root">
+      <div className="dm-container">
         {/* Header */}
-        <div style={{
-          background: theme.colors.glass,
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          padding: '12px 16px',
-          borderRadius: '12px',
-          marginBottom: '12px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-          border: `1px solid ${theme.colors.glassBorder}`,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '14px', color: theme.colors.foreground, fontWeight: '600' }}>
+        <div className="dm-header">
+          <div className="dm-header__row">
+            <h1 className="dm-header__title">
               📊 Data Management
             </h1>
+            <div className="dm-header__actions">
+              <button
+                onClick={() => setShowBottomPanels(prev => !prev)}
+                className="dm-btn dm-btn--toggle"
+                data-active={showBottomPanels}
+                title="Toggle activity panels"
+              >
+                {showBottomPanels ? 'Hide Panels' : 'Show Panels'}
+              </button>
+              <button
+                onClick={() => setShowBackupBar(prev => !prev)}
+                className="dm-btn dm-btn--toggle"
+                data-active={showBackupBar}
+                title="Toggle backup status bar"
+              >
+                {showBackupBar ? 'Hide Backup' : 'Show Backup'}
+              </button>
+              <button
+                onClick={refetch}
+                disabled={loading}
+                className="dm-btn dm-btn--accent"
+              >
+                {loading ? '⏳' : '↻'} Refresh
+              </button>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button
-              onClick={() => setShowBottomPanels(prev => !prev)}
-              style={{
-                padding: '4px 8px',
-                background: showBottomPanels ? theme.colors.accent : 'transparent',
-                color: showBottomPanels ? '#0f0f23' : theme.colors.textSecondary,
-                border: showBottomPanels ? 'none' : `1px solid ${theme.colors.glassBorder}`,
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '10px',
-                fontWeight: '500',
-                transition: 'all 0.2s'
-              }}
-              title="Toggle activity panels"
-            >
-              {showBottomPanels ? 'Hide Panels' : 'Show Panels'}
-            </button>
-            <button
-              onClick={refetch}
-              disabled={loading}
-              style={{
-                padding: '4px 8px',
-                background: loading ? theme.colors.glass : theme.colors.accent,
-                color: loading ? theme.colors.textMuted : '#0f0f23',
-                border: loading ? `1px solid ${theme.colors.glassBorder}` : 'none',
-                borderRadius: '6px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontSize: '10px',
-                fontWeight: '500',
-                backdropFilter: loading ? 'blur(10px)' : 'none',
-                WebkitBackdropFilter: loading ? 'blur(10px)' : 'none',
-                transition: 'all 0.2s'
-              }}
-            >
-              {loading ? '⏳' : '↻'} Refresh
-            </button>
+          {runningSyncCount > 0 && (
+            <div className="dm-running-sync">
+              <span className="dm-running-sync__label">
+                Syncing {runningSyncCount} {runningSyncCount === 1 ? 'table' : 'tables'}
+              </span>
+              <progress
+                className="dm-running-sync__progress"
+                value={runningProgress}
+                max="100"
+              />
+              <span className="dm-running-sync__percent">
+                {runningProgress}%
+              </span>
+            </div>
+          )}
+          <div className="dm-range">
+            <div className="dm-range__meta">
+              <span>
+                Global Range: <strong>{formatDateRange(configuredRange)}</strong>
+              </span>
+              <span>
+                Actual Data: <strong>{formatDateRange(globalActualRange)}</strong>
+              </span>
+              <span>
+                Last Sync: <strong>{formatDateTime(globalLastSync)}</strong>
+              </span>
+            </div>
+            <div className="dm-range__actions">
+              <input
+                type="date"
+                value={rangeDraft.from}
+                onChange={(e) => setRangeDraft(prev => ({ ...prev, from: e.target.value }))}
+                className="dm-range__input"
+                aria-label="Global range start"
+              />
+              <span className="dm-range__arrow">→</span>
+              <input
+                type="date"
+                value={rangeDraft.to}
+                onChange={(e) => setRangeDraft(prev => ({ ...prev, to: e.target.value }))}
+                className="dm-range__input"
+                aria-label="Global range end"
+              />
+              <button
+                onClick={handleSaveRange}
+                disabled={rangeSaving || !globalRange}
+                className="dm-btn dm-btn--accent"
+                title="Update global date range"
+              >
+                {rangeSaving ? 'Saving...' : 'Save Range'}
+              </button>
+              <button
+                onClick={() => handleSyncAll(false)}
+                disabled={bulkSyncing}
+                className="dm-btn dm-btn--accent"
+                title="Incremental sync for all tables"
+              >
+                {bulkSyncing && bulkMode === 'sync' ? 'Syncing...' : 'Sync All'}
+              </button>
+              <button
+                onClick={() => handleSyncAll(true)}
+                disabled={bulkSyncing}
+                className="dm-btn dm-btn--danger"
+                title="Full update for all tables"
+              >
+                {bulkSyncing && bulkMode === 'full' ? 'Updating...' : 'Full Update'}
+              </button>
+            </div>
+            {rangeError && (
+              <div className="dm-range__error">{rangeError}</div>
+            )}
           </div>
         </div>
 
-        <SummaryBar theme={theme} tables={tables} />
+        <SummaryBar tables={tables} />
 
-        <BackupStatusBar
-          theme={theme}
-          backupStatus={backupStatus}
-          formatDateTime={formatDateTime}
-          triggerBackup={triggerBackup}
-          fetchBackupStatus={fetchBackupStatus}
-        />
+        {showBackupBar && (
+          <BackupStatusBar
+            backupStatus={backupStatus}
+            formatDateTime={formatDateTime}
+            triggerBackup={triggerBackup}
+            fetchBackupStatus={fetchBackupStatus}
+          />
+        )}
 
         <FiltersBar
-          theme={theme}
           tables={tables}
           activeFilter={activeFilter}
           setActiveFilter={setActiveFilter}
@@ -1370,7 +1595,6 @@ The backup will be saved to: talia-server/backups/`;
         />
 
         <TablesSection
-          theme={theme}
           loading={loading}
           error={error}
           top5Tables={top5Tables}
@@ -1381,47 +1605,19 @@ The backup will be saved to: talia-server/backups/`;
 
         {/* Loading/Error States */}
         {loading && (
-          <div style={{ 
-            padding: '20px', 
-            textAlign: 'center', 
-            background: theme.colors.glass,
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            borderRadius: '12px',
-            border: `1px solid ${theme.colors.glassBorder}`,
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
-          }}>
+          <div className="dm-card">
             <LoadingSpinner size="small" message="Loading table information..." />
           </div>
         )}
 
         {error && (
-          <div style={{ 
-            padding: '12px', 
-            background: theme.colors.glass,
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            borderRadius: '12px',
-            border: `1px solid ${theme.colors.glassBorder}`,
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
-          }}>
+          <div className="dm-card dm-card--error">
             <ErrorMessage error={error} title="Error loading tables" onRetry={refetch} />
           </div>
         )}
 
         {!loading && !error && filteredTables.length === 0 && (
-          <div style={{
-            padding: '20px',
-            textAlign: 'center',
-            background: theme.colors.glass,
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            borderRadius: '12px',
-            border: `1px solid ${theme.colors.glassBorder}`,
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-            color: theme.colors.textMuted,
-            fontSize: '11px'
-          }}>
+          <div className="dm-card dm-card--empty">
             {filterText || activeFilter ? 'No tables match your filter' : 'No tables found'}
           </div>
         )}
@@ -1429,37 +1625,24 @@ The backup will be saved to: talia-server/backups/`;
 
       {/* Bottom Panel - Split into Client Activity Log, Server Logs, All Activity, and Server Status */}
       {showBottomPanels && (
-        <div style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '200px',
-          display: 'flex',
-          gap: '8px',
-          padding: '0 8px 8px 8px',
-          zIndex: 1000
-        }}>
+        <div className="dm-bottom-panels">
           <LogsPanel
-            theme={theme}
             title="📋 Client Activity"
             logs={logs}
             emptyMessage="No activity yet"
             onClear={() => setLogs([])}
             logRef={logEndRef}
-            getLogStyle={clientLogStyle}
+            onMaximize={() => setExpandedPanel('client')}
           />
           <LogsPanel
-            theme={theme}
             title="🔧 Server Logs"
             logs={serverLogs}
             emptyMessage="No server logs yet"
             onClear={() => setServerLogs([])}
             logRef={serverLogEndRef}
-            getLogStyle={serverLogStyle}
+            onMaximize={() => setExpandedPanel('server')}
           />
           <ServerStatusPanel
-            theme={theme}
             serverServices={SERVER_SERVICES}
             serverStatus={serverStatus}
             expandedServices={expandedServices}
@@ -1478,12 +1661,14 @@ The backup will be saved to: talia-server/backups/`;
                 tableName: 'System'
               }]);
             }}
+            onMaximize={() => setExpandedPanel('status')}
           />
         </div>
       )}
 
+      {renderExpandedPanel()}
+
       <StatusModal
-        theme={theme}
         statusTable={statusTable}
         onClose={() => setStatusTable(null)}
         formatDateRange={formatDateRange}
@@ -1491,12 +1676,11 @@ The backup will be saved to: talia-server/backups/`;
       />
 
       <ReviewModal
-        theme={theme}
         reviewData={reviewData}
         onClose={() => setReviewData(null)}
       />
 
-      {showBottomPanels && <div style={{ height: '200px' }} />} {/* Spacer for fixed log panel */}
+      {showBottomPanels && <div className="dm-bottom-spacer" />} {/* Spacer for fixed log panel */}
     </div>
   );
 };

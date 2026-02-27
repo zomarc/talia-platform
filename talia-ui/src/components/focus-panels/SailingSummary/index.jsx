@@ -9,13 +9,11 @@ import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithCon
 import SailingSummaryPresenter from './SailingSummaryPresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
-const SailingSummaryContainer = ({ theme: themeProp }) => {
-  // Use theme prop if provided, otherwise use default
-  const theme = themeProp || { colors: { foreground: '#ffffff', background: '#1a1a1a' } };
+const SailingSummaryContainer = () => {
 
   // Use reusable hook for context-based data fetching
   // Note: SailingSummary shows all data (no filtering), but listens to events for selection
-  const { data, loading, error, refetch, context } = useTableDataWithContext({
+  const { data, loading, error, refetch } = useTableDataWithContext({
     tableName: 'sail_by_cabin_occupancy',
     eventName: null, // Don't filter - show all sail data
     contextMapper: () => null, // No filtering
@@ -41,26 +39,16 @@ const SailingSummaryContainer = ({ theme: themeProp }) => {
   // Handle empty data
   if (!data || data.length === 0) {
     return (
-      <div style={{ 
-        padding: '40px', 
-        textAlign: 'center',
-        color: theme?.colors?.foreground || '#ffffff'
-      }}>
+      <div className="focus-panel-empty">
         <p>No sailing summary data available</p>
-        <button 
-          onClick={refetch}
-          style={{
-            marginTop: '16px',
-            padding: '8px 16px',
-            backgroundColor: theme?.colors?.accent || '#b08d57',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Retry
-        </button>
+        <div className="focus-panel-empty__action">
+          <button 
+            onClick={refetch}
+            className="talia-btn talia-btn--primary"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -69,7 +57,6 @@ const SailingSummaryContainer = ({ theme: themeProp }) => {
   return (
     <SailingSummaryPresenter 
       data={data} 
-      theme={theme}
       onRefresh={refetch}
     />
   );

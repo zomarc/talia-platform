@@ -169,7 +169,7 @@ class QueryTracker {
         })
         .filter(line => line.length > 0)
         .join('\n');
-    } catch (error) {
+    } catch {
       return queryString;
     }
   }

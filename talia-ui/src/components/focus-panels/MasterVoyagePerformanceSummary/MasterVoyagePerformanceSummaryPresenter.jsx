@@ -64,23 +64,11 @@ const rowFormatter = createRowFormatter();
 /**
  * Presentational component for Master Voyage Performance Summary
  */
-const MasterVoyagePerformanceSummaryPresenter = ({ data, theme, onRefresh }) => {
+const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const [tableInitialized, setTableInitialized] = useState(false);
   const lastDataRef = useRef(null);
-
-  // Extract unique values for filters
-  const filterValues = useMemo(() => {
-    if (!data || data.length === 0) return {};
-    
-    return {
-      ships: [...new Set(data.map(d => d.ship).filter(Boolean))].sort(),
-      voyages: [...new Set(data.map(d => d.voyageCode).filter(Boolean))].sort(),
-      itineraries: [...new Set(data.map(d => d.itinerary).filter(Boolean))].sort(),
-      months: [...new Set(data.map(d => d.accMonth).filter(Boolean))].sort()
-    };
-  }, [data]);
 
   // Define all columns with Tabulator's native features
   const columns = useMemo(() => [
@@ -637,7 +625,7 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, theme, onRefresh }) => 
           paginationSizeSelector: [25, 50, 100, 200],
           rowFormatter: rowFormatter,
           rowClick: (e, row) => {
-            try { row?.select?.(); } catch {}
+            try { row?.select?.(); } catch { /* noop */ }
           },
           rowSelectionChanged: (selectedData) => {
             const rec = selectedData && selectedData[0];
@@ -694,68 +682,26 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, theme, onRefresh }) => 
     }
   }, [data, tableInitialized]);
 
-  const defaultTheme = {
-    colors: {
-      background: '#ffffff',
-      foreground: '#2b2b2b'
-    }
-  };
-
-  const themeValues = theme || defaultTheme;
-
   // Get current date for footer
   const currentDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   return (
-    <div style={{
-      height: "100%",
-      width: "100%",
-      display: "flex",
-      flexDirection: "column",
-      background: themeValues.colors.background,
-      color: themeValues.colors.foreground
-    }}>
+    <div className="master-voyage">
       {/* Header */}
-      <div style={{
-        padding: '16px',
-        borderBottom: `1px solid ${themeValues.colors.border || '#e0e0e0'}`,
-        background: themeValues.colors.glass || themeValues.colors.background
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
+      <div className="master-voyage__header">
+        <div className="master-voyage__header-row">
           <div>
-            <h1 style={{
-              margin: 0,
-              fontSize: '20px',
-              fontWeight: 'bold',
-              color: themeValues.colors.foreground
-            }}>
+            <h1 className="master-voyage__title">
               Master Voyage Performance Summary
             </h1>
-            <p style={{
-              margin: '8px 0 0 0',
-              fontSize: '12px',
-              color: themeValues.colors.textSecondary || '#666'
-            }}>
+            <p className="master-voyage__subtitle">
               YTD performance on Occupancy YTD, Target and Budget, Cabins Availability, Fares per person, Outstanding group payments, and Last Week Performance by Passenger Type, and FIT ROS for Last 4 Weeks.
             </p>
           </div>
           {onRefresh && (
             <button
               onClick={onRefresh}
-              style={{
-                padding: '6px 12px',
-                fontSize: '12px',
-                border: `1px solid ${themeValues.colors.border || '#333333'}`,
-                borderRadius: '4px',
-                cursor: 'pointer',
-                background: themeValues.colors.cardBackground || themeValues.colors.background || '#2a2a2a',
-                color: themeValues.colors.foreground || '#ffffff',
-                fontWeight: '500'
-              }}
+              className="master-voyage__refresh"
             >
               ↻ Refresh
             </button>
@@ -764,31 +710,15 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, theme, onRefresh }) => 
       </div>
 
       {/* Table Container */}
-      <div style={{
-        flex: 1,
-        overflow: 'hidden',
-        padding: '8px'
-      }}>
+      <div className="master-voyage__table">
         <div 
           ref={tableRef} 
-          style={{ 
-            height: "100%", 
-            width: "100%"
-          }} 
+          className="master-voyage__table-host"
         />
       </div>
 
       {/* Footer */}
-      <div style={{
-        padding: '8px 16px',
-        borderTop: `1px solid ${themeValues.colors.border || '#e0e0e0'}`,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        fontSize: '12px',
-        color: themeValues.colors.textSecondary || '#666',
-        background: themeValues.colors.glass || themeValues.colors.background
-      }}>
+      <div className="master-voyage__footer">
         <div>Data updated Weekly</div>
         <div>Data to: {currentDate}</div>
       </div>

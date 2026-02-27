@@ -62,7 +62,7 @@ export const useTableDataWithContext = ({
       const mappedFilters = contextMapperRef.current(eventDetail);
       // Remove null/undefined values
       const cleanFilters = Object.fromEntries(
-        Object.entries(mappedFilters).filter(([_, v]) => v != null)
+        Object.entries(mappedFilters).filter(([, v]) => v != null)
       );
       return Object.keys(cleanFilters).length > 0 ? cleanFilters : null;
     } catch (err) {

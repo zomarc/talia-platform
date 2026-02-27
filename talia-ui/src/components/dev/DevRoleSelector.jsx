@@ -14,17 +14,18 @@ const DevRoleSelector = ({ inDropdown = false }) => {
   const [currentRole, setCurrentRole] = useState(user?.role || 'ADMIN');
   const [isCollapsed, setIsCollapsed] = useState(true); // Closed by default
 
+  // Update current role when user changes (dev mode only)
+  useEffect(() => {
+    if (!isDevMode) return;
+    if (user?.role) {
+      setCurrentRole(user.role);
+    }
+  }, [isDevMode, user?.role]);
+
   // Only show in dev mode
   if (!isDevMode) {
     return null;
   }
-
-  // Update current role when user changes
-  useEffect(() => {
-    if (user?.role) {
-      setCurrentRole(user.role);
-    }
-  }, [user?.role]);
 
   const roles = ['ADMIN', 'MANAGER', 'USER', 'GUEST'];
 

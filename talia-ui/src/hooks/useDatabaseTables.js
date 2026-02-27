@@ -101,6 +101,7 @@ export const useDatabaseTables = () => {
               max
             }
             latestSnapshotDate
+            latestAvailableData
             lastSync
             syncDuration
             recordsProcessed
@@ -139,7 +140,8 @@ export const useDatabaseTables = () => {
           rowCount: table.rowCount || 0,
           dateRange: table.dateRange || { min: null, max: null },
           actualDataRange: table.actualDataRange || { min: null, max: null },
-          latestSnapshotDate: table.latestSnapshotDate || table.dateRange?.max || null,
+          latestSnapshotDate: table.latestSnapshotDate || null,
+          latestAvailableData: table.latestAvailableData || null,
           lastSync: table.lastSync,
           syncDuration: table.syncDuration,
           recordsProcessed: table.recordsProcessed,
@@ -148,7 +150,7 @@ export const useDatabaseTables = () => {
           syncStatus: table.syncStatus || 'Not Synced',
           dataStatus: table.dataStatus || 'Empty',
           status: table.status || `${table.syncStatus || 'Not Synced'} • ${table.dataStatus || 'Empty'}`,
-          syncType: tableConfig?.syncType || table.syncType
+          syncType: table.syncType || tableConfig?.syncType
         };
       });
 
@@ -181,6 +183,7 @@ export const useDatabaseTables = () => {
               max
             }
             latestSnapshotDate
+            latestAvailableData
             lastSync
             syncDuration
             recordsProcessed
@@ -216,7 +219,8 @@ export const useDatabaseTables = () => {
               rowCount: table.rowCount || 0,
               dateRange: table.dateRange || { min: null, max: null },
               actualDataRange: table.actualDataRange || { min: null, max: null },
-              latestSnapshotDate: table.latestSnapshotDate || table.dateRange?.max || null,
+              latestSnapshotDate: table.latestSnapshotDate || null,
+              latestAvailableData: table.latestAvailableData || null,
               lastSync: table.lastSync,
               syncDuration: table.syncDuration,
               recordsProcessed: table.recordsProcessed,
@@ -224,7 +228,8 @@ export const useDatabaseTables = () => {
               lastError: table.lastError || null,
               syncStatus: table.syncStatus || 'Not Synced',
               dataStatus: table.dataStatus || 'Empty',
-              status: table.status || `${table.syncStatus || 'Not Synced'} • ${table.dataStatus || 'Empty'}`
+              status: table.status || `${table.syncStatus || 'Not Synced'} • ${table.dataStatus || 'Empty'}`,
+              syncType: table.syncType || tableConfig?.syncType
             }
           : t
       ));

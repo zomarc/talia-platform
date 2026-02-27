@@ -11,9 +11,7 @@ import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 import { transformVoyageData } from './utils/dataTransformation';
 
-const MasterVoyagePerformanceSummaryContainer = ({ filters = {}, theme: themeProp }) => {
-  // Use theme prop if provided, otherwise use default
-  const theme = themeProp || { colors: { foreground: '#ffffff', background: '#1a1a1a' } };
+const MasterVoyagePerformanceSummaryContainer = () => {
 
   // Use reusable hook for context-based data fetching
   // Show all master_sail data without filtering
@@ -51,9 +49,11 @@ const MasterVoyagePerformanceSummaryContainer = ({ filters = {}, theme: themePro
   // Handle empty data
   if (!transformedData || transformedData.length === 0) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center' }}>
+      <div className="focus-panel-empty">
         <p>No voyage performance data available</p>
-        <button onClick={refetch}>Retry</button>
+        <div className="focus-panel-empty__action">
+          <button className="talia-btn talia-btn--primary" onClick={refetch}>Retry</button>
+        </div>
       </div>
     );
   }
@@ -62,7 +62,6 @@ const MasterVoyagePerformanceSummaryContainer = ({ filters = {}, theme: themePro
   return (
     <MasterVoyagePerformanceSummaryPresenter 
       data={transformedData} 
-      theme={theme}
       onRefresh={refetch}
     />
   );

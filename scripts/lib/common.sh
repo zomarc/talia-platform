@@ -102,7 +102,10 @@ test_ssh_staging() {
 http_check() {
   local url="$1"
   local timeout="${2:-5}"
-  curl -sS -o /dev/null -w '%{http_code}' --max-time "${timeout}" "$url" 2>/dev/null || echo "000"
+  local code
+  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time "${timeout}" "$url" 2>/dev/null || true)
+  [[ -z "$code" ]] && code="000"
+  echo "$code"
 }
 
 # HTTP check with basic auth
@@ -111,7 +114,10 @@ http_check_auth() {
   local user="$2"
   local pass="$3"
   local timeout="${4:-5}"
-  curl -sS --basic -u "${user}:${pass}" -o /dev/null -w '%{http_code}' --max-time "${timeout}" "$url" 2>/dev/null || echo "000"
+  local code
+  code=$(curl -sS --basic -u "${user}:${pass}" -o /dev/null -w '%{http_code}' --max-time "${timeout}" "$url" 2>/dev/null || true)
+  [[ -z "$code" ]] && code="000"
+  echo "$code"
 }
 
 # Ping latency test

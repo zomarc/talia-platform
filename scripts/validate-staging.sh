@@ -15,7 +15,29 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SCRIPT_VERSION="2026-01-30.1"
+SCRIPT_VERSION="2026-02-12.2"
+
+RECOMMENDATIONS=()
+
+add_recommendation() {
+  local msg="$1"
+  local existing
+  for existing in "${RECOMMENDATIONS[@]:-}"; do
+    [[ "$existing" == "$msg" ]] && return 0
+  done
+  RECOMMENDATIONS+=("$msg")
+}
+
+print_recommendations() {
+  if [[ ${#RECOMMENDATIONS[@]} -eq 0 ]]; then
+    return 0
+  fi
+  print_section "RECOMMENDATIONS"
+  local msg
+  for msg in "${RECOMMENDATIONS[@]}"; do
+    echo -e "  - ${msg}"
+  done
+}
 
 # Source common functions
 if [[ -f "${SCRIPT_DIR}/lib/common.sh" ]]; then
@@ -220,6 +242,7 @@ check_performance() {
     echo -e "  ${GREEN}✅ Performance OK${NC}"
   else
     echo -e "  ${YELLOW}⚠️  Performance: ${perf_issues} issue(s)${NC}"
+    add_recommendation "Network performance issues: rerun ./scripts/validate-staging.sh perf"
   fi
   
   return $perf_issues
@@ -239,29 +262,32 @@ check_local_environment() {
   
   # GraphQL Server
   local gql_code
-  gql_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:4000/graphql 2>/dev/null || echo "000")
+  gql_code=$(http_check "http://127.0.0.1:4000/graphql" 3)
   if [[ "$gql_code" == "200" ]] || [[ "$gql_code" == "400" ]]; then
     check_status "GraphQL (localhost:4000)" "OK" "HTTP ${gql_code}"
   else
     check_status "GraphQL (localhost:4000)" "FAIL" "HTTP ${gql_code}" || ((local_issues++))
+    add_recommendation "Start API: cd talia-server && npm run start"
   fi
   
   # UI Server
   local ui_code
-  ui_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo "000")
+  ui_code=$(http_check "http://127.0.0.1:5173/" 3)
   if [[ "$ui_code" == "200" ]]; then
     check_status "UI (localhost:5173)" "OK" "HTTP ${ui_code}"
   else
     check_status "UI (localhost:5173)" "WARN" "HTTP ${ui_code} - run: cd talia-ui && npm run dev" || ((local_issues++))
+    add_recommendation "Start UI: cd talia-ui && npm run dev"
   fi
   
   # Supabase Kong
   local kong_code
-  kong_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:54321/ 2>/dev/null || echo "000")
+  kong_code=$(http_check "http://127.0.0.1:54321/" 3)
   if echo "$kong_code" | grep -qE '^(200|301|302|401|403|404)$'; then
     check_status "Supabase Kong (localhost:54321)" "OK" "HTTP ${kong_code}"
   else
     check_status "Supabase Kong (localhost:54321)" "FAIL" "HTTP ${kong_code}" || ((local_issues++))
+    add_recommendation "Start Supabase containers (Docker)"
   fi
   
   print_subsection "Docker Containers:"
@@ -274,9 +300,11 @@ check_local_environment() {
       docker ps --format "table {{.Names}}\t{{.Status}}" 2>/dev/null | grep -E "(NAMES|supabase_)" | sed 's/^/    /'
     else
       check_status "Supabase containers" "WARN" "none running" || ((local_issues++))
+      add_recommendation "Start Supabase containers (Docker)"
     fi
   else
     check_status "Docker" "FAIL" "not available" || ((local_issues++))
+    add_recommendation "Start Docker Desktop"
   fi
   
   echo ""
@@ -335,6 +363,7 @@ check_staging_environment() {
       echo "    1. Check MiniPC is powered on"
       echo "    2. ping ${STAGING_HOST}"
       echo "    3. ssh ${STAGING_USER}@${STAGING_HOST}"
+      add_recommendation "Staging unreachable: check power/network, then ping/ssh ${STAGING_HOST}"
     fi
   fi
   
@@ -370,5 +399,6 @@ if $CHECK_PERF && ! $QUICK_MODE; then
   check_performance || TOTAL_ISSUES=$((TOTAL_ISSUES + $?))
 fi
 
+print_recommendations
 print_summary $TOTAL_ISSUES
 exit $TOTAL_ISSUES

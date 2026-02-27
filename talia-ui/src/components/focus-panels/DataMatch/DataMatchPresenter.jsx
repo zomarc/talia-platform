@@ -8,7 +8,7 @@ import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
 import { emitSailClear, emitSailSelect, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
-const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }) => {
+const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const [tableInitialized, setTableInitialized] = useState(false);
@@ -147,7 +147,7 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
           const aMatch = parseInt(a.split('/')[0]) || 0;
           const bMatch = parseInt(b.split('/')[0]) || 0;
           return aMatch - bMatch;
-        } catch (e) {
+        } catch {
           return 0;
         }
       }
@@ -224,7 +224,7 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
 
         // Register event listeners using Tabulator's .on() method (same as SailingTablePresenter)
         instanceRef.current.on("rowClick", (e, row) => {
-          try { row?.select?.(); } catch {}
+          try { row?.select?.(); } catch { /* noop */ }
         });
 
         instanceRef.current.on("rowSelected", (row) => {
@@ -314,112 +314,52 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
     }
   }, [transformedData, columns, tableInitialized]);
 
-  const defaultTheme = {
-    colors: {
-      background: '#ffffff',
-      foreground: '#2b2b2b'
-    }
-  };
-
-  const themeValues = theme || defaultTheme;
-
   return (
-    <div style={{
-      height: '100%',
-      width: '100%',
-      position: 'relative',
-      background: themeValues.colors.background,
-      color: themeValues.colors.foreground,
-      display: 'flex',
-      flexDirection: 'column'
-    }}>
+    <div className="data-match">
       {/* Filter Panel */}
-      <div style={{
-        padding: '12px',
-        borderBottom: `1px solid ${themeValues.colors.border || '#333333'}`,
-        display: 'flex',
-        gap: '12px',
-        flexWrap: 'wrap',
-        alignItems: 'center'
-      }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div className="data-match__filters">
+        <label className="data-match__label">
           <span>Ship Code:</span>
           <input
             type="text"
             value={filters.ship_code || ''}
             onChange={(e) => onFiltersChange({ ...filters, ship_code: e.target.value || null })}
             placeholder="Filter by ship code"
-            style={{
-              padding: '4px 8px',
-              border: `1px solid ${themeValues.colors.border || '#333333'}`,
-              borderRadius: '4px',
-              background: themeValues.colors.cardBackground || themeValues.colors.background,
-              color: themeValues.colors.foreground,
-              width: '120px'
-            }}
+            className="data-match__input"
           />
         </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <label className="data-match__label">
           <span>Sail Code:</span>
           <input
             type="text"
             value={filters.sail_code || ''}
             onChange={(e) => onFiltersChange({ ...filters, sail_code: e.target.value || null })}
             placeholder="Filter by sail code"
-            style={{
-              padding: '4px 8px',
-              border: `1px solid ${themeValues.colors.border || '#333333'}`,
-              borderRadius: '4px',
-              background: themeValues.colors.cardBackground || themeValues.colors.background,
-              color: themeValues.colors.foreground,
-              width: '120px'
-            }}
+            className="data-match__input"
           />
         </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <label className="data-match__label">
           <span>Date From:</span>
           <input
             type="date"
             value={filters.date_from || ''}
             onChange={(e) => onFiltersChange({ ...filters, date_from: e.target.value || null })}
-            style={{
-              padding: '4px 8px',
-              border: `1px solid ${themeValues.colors.border || '#333333'}`,
-              borderRadius: '4px',
-              background: themeValues.colors.cardBackground || themeValues.colors.background,
-              color: themeValues.colors.foreground
-            }}
+            className="data-match__input data-match__input--date"
           />
         </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <label className="data-match__label">
           <span>Date To:</span>
           <input
             type="date"
             value={filters.date_to || ''}
             onChange={(e) => onFiltersChange({ ...filters, date_to: e.target.value || null })}
-            style={{
-              padding: '4px 8px',
-              border: `1px solid ${themeValues.colors.border || '#333333'}`,
-              borderRadius: '4px',
-              background: themeValues.colors.cardBackground || themeValues.colors.background,
-              color: themeValues.colors.foreground
-            }}
+            className="data-match__input data-match__input--date"
           />
         </label>
         {onRefresh && (
           <button
             onClick={onRefresh}
-            style={{
-              padding: '6px 12px',
-              fontSize: '12px',
-              border: `1px solid ${themeValues.colors.border || '#333333'}`,
-              borderRadius: '4px',
-              cursor: 'pointer',
-              background: themeValues.colors.cardBackground || themeValues.colors.background || '#2a2a2a',
-              color: themeValues.colors.foreground || '#ffffff',
-              fontWeight: '500',
-              marginLeft: 'auto'
-            }}
+            className="talia-btn talia-btn--small data-match__refresh"
           >
             ↻ Refresh
           </button>
@@ -429,12 +369,7 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }
       {/* Table */}
       <div 
         ref={tableRef} 
-        style={{ 
-          height: '100%', 
-          width: '100%',
-          flex: 1,
-          overflow: 'hidden'
-        }} 
+        className="data-match__table"
       />
     </div>
   );

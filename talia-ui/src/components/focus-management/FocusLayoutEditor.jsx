@@ -109,13 +109,9 @@ const FocusLayoutEditor = ({ focusId, onSave, onCancel }) => {
         gridCells.push(
           <div
             key={`${row}-${col}`}
-            className={`grid-cell ${getCellStatus(row, col)}`}
+            className={`grid-cell ${getCellStatus(row, col)} grid-col-start-${col + 1} grid-row-start-${row + 1}`}
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, { x: col, y: row, width: 1, height: 1 })}
-            style={{
-              gridColumn: col + 1,
-              gridRow: row + 1
-            }}
           />
         );
       }
@@ -139,12 +135,7 @@ const FocusLayoutEditor = ({ focusId, onSave, onCancel }) => {
     return (
       <div
         key={component.id}
-        className={`layout-component ${!component.isVisible ? 'hidden' : ''}`}
-        style={{
-          gridColumn: `${x + 1} / span ${width}`,
-          gridRow: `${y + 1} / span ${height}`,
-          backgroundColor: getComponentColor(component.componentType)
-        }}
+        className={`layout-component layout-component--${component.componentType} ${!component.isVisible ? 'hidden' : ''} grid-col-start-${x + 1} grid-row-start-${y + 1} grid-col-span-${width} grid-row-span-${height}`}
         draggable
         onDragStart={(e) => handleDragStart(e, component.id)}
       >
@@ -172,20 +163,6 @@ const FocusLayoutEditor = ({ focusId, onSave, onCancel }) => {
         </div>
       </div>
     );
-  };
-
-  const getComponentColor = (componentType) => {
-    const colors = {
-      'table': '#e3f2fd',
-      'chart': '#f3e5f5',
-      'panel': '#e8f5e8',
-      'kpi-cards': '#fff3e0',
-      'occupancy-chart': '#fce4ec',
-      'revenue-breakdown': '#e0f2f1',
-      'exception-list': '#ffebee',
-      'itinerary-list': '#f1f8e9'
-    };
-    return colors[componentType] || '#f5f5f5';
   };
 
   if (loading) {
@@ -263,11 +240,7 @@ const FocusLayoutEditor = ({ focusId, onSave, onCancel }) => {
           </div>
           
           <div 
-            className="layout-grid"
-            style={{
-              gridTemplateColumns: `repeat(${gridSize.columns}, 1fr)`,
-              gridTemplateRows: `repeat(${gridSize.rows}, 1fr)`
-            }}
+            className={`layout-grid layout-grid--cols-${gridSize.columns} layout-grid--rows-${gridSize.rows}`}
           >
             {renderGrid()}
             {components.map(renderComponent)}

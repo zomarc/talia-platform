@@ -44,7 +44,6 @@ const formatPercentage = (value) => {
 };
 
 // Conditional formatters
-const performanceFormatter = createPerformanceFormatter(100);
 const deltaFormatter = createDeltaFormatter();
 const rowFormatter = createRowFormatter();
 
@@ -186,7 +185,7 @@ const VoyageReportPresenter = ({ data, onRefresh }) => {
           
           // Event handlers
           rowClick: (e, row) => {
-            try { row?.select?.(); } catch {}
+            try { row?.select?.(); } catch { /* noop */ }
           },
           rowSelectionChanged: (selectedData) => {
             const rec = selectedData?.[0];
@@ -214,7 +213,7 @@ const VoyageReportPresenter = ({ data, onRefresh }) => {
     return () => {
       cancelled = true;
       if (instanceRef.current) {
-        try { instanceRef.current.destroy(); } catch {}
+        try { instanceRef.current.destroy(); } catch { /* noop */ }
       }
     };
   }, [data?.length]);

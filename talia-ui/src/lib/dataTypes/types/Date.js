@@ -105,7 +105,7 @@ export const DateType = {
       // Fallback to ISO string
       try {
         return date.toISOString().split('T')[0];
-      } catch (e) {
+      } catch {
         return String(value);
       }
     }

@@ -75,7 +75,7 @@ const GoogleTrendsContainer = () => {
       const startDate = trends?.dateRange?.from;
       const endDate = trends?.dateRange?.to;
       
-      const result = await googleTrendsService.refreshTrends({
+      await googleTrendsService.refreshTrends({
         queries: selectedQueries.length > 0 ? selectedQueries : undefined,
         startDate,
         endDate

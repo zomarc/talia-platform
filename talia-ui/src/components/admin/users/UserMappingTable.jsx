@@ -88,12 +88,12 @@ const UserMappingTable = () => {
             {mappings.map((mapping, index) => (
               <tr key={index} className="admin-table-row">
                 <td className="admin-table-cell">
-                  <strong className="admin-mono" style={{ color: '#2E86AB', fontSize: '16px' }}>
+                  <strong className="admin-mono admin-mono--accent">
                     {mapping.taliaUserId}
                   </strong>
                 </td>
                 <td className="admin-table-cell">
-                  <code className="admin-mono" style={{ fontSize: '12px', color: '#6C757D', background: '#f8f9fa', padding: '2px 6px', borderRadius: '3px' }}>
+                  <code className="admin-mono admin-code-pill">
                     {mapping.supabaseAuthId}
                   </code>
                 </td>

@@ -958,6 +958,7 @@ export const typeDefs = `#graphql
     dateRange: TableDateRange!  # Configured sync date range (what should be synced)
     actualDataRange: TableDateRange  # Actual data range in table (what's actually loaded)
     latestSnapshotDate: String
+    latestAvailableData: String
     lastSync: String
     syncDuration: Int
     recordsProcessed: Int

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { StrictMode, useState, useEffect, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 
@@ -8,6 +9,7 @@ import './styles/tabulator-theme.css' // Tabulator theme (midnight from npm)
 import './styles/tabulator-condensed.css' // Condensed overrides (spacing/sizing only)
 import './styles/components.css'      // Shared component classes
 import './styles/dashboard.css'       // Dashboard-specific styles
+import './styles/focus-panels.css'    // Focus panel styles
 import './styles/dev-components.css' // Dev component styles (separate, does not affect other components)
 import './styles/mode-selector.css'  // Mode selector styles
 import './styles/status-bar.css'     // Status bar styles
@@ -54,13 +56,13 @@ console.log('📱 Document ready state:', document.readyState);
 
 // Global status and event state (shared across all modes)
 const DataManagementUnavailable = () => (
-  <div style={{ padding: '16px', fontSize: '12px', color: '#c7c7d1' }}>
+  <div className="talia-unavailable">
     Data Management is currently unavailable.
   </div>
 );
 
 const AdminLiteUnavailable = () => (
-  <div style={{ padding: '16px', fontSize: '12px', color: '#c7c7d1' }}>
+  <div className="talia-unavailable">
     Admin Lite is currently unavailable.
   </div>
 );
@@ -81,6 +83,7 @@ const globalStatusState = {
   statusMessage: null,
   currentEvent: null,
   persistedEvent: null,
+  dataStatus: null,
   listeners: new Set()
 };
 
@@ -97,6 +100,10 @@ window.__taliaStatus = {
       }, 5000);
     }
   },
+  setDataStatus: (dataStatus) => {
+    globalStatusState.dataStatus = dataStatus;
+    globalStatusState.listeners.forEach(listener => listener());
+  },
   subscribe: (listener) => {
     globalStatusState.listeners.add(listener);
     return () => globalStatusState.listeners.delete(listener);
@@ -104,7 +111,8 @@ window.__taliaStatus = {
   getState: () => ({
     statusMessage: globalStatusState.statusMessage,
     currentEvent: globalStatusState.currentEvent,
-    persistedEvent: globalStatusState.persistedEvent
+    persistedEvent: globalStatusState.persistedEvent,
+    dataStatus: globalStatusState.dataStatus
   })
 };
 
@@ -114,7 +122,8 @@ const DevSwitcher = () => {
   const [statusState, setStatusState] = useState({
     statusMessage: null,
     currentEvent: null,
-    persistedEvent: null
+    persistedEvent: null,
+    dataStatus: null
   });
   const isAdminLite = window.location.pathname === '/admin-lite';
   
@@ -255,9 +264,6 @@ const DevSwitcher = () => {
     );
   }
 
-  // Status bar is always visible (has mode selector), so always add padding
-  const statusBarHeight = 38;
-
   return (
     <StrictMode>
       {/* Global Status Bar - visible in all modes (includes mode selector and event log; Hide Panels toggles details) */}
@@ -265,18 +271,13 @@ const DevSwitcher = () => {
         statusMessage={statusState.statusMessage}
         currentEvent={statusState.currentEvent}
         persistedEvent={statusState.persistedEvent}
+        dataStatus={statusState.dataStatus}
         currentMode={mode}
         onModeChange={handleModeChange}
       />
       
       {/* Content with padding for status bar (always present) */}
-      <div style={{
-        paddingTop: `${statusBarHeight}px`,
-        transition: 'padding-top 0.3s ease',
-        minHeight: `calc(100vh - ${statusBarHeight}px)`,
-        height: `calc(100vh - ${statusBarHeight}px)`,
-        overflow: 'hidden'
-      }}>
+      <div className="talia-app-shell">
         {renderContent()}
       </div>
     </StrictMode>
@@ -303,6 +304,6 @@ if (!root) {
   } catch (error) {
     console.error('❌ React render error:', error);
     // Fallback: render error message directly to DOM
-    root.innerHTML = '<h1 style="color: red;">React Error: ' + error.message + '</h1>';
+    root.innerHTML = '<h1 class="talia-startup-error">React Error: ' + error.message + '</h1>';
   }
 }

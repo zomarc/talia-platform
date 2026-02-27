@@ -1,12 +1,9 @@
 import React, { useCallback, useRef, useEffect, useState } from "react";
 import { DockviewReact } from "dockview";
 import "dockview/dist/styles/dockview.css"; // required Dockview CSS
-// Legacy focus layouts - keeping for fallback only
-import { getFocusLayout, getAvailableFocuses } from "./data/focusLayouts";
 import reportRegistry from "./components/focus-panels/registry";
 import ReportEventMeta from "./components/shared/ReportEventMeta";
 import UserProfile from "./components/UserProfile";
-import { useSupabaseAuth } from "./contexts/SupabaseAuthContext";
 import { normalizeRole, isAdmin } from "./utils/roleUtils";
 import { GraphQLUtils } from "./lib/apolloClient";
 // Focus Management Integration
@@ -81,28 +78,6 @@ const ReportShell = ({ report, children }) => {
 // - Let Dockview handle all layout and resizing naturally
 // - Only use addPanel() with proper position references
 
-// Role-based focus filtering function (moved outside Dashboard component)
-const getAvailableFocusesForRole = (userRole) => {
-  const allFocuses = [
-    { id: 'performance', name: 'Performance Dashboard', icon: '📊', roles: ['admin', 'manager', 'user', 'guest'] },
-    { id: 'exception', name: 'Exception Management', icon: '⚠️', roles: ['admin', 'manager'] },
-    { id: 'itinerary', name: 'Itinerary Management', icon: '🗺️', roles: ['admin', 'manager'] },
-    { id: 'group', name: 'Group Management', icon: '👥', roles: ['admin', 'manager'] },
-    { id: 'promotion', name: 'Promotion Management', icon: '💎', roles: ['admin', 'manager'] },
-    { id: 'inventory', name: 'Inventory Management', icon: '📦', roles: ['admin', 'manager'] },
-    { id: 'setup', name: 'Talia Set-up', icon: '⚙️', roles: ['admin'] }
-  ];
-
-  return allFocuses
-    .filter(focus => 
-      focus.roles.includes(userRole) || focus.roles.includes('guest')
-    )
-    .map(focus => ({
-      ...focus,
-      available: true // All filtered focuses are available
-    }));
-};
-
 // Basic startup logging
 console.log('🚀 App.jsx file loaded');
 console.log('📦 React version:', React?.version);
@@ -176,22 +151,11 @@ for (const [id, c] of Object.entries(curvesById)) {
 
 // ---- Panel 1: Tabulator table (single-select with canvas-safe fallback) ----
 const TablePanel = React.memo(function TablePanel() {
-  const { theme, fontSize, selectedFont, spacingMode, fontFamily } = useTheme();
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const failSafeRef = useRef(null);    // ensure timeout is always cleared
   const builtRef = useRef(false);       // only redraw after tableBuilt
   const initializedRef = useRef(false);
-  const [filters, setFilters] = React.useState({
-    ship: '',
-    sailing: '',
-    status: '',
-    dateFrom: '',
-    dateTo: '',
-    bookedMin: '',
-    bookedMax: ''
-  });
-
   // Define panel close handler outside useEffect to avoid scoping issues
   const onPanelClosed = useCallback(() => { 
     try { 
@@ -204,8 +168,6 @@ const TablePanel = React.memo(function TablePanel() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    let ro = null;
 
     const waitForNonZeroSize = (el, timeout = 3000) => new Promise((resolve) => {
       const start = performance.now();
@@ -236,7 +198,7 @@ const TablePanel = React.memo(function TablePanel() {
         <div style="padding:6px 8px;font-family:ui-sans-serif,system-ui;font-size:13px">
           <div style="margin-bottom:6px;color:#a55">(Fallback table active)</div>
           <table style="width:100%; border-collapse:collapse">
-            <thead><tr>${headers.map(h=>`<th style=\"text-align:left;border-bottom:1px solid #e8dfd0;padding:4px 6px\">${h}</th>`).join("")}</tr></thead>
+            <thead><tr>${headers.map(h=>`<th style="text-align:left;border-bottom:1px solid #e8dfd0;padding:4px 6px">${h}</th>`).join("")}</tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>`;
@@ -259,7 +221,9 @@ const TablePanel = React.memo(function TablePanel() {
           }[id];
           if (rec) emitSelect(rec);
         });
-      } catch {}
+      } catch {
+        // noop
+      }
       console.log('[FallbackTable] rendered');
     };
 
@@ -372,7 +336,7 @@ const TablePanel = React.memo(function TablePanel() {
         // Give the layout one more frame to settle
         await new Promise((r) => requestAnimationFrame(() => r()));
 
-        const TabCtor = TabGlobal;
+        const TabCtor = Tabulator;
         instanceRef.current = new TabCtor(tableRef.current, {
           data,
           columns,
@@ -384,7 +348,7 @@ const TablePanel = React.memo(function TablePanel() {
           headerFilterLiveFilterDelay: 300, // delay for live filtering
           // Theme and font configuration
           rowClick: (e, row) => {
-            try { row?.select?.(); } catch {}
+            try { row?.select?.(); } catch { /* noop */ }
           },
           rowSelectionChanged: (selectedData /* array */) => {
             const rec = selectedData && selectedData[0];
@@ -397,13 +361,13 @@ const TablePanel = React.memo(function TablePanel() {
             }
           },
           cellClick: (e, cell) => {
-            try { cell.getRow()?.select?.(); } catch {}
+            try { cell.getRow()?.select?.(); } catch { /* noop */ }
           },
         });
         console.log('[Tabulator] instance created');
 
         // Listen for a clear selection from the toolbar
-        const onClear = () => { try { instanceRef.current?.deselectRow?.(); } catch {}; };
+        const onClear = () => { try { instanceRef.current?.deselectRow?.(); } catch { /* noop */ } };
         window.addEventListener(CLEAR_EVENT, onClear);
 
         // Add clear filters function to global scope for toolbar access
@@ -456,7 +420,7 @@ const TablePanel = React.memo(function TablePanel() {
 
     return () => {
       if (failSafeRef.current) { clearTimeout(failSafeRef.current); failSafeRef.current = null; }
-      try { instanceRef.current?.destroy?.(); } catch {}
+      try { instanceRef.current?.destroy?.(); } catch { /* noop */ }
       instanceRef.current = null;
       builtRef.current = false;
       initializedRef.current = false;
@@ -467,31 +431,16 @@ const TablePanel = React.memo(function TablePanel() {
   // This prevents interference with Dockview's drag and drop system
 
   return (
-    <div style={{ 
-      height: "100%", 
-      width: "100%", 
-      display: "flex", 
-      flexDirection: "column",
-      background: theme.colors.background,
-      color: theme.colors.foreground,
-      fontSize: `${fontSize}px`,
-      fontFamily: selectedFont.value
-    }}>
-      <div style={{ 
-        padding: "8px 12px", 
-        background: theme.colors.sidebarHeader, 
-        borderBottom: `1px solid ${theme.colors.sidebarBorder}`,
-        fontSize: `${fontSize - 1}px`,
-        color: theme.colors.textSecondary
-      }}>
+    <div className="dashboard-table-panel">
+      <div className="dashboard-table-panel__note">
         <strong>Table Filters:</strong> Use the filter controls in column headers to filter data. 
-        <span style={{ marginLeft: "8px", color: theme.colors.accent }}>
+        <span className="dashboard-table-panel__tip">
           💡 Tip: Click filter icons in column headers to filter by Ship, Sailing, Status, or numeric values
         </span>
       </div>
       <div 
         ref={tableRef} 
-        style={{ height: "100%", width: "100%", flex: 1 }} 
+        className="dashboard-table-panel__body"
       />
       {/* Tabulator styling configured via initTabulator() - CSS injected after Tabulator loads */}
     </div>
@@ -500,7 +449,7 @@ const TablePanel = React.memo(function TablePanel() {
 
 // ---- Panel 2: Chart.js line chart (single series + target; listens to SELECT_EVENT) ----
 const ChartPanel = React.memo(function ChartPanel() {
-  const { theme, fontSize, selectedFont, fontFamily } = useTheme();
+  const { theme, fontSize, selectedFont } = useTheme();
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
   const initializedRef = useRef(false);
@@ -576,7 +525,7 @@ const ChartPanel = React.memo(function ChartPanel() {
         
         // Also check Chart.js registry for any chart using this canvas
         try {
-          const allCharts = ChartGlobal.instances || {};
+          const allCharts = Chart.instances || {};
           Object.keys(allCharts).forEach(id => {
             const chart = allCharts[id];
             if (chart && chart.canvas === canvasRef.current) {
@@ -713,18 +662,10 @@ const ChartPanel = React.memo(function ChartPanel() {
   // This prevents interference with Dockview's drag and drop system
 
   return (
-    <div style={{ 
-      height: "100%", 
-      width: "100%", 
-      position: "relative",
-      background: theme.colors.background,
-      color: theme.colors.foreground,
-      fontSize: `${fontSize}px`,
-      fontFamily: selectedFont.value
-    }}>
+    <div className="dashboard-chart-panel">
       <canvas 
         ref={canvasRef} 
-        style={{ height: "100%", width: "100%" }} 
+        className="dashboard-chart-panel__canvas"
       />
     </div>
   );
@@ -732,28 +673,18 @@ const ChartPanel = React.memo(function ChartPanel() {
 
 // ---- Simple text panel (fallback/info) ----
 function InfoPanel(props) {
-  const { theme, fontSize, selectedFont, fontFamily } = useTheme();
   const title = props?.params?.panel?.title || props?.params?.title || "Panel";
   return (
-    <div style={{ 
-      height: "100%", 
-      width: "100%", 
-      padding: 16, 
-      fontSize: `${fontSize}px`, 
-      fontFamily: selectedFont.value,
-      lineHeight: 1.5, 
-      color: theme.colors.foreground, 
-      background: theme.colors.background 
-    }}>
-      <p style={{ margin: 0, marginBottom: 8, fontWeight: 600 }}>{title}</p>
-      <p style={{ margin: 0 }}>This is a generic panel. Drag the tab to dock/split.</p>
+    <div className="dashboard-info-panel">
+      <p className="dashboard-info-panel__title">{title}</p>
+      <p className="dashboard-info-panel__text">This is a generic panel. Drag the tab to dock/split.</p>
     </div>
   );
 }
 
 // ---- VS Code-style Sidebar Component ----
-function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFiltersChange, width, saveLayout, loadLayout, addPanel, clearSelection, clearFilters, resetLayout, createLayoutPreset, currentFocus, onFocusChange, userRole, taliaFocuses, focusLoading, focusError, initializeStandardTaliaFocuses, onSaveCurrentLayout }) {
-  const { theme, fontSize, setFontSize, fontFamily, setFontFamily, selectedFont, fontFamilies } = useTheme();
+function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFiltersChange, saveLayout, loadLayout, addPanel, clearSelection, clearFilters, resetLayout, createLayoutPreset, currentFocus, onFocusChange, userRole, focusLoading, focusError, onSaveCurrentLayout }) {
+  const { fontFamily, setFontFamily, selectedFont, fontFamilies } = useTheme();
 
   const reportGroups = React.useMemo(() => {
     const items = Object.values(reportRegistry)
@@ -808,15 +739,9 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
     });
   };
 
-  // Dynamic styles - only for truly dynamic values (width, display)
-  const sidebarDynamicStyle = {
-    width: isCollapsed ? '48px' : `${width}px`,
-    transition: isCollapsed ? 'width 0.2s ease' : 'none',
-  };
-
   if (isCollapsed) {
     return (
-      <div className="dashboard-sidebar" style={sidebarDynamicStyle}>
+      <div className="dashboard-sidebar dashboard-sidebar--collapsed">
         <div className="dashboard-sidebar__header">
           <button
             onClick={onToggle}
@@ -835,7 +760,7 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
   }
 
   return (
-    <div className="dashboard-sidebar" style={sidebarDynamicStyle}>
+    <div className="dashboard-sidebar">
       {/* Header */}
       <div className="dashboard-explorer__header">
         <span className="dashboard-explorer__title">Explorer</span>
@@ -850,13 +775,7 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
       {/* Sections Container - Flex container for dynamic sizing */}
       <div className="dashboard-explorer__content">
         {/* Enhanced Focus Section with New Focus Management */}
-      <div className="dashboard-section dashboard-section--focus" style={{ 
-        flex: expandedSections.focus ? '1' : '0 0 auto',
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '0',
-        overflow: 'hidden'
-      }}>
+      <div className={`dashboard-section dashboard-section--focus ${expandedSections.focus ? 'dashboard-section--expanded' : 'dashboard-section--collapsed'}`}>
         <div 
           className="dashboard-section__header"
           onClick={() => toggleSection('focus')}
@@ -866,13 +785,7 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
             ▶
           </span>
         </div>
-        <div className={`dashboard-section__content ${expandedSections.focus ? 'dashboard-section__content--expanded' : ''}`} style={{ 
-          display: expandedSections.focus ? 'flex' : 'none',
-          flexDirection: 'column',
-          flex: expandedSections.focus ? '1' : '0 0 auto',
-          minHeight: '0',
-          overflow: 'hidden'
-        }}>
+        <div className={`dashboard-section__content ${expandedSections.focus ? 'dashboard-section__content--expanded' : ''}`}>
           {/* Show loading state */}
           {focusLoading && (
             <div className="dashboard-loading">
@@ -1112,7 +1025,7 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
             >
               👥 Talia Users
             </button>
-            <div className="dashboard-form-hint" style={{ marginTop: '8px', padding: '4px', background: 'var(--theme-hover)', borderRadius: '4px' }}>
+            <div className="dashboard-form-hint dashboard-form-hint--admin">
               💡 Admin tools for managing users and system configuration
             </div>
           </div>
@@ -1135,7 +1048,6 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
 
 // ---- GraphQL Data Panel ----
 const GraphQLPanel = React.memo(function GraphQLPanel(props) {
-  const { theme, fontSize, selectedFont, fontFamily } = useTheme();
   debugLog('GraphQLPanel render', { props });
 
   const title = props?.params?.panel?.title || props?.params?.title || "GraphQL Data";
@@ -1234,86 +1146,37 @@ const GraphQLPanel = React.memo(function GraphQLPanel(props) {
   const items = data?.[dataType] || [];
   
   return (
-    <div style={{ 
-      height: "100%", 
-      width: "100%", 
-      display: "flex", 
-      flexDirection: "column",
-      background: theme.colors.background,
-      color: theme.colors.foreground,
-      fontSize: `${fontSize}px`
-    }}>
-      <div style={{ 
-        padding: "8px 12px", 
-        background: theme.colors.sidebarHeader, 
-        borderBottom: `1px solid ${theme.colors.sidebarBorder}`,
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center"
-      }}>
-        <div style={{ fontSize: `${fontSize + 2}px`, fontWeight: 600, color: theme.colors.foreground }}>
+    <div className="dashboard-graphql-panel">
+      <div className="dashboard-graphql-panel__header">
+        <div className="dashboard-graphql-panel__title">
           {title} ({items.length} items)
         </div>
         <button 
           onClick={handleRefresh}
-          style={{ 
-            padding: "4px 8px", 
-            background: theme.colors.accent, 
-            color: "white", 
-            border: "none", 
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontSize: `${fontSize - 1}px`
-          }}
+          className="talia-btn talia-btn--primary talia-btn--small"
         >
           🔄 Refresh
         </button>
       </div>
       
       <div 
-        style={{ 
-          flex: 1, 
-          padding: 16, 
-          overflow: "auto",
-          background: theme.colors.background,
-          color: theme.colors.foreground
-        }}
+        className="dashboard-graphql-panel__content"
       >
         {items.length === 0 ? (
-          <div style={{ 
-            textAlign: "center", 
-            color: theme.colors.textSecondary, 
-            fontSize: `${fontSize + 2}px` 
-          }}>
+          <div className="dashboard-graphql-panel__empty">
             No {dataType} data available
           </div>
         ) : (
-          <div style={{ display: "grid", gap: 12 }}>
+          <div className="dashboard-graphql-grid">
             {items.map((item, index) => (
               <div 
                 key={item.id || index}
-                style={{ 
-                  padding: 12, 
-                  background: theme.colors.sidebarHeader, 
-                  border: `1px solid ${theme.colors.border}`, 
-                  borderRadius: "6px",
-                  fontSize: `${fontSize + 1}px`
-                }}
+                className="dashboard-graphql-card"
               >
-                <div style={{ 
-                  fontWeight: 600, 
-                  marginBottom: 6, 
-                  color: theme.colors.foreground 
-                }}>
+                <div className="dashboard-graphql-card__title">
                   {item.title || item.Ship_Name || item.Package_Name || `Item ${item.id || item.Ship_Id}`}
                 </div>
-                <div style={{ 
-                  display: "grid", 
-                  gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", 
-                  gap: 8, 
-                  fontSize: `${fontSize}px`, 
-                  color: theme.colors.textSecondary 
-                }}>
+                <div className="dashboard-graphql-card__meta">
                   {Object.entries(item).map(([key, value]) => (
                     key !== 'title' && key !== 'Ship_Name' && key !== 'Package_Name' && (
                       <div key={key}>
@@ -1331,8 +1194,8 @@ const GraphQLPanel = React.memo(function GraphQLPanel(props) {
   );
 });
 
-function Dashboard({ user, mode, onModeChange }) {
-  const { theme, currentTheme, setCurrentTheme, fontSize, selectedFont, fontFamily, spacingMode, setFontSize, setFontFamily, setSpacingMode } = useTheme();
+function Dashboard({ user }) {
+  const { theme, currentTheme, setCurrentTheme, fontSize, fontFamily, spacingMode, setFontSize, setFontFamily, setSpacingMode } = useTheme();
 
   const reportComponentMap = React.useMemo(() => {
     const map = {};
@@ -1360,18 +1223,9 @@ function Dashboard({ user, mode, onModeChange }) {
   // Focus Management Integration
   const {
     focuses: taliaFocuses,
-    currentFocus: dbCurrentFocus,
     loading: focusLoading,
     error: focusError,
-    loadFocus: loadTaliaFocus,
-    createFocus: createTaliaFocus,
-    updateFocus: updateTaliaFocus,
-    deleteFocus: deleteTaliaFocus,
-    toggleFavorite,
-    initializeStandardFocuses: initializeStandardTaliaFocuses,
-    favoriteFocuses,
-    taliaUserId,
-    canModifyFocus: canModifyFocus
+    updateFocus: updateTaliaFocus
   } = useFocusManagement();
   
   // Get role from user or localStorage (normalized)
@@ -1447,6 +1301,7 @@ function Dashboard({ user, mode, onModeChange }) {
   }, []);
 
   const apiRef = useRef(null);
+  const shellRef = useRef(null);
   const initializedRef = useRef(false); // guard for React 18 StrictMode
 
   // Sidebar state
@@ -1458,6 +1313,12 @@ function Dashboard({ user, mode, onModeChange }) {
     dateFrom: '',
     dateTo: ''
   });
+
+  useEffect(() => {
+    if (!shellRef.current) return;
+    const widthValue = sidebarCollapsed ? '48px' : `${sidebarWidth}px`;
+    shellRef.current.style.setProperty('--dashboard-sidebar-width', widthValue);
+  }, [sidebarCollapsed, sidebarWidth]);
 
   // Focus navigation state - now using database focus system
   const [currentFocus, setCurrentFocus] = useState(null);
@@ -1886,7 +1747,7 @@ function Dashboard({ user, mode, onModeChange }) {
           if (!isValidLayout) {
             console.warn('Invalid layout data structure, clearing corrupted data');
             localStorage.removeItem(LAYOUT_KEY);
-            createDefaultLayout(api);
+            createDefaultLayout();
             return;
           }
           
@@ -1918,7 +1779,7 @@ function Dashboard({ user, mode, onModeChange }) {
               console.warn('Failed to restore layout, clearing corrupted data:', e);
               // Clear corrupted layout data
               localStorage.removeItem(LAYOUT_KEY);
-              createDefaultLayout(api);
+              createDefaultLayout();
             }
           }, 500);
           
@@ -1935,7 +1796,7 @@ function Dashboard({ user, mode, onModeChange }) {
     if (preset) {
       loadLayoutPreset(api);
     } else {
-      createDefaultLayout(api);
+      createDefaultLayout();
     }
     
     // REMOVED: forcePanelResize function - let Dockview handle layout naturally
@@ -1966,7 +1827,7 @@ function Dashboard({ user, mode, onModeChange }) {
     // No MutationObserver or DOM manipulation needed
   }, []);
 
-  const createDefaultLayout = useCallback(async (api) => {
+  const createDefaultLayout = useCallback(async () => {
     // Load the first available focus layout as the default
     // Try to find a focus by name "Performance" or use the first available focus
     console.log('Creating default layout using first available focus');
@@ -2096,57 +1957,29 @@ function Dashboard({ user, mode, onModeChange }) {
       {/* Status Bar is now at top level (main.jsx) - not rendered here */}
       {/* DevRoleSelector is now in ModeSelector dropdown */}
       <div 
-      className={`dockview-theme-${theme.name.toLowerCase().replace(' ', '-')}`} 
-      style={{ 
-        height: "100vh", 
-        width: "100vw", 
-        overflow: "hidden", 
-        background: theme.colors.background, 
-        color: theme.colors.foreground,
-        fontSize: `${fontSize}px`,
-        fontFamily: selectedFont.value
-      }}
+      className={`dashboard-shell dockview-theme-${theme.name.toLowerCase().replace(' ', '-')}`} 
+      ref={shellRef}
     >
       {/* Top Toolbar */}
-      <div style={{ 
-        display: "flex", 
-        gap: 8, 
-        padding: "8px 10px", 
-        borderBottom: `1px solid ${theme.colors.sidebarBorder}`, 
-        background: theme.colors.sidebar, 
-        alignItems: "center" 
-      }}>
+      <div className="dashboard-toolbar">
         <button 
           onClick={toggleSidebar} 
-          style={{ 
-            background: theme.colors.accent, 
-            color: "white", 
-            border: "none", 
-            borderRadius: "4px", 
-            padding: "4px 8px", 
-            cursor: "pointer",
-            fontSize: `${fontSize - 1}px`
-          }}
+          className="dashboard-toolbar__toggle"
         >
           {sidebarCollapsed ? "☰ Show Sidebar" : "◀ Hide Sidebar"}
         </button>
-        <div style={{ 
-          marginLeft: "auto", 
-          fontSize: `${fontSize - 1}px`, 
-          color: theme.colors.textSecondary 
-        }}>
+        <div className="dashboard-toolbar__meta">
           Dockview Dashboard - {theme.name}
         </div>
       </div>
 
-      <div style={{ display: "flex", height: "calc(100vh - 48px)", position: "relative" }}>
+      <div className="dashboard-layout">
         <Sidebar
           isCollapsed={sidebarCollapsed}
           onToggle={toggleSidebar}
           onAddPanel={addNewPanel}
           globalFilters={globalFilters}
           onGlobalFiltersChange={handleGlobalFiltersChange}
-          width={sidebarWidth}
           saveLayout={saveLayout}
           loadLayout={loadLayout}
           addPanel={addPanel}
@@ -2157,49 +1990,25 @@ function Dashboard({ user, mode, onModeChange }) {
           currentFocus={currentFocus}
           onFocusChange={handleFocusChange}
           userRole={userRole}
-          taliaFocuses={taliaFocuses}
           focusLoading={focusLoading}
           focusError={focusError}
-          initializeStandardTaliaFocuses={initializeStandardTaliaFocuses}
           onSaveCurrentLayout={handleSaveCurrentLayoutToFocus}
         />
         
         {/* Resize Handle - positioned between sidebar and main content */}
         {!sidebarCollapsed && (
           <div
-            style={{
-              width: '4px',
-              height: '100%',
-              background: theme.colors.accentLight,
-              cursor: 'col-resize',
-              flexShrink: 0,
-              transition: 'background 0.2s ease'
-            }}
+            className="dashboard-resize-handle"
             onMouseDown={handleMouseDown}
-            onMouseEnter={(e) => {
-              e.target.style.background = theme.colors.accentHover;
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = theme.colors.accentLight;
-            }}
           />
         )}
         
         {isResizing && (
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: `${sidebarWidth + 4}px`,
-            width: '2px',
-            height: '100%',
-            background: theme.colors.accent,
-            zIndex: 1000,
-            pointerEvents: 'none'
-          }} />
+          <div className="dashboard-resize-guide" />
         )}
         
         {/* Dockview container with flex: 1 to fill remaining space */}
-        <div style={{ flex: 1, height: "100%", minWidth: 0 }}>
+        <div className="dashboard-content">
           <DockviewReact 
             components={{ 
               panel: InfoPanel, 
@@ -2216,7 +2025,7 @@ function Dashboard({ user, mode, onModeChange }) {
               "context-row-monitor": ContextRowMonitor
             }} 
             onReady={onReady}
-            style={{ height: "100%", width: "100%" }} 
+            className="dashboard-dockview"
           />
         </div>
       </div>
@@ -2321,7 +2130,7 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: '20px', color: 'red', fontFamily: 'monospace' }}>
+        <div className="dashboard-error-boundary">
           <h2>Application Error</h2>
           <p>Error: {this.state.error?.message}</p>
           <p>Check console for details</p>

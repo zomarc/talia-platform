@@ -6,22 +6,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
-const EventMonitor = ({ componentFilter = null, theme }) => {
+const EventMonitor = () => {
   const [events, setEvents] = useState([]);
   const [isPaused, setIsPaused] = useState(false);
   const [filter, setFilter] = useState('');
   const [grouped, setGrouped] = useState(false);
   const eventIdCounterRef = useRef(0);
   const lastEventRef = useRef(null);
-
-  // Use theme colors or fallback to defaults
-  const colors = theme?.colors || {};
-  const bgColor = colors.cardBackground || colors.background || '#1a1a1a';
-  const fgColor = colors.foreground || '#ffffff';
-  const textSecondary = colors.textSecondary || '#b0b0b0';
-  const borderColor = colors.border || '#333333';
-  const accentColor = colors.accent || '#b08d57';
-  const cardBg = colors.cardBackground || '#2a2a2a';
 
   // Intercept dispatchEvent to catch ALL custom events - this is the primary capture mechanism
   useEffect(() => {
@@ -177,84 +168,37 @@ const EventMonitor = ({ componentFilter = null, theme }) => {
     : null;
 
   return (
-    <div style={{
-      background: bgColor,
-      padding: '12px',
-      borderRadius: '8px',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      color: fgColor
-    }}>
-      <div style={{ marginBottom: '8px' }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '6px'
-        }}>
-          <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: fgColor }}>
+    <div className="event-monitor">
+      <div className="event-monitor__header">
+        <div className="event-monitor__title-row">
+          <h4 className="event-monitor__title">
             📡 Events {events.length > 0 && `(${events.length})`}
           </h4>
-          <div style={{ display: 'flex', gap: '4px' }}>
+          <div className="event-monitor__actions">
             <button
               onClick={() => setIsPaused(!isPaused)}
-              style={{
-                padding: '2px 6px',
-                background: isPaused ? '#999' : '#f44336',
-                color: 'white',
-                border: 'none',
-                borderRadius: '3px',
-                cursor: 'pointer',
-                fontSize: '10px',
-                fontWeight: '500'
-              }}
+              className={`event-monitor__btn event-monitor__btn--pause ${isPaused ? 'is-paused' : ''}`}
               title={isPaused ? 'Resume' : 'Pause'}
             >
               {isPaused ? '▶' : '⏸'}
             </button>
             <button
               onClick={exportEvents}
-              style={{
-                padding: '2px 6px',
-                background: borderColor,
-                color: fgColor,
-                border: 'none',
-                borderRadius: '3px',
-                cursor: 'pointer',
-                fontSize: '10px'
-              }}
+              className="event-monitor__btn event-monitor__btn--neutral"
               title="Export events"
             >
               💾
             </button>
             <button
               onClick={() => setGrouped(!grouped)}
-              style={{
-                padding: '2px 6px',
-                background: grouped ? accentColor : borderColor,
-                color: grouped ? 'white' : fgColor,
-                border: 'none',
-                borderRadius: '3px',
-                cursor: 'pointer',
-                fontSize: '10px'
-              }}
+              className={`event-monitor__btn event-monitor__btn--neutral event-monitor__btn--group ${grouped ? 'is-active' : ''}`}
               title="Group by event type"
             >
               📊
             </button>
             <button
               onClick={clearEvents}
-              style={{
-                padding: '2px 6px',
-                background: borderColor,
-                color: fgColor,
-                border: 'none',
-                borderRadius: '3px',
-                cursor: 'pointer',
-                fontSize: '10px'
-              }}
+              className="event-monitor__btn event-monitor__btn--neutral"
               title="Clear events"
             >
               🗑️
@@ -266,88 +210,36 @@ const EventMonitor = ({ componentFilter = null, theme }) => {
           placeholder="Filter events..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '4px 8px',
-            border: `1px solid ${borderColor}`,
-            borderRadius: '3px',
-            fontSize: '11px',
-            background: cardBg,
-            color: fgColor
-          }}
+          className="event-monitor__filter"
         />
       </div>
 
       {filteredEvents.length === 0 ? (
-        <div style={{
-          textAlign: 'center',
-          padding: '10px',
-          color: textSecondary,
-          fontSize: '11px',
-          fontStyle: 'italic'
-        }}>
+        <div className="event-monitor__empty">
           {isPaused ? 'Paused' : filter ? 'No matching events' : 'No events captured yet. Select a sail to trigger events.'}
         </div>
       ) : groupedEvents ? (
-        <div style={{
-          maxHeight: '280px',
-          overflowY: 'auto',
-          border: `1px solid ${borderColor}`,
-          borderRadius: '4px',
-          padding: '6px',
-          flex: 1
-        }}>
+        <div className="event-monitor__list">
           {Object.entries(groupedEvents).map(([eventName, eventGroup]) => (
-            <div key={eventName} style={{ marginBottom: '8px' }}>
-              <div style={{
-                padding: '4px 8px',
-                background: accentColor,
-                color: 'white',
-                borderRadius: '3px',
-                fontSize: '11px',
-                fontWeight: '600',
-                marginBottom: '4px'
-              }}>
+            <div key={eventName} className="event-monitor__group">
+              <div className="event-monitor__group-header">
                 {eventName} ({eventGroup.length})
               </div>
               {eventGroup.map((event, index) => (
                 <div
                   key={event.id || index}
-                  style={{
-                    padding: '4px 8px',
-                    marginLeft: '12px',
-                    marginBottom: '2px',
-                    background: cardBg,
-                    border: `1px solid ${borderColor}`,
-                    borderRadius: '3px',
-                    fontSize: '10px',
-                    color: fgColor
-                  }}
+                  className="event-monitor__group-item"
                 >
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <span style={{ color: textSecondary }}>{event.timestamp}</span>
+                  <div className="event-monitor__meta">
+                    <span className="event-monitor__timestamp">{event.timestamp}</span>
                     {event.detail !== undefined && event.detail !== null && (
-                      <span style={{ color: textSecondary, fontSize: '9px' }}>
+                      <span className="event-monitor__detail-type">
                         {typeof event.detail === 'object' ? 'Object' : 'String'}
                       </span>
                     )}
                   </div>
                   {event.detail !== undefined && event.detail !== null && (
-                    <div style={{
-                      padding: '4px 6px',
-                      marginTop: '4px',
-                      background: bgColor,
-                      borderRadius: '2px',
-                      fontSize: '9px',
-                      fontFamily: 'monospace',
-                      maxHeight: '80px',
-                      overflow: 'auto',
-                      color: fgColor
-                    }}>
+                    <div className="event-monitor__detail">
                       {typeof event.detail === 'object' 
                         ? JSON.stringify(event.detail, null, 2)
                         : String(event.detail)
@@ -360,55 +252,22 @@ const EventMonitor = ({ componentFilter = null, theme }) => {
           ))}
         </div>
       ) : (
-        <div style={{
-          maxHeight: '280px',
-          overflowY: 'auto',
-          border: `1px solid ${borderColor}`,
-          borderRadius: '4px',
-          padding: '6px',
-          flex: 1
-        }}>
+        <div className="event-monitor__list">
           {filteredEvents.map((event, index) => (
             <div
               key={event.id || index}
-              style={{
-                padding: '6px',
-                marginBottom: '3px',
-                background: index === 0 ? accentColor + '40' : cardBg,
-                border: index === 0 ? `1px solid ${accentColor}` : `1px solid ${borderColor}`,
-                borderRadius: '3px',
-                fontSize: '11px',
-                color: fgColor
-              }}
+              className={`event-monitor__event ${index === 0 ? 'event-monitor__event--latest' : ''}`}
             >
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '4px'
-              }}>
-                <strong style={{ color: accentColor, fontSize: '11px' }}>{event.name}</strong>
-                <span style={{ color: textSecondary, fontSize: '9px' }}>{event.timestamp}</span>
+              <div className="event-monitor__event-header">
+                <strong className="event-monitor__event-name">{event.name}</strong>
+                <span className="event-monitor__timestamp">{event.timestamp}</span>
               </div>
               {event.detail !== undefined && event.detail !== null && (
-                <div style={{
-                  padding: '6px 8px',
-                  background: bgColor,
-                  borderRadius: '3px',
-                  fontFamily: 'monospace',
-                  fontSize: '10px',
-                  color: fgColor,
-                  overflowX: 'auto',
-                  wordBreak: 'break-word',
-                  maxHeight: '150px',
-                  overflowY: 'auto',
-                  marginTop: '4px',
-                  border: `1px solid ${borderColor}`
-                }}>
-                  <div style={{ fontWeight: '600', marginBottom: '4px', fontSize: '9px', color: textSecondary }}>
+                <div className="event-monitor__payload">
+                  <div className="event-monitor__payload-title">
                     Event Payload:
                   </div>
-                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: '9px', color: fgColor }}>
+                  <pre className="event-monitor__payload-pre">
                     {typeof event.detail === 'object' 
                       ? JSON.stringify(event.detail, null, 2)
                       : String(event.detail)
@@ -417,12 +276,7 @@ const EventMonitor = ({ componentFilter = null, theme }) => {
                 </div>
               )}
               {(event.detail === undefined || event.detail === null) && (
-                <div style={{
-                  color: textSecondary,
-                  fontStyle: 'italic',
-                  fontSize: '10px',
-                  marginTop: '4px'
-                }}>
+                <div className="event-monitor__no-payload">
                   (no payload)
                 </div>
               )}
@@ -432,12 +286,7 @@ const EventMonitor = ({ componentFilter = null, theme }) => {
       )}
 
       {filteredEvents.length > 0 && (
-        <div style={{
-          marginTop: '6px',
-          textAlign: 'center',
-          color: textSecondary,
-          fontSize: '10px'
-        }}>
+        <div className="event-monitor__footer">
           {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''}
           {filter && ` (filtered from ${events.length})`}
         </div>

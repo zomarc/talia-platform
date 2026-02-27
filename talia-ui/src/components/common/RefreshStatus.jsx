@@ -11,8 +11,7 @@ const RefreshStatus = ({
   isLoading = false,
   error = null,
   onRefresh,
-  dataSource = 'data',
-  theme
+  dataSource = 'data'
 }) => {
   const formatLastRefresh = (timestamp) => {
     if (!timestamp) return 'Never';
@@ -37,47 +36,17 @@ const RefreshStatus = ({
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-      padding: '8px 12px',
-      backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
-      borderRadius: '6px',
-      border: `1px solid ${theme?.colors?.border || '#333'}`,
-      fontSize: '13px'
-    }}>
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px'
-      }}>
+    <div className="refresh-status">
+      <div className="refresh-status__meta">
         {isLoading ? (
           <>
-            <span style={{ 
-              display: 'inline-block',
-              width: '12px',
-              height: '12px',
-              border: `2px solid ${theme?.colors?.primary || '#1976d2'}`,
-              borderTopColor: 'transparent',
-              borderRadius: '50%',
-              animation: 'spin 0.8s linear infinite'
-            }} />
-            <span style={{ color: theme?.colors?.foreground || '#e0e0e0' }}>
-              Refreshing...
-            </span>
+            <span className="refresh-status__spinner" />
+            <span className="refresh-status__value">Refreshing...</span>
           </>
         ) : (
           <>
-            <span style={{ color: theme?.colors?.textSecondary || '#999' }}>
-              Last refresh:
-            </span>
-            <span style={{ 
-              color: error 
-                ? (theme?.colors?.error || '#f44336')
-                : (theme?.colors?.foreground || '#e0e0e0'),
-              fontWeight: '500'
-            }}>
+            <span className="refresh-status__label">Last refresh:</span>
+            <span className="refresh-status__value" data-error={Boolean(error)}>
               {error ? 'Error' : formatLastRefresh(lastRefreshTime)}
             </span>
           </>
@@ -87,35 +56,11 @@ const RefreshStatus = ({
       <button
         onClick={onRefresh}
         disabled={isLoading}
-        style={{
-          padding: '6px 12px',
-          fontSize: '12px',
-          fontWeight: '500',
-          backgroundColor: isLoading
-            ? (theme?.colors?.backgroundSecondary || '#2a2a2a')
-            : (theme?.colors?.primary || '#1976d2'),
-          color: '#fff',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: isLoading ? 'not-allowed' : 'pointer',
-          opacity: isLoading ? 0.6 : 1,
-          transition: 'all 0.2s',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px'
-        }}
+        className="refresh-status__button"
       >
         {isLoading ? (
           <>
-            <span style={{ 
-              display: 'inline-block',
-              width: '10px',
-              height: '10px',
-              border: '2px solid #fff',
-              borderTopColor: 'transparent',
-              borderRadius: '50%',
-              animation: 'spin 0.8s linear infinite'
-            }} />
+            <span className="refresh-status__button-spinner" />
             Refreshing...
           </>
         ) : (
@@ -124,12 +69,6 @@ const RefreshStatus = ({
           </>
         )}
       </button>
-      
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 };

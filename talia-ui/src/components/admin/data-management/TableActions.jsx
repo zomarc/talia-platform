@@ -5,24 +5,18 @@ const TableActions = ({
   isSyncing,
   selectedTable,
   reviewLoading,
-  theme,
   setStatusTable,
   tableActions
 }) => {
   if (table.source === 'N/A' || table.type === 'unknown' || table.type === 'system' || table.type === 'application') {
-    return <span className="dm-action-placeholder" style={{ color: theme.colors.textMuted }}>—</span>;
+    return <span className="dm-action-placeholder">—</span>;
   }
 
   return (
     <div className="dm-action-group">
       <button
         onClick={() => setStatusTable(table)}
-        className="dm-action-button dm-action-button-regular"
-        style={{
-          background: 'rgba(255, 255, 255, 0.06)',
-          color: theme.colors.foreground,
-          border: `1px solid ${theme.colors.glassBorder}`
-        }}
+        className="dm-action-button dm-action-button-regular dm-action-button--status"
         title="View table status details"
       >
         🧾 Status
@@ -31,14 +25,7 @@ const TableActions = ({
         <button
           onClick={() => tableActions.handleReview(table)}
           disabled={reviewLoading}
-          className="dm-action-button dm-action-button-bold"
-          style={{
-            background: reviewLoading ? theme.colors.textMuted : '#4caf50',
-            color: reviewLoading ? theme.colors.textSecondary : '#ffffff',
-            border: 'none',
-            cursor: reviewLoading ? 'not-allowed' : 'pointer',
-            opacity: reviewLoading ? 0.6 : 1
-          }}
+          className="dm-action-button dm-action-button-bold dm-action-button--review"
           title="Review top 100 rows"
         >
           {reviewLoading ? '⏳' : '👁️ Review'}
@@ -47,18 +34,7 @@ const TableActions = ({
       <button
         onClick={() => tableActions.handleIncrementalSync(table)}
         disabled={isSyncing}
-        className="dm-action-button dm-action-button-regular"
-        style={{
-          background: isSyncing
-            ? theme.colors.textMuted
-            : theme.colors.accent,
-          color: isSyncing
-            ? theme.colors.textSecondary
-            : '#0f0f23',
-          border: 'none',
-          cursor: isSyncing ? 'not-allowed' : 'pointer',
-          opacity: isSyncing ? 0.6 : 1
-        }}
+        className="dm-action-button dm-action-button-regular dm-action-button--sync"
         title="Incremental sync"
       >
         {isSyncing ? '⏳ Syncing...' : '🔄 Sync'}
@@ -66,18 +42,7 @@ const TableActions = ({
       <button
         onClick={() => tableActions.handleFullSync(table)}
         disabled={isSyncing}
-        className="dm-action-button dm-action-button-bold"
-        style={{
-          background: isSyncing
-            ? theme.colors.textMuted
-            : '#ff6b35',
-          color: isSyncing
-            ? theme.colors.textSecondary
-            : '#ffffff',
-          border: 'none',
-          cursor: isSyncing ? 'not-allowed' : 'pointer',
-          opacity: isSyncing ? 0.6 : 1
-        }}
+        className="dm-action-button dm-action-button-bold dm-action-button--full"
         title="Force full refresh (syncs all data)"
       >
         {isSyncing ? '⏳' : '⚡ Full'}

@@ -14,7 +14,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SCRIPT_VERSION="2026-01-30.1"
+SCRIPT_VERSION="2026-02-12.3"
 
 # Colors
 RED='\033[0;31m'
@@ -49,34 +49,14 @@ print_header() {
 print_menu() {
   echo -e "${BOLD}Select an option:${NC}"
   echo ""
-  
-  if $IS_ON_STAGING; then
-    # On staging server
-    echo -e "  ${GREEN}1)${NC} Validate staging (local checks)"
-    echo -e "  ${GREEN}2)${NC} Check Docker containers"
-    echo -e "  ${GREEN}3)${NC} Check VPN status"
-    echo -e "  ${GREEN}4)${NC} Check ngrok tunnel"
-    echo -e "  ${GREEN}5)${NC} Restart VPN + ngrok"
-    echo -e "  ${CYAN}6)${NC} ${BOLD}FULL CHECK${NC} (all services + docker + network)"
-    echo -e "  ${CYAN}7)${NC} ${BOLD}RESTART ALL${NC} (VPN + ngrok + Docker)"
-    echo -e "  ${CYAN}8)${NC} ${BOLD}COMPREHENSIVE CHECK${NC} (versions + schema + ports)"
-    echo -e "  ${DIM}9) RESTART ALL (remote) — unavailable on staging${NC}"
-    echo ""
-    echo -e "  ${YELLOW}0)${NC} Exit"
-  else
-    # On Mac/remote
-    echo -e "  ${GREEN}1)${NC} Validate local (Mac development)"
-    echo -e "  ${GREEN}2)${NC} Validate staging (MiniPC via SSH)"
-    echo -e "  ${GREEN}3)${NC} Validate all (local + staging)"
-    echo -e "  ${GREEN}4)${NC} Quick connectivity test"
-    echo -e "  ${GREEN}5)${NC} Restart staging services"
-    echo -e "  ${GREEN}6)${NC} Fix staging connectivity"
-    echo -e "  ${CYAN}7)${NC} ${BOLD}FULL CHECK${NC} (all + docker + network performance)"
-    echo -e "  ${CYAN}8)${NC} ${BOLD}COMPREHENSIVE CHECK${NC} (versions + schema + ports)"
-    echo -e "  ${CYAN}9)${NC} ${BOLD}RESTART ALL${NC} (VPN + ngrok + Docker)"
-    echo ""
-    echo -e "  ${YELLOW}0)${NC} Exit"
-  fi
+
+  echo -e "  ${GREEN}1)${NC} Total status"
+  echo -e "  ${GREEN}2)${NC} Check services"
+  echo -e "  ${GREEN}3)${NC} Start services"
+  echo -e "  ${GREEN}4)${NC} Stop services"
+  echo -e "  ${GREEN}5)${NC} Complete check"
+  echo ""
+  echo -e "  ${YELLOW}0)${NC} Exit"
   echo ""
 }
 
@@ -117,6 +97,367 @@ wait_for_key() {
   echo ""
   echo -e "${DIM}Press any key to continue...${NC}"
   read -n 1 -s
+}
+
+prompt_target() {
+  {
+    echo ""
+    echo -e "${BOLD}Target:${NC}"
+    echo -e "  ${GREEN}1)${NC} Local"
+    echo -e "  ${GREEN}2)${NC} Staging"
+    echo -e "  ${GREEN}3)${NC} All"
+    echo -e "  ${YELLOW}0)${NC} Back"
+    echo ""
+    echo -n -e "${BOLD}Enter target: ${NC}"
+  } >&2
+  read -r target
+  case "$target" in
+    1|local) echo "local" ;;
+    2|staging) echo "staging" ;;
+    3|all) echo "all" ;;
+    0|back|q|quit|exit) echo "back" ;;
+    *) echo "invalid" ;;
+  esac
+}
+
+prompt_service_group() {
+  {
+    echo ""
+    echo -e "${BOLD}Service group:${NC}"
+    echo -e "  ${GREEN}1)${NC} Local development (UI + API)"
+    echo -e "  ${GREEN}2)${NC} External gateway (ngrok)"
+    echo -e "  ${GREEN}3)${NC} Staging services (Docker + ngrok)"
+    echo -e "  ${GREEN}4)${NC} All"
+    echo -e "  ${YELLOW}0)${NC} Back"
+    echo ""
+    echo -n -e "${BOLD}Enter group: ${NC}"
+  } >&2
+  read -r group
+  case "$group" in
+    1|local) echo "local" ;;
+    2|external) echo "external" ;;
+    3|staging) echo "staging" ;;
+    4|all) echo "all" ;;
+    0|back|q|quit|exit) echo "back" ;;
+    *) echo "invalid" ;;
+  esac
+}
+
+check_local_services() {
+  echo -e "${BOLD}Local Services:${NC}"
+  echo -n "  UI (localhost:5173): "
+  local ui
+  ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo "000")
+  [[ "$ui" == "200" ]] && echo -e "${GREEN}UP${NC}" || echo -e "${YELLOW}DOWN${NC} (HTTP $ui)"
+
+  echo -n "  GraphQL (localhost:4000): "
+  local gql
+  gql=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:4000/graphql 2>/dev/null || echo "000")
+  [[ "$gql" == "200" || "$gql" == "400" ]] && echo -e "${GREEN}UP${NC} (HTTP $gql)" || echo -e "${YELLOW}DOWN${NC} (HTTP $gql)"
+
+  echo -n "  ngrok (local): "
+  if pgrep -f "ngrok http --url=taliahub.com" >/dev/null 2>&1; then
+    echo -e "${GREEN}UP${NC}"
+  else
+    echo -e "${YELLOW}DOWN${NC}"
+  fi
+}
+
+check_staging_services_remote() {
+  if $IS_ON_STAGING; then
+    run_script "validate-staging-local.sh"
+  else
+    run_script "validate-staging-connectivity.sh"
+  fi
+}
+
+start_local_services() {
+  echo -e "${BOLD}Starting local services:${NC}"
+
+  if [[ ! -d "${ROOT_DIR}/talia-ui" ]] || [[ ! -d "${ROOT_DIR}/talia-server" ]]; then
+    echo -e "  ${RED}Local project directories not found under ${ROOT_DIR}${NC}"
+    return 1
+  fi
+
+  local ui_code
+  ui_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo "000")
+  if [[ "$ui_code" == "200" ]]; then
+    echo -e "  ${GREEN}✓${NC} UI already running (port 5173)"
+  else
+    echo -e "  Starting UI (talia-ui)..."
+    (cd "${ROOT_DIR}/talia-ui" && nohup npm run dev >/tmp/talia-ui.log 2>&1 & echo $! > .dev-server.pid)
+  fi
+
+  local gql_code
+  gql_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:4000/graphql 2>/dev/null || echo "000")
+  if [[ "$gql_code" == "200" || "$gql_code" == "400" ]]; then
+    echo -e "  ${GREEN}✓${NC} GraphQL already running (port 4000)"
+  else
+    echo -e "  Starting GraphQL (talia-server)..."
+    (cd "${ROOT_DIR}/talia-server" && nohup npm run start >/tmp/talia-server.log 2>&1 & echo $! > .dev-server.pid)
+  fi
+
+  sleep 2
+  echo -e "  ${DIM}Logs:${NC} /tmp/talia-ui.log, /tmp/talia-server.log"
+}
+
+start_services() {
+  local target="$1"
+  case "$target" in
+    local)
+      start_local_services
+      ;;
+    external)
+      local ext_target
+      ext_target=$(prompt_target)
+      [[ "$ext_target" == "back" || "$ext_target" == "invalid" ]] && return 1
+      start_external_services "$ext_target"
+      ;;
+    staging)
+      start_staging_services_remote
+      ;;
+    all)
+      start_local_services
+      start_external_services "all"
+      start_staging_services_remote
+      ;;
+  esac
+}
+
+stop_services() {
+  local target="$1"
+  case "$target" in
+    local)
+      stop_local_dev_services
+      ;;
+    external)
+      local ext_target
+      ext_target=$(prompt_target)
+      [[ "$ext_target" == "back" || "$ext_target" == "invalid" ]] && return 1
+      stop_external_services "$ext_target"
+      ;;
+    staging)
+      stop_staging_services_remote
+      ;;
+    all)
+      stop_local_dev_services
+      stop_external_services "all"
+      stop_staging_services_remote
+      ;;
+  esac
+}
+
+complete_check() {
+  local target="$1"
+  case "$target" in
+    local)
+      if [[ -f "${SCRIPT_DIR}/validate-staging.sh" ]]; then
+        run_script "validate-staging.sh" "local"
+      else
+        check_duplicate_dev_servers true
+        check_local_services
+      fi
+      check_external_gateway
+      ;;
+    staging)
+      check_staging_services_remote
+      check_external_gateway
+      ;;
+    all)
+      run_comprehensive_check
+      check_external_gateway
+      ;;
+  esac
+}
+
+total_status() {
+  echo -e "${BOLD}Total Status:${NC}"
+  echo ""
+  check_local_services
+  echo ""
+  check_staging_services_remote
+  echo ""
+  check_external_gateway
+}
+
+check_external_gateway() {
+  echo -e "${BOLD}External Gateway (taliahub.com):${NC}"
+  local urls=("https://taliahub.com/" "https://celestyal.taliahub.com/")
+  echo -e ""
+  printf "  %-34s  %-10s  %-8s  %s\n" "URL" "STATUS" "HTTP" "DETAILS"
+  printf "  %-34s  %-10s  %-8s  %s\n" "----------------------------------" "----------" "--------" "----------------------------"
+  for url in "${urls[@]}"; do
+    local headers
+    headers=$(curl -sI --max-time 8 "$url" 2>/dev/null || true)
+    local code
+    code=$(echo "$headers" | awk 'NR==1{print $2}')
+    local gateway
+    gateway=$(echo "$headers" | awk -F': ' 'tolower($1)=="x-taliahub-gateway"{print $2}')
+    local ngrok
+    ngrok=$(echo "$headers" | awk -F': ' 'tolower($1)=="ngrok-error-code"{print $2}')
+    [[ -z "$code" ]] && code="000"
+    local status="WARN"
+    local detail="HTTP ${code}"
+    if [[ "$code" == "000" ]]; then
+      status="DOWN"
+      detail="no response"
+    elif [[ "$gateway" == "fallback" ]]; then
+      status="DOWN"
+      detail="holding page"
+    elif [[ "$gateway" == "proxied" && ( "$code" == "200" || "$code" == "302" ) ]]; then
+      status="UP"
+      detail="app served"
+    elif [[ "$code" == "200" || "$code" == "302" ]]; then
+      status="UP"
+      detail="app served"
+    elif [[ "$code" == "503" ]]; then
+      status="DOWN"
+      detail="holding page"
+    fi
+
+    local status_color="$YELLOW"
+    [[ "$status" == "UP" ]] && status_color="$GREEN"
+    [[ "$status" == "DOWN" ]] && status_color="$RED"
+
+    local details=""
+    details="$detail"
+    [[ -n "$gateway" ]] && details="${details}; gateway=${gateway}"
+    [[ -n "$ngrok" ]] && details="${details}; ngrok=${ngrok}"
+
+    printf "  %-34s  ${BOLD}%b%-10s${NC}  %-8s  %s\n" "$url" "$status_color" "$status" "$code" "$details"
+  done
+  echo ""
+  echo -e "${DIM}Next steps:${NC}"
+  echo -e "  ${DIM}- If DOWN but you expect UP: start services → External gateway.${NC}"
+  echo -e "  ${DIM}- If still DOWN: check UI on localhost:5173 and ngrok status.${NC}"
+}
+
+start_ngrok_local() {
+  if ! command -v ngrok >/dev/null 2>&1; then
+    echo -e "${RED}ngrok not found on PATH. Install from https://ngrok.com/download${NC}"
+    return 1
+  fi
+  echo -n "  UI (localhost:5173): "
+  local ui
+  ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo "000")
+  [[ "$ui" == "200" ]] && echo -e "${GREEN}OK${NC}" || echo -e "${YELLOW}Not running${NC} (start talia-ui first)"
+
+  if pgrep -f "ngrok http --url=taliahub.com" >/dev/null 2>&1; then
+    echo -e "  ${YELLOW}ngrok already running for taliahub.com${NC}"
+  else
+    echo -e "  Starting ngrok (taliahub.com → localhost:5173)..."
+    nohup ngrok http --url=taliahub.com 5173 >/tmp/ngrok-taliahub.log 2>&1 &
+    sleep 2
+  fi
+
+  echo -e "  Tunnel:"
+  curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"[^"]*"' | head -1 || echo "  Not active"
+}
+
+start_ngrok_staging_remote() {
+  run_command "ssh -o ConnectTimeout=5 zomarc@192.168.1.120 \"sudo systemctl start ngrok-taliahub && sleep 2 && sudo systemctl status ngrok-taliahub --no-pager\"" "Start ngrok on staging (systemd)"
+}
+
+stop_ngrok_staging_remote() {
+  if $IS_ON_STAGING; then
+    run_command "sudo systemctl stop ngrok-taliahub" "Stop ngrok on staging (systemd)"
+  else
+    run_command "ssh -o ConnectTimeout=5 zomarc@192.168.1.120 \"sudo systemctl stop ngrok-taliahub\"" "Stop ngrok on staging (systemd)"
+  fi
+}
+
+start_staging_services_remote() {
+  if $IS_ON_STAGING; then
+    run_command "sudo systemctl start ngrok-taliahub; cd /home/zomarc/talia-docker && docker compose -f docker-compose.staging.yml up -d; docker compose -f docker-compose.staging.yml ps" "Start staging services (ngrok + docker)"
+  else
+    run_command "ssh -o ConnectTimeout=5 zomarc@192.168.1.120 \"sudo systemctl start ngrok-taliahub; cd /home/zomarc/talia-docker && docker compose -f docker-compose.staging.yml up -d; docker compose -f docker-compose.staging.yml ps\"" "Start staging services (ngrok + docker)"
+  fi
+}
+
+stop_ngrok_local() {
+  if pgrep -f "ngrok http --url=taliahub.com" >/dev/null 2>&1; then
+    echo -e "  Stopping local ngrok..."
+    pkill -f "ngrok http --url=taliahub.com" 2>/dev/null || true
+  else
+    echo -e "  ${DIM}ngrok not running locally${NC}"
+  fi
+}
+
+stop_local_dev_services() {
+  echo -e "${BOLD}Stopping local dev services (UI/API):${NC}"
+  if command -v lsof >/dev/null 2>&1; then
+    local pids
+    pids=$(lsof -ti:5173,4000 2>/dev/null | tr '\n' ' ' | xargs)
+    if [[ -n "$pids" ]]; then
+      kill $pids 2>/dev/null || true
+      sleep 1
+      kill -9 $pids 2>/dev/null || true
+      echo -e "  ${GREEN}✓${NC} Stopped processes on ports 5173/4000"
+    else
+      echo -e "  ${DIM}No processes on ports 5173/4000${NC}"
+    fi
+  else
+    echo -e "  ${YELLOW}lsof not available; skipping port-based stop${NC}"
+  fi
+}
+
+stop_local_services() {
+  echo -e "${BOLD}Stopping local services:${NC}"
+  if command -v lsof >/dev/null 2>&1; then
+    local pids
+    pids=$(lsof -ti:5173,4000 2>/dev/null | tr '\n' ' ' | xargs)
+    if [[ -n "$pids" ]]; then
+      kill $pids 2>/dev/null || true
+      sleep 1
+      kill -9 $pids 2>/dev/null || true
+      echo -e "  ${GREEN}✓${NC} Stopped processes on ports 5173/4000"
+    else
+      echo -e "  ${DIM}No processes on ports 5173/4000${NC}"
+    fi
+  else
+    echo -e "  ${YELLOW}lsof not available; skipping port-based stop${NC}"
+  fi
+  stop_ngrok_local
+}
+
+stop_staging_services_remote() {
+  if $IS_ON_STAGING; then
+    run_command "sudo systemctl stop ngrok-taliahub; cd /home/zomarc/talia-docker && docker compose -f docker-compose.staging.yml stop" "Stop staging services (ngrok + docker)"
+  else
+    run_command "ssh -o ConnectTimeout=5 zomarc@192.168.1.120 \"sudo systemctl stop ngrok-taliahub; cd /home/zomarc/talia-docker && docker compose -f docker-compose.staging.yml stop\"" "Stop staging services (ngrok + docker)"
+  fi
+}
+
+start_external_services() {
+  local target="$1"
+  case "$target" in
+    local)
+      start_ngrok_local
+      ;;
+    staging)
+      start_ngrok_staging_remote
+      ;;
+    all)
+      start_ngrok_local
+      start_ngrok_staging_remote
+      ;;
+  esac
+}
+
+stop_external_services() {
+  local target="$1"
+  case "$target" in
+    local)
+      stop_ngrok_local
+      ;;
+    staging)
+      stop_ngrok_staging_remote
+      ;;
+    all)
+      stop_ngrok_local
+      stop_ngrok_staging_remote
+      ;;
+  esac
 }
 
 check_duplicate_dev_servers() {
@@ -248,26 +589,52 @@ restart_all_staging() {
   fi
 }
 
-handle_staging_menu() {
+handle_staging_menu_legacy() {
   local choice="$1"
   
   case "$choice" in
-    1|local|staging)
+    1|local)
       run_script "validate-staging-local.sh"
       ;;
-    2|docker)
-      run_command "docker compose -f /home/zomarc/talia-docker/docker-compose.staging.yml ps" "Docker Containers"
+    2|staging)
+      run_script "validate-staging-local.sh"
       ;;
-    3|vpn)
-      run_command "sudo systemctl status protonvpn-openvpn --no-pager && echo '' && echo 'VPN IP:' && curl -s https://api.ipify.org && echo ''" "VPN Status"
+    3|all)
+      run_script "validate-staging-local.sh"
       ;;
-    4|ngrok)
-      run_command "sudo systemctl status ngrok-taliahub --no-pager && echo '' && echo 'Tunnel:' && curl -s http://localhost:4040/api/tunnels | grep -o 'taliahub.com' || echo 'No tunnel'" "ngrok Status"
+    4|gateway)
+      check_external_gateway
       ;;
-    5|restart)
+    5|start-ngrok)
+      run_command "sudo systemctl start ngrok-taliahub && sleep 2 && sudo systemctl status ngrok-taliahub --no-pager" "Start ngrok tunnel"
+      ;;
+    6|start-ngrok-staging)
+      run_command "sudo systemctl start ngrok-taliahub && sleep 2 && sudo systemctl status ngrok-taliahub --no-pager" "Start ngrok tunnel"
+      ;;
+    7|stop-local)
+      echo -e "${BOLD}Stopping local staging services:${NC}"
+      run_command "sudo systemctl stop ngrok-taliahub || true" "Stop ngrok"
+      run_command "cd /home/zomarc/talia-docker && docker compose -f docker-compose.staging.yml stop" "Stop staging Docker"
+      ;;
+    8|stop-staging)
+      echo -e "${BOLD}Stopping staging services:${NC}"
+      run_command "sudo systemctl stop ngrok-taliahub || true" "Stop ngrok"
+      run_command "cd /home/zomarc/talia-docker && docker compose -f docker-compose.staging.yml stop" "Stop staging Docker"
+      ;;
+    9|quick|test)
+      echo -e "${BOLD}Quick Connectivity Test${NC}"
+      echo ""
+      echo -n "  taliahub.com (public): "
+      local talia=$(curl -sS --basic -u talia:dev2025tal -o /dev/null -w '%{http_code}' --max-time 10 https://taliahub.com 2>/dev/null || echo "000")
+      [[ "$talia" == "200" || "$talia" == "302" ]] && echo -e "${GREEN}OK${NC}" || echo -e "${RED}HTTP $talia${NC}"
+      ;;
+    10|restart)
       run_command "sudo systemctl restart protonvpn-openvpn && sleep 10 && sudo systemctl restart ngrok-taliahub && sleep 5 && echo 'Services restarted' && curl -s http://localhost:4040/api/tunnels | grep -o 'taliahub.com' && echo ' tunnel active'" "Restart VPN + ngrok"
       ;;
-    6|full)
+    11|fix)
+      run_command "sudo systemctl restart protonvpn-openvpn && sleep 10 && sudo systemctl restart ngrok-taliahub && sleep 5" "Fix staging connectivity (VPN + ngrok)"
+      ;;
+    12|full)
       echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
       echo -e "${CYAN}║${NC}${BOLD}                    FULL SYSTEM CHECK                        ${NC}${CYAN}║${NC}"
       echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
@@ -307,15 +674,11 @@ handle_staging_menu() {
       echo ""
       echo -e "${GREEN}✅ Full check complete${NC}"
       ;;
-    7|restart-all)
+    14|restart-all)
       restart_all_staging
       ;;
-    8|comprehensive)
+    13|comprehensive)
       run_script "validate-staging-local.sh"
-      ;;
-    9)
-      echo -e "${YELLOW}Option 9 is only available from local (remote restart).${NC}"
-      return 1
       ;;
     0|q|quit|exit)
       echo -e "${GREEN}Goodbye!${NC}"
@@ -328,7 +691,7 @@ handle_staging_menu() {
   esac
 }
 
-handle_remote_menu() {
+handle_remote_menu_legacy() {
   local choice="$1"
   
   case "$choice" in
@@ -372,7 +735,22 @@ handle_remote_menu() {
       echo -e "${BOLD}=== STAGING ===${NC}"
       run_script "validate-staging-connectivity.sh"
       ;;
-    4|quick|test)
+    4|gateway)
+      check_external_gateway
+      ;;
+    5|start-ngrok)
+      start_ngrok_local
+      ;;
+    6|start-ngrok-staging)
+      start_ngrok_staging_remote
+      ;;
+    7|stop-local)
+      stop_local_services
+      ;;
+    8|stop-staging)
+      stop_staging_services_remote
+      ;;
+    9|quick|test)
       echo -e "${BOLD}Quick Connectivity Test${NC}"
       echo ""
       echo -n "  Ping staging (192.168.1.120): "
@@ -385,13 +763,13 @@ handle_remote_menu() {
       local talia=$(curl -sS --basic -u talia:dev2025tal -o /dev/null -w '%{http_code}' --max-time 10 https://taliahub.com 2>/dev/null || echo "000")
       [[ "$talia" == "200" ]] && echo -e "${GREEN}OK${NC}" || echo -e "${RED}HTTP $talia${NC}"
       ;;
-    5|restart)
+    10|restart)
       run_script "restart-staging-tunnel.sh"
       ;;
-    6|fix)
+    11|fix)
       run_script "fix-staging-connectivity.sh"
       ;;
-    7|full)
+    12|full)
       echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
       echo -e "${CYAN}║${NC}${BOLD}                    FULL SYSTEM CHECK                        ${NC}${CYAN}║${NC}"
       echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
@@ -462,11 +840,59 @@ handle_remote_menu() {
       echo ""
       echo -e "${GREEN}✅ Full check complete${NC}"
       ;;
-    8|comprehensive)
+    13|comprehensive)
       run_comprehensive_check
       ;;
-    9|restart-all)
+    14|restart-all)
       restart_all_staging
+      ;;
+    0|q|quit|exit)
+      echo -e "${GREEN}Goodbye!${NC}"
+      exit 0
+      ;;
+    *)
+      echo -e "${RED}Invalid option: ${choice}${NC}"
+      return 1
+      ;;
+  esac
+}
+
+handle_remote_menu() {
+  local choice="$1"
+
+  case "$choice" in
+    1|status)
+      total_status
+      ;;
+    2|check)
+      local target
+      target=$(prompt_target)
+      [[ "$target" == "back" || "$target" == "invalid" ]] && return 1
+      if [[ "$target" == "local" || "$target" == "all" ]]; then
+        check_local_services
+      fi
+      if [[ "$target" == "staging" || "$target" == "all" ]]; then
+        check_staging_services_remote
+      fi
+      check_external_gateway
+      ;;
+    3|start)
+      local group
+      group=$(prompt_service_group)
+      [[ "$group" == "back" || "$group" == "invalid" ]] && return 1
+      start_services "$group"
+      ;;
+    4|stop)
+      local group
+      group=$(prompt_service_group)
+      [[ "$group" == "back" || "$group" == "invalid" ]] && return 1
+      stop_services "$group"
+      ;;
+    5|complete)
+      local target
+      target=$(prompt_target)
+      [[ "$target" == "back" || "$target" == "invalid" ]] && return 1
+      complete_check "$target"
       ;;
     0|q|quit|exit)
       echo -e "${GREEN}Goodbye!${NC}"
@@ -483,11 +909,7 @@ handle_remote_menu() {
 main() {
   # If argument provided, run directly without menu
   if [[ $# -gt 0 ]]; then
-    if $IS_ON_STAGING; then
-      handle_staging_menu "$1"
-    else
-      handle_remote_menu "$1"
-    fi
+    handle_remote_menu "$1"
     exit $?
   fi
   
@@ -499,11 +921,7 @@ main() {
     echo -n -e "${BOLD}Enter choice: ${NC}"
     read -r choice
     
-    if $IS_ON_STAGING; then
-      handle_staging_menu "$choice" || true
-    else
-      handle_remote_menu "$choice" || true
-    fi
+    handle_remote_menu "$choice" || true
     
     wait_for_key
   done

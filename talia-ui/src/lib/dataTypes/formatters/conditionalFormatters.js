@@ -76,18 +76,6 @@ const formatAsPercentage = (value, decimals = 2) => {
 };
 
 /**
- * Format a number with locale formatting
- * @param {number} value - The value to format
- * @returns {string} Formatted number string
- */
-const formatAsNumber = (value) => {
-  if (isEmpty(value)) return '';
-  const num = parseNumber(value);
-  if (num === null) return '';
-  return new Intl.NumberFormat('en-US').format(num);
-};
-
-/**
  * Create a performance formatter with threshold-based conditional styling
  * 
  * - Green: value >= threshold (good performance)
@@ -270,7 +258,7 @@ export const createCurrencyDeltaFormatter = (options = {}) => {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0
       }).format(numValue);
-    } catch (error) {
+    } catch {
       return `${currency} ${numValue.toFixed(0)}`;
     }
   };

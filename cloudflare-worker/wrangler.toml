@@ -1,0 +1,8 @@
+name = "taliahub-gateway"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# Minimal Worker route for taliahub.com + subdomains
+[[routes]]
+pattern = "*taliahub.com/*"
+zone_name = "taliahub.com"

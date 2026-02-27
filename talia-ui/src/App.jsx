@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useCallback, useRef, useEffect, useState } from "react";
 import { ApolloProvider } from '@apollo/client';
 import { DockviewReact } from "dockview";
@@ -17,6 +18,7 @@ import { FocusSelector, FocusManager } from "./components/focus-management";
 import { useFocusManagement } from "./hooks/useFocusManagement";
 import { useSupabaseAuth } from "./contexts/SupabaseAuthContext";
 import "./components/focus-management/focus-management.css";
+import "./styles/legacy-app.css";
 
 // Debug logging
 const debugLog = (message, data = null) => {
@@ -666,31 +668,16 @@ const TablePanel = React.memo(function TablePanel() {
   // This prevents interference with Dockview's drag and drop system
 
   return (
-    <div style={{ 
-      height: "100%", 
-      width: "100%", 
-      display: "flex", 
-      flexDirection: "column",
-      background: theme.colors.background,
-      color: theme.colors.foreground,
-      fontSize: `${fontSize}px`,
-      fontFamily: selectedFont.value
-    }}>
-      <div style={{ 
-        padding: "8px 12px", 
-        background: theme.colors.sidebarHeader, 
-        borderBottom: `1px solid ${theme.colors.sidebarBorder}`,
-        fontSize: `${fontSize - 1}px`,
-        color: theme.colors.textSecondary
-      }}>
+    <div className="legacy-panel">
+      <div className="legacy-panel__header">
         <strong>Table Filters:</strong> Use the filter controls in column headers to filter data. 
-        <span style={{ marginLeft: "8px", color: theme.colors.accent }}>
+        <span className="legacy-panel__header-tip">
           💡 Tip: Click filter icons in column headers to filter by Ship, Sailing, Status, or numeric values
         </span>
       </div>
       <div 
         ref={tableRef} 
-        style={{ height: "100%", width: "100%", flex: 1 }} 
+        className="legacy-panel__body"
       />
       {/* Tabulator styling configured via initTabulator() - CSS injected after Tabulator loads */}
     </div>
@@ -921,18 +908,10 @@ const ChartPanel = React.memo(function ChartPanel() {
   // This prevents interference with Dockview's drag and drop system
 
   return (
-    <div style={{ 
-      height: "100%", 
-      width: "100%", 
-      position: "relative",
-      background: theme.colors.background,
-      color: theme.colors.foreground,
-      fontSize: `${fontSize}px`,
-      fontFamily: selectedFont.value
-    }}>
+    <div className="legacy-chart-panel">
       <canvas 
         ref={canvasRef} 
-        style={{ height: "100%", width: "100%" }} 
+        className="legacy-chart-panel__canvas"
       />
     </div>
   );
@@ -940,21 +919,11 @@ const ChartPanel = React.memo(function ChartPanel() {
 
 // ---- Simple text panel (fallback/info) ----
 function InfoPanel(props) {
-  const { theme, fontSize, selectedFont, fontFamily } = useTheme();
   const title = props?.params?.panel?.title || props?.params?.title || "Panel";
   return (
-    <div style={{ 
-      height: "100%", 
-      width: "100%", 
-      padding: 16, 
-      fontSize: `${fontSize}px`, 
-      fontFamily: selectedFont.value,
-      lineHeight: 1.5, 
-      color: theme.colors.foreground, 
-      background: theme.colors.background 
-    }}>
-      <p style={{ margin: 0, marginBottom: 8, fontWeight: 600 }}>{title}</p>
-      <p style={{ margin: 0 }}>This is a generic panel. Drag the tab to dock/split.</p>
+    <div className="legacy-info-panel">
+      <p className="legacy-info-panel__title">{title}</p>
+      <p className="legacy-info-panel__text">This is a generic panel. Drag the tab to dock/split.</p>
     </div>
   );
 }
@@ -981,229 +950,105 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
       [section]: !prev[section]
     }));
   };
+  const sidebarRef = useRef(null);
 
-  const sidebarStyle = {
-    width: isCollapsed ? '48px' : `${width}px`,
-    height: '100%',
-    background: theme.colors.sidebar,
-    borderRight: `1px solid ${theme.colors.sidebarBorder}`,
-    display: 'flex',
-    flexDirection: 'column',
-    transition: isCollapsed ? 'width 0.2s ease' : 'none',
-    overflow: 'hidden',
-    position: 'relative',
-    flexShrink: 0,
-    fontSize: `${fontSize}px`,
-    fontFamily: selectedFont.value
-  };
-
-  const sectionStyle = {
-    borderBottom: `1px solid ${theme.colors.sidebarBorder}`
-  };
-
-  const sectionHeaderStyle = {
-    padding: '8px 12px',
-    background: theme.colors.sidebarHeader,
-    borderBottom: `1px solid ${theme.colors.sidebarBorder}`,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    fontSize: `${fontSize}px`,
-    fontWeight: '600',
-    color: theme.colors.foreground,
-    userSelect: 'none'
-  };
-
-  const sectionContentStyle = {
-    padding: '8px 12px',
-    fontSize: `${fontSize}px`,
-    color: theme.colors.foreground,
-    maxHeight: '300px',
-    overflow: 'auto'
-  };
-
-  const inputStyle = {
-    width: '100%',
-    padding: '6px 8px',
-    border: `1px solid ${theme.colors.border}`,
-    borderRadius: '4px',
-    fontSize: `${fontSize - 1}px`,
-    marginBottom: '6px',
-    background: theme.colors.background,
-    color: theme.colors.foreground,
-    boxSizing: 'border-box'
-  };
-
-  const buttonStyle = {
-    width: '100%',
-    padding: '8px 6px',
-    background: theme.colors.accent,
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    fontSize: `${fontSize - 1}px`,
-    cursor: 'pointer',
-    marginBottom: '6px',
-    textAlign: 'left',
-    boxSizing: 'border-box'
-  };
-
-  const iconStyle = {
-    fontSize: '14px',
-    transition: 'transform 0.2s ease'
-  };
+  React.useEffect(() => {
+    if (!sidebarRef.current) return;
+    const sidebarWidth = isCollapsed ? '48px' : `${width}px`;
+    sidebarRef.current.style.setProperty('--legacy-sidebar-width', sidebarWidth);
+  }, [isCollapsed, width]);
 
   if (isCollapsed) {
     return (
-      <div style={sidebarStyle}>
-        <div style={{ padding: '8px', textAlign: 'center' }}>
+      <div ref={sidebarRef} className="legacy-sidebar">
+        <div className="legacy-sidebar__collapsed-header">
           <button
             onClick={onToggle}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}
+            className="legacy-sidebar__collapse-btn"
           >
             ☰
           </button>
         </div>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px' }}>
-          <button style={{ ...buttonStyle, width: '32px', height: '32px', marginBottom: '8px' }} title="Default Criteria">📊</button>
-          <button style={{ ...buttonStyle, width: '32px', height: '32px', marginBottom: '8px' }} title="Reports">📋</button>
-          <button style={{ ...buttonStyle, width: '32px', height: '32px', marginBottom: '8px' }} title="Appearance">🎨</button>
+        <div className="legacy-sidebar__collapsed-actions">
+          <button className="legacy-sidebar__collapsed-action" title="Default Criteria">📊</button>
+          <button className="legacy-sidebar__collapsed-action" title="Reports">📋</button>
+          <button className="legacy-sidebar__collapsed-action" title="Appearance">🎨</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={sidebarStyle}>
+    <div ref={sidebarRef} className="legacy-sidebar legacy-sidebar--expanded">
       {/* Header */}
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid #e8dfd0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '14px', fontWeight: '600', color: '#2b2b2b' }}>Explorer</span>
+      <div className="legacy-sidebar__header">
+        <span className="legacy-sidebar__header-title">Explorer</span>
         <button
           onClick={onToggle}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}
+          className="legacy-sidebar__collapse-btn"
         >
           ◀
         </button>
       </div>
 
       {/* TEST: This should be visible at the very top */}
-      <div style={{ 
-        background: '#FFD700', 
-        color: '#000', 
-        padding: '2px', 
-        fontSize: '8px',
-        textAlign: 'center',
-        fontWeight: 'bold',
-        border: '2px solid #FF0000'
-      }}>
+      <div className="legacy-sidebar__test-banner">
         🚨 SIDEBAR RENDERING TEST 🚨
       </div>
 
       {/* Enhanced Focus Section with New Focus Management */}
-      <div style={sectionStyle}>
+      <div className="legacy-sidebar__section">
         {/* TEST: This should always be visible */}
-        <div style={{ 
-          background: '#ff6b6b', 
-          color: 'white', 
-          padding: '4px', 
-          marginBottom: '8px',
-          fontSize: '10px',
-          textAlign: 'center',
-          fontWeight: 'bold'
-        }}>
+        <div className="legacy-sidebar__focus-test-banner">
           🧪 FOCUS MANAGEMENT TEST - SHOULD BE VISIBLE
         </div>
         <div 
-          style={sectionHeaderStyle}
+          className="legacy-sidebar__section-header"
           onClick={() => {
             console.log('🔍 Focus Management section clicked!');
             toggleSection('focus');
           }}
         >
           <span>Focus Management</span>
-          <span style={{ ...iconStyle, transform: expandedSections.focus ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+          <span className="legacy-sidebar__section-icon" data-expanded={expandedSections.focus}>
             ▶
           </span>
         </div>
-        <div style={{ ...sectionContentStyle, display: expandedSections.focus ? 'block' : 'none' }}>
+        <div className="legacy-sidebar__section-content" data-visible={expandedSections.focus}>
           {/* Debug Information */}
-          <div style={{ 
-            background: '#e7f3ff', 
-            color: '#0066cc', 
-            padding: '6px', 
-            borderRadius: '4px', 
-            marginBottom: '8px',
-            fontSize: `${fontSize - 3}px`,
-            border: '1px solid #b3d9ff'
-          }}>
+          <div className="legacy-sidebar__debug-info">
             <strong>Debug:</strong> Role: {userRole} | Focuses: {focuses?.length || 0} | Loading: {focusLoading ? 'Yes' : 'No'} | Fallback: {fallbackMode ? 'Yes' : 'No'}
           </div>
           
           {/* Show focus management error if any */}
           {focusError && (
-            <div style={{ 
-              background: '#f8d7da', 
-              color: '#721c24', 
-              padding: '8px', 
-              borderRadius: '4px', 
-              marginBottom: '10px',
-              fontSize: `${fontSize - 2}px`
-            }}>
+            <div className="legacy-sidebar__alert legacy-sidebar__alert--error">
               Focus Error: {focusError}
             </div>
           )}
           
           {/* Show loading state */}
           {focusLoading && (
-            <div style={{ 
-              background: '#d1ecf1', 
-              color: '#0c5460', 
-              padding: '8px', 
-              borderRadius: '4px', 
-              marginBottom: '10px',
-              fontSize: `${fontSize - 2}px`
-            }}>
+            <div className="legacy-sidebar__alert legacy-sidebar__alert--info">
               Loading focuses...
             </div>
           )}
           
           {/* New Focus Management System */}
           {focusError ? (
-            <div style={{ 
-              background: '#fff3cd', 
-              color: '#856404', 
-              padding: '8px', 
-              borderRadius: '4px', 
-              marginBottom: '10px',
-              fontSize: `${fontSize - 2}px`
-            }}>
+            <div className="legacy-sidebar__alert legacy-sidebar__alert--warning">
               Focus Management Error: {focusError}
-              <div style={{ marginTop: '4px', fontSize: `${fontSize - 3}px` }}>
+              <div className="legacy-sidebar__alert-meta">
                 {fallbackMode ? 'Using fallback focus system.' : 'Using legacy focus system as fallback.'}
               </div>
             </div>
           ) : fallbackMode ? (
-            <div style={{ 
-              background: '#d1ecf1', 
-              color: '#0c5460', 
-              padding: '8px', 
-              borderRadius: '4px', 
-              marginBottom: '10px',
-              fontSize: `${fontSize - 2}px`
-            }}>
+            <div className="legacy-sidebar__alert legacy-sidebar__alert--info">
               📡 Database Offline - Using Fallback Focuses
             </div>
           ) : (
             <div>
-              <div style={{ 
-                background: '#90EE90', 
-                color: '#006400', 
-                padding: '8px', 
-                marginBottom: '8px',
-                fontSize: '12px',
-                fontWeight: 'bold'
-              }}>
+              <div className="legacy-sidebar__notice">
                 🟢 FocusSelector should render here
               </div>
               {(() => {
@@ -1217,12 +1062,7 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
                 } catch (error) {
                   console.error('FocusSelector render error:', error);
                   return (
-                    <div style={{ 
-                      background: '#ff6b6b', 
-                      color: 'white', 
-                      padding: '8px',
-                      fontSize: '12px'
-                    }}>
+                    <div className="legacy-sidebar__error-box">
                       FocusSelector Error: {error.message}
                     </div>
                   );
@@ -1233,13 +1073,8 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
           
           {/* Fallback: Show legacy focus list if FocusSelector fails or in fallback mode */}
           {(focusError || fallbackMode) && (
-            <div style={{ marginTop: '10px' }}>
-              <div style={{ 
-                fontSize: `${fontSize - 2}px`, 
-                fontWeight: 'bold', 
-                marginBottom: '8px',
-                color: theme.colors.textSecondary
-              }}>
+            <div className="legacy-sidebar__focus-options">
+              <div className="legacy-sidebar__focus-options-title">
                 {fallbackMode ? 'Available Focus Options:' : 'Legacy Focus Options:'}
               </div>
               {[
@@ -1251,21 +1086,9 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
                 <div
                   key={focus.id}
                   onClick={() => onFocusChange && onFocusChange(focus.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '6px 8px',
-                    cursor: 'pointer',
-                    background: currentFocus === focus.id ? theme.colors.accent : 'transparent',
-                    color: currentFocus === focus.id ? 'white' : theme.colors.foreground,
-                    borderRadius: '4px',
-                    marginBottom: '2px',
-                    fontSize: `${fontSize - 1}px`,
-                    transition: 'all 0.2s ease'
-                  }}
+                  className={`legacy-sidebar__focus-option ${currentFocus === focus.id ? 'is-active' : ''}`}
                 >
-                  <span style={{ fontSize: '14px' }}>{focus.icon}</span>
+                  <span className="legacy-sidebar__focus-icon">{focus.icon}</span>
                   <span>{focus.name}</span>
                 </div>
               ))}
@@ -1274,7 +1097,7 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
           
           {/* Admin-only Focus Manager Button */}
           {userRole === 'admin' && (
-            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e0e0e0' }}>
+            <div className="legacy-sidebar__admin-actions">
               <button
                 onClick={() => {
                   // Initialize standard focuses if not already done
@@ -1282,25 +1105,11 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
                     initializeStandardFocuses();
                   }
                 }}
-                style={{
-                  width: '100%',
-                  padding: '6px 8px',
-                  background: '#2E86AB',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  fontSize: `${fontSize - 2}px`,
-                  cursor: 'pointer',
-                  marginBottom: '4px'
-                }}
+                className="legacy-sidebar__admin-btn"
               >
                 🚀 Initialize Standard Focuses
               </button>
-              <div style={{ 
-                fontSize: `${fontSize - 3}px`, 
-                color: theme.colors.textMuted,
-                textAlign: 'center'
-              }}>
+              <div className="legacy-sidebar__admin-note">
                 Admin: Set up standard focuses
               </div>
             </div>
@@ -1309,21 +1118,21 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
       </div>
 
       {/* Default Criteria Section */}
-      <div style={sectionStyle}>
+      <div className="legacy-sidebar__section">
         <div 
-          style={sectionHeaderStyle}
+          className="legacy-sidebar__section-header"
           onClick={() => toggleSection('criteria')}
         >
           <span>Default Criteria</span>
-          <span style={{ ...iconStyle, transform: expandedSections.criteria ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+          <span className="legacy-sidebar__section-icon" data-expanded={expandedSections.criteria}>
             ▶
           </span>
         </div>
-        <div style={{ ...sectionContentStyle, display: expandedSections.criteria ? 'block' : 'none' }}>
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '500' }}>Ship Filter:</label>
+        <div className="legacy-sidebar__section-content" data-visible={expandedSections.criteria}>
+          <div className="legacy-sidebar__field">
+            <label className="legacy-sidebar__label">Ship Filter:</label>
             <select 
-              style={inputStyle}
+              className="legacy-sidebar__input"
               value={globalFilters.ship || ''}
               onChange={(e) => onGlobalFiltersChange({ ...globalFilters, ship: e.target.value })}
             >
@@ -1332,20 +1141,20 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
               <option value="Celestyal Journey">Celestyal Journey</option>
             </select>
           </div>
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '500' }}>Date From:</label>
+          <div className="legacy-sidebar__field">
+            <label className="legacy-sidebar__label">Date From:</label>
             <input
               type="date"
-              style={inputStyle}
+              className="legacy-sidebar__input"
               value={globalFilters.dateFrom || ''}
               onChange={(e) => onGlobalFiltersChange({ ...globalFilters, dateFrom: e.target.value })}
             />
           </div>
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '500' }}>Date To:</label>
+          <div className="legacy-sidebar__field">
+            <label className="legacy-sidebar__label">Date To:</label>
             <input
               type="date"
-              style={inputStyle}
+              className="legacy-sidebar__input"
               value={globalFilters.dateTo || ''}
               onChange={(e) => onGlobalFiltersChange({ ...globalFilters, dateTo: e.target.value })}
             />
@@ -1354,66 +1163,66 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
       </div>
 
       {/* Reports Section */}
-      <div style={sectionStyle}>
+      <div className="legacy-sidebar__section">
         <div 
-          style={sectionHeaderStyle}
+          className="legacy-sidebar__section-header"
           onClick={() => toggleSection('reports')}
         >
           <span>Reports</span>
-          <span style={{ ...iconStyle, transform: expandedSections.reports ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+          <span className="legacy-sidebar__section-icon" data-expanded={expandedSections.reports}>
             ▶
           </span>
         </div>
-        <div style={{ ...sectionContentStyle, display: expandedSections.reports ? 'block' : 'none' }}>
-          <button style={buttonStyle} onClick={() => onAddPanel('table', 'New Table')}>
+        <div className="legacy-sidebar__section-content" data-visible={expandedSections.reports}>
+          <button className="legacy-sidebar__button" onClick={() => onAddPanel('table', 'New Table')}>
             📊 New Table
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('chart', 'New Chart')}>
+          <button className="legacy-sidebar__button" onClick={() => onAddPanel('chart', 'New Chart')}>
             📈 New Chart
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('graphql-sailings', 'Sailings Data')}>
+          <button className="legacy-sidebar__button" onClick={() => onAddPanel('graphql-sailings', 'Sailings Data')}>
             🚢 Sailings Data
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('graphql-kpis', 'KPI Dashboard')}>
+          <button className="legacy-sidebar__button" onClick={() => onAddPanel('graphql-kpis', 'KPI Dashboard')}>
             📊 KPI Dashboard
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('graphql-exceptions', 'Exceptions')}>
+          <button className="legacy-sidebar__button" onClick={() => onAddPanel('graphql-exceptions', 'Exceptions')}>
             ⚠️ Exceptions
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('graphql-ships', 'Ships Report')}>
+          <button className="legacy-sidebar__button" onClick={() => onAddPanel('graphql-ships', 'Ships Report')}>
             🚢 Ships Report
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('graphql-cabins', 'Cabins Report')}>
+          <button className="legacy-sidebar__button" onClick={() => onAddPanel('graphql-cabins', 'Cabins Report')}>
             🏠 Cabins Report
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('graphql-books', 'Books Report')}>
+          <button className="legacy-sidebar__button" onClick={() => onAddPanel('graphql-books', 'Books Report')}>
             📚 Books Report
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('master-voyage-performance-summary', 'Master Voyage Performance Summary')}>
+          <button className="legacy-sidebar__button" onClick={() => onAddPanel('master-voyage-performance-summary', 'Master Voyage Performance Summary')}>
             📊 Master Voyage Performance Summary
           </button>
-          <button style={buttonStyle} onClick={() => onAddPanel('voyage-report', 'Voyage Report')}>
+          <button className="legacy-sidebar__button" onClick={() => onAddPanel('voyage-report', 'Voyage Report')}>
             📈 Voyage Report
           </button>
         </div>
       </div>
 
       {/* Appearance Section */}
-      <div style={sectionStyle}>
+      <div className="legacy-sidebar__section">
         <div 
-          style={sectionHeaderStyle}
+          className="legacy-sidebar__section-header"
           onClick={() => toggleSection('appearance')}
         >
           <span>Appearance</span>
-          <span style={{ ...iconStyle, transform: expandedSections.appearance ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+          <span className="legacy-sidebar__section-icon" data-expanded={expandedSections.appearance}>
             ▶
           </span>
         </div>
-        <div style={{ ...sectionContentStyle, display: expandedSections.appearance ? 'block' : 'none' }}>
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: `${fontSize - 1}px`, fontWeight: '500', color: theme.colors.foreground }}>Theme:</label>
+        <div className="legacy-sidebar__section-content" data-visible={expandedSections.appearance}>
+          <div className="legacy-sidebar__field">
+            <label className="legacy-sidebar__label">Theme:</label>
             <select 
-              style={inputStyle}
+              className="legacy-sidebar__input"
               value={currentTheme}
               onChange={(e) => setCurrentTheme(e.target.value)}
             >
@@ -1422,10 +1231,10 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
               <option value="light">Light Mode</option>
             </select>
           </div>
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: `${fontSize - 1}px`, fontWeight: '500', color: theme.colors.foreground }}>Font Family:</label>
+          <div className="legacy-sidebar__field">
+            <label className="legacy-sidebar__label">Font Family:</label>
             <select 
-              style={inputStyle}
+              className="legacy-sidebar__input"
               value={fontFamily}
               onChange={(e) => setFontFamily(e.target.value)}
             >
@@ -1433,26 +1242,26 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
                 <option key={key} value={key}>{font.name}</option>
               ))}
             </select>
-            <div style={{ fontSize: `${fontSize - 2}px`, color: theme.colors.textMuted, marginTop: '2px' }}>
+            <div className="legacy-sidebar__help-text">
               {selectedFont.description}
             </div>
           </div>
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: `${fontSize - 1}px`, fontWeight: '500', color: theme.colors.foreground }}>Spacing Mode:</label>
+          <div className="legacy-sidebar__field">
+            <label className="legacy-sidebar__label">Spacing Mode:</label>
             <select 
-              style={inputStyle}
+              className="legacy-sidebar__input"
               value={spacingMode}
               onChange={(e) => setSpacingMode(e.target.value)}
             >
               <option value="default">Default</option>
               <option value="compact">Compact</option>
             </select>
-            <div style={{ fontSize: `${fontSize - 2}px`, color: theme.colors.textMuted, marginTop: '2px' }}>
+            <div className="legacy-sidebar__help-text">
               {spacingMode === 'compact' ? 'Minimal spacing for data cells' : 'Standard spacing for readability'}
             </div>
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: `${fontSize - 1}px`, fontWeight: '500', color: theme.colors.foreground }}>
+            <label className="legacy-sidebar__label">
               Font Size: {fontSize}px
             </label>
             <input 
@@ -1461,35 +1270,32 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
               max="18" 
               value={fontSize}
               onChange={(e) => setFontSize(Number(e.target.value))}
-              style={{ 
-                width: '100%',
-                accentColor: theme.colors.accent
-              }}
+              className="legacy-sidebar__range"
             />
           </div>
         </div>
       </div>
 
       {/* Control Centre Section */}
-      <div style={sectionStyle}>
+      <div className="legacy-sidebar__section">
         <div
-          style={sectionHeaderStyle}
+          className="legacy-sidebar__section-header"
           onClick={() => toggleSection('controls')}
         >
           <span>Control Centre</span>
-          <span style={{ ...iconStyle, transform: expandedSections.controls ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+          <span className="legacy-sidebar__section-icon" data-expanded={expandedSections.controls}>
             ▶
           </span>
         </div>
-        <div style={{ ...sectionContentStyle, display: expandedSections.controls ? 'block' : 'none' }}>
+        <div className="legacy-sidebar__section-content" data-visible={expandedSections.controls}>
           <button
-            style={buttonStyle}
+            className="legacy-sidebar__button"
             onClick={saveLayout}
           >
             💾 Save Layout
           </button>
           <button
-            style={buttonStyle}
+            className="legacy-sidebar__button"
             onClick={loadLayout}
           >
             📂 Load Layout
@@ -1502,21 +1308,21 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
           </button>
           
           {/* Layout Preset Buttons */}
-          <div style={{ display: "flex", gap: "4px", marginTop: "8px", flexWrap: "wrap" }}>
+          <div className="legacy-sidebar__button-row">
             <button
-              style={{...buttonStyle, fontSize: `${fontSize - 2}px`, padding: "2px 6px"}}
+              className="legacy-sidebar__button legacy-sidebar__button--compact"
               onClick={() => createLayoutPreset('grid')}
             >
               🔲 Grid
             </button>
             <button
-              style={{...buttonStyle, fontSize: `${fontSize - 2}px`, padding: "2px 6px"}}
+              className="legacy-sidebar__button legacy-sidebar__button--compact"
               onClick={() => createLayoutPreset('horizontal')}
             >
               ↔️ Horizontal
             </button>
             <button
-              style={{...buttonStyle, fontSize: `${fontSize - 2}px`, padding: "2px 6px"}}
+              className="legacy-sidebar__button legacy-sidebar__button--compact"
               onClick={() => createLayoutPreset('vertical')}
             >
               ↕️ Vertical
@@ -1524,19 +1330,19 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
           </div>
           
           <button
-            style={buttonStyle}
+            className="legacy-sidebar__button"
             onClick={clearSelection}
           >
             ❌ Clear Selection
           </button>
           <button
-            style={buttonStyle}
+            className="legacy-sidebar__button"
             onClick={clearFilters}
           >
             🔄 Clear Filters
           </button>
           <button
-            style={buttonStyle}
+            className="legacy-sidebar__button"
             onClick={resetLayout}
           >
             🔄 Reset Layout
@@ -1545,7 +1351,7 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
       </div>
 
       {/* Footer */}
-      <div style={{ marginTop: 'auto', padding: '8px 12px', borderTop: '1px solid #e8dfd0', fontSize: '10px', color: '#6b6b6b' }}>
+      <div className="legacy-sidebar__footer">
         Dockview v4.6.2
       </div>
       
@@ -1660,59 +1466,27 @@ const GraphQLPanel = React.memo(function GraphQLPanel(props) {
 
   if (loading) {
     return (
-      <div style={{ 
-        height: "100%", 
-        width: "100%", 
-        padding: 16, 
-        display: "flex", 
-        alignItems: "center", 
-        justifyContent: "center", 
-        flexDirection: "column",
-        background: theme.colors.background,
-        color: theme.colors.foreground,
-        fontSize: `${fontSize}px`,
-        fontFamily: selectedFont.value
-      }}>
-        <div style={{ fontSize: `${fontSize + 4}px`, color: theme.colors.accent, marginBottom: 8 }}>🔄 Loading {dataType}...</div>
-        <div style={{ fontSize: `${fontSize - 1}px`, color: theme.colors.textSecondary }}>Fetching data from GraphQL server</div>
+      <div className="legacy-graphql-panel legacy-graphql-panel__center">
+        <div className="legacy-graphql-panel__loading-title">🔄 Loading {dataType}...</div>
+        <div className="legacy-graphql-panel__loading-subtitle">Fetching data from GraphQL server</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={{ 
-        height: "100%", 
-        width: "100%", 
-        padding: 16, 
-        display: "flex", 
-        alignItems: "center", 
-        justifyContent: "center", 
-        flexDirection: "column",
-        background: theme.colors.background,
-        color: theme.colors.foreground,
-        fontSize: `${fontSize}px`,
-        fontFamily: selectedFont.value
-      }}>
-        <div style={{ fontSize: `${fontSize + 4}px`, color: "#d32f2f", marginBottom: 8 }}>❌ GraphQL Error</div>
-        <div style={{ fontSize: `${fontSize - 1}px`, color: theme.colors.textSecondary, textAlign: "center", marginBottom: 16 }}>
+      <div className="legacy-graphql-panel legacy-graphql-panel__center">
+        <div className="legacy-graphql-panel__error-title">❌ GraphQL Error</div>
+        <div className="legacy-graphql-panel__error-message">
           {error}
         </div>
         <button 
           onClick={handleRefresh}
-          style={{ 
-            padding: "8px 16px", 
-            background: theme.colors.accent, 
-            color: "white", 
-            border: "none", 
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontSize: `${fontSize - 1}px`
-          }}
+          className="legacy-graphql-panel__retry"
         >
           Retry
         </button>
-        <div style={{ fontSize: `${fontSize - 2}px`, color: theme.colors.textMuted, marginTop: 8 }}>
+        <div className="legacy-graphql-panel__error-meta">
           Server: /api/graphql (proxied to localhost:4000)
         </div>
       </div>
@@ -1722,86 +1496,35 @@ const GraphQLPanel = React.memo(function GraphQLPanel(props) {
   const items = data?.[dataType] || [];
   
   return (
-    <div style={{ 
-      height: "100%", 
-      width: "100%", 
-      display: "flex", 
-      flexDirection: "column",
-      background: theme.colors.background,
-      color: theme.colors.foreground,
-      fontSize: `${fontSize}px`
-    }}>
-      <div style={{ 
-        padding: "8px 12px", 
-        background: theme.colors.sidebarHeader, 
-        borderBottom: `1px solid ${theme.colors.sidebarBorder}`,
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center"
-      }}>
-        <div style={{ fontSize: `${fontSize + 2}px`, fontWeight: 600, color: theme.colors.foreground }}>
+    <div className="legacy-graphql-panel">
+      <div className="legacy-graphql-panel__header">
+        <div className="legacy-graphql-panel__title">
           {title} ({items.length} items)
         </div>
         <button 
           onClick={handleRefresh}
-          style={{ 
-            padding: "4px 8px", 
-            background: theme.colors.accent, 
-            color: "white", 
-            border: "none", 
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontSize: `${fontSize - 1}px`
-          }}
+          className="legacy-graphql-panel__refresh"
         >
           🔄 Refresh
         </button>
       </div>
       
-      <div 
-        style={{ 
-          flex: 1, 
-          padding: 16, 
-          overflow: "auto",
-          background: theme.colors.background,
-          color: theme.colors.foreground
-        }}
-      >
+      <div className="legacy-graphql-panel__content">
         {items.length === 0 ? (
-          <div style={{ 
-            textAlign: "center", 
-            color: theme.colors.textSecondary, 
-            fontSize: `${fontSize + 2}px` 
-          }}>
+          <div className="legacy-graphql-panel__empty">
             No {dataType} data available
           </div>
         ) : (
-          <div style={{ display: "grid", gap: 12 }}>
+          <div className="legacy-graphql-panel__grid">
             {items.map((item, index) => (
               <div 
                 key={item.id || index}
-                style={{ 
-                  padding: 12, 
-                  background: theme.colors.sidebarHeader, 
-                  border: `1px solid ${theme.colors.border}`, 
-                  borderRadius: "6px",
-                  fontSize: `${fontSize + 1}px`
-                }}
+                className="legacy-graphql-panel__card"
               >
-                <div style={{ 
-                  fontWeight: 600, 
-                  marginBottom: 6, 
-                  color: theme.colors.foreground 
-                }}>
+                <div className="legacy-graphql-panel__card-title">
                   {item.title || item.Ship_Name || item.Package_Name || `Item ${item.id || item.Ship_Id}`}
                 </div>
-                <div style={{ 
-                  display: "grid", 
-                  gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", 
-                  gap: 8, 
-                  fontSize: `${fontSize}px`, 
-                  color: theme.colors.textSecondary 
-                }}>
+                <div className="legacy-graphql-panel__card-meta">
                   {Object.entries(item).map(([key, value]) => (
                     key !== 'title' && key !== 'Ship_Name' && key !== 'Package_Name' && (
                       <div key={key}>
@@ -1925,6 +1648,7 @@ function App() {
 
   const apiRef = useRef(null);
   const initializedRef = useRef(false); // guard for React 18 StrictMode
+  const appShellRef = useRef(null);
 
   // Sidebar state
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
@@ -1935,6 +1659,30 @@ function App() {
     dateFrom: '',
     dateTo: ''
   });
+
+  React.useEffect(() => {
+    if (!appShellRef.current) return;
+    const root = appShellRef.current;
+    root.style.setProperty('--legacy-bg', theme.colors.background);
+    root.style.setProperty('--legacy-fg', theme.colors.foreground);
+    root.style.setProperty('--legacy-sidebar', theme.colors.sidebar);
+    root.style.setProperty('--legacy-sidebar-border', theme.colors.sidebarBorder);
+    root.style.setProperty('--legacy-sidebar-header', theme.colors.sidebarHeader);
+    root.style.setProperty('--legacy-accent', theme.colors.accent);
+    root.style.setProperty('--legacy-accent-hover', theme.colors.accentHover);
+    root.style.setProperty('--legacy-accent-light', theme.colors.accentLight);
+    root.style.setProperty('--legacy-text-secondary', theme.colors.textSecondary);
+    root.style.setProperty('--legacy-text-muted', theme.colors.textMuted);
+    root.style.setProperty('--legacy-border', theme.colors.border);
+    root.style.setProperty('--legacy-font-size', `${fontSize}px`);
+    root.style.setProperty('--legacy-font-size-sm', `${fontSize - 1}px`);
+    root.style.setProperty('--legacy-font-size-xs', `${fontSize - 2}px`);
+    root.style.setProperty('--legacy-font-size-xxs', `${fontSize - 3}px`);
+    root.style.setProperty('--legacy-font-size-lg', `${fontSize + 2}px`);
+    root.style.setProperty('--legacy-font-size-xl', `${fontSize + 4}px`);
+    root.style.setProperty('--legacy-font-family', selectedFont.value);
+    root.style.setProperty('--legacy-resize-guide-left', `${sidebarWidth + 4}px`);
+  }, [theme, fontSize, selectedFont, sidebarWidth]);
 
   // Focus navigation state - integrate with new focus management
   const [currentFocus, setCurrentFocus] = useState(() => {
@@ -2528,50 +2276,23 @@ function App() {
 
   return (
     <div 
-      className={`dockview-theme-${theme.name.toLowerCase().replace(' ', '-')}`} 
-      style={{ 
-        height: "100vh", 
-        width: "100vw", 
-        overflow: "hidden", 
-        background: theme.colors.background, 
-        color: theme.colors.foreground,
-        fontSize: `${fontSize}px`,
-        fontFamily: selectedFont.value
-      }}
+      ref={appShellRef}
+      className={`legacy-app dockview-theme-${theme.name.toLowerCase().replace(' ', '-')}`} 
     >
       {/* Top Toolbar */}
-      <div style={{ 
-        display: "flex", 
-        gap: 8, 
-        padding: "8px 10px", 
-        borderBottom: `1px solid ${theme.colors.sidebarBorder}`, 
-        background: theme.colors.sidebar, 
-        alignItems: "center" 
-      }}>
+      <div className="legacy-app__toolbar">
         <button 
           onClick={toggleSidebar} 
-          style={{ 
-            background: theme.colors.accent, 
-            color: "white", 
-            border: "none", 
-            borderRadius: "4px", 
-            padding: "4px 8px", 
-            cursor: "pointer",
-            fontSize: `${fontSize - 1}px`
-          }}
+          className="legacy-app__toggle-btn"
         >
           {sidebarCollapsed ? "☰ Show Sidebar" : "◀ Hide Sidebar"}
         </button>
-        <div style={{ 
-          marginLeft: "auto", 
-          fontSize: `${fontSize - 1}px`, 
-          color: theme.colors.textSecondary 
-        }}>
+        <div className="legacy-app__toolbar-title">
           Dockview Dashboard - {theme.name}
         </div>
       </div>
 
-      <div style={{ display: "flex", height: "calc(100vh - 48px)", position: "relative" }}>
+      <div className="legacy-app__layout">
         <Sidebar
           isCollapsed={sidebarCollapsed}
           onToggle={toggleSidebar}
@@ -2599,39 +2320,17 @@ function App() {
         {/* Resize Handle - positioned between sidebar and main content */}
         {!sidebarCollapsed && (
           <div
-            style={{
-              width: '4px',
-              height: '100%',
-              background: theme.colors.accentLight,
-              cursor: 'col-resize',
-              flexShrink: 0,
-              transition: 'background 0.2s ease'
-            }}
+            className="legacy-app__resize-handle"
             onMouseDown={handleMouseDown}
-            onMouseEnter={(e) => {
-              e.target.style.background = theme.colors.accentHover;
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = theme.colors.accentLight;
-            }}
           />
         )}
         
         {isResizing && (
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: `${sidebarWidth + 4}px`,
-            width: '2px',
-            height: '100%',
-            background: theme.colors.accent,
-            zIndex: 1000,
-            pointerEvents: 'none'
-          }} />
+          <div className="legacy-app__resize-guide" />
         )}
         
         {/* Dockview container with flex: 1 to fill remaining space */}
-        <div style={{ flex: 1, height: "100%", minWidth: 0 }}>
+        <div className="legacy-app__dockview">
           <DockviewReact 
             components={{ 
               panel: InfoPanel, 
@@ -2665,7 +2364,7 @@ function App() {
               }
             }} 
             onReady={onReady}
-            style={{ height: "100%", width: "100%" }} 
+            className="legacy-app__dockview-content"
           />
         </div>
       </div>
@@ -2769,7 +2468,7 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: '20px', color: 'red', fontFamily: 'monospace' }}>
+        <div className="legacy-app__error">
           <h2>Application Error</h2>
           <p>Error: {this.state.error?.message}</p>
           <p>Check console for details</p>

@@ -38,7 +38,7 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
     }
   };
 
-  const handleAppModeClick = (e) => {
+  const handleAppModeClick = () => {
     // Always switch to app mode
     handleModeClick('app');
   };

@@ -114,9 +114,6 @@ const BtopTerminal = ({ theme: propTheme, mode = 'data' }) => {
         // Debounce resize - only reconnect if dimensions actually changed significantly
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(() => {
-          const newCols = terminalInstanceRef.current.cols;
-          const newRows = terminalInstanceRef.current.rows;
-          
           // Only reconnect if dimensions changed significantly (avoid constant reconnections)
           // Reconnecting is expensive, so we'll skip it for now
           // The terminal will still fit to container, btop will just use initial dimensions
@@ -140,38 +137,20 @@ const BtopTerminal = ({ theme: propTheme, mode = 'data' }) => {
   }, [theme, isConnected]);
 
   return (
-    <div style={{
-      width: '100%',
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      background: theme.colors.bgSolid || '#151528',
-    }}>
+    <div className="btop-terminal">
       {/* Header */}
-      <div style={{
-        padding: '8px 12px',
-        background: theme.colors.glass || 'rgba(255, 255, 255, 0.08)',
-        borderBottom: `1px solid ${theme.colors.glassBorder || 'rgba(255, 255, 255, 0.15)'}`,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        fontSize: '11px',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div className="btop-terminal__header">
+        <div className="btop-terminal__header-row">
           <span>🖥️</span>
-          <span style={{ fontWeight: '600' }}>System Monitor (btop) - {serverName}</span>
+          <span className="btop-terminal__title">System Monitor (btop) - {serverName}</span>
           {isConnected && (
-            <span style={{ 
-              fontSize: '9px', 
-              color: theme.colors.accent || '#5b9bd5',
-              marginLeft: '8px'
-            }}>
+            <span className="btop-terminal__status">
               ● Connected
             </span>
           )}
         </div>
         {error && (
-          <span style={{ fontSize: '10px', color: '#ff6b6b' }}>
+          <span className="btop-terminal__error">
             ⚠️ {error}
           </span>
         )}
@@ -180,12 +159,7 @@ const BtopTerminal = ({ theme: propTheme, mode = 'data' }) => {
       {/* Terminal container */}
       <div 
         ref={terminalRef} 
-        style={{
-          flex: 1,
-          width: '100%',
-          padding: '8px',
-          overflow: 'hidden',
-        }}
+        className="btop-terminal__body"
       />
     </div>
   );

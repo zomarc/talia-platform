@@ -30,7 +30,7 @@ const UPDATE_USER_PREFERENCES = gql`
 /**
  * Presentational component for the sailing table
  */
-const SailingTablePresenter = ({ data, theme, onRefresh }) => {
+const SailingTablePresenter = ({ data }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   
@@ -209,7 +209,7 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
 
         // Register event listeners using Tabulator's .on() method
         instanceRef.current.on("rowClick", (e, row) => {
-          try { row?.select?.(); } catch {}
+          try { row?.select?.(); } catch { /* noop */ }
         });
 
         instanceRef.current.on("rowSelected", (row) => {
@@ -268,16 +268,7 @@ const SailingTablePresenter = ({ data, theme, onRefresh }) => {
     }
   }, [data]);
 
-  const defaultTheme = {
-    colors: {
-      background: '#ffffff',
-      foreground: '#2b2b2b'
-    }
-  };
-
-  const themeValues = theme || defaultTheme;
-
-  return <div ref={tableRef} style={{ width: "100%", height: "100%" }} />;
+  return <div ref={tableRef} className="focus-panel__table" />;
 };
 
 export default SailingTablePresenter;

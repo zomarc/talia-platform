@@ -6,10 +6,7 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
-
-// Event system for selection
-const SAIL_SELECT_EVENT = 'talia:sail.select';
-const SAIL_CLEAR_EVENT = 'talia:sail.clear';
+import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
 // Function to aggregate sailing data at sail level
 const aggregateSailingData = (rawData) => {
@@ -54,7 +51,7 @@ const aggregateSailingData = (rawData) => {
   return aggregatedData;
 };
 
-const SailingSummaryPresenter = ({ data, theme, onRefresh }) => {
+const SailingSummaryPresenter = ({ data, onRefresh }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const [tableInitialized, setTableInitialized] = useState(false);
@@ -237,7 +234,7 @@ const SailingSummaryPresenter = ({ data, theme, onRefresh }) => {
             { column: "sail_date_from", dir: "desc" }
           ],
           rowClick: (e, row) => {
-            try { row?.select?.(); } catch {}
+            try { row?.select?.(); } catch { /* noop */ }
           },
           rowSelectionChanged: (selectedData) => {
             const rec = selectedData && selectedData[0];
@@ -302,42 +299,13 @@ const SailingSummaryPresenter = ({ data, theme, onRefresh }) => {
     }
   }, [aggregatedData, tableInitialized]);
 
-  const defaultTheme = {
-    colors: {
-      background: '#ffffff',
-      foreground: '#2b2b2b'
-    }
-  };
-
-  const themeValues = theme || defaultTheme;
-
   return (
-    <div style={{
-      height: "100%",
-      width: "100%",
-      position: "relative",
-      background: themeValues.colors.background,
-      color: themeValues.colors.foreground
-    }}>
+    <div className="focus-panel">
       {onRefresh && (
-        <div style={{
-          position: 'absolute',
-          top: '8px',
-          right: '8px',
-          zIndex: 10
-        }}>
+        <div className="focus-panel__overlay focus-panel__overlay--right">
           <button
             onClick={onRefresh}
-            style={{
-              padding: '6px 12px',
-              fontSize: '12px',
-              border: `1px solid ${themeValues.colors.border || '#333333'}`,
-              borderRadius: '4px',
-              cursor: 'pointer',
-              background: themeValues.colors.cardBackground || themeValues.colors.background || '#2a2a2a',
-              color: themeValues.colors.foreground || '#ffffff',
-              fontWeight: '500'
-            }}
+            className="talia-btn talia-btn--small"
           >
             ↻ Refresh
           </button>
@@ -345,11 +313,7 @@ const SailingSummaryPresenter = ({ data, theme, onRefresh }) => {
       )}
       <div 
         ref={tableRef} 
-        style={{ 
-          height: "100%", 
-          width: "100%",
-          padding: '8px'
-        }} 
+        className="focus-panel__table"
       />
     </div>
   );

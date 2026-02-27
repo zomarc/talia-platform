@@ -9,36 +9,27 @@ import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
 
 /**
- * Helper function to generate heatmap color based on value
- * Returns a shade of red - darker for higher values
+ * Helper function to generate heatmap level based on value.
+ * Returns a number from 0-5 for CSS class mapping.
  */
-const getHeatmapColor = (value, maxValue) => {
+const getHeatmapLevel = (value, maxValue) => {
   if (!value || value === 0 || !maxValue || maxValue === 0) {
-    return { bg: '#ffffff', text: '#666666' };
+    return 0;
   }
 
-  const intensity = Math.min(value / maxValue, 1); // Normalize to 0-1
-  const alpha = 0.3 + (intensity * 0.7); // Range from 0.3 to 1.0
-  
-  // Red gradient: light red for low values, dark red for high values
-  const red = 220 - (intensity * 100); // 220 to 120
-  const green = 53 - (intensity * 53); // 53 to 0
-  const blue = 69 - (intensity * 69); // 69 to 0
-
-  return {
-    bg: `rgba(${Math.round(red)}, ${Math.round(green)}, ${Math.round(blue)}, ${alpha.toFixed(2)})`,
-    text: intensity > 0.5 ? '#ffffff' : '#000000'
-  };
+  const intensity = Math.min(value / maxValue, 1);
+  const scaled = Math.ceil(intensity * 5);
+  return Math.min(5, Math.max(1, scaled));
 };
 
 /**
- * Helper function to generate search trend indicator color
+ * Helper function to generate search trend indicator variant
  */
-const getTrendColor = (changePercent) => {
-  if (!changePercent && changePercent !== 0) return { bg: '#e0e0e0', text: '#666' };
-  if (changePercent > 0) return { bg: 'rgba(76, 175, 80, 0.2)', text: '#4caf50' };
-  if (changePercent < 0) return { bg: 'rgba(244, 67, 54, 0.2)', text: '#f44336' };
-  return { bg: 'rgba(158, 158, 158, 0.2)', text: '#9e9e9e' };
+const getTrendVariant = (changePercent) => {
+  if (!changePercent && changePercent !== 0) return 'neutral';
+  if (changePercent > 0) return 'positive';
+  if (changePercent < 0) return 'negative';
+  return 'neutral';
 };
 
 /**
@@ -49,9 +40,7 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
   months, 
   searchTrends, 
   combinedData,
-  trackedQueries,
   containsMockData,
-  theme, 
   onRefresh 
 }) => {
   const tableRef = useRef(null);
@@ -113,18 +102,16 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
           // Dynamic month columns with optional search trends overlay
           ...months.map(month => {
             const displayMonth = month;
-            
+            const hasTrend = combinedData && combinedData.some(row => row[`${month}_searchTrends`]);
+            const titleContent = showTrends
+              ? `<div class="demand-heatmap__month-header">
+                  <span>${displayMonth}</span>
+                  ${hasTrend ? '<span class="demand-heatmap__month-trend">📈 Trends</span>' : ''}
+                </div>`
+              : displayMonth;
+
             return {
-              title: showTrends ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-                  <span>{displayMonth}</span>
-                  {combinedData && combinedData.some(row => row[`${month}_searchTrends`]) && (
-                    <span style={{ fontSize: '9px', color: '#4caf50', fontWeight: '500' }}>
-                      📈 Trends
-                    </span>
-                  )}
-                </div>
-              ) : displayMonth,
+              title: titleContent,
               field: month,
               width: 100,
               hozAlign: 'center',
@@ -140,36 +127,19 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
                 const trendData = row[`${month}_searchTrends`];
                 
                 if (value === null || value === undefined) {
-                  return '<span style="color: #999;">-</span>';
+                  return '<span class="demand-heatmap__cell demand-heatmap__cell--empty">-</span>';
                 }
-                
-                const colors = getHeatmapColor(value, maxValue);
-                const fontWeight = value && value > 0 ? '600' : 'normal';
+
+                const level = getHeatmapLevel(value, maxValue);
+                const strongClass = value && value > 0 ? ' demand-heatmap__cell--strong' : '';
                 
                 // Build cell content
-                let cellContent = `<span style="
-                  display: inline-block;
-                  width: 100%;
-                  padding: 4px 8px;
-                  background-color: ${colors.bg};
-                  color: ${colors.text};
-                  font-weight: ${fontWeight};
-                  border-radius: 2px;
-                  text-align: center;
-                ">${value.toLocaleString()}</span>`;
+                let cellContent = `<span class="demand-heatmap__cell demand-heatmap__cell--level-${level}${strongClass}">${value.toLocaleString()}</span>`;
                 
                 // Add search trends indicator if available
                 if (showTrends && trendData) {
-                  const trendColors = getTrendColor(trendData.data[0]?.changePercent);
-                  cellContent += `<div style="
-                    margin-top: 2px;
-                    font-size: 9px;
-                    padding: 2px 4px;
-                    background-color: ${trendColors.bg};
-                    color: ${trendColors.text};
-                    border-radius: 2px;
-                    text-align: center;
-                  ">📊 ${Math.round(trendData.average).toLocaleString()}</div>`;
+                  const trendVariant = getTrendVariant(trendData.data[0]?.changePercent);
+                  cellContent += `<div class="demand-heatmap__trend demand-heatmap__trend--${trendVariant}">📊 ${Math.round(trendData.average).toLocaleString()}</div>`;
                 }
                 
                 return cellContent;
@@ -240,68 +210,30 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
   }, [combinedData, heatmapData]);
 
   return (
-    <div style={{ 
-      width: '100%', 
-      height: '100%', 
-      display: 'flex', 
-      flexDirection: 'column',
-      padding: '16px',
-      boxSizing: 'border-box'
-    }}>
+    <div className="demand-heatmap">
       {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '16px',
-        paddingBottom: '12px',
-        borderBottom: '1px solid var(--theme-border, #e0e0e0)'
-      }}>
+      <div className="demand-heatmap__header">
         <div>
-          <h3 style={{
-            margin: 0,
-            fontSize: '18px',
-            fontWeight: '600',
-            color: 'var(--theme-fg, #2b2b2b)'
-          }}>
+          <h3 className="demand-heatmap__title">
             Demand Heatmap with Search Trends Correlation
           </h3>
-          <p style={{
-            margin: '4px 0 0 0',
-            fontSize: '12px',
-            color: 'var(--theme-text-secondary, #666)'
-          }}>
+          <p className="demand-heatmap__subtitle">
             Viewing demand across itineraries by departure month, enhanced with search trend indicators
           </p>
         </div>
         
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div className="demand-heatmap__controls">
           <button
             onClick={() => setShowTrends(!showTrends)}
-            style={{
-              padding: '6px 12px',
-              fontSize: '12px',
-              backgroundColor: showTrends ? 'var(--theme-accent, #b08d57)' : 'transparent',
-              color: showTrends ? 'white' : 'var(--theme-fg, #2b2b2b)',
-              border: `1px solid var(--theme-accent, #b08d57)`,
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
+            className="demand-heatmap__toggle"
+            data-active={showTrends ? 'true' : 'false'}
           >
             {showTrends ? '📊 Hide Trends' : '📊 Show Trends'}
           </button>
           {onRefresh && (
             <button
               onClick={onRefresh}
-              style={{
-                padding: '6px 12px',
-                fontSize: '12px',
-                backgroundColor: 'var(--theme-accent, #b08d57)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
+              className="demand-heatmap__refresh"
             >
               Refresh
             </button>
@@ -311,31 +243,18 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
 
       {/* Search Trends Summary */}
       {showTrends && searchTrends && searchTrends.series && searchTrends.series.length > 0 && (
-        <div style={{
-          marginBottom: '12px',
-          padding: '12px',
-          background: 'rgba(76, 175, 80, 0.1)',
-          borderRadius: '6px',
-          border: '1px solid rgba(76, 175, 80, 0.3)',
-          fontSize: '12px'
-        }}>
-          <div style={{ fontWeight: '600', marginBottom: '4px', color: 'var(--theme-fg, #2b2b2b)' }}>
+        <div className="demand-heatmap__trends-summary">
+          <div className="demand-heatmap__trends-title">
             📈 Active Search Trends ({searchTrends.series.length} queries)
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '11px' }}>
+          <div className="demand-heatmap__trends-list">
             {searchTrends.series.map((series, idx) => (
-              <span key={idx} style={{
-                padding: '4px 8px',
-                background: 'white',
-                borderRadius: '4px',
-                border: '1px solid rgba(76, 175, 80, 0.3)'
-              }}>
+              <span key={idx} className="demand-heatmap__trend-chip">
                 "{series.query}": {series.latestCount.toLocaleString()} results
                 {series.changePercent !== 0 && (
-                  <span style={{ 
-                    color: series.changePercent > 0 ? '#4caf50' : '#f44336',
-                    marginLeft: '4px'
-                  }}>
+                  <span
+                    className={`demand-heatmap__trend-change demand-heatmap__trend-change--${series.changePercent > 0 ? 'positive' : 'negative'}`}
+                  >
                     ({series.changePercent > 0 ? '+' : ''}{series.changePercent.toFixed(1)}%)
                   </span>
                 )}
@@ -346,51 +265,31 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
       )}
 
       {/* Table Container */}
-      <div style={{ flex: 1, overflow: 'hidden' }}>
-        <div ref={tableRef} style={{ width: '100%', height: '100%' }} />
+      <div className="demand-heatmap__table">
+        <div ref={tableRef} className="demand-heatmap__table-host" />
       </div>
 
       {/* Legend */}
-      <div style={{
-        marginTop: '12px',
-        paddingTop: '12px',
-        borderTop: '1px solid var(--theme-border, #e0e0e0)',
-        fontSize: '12px',
-        color: 'var(--theme-text-secondary, #666)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '16px',
-        flexWrap: 'wrap'
-      }}>
+      <div className="demand-heatmap__legend">
         <span>Legend:</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{
-            width: '20px',
-            height: '20px',
-            backgroundColor: 'rgba(220, 53, 69, 0.3)',
-            border: '1px solid #ccc'
-          }} />
+        <div className="demand-heatmap__legend-item">
+          <div className="demand-heatmap__legend-swatch demand-heatmap__legend-swatch--low" />
           <span>Low Demand</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{
-            width: '20px',
-            height: '20px',
-            backgroundColor: 'rgba(220, 53, 69, 0.8)',
-            border: '1px solid #ccc'
-          }} />
+        <div className="demand-heatmap__legend-item">
+          <div className="demand-heatmap__legend-swatch demand-heatmap__legend-swatch--high" />
           <span>High Demand</span>
         </div>
         {showTrends && (
           <>
-            <div style={{ width: '1px', height: '16px', background: '#ccc' }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="demand-heatmap__legend-divider" />
+            <div className="demand-heatmap__legend-item">
               <span>📊</span>
               <span>Search Trends (avg results/month)</span>
             </div>
           </>
         )}
-        <div style={{ marginLeft: 'auto', fontStyle: 'italic' }}>
+        <div className="demand-heatmap__legend-note">
           Max demand: {maxValue.toLocaleString()} {containsMockData && '(includes mock data)'}
         </div>
       </div>

@@ -7,11 +7,9 @@ import React, { useState, useEffect } from 'react';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { isAdmin } from '../../../utils/roleUtils';
 import ContextRowMonitorPresenter from './ContextRowMonitorPresenter';
-import { useTheme } from '../../../contexts/ThemeContext';
 
 const ContextRowMonitorContainer = () => {
   const { user } = useSupabaseAuth();
-  const { theme } = useTheme();
   const [currentContext, setCurrentContext] = useState(null);
 
   // Check if user is admin
@@ -101,13 +99,9 @@ const ContextRowMonitorContainer = () => {
   // Show access denied for non-admins
   if (!adminAccess) {
     return (
-      <div style={{
-        padding: '40px',
-        textAlign: 'center',
-        color: '#666'
-      }}>
+      <div className="focus-panel-empty">
         <h3>Access Denied</h3>
-        <p>This panel is only available to administrators.</p>
+        <p className="focus-panel-empty__detail">This panel is only available to administrators.</p>
       </div>
     );
   }
@@ -115,7 +109,6 @@ const ContextRowMonitorContainer = () => {
   return (
     <ContextRowMonitorPresenter 
       currentContext={currentContext}
-      theme={theme}
     />
   );
 };

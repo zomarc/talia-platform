@@ -18,11 +18,7 @@ import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithCon
 import TemplatePresenter from './TemplatePresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
-import { useTheme } from '../../../contexts/ThemeContext';
-
-const TemplateContainer = ({ filters = {} }) => {
-  const { theme } = useTheme();
-  
+const TemplateContainer = () => {
   console.log('[TemplateContainer] Component rendering');
   
   // Use reusable hook for context-based data fetching with server-side filtering
@@ -69,30 +65,20 @@ const TemplateContainer = ({ filters = {} }) => {
   // Handle empty data
   if (!transformedData || transformedData.length === 0) {
     return (
-      <div style={{ 
-        padding: '40px', 
-        textAlign: 'center',
-        color: 'var(--theme-fg)'
-      }}>
+      <div className="focus-panel-empty">
         <p>
           {selectedSailCode 
             ? `No data found for selected context`
             : 'No data available'}
         </p>
-        <button 
-          onClick={refetch}
-          style={{
-            marginTop: '16px',
-            padding: '8px 16px',
-            backgroundColor: 'var(--theme-accent)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Retry
-        </button>
+        <div className="focus-panel-empty__action">
+          <button 
+            className="talia-btn talia-btn--primary"
+            onClick={refetch}
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -101,9 +87,7 @@ const TemplateContainer = ({ filters = {} }) => {
   return (
     <TemplatePresenter 
       data={transformedData} 
-      theme={theme}
       onRefresh={refetch}
-      selectedSailCode={selectedSailCode}
       // TODO: Pass additional props as needed
     />
   );

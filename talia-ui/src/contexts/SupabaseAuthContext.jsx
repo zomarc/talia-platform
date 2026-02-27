@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { GraphQLUtils } from '../lib/apolloClient';
@@ -368,8 +369,6 @@ export const SupabaseAuthProvider = ({ children }) => {
       setLoading(false);
     }
     
-    // Return the sign-in result (data will be set by auth state change listener)
-    return signInData;
   };
 
   const signOut = async () => {

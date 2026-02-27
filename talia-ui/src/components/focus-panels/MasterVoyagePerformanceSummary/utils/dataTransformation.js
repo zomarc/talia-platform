@@ -28,11 +28,12 @@ const generateMockValue = (voyage, columnType, seed = 0) => {
       return 1200 + (random * 400); // 1200-1600 EUR
     case 'price_max_deluxe':
       return 1600 + (random * 600); // 1600-2200 EUR
-    case 'revenue':
+    case 'revenue': {
       const duration = voyage.sail_days || 7;
       const pax = 100 + (random * 400); // 100-500 pax
       const avgPrice = 800 + (random * 400);
       return Math.round(pax * avgPrice * duration);
+    }
     case 'pax':
       return Math.round(100 + (random * 400)); // 100-500
     case 'ppp':

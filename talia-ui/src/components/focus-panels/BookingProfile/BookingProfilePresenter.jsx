@@ -177,39 +177,15 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuil
     theme?.colors?.foreground
   ]);
 
-  // Calculate additional metrics
-  const totalNewBookings = currentYear.bookingDataPoints?.reduce((sum, dp) => sum + dp.newBookings, 0) || 0;
-  const totalCancellations = currentYear.bookingDataPoints?.reduce((sum, dp) => sum + dp.cancellations, 0) || 0;
-  const netBookings = totalNewBookings - totalCancellations;
-
   return (
-    <div style={{
-      padding: '20px',
-      background: theme?.colors?.background || '#ffffff',
-      borderRadius: '8px',
-      color: theme?.colors?.foreground || '#2b2b2b'
-    }}>
+    <div className="booking-profile">
       {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '20px'
-      }}>
+      <div className="booking-profile__header">
         <div>
-          <h2 style={{
-            margin: 0,
-            fontSize: '24px',
-            fontWeight: 'bold',
-            color: theme?.colors?.foreground || '#2b2b2b'
-          }}>
+          <h2 className="booking-profile__title">
             Booking Profile: {sailCode}
           </h2>
-          <p style={{
-            margin: '4px 0 0 0',
-            fontSize: '14px',
-            color: theme?.colors?.textSecondary || '#666'
-          }}>
+          <p className="booking-profile__subtitle">
             {currentYear.shipName} • Sailing: {new Date(currentYear.sailDate).toLocaleDateString()}
             {currentYear.daysUntilSailing !== null && (
               <span> • {currentYear.daysUntilSailing} days until sailing</span>
@@ -218,50 +194,33 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuil
         </div>
         <button
           onClick={onRefresh}
-          style={{
-            padding: '8px 16px',
-            background: theme?.colors?.accent || '#b08d57',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '14px'
-          }}
+          className="booking-profile__refresh"
         >
           Refresh
         </button>
       </div>
 
       {/* KPI Cards */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '16px',
-        marginBottom: '24px'
-      }}>
+      <div className="booking-profile__kpi-grid">
         <KPICard
           title="Current Bookings"
           value={currentYear.currentBookings.toLocaleString()}
           subtitle="Reservations"
-          theme={theme}
         />
         <KPICard
           title="Total Guests"
           value={currentYear.currentGuests.toLocaleString()}
           subtitle="Passengers"
-          theme={theme}
         />
         <KPICard
           title="Booking Velocity"
           value={currentYear.bookingVelocity.toFixed(1)}
           subtitle="Bookings per day"
-          theme={theme}
         />
         <KPICard
           title="Cancellation Rate"
           value={`${currentYear.cancellationRate.toFixed(1)}%`}
           subtitle="Of total bookings"
-          theme={theme}
           isWarning={currentYear.cancellationRate > 10}
         />
         {comparison && (
@@ -270,14 +229,12 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuil
               title="YoY Bookings"
               value={`${comparison.bookingsDifference > 0 ? '+' : ''}${comparison.bookingsDifference}`}
               subtitle={`${comparison.bookingsPercentageChange > 0 ? '+' : ''}${comparison.bookingsPercentageChange.toFixed(1)}%`}
-              theme={theme}
               isPositive={comparison.bookingsDifference > 0}
             />
             <KPICard
               title="YoY Guests"
               value={`${comparison.guestsDifference > 0 ? '+' : ''}${comparison.guestsDifference}`}
               subtitle={`${comparison.guestsPercentageChange > 0 ? '+' : ''}${comparison.guestsPercentageChange.toFixed(1)}%`}
-              theme={theme}
               isPositive={comparison.guestsDifference > 0}
             />
           </>
@@ -285,25 +242,17 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuil
       </div>
 
       {/* Booking Trends Chart */}
-      <div style={{
-        background: theme?.colors?.glass || 'rgba(255, 255, 255, 0.8)',
-        padding: '20px',
-        borderRadius: '8px',
-        border: `1px solid ${theme?.colors?.border || '#e0e0e0'}`,
-        marginBottom: '24px',
-        height: '400px'
-      }}>
+      <div className="booking-profile__chart">
         <canvas ref={chartRef} />
       </div>
 
       {/* Build Curves Chart */}
       {includeBuildCurves && data?.buildCurves && data.buildCurves.length > 0 && (
-        <div style={{ marginBottom: '24px' }}>
+        <div className="booking-profile__build-curves">
           <BuildCurveChart
             buildCurves={data.buildCurves}
             targetCurves={null} // Can be passed from target profile if available
             previousYearCurves={data?.previousYear?.buildCurves}
-            theme={theme}
             sailCode={sailCode}
           />
         </div>
@@ -311,32 +260,17 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuil
 
       {/* Year-over-Year Comparison */}
       {isYOY && previousYear && (
-        <div style={{
-          background: theme?.colors?.glass || 'rgba(255, 255, 255, 0.8)',
-          padding: '20px',
-          borderRadius: '8px',
-          border: `1px solid ${theme?.colors?.border || '#e0e0e0'}`
-        }}>
-          <h3 style={{
-            margin: '0 0 16px 0',
-            fontSize: '18px',
-            fontWeight: '600',
-            color: theme?.colors?.foreground || '#2b2b2b'
-          }}>
+        <div className="booking-profile__comparison">
+          <h3 className="booking-profile__comparison-title">
             Year-over-Year Comparison
           </h3>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-            gap: '16px'
-          }}>
+          <div className="booking-profile__comparison-grid">
             <ComparisonCard
               title="Current Year"
               sailCode={currentYear.sailCode}
               bookings={currentYear.currentBookings}
               guests={currentYear.currentGuests}
               velocity={currentYear.bookingVelocity}
-              theme={theme}
             />
             <ComparisonCard
               title="Previous Year"
@@ -344,7 +278,6 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuil
               bookings={previousYear.currentBookings}
               guests={previousYear.currentGuests}
               velocity={previousYear.bookingVelocity}
-              theme={theme}
             />
           </div>
         </div>
@@ -354,46 +287,19 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuil
 };
 
 // KPI Card Component
-const KPICard = ({ title, value, subtitle, theme, isPositive, isWarning }) => {
-  const cardStyle = {
-    background: theme?.colors?.glass || 'rgba(255, 255, 255, 0.8)',
-    padding: '16px',
-    borderRadius: '8px',
-    border: `1px solid ${theme?.colors?.border || '#e0e0e0'}`,
-    boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-  };
-
-  const valueColor = isWarning 
-    ? '#f44336' 
-    : isPositive 
-      ? '#4caf50' 
-      : isPositive === false 
-        ? '#f44336' 
-        : theme?.colors?.foreground || '#2b2b2b';
+const KPICard = ({ title, value, subtitle, isPositive, isWarning }) => {
+  const variant = isWarning ? 'warning' : isPositive ? 'positive' : isPositive === false ? 'negative' : 'neutral';
 
   return (
-    <div style={cardStyle}>
-      <div style={{
-        fontSize: '12px',
-        color: theme?.colors?.textSecondary || '#666',
-        marginBottom: '8px',
-        fontWeight: '500'
-      }}>
+    <div className="booking-kpi">
+      <div className="booking-kpi__title">
         {title}
       </div>
-      <div style={{
-        fontSize: '28px',
-        fontWeight: 'bold',
-        color: valueColor,
-        marginBottom: '4px'
-      }}>
+      <div className="booking-kpi__value" data-variant={variant}>
         {value}
       </div>
       {subtitle && (
-        <div style={{
-          fontSize: '12px',
-          color: theme?.colors?.textMuted || '#999'
-        }}>
+        <div className="booking-kpi__subtitle">
           {subtitle}
         </div>
       )}
@@ -402,46 +308,28 @@ const KPICard = ({ title, value, subtitle, theme, isPositive, isWarning }) => {
 };
 
 // Comparison Card Component
-const ComparisonCard = ({ title, sailCode, bookings, guests, velocity, theme }) => {
+const ComparisonCard = ({ title, sailCode, bookings, guests, velocity }) => {
   return (
-    <div style={{
-      background: theme?.colors?.selected || 'rgba(253, 234, 204, 0.3)',
-      padding: '16px',
-      borderRadius: '8px',
-      border: `1px solid ${theme?.colors?.border || '#e0e0e0'}`
-    }}>
-      <div style={{
-        fontSize: '14px',
-        fontWeight: '600',
-        color: theme?.colors?.foreground || '#2b2b2b',
-        marginBottom: '12px'
-      }}>
+    <div className="booking-comparison">
+      <div className="booking-comparison__title">
         {title}
       </div>
-      <div style={{
-        fontSize: '12px',
-        color: theme?.colors?.textSecondary || '#666',
-        marginBottom: '8px'
-      }}>
+      <div className="booking-comparison__subtitle">
         {sailCode}
       </div>
-      <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <MetricRow label="Bookings" value={bookings.toLocaleString()} theme={theme} />
-        <MetricRow label="Guests" value={guests.toLocaleString()} theme={theme} />
-        <MetricRow label="Velocity" value={velocity.toFixed(1)} theme={theme} />
+      <div className="booking-comparison__metrics">
+        <MetricRow label="Bookings" value={bookings.toLocaleString()} />
+        <MetricRow label="Guests" value={guests.toLocaleString()} />
+        <MetricRow label="Velocity" value={velocity.toFixed(1)} />
       </div>
     </div>
   );
 };
 
-const MetricRow = ({ label, value, theme }) => (
-  <div style={{
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '13px'
-  }}>
-    <span style={{ color: theme?.colors?.textSecondary || '#666' }}>{label}:</span>
-    <span style={{ fontWeight: '600', color: theme?.colors?.foreground || '#2b2b2b' }}>{value}</span>
+const MetricRow = ({ label, value }) => (
+  <div className="booking-metric">
+    <span className="booking-metric__label">{label}:</span>
+    <span className="booking-metric__value">{value}</span>
   </div>
 );
 

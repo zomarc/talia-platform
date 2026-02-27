@@ -8,44 +8,15 @@
 
 import React, { useState } from 'react';
 import { useDataDebugInfo } from '../../hooks/data/useDataDebugInfo';
-import { LoadingSpinner, ErrorMessage } from '../shared';
+import { LoadingSpinner } from '../shared';
 
-const DataDebugView = ({ theme = {} }) => {
+const DataDebugView = () => {
   const { data, loading, error, refetch } = useDataDebugInfo();
   const [selectedShipCode, setSelectedShipCode] = useState(null);
 
-  // Default theme values if not provided
-  const defaultTheme = {
-    colors: {
-      background: '#1a1a1a',
-      foreground: '#ffffff',
-      cardBackground: '#2a2a2a',
-      border: '#3a3a3a',
-      tableHeader: '#3a3a3a',
-      textSecondary: '#cccccc',
-      accent: '#b08d57',
-      inputBackground: '#1a1a1a'
-    }
-  };
-
-  const finalTheme = {
-    colors: {
-      ...defaultTheme.colors,
-      ...(theme?.colors || {})
-    }
-  };
-
   if (loading) {
     return (
-      <div style={{ 
-        padding: '20px', 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center',
-        minHeight: '400px',
-        background: finalTheme.colors.background,
-        color: finalTheme.colors.foreground
-      }}>
+      <div className="data-debug data-debug__state data-debug__state--centered">
         <LoadingSpinner />
       </div>
     );
@@ -53,28 +24,13 @@ const DataDebugView = ({ theme = {} }) => {
 
   if (error) {
     return (
-      <div style={{ 
-        padding: '20px',
-        background: finalTheme.colors.background,
-        color: finalTheme.colors.foreground
-      }}>
-        <div style={{
-          padding: '16px',
-          background: '#2a1a1a',
-          border: '1px solid #d32f2f',
-          borderRadius: '8px',
-          marginBottom: '16px'
-        }}>
-          <h3 style={{ marginTop: 0, color: '#d32f2f' }}>Error Loading Data</h3>
-          <p style={{ color: finalTheme.colors.textSecondary }}>
+      <div className="data-debug data-debug__state">
+        <div className="data-debug__error-card">
+          <h3 className="data-debug__error-title">Error Loading Data</h3>
+          <p className="data-debug__error-message">
             {error.message || 'Failed to load data debug information'}
           </p>
-          <p style={{ 
-            fontSize: '12px', 
-            color: finalTheme.colors.textSecondary,
-            marginTop: '8px',
-            fontFamily: 'monospace'
-          }}>
+          <p className="data-debug__error-note">
             Note: The GraphQL server may need to be restarted to pick up schema changes.
             <br />
             If you see "Cannot query field dataDebugInfo", restart the server with: npm run dev
@@ -82,15 +38,7 @@ const DataDebugView = ({ theme = {} }) => {
         </div>
         <button
           onClick={refetch}
-          style={{
-            padding: '8px 16px',
-            background: finalTheme.colors.accent,
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '14px'
-          }}
+          className="talia-btn talia-btn--primary"
         >
           Retry
         </button>
@@ -100,12 +48,8 @@ const DataDebugView = ({ theme = {} }) => {
 
   if (!data) {
     return (
-      <div style={{ 
-        padding: '20px',
-        background: theme?.colors?.background || '#1a1a1a',
-        color: theme?.colors?.foreground || '#ffffff'
-      }}>
-        <p>No data available</p>
+      <div className="data-debug data-debug__state data-debug__state--empty">
+        <p className="data-debug__empty-text">No data available</p>
       </div>
     );
   }
@@ -129,107 +73,31 @@ const DataDebugView = ({ theme = {} }) => {
       })
     : overview.yearMonthBreakdown;
 
-  const cardStyle = {
-    background: finalTheme.colors.cardBackground,
-    border: `1px solid ${finalTheme.colors.border}`,
-    borderRadius: '8px',
-    padding: '16px',
-    marginBottom: '16px'
-  };
-
-  const tableStyle = {
-    width: '100%',
-    borderCollapse: 'collapse',
-    fontSize: '14px'
-  };
-
-  const thStyle = {
-    background: finalTheme.colors.tableHeader,
-    color: finalTheme.colors.foreground,
-    padding: '12px',
-    textAlign: 'left',
-    borderBottom: `2px solid ${finalTheme.colors.border}`,
-    fontWeight: '600'
-  };
-
-  const tdStyle = {
-    padding: '10px 12px',
-    borderBottom: `1px solid ${finalTheme.colors.border}`,
-    color: finalTheme.colors.textSecondary
-  };
-
   return (
-    <div style={{ 
-      padding: '20px',
-      background: finalTheme.colors.background,
-      color: finalTheme.colors.foreground,
-      minHeight: '100%'
-    }}>
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        marginBottom: '24px'
-      }}>
-        <h2 style={{ 
-          margin: 0,
-          color: finalTheme.colors.foreground,
-          fontSize: '24px',
-          fontWeight: '600'
-        }}>
-          Data Debug View
-        </h2>
+    <div className="data-debug">
+      <div className="data-debug__header">
+        <h2 className="data-debug__title">Data Debug View</h2>
         <button
           onClick={refetch}
-          style={{
-            padding: '8px 16px',
-            background: finalTheme.colors.accent,
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: '500'
-          }}
+          className="talia-btn talia-btn--primary data-debug__refresh"
         >
           🔄 Refresh
         </button>
       </div>
 
       {/* Overview Section */}
-      <div style={cardStyle}>
-        <h3 style={{ 
-          marginTop: 0,
-          marginBottom: '16px',
-          color: finalTheme.colors.foreground,
-          fontSize: '18px'
-        }}>
-          Overview
-        </h3>
-        
+      <div className="data-debug__card">
+        <h3 className="data-debug__section-title">Overview</h3>
+
         {/* Ship Code Filter */}
-        <div style={{ marginBottom: '16px' }}>
-          <label style={{ 
-            display: 'block',
-            marginBottom: '8px',
-            color: finalTheme.colors.textSecondary,
-            fontSize: '14px'
-          }}>
+        <div className="data-debug__filter">
+          <label className="data-debug__label">
             Filter by Ship Code:
           </label>
           <select
             value={selectedShipCode || ''}
             onChange={(e) => setSelectedShipCode(e.target.value || null)}
-            style={{
-              padding: '8px 12px',
-              background: finalTheme.colors.inputBackground,
-              color: finalTheme.colors.foreground,
-              border: `1px solid ${finalTheme.colors.border}`,
-              borderRadius: '4px',
-              fontSize: '14px',
-              cursor: 'pointer',
-              minWidth: '200px'
-            }}
+            className="data-debug__select"
           >
             <option value="">All Ships</option>
             {overview.shipCodes.map(shipCode => (
@@ -239,130 +107,60 @@ const DataDebugView = ({ theme = {} }) => {
         </div>
 
         {/* Summary Cards */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px',
-          marginBottom: '24px'
-        }}>
-          <div style={{
-            ...cardStyle,
-            marginBottom: 0,
-            textAlign: 'center'
-          }}>
-            <div style={{ 
-              fontSize: '12px',
-              color: finalTheme.colors.textSecondary,
-              marginBottom: '8px'
-            }}>
-              Total Capacity
-            </div>
-            <div style={{ 
-              fontSize: '24px',
-              fontWeight: '600',
-              color: finalTheme.colors.accent
-            }}>
+        <div className="data-debug__summary-grid">
+          <div className="data-debug__summary-card">
+            <div className="data-debug__summary-label">Total Capacity</div>
+            <div className="data-debug__summary-value">
               {overview.totalCapacity.toLocaleString()}
             </div>
           </div>
-          
-          <div style={{
-            ...cardStyle,
-            marginBottom: 0,
-            textAlign: 'center'
-          }}>
-            <div style={{ 
-              fontSize: '12px',
-              color: finalTheme.colors.textSecondary,
-              marginBottom: '8px'
-            }}>
-              Total Booked
-            </div>
-            <div style={{ 
-              fontSize: '24px',
-              fontWeight: '600',
-              color: finalTheme.colors.accent
-            }}>
+
+          <div className="data-debug__summary-card">
+            <div className="data-debug__summary-label">Total Booked</div>
+            <div className="data-debug__summary-value">
               {overview.totalBooked.toLocaleString()}
             </div>
           </div>
-          
-          <div style={{
-            ...cardStyle,
-            marginBottom: 0,
-            textAlign: 'center'
-          }}>
-            <div style={{ 
-              fontSize: '12px',
-              color: finalTheme.colors.textSecondary,
-              marginBottom: '8px'
-            }}>
-              Available
-            </div>
-            <div style={{ 
-              fontSize: '24px',
-              fontWeight: '600',
-              color: finalTheme.colors.accent
-            }}>
+
+          <div className="data-debug__summary-card">
+            <div className="data-debug__summary-label">Available</div>
+            <div className="data-debug__summary-value">
               {(overview.totalCapacity - overview.totalBooked).toLocaleString()}
             </div>
           </div>
-          
-          <div style={{
-            ...cardStyle,
-            marginBottom: 0,
-            textAlign: 'center'
-          }}>
-            <div style={{ 
-              fontSize: '12px',
-              color: finalTheme.colors.textSecondary,
-              marginBottom: '8px'
-            }}>
-              Sailing Days
-            </div>
-            <div style={{ 
-              fontSize: '24px',
-              fontWeight: '600',
-              color: finalTheme.colors.accent
-            }}>
+
+          <div className="data-debug__summary-card">
+            <div className="data-debug__summary-label">Sailing Days</div>
+            <div className="data-debug__summary-value">
               {filteredSailingDays.length}
             </div>
           </div>
         </div>
 
         {/* Year/Month Breakdown */}
-        <div style={{ marginBottom: '24px' }}>
-          <h4 style={{ 
-            marginBottom: '12px',
-            color: finalTheme.colors.foreground,
-            fontSize: '16px'
-          }}>
-            Year/Month Breakdown
-          </h4>
-          <div style={{ 
-            maxHeight: '300px',
-            overflowY: 'auto'
-          }}>
-            <table style={tableStyle}>
+        <div className="data-debug__subsection">
+          <h4 className="data-debug__subsection-title">Year/Month Breakdown</h4>
+          <div className="data-debug__table-scroll data-debug__table-scroll--medium">
+            <table className="data-debug__table">
               <thead>
                 <tr>
-                  <th style={thStyle}>Year</th>
-                  <th style={thStyle}>Month</th>
-                  <th style={thStyle}>Capacity</th>
-                  <th style={thStyle}>Booked</th>
-                  <th style={thStyle}>Available</th>
-                  <th style={thStyle}>Sailing Days</th>
+                  <th className="data-debug__th">Year</th>
+                  <th className="data-debug__th">Month</th>
+                  <th className="data-debug__th">Capacity</th>
+                  <th className="data-debug__th">Booked</th>
+                  <th className="data-debug__th">Available</th>
+                  <th className="data-debug__th">Sailing Days</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredYearMonth.map((ym, idx) => (
+                {filteredYearMonth.map((ym) => (
                   <tr key={`${ym.year}-${ym.month}`}>
-                    <td style={tdStyle}>{ym.year}</td>
-                    <td style={tdStyle}>{ym.month}</td>
-                    <td style={tdStyle}>{ym.capacity.toLocaleString()}</td>
-                    <td style={tdStyle}>{ym.booked.toLocaleString()}</td>
-                    <td style={tdStyle}>{ym.available.toLocaleString()}</td>
-                    <td style={tdStyle}>{ym.sailingDays}</td>
+                    <td className="data-debug__td">{ym.year}</td>
+                    <td className="data-debug__td">{ym.month}</td>
+                    <td className="data-debug__td">{ym.capacity.toLocaleString()}</td>
+                    <td className="data-debug__td">{ym.booked.toLocaleString()}</td>
+                    <td className="data-debug__td">{ym.available.toLocaleString()}</td>
+                    <td className="data-debug__td">{ym.sailingDays}</td>
                   </tr>
                 ))}
               </tbody>
@@ -371,38 +169,31 @@ const DataDebugView = ({ theme = {} }) => {
         </div>
 
         {/* Sailing Days (first 20) */}
-        <div>
-          <h4 style={{ 
-            marginBottom: '12px',
-            color: finalTheme.colors.foreground,
-            fontSize: '16px'
-          }}>
+        <div className="data-debug__subsection">
+          <h4 className="data-debug__subsection-title">
             Sailing Days {filteredSailingDays.length > 20 ? `(showing first 20 of ${filteredSailingDays.length})` : ''}
           </h4>
-          <div style={{ 
-            maxHeight: '400px',
-            overflowY: 'auto'
-          }}>
-            <table style={tableStyle}>
+          <div className="data-debug__table-scroll data-debug__table-scroll--large">
+            <table className="data-debug__table">
               <thead>
                 <tr>
-                  <th style={thStyle}>Date</th>
-                  <th style={thStyle}>Ship</th>
-                  <th style={thStyle}>Sail Code</th>
-                  <th style={thStyle}>Capacity</th>
-                  <th style={thStyle}>Booked</th>
-                  <th style={thStyle}>Available</th>
+                  <th className="data-debug__th">Date</th>
+                  <th className="data-debug__th">Ship</th>
+                  <th className="data-debug__th">Sail Code</th>
+                  <th className="data-debug__th">Capacity</th>
+                  <th className="data-debug__th">Booked</th>
+                  <th className="data-debug__th">Available</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredSailingDays.slice(0, 20).map((day, idx) => (
+                {filteredSailingDays.slice(0, 20).map((day) => (
                   <tr key={`${day.date}-${day.shipCode}-${day.sailCode || 'unknown'}`}>
-                    <td style={tdStyle}>{day.date}</td>
-                    <td style={tdStyle}>{day.shipCode || 'N/A'}</td>
-                    <td style={tdStyle}>{day.sailCode || 'N/A'}</td>
-                    <td style={tdStyle}>{day.capacity.toLocaleString()}</td>
-                    <td style={tdStyle}>{day.booked.toLocaleString()}</td>
-                    <td style={tdStyle}>{day.available.toLocaleString()}</td>
+                    <td className="data-debug__td">{day.date}</td>
+                    <td className="data-debug__td">{day.shipCode || 'N/A'}</td>
+                    <td className="data-debug__td">{day.sailCode || 'N/A'}</td>
+                    <td className="data-debug__td">{day.capacity.toLocaleString()}</td>
+                    <td className="data-debug__td">{day.booked.toLocaleString()}</td>
+                    <td className="data-debug__td">{day.available.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
@@ -412,50 +203,41 @@ const DataDebugView = ({ theme = {} }) => {
       </div>
 
       {/* Tables Overview */}
-      <div style={cardStyle}>
-        <h3 style={{ 
-          marginTop: 0,
-          marginBottom: '16px',
-          color: finalTheme.colors.foreground,
-          fontSize: '18px'
-        }}>
-          Tables Overview
-        </h3>
-        <div style={{ 
-          overflowX: 'auto'
-        }}>
-          <table style={tableStyle}>
+      <div className="data-debug__card">
+        <h3 className="data-debug__section-title">Tables Overview</h3>
+        <div className="data-debug__table-container">
+          <table className="data-debug__table">
             <thead>
               <tr>
-                <th style={thStyle}>Table Name</th>
-                <th style={thStyle}>Row Count</th>
-                <th style={thStyle}>Last Snapshot Date</th>
-                <th style={thStyle}>Changes (Last Sync)</th>
-                <th style={thStyle}>Changes (24 Hours)</th>
-                <th style={thStyle}>Changes (Last Month)</th>
+                <th className="data-debug__th">Table Name</th>
+                <th className="data-debug__th">Row Count</th>
+                <th className="data-debug__th">Last Snapshot Date</th>
+                <th className="data-debug__th">Changes (Last Sync)</th>
+                <th className="data-debug__th">Changes (24 Hours)</th>
+                <th className="data-debug__th">Changes (Last Month)</th>
               </tr>
             </thead>
             <tbody>
-              {tables.map((table, idx) => (
+              {tables.map((table) => (
                 <tr key={table.tableName}>
-                  <td style={tdStyle}>
-                    <strong style={{ color: finalTheme.colors.foreground }}>
+                  <td className="data-debug__td">
+                    <strong className="data-debug__table-name">
                       {table.tableName}
                     </strong>
                   </td>
-                  <td style={tdStyle}>{table.rowCount.toLocaleString()}</td>
-                  <td style={tdStyle}>
+                  <td className="data-debug__td">{table.rowCount.toLocaleString()}</td>
+                  <td className="data-debug__td">
                     {table.lastSnapshotDate 
                       ? new Date(table.lastSnapshotDate).toLocaleDateString()
                       : 'N/A'}
                   </td>
-                  <td style={tdStyle}>
+                  <td className="data-debug__td">
                     {table.changesLastSync !== null 
                       ? table.changesLastSync.toLocaleString()
                       : 'N/A'}
                   </td>
-                  <td style={tdStyle}>{table.changes24Hours.toLocaleString()}</td>
-                  <td style={tdStyle}>{table.changesLastMonth.toLocaleString()}</td>
+                  <td className="data-debug__td">{table.changes24Hours.toLocaleString()}</td>
+                  <td className="data-debug__td">{table.changesLastMonth.toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>

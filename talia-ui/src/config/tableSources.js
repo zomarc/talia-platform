@@ -171,7 +171,7 @@ export const getTableSource = (tableName) => {
  */
 export const getSyncedTables = () => {
   return Object.entries(tableSources)
-    .filter(([_, config]) => config.syncType !== null)
+    .filter(([, config]) => config.syncType !== null)
     .map(([tableName, config]) => ({ tableName, ...config }));
 };
 

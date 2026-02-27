@@ -12,7 +12,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import DirectSourceRequestPresenter from './DirectSourceRequestPresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
-import { useTheme } from '../../../contexts/ThemeContext';
+import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
 // Default external GraphQL endpoint
 const DEFAULT_GRAPHQL_ENDPOINT = 'https://thaliatest.b2b.celestyal.com:3000/graphql';
@@ -48,9 +48,7 @@ const DEFAULT_QUERY = `query Availability($effectiveDate: DateTime!, $startDateF
   }
 }`;
 
-const DirectSourceRequestContainer = ({ theme: themeProp }) => {
-  const { theme: contextTheme } = useTheme();
-  const theme = themeProp || contextTheme;
+const DirectSourceRequestContainer = () => {
 
   // Get today's date in ISO format for defaults
   const getTodayISO = () => new Date().toISOString().split('T')[0];
@@ -403,7 +401,7 @@ const DirectSourceRequestContainer = ({ theme: themeProp }) => {
       }
     };
 
-    window.addEventListener('talia:sail.select', handleSailSelect);
+    window.addEventListener(SAIL_SELECT_EVENT, handleSailSelect);
 
     // Check on mount - try multiple sources
     const foundContext = checkPersistedEvent() || checkLocalStorage();
@@ -417,7 +415,7 @@ const DirectSourceRequestContainer = ({ theme: themeProp }) => {
       if (unsubscribe) {
         unsubscribe();
       }
-      window.removeEventListener('talia:sail.select', handleSailSelect);
+      window.removeEventListener(SAIL_SELECT_EVENT, handleSailSelect);
     };
   }, [extractQueryParams, fetchData]);
 
@@ -496,57 +494,30 @@ const DirectSourceRequestContainer = ({ theme: themeProp }) => {
   // Handle no context state
   if (!persistedEvent && !data && !loading) {
     return (
-      <div style={{ 
-        padding: '40px', 
-        textAlign: 'center',
-        color: theme?.colors?.foreground || '#ffffff',
-        background: theme?.colors?.background || '#1a1a1a',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔗</div>
-        <h3 style={{ margin: '0 0 8px 0' }}>Direct Source Request</h3>
-        <p style={{ margin: '0 0 16px 0', color: theme?.colors?.textSecondary || '#888' }}>
+      <div className="direct-source-empty">
+        <div className="direct-source-empty__icon">🔗</div>
+        <h3 className="direct-source-empty__title">Direct Source Request</h3>
+        <p className="direct-source-empty__message">
           Waiting for context... Select a sailing from another panel
         </p>
         
-        <div style={{ 
-          fontSize: '12px', 
-          color: theme?.colors?.textSecondary || '#666',
-          background: theme?.colors?.cardBackground || '#2a2a2a',
-          padding: '16px',
-          borderRadius: '8px',
-          maxWidth: '450px',
-          textAlign: 'left',
-          marginBottom: '16px'
-        }}>
-          <div style={{ marginBottom: '8px' }}>
+        <div className="direct-source-empty__card">
+          <div className="direct-source-empty__card-title">
             <strong>How it works:</strong>
           </div>
-          <ul style={{ margin: '0', paddingLeft: '20px', lineHeight: '1.6' }}>
+          <ul className="direct-source-empty__list">
             <li>Select a sailing to set the date range automatically</li>
             <li>Or click below to load availability for the next 4 weeks</li>
           </ul>
-          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          <div className="direct-source-empty__card-footer">
             <strong>Source:</strong> {DEFAULT_GRAPHQL_ENDPOINT}
           </div>
         </div>
         
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div className="direct-source-empty__actions">
           <button 
             onClick={handleRefresh}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: theme?.colors?.accent || '#b08d57',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontWeight: '500'
-            }}
+            className="direct-source-empty__button"
           >
             Load Availability (Next 4 Weeks)
           </button>
@@ -559,7 +530,6 @@ const DirectSourceRequestContainer = ({ theme: themeProp }) => {
   return (
     <DirectSourceRequestPresenter 
       data={data || []}
-      theme={theme}
       onRefresh={handleRefresh}
       loading={loading}
       queryInfo={queryInfo}

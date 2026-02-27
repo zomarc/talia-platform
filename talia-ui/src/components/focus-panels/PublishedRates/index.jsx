@@ -9,12 +9,9 @@ import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithCon
 import PublishedRatesPresenter from './PublishedRatesPresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
-import { useTheme } from '../../../contexts/ThemeContext';
 import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
-const PublishedRatesContainer = ({ filters = {} }) => {
-  const { theme } = useTheme();
-  
+const PublishedRatesContainer = () => {
   console.log('[PublishedRatesContainer] Component rendering');
   
   // Use reusable hook for context-based data fetching with server-side filtering
@@ -88,30 +85,20 @@ const PublishedRatesContainer = ({ filters = {} }) => {
   // Handle empty data
   if (!transformedData || transformedData.length === 0) {
     return (
-      <div style={{ 
-        padding: '40px', 
-        textAlign: 'center',
-        color: 'var(--theme-fg)'
-      }}>
+      <div className="focus-panel-empty">
         <p>
           {selectedSailCode 
             ? `No published rates found for sail code: ${selectedSailCode}`
             : 'No published rates data available'}
         </p>
-        <button 
-          onClick={refetch}
-          style={{
-            marginTop: '16px',
-            padding: '8px 16px',
-            backgroundColor: 'var(--theme-accent)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Retry
-        </button>
+        <div className="focus-panel-empty__action">
+          <button 
+            onClick={refetch}
+            className="talia-btn talia-btn--primary"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -120,7 +107,6 @@ const PublishedRatesContainer = ({ filters = {} }) => {
   return (
     <PublishedRatesPresenter 
       data={transformedData} 
-      theme={theme}
       selectedSailCode={selectedSailCode}
     />
   );

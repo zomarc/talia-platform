@@ -47,7 +47,7 @@ class CompetitorPricingService {
     try {
       // Remove null/undefined values from filters to avoid GraphQL errors
       const cleanFilters = Object.fromEntries(
-        Object.entries(filters).filter(([_, value]) => value !== null && value !== undefined && value !== '')
+        Object.entries(filters).filter(([, value]) => value !== null && value !== undefined && value !== '')
       );
       
       // Only include filters in variables if there are actual filter values

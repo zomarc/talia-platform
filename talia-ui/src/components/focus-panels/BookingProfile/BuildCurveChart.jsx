@@ -156,24 +156,14 @@ const BuildCurveChart = ({ buildCurves, targetCurves = null, previousYearCurves 
 
   if (!buildCurves || buildCurves.length === 0) {
     return (
-      <div style={{
-        padding: '40px',
-        textAlign: 'center',
-        color: theme?.colors?.textSecondary || '#666'
-      }}>
-        No build curve data available
+      <div className="focus-panel-empty">
+        <p className="focus-panel-empty__detail">No build curve data available</p>
       </div>
     );
   }
 
   return (
-    <div style={{
-      background: theme?.colors?.glass || 'rgba(255, 255, 255, 0.8)',
-      padding: '20px',
-      borderRadius: '8px',
-      border: `1px solid ${theme?.colors?.border || '#e0e0e0'}`,
-      height: '400px'
-    }}>
+    <div className="booking-build-curve">
       <canvas ref={chartRef} />
     </div>
   );

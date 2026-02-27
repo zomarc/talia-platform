@@ -41,26 +41,11 @@ const DataMatchContainer = ({ theme: themeProp }) => {
   // Handle empty data
   if (!data || !data.rows || data.rows.length === 0) {
     return (
-      <div style={{ 
-        padding: '40px', 
-        textAlign: 'center',
-        color: theme?.colors?.foreground || '#ffffff'
-      }}>
+      <div className="focus-panel-empty">
         <p>No data match information available</p>
-        <button 
-          onClick={refetch}
-          style={{
-            marginTop: '16px',
-            padding: '8px 16px',
-            backgroundColor: theme?.colors?.accent || '#b08d57',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Retry
-        </button>
+        <div className="focus-panel-empty__action">
+          <button className="talia-btn talia-btn--primary" onClick={refetch}>Retry</button>
+        </div>
       </div>
     );
   }

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-env node */
 
 /**
  * Clear All InstantDB Data Script
@@ -47,9 +48,9 @@ async function clearAllData() {
 clearAllData()
   .then(() => {
     console.log('🎉 Data clearing complete - ready for fresh sign-ins!');
-    process.exit(0);
+    globalThis.process?.exit(0);
   })
   .catch((error) => {
     console.error('💥 Script failed:', error);
-    process.exit(1);
+    globalThis.process?.exit(1);
   });

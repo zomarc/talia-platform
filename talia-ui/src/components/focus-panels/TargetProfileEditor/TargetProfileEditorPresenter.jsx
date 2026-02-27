@@ -8,7 +8,6 @@ import React, { useState, useEffect } from 'react';
 const TargetProfileEditorPresenter = ({ 
   initialData = null, 
   sailCode = null, 
-  theme, 
   onSave, 
   onCancel,
   saving = false,
@@ -77,56 +76,22 @@ const TargetProfileEditorPresenter = ({
     }
   };
 
-  const defaultTheme = {
-    colors: {
-      background: '#ffffff',
-      foreground: '#2b2b2b',
-      border: '#e0e0e0',
-      accent: '#b08d57',
-      textSecondary: '#666'
-    }
-  };
-
-  const themeValues = theme || defaultTheme;
-
   return (
-    <div style={{
-      padding: '20px',
-      background: themeValues.colors.background,
-      borderRadius: '8px',
-      color: themeValues.colors.foreground
-    }}>
-      <h2 style={{
-        margin: '0 0 20px 0',
-        fontSize: '24px',
-        fontWeight: 'bold',
-        color: themeValues.colors.foreground
-      }}>
+    <div className="target-profile-editor">
+      <h2 className="target-profile-editor__title">
         {initialData ? 'Edit Target Profile' : 'Create Target Profile'}
       </h2>
 
       {saveError && (
-        <div style={{
-          padding: '12px',
-          marginBottom: '20px',
-          background: '#fee',
-          border: '1px solid #fcc',
-          borderRadius: '4px',
-          color: '#c33'
-        }}>
+        <div className="target-profile-editor__error">
           Error saving: {saveError.message || 'Unknown error'}
         </div>
       )}
 
       <form onSubmit={handleSubmit}>
         {/* Basic Information */}
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{
-            display: 'block',
-            marginBottom: '8px',
-            fontWeight: '600',
-            color: themeValues.colors.foreground
-          }}>
+        <div className="target-profile-editor__section">
+          <label className="target-profile-editor__label">
             Name *
           </label>
           <input
@@ -134,111 +99,58 @@ const TargetProfileEditorPresenter = ({
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              border: `1px solid ${themeValues.colors.border}`,
-              borderRadius: '4px',
-              fontSize: '14px',
-              background: themeValues.colors.background,
-              color: themeValues.colors.foreground
-            }}
+            className="target-profile-editor__input"
           />
         </div>
 
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{
-            display: 'block',
-            marginBottom: '8px',
-            fontWeight: '600',
-            color: themeValues.colors.foreground
-          }}>
+        <div className="target-profile-editor__section">
+          <label className="target-profile-editor__label">
             Description
           </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              border: `1px solid ${themeValues.colors.border}`,
-              borderRadius: '4px',
-              fontSize: '14px',
-              background: themeValues.colors.background,
-              color: themeValues.colors.foreground,
-              resize: 'vertical'
-            }}
+            className="target-profile-editor__textarea"
           />
         </div>
 
         {/* Build Curves */}
-        <div style={{ marginBottom: '24px' }}>
-          <h3 style={{
-            margin: '0 0 16px 0',
-            fontSize: '18px',
-            fontWeight: '600',
-            color: themeValues.colors.foreground
-          }}>
+        <div className="target-profile-editor__section">
+          <h3 className="target-profile-editor__section-title">
             Build Curves
           </h3>
-          <div style={{
-            background: themeValues.colors.background,
-            border: `1px solid ${themeValues.colors.border}`,
-            borderRadius: '4px',
-            overflow: 'hidden'
-          }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className="target-profile-editor__table-wrap">
+            <table className="target-profile-editor__table">
               <thead>
-                <tr style={{
-                  background: themeValues.colors.border,
-                  borderBottom: `1px solid ${themeValues.colors.border}`
-                }}>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Week</th>
-                  <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Target Bookings</th>
-                  <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Target Guests</th>
+                <tr className="target-profile-editor__table-header">
+                  <th className="target-profile-editor__th">Week</th>
+                  <th className="target-profile-editor__th target-profile-editor__th--right">Target Bookings</th>
+                  <th className="target-profile-editor__th target-profile-editor__th--right">Target Guests</th>
                 </tr>
               </thead>
               <tbody>
                 {buildCurves.map((curve, index) => (
-                  <tr key={index} style={{
-                    borderBottom: `1px solid ${themeValues.colors.border}`
-                  }}>
-                    <td style={{ padding: '12px', fontWeight: '500' }}>
+                  <tr key={index} className="target-profile-editor__row">
+                    <td className="target-profile-editor__cell">
                       {curve.weekLabel}
                     </td>
-                    <td style={{ padding: '12px', textAlign: 'right' }}>
+                    <td className="target-profile-editor__cell target-profile-editor__cell--right">
                       <input
                         type="number"
                         value={curve.targetBookings || 0}
                         onChange={(e) => handleCurveChange(index, 'targetBookings', e.target.value)}
                         min="0"
-                        style={{
-                          width: '120px',
-                          padding: '6px 8px',
-                          border: `1px solid ${themeValues.colors.border}`,
-                          borderRadius: '4px',
-                          textAlign: 'right',
-                          background: themeValues.colors.background,
-                          color: themeValues.colors.foreground
-                        }}
+                        className="target-profile-editor__number-input"
                       />
                     </td>
-                    <td style={{ padding: '12px', textAlign: 'right' }}>
+                    <td className="target-profile-editor__cell target-profile-editor__cell--right">
                       <input
                         type="number"
                         value={curve.targetGuests || 0}
                         onChange={(e) => handleCurveChange(index, 'targetGuests', e.target.value)}
                         min="0"
-                        style={{
-                          width: '120px',
-                          padding: '6px 8px',
-                          border: `1px solid ${themeValues.colors.border}`,
-                          borderRadius: '4px',
-                          textAlign: 'right',
-                          background: themeValues.colors.background,
-                          color: themeValues.colors.foreground
-                        }}
+                        className="target-profile-editor__number-input"
                       />
                     </td>
                   </tr>
@@ -249,41 +161,19 @@ const TargetProfileEditorPresenter = ({
         </div>
 
         {/* Actions */}
-        <div style={{
-          display: 'flex',
-          gap: '12px',
-          justifyContent: 'flex-end'
-        }}>
+        <div className="target-profile-editor__actions">
           <button
             type="button"
             onClick={handleCancel}
             disabled={saving}
-            style={{
-              padding: '10px 20px',
-              border: `1px solid ${themeValues.colors.border}`,
-              borderRadius: '4px',
-              background: themeValues.colors.background,
-              color: themeValues.colors.foreground,
-              cursor: saving ? 'not-allowed' : 'pointer',
-              fontSize: '14px',
-              fontWeight: '500'
-            }}
+            className="target-profile-editor__button target-profile-editor__button--secondary"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={saving || !name.trim()}
-            style={{
-              padding: '10px 20px',
-              border: 'none',
-              borderRadius: '4px',
-              background: saving ? themeValues.colors.border : (themeValues.colors.accent || '#b08d57'),
-              color: '#fff',
-              cursor: saving || !name.trim() ? 'not-allowed' : 'pointer',
-              fontSize: '14px',
-              fontWeight: '500'
-            }}
+            className="target-profile-editor__button target-profile-editor__button--primary"
           >
             {saving ? 'Saving...' : (initialData ? 'Update' : 'Create')}
           </button>

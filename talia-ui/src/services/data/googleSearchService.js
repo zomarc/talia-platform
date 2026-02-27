@@ -87,7 +87,7 @@ class GoogleSearchService {
             errorDetails = ` GraphQL errors: ${JSON.stringify(errorBody.errors, null, 2)}`;
             console.error('[GoogleSearchService] GraphQL errors:', errorBody.errors);
           }
-        } catch (e) {
+        } catch {
           const errorText = await response.clone().text();
           errorDetails = ` Response: ${errorText.substring(0, 200)}`;
         }

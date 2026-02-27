@@ -5,7 +5,7 @@
 
 import React, { useMemo } from 'react';
 
-const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, backfillResult, onQuerySelect, onBackfill, theme }) => {
+const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, backfillResult, onQuerySelect, onBackfill }) => {
   const formatDate = (dateString) => {
     if (!dateString) return '';
     try {
@@ -28,42 +28,27 @@ const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, b
   }, [trends]);
 
   // Color palette for different queries
-  const colors = [
-    '#1976d2', '#4caf50', '#ff9800', '#9c27b0', '#e91e63',
-    '#00bcd4', '#8bc34a', '#ff5722', '#673ab7', '#f44336'
-  ];
+  const colorCount = 10;
 
   if (loading) {
     return (
-      <div style={{ 
-        padding: '40px', 
-        textAlign: 'center',
-        color: theme?.colors?.foreground || '#e0e0e0'
-      }}>
-        <p>Loading search trends...</p>
+      <div className="search-trends__status">
+        <p className="search-trends__status-text">Loading search trends...</p>
       </div>
     );
   }
 
   if (!trends || trends.series.length === 0) {
     return (
-      <div style={{ 
-        padding: '40px', 
-        textAlign: 'center',
-        color: theme?.colors?.foreground || '#e0e0e0'
-      }}>
-        <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: '600' }}>
-          Search Trends
-        </h3>
-        <p style={{ color: theme?.colors?.textSecondary || '#999', marginBottom: '16px' }}>
-          No trend data available yet
-        </p>
-        <p style={{ fontSize: '14px', color: theme?.colors?.textSecondary || '#999', marginBottom: '24px' }}>
+      <div className="search-trends__empty">
+        <h3 className="search-trends__empty-title">Search Trends</h3>
+        <p className="search-trends__empty-text">No trend data available yet</p>
+        <p className="search-trends__empty-note">
           Start tracking searches to see trends over time, or backfill historical data
         </p>
         {onBackfill && (
-          <div style={{ marginTop: '24px' }}>
-            <p style={{ fontSize: '13px', color: theme?.colors?.textSecondary || '#999', marginBottom: '12px' }}>
+          <div className="search-trends__backfill">
+            <p className="search-trends__backfill-label">
               Get historical trends for a query:
             </p>
             <form onSubmit={(e) => {
@@ -75,21 +60,12 @@ const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, b
                 onBackfill(query.trim(), monthsBack);
               }
             }}>
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', maxWidth: '500px', margin: '0 auto' }}>
+              <div className="search-trends__backfill-row search-trends__backfill-row--center">
                 <input
                   type="text"
                   name="backfillQuery"
                   placeholder="e.g., cruise holidays"
-                  style={{
-                    flex: 1,
-                    padding: '8px 12px',
-                    fontSize: '14px',
-                    border: `1px solid ${theme?.colors?.border || '#444'}`,
-                    borderRadius: '4px',
-                    backgroundColor: theme?.colors?.background || '#1e1e1e',
-                    color: theme?.colors?.foreground || '#e0e0e0',
-                    outline: 'none'
-                  }}
+                  className="search-trends__input"
                   disabled={backfilling}
                 />
                 <input
@@ -99,51 +75,23 @@ const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, b
                   defaultValue="6"
                   min="1"
                   max="12"
-                  style={{
-                    width: '80px',
-                    padding: '8px 12px',
-                    fontSize: '14px',
-                    border: `1px solid ${theme?.colors?.border || '#444'}`,
-                    borderRadius: '4px',
-                    backgroundColor: theme?.colors?.background || '#1e1e1e',
-                    color: theme?.colors?.foreground || '#e0e0e0',
-                    outline: 'none'
-                  }}
+                  className="search-trends__input search-trends__input--small"
                   disabled={backfilling}
                 />
                 <button
                   type="submit"
                   disabled={backfilling}
-                  style={{
-                    padding: '8px 16px',
-                    fontSize: '14px',
-                    backgroundColor: backfilling 
-                      ? (theme?.colors?.accent || '#1976d2') + '80'
-                      : (theme?.colors?.accent || '#1976d2'),
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: backfilling ? 'not-allowed' : 'pointer',
-                    fontWeight: '500'
-                  }}
+                  className="search-trends__button"
                 >
                   {backfilling ? 'Backfilling...' : 'Get Historical Data'}
                 </button>
               </div>
             </form>
             {backfillResult && (
-              <div style={{
-                marginTop: '16px',
-                padding: '12px',
-                backgroundColor: backfillResult.error 
-                  ? 'rgba(244, 67, 54, 0.1)' 
-                  : 'rgba(76, 175, 80, 0.1)',
-                borderRadius: '4px',
-                fontSize: '13px',
-                color: backfillResult.error 
-                  ? '#f44336' 
-                  : theme?.colors?.foreground || '#e0e0e0'
-              }}>
+              <div
+                className="search-trends__backfill-result"
+                data-status={backfillResult.error ? 'error' : 'success'}
+              >
                 {backfillResult.error ? (
                   <span>❌ Error: {backfillResult.error}</span>
                 ) : (
@@ -161,86 +109,38 @@ const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, b
   }
 
   return (
-    <div style={{ 
-      padding: '20px',
-      color: theme?.colors?.foreground || '#e0e0e0',
-      fontFamily: theme?.typography?.fontFamily || 'Roboto, sans-serif'
-    }}>
+    <div className="search-trends">
       {/* Header */}
-      <div style={{ marginBottom: '24px' }}>
-        <h3 style={{ 
-          margin: '0 0 8px 0', 
-          fontSize: '20px', 
-          fontWeight: '600',
-          color: theme?.colors?.foreground || '#e0e0e0'
-        }}>
+      <div className="search-trends__header">
+        <h3 className="search-trends__title">
           Search Trends - What People Are Looking For
         </h3>
-        <p style={{ 
-          fontSize: '14px', 
-          color: theme?.colors?.textSecondary || '#999',
-          margin: 0
-        }}>
+        <p className="search-trends__subtitle">
           Tracking {trends.queries.length} search {trends.queries.length === 1 ? 'query' : 'queries'} from {formatDate(trends.dateRange.from)} to {formatDate(trends.dateRange.to)}
         </p>
       </div>
 
       {/* Trend Cards */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-        gap: '16px',
-        marginBottom: '32px'
-      }}>
+      <div className="search-trends__grid">
         {trends.series.map((series, index) => {
-          const color = colors[index % colors.length];
+          const colorIndex = index % colorCount;
           const isPositive = series.changePercent >= 0;
           
           return (
             <div
               key={series.query}
-              style={{
-                padding: '20px',
-                backgroundColor: theme?.colors?.background || '#1e1e1e',
-                border: `1px solid ${theme?.colors?.border || '#333'}`,
-                borderRadius: '8px',
-                cursor: onQuerySelect ? 'pointer' : 'default',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                if (onQuerySelect) {
-                  e.currentTarget.style.borderColor = color;
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (onQuerySelect) {
-                  e.currentTarget.style.borderColor = theme?.colors?.border || '#333';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }
-              }}
+              className={`search-trends__card search-trends__card--color-${colorIndex}`}
+              data-clickable={onQuerySelect ? 'true' : 'false'}
               onClick={() => onQuerySelect && onQuerySelect(series.query)}
             >
               {/* Query Header */}
-              <div style={{ marginBottom: '16px' }}>
-                <h4 style={{ 
-                  margin: '0 0 8px 0',
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  color: theme?.colors?.foreground || '#e0e0e0'
-                }}>
+              <div className="search-trends__card-header">
+                <h4 className="search-trends__card-title">
                   "{series.query}"
                 </h4>
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center',
-                  gap: '12px',
-                  fontSize: '14px'
-                }}>
-                  <span style={{ 
-                    color: theme?.colors?.textSecondary || '#999'
-                  }}>
-                    Latest: <strong style={{ color: theme?.colors?.foreground || '#e0e0e0' }}>
+                <div className="search-trends__card-meta">
+                  <span className="search-trends__card-meta-label">
+                    Latest: <strong className="search-trends__card-meta-value">
                       {formatNumber(series.latestCount)} results
                     </strong>
                   </span>
@@ -249,28 +149,11 @@ const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, b
 
               {/* Trend Indicator */}
               {series.changePercent !== 0 && (
-                <div style={{ 
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  marginBottom: '16px',
-                  padding: '8px 12px',
-                  backgroundColor: isPositive 
-                    ? 'rgba(76, 175, 80, 0.1)' 
-                    : 'rgba(244, 67, 54, 0.1)',
-                  borderRadius: '4px'
-                }}>
-                  <span style={{ 
-                    fontSize: '20px',
-                    color: isPositive ? '#4caf50' : '#f44336'
-                  }}>
+                <div className="search-trends__trend" data-variant={isPositive ? 'positive' : 'negative'}>
+                  <span className="search-trends__trend-icon">
                     {isPositive ? '📈' : '📉'}
                   </span>
-                  <span style={{ 
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    color: isPositive ? '#4caf50' : '#f44336'
-                  }}>
+                  <span className="search-trends__trend-text">
                     {isPositive ? '+' : ''}{series.changePercent.toFixed(1)}% 
                     ({isPositive ? '+' : ''}{formatNumber(series.change)} results)
                   </span>
@@ -279,33 +162,17 @@ const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, b
 
               {/* Mini Chart */}
               {series.dataPoints.length > 0 && (
-                <div style={{
-                  marginTop: '16px',
-                  height: '80px',
-                  display: 'flex',
-                  alignItems: 'flex-end',
-                  gap: '4px',
-                  padding: '8px',
-                  backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
-                  borderRadius: '4px'
-                }}>
+                <div className="search-trends__mini-chart">
                   {series.dataPoints.map((point, idx) => {
                     const heightPercent = maxResults > 0 
                       ? (point.totalResults / maxResults) * 100 
                       : 0;
+                    const level = Math.max(1, Math.min(10, Math.round(heightPercent / 10)));
                     
                     return (
                       <div
                         key={idx}
-                        style={{
-                          flex: 1,
-                          height: `${Math.max(heightPercent, 5)}%`,
-                          backgroundColor: color,
-                          borderRadius: '2px 2px 0 0',
-                          minHeight: '4px',
-                          transition: 'height 0.3s ease',
-                          position: 'relative'
-                        }}
+                        className={`search-trends__bar search-trends__bar--level-${level}`}
                         title={`${formatDate(point.date)}: ${formatNumber(point.totalResults)} results`}
                       />
                     );
@@ -314,12 +181,7 @@ const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, b
               )}
 
               {/* Data Point Count */}
-              <div style={{
-                marginTop: '12px',
-                fontSize: '12px',
-                color: theme?.colors?.textSecondary || '#666',
-                textAlign: 'center'
-              }}>
+              <div className="search-trends__count">
                 {series.dataPoints.length} data {series.dataPoints.length === 1 ? 'point' : 'points'}
               </div>
             </div>
@@ -329,37 +191,15 @@ const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, b
 
       {/* Tracked Queries List */}
       {trackedQueries && trackedQueries.length > 0 && (
-        <div style={{
-          marginTop: '32px',
-          padding: '16px',
-          backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
-          borderRadius: '8px',
-          border: `1px solid ${theme?.colors?.border || '#333'}`
-        }}>
-          <h4 style={{ 
-            margin: '0 0 12px 0',
-            fontSize: '14px',
-            fontWeight: '600',
-            color: theme?.colors?.foreground || '#e0e0e0'
-          }}>
+        <div className="search-trends__tracked">
+          <h4 className="search-trends__tracked-title">
             Currently Tracking ({trackedQueries.length})
           </h4>
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '8px'
-          }}>
+          <div className="search-trends__tracked-list">
             {trackedQueries.map((query, idx) => (
               <span
                 key={idx}
-                style={{
-                  padding: '6px 12px',
-                  backgroundColor: theme?.colors?.background || '#1e1e1e',
-                  border: `1px solid ${theme?.colors?.border || '#444'}`,
-                  borderRadius: '4px',
-                  fontSize: '13px',
-                  color: theme?.colors?.foreground || '#e0e0e0'
-                }}
+                className="search-trends__tracked-item"
               >
                 "{query}"
               </span>
@@ -370,26 +210,11 @@ const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, b
 
       {/* Historical Data Backfill Section */}
       {onBackfill && (
-        <div style={{
-          marginTop: '32px',
-          padding: '20px',
-          backgroundColor: theme?.colors?.backgroundSecondary || '#2a2a2a',
-          borderRadius: '8px',
-          border: `1px solid ${theme?.colors?.border || '#333'}`
-        }}>
-          <h4 style={{ 
-            margin: '0 0 12px 0',
-            fontSize: '16px',
-            fontWeight: '600',
-            color: theme?.colors?.foreground || '#e0e0e0'
-          }}>
+        <div className="search-trends__backfill-section">
+          <h4 className="search-trends__backfill-title">
             📊 Get Historical Trends
           </h4>
-          <p style={{ 
-            fontSize: '13px', 
-            color: theme?.colors?.textSecondary || '#999',
-            marginBottom: '16px'
-          }}>
+          <p className="search-trends__backfill-description">
             Backfill historical search data to see trends over time. This will perform searches for past dates and store the results.
           </p>
           <form onSubmit={(e) => {
@@ -401,35 +226,17 @@ const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, b
               onBackfill(query.trim(), monthsBack);
             }
           }}>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <div className="search-trends__backfill-row">
               <input
                 type="text"
                 name="backfillQuery"
                 placeholder="Enter search query (e.g., cruise holidays)"
-                style={{
-                  flex: 1,
-                  padding: '10px 12px',
-                  fontSize: '14px',
-                  border: `1px solid ${theme?.colors?.border || '#444'}`,
-                  borderRadius: '4px',
-                  backgroundColor: theme?.colors?.background || '#1e1e1e',
-                  color: theme?.colors?.foreground || '#e0e0e0',
-                  outline: 'none'
-                }}
+                className="search-trends__input"
                 disabled={backfilling}
               />
               <select
                 name="monthsBack"
-                style={{
-                  padding: '10px 12px',
-                  fontSize: '14px',
-                  border: `1px solid ${theme?.colors?.border || '#444'}`,
-                  borderRadius: '4px',
-                  backgroundColor: theme?.colors?.background || '#1e1e1e',
-                  color: theme?.colors?.foreground || '#e0e0e0',
-                  outline: 'none',
-                  cursor: backfilling ? 'not-allowed' : 'pointer'
-                }}
+                className="search-trends__input search-trends__input--select"
                 disabled={backfilling}
                 defaultValue="6"
               >
@@ -440,56 +247,31 @@ const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, b
               <button
                 type="submit"
                 disabled={backfilling}
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  backgroundColor: backfilling 
-                    ? (theme?.colors?.accent || '#1976d2') + '80'
-                    : (theme?.colors?.accent || '#1976d2'),
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: backfilling ? 'not-allowed' : 'pointer',
-                  fontWeight: '500',
-                  whiteSpace: 'nowrap'
-                }}
+                className="search-trends__button"
               >
                 {backfilling ? '⏳ Backfilling...' : '📥 Get Historical Data'}
               </button>
             </div>
           </form>
           {backfillResult && (
-            <div style={{
-              marginTop: '12px',
-              padding: '12px',
-              backgroundColor: backfillResult.error 
-                ? 'rgba(244, 67, 54, 0.1)' 
-                : 'rgba(76, 175, 80, 0.1)',
-              borderRadius: '4px',
-              fontSize: '13px',
-              color: backfillResult.error 
-                ? '#f44336' 
-                : theme?.colors?.foreground || '#e0e0e0'
-            }}>
+            <div
+              className="search-trends__backfill-result"
+              data-status={backfillResult.error ? 'error' : 'success'}
+            >
               {backfillResult.error ? (
                 <span>❌ Error: {backfillResult.error}</span>
               ) : (
                 <span>
                   ✅ Successfully backfilled <strong>{backfillResult.dataPointsStored}</strong> data points for "{backfillResult.query}"
                   <br />
-                  <span style={{ fontSize: '12px', color: theme?.colors?.textSecondary || '#999' }}>
+                  <span className="search-trends__backfill-meta">
                     Date range: {formatDate(backfillResult.dateRange.from)} to {formatDate(backfillResult.dateRange.to)}
                   </span>
                 </span>
               )}
             </div>
           )}
-          <p style={{ 
-            marginTop: '12px',
-            fontSize: '12px', 
-            color: theme?.colors?.textSecondary || '#666',
-            fontStyle: 'italic'
-          }}>
+          <p className="search-trends__backfill-note">
             Note: Historical backfill uses date-restricted searches to simulate past trends. Results may vary based on Google's index.
           </p>
         </div>

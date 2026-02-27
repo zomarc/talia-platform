@@ -6,7 +6,7 @@ class ErrorBoundary extends React.Component {
     this.state = { hasError: false, error: null, errorInfo: null };
   }
 
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError() {
     // Update state so the next render will show the fallback UI
     return { hasError: true };
   }
@@ -26,86 +26,29 @@ class ErrorBoundary extends React.Component {
     if (this.state.hasError) {
       // Fallback UI
       return (
-        <div style={{
-          minHeight: '100vh',
-          background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontFamily: 'Inter, sans-serif',
-          padding: '20px'
-        }}>
-          <div style={{
-            background: 'white',
-            borderRadius: '12px',
-            padding: '2rem',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
-            maxWidth: '600px',
-            width: '100%'
-          }}>
-            <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-              <h1 style={{
-                fontSize: '2rem',
-                fontWeight: 'bold',
-                color: '#dc2626',
-                margin: '0 0 1rem 0'
-              }}>
-                🚨 Application Error
-              </h1>
-              <p style={{
-                color: '#6b7280',
-                margin: 0,
-                fontSize: '1rem'
-              }}>
+        <div className="error-boundary">
+          <div className="error-boundary__card">
+            <div className="error-boundary__header">
+              <h1 className="error-boundary__title">🚨 Application Error</h1>
+              <p className="error-boundary__subtitle">
                 Something went wrong in the authentication system
               </p>
             </div>
 
-            <div style={{
-              background: '#fef2f2',
-              border: '1px solid #fecaca',
-              borderRadius: '8px',
-              padding: '1rem',
-              marginBottom: '1.5rem'
-            }}>
-              <h3 style={{
-                color: '#dc2626',
-                margin: '0 0 0.5rem 0',
-                fontSize: '1rem'
-              }}>
+            <div className="error-boundary__section error-boundary__section--error">
+              <h3 className="error-boundary__section-title error-boundary__section-title--error">
                 Error Details:
               </h3>
-              <pre style={{
-                color: '#991b1b',
-                fontSize: '0.875rem',
-                margin: 0,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word'
-              }}>
+              <pre className="error-boundary__error-details">
                 {this.state.error && this.state.error.toString()}
               </pre>
             </div>
 
-            <div style={{
-              background: '#f0f9ff',
-              border: '1px solid #bae6fd',
-              borderRadius: '8px',
-              padding: '1rem',
-              marginBottom: '1.5rem'
-            }}>
-              <h3 style={{
-                color: '#0369a1',
-                margin: '0 0 0.5rem 0',
-                fontSize: '1rem'
-              }}>
+            <div className="error-boundary__section error-boundary__section--info">
+              <h3 className="error-boundary__section-title error-boundary__section-title--info">
                 Troubleshooting Steps:
               </h3>
-              <ol style={{
-                color: '#0c4a6e',
-                fontSize: '0.875rem',
-                margin: 0,
-                paddingLeft: '1.5rem'
-              }}>
+              <ol className="error-boundary__steps">
                 <li>Check the browser console for detailed error logs</li>
                 <li>Verify your Supabase connection is configured correctly</li>
                 <li>Ensure you have a stable internet connection</li>
@@ -114,63 +57,31 @@ class ErrorBoundary extends React.Component {
               </ol>
             </div>
 
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+            <div className="error-boundary__actions">
               <button
                 onClick={() => window.location.reload()}
-                style={{
-                  background: '#3b82f6',
-                  color: 'white',
-                  border: 'none',
-                  padding: '0.75rem 1.5rem',
-                  borderRadius: '6px',
-                  fontSize: '1rem',
-                  cursor: 'pointer',
-                  fontWeight: '500'
-                }}
+                className="error-boundary__button error-boundary__button--reload"
               >
                 🔄 Reload Page
               </button>
-              
+
               <button
                 onClick={() => {
                   console.clear();
                   this.setState({ hasError: false, error: null, errorInfo: null });
                 }}
-                style={{
-                  background: '#10b981',
-                  color: 'white',
-                  border: 'none',
-                  padding: '0.75rem 1.5rem',
-                  borderRadius: '6px',
-                  fontSize: '1rem',
-                  cursor: 'pointer',
-                  fontWeight: '500'
-                }}
+                className="error-boundary__button error-boundary__button--retry"
               >
                 🔄 Try Again
               </button>
             </div>
 
             {this.state.errorInfo && (
-              <details style={{ marginTop: '1.5rem' }}>
-                <summary style={{
-                  cursor: 'pointer',
-                  color: '#6b7280',
-                  fontSize: '0.875rem',
-                  marginBottom: '0.5rem'
-                }}>
+              <details className="error-boundary__details">
+                <summary className="error-boundary__details-summary">
                   Show Technical Details
                 </summary>
-                <pre style={{
-                  background: '#f9fafb',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '4px',
-                  padding: '0.75rem',
-                  fontSize: '0.75rem',
-                  color: '#374151',
-                  overflow: 'auto',
-                  maxHeight: '200px'
-                }}>
+                <pre className="error-boundary__details-content">
                   {this.state.errorInfo.componentStack}
                 </pre>
               </details>

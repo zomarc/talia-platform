@@ -15,68 +15,26 @@ const AppContent = () => {
 
   if (loading) {
     return (
-      <div style={{
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#f9fafb',
-        fontFamily: 'Inter, sans-serif'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            border: '4px solid #e5e7eb',
-            borderTop: '4px solid #3b82f6',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
-          }} />
-          <p style={{ color: '#6b7280', margin: 0 }}>Loading Talia UI...</p>
+      <div className="talia-auth-screen">
+        <div className="talia-auth-center">
+          <div className="talia-auth-spinner" />
+          <p className="talia-auth-message">Loading Talia UI...</p>
         </div>
-        <style>{`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}</style>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={{
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#f9fafb',
-        fontFamily: 'Inter, sans-serif'
-      }}>
-        <div style={{
-          background: 'white',
-          padding: '2rem',
-          borderRadius: '8px',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-          textAlign: 'center',
-          maxWidth: '400px'
-        }}>
-          <h2 style={{ color: '#dc2626', margin: '0 0 1rem 0' }}>Authentication Error</h2>
-          <p style={{ color: '#6b7280', margin: '0 0 1rem 0' }}>
+      <div className="talia-auth-screen">
+        <div className="talia-auth-card">
+          <h2 className="talia-auth-title">Authentication Error</h2>
+          <p className="talia-auth-message">
             {error.message || 'An error occurred during authentication'}
           </p>
           <button
             onClick={() => window.location.reload()}
-            style={{
-              background: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '6px',
-              cursor: 'pointer'
-            }}
+            className="talia-auth-button"
           >
             Retry
           </button>
@@ -92,32 +50,11 @@ const AppContent = () => {
     console.log('🔧 Dev mode: No user found, should be handled by context');
     // The context will create a mock user, so we'll wait for it
     return (
-      <div style={{
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#f9fafb',
-        fontFamily: 'Inter, sans-serif'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            border: '4px solid #e5e7eb',
-            borderTop: '4px solid #3b82f6',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
-          }} />
-          <p style={{ color: '#6b7280', margin: 0 }}>Initializing development user...</p>
+      <div className="talia-auth-screen">
+        <div className="talia-auth-center">
+          <div className="talia-auth-spinner" />
+          <p className="talia-auth-message">Initializing development user...</p>
         </div>
-        <style>{`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}</style>
       </div>
     );
   }
@@ -136,53 +73,11 @@ const AppContent = () => {
 // Main app with authentication provider and error boundary
 const AppWithAuth = () => {
   console.log('🎯 AppWithAuth component initializing...');
-  
-  try {
-    return (
-      <ErrorBoundary>
-        <AppContent />
-      </ErrorBoundary>
-    );
-  } catch (err) {
-    console.error('❌ AppWithAuth render error:', err);
-    return (
-      <div style={{
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#f9fafb',
-        fontFamily: 'Inter, sans-serif'
-      }}>
-        <div style={{
-          background: 'white',
-          padding: '2rem',
-          borderRadius: '8px',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-          textAlign: 'center',
-          maxWidth: '400px'
-        }}>
-          <h2 style={{ color: '#dc2626', margin: '0 0 1rem 0' }}>App Error</h2>
-          <p style={{ color: '#6b7280', margin: '0 0 1rem 0' }}>
-            Failed to render app: {err.message}
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              background: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '6px',
-              cursor: 'pointer'
-            }}
-          >
-            Reload Page
-          </button>
-        </div>
-      </div>
-    );
-  }
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
 };
 
 export default AppWithAuth;

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { GraphQLUtils } from '../lib/apolloClient';
 
-const UserProfile = ({ isCollapsed, onToggle }) => {
+const UserProfile = ({ isCollapsed }) => {
   const { user, signOut, signInWithPassword } = useSupabaseAuth();
   const [showProfile, setShowProfile] = useState(false);
   const [switchingToAdmin, setSwitchingToAdmin] = useState(false);
@@ -85,16 +85,6 @@ const UserProfile = ({ isCollapsed, onToggle }) => {
       'guest': 'Guest'
     };
     return roleMap[role] || role;
-  };
-
-  const getRoleColor = (role) => {
-    const colorMap = {
-      'admin': '#dc2626',
-      'manager': '#ea580c',
-      'user': '#2563eb',
-      'guest': '#6b7280'
-    };
-    return colorMap[role] || '#6b7280';
   };
 
   const roleClass = `dashboard-user-profile__role dashboard-user-profile__role--${(user.role || 'user').toLowerCase()}`;

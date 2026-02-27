@@ -87,7 +87,7 @@ class DemandHeatmapService {
             errorDetails = ` GraphQL errors: ${JSON.stringify(errorBody.errors, null, 2)}`;
             console.error('[DemandHeatmapService] GraphQL errors:', errorBody.errors);
           }
-        } catch (e) {
+        } catch {
           // Response might not be JSON
           const errorText = await response.clone().text();
           errorDetails = ` Response: ${errorText.substring(0, 200)}`;

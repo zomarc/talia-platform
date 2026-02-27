@@ -13,7 +13,7 @@ import React, { useState, useEffect } from 'react';
 import ModeSelector from '../ModeSelector';
 // CSS imported globally in main.jsx
 
-const StatusBar = ({ statusMessage, currentEvent, persistedEvent, currentMode, onModeChange }) => {
+const StatusBar = ({ statusMessage, currentEvent, persistedEvent, currentMode, onModeChange, dataStatus }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [displayMessage, setDisplayMessage] = useState(statusMessage);
 
@@ -64,6 +64,16 @@ const StatusBar = ({ statusMessage, currentEvent, persistedEvent, currentMode, o
 
   const currentEventSummary = getEventSummary(currentEvent);
   const persistedEventSummary = getEventSummary(persistedEvent);
+  const formatRange = (range) => {
+    if (!range || (!range.min && !range.max)) return 'N/A';
+    const min = range.min ? String(range.min).split('T')[0] : 'N/A';
+    const max = range.max ? String(range.max).split('T')[0] : 'N/A';
+    return min === max ? min : `${min} → ${max}`;
+  };
+  const dataRangeText = formatRange(dataStatus?.globalRange);
+  const dataLastSyncText = dataStatus?.lastSync
+    ? new Date(dataStatus.lastSync).toLocaleString()
+    : 'N/A';
 
   // Always render - mode selector should always be visible
   return (
@@ -109,6 +119,14 @@ const StatusBar = ({ statusMessage, currentEvent, persistedEvent, currentMode, o
                 {persistedEventSummary.identifier && ` - ${persistedEventSummary.identifier}`}
               </span>
               <span className="status-bar__timestamp">{persistedEventSummary.timestamp}</span>
+            </div>
+          )}
+
+          {currentMode === 'data' && dataStatus && (
+            <div className="status-bar__item" title="Global data range and last sync">
+              <span className="status-bar__label">Data:</span>
+              <span className="status-bar__value">Range {dataRangeText}</span>
+              <span className="status-bar__timestamp">Last Sync {dataLastSyncText}</span>
             </div>
           )}
         </div>

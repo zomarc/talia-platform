@@ -14,6 +14,7 @@ import { LoadingSpinner, ErrorMessage } from './shared';
 import queryTracker from '../services/data/queryTracker';
 import { getThemeForMode } from '../themes/modeThemes';
 import '../themes/dataMode.css';
+import './TestPage/test-page.css';
 
 const TestPage = () => {
   // Component selection
@@ -217,86 +218,46 @@ const TestPage = () => {
   }, []);
 
   return (
-    <div style={{
-      padding: '12px',
-      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
-      backgroundAttachment: 'fixed',
-      minHeight: '100vh',
-      position: 'relative'
-    }}>
-      <div style={{ maxWidth: '100%', margin: '0 auto' }}>
+    <div className="test-page">
+      <div className="test-page__container">
         {/* Compact Header */}
-        <div style={{
-          background: theme.colors.glass,
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          padding: '12px 16px',
-          borderRadius: '12px',
-          marginBottom: '12px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-          border: `1px solid ${theme.colors.glassBorder}`,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
+        <div className="test-page__glass-card test-page__header">
           <div>
-            <h1 style={{ margin: 0, fontSize: '18px', color: theme.colors.foreground, fontWeight: '600' }}>
+            <h1 className="test-page__header-title">
               🧪 Component Test Page
             </h1>
-            <p style={{ margin: '4px 0 0 0', color: 'rgba(224, 224, 224, 0.7)', fontSize: '12px' }}>
+            <p className="test-page__header-subtitle">
               Test and inspect components with real-time monitoring
             </p>
           </div>
         </div>
 
         {/* Summary Bar */}
-        <div style={{
-          background: theme.colors.glass,
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          padding: '8px 16px',
-          borderRadius: '12px',
-          marginBottom: '12px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-          border: `1px solid ${theme.colors.glassBorder}`,
-          display: 'flex',
-          gap: '24px',
-          alignItems: 'center',
-          fontSize: '11px',
-          borderLeft: `3px solid ${theme.colors.accent}`
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: 'rgba(224, 224, 224, 0.7)', fontWeight: '500' }}>Source:</span>
-            <span style={{ color: theme.colors.foreground, fontFamily: 'monospace' }}>{componentFile}</span>
+        <div className="test-page__glass-card test-page__summary">
+          <div className="test-page__summary-item">
+            <span className="test-page__summary-label">Source:</span>
+            <span className="test-page__summary-mono">{componentFile}</span>
           </div>
-          <div style={{ width: '1px', height: '20px', background: 'rgba(255, 255, 255, 0.2)' }}></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: 'rgba(224, 224, 224, 0.7)', fontWeight: '500' }}>Latest Event:</span>
-            <span style={{ color: latestEvent ? theme.colors.accent : 'rgba(224, 224, 224, 0.5)' }}>
+          <div className="test-page__summary-divider"></div>
+          <div className="test-page__summary-item">
+            <span className="test-page__summary-label">Latest Event:</span>
+            <span className="test-page__summary-value" data-active={Boolean(latestEvent)}>
               {latestEvent ? `${latestEvent.name} (${latestEvent.timestamp})` : 'None'}
             </span>
             {latestEvent && localStorage.getItem('talia:test:lastEvent') && (
-              <span style={{ 
-                fontSize: '10px', 
-                color: '#4caf50',
-                marginLeft: '4px',
-                padding: '2px 6px',
-                background: 'rgba(76, 175, 80, 0.2)',
-                borderRadius: '4px'
-              }}>
+              <span className="test-page__summary-badge">
                 💾 Persisted
               </span>
             )}
           </div>
-          <div style={{ width: '1px', height: '20px', background: 'rgba(255, 255, 255, 0.2)' }}></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: 'rgba(224, 224, 224, 0.7)', fontWeight: '500' }}>Data Source:</span>
-            <span style={{ color: theme.colors.foreground, fontFamily: 'monospace' }}>
+          <div className="test-page__summary-divider"></div>
+          <div className="test-page__summary-item">
+            <span className="test-page__summary-label">Data Source:</span>
+            <span className="test-page__summary-mono">
               /api/graphql (proxied to localhost:4000)
             </span>
             {latestQuery && (
-              <span style={{ color: '#4caf50', marginLeft: '4px' }}>
+              <span className="test-page__summary-duration">
                 ({Math.round(latestQuery.duration || 0)}ms)
               </span>
             )}
@@ -304,18 +265,10 @@ const TestPage = () => {
           {/* Mock Data Indicator */}
           {componentMeta?.usesMockData || window._componentMockDataFlags?.[selectedComponent] ? (
             <>
-              <div style={{ width: '1px', height: '20px', background: 'rgba(255, 255, 255, 0.2)' }}></div>
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '6px',
-                padding: '4px 8px',
-                background: 'rgba(255, 193, 7, 0.2)',
-                borderRadius: '6px',
-                border: '1px solid rgba(255, 193, 7, 0.4)'
-              }}>
-                <span style={{ fontSize: '14px' }}>🧪</span>
-                <span style={{ color: '#ffc107', fontWeight: '600', fontSize: '11px' }}>
+              <div className="test-page__summary-divider"></div>
+              <div className="test-page__mock-indicator">
+                <span>🧪</span>
+                <span className="test-page__mock-label">
                   MOCK DATA
                 </span>
               </div>
@@ -325,35 +278,10 @@ const TestPage = () => {
 
         {/* Event Content Bar */}
         {latestEvent && latestEvent.detail && (
-          <div style={{
-            background: 'rgba(255, 193, 7, 0.1)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            padding: '8px 16px',
-            borderRadius: '12px',
-            marginBottom: '12px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-            border: '1px solid rgba(255, 193, 7, 0.3)',
-            borderLeft: `3px solid #ffc107`,
-            fontSize: '10px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-              <span style={{ color: 'rgba(224, 224, 224, 0.9)', fontWeight: '500', minWidth: '80px' }}>Event Content:</span>
-              <div style={{ 
-                flex: 1, 
-                fontFamily: 'monospace', 
-                color: theme.colors.foreground,
-                background: 'rgba(0, 0, 0, 0.3)',
-                backdropFilter: 'blur(10px)',
-                WebkitBackdropFilter: 'blur(10px)',
-                padding: '4px 8px',
-                borderRadius: '6px',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                maxHeight: '80px',
-                overflow: 'auto',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word'
-              }}>
+          <div className="test-page__event-content">
+            <div className="test-page__event-content-row">
+              <span className="test-page__event-content-label">Event Content:</span>
+              <div className="test-page__event-content-body">
                 {typeof latestEvent.detail === 'object' 
                   ? JSON.stringify(latestEvent.detail, null, 2)
                   : String(latestEvent.detail)
@@ -364,33 +292,12 @@ const TestPage = () => {
         )}
 
         {/* Tabs */}
-        <div style={{
-          display: 'flex',
-          background: theme.colors.glass,
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderRadius: '12px 12px 0 0',
-          border: `1px solid ${theme.colors.glassBorder}`,
-          borderBottom: `1px solid ${theme.colors.glassBorder}`,
-          padding: '0 12px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
-        }}>
+        <div className="test-page__glass-card test-page__tabs">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              style={{
-                padding: '10px 16px',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: activeTab === tab.id ? `2px solid ${theme.colors.accent}` : '2px solid transparent',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: activeTab === tab.id ? '600' : '400',
-                color: activeTab === tab.id ? theme.colors.accent : 'rgba(224, 224, 224, 0.7)',
-                marginRight: '8px',
-                transition: 'all 0.2s'
-              }}
+              className={`test-page__tab ${activeTab === tab.id ? 'is-active' : ''}`}
             >
               {tab.label}
             </button>
@@ -398,50 +305,20 @@ const TestPage = () => {
         </div>
 
         {/* Tab Content */}
-        <div style={{
-          background: theme.colors.glass,
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderRadius: '0 0 12px 12px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-          border: `1px solid ${theme.colors.glassBorder}`,
-          borderTop: 'none',
-          minHeight: '600px'
-        }}>
+        <div className="test-page__glass-card test-page__tab-content">
           {/* Component Tab */}
           {activeTab === 'component' && (
-            <div style={{ padding: '12px' }}>
+            <div className="test-page__component-tab">
               {/* Component Selector */}
-              <div style={{
-                display: 'flex',
-                gap: '12px',
-                marginBottom: '12px',
-                alignItems: 'center'
-              }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '11px',
-                    color: 'rgba(224, 224, 224, 0.7)',
-                    marginBottom: '4px',
-                    fontWeight: '500'
-                  }}>
+              <div className="test-page__selector-row">
+                <div className="test-page__selector-col">
+                  <label className="test-page__label">
                     Component
                   </label>
                   <select
                     value={selectedComponent}
                     onChange={(e) => setSelectedComponent(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '6px 8px',
-                      border: `1px solid ${theme.colors.glassBorder}`,
-                      borderRadius: '6px',
-                      fontSize: '13px',
-                      background: 'rgba(0, 0, 0, 0.3)',
-                      backdropFilter: 'blur(10px)',
-                      WebkitBackdropFilter: 'blur(10px)',
-                      color: theme.colors.foreground
-                    }}
+                    className="test-page__select"
                   >
                     {Object.entries(categories).map(([category, components]) => (
                       <optgroup key={category} label={category}>
@@ -456,21 +333,8 @@ const TestPage = () => {
                 </div>
                 <button
                   onClick={() => setShowFilters(!showFilters)}
-                  style={{
-                    padding: '6px 12px',
-                    background: showFilters ? theme.colors.accent : theme.colors.glass,
-                    backdropFilter: 'blur(10px)',
-                    WebkitBackdropFilter: 'blur(10px)',
-                    color: showFilters ? '#0f0f23' : theme.colors.foreground,
-                    border: `1px solid ${theme.colors.glassBorder}`,
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    alignSelf: 'flex-end',
-                    marginTop: '20px',
-                    fontWeight: '500',
-                    transition: 'all 0.2s'
-                  }}
+                  className="test-page__toggle-btn"
+                  data-active={showFilters}
                 >
                   {showFilters ? '▼' : '▶'} Filters
                 </button>
@@ -478,30 +342,12 @@ const TestPage = () => {
 
               {/* Collapsible Filters */}
               {showFilters && (
-                <div style={{
-                  padding: '12px',
-                  background: 'rgba(0, 0, 0, 0.3)',
-                  backdropFilter: 'blur(10px)',
-                  WebkitBackdropFilter: 'blur(10px)',
-                  borderRadius: '8px',
-                  marginBottom: '12px',
-                  border: `1px solid ${theme.colors.glassBorder}`
-                }}>
+                <div className="test-page__filters">
                   {/* BookingProfile Filters */}
                   {selectedComponent === 'BookingProfile' ? (
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '12px'
-                    }}>
+                    <div className="test-page__filter-stack">
                       <div>
-                        <label style={{
-                          display: 'block',
-                          fontSize: '11px',
-                          color: 'rgba(224, 224, 224, 0.7)',
-                          marginBottom: '4px',
-                          fontWeight: '500'
-                        }}>
+                        <label className="test-page__label">
                           Sail Code
                         </label>
                         <input
@@ -509,58 +355,25 @@ const TestPage = () => {
                           value={bookingProfileSailCode}
                           onChange={(e) => setBookingProfileSailCode(e.target.value)}
                           placeholder="e.g., CJ07250901"
-                          style={{
-                            width: '100%',
-                            padding: '6px',
-                            border: `1px solid ${theme.colors.glassBorder}`,
-                            borderRadius: '6px',
-                            fontSize: '12px',
-                            background: 'rgba(0, 0, 0, 0.4)',
-                            color: theme.colors.foreground,
-                            backdropFilter: 'blur(10px)',
-                            WebkitBackdropFilter: 'blur(10px)'
-                          }}
+                          className="test-page__input"
                         />
                       </div>
                       <div>
-                        <label style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          fontSize: '11px',
-                          color: 'rgba(224, 224, 224, 0.7)',
-                          fontWeight: '500',
-                          cursor: 'pointer'
-                        }}>
+                        <label className="test-page__checkbox-label">
                           <input
                             type="checkbox"
                             checked={includeComparison}
                             onChange={(e) => setIncludeComparison(e.target.checked)}
-                            style={{
-                              width: '16px',
-                              height: '16px',
-                              cursor: 'pointer'
-                            }}
+                            className="test-page__checkbox"
                           />
                           Include Year-over-Year Comparison
                         </label>
                       </div>
                     </div>
                   ) : (
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-                      gap: '8px',
-                      marginBottom: '8px'
-                    }}>
+                    <div className="test-page__filter-grid">
                       <div>
-                        <label style={{
-                          display: 'block',
-                          fontSize: '11px',
-                          color: 'rgba(224, 224, 224, 0.7)',
-                          marginBottom: '4px',
-                          fontWeight: '500'
-                        }}>
+                        <label className="test-page__label">
                           Sail Code
                         </label>
                         <input
@@ -568,27 +381,11 @@ const TestPage = () => {
                           value={sailCode}
                           onChange={(e) => setSailCode(e.target.value)}
                           placeholder="Filter by sail code..."
-                          style={{
-                            width: '100%',
-                            padding: '6px',
-                            border: `1px solid ${theme.colors.glassBorder}`,
-                            borderRadius: '6px',
-                            fontSize: '12px',
-                            background: 'rgba(0, 0, 0, 0.4)',
-                            color: theme.colors.foreground,
-                            backdropFilter: 'blur(10px)',
-                            WebkitBackdropFilter: 'blur(10px)'
-                          }}
+                          className="test-page__input"
                         />
                       </div>
                       <div>
-                        <label style={{
-                          display: 'block',
-                          fontSize: '11px',
-                          color: 'rgba(224, 224, 224, 0.7)',
-                          marginBottom: '4px',
-                          fontWeight: '500'
-                        }}>
+                        <label className="test-page__label">
                           Ship Name
                         </label>
                         <input
@@ -596,27 +393,11 @@ const TestPage = () => {
                           value={shipName}
                           onChange={(e) => setShipName(e.target.value)}
                           placeholder="Filter by ship name..."
-                          style={{
-                            width: '100%',
-                            padding: '6px',
-                            border: `1px solid ${theme.colors.glassBorder}`,
-                            borderRadius: '6px',
-                            fontSize: '12px',
-                            background: 'rgba(0, 0, 0, 0.4)',
-                            color: theme.colors.foreground,
-                            backdropFilter: 'blur(10px)',
-                            WebkitBackdropFilter: 'blur(10px)'
-                          }}
+                          className="test-page__input"
                         />
                       </div>
                     <div>
-                      <label style={{
-                        display: 'block',
-                        fontSize: '11px',
-                        color: 'rgba(224, 224, 224, 0.7)',
-                        marginBottom: '4px',
-                        fontWeight: '500'
-                      }}>
+                      <label className="test-page__label">
                         Limit
                       </label>
                       <input
@@ -626,67 +407,25 @@ const TestPage = () => {
                         min="10"
                         max="1000"
                         step="10"
-                        style={{
-                          width: '100%',
-                          padding: '6px',
-                          border: `1px solid ${theme.colors.glassBorder}`,
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          background: 'rgba(0, 0, 0, 0.4)',
-                          color: theme.colors.foreground,
-                          backdropFilter: 'blur(10px)',
-                          WebkitBackdropFilter: 'blur(10px)'
-                        }}
+                        className="test-page__input"
                       />
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                    <div className="test-page__filter-actions">
                       <button
                         onClick={handleApplyFilters}
-                        style={{
-                          padding: '6px 12px',
-                          background: theme.colors.accent,
-                          color: '#0f0f23',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          fontWeight: '500',
-                          transition: 'all 0.2s'
-                        }}
+                        className="test-page__btn test-page__btn--primary"
                       >
                         Apply
                       </button>
                       <button
                         onClick={handleClearFilters}
-                        style={{
-                          padding: '6px 12px',
-                          background: theme.colors.glass,
-                          backdropFilter: 'blur(10px)',
-                          WebkitBackdropFilter: 'blur(10px)',
-                          color: theme.colors.foreground,
-                          border: `1px solid ${theme.colors.glassBorder}`,
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          transition: 'all 0.2s'
-                        }}
+                        className="test-page__btn test-page__btn--ghost"
                       >
                         Clear
                       </button>
                       <button
                         onClick={refetch}
-                        style={{
-                          padding: '6px 12px',
-                          background: theme.colors.glass,
-                          backdropFilter: 'blur(10px)',
-                          WebkitBackdropFilter: 'blur(10px)',
-                          color: theme.colors.foreground,
-                          border: `1px solid ${theme.colors.glassBorder}`,
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          transition: 'all 0.2s'
-                        }}
+                        className="test-page__btn test-page__btn--ghost"
                       >
                         ↻ Refresh
                       </button>
@@ -697,15 +436,7 @@ const TestPage = () => {
               )}
 
               {/* Component Render Area */}
-              <div style={{
-                border: `1px solid ${theme.colors.glassBorder}`,
-                borderRadius: '8px',
-                padding: '12px',
-                minHeight: '500px',
-                background: 'rgba(0, 0, 0, 0.2)',
-                backdropFilter: 'blur(10px)',
-                WebkitBackdropFilter: 'blur(10px)'
-              }}>
+              <div className="test-page__component-area">
                 {loading && selectedComponent === 'SailingTable' && (
                   <LoadingSpinner size="small" message="Loading data..." />
                 )}
@@ -726,16 +457,16 @@ const TestPage = () => {
 
           {/* Events Tab */}
           {activeTab === 'events' && (
-            <div style={{ padding: '12px', height: '600px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ fontSize: '12px', color: 'rgba(224, 224, 224, 0.7)' }}>
-                Showing events for: <strong style={{ color: theme.colors.foreground }}>{selectedComponent}</strong>
+            <div className="test-page__events-tab">
+              <div className="test-page__events-meta">
+                Showing events for: <strong className="test-page__events-meta-strong">{selectedComponent}</strong>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', flex: 1, minHeight: 0 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                  <EventMonitor componentFilter={selectedComponent} theme={theme} />
+              <div className="test-page__events-grid">
+                <div className="test-page__events-panel">
+                  <EventMonitor componentFilter={selectedComponent} />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                  <EventContextPanel latestEvent={latestEvent} theme={theme} selectedComponent={selectedComponent} />
+                <div className="test-page__events-panel">
+                  <EventContextPanel latestEvent={latestEvent} selectedComponent={selectedComponent} />
                 </div>
               </div>
             </div>
@@ -743,11 +474,10 @@ const TestPage = () => {
 
           {/* Information Tab */}
           {activeTab === 'information' && (
-            <div style={{ height: '600px' }}>
+            <div className="test-page__information-tab">
               <InformationPanel 
                 selectedComponent={selectedComponent}
                 performanceData={null} // Will be passed from ComponentWrapper if needed
-                theme={theme}
               />
             </div>
           )}

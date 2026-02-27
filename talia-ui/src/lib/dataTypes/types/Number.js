@@ -96,6 +96,8 @@ export const Number = {
    * Supports: >, <, >=, <=, =, !=, or just a number (defaults to >=)
    */
   headerFilterFunc: (headerValue, rowValue, rowData, filterParams) => {
+    void rowData;
+    void filterParams;
     if (!headerValue || headerValue === '') return true;
     
     // Parse the filter value to extract operator and number

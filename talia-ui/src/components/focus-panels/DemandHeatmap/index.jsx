@@ -9,11 +9,8 @@ import { useDemandHeatmap } from '../../../hooks/data/useDemandHeatmap';
 import DemandHeatmapPresenter from './DemandHeatmapPresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
-import { useTheme } from '../../../contexts/ThemeContext';
 
 const DemandHeatmapContainer = ({ filters = {} }) => {
-  const { theme } = useTheme();
-  
   console.log('[DemandHeatmapContainer] Component rendering with filters:', filters);
   
   const { data, months, containsMockData, loading, error, refetch } = useDemandHeatmap(filters);
@@ -55,29 +52,14 @@ const DemandHeatmapContainer = ({ filters = {} }) => {
   // Handle empty data
   if (!data || data.length === 0) {
     return (
-      <div style={{ 
-        padding: '40px', 
-        textAlign: 'center',
-        color: 'var(--theme-fg)'
-      }}>
+      <div className="focus-panel-empty">
         <p>No demand data available</p>
-        <p style={{ fontSize: '12px', color: 'var(--theme-text-secondary)', marginTop: '8px' }}>
+        <p className="focus-panel-empty__detail">
           Demand data is calculated from reservation counts grouped by itinerary and departure month.
         </p>
-        <button 
-          onClick={refetch}
-          style={{
-            marginTop: '16px',
-            padding: '8px 16px',
-            backgroundColor: 'var(--theme-accent)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Retry
-        </button>
+        <div className="focus-panel-empty__action">
+          <button className="talia-btn talia-btn--primary" onClick={refetch}>Retry</button>
+        </div>
       </div>
     );
   }
@@ -87,7 +69,6 @@ const DemandHeatmapContainer = ({ filters = {} }) => {
     <DemandHeatmapPresenter 
       data={data}
       months={months}
-      theme={theme}
       onRefresh={refetch}
     />
   );

@@ -6,6 +6,90 @@
  */
 
 /* ============================================================================
+   Dashboard Shell
+   ============================================================================ */
+
+.dashboard-shell {
+  --dashboard-toolbar-height: 48px;
+  --dashboard-resize-handle-width: 4px;
+  --dashboard-sidebar-width: 280px;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size);
+  font-family: var(--theme-font-family);
+}
+
+.dashboard-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--theme-sidebar-border);
+  background: var(--theme-sidebar);
+  align-items: center;
+  height: var(--dashboard-toolbar-height);
+}
+
+.dashboard-toolbar__toggle {
+  background: var(--theme-accent);
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: calc(var(--theme-font-size) - 1px);
+}
+
+.dashboard-toolbar__meta {
+  margin-left: auto;
+  font-size: calc(var(--theme-font-size) - 1px);
+  color: var(--theme-text-secondary);
+}
+
+.dashboard-layout {
+  display: flex;
+  height: calc(100vh - var(--dashboard-toolbar-height));
+  position: relative;
+}
+
+.dashboard-content {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+}
+
+.dashboard-dockview {
+  height: 100%;
+  width: 100%;
+}
+
+.dashboard-resize-handle {
+  width: var(--dashboard-resize-handle-width);
+  height: 100%;
+  background: var(--theme-accent-light);
+  cursor: col-resize;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.dashboard-resize-handle:hover {
+  background: var(--theme-accent-hover);
+}
+
+.dashboard-resize-guide {
+  position: absolute;
+  top: 0;
+  left: calc(var(--dashboard-sidebar-width) + var(--dashboard-resize-handle-width));
+  width: 2px;
+  height: 100%;
+  background: var(--theme-accent);
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* ============================================================================
    Sidebar Styles
    ============================================================================ */
 
@@ -13,6 +97,8 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  width: var(--dashboard-sidebar-width);
+  flex-shrink: 0;
   background: var(--theme-sidebar);
   border-right: 1px solid var(--theme-sidebar-border);
   overflow-y: auto;
@@ -110,6 +196,18 @@
 /* Focus section can grow to fill available space */
 .dashboard-section--focus {
   flex-shrink: 1; /* Allow shrinking if needed */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dashboard-section--focus.dashboard-section--expanded {
+  flex: 1;
+}
+
+.dashboard-section--focus.dashboard-section--collapsed {
+  flex: 0 0 auto;
 }
 
 .dashboard-section__header {
@@ -159,6 +257,27 @@
   padding: var(--theme-padding-sm) var(--theme-padding-md);
 }
 
+.dashboard-section__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-padding-xs);
+  padding-bottom: var(--theme-padding-sm);
+  border-bottom: 1px solid var(--theme-border-light);
+}
+
+.dashboard-section__group:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.dashboard-section__subtitle {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--theme-text-muted);
+  margin-bottom: 2px;
+}
+
 /* Focus section content can grow to fill available space */
 .dashboard-section--focus .dashboard-section__content--expanded {
   max-height: none; /* No max height limit for focus section */
@@ -205,6 +324,13 @@
   font-size: calc(var(--theme-font-size) - 2px);
   color: var(--theme-text-muted);
   margin-top: 2px;
+}
+
+.dashboard-form-hint--admin {
+  margin-top: 8px;
+  padding: 4px;
+  background: var(--theme-hover);
+  border-radius: 4px;
 }
 
 /* ============================================================================
@@ -800,6 +926,147 @@
 .dashboard-panel__content {
   color: var(--theme-text-secondary);
   font-size: var(--theme-font-size);
+}
+
+/* ============================================================================
+   Inline Panel Styles (Table/Chart/GraphQL/Info)
+   ============================================================================ */
+
+.dashboard-table-panel {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size);
+  font-family: var(--theme-font-family);
+}
+
+.dashboard-table-panel__note {
+  padding: 8px 12px;
+  background: var(--theme-sidebar-header);
+  border-bottom: 1px solid var(--theme-sidebar-border);
+  font-size: calc(var(--theme-font-size) - 1px);
+  color: var(--theme-text-secondary);
+}
+
+.dashboard-table-panel__tip {
+  margin-left: 8px;
+  color: var(--theme-accent);
+}
+
+.dashboard-table-panel__body {
+  height: 100%;
+  width: 100%;
+  flex: 1;
+}
+
+.dashboard-chart-panel {
+  height: 100%;
+  width: 100%;
+  position: relative;
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size);
+  font-family: var(--theme-font-family);
+}
+
+.dashboard-chart-panel__canvas {
+  height: 100%;
+  width: 100%;
+}
+
+.dashboard-info-panel {
+  height: 100%;
+  width: 100%;
+  padding: 16px;
+  font-size: var(--theme-font-size);
+  font-family: var(--theme-font-family);
+  line-height: 1.5;
+  color: var(--theme-fg);
+  background: var(--theme-bg-solid);
+}
+
+.dashboard-info-panel__title {
+  margin: 0 0 8px 0;
+  font-weight: 600;
+}
+
+.dashboard-info-panel__text {
+  margin: 0;
+}
+
+.dashboard-graphql-panel {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size);
+}
+
+.dashboard-graphql-panel__header {
+  padding: 8px 12px;
+  background: var(--theme-sidebar-header);
+  border-bottom: 1px solid var(--theme-sidebar-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dashboard-graphql-panel__title {
+  font-size: calc(var(--theme-font-size) + 2px);
+  font-weight: 600;
+  color: var(--theme-fg);
+}
+
+.dashboard-graphql-panel__content {
+  flex: 1;
+  padding: 16px;
+  overflow: auto;
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+}
+
+.dashboard-graphql-panel__empty {
+  text-align: center;
+  color: var(--theme-text-secondary);
+  font-size: calc(var(--theme-font-size) + 2px);
+}
+
+.dashboard-graphql-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-graphql-card {
+  padding: 12px;
+  background: var(--theme-sidebar-header);
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  font-size: calc(var(--theme-font-size) + 1px);
+}
+
+.dashboard-graphql-card__title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--theme-fg);
+}
+
+.dashboard-graphql-card__meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  font-size: var(--theme-font-size);
+  color: var(--theme-text-secondary);
+}
+
+.dashboard-error-boundary {
+  padding: 20px;
+  color: red;
+  font-family: var(--theme-font-family-monospace);
 }
 
 /* ============================================================================

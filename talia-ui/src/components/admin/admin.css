@@ -296,3 +296,171 @@
   color: #666666;
   font-size: 14px;
 }
+
+/* ============================================================================
+   Focus Groups Manager helpers
+   ============================================================================ */
+
+.admin-section--denied {
+  color: #c2185b;
+}
+
+.admin-page-header--row {
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.admin-page-title--compact {
+  font-size: 24px;
+  margin: 0;
+}
+
+.admin-page-subtitle--compact {
+  margin-top: 4px;
+}
+
+.admin-btn--large {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.admin-btn--medium {
+  font-size: 14px;
+}
+
+.admin-error--spaced {
+  margin-bottom: 20px;
+}
+
+.admin-form-title {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.admin-card-body {
+  flex: 1;
+}
+
+.admin-card-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.admin-badge--compact {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+/* ============================================================================
+   Admin Lite
+   ============================================================================ */
+
+.admin-lite {
+  min-height: 100vh;
+  background: #0f0f23;
+  color: #e7e7ef;
+}
+
+.admin-lite__header {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.admin-lite__title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.admin-lite__subtitle {
+  font-size: 12px;
+  color: #9ea0b5;
+}
+
+.admin-lite__tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.admin-lite__tab {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: #e7e7ef;
+  cursor: pointer;
+}
+
+.admin-lite__tab[data-active="true"] {
+  background: #b08d57;
+  color: #0f0f23;
+}
+
+.admin-lite__content {
+  padding: 12px 16px;
+}
+
+.admin-lite__panel {
+  background: #ffffff;
+  color: #0f0f23;
+  border-radius: 8px;
+}
+
+.admin-lite__unavailable {
+  padding: 16px;
+  font-size: 12px;
+  color: #c7c7d1;
+}
+
+/* ============================================================================
+   Admin User Tables
+   ============================================================================ */
+
+.admin-mono--accent {
+  color: #2e86ab;
+  font-size: 16px;
+}
+
+.admin-code-pill {
+  font-size: 12px;
+  color: #6c757d;
+  background: #f8f9fa;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.admin-role-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.admin-role-badge--admin {
+  background: #dc3545;
+  color: #ffffff;
+}
+
+.admin-role-badge--manager {
+  background: #ffc107;
+  color: #212529;
+}
+
+.admin-role-badge--user {
+  background: #28a745;
+  color: #ffffff;
+}
+
+.admin-role-badge--guest,
+.admin-role-badge--default {
+  background: #6c757d;
+  color: #ffffff;
+}

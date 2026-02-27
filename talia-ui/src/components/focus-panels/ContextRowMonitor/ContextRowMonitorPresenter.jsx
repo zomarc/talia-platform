@@ -4,29 +4,14 @@
  * Admin-only component
  */
 
-import React, { useState, useEffect } from 'react';
-import { useTheme } from '../../../contexts/ThemeContext';
+import React from 'react';
 
-const ContextRowMonitorPresenter = ({ currentContext, theme }) => {
-  const { theme: contextTheme } = useTheme();
-  const themeValues = theme || contextTheme || {
-    colors: {
-      background: '#ffffff',
-      foreground: '#2b2b2b',
-      glass: 'rgba(255, 255, 255, 0.9)',
-      border: '#e0e0e0'
-    }
-  };
+const ContextRowMonitorPresenter = ({ currentContext }) => {
 
   if (!currentContext) {
     return (
-      <div style={{
-        padding: '20px',
-        textAlign: 'center',
-        color: themeValues.colors.foreground,
-        background: themeValues.colors.background
-      }}>
-        <p style={{ color: themeValues.colors.textSecondary || '#666', fontSize: '14px' }}>
+      <div className="focus-panel-empty">
+        <p className="focus-panel-empty__detail">
           No context selected. Select a row in any table to see details here.
         </p>
       </div>
@@ -36,33 +21,13 @@ const ContextRowMonitorPresenter = ({ currentContext, theme }) => {
   const { eventType, rowData, timestamp, source } = currentContext;
 
   return (
-    <div style={{
-      padding: '16px',
-      height: '100%',
-      overflow: 'auto',
-      background: themeValues.colors.background,
-      color: themeValues.colors.foreground
-    }}>
+    <div className="context-row-monitor">
       {/* Header */}
-      <div style={{
-        marginBottom: '16px',
-        paddingBottom: '12px',
-        borderBottom: `2px solid ${themeValues.colors.border || '#e0e0e0'}`
-      }}>
-        <h3 style={{
-          margin: '0 0 8px 0',
-          fontSize: '18px',
-          fontWeight: '600',
-          color: themeValues.colors.foreground
-        }}>
+      <div className="context-row-monitor__header">
+        <h3 className="context-row-monitor__title">
           📋 Current Context
         </h3>
-        <div style={{
-          display: 'flex',
-          gap: '12px',
-          fontSize: '12px',
-          color: themeValues.colors.textSecondary || '#666'
-        }}>
+        <div className="context-row-monitor__meta">
           <span><strong>Source:</strong> {source}</span>
           <span><strong>Event:</strong> {eventType}</span>
           {timestamp && <span><strong>Time:</strong> {timestamp}</span>}
@@ -71,57 +36,24 @@ const ContextRowMonitorPresenter = ({ currentContext, theme }) => {
 
       {/* Row Data */}
       <div>
-        <h4 style={{
-          margin: '0 0 12px 0',
-          fontSize: '14px',
-          fontWeight: '600',
-          color: themeValues.colors.foreground
-        }}>
+        <h4 className="context-row-monitor__section-title">
           Row Data:
         </h4>
-        <div style={{
-          background: themeValues.colors.glass || 'rgba(0, 0, 0, 0.05)',
-          border: `1px solid ${themeValues.colors.border || '#e0e0e0'}`,
-          borderRadius: '8px',
-          padding: '12px',
-          fontFamily: 'monospace',
-          fontSize: '12px',
-          overflow: 'auto',
-          maxHeight: 'calc(100vh - 200px)'
-        }}>
-          <pre style={{
-            margin: 0,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            color: themeValues.colors.foreground
-          }}>
+        <div className="context-row-monitor__data">
+          <pre className="context-row-monitor__pre">
             {JSON.stringify(rowData, null, 2)}
           </pre>
         </div>
       </div>
 
       {/* Quick Actions */}
-      <div style={{
-        marginTop: '16px',
-        paddingTop: '12px',
-        borderTop: `1px solid ${themeValues.colors.border || '#e0e0e0'}`
-      }}>
+      <div className="context-row-monitor__actions">
         <button
           onClick={() => {
             navigator.clipboard.writeText(JSON.stringify(rowData, null, 2));
             alert('Row data copied to clipboard!');
           }}
-          style={{
-            padding: '6px 12px',
-            background: themeValues.colors.accent || '#b08d57',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '12px',
-            fontWeight: '500',
-            marginRight: '8px'
-          }}
+          className="context-row-monitor__button context-row-monitor__button--primary"
         >
           📋 Copy JSON
         </button>
@@ -130,15 +62,7 @@ const ContextRowMonitorPresenter = ({ currentContext, theme }) => {
             console.log('[ContextRowMonitor] Current context:', currentContext);
             console.log('[ContextRowMonitor] Row data:', rowData);
           }}
-          style={{
-            padding: '6px 12px',
-            background: themeValues.colors.glass || 'rgba(0, 0, 0, 0.1)',
-            color: themeValues.colors.foreground,
-            border: `1px solid ${themeValues.colors.border || '#e0e0e0'}`,
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '12px'
-          }}
+          className="context-row-monitor__button"
         >
           🔍 Log to Console
         </button>

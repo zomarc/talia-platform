@@ -56,24 +56,15 @@ const TaliaUserTable = () => {
     setNewRole('');
   };
 
-  const getRoleBadgeStyle = (role) => {
-    const baseStyle = {
-      padding: '4px 12px',
-      borderRadius: '12px',
-      fontSize: '12px',
-      fontWeight: 'bold',
-      textTransform: 'uppercase'
-    };
-
+  const getRoleBadgeVariant = (role) => {
     switch (role) {
       case 'admin':
-        return { ...baseStyle, backgroundColor: '#dc3545', color: 'white' };
       case 'manager':
-        return { ...baseStyle, backgroundColor: '#ffc107', color: '#212529' };
       case 'user':
-        return { ...baseStyle, backgroundColor: '#28a745', color: 'white' };
+      case 'guest':
+        return role;
       default:
-        return { ...baseStyle, backgroundColor: '#6c757d', color: 'white' };
+        return 'default';
     }
   };
 
@@ -109,7 +100,7 @@ const TaliaUserTable = () => {
             {users.map((user) => (
               <tr key={user.taliaUserId} className="admin-table-row">
                 <td className="admin-table-cell">
-                  <strong className="admin-mono" style={{ color: '#2E86AB', fontSize: '16px' }}>
+                  <strong className="admin-mono admin-mono--accent">
                     {user.taliaUserId}
                   </strong>
                 </td>
@@ -128,7 +119,7 @@ const TaliaUserTable = () => {
                       <option value="guest">Guest</option>
                     </select>
                   ) : (
-                    <span style={getRoleBadgeStyle(user.taliaRole)}>
+                    <span className={`admin-role-badge admin-role-badge--${getRoleBadgeVariant(user.taliaRole)}`}>
                       {user.taliaRole}
                     </span>
                   )}

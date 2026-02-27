@@ -3,15 +3,13 @@
  * Provides filter controls for competitor pricing data
  */
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 
-const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange, theme }) => {
+const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange }) => {
   // Extract unique values for dropdowns from data
   const currencies = [...new Set(data.map(d => d.currency).filter(Boolean))].sort();
   const durations = [...new Set(data.map(d => d.duration).filter(Boolean))].sort((a, b) => a - b);
   const destinations = [...new Set(data.map(d => d.destination).filter(Boolean))].sort();
-  const cruiseLines = [...new Set(data.map(d => d.cruiseLine).filter(Boolean))].sort();
-  const markets = [...new Set(data.map(d => d.market).filter(Boolean))].sort();
 
   const months = [
     { value: null, label: 'All Months' },
@@ -44,48 +42,14 @@ const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange, theme }
     });
   };
 
-  const inputStyle = {
-    padding: '6px 8px',
-    border: `1px solid ${theme?.colors?.border || '#e0e0e0'}`,
-    borderRadius: '4px',
-    fontSize: '14px',
-    background: theme?.colors?.background || '#fff',
-    color: theme?.colors?.foreground || '#333',
-    minWidth: '120px',
-    boxSizing: 'border-box'
-  };
-
-  const labelStyle = {
-    fontSize: '12px',
-    fontWeight: '600',
-    color: theme?.colors?.textSecondary || '#666',
-    marginBottom: '4px',
-    display: 'block'
-  };
-
-  const containerStyle = {
-    display: 'flex',
-    gap: '16px',
-    flexWrap: 'wrap',
-    padding: '16px',
-    background: theme?.colors?.glass || 'rgba(255, 255, 255, 0.8)',
-    borderBottom: `1px solid ${theme?.colors?.border || '#e0e0e0'}`,
-    alignItems: 'flex-end'
-  };
-
-  const filterGroupStyle = {
-    display: 'flex',
-    flexDirection: 'column'
-  };
-
   return (
-    <div style={containerStyle}>
-      <div style={filterGroupStyle}>
-        <label style={labelStyle}>Currency</label>
+    <div className="competitor-filters">
+      <div className="competitor-filters__group">
+        <label className="competitor-filters__label">Currency</label>
         <select
           value={filters.currency || ''}
           onChange={(e) => handleFilterChange('currency', e.target.value)}
-          style={inputStyle}
+          className="competitor-filters__input"
         >
           {currencies.length > 0 ? (
             currencies.map(curr => (
@@ -97,12 +61,12 @@ const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange, theme }
         </select>
       </div>
 
-      <div style={filterGroupStyle}>
-        <label style={labelStyle}>Cruise Duration</label>
+      <div className="competitor-filters__group">
+        <label className="competitor-filters__label">Cruise Duration</label>
         <select
           value={filters.duration || ''}
           onChange={(e) => handleFilterChange('duration', e.target.value ? parseFloat(e.target.value) : null)}
-          style={inputStyle}
+          className="competitor-filters__input"
         >
           <option value="">All</option>
           {durations.map(dur => (
@@ -111,12 +75,12 @@ const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange, theme }
         </select>
       </div>
 
-      <div style={filterGroupStyle}>
-        <label style={labelStyle}>Source Destination</label>
+      <div className="competitor-filters__group">
+        <label className="competitor-filters__label">Source Destination</label>
         <select
           value={filters.destination || ''}
           onChange={(e) => handleFilterChange('destination', e.target.value)}
-          style={inputStyle}
+          className="competitor-filters__input"
         >
           <option value="">All Destinations</option>
           {destinations.length > 0 ? (
@@ -129,12 +93,12 @@ const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange, theme }
         </select>
       </div>
 
-      <div style={filterGroupStyle}>
-        <label style={labelStyle}>Cabin Type</label>
+      <div className="competitor-filters__group">
+        <label className="competitor-filters__label">Cabin Type</label>
         <select
           value={filters.cabinType || 'ALL'}
           onChange={(e) => handleFilterChange('cabinType', e.target.value)}
-          style={inputStyle}
+          className="competitor-filters__input"
         >
           {cabinTypes.map(type => (
             <option key={type.value} value={type.value}>{type.label}</option>
@@ -142,12 +106,12 @@ const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange, theme }
         </select>
       </div>
 
-      <div style={filterGroupStyle}>
-        <label style={labelStyle}>Departure Month</label>
+      <div className="competitor-filters__group">
+        <label className="competitor-filters__label">Departure Month</label>
         <select
           value={filters.departureMonth || ''}
           onChange={(e) => handleFilterChange('departureMonth', e.target.value ? parseInt(e.target.value) : null)}
-          style={inputStyle}
+          className="competitor-filters__input"
         >
           {months.map(month => (
             <option key={month.value || 'all'} value={month.value || ''}>{month.label}</option>
@@ -155,13 +119,13 @@ const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange, theme }
         </select>
       </div>
 
-      <div style={filterGroupStyle}>
-        <label style={labelStyle}>
+      <div className="competitor-filters__group">
+        <label className="competitor-filters__label competitor-filters__label--inline">
           <input
             type="checkbox"
             checked={filters.isLatest !== false}
             onChange={(e) => handleFilterChange('isLatest', e.target.checked)}
-            style={{ marginRight: '6px' }}
+            className="competitor-filters__checkbox"
           />
           Latest Only
         </label>

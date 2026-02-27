@@ -55,7 +55,7 @@ class FocusPreferencesService {
   /**
    * Get user preferences for all focuses
    */
-  async getUserPreferences(userId) {
+  async getUserPreferences() {
     try {
       const result = await apolloClient.query({
         query: GET_USER_PREFERENCES_QUERY,
@@ -91,7 +91,7 @@ class FocusPreferencesService {
   /**
    * Toggle favorite status for a focus
    */
-  async toggleFavorite(userId, focusId) {
+  async toggleFavorite(focusId) {
     try {
       const { data } = await apolloClient.mutate({
         mutation: TOGGLE_FAVORITE_MUTATION,
@@ -108,7 +108,7 @@ class FocusPreferencesService {
   /**
    * Update last used timestamp for a focus
    */
-  async updateLastUsed(userId, focusId) {
+  async updateLastUsed(focusId) {
     try {
       const { data } = await apolloClient.mutate({
         mutation: UPDATE_FOCUS_PREFERENCE_MUTATION,
@@ -130,7 +130,7 @@ class FocusPreferencesService {
   /**
    * Save custom layout for a focus
    */
-  async saveCustomLayout(userId, focusId, layout) {
+  async saveCustomLayout(focusId, layout) {
     try {
       const { data } = await apolloClient.mutate({
         mutation: UPDATE_FOCUS_PREFERENCE_MUTATION,
@@ -152,7 +152,7 @@ class FocusPreferencesService {
   /**
    * Update multiple preference fields at once
    */
-  async updatePreferences(userId, focusId, preferences) {
+  async updatePreferences(focusId, preferences) {
     try {
       const { data } = await apolloClient.mutate({
         mutation: UPDATE_FOCUS_PREFERENCE_MUTATION,

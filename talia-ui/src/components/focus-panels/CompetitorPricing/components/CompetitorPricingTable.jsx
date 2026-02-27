@@ -6,7 +6,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { initTabulator } from '../../../../lib/tabulatorConfig';
 
-const CompetitorPricingTable = ({ data, theme }) => {
+const CompetitorPricingTable = ({ data }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const [initialized, setInitialized] = useState(false);
@@ -180,25 +180,17 @@ const CompetitorPricingTable = ({ data, theme }) => {
     };
   }, [data, initialized]);
 
-  const containerStyle = {
-    padding: '16px',
-    background: theme?.colors?.glass || 'rgba(255, 255, 255, 0.8)',
-    borderTop: `1px solid ${theme?.colors?.border || '#e0e0e0'}`
-  };
-
   if (!data || data.length === 0) {
     return (
-      <div style={containerStyle}>
-        <p style={{ textAlign: 'center', color: theme?.colors?.textSecondary || '#666' }}>
-          No competitor pricing data available
-        </p>
+      <div className="competitor-table">
+        <p className="competitor-table__empty">No competitor pricing data available</p>
       </div>
     );
   }
 
   return (
-    <div style={containerStyle}>
-      <div ref={tableRef} style={{ background: theme?.colors?.background || '#fff' }} />
+    <div className="competitor-table">
+      <div ref={tableRef} className="competitor-table__host" />
     </div>
   );
 };

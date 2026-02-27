@@ -33,7 +33,7 @@ const FocusGroupsManager = () => {
 
   if (!isAdmin) {
     return (
-      <div className="admin-section" style={{ color: '#c2185b' }}>
+      <div className="admin-section admin-section--denied">
         <h2>Access Denied</h2>
         <p>Admin access required to manage focus groups.</p>
       </div>
@@ -103,10 +103,10 @@ const FocusGroupsManager = () => {
 
   return (
     <div className="admin-section">
-      <div className="admin-page-header" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="admin-page-header admin-page-header--row">
         <div>
-          <h1 className="admin-page-title" style={{ fontSize: '24px', margin: 0 }}>Focus Groups Management</h1>
-          <p className="admin-page-subtitle" style={{ marginTop: '4px' }}>
+          <h1 className="admin-page-title admin-page-title--compact">Focus Groups Management</h1>
+          <p className="admin-page-subtitle admin-page-subtitle--compact">
             Organize screen sets into groups for better management
           </p>
         </div>
@@ -116,22 +116,21 @@ const FocusGroupsManager = () => {
             setEditingGroup(null);
             setFormData({ name: '', description: '', isActive: true });
           }}
-          className="admin-btn admin-btn-accent"
-          style={{ padding: '10px 20px', fontSize: '14px', fontWeight: '500' }}
+          className="admin-btn admin-btn-accent admin-btn--large"
         >
           + Create Group
         </button>
       </div>
 
         {error && (
-          <div className="admin-error" style={{ marginBottom: '20px' }}>
+          <div className="admin-error admin-error--spaced">
             {error}
           </div>
         )}
 
         {(showCreateForm || editingGroup) && (
           <div className="admin-form-card">
-            <h3 style={{ marginTop: 0, marginBottom: '16px' }}>
+            <h3 className="admin-form-title">
               {editingGroup ? 'Edit Focus Group' : 'Create Focus Group'}
             </h3>
             <div className="admin-form-row">
@@ -167,15 +166,13 @@ const FocusGroupsManager = () => {
               <div className="admin-actions">
                 <button
                   onClick={editingGroup ? () => handleUpdate(editingGroup) : handleCreate}
-                  className="admin-btn admin-btn-accent"
-                  style={{ fontSize: '14px' }}
+                  className="admin-btn admin-btn-accent admin-btn--medium"
                 >
                   {editingGroup ? 'Update' : 'Create'}
                 </button>
                 <button
                   onClick={cancelEdit}
-                  className="admin-btn admin-btn-muted"
-                  style={{ fontSize: '14px' }}
+                  className="admin-btn admin-btn-muted admin-btn--medium"
                 >
                   Cancel
                 </button>
@@ -195,15 +192,15 @@ const FocusGroupsManager = () => {
                 key={group.id}
                 className="admin-card-row"
               >
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <div className="admin-card-body">
+                  <div className="admin-card-header-row">
                     <h3 className="admin-card-title">{group.name}</h3>
                     {group.isActive ? (
-                      <span className="admin-badge admin-btn-success" style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '12px' }}>
+                      <span className="admin-badge admin-btn-success admin-badge--compact">
                         Active
                       </span>
                     ) : (
-                      <span className="admin-badge admin-btn-muted" style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '12px' }}>
+                      <span className="admin-badge admin-btn-muted admin-badge--compact">
                         Inactive
                       </span>
                     )}

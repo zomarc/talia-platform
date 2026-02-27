@@ -136,7 +136,7 @@ const SimpleTablePresenter = ({ data }) => {
         initialSort: [{ column: 'sail_date_from', dir: 'desc' }],
         pagination: false,
         rowClick: (event, row) => {
-          try { row?.select?.(); } catch {}
+          try { row?.select?.(); } catch { /* noop */ }
         },
         rowSelectionChanged: (selectedData) => {
           const rec = selectedData && selectedData[0];

@@ -43,7 +43,7 @@ const BookingProfileContainer = ({ sailCode, includeComparison = false, previous
   // Handle no sail code
   if (!sailCode) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center' }}>
+      <div className="focus-panel-empty">
         <p>Please select a sailing to view booking profile</p>
       </div>
     );
@@ -52,9 +52,11 @@ const BookingProfileContainer = ({ sailCode, includeComparison = false, previous
   // Handle empty data
   if (!data) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center' }}>
+      <div className="focus-panel-empty">
         <p>No booking data available for {sailCode}</p>
-        <button onClick={refetch}>Retry</button>
+        <div className="focus-panel-empty__action">
+          <button className="talia-btn talia-btn--primary" onClick={refetch}>Retry</button>
+        </div>
       </div>
     );
   }

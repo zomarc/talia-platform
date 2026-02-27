@@ -4,17 +4,14 @@
  * NEW component - does not modify existing DemandHeatmap component
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useDemandHeatmap } from '../../../hooks/data/useDemandHeatmap';
 import { useSearchTrends } from '../../../hooks/data/useSearchTrends';
 import DemandHeatmapWithSearchTrendsPresenter from './DemandHeatmapWithSearchTrendsPresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
-import { useTheme } from '../../../contexts/ThemeContext';
 
 const DemandHeatmapWithSearchTrendsContainer = ({ filters = {} }) => {
-  const { theme } = useTheme();
-  
   console.log('[DemandHeatmapWithSearchTrendsContainer] Component rendering with filters:', filters);
   
   // Fetch both data sources
@@ -29,7 +26,6 @@ const DemandHeatmapWithSearchTrendsContainer = ({ filters = {} }) => {
   
   const { 
     trends: searchTrends, 
-    trackedQueries, 
     loading: trendsLoading, 
     error: trendsError, 
     refetch: refetchTrends 
@@ -104,32 +100,22 @@ const DemandHeatmapWithSearchTrendsContainer = ({ filters = {} }) => {
   // Handle empty data
   if ((!heatmapData || heatmapData.length === 0) && (!searchTrends || !searchTrends.series || searchTrends.series.length === 0)) {
     return (
-      <div style={{ 
-        padding: '40px', 
-        textAlign: 'center',
-        color: 'var(--theme-fg)'
-      }}>
+      <div className="focus-panel-empty">
         <p>No data available</p>
-        <p style={{ fontSize: '12px', color: 'var(--theme-text-secondary)', marginTop: '8px' }}>
+        <p className="focus-panel-empty__detail">
           This component combines demand heatmap data with search trends to show correlations.
         </p>
-        <button 
-          onClick={() => {
-            refetchHeatmap();
-            refetchTrends();
-          }}
-          style={{
-            marginTop: '16px',
-            padding: '8px 16px',
-            backgroundColor: 'var(--theme-accent)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Retry
-        </button>
+        <div className="focus-panel-empty__action">
+          <button 
+            className="talia-btn talia-btn--primary"
+            onClick={() => {
+              refetchHeatmap();
+              refetchTrends();
+            }}
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -141,9 +127,7 @@ const DemandHeatmapWithSearchTrendsContainer = ({ filters = {} }) => {
       months={heatmapMonths}
       searchTrends={searchTrends}
       combinedData={combinedData}
-      trackedQueries={trackedQueries}
       containsMockData={containsMockData}
-      theme={theme}
       onRefresh={() => {
         refetchHeatmap();
         refetchTrends();

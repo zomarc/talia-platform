@@ -87,7 +87,7 @@ class GoogleTrendsService {
             errorDetails = ` GraphQL errors: ${JSON.stringify(errorBody.errors, null, 2)}`;
             console.error('[GoogleTrendsService] GraphQL errors:', errorBody.errors);
           }
-        } catch (e) {
+        } catch {
           const errorText = await response.clone().text();
           errorDetails = ` Response: ${errorText.substring(0, 200)}`;
         }
@@ -471,10 +471,10 @@ class GoogleTrendsService {
             } else if (errorJson.message) {
               errorDetails += ` - ${errorJson.message}`;
             }
-          } catch (parseError) {
+          } catch {
             errorDetails += ` - ${errorText.substring(0, 200)}`;
           }
-        } catch (e) {
+        } catch {
           // Couldn't parse error response
         }
         throw new Error(errorDetails);

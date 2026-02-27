@@ -11,6 +11,7 @@
  *   FALLBACK:  style={{ background: theme.colors.background }}
  */
 
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import theme from '../config/themes';
 
@@ -77,7 +78,7 @@ export const ThemeProvider = ({ children }) => {
         const parsed = JSON.parse(saved);
         initialFontSize = parsed.fontSettings?.fontSize || 12;
       }
-    } catch (e) {
+    } catch {
       // Use default
     }
     return initialFontSize;
@@ -92,7 +93,7 @@ export const ThemeProvider = ({ children }) => {
         const parsed = JSON.parse(saved);
         initialFontFamily = parsed.fontSettings?.fontFamily || 'Inter';
       }
-    } catch (e) {
+    } catch {
       // Use default
     }
     return initialFontFamily;

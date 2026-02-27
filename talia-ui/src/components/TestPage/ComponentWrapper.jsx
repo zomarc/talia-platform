@@ -8,7 +8,7 @@ import { usePerformanceTracking } from '../../hooks/usePerformanceTracking';
 import ErrorMessage from '../shared/ErrorMessage';
 
 const ComponentWrapper = ({ componentName, Component, props = {}, theme = {} }) => {
-  const performanceData = usePerformanceTracking(componentName);
+  usePerformanceTracking(componentName);
   const [error, setError] = useState(null);
 
   // Default theme
@@ -37,8 +37,8 @@ const ComponentWrapper = ({ componentName, Component, props = {}, theme = {} }) 
 
   try {
     return (
-      <div style={{ height: '100%', width: '100%' }}>
-        <Component {...props} theme={defaultTheme} />
+      <div className="test-component-wrapper">
+        {React.createElement(Component, { ...props, theme: defaultTheme })}
       </div>
     );
   } catch (err) {

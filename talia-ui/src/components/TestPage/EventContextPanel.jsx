@@ -5,12 +5,13 @@
 
 import React, { useState, useEffect } from 'react';
 
-const EventContextPanel = ({ latestEvent, theme, selectedComponent }) => {
+const EventContextPanel = ({ latestEvent, selectedComponent }) => {
   const [componentDebugState, setComponentDebugState] = useState(null);
+  const isDevMode = import.meta.env.DEV;
 
   // Poll for component debug state (development only)
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
+    if (!isDevMode) return;
 
     const interval = setInterval(() => {
       if (window._componentDebugState && selectedComponent) {
@@ -24,105 +25,67 @@ const EventContextPanel = ({ latestEvent, theme, selectedComponent }) => {
     return () => clearInterval(interval);
   }, [selectedComponent]);
 
-  const colors = theme?.colors || {};
-  const bgColor = colors.cardBackground || '#2a2a2a';
-  const fgColor = colors.foreground || '#ffffff';
-  const textSecondary = colors.textSecondary || '#b0b0b0';
-  const borderColor = colors.border || '#333333';
-  const accentColor = colors.accent || '#b08d57';
-
   // Show component debug state even if no event
   if (!latestEvent || !latestEvent.detail) {
     return (
-      <div style={{
-        background: bgColor,
-        padding: '12px',
-        borderRadius: '8px',
-        border: `1px solid ${borderColor}`,
-        color: fgColor,
-        fontSize: '11px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px'
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          borderBottom: `1px solid ${borderColor}`,
-          paddingBottom: '8px'
-        }}>
-          <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: accentColor }}>
+      <div className="event-context">
+        <div className="event-context__header">
+          <h4 className="event-context__title">
             📋 Event Context
           </h4>
         </div>
-        <div style={{ textAlign: 'center', fontStyle: 'italic', color: textSecondary }}>
+        <div className="event-context__empty">
           No event context available. Select a row to see context.
         </div>
         {/* Component Debug State (Development Only) - show even without event */}
-        {process.env.NODE_ENV === 'development' && componentDebugState && (
+        {isDevMode && componentDebugState && (
           <div>
-            <div style={{
-              fontSize: '10px',
-              fontWeight: '600',
-              color: textSecondary,
-              marginBottom: '6px',
-              marginTop: '12px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
-            }}>
+            <div className="event-context__section-title">
               Component State ({selectedComponent})
             </div>
-            <div style={{
-              background: colors.background || '#1a1a1a',
-              padding: '8px',
-              borderRadius: '4px',
-              border: `1px solid ${borderColor}`,
-              fontFamily: 'monospace',
-              fontSize: '10px'
-            }}>
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-                <span style={{ color: textSecondary }}>Loading:</span>
-                <span style={{ color: componentDebugState.loading ? accentColor : fgColor }}>
+            <div className="event-context__card">
+              <div className="event-context__kv">
+                <span className="event-context__kv-label">Loading:</span>
+                <span className={`event-context__kv-value ${componentDebugState.loading ? 'event-context__kv-value--accent' : ''}`}>
                   {componentDebugState.loading ? 'YES' : 'NO'}
                 </span>
               </div>
               {componentDebugState.error && (
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-                  <span style={{ color: textSecondary }}>Error:</span>
-                  <span style={{ color: colors.error || '#f44336' }}>
+                <div className="event-context__kv">
+                  <span className="event-context__kv-label">Error:</span>
+                  <span className="event-context__kv-value event-context__kv-value--error">
                     {componentDebugState.error}
                   </span>
                 </div>
               )}
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-                <span style={{ color: textSecondary }}>Data Records:</span>
-                <span style={{ color: fgColor, fontWeight: '600' }}>
+              <div className="event-context__kv">
+                <span className="event-context__kv-label">Data Records:</span>
+                <span className="event-context__kv-value event-context__kv-value--strong">
                   {componentDebugState.dataLength}
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-                <span style={{ color: textSecondary }}>Table Initialized:</span>
-                <span style={{ color: componentDebugState.tableInitialized ? accentColor : fgColor }}>
+              <div className="event-context__kv">
+                <span className="event-context__kv-label">Table Initialized:</span>
+                <span className={`event-context__kv-value ${componentDebugState.tableInitialized ? 'event-context__kv-value--accent' : ''}`}>
                   {componentDebugState.tableInitialized ? 'YES' : 'NO'}
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-                <span style={{ color: textSecondary }}>Has Instance:</span>
-                <span style={{ color: componentDebugState.hasInstance ? accentColor : fgColor }}>
+              <div className="event-context__kv">
+                <span className="event-context__kv-label">Has Instance:</span>
+                <span className={`event-context__kv-value ${componentDebugState.hasInstance ? 'event-context__kv-value--accent' : ''}`}>
                   {componentDebugState.hasInstance ? 'YES' : 'NO'}
                 </span>
               </div>
               {componentDebugState.context && (
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-                  <span style={{ color: textSecondary }}>Context:</span>
-                  <span style={{ color: accentColor }}>{componentDebugState.context}</span>
+                <div className="event-context__kv">
+                  <span className="event-context__kv-label">Context:</span>
+                  <span className="event-context__kv-value event-context__kv-value--accent">{componentDebugState.context}</span>
                 </div>
               )}
               {componentDebugState.lastUpdate && (
-                <div style={{ display: 'flex', gap: '8px', fontSize: '9px', marginTop: '4px', paddingTop: '4px', borderTop: `1px solid ${borderColor}` }}>
-                  <span style={{ color: textSecondary }}>Last Update:</span>
-                  <span style={{ color: textSecondary }}>
+                <div className="event-context__meta-row">
+                  <span className="event-context__kv-label">Last Update:</span>
+                  <span className="event-context__kv-value event-context__kv-value--muted">
                     {new Date(componentDebugState.lastUpdate).toLocaleTimeString()}
                   </span>
                 </div>
@@ -157,114 +120,52 @@ const EventContextPanel = ({ latestEvent, theme, selectedComponent }) => {
   };
 
   return (
-    <div style={{
-      background: bgColor,
-      padding: '12px',
-      borderRadius: '8px',
-      border: `1px solid ${borderColor}`,
-      color: fgColor,
-      fontSize: '11px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '12px'
-    }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderBottom: `1px solid ${borderColor}`,
-        paddingBottom: '8px'
-      }}>
-        <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: accentColor }}>
-          📋 Event Context
-        </h4>
-        <span style={{ fontSize: '10px', color: textSecondary }}>
-          {latestEvent.name}
-        </span>
+    <div className="event-context">
+      <div className="event-context__header">
+        <h4 className="event-context__title">📋 Event Context</h4>
+        <span className="event-context__subtitle">{latestEvent.name}</span>
       </div>
 
       {/* Filter Applied */}
       <div>
-        <div style={{
-          fontSize: '10px',
-          fontWeight: '600',
-          color: textSecondary,
-          marginBottom: '6px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px'
-        }}>
-          Filter Applied
-        </div>
-        <div style={{
-          background: colors.background || '#1a1a1a',
-          padding: '8px',
-          borderRadius: '4px',
-          border: `1px solid ${borderColor}`,
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '4px'
-        }}>
+        <div className="event-context__section-title">Filter Applied</div>
+        <div className="event-context__card event-context__kv-list">
           {filters.sail_code && (
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <span style={{ color: textSecondary }}>sail_code:</span>
-              <span style={{ color: accentColor, fontWeight: '600' }}>{filters.sail_code}</span>
+            <div className="event-context__kv">
+              <span className="event-context__kv-label">sail_code:</span>
+              <span className="event-context__kv-value event-context__kv-value--accent">{filters.sail_code}</span>
             </div>
           )}
           {filters.ship_code && (
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <span style={{ color: textSecondary }}>ship_code:</span>
-              <span style={{ color: accentColor, fontWeight: '600' }}>{filters.ship_code}</span>
+            <div className="event-context__kv">
+              <span className="event-context__kv-label">ship_code:</span>
+              <span className="event-context__kv-value event-context__kv-value--accent">{filters.ship_code}</span>
             </div>
           )}
           {filters.departure_date && (
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <span style={{ color: textSecondary }}>departure_date:</span>
-              <span style={{ color: accentColor, fontWeight: '600' }}>{filters.departure_date}</span>
+            <div className="event-context__kv">
+              <span className="event-context__kv-label">departure_date:</span>
+              <span className="event-context__kv-value event-context__kv-value--accent">{filters.departure_date}</span>
             </div>
           )}
           {!filters.sail_code && !filters.ship_code && !filters.departure_date && (
-            <span style={{ color: textSecondary, fontStyle: 'italic' }}>No filters applied</span>
+            <span className="event-context__kv-value event-context__kv-value--muted">No filters applied</span>
           )}
         </div>
       </div>
 
       {/* Row Data */}
       <div>
-        <div style={{
-          fontSize: '10px',
-          fontWeight: '600',
-          color: textSecondary,
-          marginBottom: '6px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px'
-        }}>
-          Row Retrieved
-        </div>
-        <div style={{
-          background: colors.background || '#1a1a1a',
-          padding: '8px',
-          borderRadius: '4px',
-          border: `1px solid ${borderColor}`,
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          maxHeight: '200px',
-          overflowY: 'auto'
-        }}>
+        <div className="event-context__section-title">Row Retrieved</div>
+        <div className="event-context__card event-context__card--scroll">
           {Object.entries(rowData).slice(0, 10).map(([key, value]) => (
-            <div key={key} style={{
-              display: 'flex',
-              gap: '8px',
-              marginBottom: '4px',
-              padding: '2px 0'
-            }}>
-              <span style={{ color: textSecondary, minWidth: '120px' }}>{key}:</span>
-              <span style={{ color: fgColor, wordBreak: 'break-word' }}>{formatValue(value)}</span>
+            <div key={key} className="event-context__row">
+              <span className="event-context__row-key">{key}:</span>
+              <span className="event-context__row-value">{formatValue(value)}</span>
             </div>
           ))}
           {Object.keys(rowData).length > 10 && (
-            <div style={{ color: textSecondary, fontSize: '9px', marginTop: '4px', fontStyle: 'italic' }}>
+            <div className="event-context__more">
               ... and {Object.keys(rowData).length - 10} more fields
             </div>
           )}
@@ -272,69 +173,54 @@ const EventContextPanel = ({ latestEvent, theme, selectedComponent }) => {
       </div>
 
       {/* Component Debug State (Development Only) */}
-      {process.env.NODE_ENV === 'development' && componentDebugState && (
+      {isDevMode && componentDebugState && (
         <div>
-          <div style={{
-            fontSize: '10px',
-            fontWeight: '600',
-            color: textSecondary,
-            marginBottom: '6px',
-            marginTop: '12px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px'
-          }}>
+          <div className="event-context__section-title">
             Component State ({selectedComponent})
           </div>
-          <div style={{
-            background: colors.background || '#1a1a1a',
-            padding: '8px',
-            borderRadius: '4px',
-            border: `1px solid ${borderColor}`,
-            fontFamily: 'monospace',
-            fontSize: '10px'
-          }}>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-              <span style={{ color: textSecondary }}>Loading:</span>
-              <span style={{ color: componentDebugState.loading ? accentColor : fgColor }}>
+          <div className="event-context__card">
+            <div className="event-context__kv">
+              <span className="event-context__kv-label">Loading:</span>
+              <span className={`event-context__kv-value ${componentDebugState.loading ? 'event-context__kv-value--accent' : ''}`}>
                 {componentDebugState.loading ? 'YES' : 'NO'}
               </span>
             </div>
             {componentDebugState.error && (
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-                <span style={{ color: textSecondary }}>Error:</span>
-                <span style={{ color: colors.error || '#f44336' }}>
+              <div className="event-context__kv">
+                <span className="event-context__kv-label">Error:</span>
+                <span className="event-context__kv-value event-context__kv-value--error">
                   {componentDebugState.error}
                 </span>
               </div>
             )}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-              <span style={{ color: textSecondary }}>Data Records:</span>
-              <span style={{ color: fgColor, fontWeight: '600' }}>
+            <div className="event-context__kv">
+              <span className="event-context__kv-label">Data Records:</span>
+              <span className="event-context__kv-value event-context__kv-value--strong">
                 {componentDebugState.dataLength}
               </span>
             </div>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-              <span style={{ color: textSecondary }}>Table Initialized:</span>
-              <span style={{ color: componentDebugState.tableInitialized ? accentColor : fgColor }}>
+            <div className="event-context__kv">
+              <span className="event-context__kv-label">Table Initialized:</span>
+              <span className={`event-context__kv-value ${componentDebugState.tableInitialized ? 'event-context__kv-value--accent' : ''}`}>
                 {componentDebugState.tableInitialized ? 'YES' : 'NO'}
               </span>
             </div>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-              <span style={{ color: textSecondary }}>Has Instance:</span>
-              <span style={{ color: componentDebugState.hasInstance ? accentColor : fgColor }}>
+            <div className="event-context__kv">
+              <span className="event-context__kv-label">Has Instance:</span>
+              <span className={`event-context__kv-value ${componentDebugState.hasInstance ? 'event-context__kv-value--accent' : ''}`}>
                 {componentDebugState.hasInstance ? 'YES' : 'NO'}
               </span>
             </div>
             {componentDebugState.context && (
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-                <span style={{ color: textSecondary }}>Context:</span>
-                <span style={{ color: accentColor }}>{componentDebugState.context}</span>
+              <div className="event-context__kv">
+                <span className="event-context__kv-label">Context:</span>
+                <span className="event-context__kv-value event-context__kv-value--accent">{componentDebugState.context}</span>
               </div>
             )}
             {componentDebugState.lastUpdate && (
-              <div style={{ display: 'flex', gap: '8px', fontSize: '9px', marginTop: '4px', paddingTop: '4px', borderTop: `1px solid ${borderColor}` }}>
-                <span style={{ color: textSecondary }}>Last Update:</span>
-                <span style={{ color: textSecondary }}>
+              <div className="event-context__meta-row">
+                <span className="event-context__kv-label">Last Update:</span>
+                <span className="event-context__kv-value event-context__kv-value--muted">
                   {new Date(componentDebugState.lastUpdate).toLocaleTimeString()}
                 </span>
               </div>

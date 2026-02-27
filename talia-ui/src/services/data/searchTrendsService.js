@@ -82,7 +82,7 @@ class SearchTrendsService {
             errorDetails = ` GraphQL errors: ${JSON.stringify(errorBody.errors, null, 2)}`;
             console.error('[SearchTrendsService] GraphQL errors:', errorBody.errors);
           }
-        } catch (e) {
+        } catch {
           const errorText = await response.clone().text();
           errorDetails = ` Response: ${errorText.substring(0, 200)}`;
         }

@@ -12,6 +12,25 @@
 ./scripts/deploy-to-staging.sh --full
 ```
 
+### Direct Deploy (No Git Push)
+Use this when GitHub auth is blocked or staging cannot pull.
+```bash
+# 1) Create a bundle from local main
+git bundle create /tmp/talia-platform.bundle main
+
+# 2) Copy bundle to staging
+scp /tmp/talia-platform.bundle zomarc@192.168.1.120:/tmp/talia-platform.bundle
+
+# 3) Apply bundle on staging and restart services
+ssh zomarc@192.168.1.120 "cd ~/talia-docker && \
+  git fetch /tmp/talia-platform.bundle main && \
+  git reset --hard FETCH_HEAD && \
+  docker compose -f docker-compose.staging.yml restart supabase-db supabase-rest supabase-kong && \
+  docker compose -f docker-compose.staging.yml build graphql-server ui && \
+  docker compose -f docker-compose.staging.yml up -d graphql-server ui && \
+  docker compose -f docker-compose.staging.yml ps"
+```
+
 ### Check Status & Restart if Needed
 ```bash
 ./scripts/restart-and-check.sh staging --restart

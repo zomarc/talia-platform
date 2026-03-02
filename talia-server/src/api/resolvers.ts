@@ -13,6 +13,7 @@ import { SyncOperation } from '../services/sync-operation.js';
 import { syncEventEmitter } from '../services/sync-event-emitter.js';
 import { getDateRangeConfigSummary, getDateRange } from '../config/date-range-config.js';
 import { configService } from '../services/config-service.js';
+import { aisLiveService } from '../services/ais-live-service.js';
 
 // Helper function to check user permissions
 const hasPermission = (userRole: string, requiredRole: string): boolean => {
@@ -32,6 +33,87 @@ const filterDataByRole = (data: any[], userRole: string, roleField?: string) => 
   
   // For now, return all data. In production, implement role-based filtering
   return data;
+};
+
+const mapDbInventoryItemToGraphQL = (row: any) => ({
+  id: row.id,
+  localKey: row.local_key,
+  sailCode: row.sail_code,
+  mmsi: row.mmsi,
+  imoNumber: row.imo_number,
+  shipCode: row.ship_code,
+  shipName: row.ship_name,
+  masterSailId: row.master_sail_id,
+  packageId: row.package_id,
+  sourceTable: row.source_table,
+  sourceRowId: row.source_row_id,
+  metadata: row.metadata || {},
+  createdAt: row.created_at,
+  updatedAt: row.updated_at
+});
+
+const mapDbInventoryMemoToGraphQL = (row: any) => ({
+  id: row.id,
+  inventoryItemId: row.inventory_item_id,
+  memoText: row.memo_text,
+  memoType: row.memo_type,
+  createdBy: row.created_by,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at
+});
+
+const decodeHtml = (value: string) => (
+  String(value || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1')
+    .trim()
+);
+
+const extractTag = (xml: string, tagName: string) => {
+  const regex = new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`, 'i');
+  const match = xml.match(regex);
+  return match ? decodeHtml(match[1]) : '';
+};
+
+const fetchPortNewsItems = async (port: string, limit = 5) => {
+  const safePort = String(port || '').trim();
+  if (!safePort) return [];
+
+  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(`${safePort} port`)}&hl=en-US&gl=US&ceid=US:en`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) return [];
+    const xml = await response.text();
+    const items = xml.match(/<item>[\s\S]*?<\/item>/gi) || [];
+    return items.slice(0, Math.max(1, Math.min(10, limit))).map((item, index) => {
+      const title = extractTag(item, 'title') || 'Untitled';
+      const link = extractTag(item, 'link') || '';
+      const publishedAt = extractTag(item, 'pubDate') || null;
+      const source = extractTag(item, 'source') || 'Google News';
+      const description = extractTag(item, 'description') || null;
+      return {
+        id: `${safePort}-${index}-${link || title}`,
+        title,
+        url: link,
+        source,
+        publishedAt,
+        summary: description,
+        port: safePort
+      };
+    }).filter((row) => row.url);
+  } catch (error) {
+    console.warn(`[portNews] Failed to fetch news for ${safePort}:`, (error as any)?.message || error);
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
 const TABLE_SYNC_MAP: Record<string, string> = {
@@ -532,6 +614,52 @@ export const resolvers = {
       }
     },
 
+    inventoryItems: async (parent: any, args: any) => {
+      try {
+        const filters = args?.filters || {};
+        const dbFilters: any = {};
+        if (filters.id) dbFilters.id = Number(filters.id);
+        if (filters.localKey) dbFilters.local_key = filters.localKey;
+        if (filters.sailCode) dbFilters.sail_code = filters.sailCode;
+        if (filters.mmsi) dbFilters.mmsi = filters.mmsi;
+        if (filters.shipCode) dbFilters.ship_code = filters.shipCode;
+        if (filters.masterSailId != null) dbFilters.master_sail_id = filters.masterSailId;
+        if (filters.limit != null) dbFilters.limit = filters.limit;
+
+        const rows = await supabaseDataService.getInventoryItems(dbFilters);
+        return rows.map(mapDbInventoryItemToGraphQL);
+      } catch (error) {
+        console.error('Error fetching inventory items:', error);
+        return [];
+      }
+    },
+
+    inventoryMemos: async (parent: any, args: any) => {
+      try {
+        const inventoryItemId = Number(args?.inventoryItemId);
+        if (!Number.isFinite(inventoryItemId)) {
+          throw new Error('inventoryItemId is required');
+        }
+        const rows = await supabaseDataService.getInventoryMemos(inventoryItemId);
+        return rows.map(mapDbInventoryMemoToGraphQL);
+      } catch (error) {
+        console.error('Error fetching inventory memos:', error);
+        return [];
+      }
+    },
+
+    portNews: async (parent: any, args: any) => {
+      try {
+        const port = String(args?.port || '').trim();
+        const limit = Number.isFinite(Number(args?.limit)) ? Number(args.limit) : 5;
+        if (!port) return [];
+        return await fetchPortNewsItems(port, limit);
+      } catch (error) {
+        console.error('Error fetching port news:', error);
+        return [];
+      }
+    },
+
     ships: async () => {
       try {
         // Try to get data from Supabase first (local development)
@@ -560,6 +688,81 @@ export const resolvers = {
           { Ship_Id: 1, Ship_Code: "DIS", Ship_Name: "Celestyal Discovery", Ship_Pax_Capacity: "950", Ship_Length: "180m", Ship_Tonnage: "45000" },
           { Ship_Id: 2, Ship_Code: "JRN", Ship_Name: "Celestyal Journey", Ship_Pax_Capacity: "980", Ship_Length: "185m", Ship_Tonnage: "47000" }
         ];
+      }
+    },
+
+    liveShipPositions: async (parent: any, args: any) => {
+      try {
+        const shipCodeAliases: Record<string, string> = {
+          CD: 'DIS',
+          CJ: 'JRN',
+          DISCOVERY: 'DIS',
+          JOURNEY: 'JRN'
+        };
+        const inventoryLookupByCanonical: Record<string, string[]> = {
+          DIS: ['DIS', 'CD', 'DISCOVERY'],
+          JRN: ['JRN', 'CJ', 'JOURNEY']
+        };
+        const toCanonical = (value: string) => {
+          const upper = String(value || '').trim().toUpperCase();
+          return shipCodeAliases[upper] || upper;
+        };
+        const defaultNameFor = (code: string) => (
+          code === 'DIS' ? 'Celestyal Discovery' : code === 'JRN' ? 'Celestyal Journey' : code
+        );
+
+        const requestedCodes = Array.isArray(args?.shipCodes)
+          ? args.shipCodes.map((code: string) => toCanonical(code)).filter(Boolean)
+          : [];
+
+        const canonicalRequested = requestedCodes.length ? requestedCodes : ['DIS', 'JRN'];
+        const requestedSet = new Set(canonicalRequested);
+        const inventoryLookupCodes = Array.from(new Set(
+          canonicalRequested.flatMap((code) => inventoryLookupByCanonical[code] || [code])
+        ));
+
+        const inventoryRows: any[] = [];
+        for (const code of inventoryLookupCodes) {
+          const rows = await supabaseDataService.getInventoryItems({ ship_code: code, limit: 500 });
+          inventoryRows.push(...rows);
+        }
+
+        const bestInventoryByShip = new Map<string, any>();
+        inventoryRows.forEach((row) => {
+          const canonicalCode = toCanonical(row?.ship_code);
+          if (!requestedSet.has(canonicalCode)) return;
+          const existing = bestInventoryByShip.get(canonicalCode);
+          if (!existing) {
+            bestInventoryByShip.set(canonicalCode, row);
+            return;
+          }
+          // Prefer rows with MMSI, then newer updates.
+          const existingHasMmsi = Boolean(existing?.mmsi);
+          const rowHasMmsi = Boolean(row?.mmsi);
+          if (rowHasMmsi && !existingHasMmsi) {
+            bestInventoryByShip.set(canonicalCode, row);
+            return;
+          }
+          const existingUpdated = existing?.updated_at ? new Date(existing.updated_at).getTime() : 0;
+          const rowUpdated = row?.updated_at ? new Date(row.updated_at).getTime() : 0;
+          if (rowUpdated > existingUpdated) {
+            bestInventoryByShip.set(canonicalCode, row);
+          }
+        });
+
+        const shipConfigs = canonicalRequested.map((shipCode) => {
+          const inventory = bestInventoryByShip.get(shipCode);
+          return {
+            shipCode,
+            shipName: inventory?.ship_name || defaultNameFor(shipCode),
+            mmsi: inventory?.mmsi || null
+          };
+        });
+
+        return aisLiveService.getLiveShipPositions(shipConfigs as any);
+      } catch (error) {
+        console.error('Error fetching live ship positions:', error);
+        return [];
       }
     },
 
@@ -2700,6 +2903,73 @@ export const resolvers = {
         return success;
       } catch (error) {
         console.error('Error deleting target profile:', error);
+        throw error;
+      }
+    },
+
+    upsertInventoryItem: async (parent: any, args: any) => {
+      try {
+        const input = args?.input || {};
+        const row = await supabaseDataService.upsertInventoryItem({
+          id: input.id ? Number(input.id) : null,
+          sailCode: input.sailCode,
+          mmsi: input.mmsi,
+          imoNumber: input.imoNumber,
+          shipCode: input.shipCode,
+          shipName: input.shipName,
+          masterSailId: input.masterSailId,
+          packageId: input.packageId,
+          sourceTable: input.sourceTable,
+          sourceRowId: input.sourceRowId,
+          metadata: input.metadata || {}
+        });
+        return mapDbInventoryItemToGraphQL(row);
+      } catch (error) {
+        console.error('Error upserting inventory item:', error);
+        throw error;
+      }
+    },
+
+    addInventoryMemo: async (parent: any, args: any, context: any) => {
+      try {
+        const input = args?.input || {};
+        if (!input.memoText || !String(input.memoText).trim()) {
+          throw new Error('memoText is required');
+        }
+
+        let inventoryItemId = input.inventoryItemId ? Number(input.inventoryItemId) : null;
+        if (!inventoryItemId) {
+          const inventoryItemInput = input.inventoryItem || {};
+          const itemRow = await supabaseDataService.upsertInventoryItem({
+            id: inventoryItemInput.id ? Number(inventoryItemInput.id) : null,
+            sailCode: inventoryItemInput.sailCode,
+            mmsi: inventoryItemInput.mmsi,
+            imoNumber: inventoryItemInput.imoNumber,
+            shipCode: inventoryItemInput.shipCode,
+            shipName: inventoryItemInput.shipName,
+            masterSailId: inventoryItemInput.masterSailId,
+            packageId: inventoryItemInput.packageId,
+            sourceTable: inventoryItemInput.sourceTable || 'memo',
+            sourceRowId: inventoryItemInput.sourceRowId,
+            metadata: inventoryItemInput.metadata || {}
+          });
+          inventoryItemId = Number(itemRow?.id);
+        }
+
+        if (!inventoryItemId || !Number.isFinite(inventoryItemId)) {
+          throw new Error('Unable to resolve inventoryItemId for memo');
+        }
+
+        const createdBy = context?.user?.email || context?.user?.id || null;
+        const memoRow = await supabaseDataService.createInventoryMemo({
+          inventoryItemId,
+          memoText: String(input.memoText).trim(),
+          memoType: input.memoType || 'note'
+        }, createdBy);
+
+        return mapDbInventoryMemoToGraphQL(memoRow);
+      } catch (error) {
+        console.error('Error adding inventory memo:', error);
         throw error;
       }
     },

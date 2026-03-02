@@ -3,12 +3,10 @@
  * 
  * Provides theme values to components. The actual styling is done via
  * CSS variables in /src/styles/theme.css. This context provides:
- * - JavaScript access to theme values (for inline styles when needed)
+ * - JavaScript access to theme values (for charts/config logic when needed)
  * - Font size/family settings (user-adjustable)
  * 
- * Components should prefer CSS variables over context values:
- *   PREFERRED: style={{ background: 'var(--theme-bg-solid)' }}
- *   FALLBACK:  style={{ background: theme.colors.background }}
+ * Components should apply styling via CSS classes and CSS variables.
  */
 
 /* eslint-disable react-refresh/only-export-components */

@@ -10,6 +10,12 @@ const appVersion = JSON.parse(
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    // Keep these pre-bundled deterministically to avoid transient
+    // 504 errors from /node_modules/.vite/deps during dev reloads.
+    include: ['react', 'react-dom', 'react-dom/client', 'leaflet', 'react-leaflet'],
+    force: true
+  },
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion)
   },

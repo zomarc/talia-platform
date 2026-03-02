@@ -3,14 +3,8 @@
  * 
  * Single theme definition for the application.
  * CSS variables are defined in /src/styles/theme.css
- * This file provides JavaScript access to theme values for components
- * that need to reference colors in inline styles.
- * 
- * PREFERRED: Use CSS variables directly in styles:
- *   style={{ background: 'var(--theme-bg-solid)' }}
- * 
- * FALLBACK: Use this theme object when CSS variables won't work:
- *   style={{ background: theme.colors.background }}
+ * This file provides JavaScript access to theme values for non-CSS logic
+ * (for example chart configuration), while component styling remains in CSS.
  */
 
 /**

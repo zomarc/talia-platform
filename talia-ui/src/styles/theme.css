@@ -10,8 +10,8 @@
  *   color: var(--theme-fg);
  *   border: 1px solid var(--theme-border);
  * 
- * Usage in React (inline styles):
- *   style={{ background: 'var(--theme-bg-solid)', color: 'var(--theme-fg)' }}
+ * Usage in components:
+ *   apply CSS classes that consume these variables
  */
 
 :root {

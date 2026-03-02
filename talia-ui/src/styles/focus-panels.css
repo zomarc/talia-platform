@@ -2650,6 +2650,56 @@
   overflow: hidden;
 }
 
+.data-match__count-chip {
+  display: inline-block;
+  width: 100%;
+  text-align: center;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.data-match__count-chip--ok {
+  background-color: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.data-match__count-chip--warn {
+  background-color: rgba(255, 152, 0, 0.2);
+  color: #ff9800;
+}
+
+.data-match__count-chip--error {
+  background-color: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+}
+
+.data-match__group-meta {
+  color: var(--theme-text-muted);
+}
+
+/* ============================================================================
+   Competitor Pricing
+   ============================================================================ */
+
+.competitor-scatter-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 16px;
+  padding: 16px;
+  background: var(--theme-glass);
+}
+
+.competitor-scatter-grid__chart {
+  position: relative;
+  height: 300px;
+  background: var(--theme-bg-solid);
+  border-radius: 8px;
+  border: 1px solid var(--theme-border);
+  padding: 12px;
+}
+
 /* ============================================================================
    Target Profile Editor
    ============================================================================ */
@@ -2790,4 +2840,486 @@
 .target-profile-editor__button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+/* ============================================================================
+   Ship Tracker Map
+   ============================================================================ */
+
+.ship-tracker-map {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  box-sizing: border-box;
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  overflow: auto;
+}
+
+.ship-tracker-map__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.ship-tracker-map__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ship-tracker-map__ship-filter-label {
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-secondary);
+}
+
+.ship-tracker-map__ship-filter {
+  min-width: 160px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size-sm);
+}
+
+.ship-tracker-map__title {
+  margin: 0;
+  font-size: var(--theme-font-size-xl);
+  font-weight: 700;
+}
+
+.ship-tracker-map__subtitle {
+  margin: 4px 0 0 0;
+  color: var(--theme-text-secondary);
+  font-size: var(--theme-font-size-sm);
+}
+
+.ship-tracker-map__note {
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-secondary);
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.ship-tracker-map__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  background: var(--theme-bg-elevated);
+  padding: 8px 10px;
+}
+
+.ship-tracker-map__timeline-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 78px;
+  gap: 10px;
+  align-items: center;
+}
+
+.ship-tracker-map__timeline-label {
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-secondary);
+  white-space: nowrap;
+}
+
+.ship-tracker-map__timeline-slider {
+  width: 100%;
+}
+
+.ship-tracker-map__timeline-value {
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-fg);
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .ship-tracker-map__timeline-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
+.ship-tracker-map__map-wrap {
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #b9e1ff;
+  height: 320px;
+  position: relative;
+  cursor: zoom-in;
+}
+
+.ship-tracker-map__map-wrap--expanded {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1200;
+  height: auto;
+  border-width: 2px;
+  cursor: default;
+}
+
+.ship-tracker-map__leaflet {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.ship-tracker-map__expand-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 500;
+  border: 1px solid var(--theme-border);
+  border-radius: 4px;
+  background: rgba(12, 18, 42, 0.85);
+  color: #ffffff;
+  font-size: var(--theme-font-size-sm);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.ship-tracker-map__map-overlay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 450;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 320px;
+  pointer-events: none;
+}
+
+.ship-tracker-map__weather-chip {
+  border: 1px solid var(--theme-border);
+  background: rgba(12, 18, 42, 0.78);
+  color: #ffffff;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: var(--theme-font-size-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ship-tracker-map__news {
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  background: var(--theme-bg-elevated);
+  padding: 8px;
+}
+
+.ship-tracker-map__news-title {
+  margin: 0 0 8px 0;
+  font-size: var(--theme-font-size);
+}
+
+.ship-tracker-map__news-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.ship-tracker-map__news-port {
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  background: var(--theme-bg-solid);
+  padding: 8px;
+}
+
+.ship-tracker-map__news-port-title {
+  font-size: var(--theme-font-size-sm);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.ship-tracker-map__news-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ship-tracker-map__news-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--theme-font-size-sm);
+}
+
+.ship-tracker-map__news-item a {
+  color: var(--theme-accent);
+  text-decoration: none;
+}
+
+.ship-tracker-map__news-item a:hover {
+  text-decoration: underline;
+}
+
+.ship-tracker-map__news-item span,
+.ship-tracker-map__news-empty {
+  color: var(--theme-text-secondary);
+  font-size: var(--theme-font-size-sm);
+}
+
+.ship-tracker-map__popup {
+  font-size: var(--theme-font-size-sm);
+}
+
+.ship-tracker-map__marker-weather {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.ship-tracker-map__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 10px;
+}
+
+.ship-tracker-map__card {
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  background: var(--theme-bg-elevated);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ship-tracker-map__card--1 {
+  border-left: 4px solid #0d47a1;
+}
+
+.ship-tracker-map__card--2 {
+  border-left: 4px solid #b71c1c;
+}
+
+.ship-tracker-map__card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ship-tracker-map__card-title {
+  margin: 0;
+  font-size: var(--theme-font-size-lg);
+  font-weight: 600;
+}
+
+.ship-tracker-map__chip {
+  font-size: var(--theme-font-size-sm);
+  background: var(--theme-accent-light);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.ship-tracker-map__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--theme-font-size-sm);
+}
+
+.ship-tracker-map__route-sections {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ship-tracker-map__section-title {
+  margin: 0 0 6px 0;
+  font-size: var(--theme-font-size);
+}
+
+.ship-tracker-map__route-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ship-tracker-map__route-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--theme-font-size-sm);
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: var(--theme-bg-solid);
+}
+
+.ship-tracker-map__route-item--empty {
+  color: var(--theme-text-secondary);
+}
+
+@media (max-width: 900px) {
+  .ship-tracker-map__route-sections {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================================
+   Inventory Memo
+   ============================================================================ */
+
+.inventory-memo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  padding: 10px;
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  overflow: auto;
+}
+
+.inventory-memo__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.inventory-memo__title {
+  margin: 0;
+  font-size: var(--theme-font-size-xl);
+}
+
+.inventory-memo__subtitle {
+  margin: 4px 0 0 0;
+  color: var(--theme-text-secondary);
+  font-size: var(--theme-font-size-sm);
+}
+
+.inventory-memo__chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.inventory-memo__chip {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: var(--theme-font-size-sm);
+}
+
+.inventory-memo__editor,
+.inventory-memo__list {
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  background: var(--theme-bg-elevated);
+  padding: 10px;
+}
+
+.inventory-memo__row {
+  display: grid;
+  grid-template-columns: 1fr 180px;
+  gap: 10px;
+}
+
+.inventory-memo__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--theme-font-size-sm);
+}
+
+.inventory-memo__input,
+.inventory-memo__textarea {
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: var(--theme-font-size);
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+}
+
+.inventory-memo__actions {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.inventory-memo__context {
+  color: var(--theme-text-secondary);
+  font-size: var(--theme-font-size-sm);
+}
+
+.inventory-memo__list-title {
+  margin: 0 0 8px 0;
+  font-size: var(--theme-font-size-lg);
+}
+
+.inventory-memo__empty {
+  color: var(--theme-text-secondary);
+  font-size: var(--theme-font-size-sm);
+}
+
+.inventory-memo__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inventory-memo__item {
+  background: var(--theme-bg-solid);
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.inventory-memo__item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.inventory-memo__type {
+  font-size: var(--theme-font-size-sm);
+  background: var(--theme-accent-light);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.inventory-memo__text {
+  margin: 8px 0;
+  white-space: pre-wrap;
+}
+
+.inventory-memo__meta {
+  color: var(--theme-text-secondary);
+  font-size: var(--theme-font-size-sm);
+}
+
+@media (max-width: 900px) {
+  .inventory-memo__row {
+    grid-template-columns: 1fr;
+  }
 }

@@ -7,13 +7,10 @@
 import React from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import PublishedRatesPresenter from './PublishedRatesPresenter';
-import LoadingSpinner from '../../shared/LoadingSpinner';
-import ErrorMessage from '../../shared/ErrorMessage';
+import PanelDataState from '../../shared/PanelDataState';
 import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
 const PublishedRatesContainer = () => {
-  console.log('[PublishedRatesContainer] Component rendering');
-  
   // Use reusable hook for context-based data fetching with server-side filtering
   const { data, loading, error, refetch, context } = useTableDataWithContext({
     tableName: 'published_rates_current_state',
@@ -21,15 +18,12 @@ const PublishedRatesContainer = () => {
     contextMapper: (detail) => {
       // Extract sail_code from event detail (supports multiple formats)
       const sailCode = detail?.sail_code || detail?.Sail_Code || detail?.row_data?.sail_code || (typeof detail === 'string' ? detail : null);
-      console.log('[PublishedRatesContainer] Mapped context to filters:', { sail_code: sailCode });
       return sailCode ? { sail_code: sailCode } : null;
     },
     limit: 1000
   });
 
   const selectedSailCode = context?.sail_code || context?.row_data?.sail_code || (typeof context === 'string' ? context : null);
-
-  console.log('[PublishedRatesContainer] State:', { loading, error: error?.message, dataLength: data?.length, selectedSailCode });
 
   React.useEffect(() => {
     const handleRefresh = (event) => {
@@ -66,49 +60,25 @@ const PublishedRatesContainer = () => {
     ...row
   })) : [];
 
-  // Handle loading state
-  if (loading) {
-    return <LoadingSpinner message="Loading published rates..." fullScreen={false} />;
-  }
-
-  // Handle error state
-  if (error) {
-    return (
-      <ErrorMessage 
-        error={error} 
-        title="Failed to load published rates"
-        onRetry={refetch}
-      />
-    );
-  }
-
-  // Handle empty data
-  if (!transformedData || transformedData.length === 0) {
-    return (
-      <div className="focus-panel-empty">
-        <p>
-          {selectedSailCode 
-            ? `No published rates found for sail code: ${selectedSailCode}`
-            : 'No published rates data available'}
-        </p>
-        <div className="focus-panel-empty__action">
-          <button 
-            onClick={refetch}
-            className="talia-btn talia-btn--primary"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Render presenter with data
   return (
-    <PublishedRatesPresenter 
-      data={transformedData} 
-      selectedSailCode={selectedSailCode}
-    />
+    <PanelDataState
+      loading={loading}
+      loadingMessage="Loading published rates..."
+      error={error}
+      errorTitle="Failed to load published rates"
+      empty={!transformedData || transformedData.length === 0}
+      emptyMessage={
+        selectedSailCode
+          ? `No published rates found for sail code: ${selectedSailCode}`
+          : 'No published rates data available'
+      }
+      onRetry={refetch}
+    >
+      <PublishedRatesPresenter 
+        data={transformedData} 
+        selectedSailCode={selectedSailCode}
+      />
+    </PanelDataState>
   );
 };
 

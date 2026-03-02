@@ -275,30 +275,12 @@ const CompetitorScatterChart = ({ data, theme }) => {
     };
   }, [data, theme]);
 
-  const containerStyle = {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gridTemplateRows: '1fr 1fr',
-    gap: '16px',
-    padding: '16px',
-    background: theme?.colors?.glass || 'rgba(255, 255, 255, 0.8)'
-  };
-
-  const chartContainerStyle = {
-    position: 'relative',
-    height: '300px',
-    background: theme?.colors?.background || '#fff',
-    borderRadius: '8px',
-    border: `1px solid ${theme?.colors?.border || '#e0e0e0'}`,
-    padding: '12px'
-  };
-
   const cabinTypes = ['BALCONY', 'INSIDE', 'OUTSIDE', 'SUITE'];
 
   return (
-    <div style={containerStyle}>
+    <div className="competitor-scatter-grid">
       {cabinTypes.map(cabinType => (
-        <div key={cabinType} style={chartContainerStyle}>
+        <div key={cabinType} className="competitor-scatter-grid__chart">
           <canvas ref={chartRefs[cabinType]} />
         </div>
       ))}

@@ -10,6 +10,7 @@ import './styles/tabulator-condensed.css' // Condensed overrides (spacing/sizing
 import './styles/components.css'      // Shared component classes
 import './styles/dashboard.css'       // Dashboard-specific styles
 import './styles/focus-panels.css'    // Focus panel styles
+import 'leaflet/dist/leaflet.css'     // Leaflet map styles
 import './styles/dev-components.css' // Dev component styles (separate, does not affect other components)
 import './styles/mode-selector.css'  // Mode selector styles
 import './styles/status-bar.css'     // Status bar styles

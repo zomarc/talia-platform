@@ -31,7 +31,9 @@ const FocusLayoutEditor = ({ focusId, onSave, onCancel }) => {
     { id: 'itinerary-list', name: 'Itinerary List', icon: '🗺️' },
     { id: 'booking-profile', name: 'Booking Profile', icon: '📈' },
     { id: 'target-profile-editor', name: 'Target Profile Editor', icon: '🎯' },
-    { id: 'competitor-pricing', name: 'Competitor Pricing', icon: '💰' }
+    { id: 'competitor-pricing', name: 'Competitor Pricing', icon: '💰' },
+    { id: 'ship-tracker-map', name: 'Ship Tracker Map', icon: '🗺️' },
+    { id: 'inventory-memo', name: 'Inventory Memo', icon: '📝' }
   ];
 
   // Load focus when component mounts or focusId changes

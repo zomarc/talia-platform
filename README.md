@@ -26,10 +26,12 @@ cd talia-ui && npm run dev
 
 ## Documentation
 
-### Getting Started
-- **`README-DEVELOPMENT.md`** - Local development setup
-- **`README-STAGING.md`** - Staging environment overview
-- **`README-DEPLOYMENT.md`** - Deployment and restart guide
+### Canonical Docs
+- `docs/DIRECTIVE.md` - mandatory coding and styling rules
+- `docs/DOCS-CANONICAL.md` - authoritative documentation map
+- `docs/README.md` - docs hub and navigation
+- `docs/DEVELOPMENT-WORKFLOW.md` - day-to-day development workflow
+- `docs/DEPLOYMENT.md` - deployment and environment operations
 
 ### Key Features
 - **Data Management**: Sync and manage data from Azure Synapse
@@ -70,11 +72,11 @@ talia/
 
 ## Development Workflow
 
-1. Make changes locally
-2. Test locally at http://localhost:5173
-3. Commit and push to git
-4. Deploy to staging: `./scripts/deploy-to-staging.sh --code-only`
-5. Verify at https://taliahub.com
+1. Validate local state: `./scripts/validate-staging.sh local --quick`
+2. Make changes locally on `main`
+3. Keep styling in CSS and code minimal (see `docs/DIRECTIVE.md`)
+4. Commit focused changes
+5. Deploy/verify as needed
 
 ## Status
 

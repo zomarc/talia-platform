@@ -7,8 +7,7 @@
 import React from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import SailingTablePresenter from './SailingTablePresenter';
-import LoadingSpinner from '../../shared/LoadingSpinner';
-import ErrorMessage from '../../shared/ErrorMessage';
+import PanelDataState from '../../shared/PanelDataState';
 const SailingTableContainer = () => {
   // Use reusable hook for context-based data fetching
   // Note: SailingTable shows all data (no filtering), but emits events when rows are selected
@@ -19,36 +18,19 @@ const SailingTableContainer = () => {
     limit: 1000
   });
 
-  // Handle loading state
-  if (loading) {
-    return <LoadingSpinner message="Loading sailing data..." fullScreen={false} />;
-  }
-
-  // Handle error state
-  if (error) {
-    return (
-      <ErrorMessage 
-        error={error} 
-        title="Failed to load sailing data"
-        onRetry={refetch}
-      />
-    );
-  }
-
-  // Handle empty data
-  if (!data || data.length === 0) {
-    return (
-      <div className="focus-panel-empty">
-        <p>No sailing data available</p>
-        <div className="focus-panel-empty__action">
-          <button className="talia-btn talia-btn--primary" onClick={refetch}>Retry</button>
-        </div>
-      </div>
-    );
-  }
-
-  // Render table with data
-  return <SailingTablePresenter data={data} onRefresh={refetch} />;
+  return (
+    <PanelDataState
+      loading={loading}
+      loadingMessage="Loading sailing data..."
+      error={error}
+      errorTitle="Failed to load sailing data"
+      empty={!data || data.length === 0}
+      emptyMessage="No sailing data available"
+      onRetry={refetch}
+    >
+      <SailingTablePresenter data={data} onRefresh={refetch} />
+    </PanelDataState>
+  );
 };
 
 export default SailingTableContainer;

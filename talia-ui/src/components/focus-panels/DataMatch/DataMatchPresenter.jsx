@@ -119,22 +119,18 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh }) => {
           const missing = parseInt(parts[1]) || 0;
           
           // Determine color based on match/missing counts
-          let bgColor, textColor;
+          let cellClass;
           if (match > 0 && missing === 0) {
-            bgColor = 'rgba(76, 175, 80, 0.2)';
-            textColor = '#4caf50';
+            cellClass = 'data-match__count-chip data-match__count-chip--ok';
           } else if (match === 0 && missing > 0) {
-            bgColor = 'rgba(244, 67, 54, 0.2)';
-            textColor = '#f44336';
+            cellClass = 'data-match__count-chip data-match__count-chip--error';
           } else if (match > 0 && missing > 0) {
-            bgColor = 'rgba(255, 152, 0, 0.2)';
-            textColor = '#ff9800';
+            cellClass = 'data-match__count-chip data-match__count-chip--warn';
           } else {
-            bgColor = 'transparent';
-            textColor = 'inherit';
+            cellClass = 'data-match__count-chip';
           }
           
-          return `<span style="background-color: ${bgColor}; color: ${textColor}; font-weight: 500; padding: 2px 6px; border-radius: 3px; display: inline-block; width: 100%; text-align: center;">${value}</span>`;
+          return `<span class="${cellClass}">${value}</span>`;
         } catch (e) {
           console.warn('[DataMatch] Error in formatter:', e);
           const value = cell.getValue();
@@ -192,17 +188,17 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh }) => {
                 // Check if this is a ship code (typically 2 characters) or month name
                 if (groupKey.length <= 3 && /^[A-Z]{2,3}$/.test(groupKey)) {
                   // Likely ship code
-                  return `<strong>Ship: ${value}</strong> <span style="color:#999;">(${count} sail${count !== 1 ? 's' : ''})</span>`;
+                  return `<strong>Ship: ${value}</strong> <span class="data-match__group-meta">(${count} sail${count !== 1 ? 's' : ''})</span>`;
                 } else {
                   // Likely month name
-                  return `<strong>Month: ${value}</strong> <span style="color:#999;">(${count} sail${count !== 1 ? 's' : ''})</span>`;
+                  return `<strong>Month: ${value}</strong> <span class="data-match__group-meta">(${count} sail${count !== 1 ? 's' : ''})</span>`;
                 }
               }
               // Fallback: use count to guess level (first level usually has more items)
               if (count > 10) {
-                return `<strong>Ship: ${value}</strong> <span style="color:#999;">(${count} sail${count !== 1 ? 's' : ''})</span>`;
+                return `<strong>Ship: ${value}</strong> <span class="data-match__group-meta">(${count} sail${count !== 1 ? 's' : ''})</span>`;
               } else {
-                return `<strong>Month: ${value}</strong> <span style="color:#999;">(${count} sail${count !== 1 ? 's' : ''})</span>`;
+                return `<strong>Month: ${value}</strong> <span class="data-match__group-meta">(${count} sail${count !== 1 ? 's' : ''})</span>`;
               }
             } catch (e) {
               console.warn('[DataMatch] Error in groupHeader:', e);

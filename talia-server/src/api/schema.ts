@@ -112,6 +112,22 @@ export const typeDefs = `#graphql
     Ship_Tonnage: String!
   }
 
+  type ShipLivePosition {
+    shipCode: String!
+    shipName: String!
+    mmsi: String
+    latitude: Float
+    longitude: Float
+    speedKnots: Float
+    course: Float
+    heading: Float
+    navStatus: String
+    timestamp: String
+    source: String!
+    freshnessSeconds: Int
+    isLive: Boolean!
+  }
+
   type CabinAvailability {
     Snapshot_Date: String!
     Package_Name: String!
@@ -280,6 +296,74 @@ export const typeDefs = `#graphql
     net_invoice_revenue_eur: Float
     total_discounts_eur: Float
     created_at: String
+  }
+
+  type InventoryItem {
+    id: ID!
+    localKey: String!
+    sailCode: String
+    mmsi: String
+    imoNumber: String
+    shipCode: String
+    shipName: String
+    masterSailId: Float
+    packageId: Float
+    sourceTable: String
+    sourceRowId: String
+    metadata: JSON
+    createdAt: String
+    updatedAt: String
+  }
+
+  type InventoryMemo {
+    id: ID!
+    inventoryItemId: ID!
+    memoText: String!
+    memoType: String
+    createdBy: String
+    createdAt: String
+    updatedAt: String
+  }
+
+  type PortNewsItem {
+    id: ID!
+    title: String!
+    url: String!
+    source: String
+    publishedAt: String
+    summary: String
+    port: String!
+  }
+
+  input InventoryItemFilters {
+    id: ID
+    localKey: String
+    sailCode: String
+    mmsi: String
+    shipCode: String
+    masterSailId: Float
+    limit: Int
+  }
+
+  input InventoryItemInput {
+    id: ID
+    sailCode: String
+    mmsi: String
+    imoNumber: String
+    shipCode: String
+    shipName: String
+    masterSailId: Float
+    packageId: Float
+    sourceTable: String
+    sourceRowId: String
+    metadata: JSON
+  }
+
+  input InventoryMemoInput {
+    inventoryItemId: ID
+    inventoryItem: InventoryItemInput
+    memoText: String!
+    memoType: String
   }
 
   # Booking Profile Types
@@ -778,8 +862,12 @@ export const typeDefs = `#graphql
     sailings(filters: SailingFilters, userRole: UserRole): [Sailing!]!
     masterSail(filters: MasterSailFilters): [MasterSail!]!
     ships: [Ship!]!
+    liveShipPositions(shipCodes: [String!]): [ShipLivePosition!]!
     cabinAvailability(filters: DateFilters): [CabinAvailability!]!
     reservations(filters: ReservationFilters): [Reservation!]!
+    inventoryItems(filters: InventoryItemFilters): [InventoryItem!]!
+    inventoryMemos(inventoryItemId: ID!): [InventoryMemo!]!
+    portNews(port: String!, limit: Int): [PortNewsItem!]!
     kpis(userRole: UserRole): [KPI!]!
     exceptions(userRole: UserRole): [Exception!]!
     
@@ -879,6 +967,8 @@ export const typeDefs = `#graphql
     createTargetProfile(input: TargetProfileInput!): TargetProfile!
     updateTargetProfile(id: ID!, input: TargetProfileInput!): TargetProfile!
     deleteTargetProfile(id: ID!): Boolean!
+    upsertInventoryItem(input: InventoryItemInput!): InventoryItem!
+    addInventoryMemo(input: InventoryMemoInput!): InventoryMemo!
     
     # Google Search Trends
     trackGoogleSearch(query: String!, trackTrend: Boolean): TrackSearchResult!

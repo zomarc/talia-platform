@@ -1256,6 +1256,159 @@ export class SupabaseDataService {
     }
   }
 
+  // ===== Inventory Item Mapping + Memos =====
+
+  async getInventoryItems(filters = {}) {
+    try {
+      let query = this.client
+        .from('inventory_item')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      if (filters.id) {
+        query = query.eq('id', filters.id);
+      }
+      if (filters.local_key) {
+        query = query.eq('local_key', filters.local_key);
+      }
+      if (filters.sail_code) {
+        query = query.eq('sail_code', filters.sail_code);
+      }
+      if (filters.mmsi) {
+        query = query.eq('mmsi', String(filters.mmsi));
+      }
+      if (filters.ship_code) {
+        query = query.eq('ship_code', filters.ship_code);
+      }
+      if (filters.master_sail_id) {
+        query = query.eq('master_sail_id', filters.master_sail_id);
+      }
+
+      query = query.limit(filters.limit || 200);
+
+      const { data, error } = await query;
+      if (error) {
+        throw new Error(error.message || 'Failed to fetch inventory_item rows');
+      }
+      return data || [];
+    } catch (error) {
+      console.error('Error getting inventory items:', error);
+      throw new Error(error?.message || 'Failed to load inventory items');
+    }
+  }
+
+  async upsertInventoryItem(input = {}) {
+    try {
+      const normalizedMmsi = input.mmsi ? String(input.mmsi) : null;
+
+      const payload = {
+        sail_code: input.sailCode || null,
+        mmsi: normalizedMmsi,
+        imo_number: input.imoNumber || null,
+        ship_code: input.shipCode || null,
+        ship_name: input.shipName || null,
+        master_sail_id: input.masterSailId ?? null,
+        package_id: input.packageId ?? null,
+        source_table: input.sourceTable || 'manual',
+        source_row_id: input.sourceRowId || null,
+        metadata: input.metadata || {}
+      };
+
+      // If an explicit ID is provided, update this row directly
+      if (input.id) {
+        const { data, error } = await this.client
+          .from('inventory_item')
+          .update(payload)
+          .eq('id', input.id)
+          .select('*')
+          .single();
+        if (error) throw new Error(error.message || 'Failed to update inventory_item');
+        return data;
+      }
+
+      // Resolve existing row using canonical mapping keys
+      let existing = null;
+      if (payload.sail_code && payload.ship_code) {
+        const { data } = await this.client
+          .from('inventory_item')
+          .select('*')
+          .eq('sail_code', payload.sail_code)
+          .eq('ship_code', payload.ship_code)
+          .limit(1)
+          .maybeSingle();
+        existing = data || null;
+      } else if (payload.sail_code && payload.mmsi) {
+        const { data } = await this.client
+          .from('inventory_item')
+          .select('*')
+          .eq('sail_code', payload.sail_code)
+          .eq('mmsi', payload.mmsi)
+          .limit(1)
+          .maybeSingle();
+        existing = data || null;
+      }
+
+      if (existing?.id) {
+        const { data, error } = await this.client
+          .from('inventory_item')
+          .update(payload)
+          .eq('id', existing.id)
+          .select('*')
+          .single();
+        if (error) throw new Error(error.message || 'Failed to update inventory_item');
+        return data;
+      }
+
+      const { data, error } = await this.client
+        .from('inventory_item')
+        .insert(payload)
+        .select('*')
+        .single();
+      if (error) throw new Error(error.message || 'Failed to insert inventory_item');
+      return data;
+    } catch (error) {
+      console.error('Error upserting inventory item:', error);
+      throw new Error(error?.message || 'Failed to upsert inventory item');
+    }
+  }
+
+  async getInventoryMemos(inventoryItemId, limit = 200) {
+    try {
+      const { data, error } = await this.client
+        .from('inventory_item_memo')
+        .select('*')
+        .eq('inventory_item_id', inventoryItemId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (error) throw new Error(error.message || 'Failed to fetch inventory_item_memo rows');
+      return data || [];
+    } catch (error) {
+      console.error('Error getting inventory memos:', error);
+      throw new Error(error?.message || 'Failed to load inventory memos');
+    }
+  }
+
+  async createInventoryMemo(input = {}, createdBy = null) {
+    try {
+      const payload = {
+        inventory_item_id: input.inventoryItemId,
+        memo_text: input.memoText,
+        memo_type: input.memoType || 'note',
+        created_by: createdBy || null
+      };
+      const { data, error } = await this.client
+        .from('inventory_item_memo')
+        .insert(payload)
+        .select('*')
+        .single();
+      if (error) throw new Error(error.message || 'Failed to insert inventory_item_memo');
+      return data;
+    } catch (error) {
+      console.error('Error creating inventory memo:', error);
+      throw new Error(error?.message || 'Failed to create inventory memo');
+    }
+  }
+
   // Get competitor pricing data
   async getCompetitorPricing(filters = {}) {
     try {

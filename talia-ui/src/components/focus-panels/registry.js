@@ -7,6 +7,8 @@ import OccupancyChart from './OccupancyChart';
 import RevenueBreakdown from './RevenueBreakdown';
 import SailingSummary from './SailingSummary';
 import SailingOverview from './SailingOverview';
+import ShipTrackerMap from './ShipTrackerMap';
+import InventoryMemo from './InventoryMemo';
 import SailingByCabinCategory from './SailingByCabinCategory';
 import ExceptionList from './ExceptionList';
 import ItineraryList from './ItineraryList';
@@ -178,6 +180,30 @@ export const componentRegistry = {
     },
     showInReports: true,
     filePath: 'src/components/focus-panels/SailingOverview/index.jsx'
+  },
+  ShipTrackerMap: {
+    component: ShipTrackerMap,
+    panelId: 'ship-tracker-map',
+    category: 'Dashboards',
+    title: 'Ship Tracker Map',
+    description: 'Live map of both ships with weather, occupancy, and route history',
+    props: {},
+    dataRequirements: 'Uses master_sail and sail_by_cabin_occupancy tables; weather from Open-Meteo API',
+    events: { emits: [], respondsTo: [] },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/ShipTrackerMap/index.jsx'
+  },
+  InventoryMemo: {
+    component: InventoryMemo,
+    panelId: 'inventory-memo',
+    category: 'Admin',
+    title: 'Inventory Memo',
+    description: 'Create and review memos linked to canonical inventory_item mappings',
+    props: {},
+    dataRequirements: 'Uses inventory_item and inventory_item_memo tables through GraphQL',
+    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/InventoryMemo/index.jsx'
   },
   SailingByCabinCategory: {
     component: SailingByCabinCategory,

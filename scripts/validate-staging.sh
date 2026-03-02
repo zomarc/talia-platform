@@ -306,6 +306,9 @@ check_local_environment() {
     check_status "Docker" "FAIL" "not available" || ((local_issues++))
     add_recommendation "Start Docker Desktop"
   fi
+
+  print_subsection "Local Code Origin:"
+  check_local_code_origin || ((local_issues++))
   
   echo ""
   if [[ $local_issues -eq 0 ]]; then
@@ -315,6 +318,57 @@ check_local_environment() {
   fi
   
   return $local_issues
+}
+
+check_local_code_origin() {
+  if ! command -v lsof >/dev/null 2>&1; then
+    check_status "Local code origin" "WARN" "lsof not available"
+    return 0
+  fi
+
+  local ui_dir="${ROOT_DIR}/talia-ui"
+  local api_dir="${ROOT_DIR}/talia-server"
+  local issues=0
+
+  local ui_pids
+  ui_pids=$(lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ' | xargs || true)
+  if [[ -z "$ui_pids" ]]; then
+    check_status "UI process" "WARN" "no process on 5173/5174/5175"
+  else
+    local pid
+    for pid in $ui_pids; do
+      local cwd
+      cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
+      if [[ -n "$cwd" && "$cwd" == "$ui_dir"* ]]; then
+        check_status "UI PID ${pid}" "OK" "cwd ${cwd}"
+      else
+        check_status "UI PID ${pid}" "WARN" "cwd ${cwd:-unknown} (expected ${ui_dir})"
+        add_recommendation "Restart UI from ${ui_dir} (./scripts/validate start → local)"
+        ((issues++)) || true
+      fi
+    done
+  fi
+
+  local api_pids
+  api_pids=$(lsof -nP -iTCP:4000 -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ' | xargs || true)
+  if [[ -z "$api_pids" ]]; then
+    check_status "API process" "WARN" "no process on 4000"
+  else
+    local pid
+    for pid in $api_pids; do
+      local cwd
+      cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
+      if [[ -n "$cwd" && "$cwd" == "$api_dir"* ]]; then
+        check_status "API PID ${pid}" "OK" "cwd ${cwd}"
+      else
+        check_status "API PID ${pid}" "WARN" "cwd ${cwd:-unknown} (expected ${api_dir})"
+        add_recommendation "Restart API from ${api_dir} (./scripts/validate start → local)"
+        ((issues++)) || true
+      fi
+    done
+  fi
+
+  return $issues
 }
 
 # ============================================================

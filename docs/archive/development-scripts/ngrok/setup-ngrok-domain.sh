@@ -100,6 +100,6 @@ echo ""
 echo "Starting ngrok with taliahub.com..."
 echo ""
 
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
+cd /Users/russell/Dev/talia
 ./scripts/start-ngrok-celestyal.sh
 

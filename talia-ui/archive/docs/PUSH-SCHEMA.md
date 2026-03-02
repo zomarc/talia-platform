@@ -22,7 +22,7 @@ The schema is defined in `instant.schema.ts`:
 ### Option 1: Use InstantDB CLI (Interactive)
 
 ```bash
-cd /Users/russell/Work/AA-Celestyal/Dev/talia-ui
+cd /Users/russell/Dev/talia/talia-ui
 npx instant-cli init
 # Select: Import an existing app
 # Select: Talia (1c2b040a-7bb2-4eb5-8490-ce5832e19dd0)

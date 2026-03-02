@@ -37,7 +37,7 @@
 
 3. **Test the setup:**
    ```bash
-   cd /Users/russell/Work/AA-Celestyal/Dev/talia
+   cd /Users/russell/Dev/talia
    ./scripts/start-ngrok-celestyal.sh
    ```
 
@@ -65,7 +65,7 @@
 
 1. **Update `ngrok.yml` to remove custom domain:**
    ```bash
-   cd /Users/russell/Work/AA-Celestyal/Dev/talia
+   cd /Users/russell/Dev/talia
    # Edit ngrok.yml and comment out the domain line
    ```
 
@@ -117,7 +117,7 @@ curl -s http://localhost:4000/graphql >/dev/null && echo "✅ Backend OK" || ech
 ### Test 2: Start ngrok
 
 ```bash
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
+cd /Users/russell/Dev/talia
 ./scripts/start-ngrok-celestyal.sh
 ```
 

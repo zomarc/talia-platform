@@ -48,8 +48,8 @@ main.jsx → AppWithAuth.jsx → Dashboard.jsx
 
 **Two Separate Backend Systems:**
 
-1. **`talia-graphql-server`** ✅ **PRIMARY DATA SOURCE (FUTURE)**
-   - **Location:** `/Users/russell/Work/AA-Celestyal/Dev/talia-graphql-server`
+1. **`talia-server`** ✅ **PRIMARY DATA SOURCE (FUTURE)**
+   - **Location:** `/Users/russell/Dev/talia/talia-server`
    - **Purpose:** Primary business data source for ALL dashboard data
    - **Port:** `http://localhost:4000/graphql` (local development)
    - **Status:** Separate Node.js/TypeScript project, linked for deployment
@@ -59,7 +59,7 @@ main.jsx → AppWithAuth.jsx → Dashboard.jsx
      - KPIs, Revenue, Occupancy metrics
      - Exceptions, Itineraries, Groups
      - All business intelligence data
-   - **Start Command:** `cd talia-graphql-server && npm start`
+   - **Start Command:** `cd talia-server && npm start`
    - **Future:** This will be the ONLY data source for business data
 
 2. **InstantDB** ⚠️ **TEMPORARY AUTH & FOCUS STORAGE**
@@ -78,12 +78,12 @@ main.jsx → AppWithAuth.jsx → Dashboard.jsx
 **Local Development:**
 ```bash
 # Terminal 1: Start GraphQL Server (PRIMARY DATA)
-cd /Users/russell/Work/AA-Celestyal/Dev/talia-graphql-server
+cd /Users/russell/Dev/talia/talia-server
 npm start
 # Runs on http://localhost:4000/graphql
 
 # Terminal 2: Start Talia UI (FRONTEND)
-cd /Users/russell/Work/AA-Celestyal/Dev/talia-ui
+cd /Users/russell/Dev/talia/talia-ui
 npm run dev
 # Runs on http://localhost:5173
 ```
@@ -347,7 +347,7 @@ If you see any of these, STOP and revert:
 ### 📚 REFERENCE DOCUMENTATION
 
 **Always use official docs for current versions:**
-- **talia-graphql-server**: Check `/talia-graphql-server/src/` for schema and resolvers
+- **talia-server**: Check `/talia-server/src/` for schema and resolvers
 - **InstantDB 0.21.26**: https://instantdb.com/docs (CRITICAL - React client API ONLY, used for auth/focus management)
 - Dockview 4.9.0: Check `node_modules/dockview-core/dist/esm/api/component.api.d.ts`
 - Chart.js 4.5.0: https://www.chartjs.org/docs/4.5.0/
@@ -357,7 +357,7 @@ If you see any of these, STOP and revert:
 **⚠️ GRAPHQL SERVER (PRIMARY DATA SOURCE):**
 - Base URL (local): `http://localhost:4000/graphql`
 - Must be running for dashboard data to work
-- Start command: `cd talia-graphql-server && npm start`
+- Start command: `cd talia-server && npm start`
 - Test: `curl http://localhost:4000/graphql -H "Content-Type: application/json" -d '{"query":"{ ships { Ship_Name } }"}'`
 - Use Apollo Client for queries in React components
 - All business data comes from here

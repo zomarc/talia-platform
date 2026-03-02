@@ -7,7 +7,7 @@ This document outlines the development workflow for working with both `talia-ui`
 
 ## 📁 Project Structure
 ```
-/Users/russell/Work/AA-Celestyal/Dev/
+/Users/russell/Dev/talia/
 ├── talia-ui/                 # React frontend
 │   ├── src/
 │   ├── package.json
@@ -77,14 +77,14 @@ Deploy both projects from a single repository:
 talia-monorepo/
 ├── apps/
 │   ├── frontend/          # talia-ui
-│   └── backend/           # talia-graphql-server
+│   └── backend/           # talia-server
 ├── netlify.toml
 └── package.json
 ```
 
 ### Option 2: Separate Deployments
 - **Frontend**: Deploy talia-ui to Netlify (static site)
-- **Backend**: Deploy talia-graphql-server to Netlify Functions
+- **Backend**: Deploy talia-server to Netlify Functions
 
 ### Netlify Configuration
 ```toml

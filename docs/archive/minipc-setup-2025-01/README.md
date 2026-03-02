@@ -13,7 +13,7 @@ This archive contains all documentation and scripts from the MiniPC setup proces
 
 ### Current Reference Documents
 
-**On Laptop** (`/Users/russell/Work/AA-Celestyal/Dev/talia/`):
+**On Laptop** (`/Users/russell/Dev/talia/`):
 - `MINIPC-SETUP-SUMMARY.md` - Complete reference
 - `README-MINIPC.md` - Quick start guide
 - `DEVELOPMENT-READY.md` - Environment status

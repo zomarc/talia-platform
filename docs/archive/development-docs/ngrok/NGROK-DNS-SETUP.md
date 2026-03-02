@@ -96,7 +96,7 @@ nslookup taliahub.com
 Once DNS is verified:
 
 ```bash
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
+cd /Users/russell/Dev/talia
 ./scripts/start-ngrok-celestyal.sh
 ```
 

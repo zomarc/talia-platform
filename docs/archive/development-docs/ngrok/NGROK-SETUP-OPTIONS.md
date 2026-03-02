@@ -14,7 +14,7 @@ cd talia-ui
 VITE_BASE_PATH=/celestyal npm run dev
 
 # Terminal 2: Start ngrok (free plan)
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
+cd /Users/russell/Dev/talia
 ./scripts/start-ngrok-free.sh
 ```
 
@@ -90,7 +90,7 @@ cd talia-ui
 VITE_BASE_PATH=/celestyal npm run dev
 
 # 2. Start ngrok (in another terminal)
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
+cd /Users/russell/Dev/talia
 ./scripts/start-ngrok-free.sh
 
 # 3. Get the URL from ngrok output or dashboard

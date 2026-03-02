@@ -7,8 +7,8 @@ set -e  # Exit on any error
 
 echo "🚀 Starting Talia UI Project Reorganization..."
 
-# Navigate to the Dev directory
-cd /Users/russell/Work/AA-Celestyal/Dev
+# Navigate to the project directory
+cd /Users/russell/Dev/talia
 
 echo "📁 Current directory: $(pwd)"
 echo "📋 Current structure:"
@@ -82,4 +82,4 @@ echo "├── talia-archive/              # Archived old projects"
 echo "└── [other projects]/"
 echo ""
 echo "✅ Reorganization complete! You can now work from:"
-echo "   cd /Users/russell/Work/AA-Celestyal/Dev/talia-ui"
+echo "   cd /Users/russell/Dev/talia/talia-ui"

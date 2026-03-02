@@ -161,6 +161,8 @@ check_local_services() {
   else
     echo -e "${YELLOW}DOWN${NC}"
   fi
+
+  check_local_code_origin false
 }
 
 check_staging_services_remote() {
@@ -178,6 +180,9 @@ start_local_services() {
     echo -e "  ${RED}Local project directories not found under ${ROOT_DIR}${NC}"
     return 1
   fi
+
+  check_duplicate_dev_servers true
+  check_local_code_origin true
 
   local ui_code
   ui_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo "000")
@@ -469,48 +474,69 @@ check_duplicate_dev_servers() {
     return 0
   fi
 
+  local ui_dir="${ROOT_DIR}/talia-ui"
+
+  get_pid_cwd() {
+    local pid="$1"
+    lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1
+  }
+
   # Check for multiple Vite processes
   local vite_count
   vite_count=$(ps aux | grep -E "[v]ite" | grep -v grep | wc -l | tr -d ' ')
   local vite_pids
   vite_pids=$(ps aux | grep -E "[v]ite" | grep -v grep | awk '{print $2}' | tr '\n' ' ' | xargs)
+  local vite_ui_pids=""
+  local vite_other_pids=""
+  local pid
+  for pid in $vite_pids; do
+    local cwd
+    cwd=$(get_pid_cwd "$pid")
+    if [[ -n "$cwd" && "$cwd" == "$ui_dir"* ]]; then
+      vite_ui_pids="${vite_ui_pids} ${pid}"
+    else
+      vite_other_pids="${vite_other_pids} ${pid}"
+    fi
+  done
 
   # Check for processes on dev server ports
   local port_5173 port_5174 port_5175 total_ports
-  port_5173=$(lsof -ti:5173 2>/dev/null | wc -l | tr -d ' ')
-  port_5174=$(lsof -ti:5174 2>/dev/null | wc -l | tr -d ' ')
-  port_5175=$(lsof -ti:5175 2>/dev/null | wc -l | tr -d ' ')
+  port_5173=$(lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null | wc -l | tr -d ' ')
+  port_5174=$(lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null | wc -l | tr -d ' ')
+  port_5175=$(lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null | wc -l | tr -d ' ')
   total_ports=$((port_5173 + port_5174 + port_5175))
 
   local has_duplicates=false
-  [[ "$vite_count" -gt 1 ]] && has_duplicates=true
+  local vite_ui_count
+  vite_ui_count=$(echo "$vite_ui_pids" | wc -w | tr -d ' ')
+  [[ "$vite_ui_count" -gt 1 ]] && has_duplicates=true
   [[ "$total_ports" -gt 1 ]] && has_duplicates=true
 
   if $has_duplicates && [[ "$auto_fix" == "true" ]]; then
     echo -e "  ${YELLOW}⚠️  Duplicate dev servers detected. Stopping all UI instances...${NC}"
     local port_pids
-    port_pids=$(lsof -ti:5173,5174,5175 2>/dev/null | tr '\n' ' ' | xargs)
+    port_pids=$(lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ' | xargs)
     if [[ -n "$port_pids" ]]; then
       kill $port_pids 2>/dev/null || true
       sleep 1
       kill -9 $port_pids 2>/dev/null || true
     fi
-    if [[ -n "$vite_pids" ]]; then
-      kill $vite_pids 2>/dev/null || true
+    if [[ -n "$vite_ui_pids" ]]; then
+      kill $vite_ui_pids 2>/dev/null || true
       sleep 1
-      kill -9 $vite_pids 2>/dev/null || true
+      kill -9 $vite_ui_pids 2>/dev/null || true
     fi
     echo -e "  ${GREEN}✓${NC} Stopped all Vite/dev-port processes"
     return 0
   fi
 
-  if [[ "$vite_count" -gt 1 ]]; then
-    echo -e "  ${RED}⚠️  Multiple Vite processes detected: ${vite_count}${NC}"
-    echo -e "  ${YELLOW}   PIDs: ${vite_pids}${NC}"
+  if [[ "$vite_ui_count" -gt 1 ]]; then
+    echo -e "  ${RED}⚠️  Multiple Talia UI Vite processes detected: ${vite_ui_count}${NC}"
+    echo -e "  ${YELLOW}   PIDs: ${vite_ui_pids}${NC}"
     echo -e "  ${DIM}   Run: pkill -f 'vite' && cd talia-ui && npm run dev${NC}"
     return 1
-  elif [[ "$vite_count" -eq 1 ]]; then
-    echo -e "  ${GREEN}✓${NC} Vite processes: ${vite_count} (OK)"
+  elif [[ "$vite_ui_count" -eq 1 ]]; then
+    echo -e "  ${GREEN}✓${NC} Vite processes: ${vite_ui_count} (OK)"
   else
     echo -e "  ${YELLOW}⚠️  No Vite processes found${NC}"
   fi
@@ -545,6 +571,77 @@ check_duplicate_dev_servers() {
   fi
 
   return 0
+}
+
+check_local_code_origin() {
+  local auto_fix="${1:-false}"
+  echo -e "${BOLD}Local Code Origin:${NC}"
+
+  if ! command -v lsof >/dev/null 2>&1; then
+    echo -e "  ${YELLOW}⚠️  lsof not available; skipping origin checks${NC}"
+    return 0
+  fi
+
+  local ui_dir="${ROOT_DIR}/talia-ui"
+  local api_dir="${ROOT_DIR}/talia-server"
+  local issues=0
+
+  get_pid_cwd() {
+    local pid="$1"
+    lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1
+  }
+
+  local ui_pids
+  ui_pids=$(lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ' | xargs || true)
+  if [[ -z "$ui_pids" ]]; then
+    echo -e "  ${YELLOW}⚠️  No UI process detected on ports 5173/5174/5175${NC}"
+  else
+    local pid
+    for pid in $ui_pids; do
+      local cwd
+      cwd=$(get_pid_cwd "$pid")
+      if [[ -n "$cwd" && "$cwd" == "$ui_dir"* ]]; then
+        echo -e "  ${GREEN}✓${NC} UI PID ${pid} running from ${cwd}"
+      else
+        echo -e "  ${RED}⚠️  UI PID ${pid} running from ${cwd:-unknown} (expected ${ui_dir})${NC}"
+        ((issues++)) || true
+        if [[ "$auto_fix" == "true" ]]; then
+          kill "$pid" 2>/dev/null || true
+          sleep 1
+          kill -9 "$pid" 2>/dev/null || true
+        fi
+      fi
+    done
+  fi
+
+  local api_pids
+  api_pids=$(lsof -nP -iTCP:4000 -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ' | xargs || true)
+  if [[ -z "$api_pids" ]]; then
+    echo -e "  ${YELLOW}⚠️  No API process detected on port 4000${NC}"
+  else
+    local pid
+    for pid in $api_pids; do
+      local cwd
+      cwd=$(get_pid_cwd "$pid")
+      if [[ -n "$cwd" && "$cwd" == "$api_dir"* ]]; then
+        echo -e "  ${GREEN}✓${NC} API PID ${pid} running from ${cwd}"
+      else
+        echo -e "  ${RED}⚠️  API PID ${pid} running from ${cwd:-unknown} (expected ${api_dir})${NC}"
+        ((issues++)) || true
+        if [[ "$auto_fix" == "true" ]]; then
+          kill "$pid" 2>/dev/null || true
+          sleep 1
+          kill -9 "$pid" 2>/dev/null || true
+        fi
+      fi
+    done
+  fi
+
+  if [[ "$auto_fix" == "true" ]] && [[ "$issues" -gt 0 ]]; then
+    echo -e "  ${GREEN}✓${NC} Stopped mismatched local processes"
+  fi
+
+  return $issues
 }
 
 run_comprehensive_check() {

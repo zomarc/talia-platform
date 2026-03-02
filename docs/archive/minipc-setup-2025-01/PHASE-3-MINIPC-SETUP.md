@@ -11,7 +11,7 @@ This guide will help you set up Supabase on your miniPC (192.168.1.120) so the d
 **On your laptop**, run:
 
 ```bash
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
+cd /Users/russell/Dev/talia
 ./copy-to-minipc.sh
 ```
 

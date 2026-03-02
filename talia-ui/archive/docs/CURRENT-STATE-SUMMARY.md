@@ -164,7 +164,7 @@ A **clean user mapping architecture** that separates authentication from busines
 
 ### Start Dev Server
 ```bash
-cd /Users/russell/Work/AA-Celestyal/Dev/talia-ui
+cd /Users/russell/Dev/talia/talia-ui
 npm run dev
 # Currently running on: http://localhost:5174/
 ```

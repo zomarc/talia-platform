@@ -71,7 +71,7 @@ async function getCorrectKeys() {
   console.log('6. Update your .env file with the correct keys');
   
   console.log('\n📝 Your current .env file location:');
-  console.log('/Users/russell/Work/AA-Celestyal/Dev/talia/talia-server/.env');
+  console.log('/Users/russell/Dev/talia/talia-server/.env');
   
   console.log('\n🛠️  Alternative: Try using the default local Supabase keys:');
   console.log('For local development, try these keys:');

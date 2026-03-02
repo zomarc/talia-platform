@@ -15,7 +15,7 @@ cd talia-ui
 VITE_BASE_PATH=/celestyal npm run dev
 
 # 3. In another terminal, start ngrok with celestyal path
-cd /Users/russell/Work/AA-Celestyal/Dev/talia
+cd /Users/russell/Dev/talia
 ./scripts/start-ngrok-celestyal.sh
 ```
 

@@ -40,7 +40,7 @@ npm run dev
 
 ### Backend Development (GraphQL Server)
 ```bash
-cd talia-graphql-server
+cd talia-server
 npm run start          # Start server
 npm run compile        # Compile TypeScript
 ```
@@ -138,7 +138,7 @@ npm run deploy:production
 
 ### Option 2: Separate Deployments
 1. **Frontend**: Deploy `talia-ui` as static site
-2. **Backend**: Deploy `talia-graphql-server` as Netlify Functions
+2. **Backend**: Deploy `talia-server` as Netlify Functions
 
 ## 🛠️ Development Commands
 

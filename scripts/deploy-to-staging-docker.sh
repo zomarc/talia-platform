@@ -4,10 +4,17 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
+if [[ -f "${CONFIG_FILE}" ]]; then
+  # shellcheck disable=SC1090
+  source "${CONFIG_FILE}"
+fi
+
 # Configuration
-STAGING_USER="zomarc"
-STAGING_HOST="192.168.1.120"
-STAGING_DIR="~/talia-docker"
+STAGING_USER="${STAGING_USER:-${STAGING_SSH_USER:-zomarc}}"
+STAGING_HOST="${STAGING_HOST:-${STAGING_SSH_HOST:-192.168.1.120}}"
+STAGING_DIR="${STAGING_DIR:-${STAGING_APP_DIR:-/home/${STAGING_USER}/talia-docker}}"
 COMPOSE_FILE="docker-compose.staging.yml"
 
 # Colors for output
@@ -47,9 +54,9 @@ docker buildx build --platform linux/amd64 --load -t talia-docker-graphql-server
 echo ""
 echo "Building talia-docker-ui..."
 docker buildx build --platform linux/amd64 --load -t talia-docker-ui:latest \
-  --build-arg VITE_SUPABASE_URL=http://192.168.1.120:54321 \
+  --build-arg VITE_SUPABASE_URL=http://${STAGING_HOST}:54321 \
   --build-arg VITE_SUPABASE_ANON_KEY=sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH \
-  --build-arg VITE_GRAPHQL_ENDPOINT=http://192.168.1.120:4000/graphql \
+  --build-arg VITE_GRAPHQL_ENDPOINT=http://${STAGING_HOST}:4000/graphql \
   --build-arg VITE_ENABLE_DEV_MODE=true \
   --build-arg VITE_APP_VERSION="${APP_VERSION}" \
   ./talia-ui

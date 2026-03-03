@@ -15,6 +15,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SCRIPT_VERSION="2026-02-12.3"
+CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
+if [[ -f "${CONFIG_FILE}" ]]; then
+  # shellcheck disable=SC1090
+  source "${CONFIG_FILE}"
+fi
 
 # Colors
 RED='\033[0;31m'
@@ -29,9 +34,27 @@ NC='\033[0m'
 # Detect environment
 HOSTNAME=$(hostname)
 IS_ON_STAGING=false
-if [[ "$HOSTNAME" == "zomarcsvr" ]] || [[ -f /home/zomarc/talia-docker/docker-compose.staging.yml ]]; then
+if [[ "$HOSTNAME" == "zomarcsvr" ]] || [[ -f "${STAGING_APP_DIR:-/home/zomarc/talia-docker}/docker-compose.staging.yml" ]]; then
   IS_ON_STAGING=true
 fi
+
+# Resolved target variables (configurable for future environments)
+STAGING_USER="${STAGING_USER:-${STAGING_SSH_USER:-zomarc}}"
+STAGING_HOST="${STAGING_HOST:-${STAGING_SSH_HOST:-192.168.1.120}}"
+STAGING_DIR="${STAGING_DIR:-${STAGING_APP_DIR:-/home/${STAGING_USER}/talia-docker}}"
+STAGING_NGROK_SERVICE="${STAGING_NGROK_SERVICE:-ngrok-taliahub}"
+
+LOCAL_UI_URL="${LOCAL_UI_URL:-http://${LOCAL_UI_HOST:-127.0.0.1}:${LOCAL_UI_PORT:-5173}}"
+LOCAL_GRAPHQL_URL="${LOCAL_GRAPHQL_URL:-http://${LOCAL_GRAPHQL_HOST:-127.0.0.1}:${LOCAL_GRAPHQL_PORT:-4000}/graphql}"
+STAGING_UI_URL="${STAGING_UI_URL:-http://${STAGING_UI_HOST:-${STAGING_HOST}}:${STAGING_UI_PORT:-5173}}"
+
+PUBLIC_MAIN_URL="${PUBLIC_MAIN_URL:-https://taliahub.com}"
+PUBLIC_SECONDARY_URL="${PUBLIC_SECONDARY_URL:-https://celestyal.taliahub.com}"
+NGROK_BASIC_USER="${NGROK_BASIC_USER:-talia}"
+NGROK_BASIC_PASS="${NGROK_BASIC_PASS:-dev2025tal}"
+STAGING_SSH_TARGET="${STAGING_USER}@${STAGING_HOST}"
+LOCAL_NGROK_DOMAIN="${LOCAL_NGROK_DOMAIN:-${PUBLIC_MAIN_URL#https://}}"
+LOCAL_NGROK_DOMAIN="${LOCAL_NGROK_DOMAIN#http://}"
 
 # External target memory (persists across runs)
 TARGET_STATE_FILE="${TARGET_STATE_FILE:-${HOME}/.talia-validate-last-target}"
@@ -95,7 +118,7 @@ get_display_version() {
   local url="$1"
   local version
   version=$(get_ui_version "$url")
-  if [[ "$version" == "NO_ASSET" && "$url" == "http://127.0.0.1:5173" ]]; then
+  if [[ "$version" == "NO_ASSET" && "$url" == "$LOCAL_UI_URL" ]]; then
     local local_src
     local_src=$(get_local_source_version)
     if [[ "$local_src" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -115,8 +138,8 @@ is_supported_target() {
 
 get_target_direct_url() {
   case "$1" in
-    local) echo "http://127.0.0.1:5173" ;;
-    staging) echo "http://192.168.1.120:5173" ;;
+    local) echo "$LOCAL_UI_URL" ;;
+    staging) echo "$STAGING_UI_URL" ;;
     *) echo "" ;;
   esac
 }
@@ -125,7 +148,7 @@ get_target_external_state() {
   local target="$1"
   case "$target" in
     local)
-      if pgrep -f "ngrok .*taliahub.com" >/dev/null 2>&1; then
+      if pgrep -f "ngrok .*${LOCAL_NGROK_DOMAIN}" >/dev/null 2>&1; then
         echo "active"
       else
         echo "inactive"
@@ -133,10 +156,10 @@ get_target_external_state() {
       ;;
     staging)
       if $IS_ON_STAGING; then
-        sudo systemctl is-active ngrok-taliahub 2>/dev/null || echo "inactive"
+        sudo systemctl is-active "$STAGING_NGROK_SERVICE" 2>/dev/null || echo "inactive"
       else
         local status
-        status=$(ssh -o ConnectTimeout=4 -o BatchMode=yes zomarc@192.168.1.120 "sudo systemctl is-active ngrok-taliahub 2>/dev/null || true" 2>/dev/null | head -n 1)
+        status=$(ssh -o ConnectTimeout=4 -o BatchMode=yes "$STAGING_SSH_TARGET" "sudo systemctl is-active $STAGING_NGROK_SERVICE 2>/dev/null || true" 2>/dev/null | head -n 1)
         [[ -z "$status" ]] && status="unreachable"
         echo "$status"
       fi
@@ -192,9 +215,9 @@ get_current_target() {
 }
 
 print_front_page_status() {
-  local local_ui_url="http://127.0.0.1:5173"
-  local staging_ui_url="http://192.168.1.120:5173"
-  local public_url="https://taliahub.com"
+  local local_ui_url="$LOCAL_UI_URL"
+  local staging_ui_url="$STAGING_UI_URL"
+  local public_url="$PUBLIC_MAIN_URL"
   local local_ui_code
   local staging_ui_code
   local public_code
@@ -262,26 +285,26 @@ print_front_page_status() {
     staging_status="DOWN"
   fi
 
-  local_external_label="https://taliahub.com (inactive)"
-  staging_external_label="https://taliahub.com (inactive)"
+  local_external_label="${PUBLIC_MAIN_URL} (inactive)"
+  staging_external_label="${PUBLIC_MAIN_URL} (inactive)"
   if [[ "$presenter" == "local" ]]; then
-    local_external_label="https://taliahub.com (active)"
+    local_external_label="${PUBLIC_MAIN_URL} (active)"
   elif [[ "$presenter" == "staging" ]]; then
-    staging_external_label="https://taliahub.com (active)"
+    staging_external_label="${PUBLIC_MAIN_URL} (active)"
   elif [[ "$presenter" == "conflict" ]]; then
-    local_external_label="https://taliahub.com (conflict)"
-    staging_external_label="https://taliahub.com (conflict)"
+    local_external_label="${PUBLIC_MAIN_URL} (conflict)"
+    staging_external_label="${PUBLIC_MAIN_URL} (conflict)"
   fi
 
   echo -e "  ${BOLD}Front Page Status${NC}"
-  echo -e "  1) taliahub.com target: ${BOLD}${presenter}${NC} (gateway=${gateway})"
+  echo -e "  1) ${PUBLIC_MAIN_URL} target: ${BOLD}${presenter}${NC} (gateway=${gateway})"
   echo -e "  2) target version: ${public_version}"
   echo -e "  3) target status: ${target_status} (HTTP ${public_code})"
   echo -e "  4) local: ${local_status} (HTTP ${local_ui_code}, v${local_ui_version}) | staging: ${staging_status} (HTTP ${staging_ui_code}, v${staging_ui_version})"
   echo -e "     Remembered target -> ${remembered_target:-none}"
   echo -e "     Local addresses   -> direct: ${local_ui_url} | external: ${local_external_label}"
   echo -e "     Staging addresses -> direct: ${staging_ui_url} | external: ${staging_external_label}"
-  echo -e "     External aliases  -> https://taliahub.com | https://celestyal.taliahub.com"
+  echo -e "     External aliases  -> ${PUBLIC_MAIN_URL} | ${PUBLIC_SECONDARY_URL}"
   echo ""
 }
 
@@ -417,15 +440,17 @@ prompt_service_group() {
 }
 
 check_local_services() {
+  local local_ui_health_url="${LOCAL_UI_URL%/}/"
+  local local_graphql_health_url="${LOCAL_GRAPHQL_URL%/}"
   echo -e "${BOLD}Local Services:${NC}"
   echo -n "  UI (localhost:5173): "
   local ui
-  ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo "000")
+  ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$local_ui_health_url" 2>/dev/null || echo "000")
   [[ "$ui" == "200" ]] && echo -e "${GREEN}UP${NC}" || echo -e "${YELLOW}DOWN${NC} (HTTP $ui)"
 
   echo -n "  GraphQL (localhost:4000): "
   local gql
-  gql=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:4000/graphql 2>/dev/null || echo "000")
+  gql=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$local_graphql_health_url" 2>/dev/null || echo "000")
   [[ "$gql" == "200" || "$gql" == "400" ]] && echo -e "${GREEN}UP${NC} (HTTP $gql)" || echo -e "${YELLOW}DOWN${NC} (HTTP $gql)"
 
   echo -n "  ngrok (local): "
@@ -451,6 +476,8 @@ print_front_screen_status() {
 }
 
 start_local_services() {
+  local local_ui_health_url="${LOCAL_UI_URL%/}/"
+  local local_graphql_health_url="${LOCAL_GRAPHQL_URL%/}"
   echo -e "${BOLD}Starting local services:${NC}"
 
   if [[ ! -d "${ROOT_DIR}/talia-ui" ]] || [[ ! -d "${ROOT_DIR}/talia-server" ]]; then
@@ -462,7 +489,7 @@ start_local_services() {
   check_local_code_origin true
 
   local ui_code
-  ui_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo "000")
+  ui_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$local_ui_health_url" 2>/dev/null || echo "000")
   if [[ "$ui_code" == "200" ]]; then
     echo -e "  ${GREEN}✓${NC} UI already running (port 5173)"
   else
@@ -471,7 +498,7 @@ start_local_services() {
   fi
 
   local gql_code
-  gql_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:4000/graphql 2>/dev/null || echo "000")
+  gql_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$local_graphql_health_url" 2>/dev/null || echo "000")
   if [[ "$gql_code" == "200" || "$gql_code" == "400" ]]; then
     echo -e "  ${GREEN}✓${NC} GraphQL already running (port 4000)"
   else
@@ -564,8 +591,8 @@ total_status() {
 }
 
 check_external_gateway() {
-  echo -e "${BOLD}External Gateway (taliahub.com):${NC}"
-  local urls=("https://taliahub.com/" "https://celestyal.taliahub.com/")
+  echo -e "${BOLD}External Gateway (${PUBLIC_MAIN_URL}):${NC}"
+  local urls=("${PUBLIC_MAIN_URL%/}/" "${PUBLIC_SECONDARY_URL%/}/")
   echo -e ""
   printf "  %-34s  %-10s  %-8s  %s\n" "URL" "STATUS" "HTTP" "DETAILS"
   printf "  %-34s  %-10s  %-8s  %s\n" "----------------------------------" "----------" "--------" "----------------------------"
@@ -616,20 +643,22 @@ check_external_gateway() {
 }
 
 start_ngrok_local() {
+  local local_ui_health_url="${LOCAL_UI_URL%/}/"
+  local local_ui_port="${LOCAL_UI_PORT:-5173}"
   if ! command -v ngrok >/dev/null 2>&1; then
     echo -e "${RED}ngrok not found on PATH. Install from https://ngrok.com/download${NC}"
     return 1
   fi
   echo -n "  UI (localhost:5173): "
   local ui
-  ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo "000")
+  ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$local_ui_health_url" 2>/dev/null || echo "000")
   [[ "$ui" == "200" ]] && echo -e "${GREEN}OK${NC}" || echo -e "${YELLOW}Not running${NC} (start talia-ui first)"
 
-  if pgrep -f "ngrok .*taliahub.com" >/dev/null 2>&1; then
-    echo -e "  ${YELLOW}ngrok already running for taliahub.com${NC}"
+  if pgrep -f "ngrok .*${LOCAL_NGROK_DOMAIN}" >/dev/null 2>&1; then
+    echo -e "  ${YELLOW}ngrok already running for ${LOCAL_NGROK_DOMAIN}${NC}"
   else
-    echo -e "  Starting ngrok (taliahub.com → localhost:5173)..."
-    nohup ngrok http --url=taliahub.com 5173 >/tmp/ngrok-taliahub.log 2>&1 &
+    echo -e "  Starting ngrok (${LOCAL_NGROK_DOMAIN} -> ${LOCAL_UI_URL})..."
+    nohup ngrok "http" "--url=${LOCAL_NGROK_DOMAIN}" "${local_ui_port}" >/tmp/ngrok-taliahub.log 2>&1 &
     sleep 1
   fi
 
@@ -655,29 +684,29 @@ start_ngrok_local() {
 }
 
 start_ngrok_staging_remote() {
-  run_command "ssh -o ConnectTimeout=5 zomarc@192.168.1.120 \"sudo systemctl start ngrok-taliahub && sleep 2 && sudo systemctl status ngrok-taliahub --no-pager\"" "Start ngrok on staging (systemd)"
+  run_command "ssh -o ConnectTimeout=5 ${STAGING_SSH_TARGET} \"sudo systemctl start ${STAGING_NGROK_SERVICE} && sleep 2 && sudo systemctl status ${STAGING_NGROK_SERVICE} --no-pager\"" "Start ngrok on staging (systemd)"
 }
 
 stop_ngrok_staging_remote() {
   if $IS_ON_STAGING; then
-    run_command "sudo systemctl stop ngrok-taliahub" "Stop ngrok on staging (systemd)"
+    run_command "sudo systemctl stop ${STAGING_NGROK_SERVICE}" "Stop ngrok on staging (systemd)"
   else
-    run_command "ssh -o ConnectTimeout=5 zomarc@192.168.1.120 \"sudo systemctl stop ngrok-taliahub\"" "Stop ngrok on staging (systemd)"
+    run_command "ssh -o ConnectTimeout=5 ${STAGING_SSH_TARGET} \"sudo systemctl stop ${STAGING_NGROK_SERVICE}\"" "Stop ngrok on staging (systemd)"
   fi
 }
 
 start_staging_services_remote() {
   if $IS_ON_STAGING; then
-    run_command "sudo systemctl start ngrok-taliahub; cd /home/zomarc/talia-docker && docker compose -f docker-compose.staging.yml up -d; docker compose -f docker-compose.staging.yml ps" "Start staging services (ngrok + docker)"
+    run_command "sudo systemctl start ${STAGING_NGROK_SERVICE}; cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml up -d; docker compose -f docker-compose.staging.yml ps" "Start staging services (ngrok + docker)"
   else
-    run_command "ssh -o ConnectTimeout=5 zomarc@192.168.1.120 \"sudo systemctl start ngrok-taliahub; cd /home/zomarc/talia-docker && docker compose -f docker-compose.staging.yml up -d; docker compose -f docker-compose.staging.yml ps\"" "Start staging services (ngrok + docker)"
+    run_command "ssh -o ConnectTimeout=5 ${STAGING_SSH_TARGET} \"sudo systemctl start ${STAGING_NGROK_SERVICE}; cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml up -d; docker compose -f docker-compose.staging.yml ps\"" "Start staging services (ngrok + docker)"
   fi
 }
 
 stop_ngrok_local() {
-  if pgrep -f "ngrok .*taliahub.com" >/dev/null 2>&1; then
+  if pgrep -f "ngrok .*${LOCAL_NGROK_DOMAIN}" >/dev/null 2>&1; then
     echo -e "  Stopping local ngrok..."
-    pkill -f "ngrok .*taliahub.com" 2>/dev/null || true
+    pkill -f "ngrok .*${LOCAL_NGROK_DOMAIN}" 2>/dev/null || true
   else
     echo -e "  ${DIM}ngrok not running locally${NC}"
   fi
@@ -722,9 +751,9 @@ stop_local_services() {
 
 stop_staging_services_remote() {
   if $IS_ON_STAGING; then
-    run_command "sudo systemctl stop ngrok-taliahub; cd /home/zomarc/talia-docker && docker compose -f docker-compose.staging.yml stop" "Stop staging services (ngrok + docker)"
+    run_command "sudo systemctl stop ${STAGING_NGROK_SERVICE}; cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml stop" "Stop staging services (ngrok + docker)"
   else
-    run_command "ssh -o ConnectTimeout=5 zomarc@192.168.1.120 \"sudo systemctl stop ngrok-taliahub; cd /home/zomarc/talia-docker && docker compose -f docker-compose.staging.yml stop\"" "Stop staging services (ngrok + docker)"
+    run_command "ssh -o ConnectTimeout=5 ${STAGING_SSH_TARGET} \"sudo systemctl stop ${STAGING_NGROK_SERVICE}; cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml stop\"" "Stop staging services (ngrok + docker)"
   fi
 }
 
@@ -799,8 +828,8 @@ apply_target_external() {
 switch_target() {
   echo ""
   echo -e "${BOLD}Switch target:${NC}"
-  echo -e "  ${GREEN}1)${NC} Local (taliahub.com -> local)"
-  echo -e "  ${GREEN}2)${NC} Staging (taliahub.com -> staging)"
+  echo -e "  ${GREEN}1)${NC} Local (${PUBLIC_MAIN_URL} -> local)"
+  echo -e "  ${GREEN}2)${NC} Staging (${PUBLIC_MAIN_URL} -> staging)"
   echo -e "  ${YELLOW}0)${NC} Back"
   echo ""
   echo -n -e "${BOLD}Enter target: ${NC}"
@@ -1096,7 +1125,7 @@ run_comprehensive_check() {
 
 restart_all_staging() {
   if $IS_ON_STAGING; then
-    run_command "sudo systemctl stop ngrok.service >/dev/null 2>&1 || true; sudo systemctl disable ngrok.service >/dev/null 2>&1 || true; sudo systemctl restart protonvpn-openvpn; sleep 5; sudo systemctl restart ngrok-taliahub; sleep 5; cd /home/zomarc/talia-docker && docker compose -f docker-compose.staging.yml restart supabase-db supabase-rest supabase-kong; sleep 5; docker compose -f docker-compose.staging.yml restart graphql-server; sleep 5; docker compose -f docker-compose.staging.yml restart ui; docker compose -f docker-compose.staging.yml up -d; sleep 10; docker compose -f docker-compose.staging.yml ps" "Restart ALL staging services"
+    run_command "sudo systemctl stop ngrok.service >/dev/null 2>&1 || true; sudo systemctl disable ngrok.service >/dev/null 2>&1 || true; sudo systemctl restart protonvpn-openvpn; sleep 5; sudo systemctl restart ${STAGING_NGROK_SERVICE}; sleep 5; cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml restart supabase-db supabase-rest supabase-kong; sleep 5; docker compose -f docker-compose.staging.yml restart graphql-server; sleep 5; docker compose -f docker-compose.staging.yml restart ui; docker compose -f docker-compose.staging.yml up -d; sleep 10; docker compose -f docker-compose.staging.yml ps" "Restart ALL staging services"
   else
     run_script "restart-and-check.sh" "staging --restart"
   fi
@@ -1119,33 +1148,33 @@ handle_staging_menu_legacy() {
       check_external_gateway
       ;;
     5|start-ngrok)
-      run_command "sudo systemctl start ngrok-taliahub && sleep 2 && sudo systemctl status ngrok-taliahub --no-pager" "Start ngrok tunnel"
+      run_command "sudo systemctl start ${STAGING_NGROK_SERVICE} && sleep 2 && sudo systemctl status ${STAGING_NGROK_SERVICE} --no-pager" "Start ngrok tunnel"
       ;;
     6|start-ngrok-staging)
-      run_command "sudo systemctl start ngrok-taliahub && sleep 2 && sudo systemctl status ngrok-taliahub --no-pager" "Start ngrok tunnel"
+      run_command "sudo systemctl start ${STAGING_NGROK_SERVICE} && sleep 2 && sudo systemctl status ${STAGING_NGROK_SERVICE} --no-pager" "Start ngrok tunnel"
       ;;
     7|stop-local)
       echo -e "${BOLD}Stopping local staging services:${NC}"
-      run_command "sudo systemctl stop ngrok-taliahub || true" "Stop ngrok"
-      run_command "cd /home/zomarc/talia-docker && docker compose -f docker-compose.staging.yml stop" "Stop staging Docker"
+      run_command "sudo systemctl stop ${STAGING_NGROK_SERVICE} || true" "Stop ngrok"
+      run_command "cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml stop" "Stop staging Docker"
       ;;
     8|stop-staging)
       echo -e "${BOLD}Stopping staging services:${NC}"
-      run_command "sudo systemctl stop ngrok-taliahub || true" "Stop ngrok"
-      run_command "cd /home/zomarc/talia-docker && docker compose -f docker-compose.staging.yml stop" "Stop staging Docker"
+      run_command "sudo systemctl stop ${STAGING_NGROK_SERVICE} || true" "Stop ngrok"
+      run_command "cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml stop" "Stop staging Docker"
       ;;
     9|quick|test)
       echo -e "${BOLD}Quick Connectivity Test${NC}"
       echo ""
-      echo -n "  taliahub.com (public): "
-      local talia=$(curl -sS --basic -u talia:dev2025tal -o /dev/null -w '%{http_code}' --max-time 10 https://taliahub.com 2>/dev/null || echo "000")
+      echo -n "  ${PUBLIC_MAIN_URL} (public): "
+      local talia=$(curl -sS --basic -u "${NGROK_BASIC_USER}:${NGROK_BASIC_PASS}" -o /dev/null -w '%{http_code}' --max-time 10 "${PUBLIC_MAIN_URL}" 2>/dev/null || echo "000")
       [[ "$talia" == "200" || "$talia" == "302" ]] && echo -e "${GREEN}OK${NC}" || echo -e "${RED}HTTP $talia${NC}"
       ;;
     10|restart)
-      run_command "sudo systemctl restart protonvpn-openvpn && sleep 10 && sudo systemctl restart ngrok-taliahub && sleep 5 && echo 'Services restarted' && curl -s http://localhost:4040/api/tunnels | grep -o 'taliahub.com' && echo ' tunnel active'" "Restart VPN + ngrok"
+      run_command "sudo systemctl restart protonvpn-openvpn && sleep 10 && sudo systemctl restart ${STAGING_NGROK_SERVICE} && sleep 5 && echo 'Services restarted' && curl -s http://localhost:4040/api/tunnels | grep -o '${LOCAL_NGROK_DOMAIN}' && echo ' tunnel active'" "Restart VPN + ngrok"
       ;;
     11|fix)
-      run_command "sudo systemctl restart protonvpn-openvpn && sleep 10 && sudo systemctl restart ngrok-taliahub && sleep 5" "Fix staging connectivity (VPN + ngrok)"
+      run_command "sudo systemctl restart protonvpn-openvpn && sleep 10 && sudo systemctl restart ${STAGING_NGROK_SERVICE} && sleep 5" "Fix staging connectivity (VPN + ngrok)"
       ;;
     12|full)
       echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
@@ -1160,7 +1189,7 @@ handle_staging_menu_legacy() {
       # Docker detailed
       echo ""
       echo -e "${BOLD}=== DOCKER CONTAINERS (detailed) ===${NC}"
-      docker compose -f /home/zomarc/talia-docker/docker-compose.staging.yml ps
+      docker compose -f ${STAGING_DIR}/docker-compose.staging.yml ps
       echo ""
       docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" 2>/dev/null | head -15 || true
       
@@ -1222,11 +1251,11 @@ handle_remote_menu_legacy() {
         echo ""
         
         echo -n "  GraphQL (localhost:4000): "
-        local gql=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:4000/graphql 2>/dev/null || echo "000")
+        local gql=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "${LOCAL_GRAPHQL_URL%/}" 2>/dev/null || echo "000")
         [[ "$gql" == "200" || "$gql" == "400" ]] && echo -e "${GREEN}OK${NC} (HTTP $gql)" || echo -e "${RED}FAIL${NC} (HTTP $gql)"
         
         echo -n "  UI (localhost:5173): "
-        local ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo "000")
+        local ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "${LOCAL_UI_URL%/}/" 2>/dev/null || echo "000")
         [[ "$ui" == "200" ]] && echo -e "${GREEN}OK${NC}" || echo -e "${YELLOW}Not running${NC}"
         
         echo -n "  Supabase (localhost:54321): "
@@ -1266,14 +1295,14 @@ handle_remote_menu_legacy() {
     9|quick|test)
       echo -e "${BOLD}Quick Connectivity Test${NC}"
       echo ""
-      echo -n "  Ping staging (192.168.1.120): "
-      ping -c 1 -t 3 192.168.1.120 >/dev/null 2>&1 && echo -e "${GREEN}OK${NC}" || echo -e "${RED}FAIL${NC}"
+      echo -n "  Ping staging (${STAGING_HOST}): "
+      ping -c 1 -t 3 ${STAGING_HOST} >/dev/null 2>&1 && echo -e "${GREEN}OK${NC}" || echo -e "${RED}FAIL${NC}"
       
       echo -n "  SSH to staging: "
-      ssh -o ConnectTimeout=5 -o BatchMode=yes zomarc@192.168.1.120 "echo ok" >/dev/null 2>&1 && echo -e "${GREEN}OK${NC}" || echo -e "${RED}FAIL${NC}"
+      ssh -o ConnectTimeout=5 -o BatchMode=yes ${STAGING_SSH_TARGET} "echo ok" >/dev/null 2>&1 && echo -e "${GREEN}OK${NC}" || echo -e "${RED}FAIL${NC}"
       
-      echo -n "  taliahub.com (public): "
-      local talia=$(curl -sS --basic -u talia:dev2025tal -o /dev/null -w '%{http_code}' --max-time 10 https://taliahub.com 2>/dev/null || echo "000")
+      echo -n "  ${PUBLIC_MAIN_URL} (public): "
+      local talia=$(curl -sS --basic -u "${NGROK_BASIC_USER}:${NGROK_BASIC_PASS}" -o /dev/null -w '%{http_code}' --max-time 10 "${PUBLIC_MAIN_URL}" 2>/dev/null || echo "000")
       [[ "$talia" == "200" ]] && echo -e "${GREEN}OK${NC}" || echo -e "${RED}HTTP $talia${NC}"
       ;;
     10|restart)
@@ -1298,11 +1327,11 @@ handle_remote_menu_legacy() {
       
       echo -e "  ${BOLD}Services:${NC}"
       echo -n "    GraphQL (localhost:4000): "
-      local gql=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:4000/graphql 2>/dev/null || echo "000")
+      local gql=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "${LOCAL_GRAPHQL_URL%/}" 2>/dev/null || echo "000")
       [[ "$gql" == "200" || "$gql" == "400" ]] && echo -e "${GREEN}OK${NC} (HTTP $gql)" || echo -e "${RED}FAIL${NC} (HTTP $gql)"
       
       echo -n "    UI (localhost:5173): "
-      local ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo "000")
+      local ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "${LOCAL_UI_URL%/}/" 2>/dev/null || echo "000")
       [[ "$ui" == "200" ]] && echo -e "${GREEN}OK${NC}" || echo -e "${YELLOW}Not running${NC}"
       
       echo -n "    Supabase Kong (localhost:54321): "
@@ -1317,8 +1346,8 @@ handle_remote_menu_legacy() {
       echo ""
       echo -e "${BOLD}━━━ NETWORK TO STAGING ━━━${NC}"
       echo ""
-      echo -n "  Ping (192.168.1.120): "
-      local ping_result=$(ping -c 3 -q 192.168.1.120 2>/dev/null)
+      echo -n "  Ping (${STAGING_HOST}): "
+      local ping_result=$(ping -c 3 -q ${STAGING_HOST} 2>/dev/null)
       if [[ $? -eq 0 ]]; then
         local ping_avg=$(echo "$ping_result" | grep "round-trip" | cut -d'/' -f5)
         local ping_loss=$(echo "$ping_result" | grep "packet loss" | grep -oE '[0-9.]+%' | head -1)
@@ -1328,10 +1357,10 @@ handle_remote_menu_legacy() {
       fi
       
       echo -n "  SSH connection: "
-      ssh -o ConnectTimeout=5 -o BatchMode=yes zomarc@192.168.1.120 "echo ok" >/dev/null 2>&1 && echo -e "${GREEN}OK${NC}" || echo -e "${RED}FAIL${NC}"
+      ssh -o ConnectTimeout=5 -o BatchMode=yes ${STAGING_SSH_TARGET} "echo ok" >/dev/null 2>&1 && echo -e "${GREEN}OK${NC}" || echo -e "${RED}FAIL${NC}"
       
-      echo -n "  taliahub.com (public): "
-      local talia=$(curl -sS --basic -u talia:dev2025tal -o /dev/null -w '%{http_code}' --max-time 10 https://taliahub.com 2>/dev/null || echo "000")
+      echo -n "  ${PUBLIC_MAIN_URL} (public): "
+      local talia=$(curl -sS --basic -u "${NGROK_BASIC_USER}:${NGROK_BASIC_PASS}" -o /dev/null -w '%{http_code}' --max-time 10 "${PUBLIC_MAIN_URL}" 2>/dev/null || echo "000")
       [[ "$talia" == "200" ]] && echo -e "${GREEN}OK${NC} (HTTP 200)" || echo -e "${RED}FAIL${NC} (HTTP $talia)"
       
       # Staging environment
@@ -1343,12 +1372,12 @@ handle_remote_menu_legacy() {
       # Staging Docker
       echo ""
       echo -e "  ${BOLD}Docker Containers (staging):${NC}"
-      ssh zomarc@192.168.1.120 "docker compose -f /home/zomarc/talia-docker/docker-compose.staging.yml ps --format 'table {{.Name}}\t{{.Status}}'" 2>/dev/null | sed 's/^/    /' || true
+      ssh ${STAGING_SSH_TARGET} "docker compose -f ${STAGING_DIR}/docker-compose.staging.yml ps --format 'table {{.Name}}\t{{.Status}}'" 2>/dev/null | sed 's/^/    /' || true
       
       # Staging resources
       echo ""
       echo -e "  ${BOLD}Staging Resources:${NC}"
-      ssh zomarc@192.168.1.120 "echo -n '    Disk: '; df -h / | tail -1 | awk '{print \$3 \" used / \" \$2 \" (\" \$5 \" full)\"}'; echo -n '    Memory: '; free -h | grep Mem | awk '{print \$3 \" used / \" \$2}'" 2>/dev/null || true
+      ssh ${STAGING_SSH_TARGET} "echo -n '    Disk: '; df -h / | tail -1 | awk '{print \$3 \" used / \" \$2 \" (\" \$5 \" full)\"}'; echo -n '    Memory: '; free -h | grep Mem | awk '{print \$3 \" used / \" \$2}'" 2>/dev/null || true
       
       echo ""
       echo -e "${GREEN}✅ Full check complete${NC}"

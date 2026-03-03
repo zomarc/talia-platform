@@ -13,19 +13,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SCRIPT_VERSION="2026-01-30.1"
 
-STAGING_USER="${STAGING_USER:-zomarc}"
-STAGING_HOST="${STAGING_HOST:-192.168.1.120}"
-STAGING_DIR="${STAGING_DIR:-/home/${STAGING_USER}/talia-docker}"
-LOCAL_UI_URL="${LOCAL_UI_URL:-http://localhost:5173}"
-STAGING_UI_URL="${STAGING_UI_URL:-http://${STAGING_HOST}:5173}"
+CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
+if [[ -f "${CONFIG_FILE}" ]]; then
+  # shellcheck disable=SC1090
+  source "${CONFIG_FILE}"
+fi
 
-NGROK_USER="${NGROK_USER:-talia}"
-NGROK_PASS="${NGROK_PASS:-dev2025tal}"
-NGROK_URL="${NGROK_URL:-https://taliahub.com}"
+STAGING_USER="${STAGING_USER:-${STAGING_SSH_USER:-zomarc}}"
+STAGING_HOST="${STAGING_HOST:-${STAGING_SSH_HOST:-192.168.1.120}}"
+STAGING_DIR="${STAGING_DIR:-${STAGING_APP_DIR:-/home/${STAGING_USER}/talia-docker}}"
+LOCAL_UI_URL="${LOCAL_UI_URL:-http://${LOCAL_UI_HOST:-127.0.0.1}:${LOCAL_UI_PORT:-5173}}"
+STAGING_UI_URL="${STAGING_UI_URL:-http://${STAGING_UI_HOST:-${STAGING_HOST}}:${STAGING_UI_PORT:-5173}}"
+
+NGROK_USER="${NGROK_USER:-${NGROK_BASIC_USER:-talia}}"
+NGROK_PASS="${NGROK_PASS:-${NGROK_BASIC_PASS:-dev2025tal}}"
+NGROK_URL="${NGROK_URL:-${PUBLIC_MAIN_URL:-https://taliahub.com}}"
 NGROK_DOMAIN="${NGROK_URL#https://}"
 NGROK_DOMAIN="${NGROK_DOMAIN#http://}"
+STAGING_NGROK_SERVICE="${STAGING_NGROK_SERVICE:-ngrok-taliahub}"
 
-EXPECTED_VPN_IP="149.40.48.92"
+EXPECTED_VPN_IP="${EXPECTED_VPN_IP:-${VPN_EXPECTED_EGRESS_IP:-149.40.48.92}}"
 TEST_AZURE=false
 
 # Colors
@@ -157,7 +164,7 @@ else
   LOCAL_NGROK_STATUS="inactive"
 fi
 
-STAGING_NGROK_STATUS_FRONT=$(ssh "${STAGING_USER}@${STAGING_HOST}" "sudo systemctl is-active ngrok-taliahub 2>/dev/null || true" 2>/dev/null | head -n 1 || true)
+STAGING_NGROK_STATUS_FRONT=$(ssh "${STAGING_USER}@${STAGING_HOST}" "sudo systemctl is-active ${STAGING_NGROK_SERVICE} 2>/dev/null || true" 2>/dev/null | head -n 1 || true)
 if [[ -z "$STAGING_NGROK_STATUS_FRONT" ]]; then STAGING_NGROK_STATUS_FRONT="unreachable"; fi
 TALIAHUB_HEADERS=$(curl -sS -I --max-time 10 "${NGROK_URL}" 2>/dev/null || true)
 TALIAHUB_CODE=$(printf "%s\n" "$TALIAHUB_HEADERS" | awk 'tolower($1) ~ /^http/{print $2; exit}')
@@ -222,7 +229,7 @@ echo ""
 echo -e "${BLUE}=== ngrok Tunnel ===${NC}"
 
 # Check ngrok service status
-NGROK_STATUS=$(ssh "${STAGING_USER}@${STAGING_HOST}" "sudo systemctl is-active ngrok-taliahub 2>/dev/null || true" 2>/dev/null | head -n 1 || true)
+NGROK_STATUS=$(ssh "${STAGING_USER}@${STAGING_HOST}" "sudo systemctl is-active ${STAGING_NGROK_SERVICE} 2>/dev/null || true" 2>/dev/null | head -n 1 || true)
 if [[ -z "$NGROK_STATUS" ]]; then NGROK_STATUS="unreachable"; fi
 if [[ "$NGROK_STATUS" == "active" ]]; then
   check_status "ngrok service" "OK" "running"

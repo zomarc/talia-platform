@@ -8,9 +8,17 @@
 #
 set -euo pipefail
 
-STAGING_DIR="${STAGING_DIR:-/home/zomarc/talia-docker}"
-NGROK_URL="${NGROK_URL:-https://taliahub.com}"
-EXPECTED_VPN_IP="149.40.48.92"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
+if [[ -f "${CONFIG_FILE}" ]]; then
+  # shellcheck disable=SC1090
+  source "${CONFIG_FILE}"
+fi
+
+STAGING_DIR="${STAGING_DIR:-${STAGING_APP_DIR:-/home/zomarc/talia-docker}}"
+NGROK_URL="${NGROK_URL:-${PUBLIC_MAIN_URL:-https://taliahub.com}}"
+EXPECTED_VPN_IP="${EXPECTED_VPN_IP:-${VPN_EXPECTED_EGRESS_IP:-149.40.48.92}}"
+STAGING_NGROK_SERVICE="${STAGING_NGROK_SERVICE:-ngrok-taliahub}"
 SCRIPT_VERSION="2026-01-30.1"
 
 # Colors
@@ -79,7 +87,7 @@ echo ""
 echo -e "${BLUE}=== ngrok Tunnel ===${NC}"
 
 # Check ngrok service status
-NGROK_STATUS=$(sudo systemctl is-active ngrok-taliahub 2>/dev/null || echo 'inactive')
+NGROK_STATUS=$(sudo systemctl is-active "${STAGING_NGROK_SERVICE}" 2>/dev/null || echo 'inactive')
 if [[ "$NGROK_STATUS" == "active" ]]; then
   check_status "ngrok service" "OK" "running"
 else

@@ -5,13 +5,21 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
+if [[ -f "${CONFIG_FILE}" ]]; then
+  # shellcheck disable=SC1090
+  source "${CONFIG_FILE}"
+fi
+
 # Configuration
-STAGING_USER="zomarc"
-STAGING_HOST="192.168.1.120"
-STAGING_DIR="~/talia-docker"
-STAGING_GIT_DIR="~/talia-docker"
-LOCAL_ARCHIVE="/tmp/talia-staging-code-sync.tar.gz"
-REMOTE_ARCHIVE="/tmp/talia-staging-code-sync.tar.gz"
+STAGING_USER="${STAGING_USER:-${STAGING_SSH_USER:-zomarc}}"
+STAGING_HOST="${STAGING_HOST:-${STAGING_SSH_HOST:-192.168.1.120}}"
+STAGING_DIR="${STAGING_DIR:-${STAGING_APP_DIR:-/home/${STAGING_USER}/talia-docker}}"
+STAGING_GIT_DIR="${STAGING_GIT_DIR:-${STAGING_DIR}}"
+LOCAL_ARCHIVE="${LOCAL_ARCHIVE:-/tmp/talia-staging-code-sync.tar.gz}"
+REMOTE_ARCHIVE="${REMOTE_ARCHIVE:-/tmp/talia-staging-code-sync.tar.gz}"
+STAGING_VERIFY_UI_URL="${STAGING_VERIFY_UI_URL:-http://${STAGING_HOST}:${STAGING_UI_PORT:-5173}}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -52,7 +60,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  Deploy to Staging (taliahub.com)${NC}"
+echo -e "${BLUE}  Deploy to Staging (${STAGING_HOST})${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 echo -e "Mode: ${YELLOW}${DEPLOY_MODE}${NC}"
@@ -246,7 +254,7 @@ fi
 
 echo ''
 echo '✅ Deployment complete and verified!'
-echo '🌐 Verify direct staging: http://192.168.1.120:5173'
+echo '🌐 Verify direct staging: ${STAGING_VERIFY_UI_URL}'
 "
 
 if [ "$DRY_RUN" = false ]; then
@@ -255,7 +263,7 @@ if [ "$DRY_RUN" = false ]; then
   echo -e "${GREEN}✅ Deployment successful!${NC}"
   echo ""
   echo -e "${BLUE}Next steps:${NC}"
-  echo "  1. Verify direct staging: http://192.168.1.120:5173"
+  echo "  1. Verify direct staging: ${STAGING_VERIFY_UI_URL}"
   echo "  2. Check logs if needed: ssh ${STAGING_USER}@${STAGING_HOST} 'cd ${STAGING_DIR} && docker compose logs'"
 else
   echo -e "${YELLOW}[DRY RUN] Would execute on staging:${NC}"

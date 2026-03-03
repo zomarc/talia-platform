@@ -33,17 +33,287 @@ if [[ "$HOSTNAME" == "zomarcsvr" ]] || [[ -f /home/zomarc/talia-docker/docker-co
   IS_ON_STAGING=true
 fi
 
+# External target memory (persists across runs)
+TARGET_STATE_FILE="${TARGET_STATE_FILE:-${HOME}/.talia-validate-last-target}"
+
+get_http_code() {
+  local url="$1"
+  curl -sS -o /dev/null -w '%{http_code}' --max-time 4 "$url" 2>/dev/null || echo "000"
+}
+
+get_ui_version() {
+  local base_url="$1"
+  python3 - "$base_url" <<'PY'
+import re
+import sys
+import urllib.request
+
+base = sys.argv[1].rstrip("/")
+try:
+    html = urllib.request.urlopen(f"{base}/", timeout=4).read().decode("utf-8", "ignore")
+except Exception:
+    print("UNREACHABLE")
+    raise SystemExit(0)
+
+asset_match = re.search(r'assets/index-[^"\']+\.js', html)
+if not asset_match:
+    print("NO_ASSET")
+    raise SystemExit(0)
+
+asset = asset_match.group(0)
+try:
+    js = urllib.request.urlopen(f"{base}/{asset}", timeout=4).read().decode("utf-8", "ignore")
+except Exception:
+    print("NO_BUNDLE")
+    raise SystemExit(0)
+
+versions = sorted({int(n) for n in re.findall(r'0\.1\.(\d+)', js)}, reverse=True)
+if versions:
+    print(f"0.1.{versions[0]}")
+else:
+    print("UNKNOWN")
+PY
+}
+
+get_local_source_version() {
+  python3 - "$ROOT_DIR" <<'PY'
+import json
+import os
+import sys
+
+root = sys.argv[1]
+path = os.path.join(root, "talia-ui", "package.json")
+try:
+    with open(path, "r", encoding="utf-8") as f:
+        print(json.load(f).get("version", "UNKNOWN"))
+except Exception:
+    print("UNKNOWN")
+PY
+}
+
+get_display_version() {
+  local url="$1"
+  local version
+  version=$(get_ui_version "$url")
+  if [[ "$version" == "NO_ASSET" && "$url" == "http://127.0.0.1:5173" ]]; then
+    local local_src
+    local_src=$(get_local_source_version)
+    if [[ "$local_src" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      echo "${local_src} (dev)"
+      return 0
+    fi
+  fi
+  echo "$version"
+}
+
+is_supported_target() {
+  case "$1" in
+    local|staging) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+get_target_direct_url() {
+  case "$1" in
+    local) echo "http://127.0.0.1:5173" ;;
+    staging) echo "http://192.168.1.120:5173" ;;
+    *) echo "" ;;
+  esac
+}
+
+get_target_external_state() {
+  local target="$1"
+  case "$target" in
+    local)
+      if pgrep -f "ngrok .*taliahub.com" >/dev/null 2>&1; then
+        echo "active"
+      else
+        echo "inactive"
+      fi
+      ;;
+    staging)
+      if $IS_ON_STAGING; then
+        sudo systemctl is-active ngrok-taliahub 2>/dev/null || echo "inactive"
+      else
+        local status
+        status=$(ssh -o ConnectTimeout=4 -o BatchMode=yes zomarc@192.168.1.120 "sudo systemctl is-active ngrok-taliahub 2>/dev/null || true" 2>/dev/null | head -n 1)
+        [[ -z "$status" ]] && status="unreachable"
+        echo "$status"
+      fi
+      ;;
+    *)
+      echo "unknown"
+      ;;
+  esac
+}
+
+remember_target() {
+  local target="$1"
+  if ! is_supported_target "$target"; then
+    return 1
+  fi
+  printf "%s\n" "$target" > "$TARGET_STATE_FILE"
+}
+
+get_remembered_target() {
+  if [[ ! -f "$TARGET_STATE_FILE" ]]; then
+    echo ""
+    return 0
+  fi
+  local saved
+  saved=$(tr -d '[:space:]' < "$TARGET_STATE_FILE" 2>/dev/null || true)
+  if is_supported_target "$saved"; then
+    echo "$saved"
+  else
+    echo ""
+  fi
+}
+
+get_current_target() {
+  local local_ngrok
+  local staging_ngrok
+  local presenter
+
+  local_ngrok=$(get_target_external_state "local")
+  staging_ngrok=$(get_target_external_state "staging")
+
+  presenter="unknown"
+  if [[ "$local_ngrok" == "active" && "$staging_ngrok" != "active" ]]; then
+    presenter="local"
+  elif [[ "$local_ngrok" != "active" && "$staging_ngrok" == "active" ]]; then
+    presenter="staging"
+  elif [[ "$local_ngrok" == "active" && "$staging_ngrok" == "active" ]]; then
+    presenter="conflict"
+  elif [[ "$local_ngrok" != "active" && "$staging_ngrok" != "active" ]]; then
+    presenter="none"
+  fi
+
+  echo "$presenter"
+}
+
+print_front_page_status() {
+  local local_ui_url="http://127.0.0.1:5173"
+  local staging_ui_url="http://192.168.1.120:5173"
+  local public_url="https://taliahub.com"
+  local local_ui_code
+  local staging_ui_code
+  local public_code
+  local local_ui_version
+  local staging_ui_version
+  local public_version
+  local local_ngrok
+  local staging_ngrok
+  local presenter
+  local target_status
+  local local_status
+  local staging_status
+  local headers
+  local gateway
+  local local_external_label
+  local staging_external_label
+  local remembered_target
+
+  local_ui_code=$(get_http_code "${local_ui_url}/")
+  staging_ui_code=$(get_http_code "${staging_ui_url}/")
+  public_code=$(get_http_code "${public_url}/")
+
+  local_ui_version=$(get_display_version "${local_ui_url}")
+  staging_ui_version=$(get_display_version "${staging_ui_url}")
+  public_version=$(get_ui_version "${public_url}")
+
+  local_ngrok=$(get_target_external_state "local")
+  staging_ngrok=$(get_target_external_state "staging")
+
+  headers=$(curl -sS -I --max-time 6 "${public_url}" 2>/dev/null || true)
+  gateway=$(echo "$headers" | awk -F': ' 'tolower($1)=="x-taliahub-gateway"{gsub("\r","",$2); print $2; exit}')
+  [[ -z "$gateway" ]] && gateway="n/a"
+
+  presenter=$(get_current_target)
+  remembered_target=$(get_remembered_target)
+
+  # Public endpoint may hide/reshape assets; infer version from active presenter when needed.
+  if [[ ! "$public_version" =~ ^0\.1\.[0-9]+$ ]]; then
+    if [[ "$presenter" == "local" ]]; then
+      public_version="${local_ui_version} (via local)"
+    elif [[ "$presenter" == "staging" ]]; then
+      public_version="${staging_ui_version} (via staging)"
+    fi
+  elif [[ "$public_version" =~ ^0\.1\.[0-9]+$ ]]; then
+    public_version="v${public_version}"
+  fi
+
+  if [[ "$public_code" == "200" || "$public_code" == "302" ]]; then
+    target_status="UP"
+  elif [[ "$public_code" == "000" ]]; then
+    target_status="DOWN"
+  else
+    target_status="WARN"
+  fi
+
+  if [[ "$local_ui_code" == "200" || "$local_ui_code" == "302" ]]; then
+    local_status="UP"
+  else
+    local_status="DOWN"
+  fi
+
+  if [[ "$staging_ui_code" == "200" || "$staging_ui_code" == "302" ]]; then
+    staging_status="UP"
+  else
+    staging_status="DOWN"
+  fi
+
+  local_external_label="https://taliahub.com (inactive)"
+  staging_external_label="https://taliahub.com (inactive)"
+  if [[ "$presenter" == "local" ]]; then
+    local_external_label="https://taliahub.com (active)"
+  elif [[ "$presenter" == "staging" ]]; then
+    staging_external_label="https://taliahub.com (active)"
+  elif [[ "$presenter" == "conflict" ]]; then
+    local_external_label="https://taliahub.com (conflict)"
+    staging_external_label="https://taliahub.com (conflict)"
+  fi
+
+  echo -e "  ${BOLD}Front Page Status${NC}"
+  echo -e "  1) taliahub.com target: ${BOLD}${presenter}${NC} (gateway=${gateway})"
+  echo -e "  2) target version: ${public_version}"
+  echo -e "  3) target status: ${target_status} (HTTP ${public_code})"
+  echo -e "  4) local: ${local_status} (HTTP ${local_ui_code}, v${local_ui_version}) | staging: ${staging_status} (HTTP ${staging_ui_code}, v${staging_ui_version})"
+  echo -e "     Remembered target -> ${remembered_target:-none}"
+  echo -e "     Local addresses   -> direct: ${local_ui_url} | external: ${local_external_label}"
+  echo -e "     Staging addresses -> direct: ${staging_ui_url} | external: ${staging_external_label}"
+  echo -e "     External aliases  -> https://taliahub.com | https://celestyal.taliahub.com"
+  echo ""
+}
+
 print_header() {
+  local current_target
+  local current_target_upper
+  local remembered_target
+  local target_color="$YELLOW"
+  current_target=$(get_current_target)
+  current_target_upper=$(echo "$current_target" | tr '[:lower:]' '[:upper:]')
+  remembered_target=$(get_remembered_target)
+  if [[ "$current_target" == "local" ]]; then
+    target_color="$GREEN"
+  elif [[ "$current_target" == "staging" ]]; then
+    target_color="$BLUE"
+  elif [[ "$current_target" == "conflict" ]]; then
+    target_color="$RED"
+  fi
+
   clear
   echo ""
   echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
   echo -e "${CYAN}║${NC}${BOLD}            TALIA VALIDATION MENU                           ${NC}${CYAN}║${NC}"
   echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
   echo ""
+  echo -e "  ${BOLD}Current Target:${NC} ${target_color}${current_target_upper}${NC}"
+  echo -e "  ${DIM}Remembered Target: ${remembered_target:-none}${NC}"
   echo -e "  ${DIM}Host: ${HOSTNAME}${NC}"
   echo -e "  ${DIM}Time: $(date '+%Y-%m-%d %H:%M:%S')${NC}"
   echo -e "  ${DIM}Version: ${SCRIPT_VERSION}${NC}"
   echo ""
+  print_front_page_status
 }
 
 print_menu() {
@@ -55,6 +325,9 @@ print_menu() {
   echo -e "  ${GREEN}3)${NC} Start services"
   echo -e "  ${GREEN}4)${NC} Stop services"
   echo -e "  ${GREEN}5)${NC} Complete check"
+  echo -e "  ${GREEN}6)${NC} Switch target (local/staging)"
+  echo -e "  ${GREEN}7)${NC} Stop External (disable ngrok local+staging)"
+  echo -e "  ${GREEN}8)${NC} Enable External (use remembered target)"
   echo ""
   echo -e "  ${YELLOW}0)${NC} Exit"
   echo ""
@@ -156,7 +429,7 @@ check_local_services() {
   [[ "$gql" == "200" || "$gql" == "400" ]] && echo -e "${GREEN}UP${NC} (HTTP $gql)" || echo -e "${YELLOW}DOWN${NC} (HTTP $gql)"
 
   echo -n "  ngrok (local): "
-  if pgrep -f "ngrok http --url=taliahub.com" >/dev/null 2>&1; then
+  if [[ "$(get_target_external_state local)" == "active" ]]; then
     echo -e "${GREEN}UP${NC}"
   else
     echo -e "${YELLOW}DOWN${NC}"
@@ -171,6 +444,10 @@ check_staging_services_remote() {
   else
     run_script "validate-staging-connectivity.sh"
   fi
+}
+
+print_front_screen_status() {
+  print_front_page_status
 }
 
 start_local_services() {
@@ -278,6 +555,7 @@ complete_check() {
 total_status() {
   echo -e "${BOLD}Total Status:${NC}"
   echo ""
+  print_front_screen_status
   check_local_services
   echo ""
   check_staging_services_remote
@@ -347,16 +625,33 @@ start_ngrok_local() {
   ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo "000")
   [[ "$ui" == "200" ]] && echo -e "${GREEN}OK${NC}" || echo -e "${YELLOW}Not running${NC} (start talia-ui first)"
 
-  if pgrep -f "ngrok http --url=taliahub.com" >/dev/null 2>&1; then
+  if pgrep -f "ngrok .*taliahub.com" >/dev/null 2>&1; then
     echo -e "  ${YELLOW}ngrok already running for taliahub.com${NC}"
   else
     echo -e "  Starting ngrok (taliahub.com → localhost:5173)..."
     nohup ngrok http --url=taliahub.com 5173 >/tmp/ngrok-taliahub.log 2>&1 &
-    sleep 2
+    sleep 1
   fi
 
   echo -e "  Tunnel:"
-  curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"[^"]*"' | head -1 || echo "  Not active"
+  local tunnel_line=""
+  local attempts=0
+  while [[ "$attempts" -lt 6 ]]; do
+    tunnel_line=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"[^"]*"' | head -1 || true)
+    if [[ -n "$tunnel_line" ]]; then
+      break
+    fi
+    attempts=$((attempts + 1))
+    sleep 1
+  done
+  if [[ -n "$tunnel_line" ]]; then
+    echo "  ${tunnel_line}"
+  else
+    echo "  Not active"
+    if [[ -f /tmp/ngrok-taliahub.log ]]; then
+      echo "  See /tmp/ngrok-taliahub.log for details"
+    fi
+  fi
 }
 
 start_ngrok_staging_remote() {
@@ -380,9 +675,9 @@ start_staging_services_remote() {
 }
 
 stop_ngrok_local() {
-  if pgrep -f "ngrok http --url=taliahub.com" >/dev/null 2>&1; then
+  if pgrep -f "ngrok .*taliahub.com" >/dev/null 2>&1; then
     echo -e "  Stopping local ngrok..."
-    pkill -f "ngrok http --url=taliahub.com" 2>/dev/null || true
+    pkill -f "ngrok .*taliahub.com" 2>/dev/null || true
   else
     echo -e "  ${DIM}ngrok not running locally${NC}"
   fi
@@ -463,6 +758,127 @@ stop_external_services() {
       stop_ngrok_staging_remote
       ;;
   esac
+}
+
+start_target_external() {
+  local target="$1"
+  case "$target" in
+    local) start_ngrok_local ;;
+    staging) start_ngrok_staging_remote ;;
+    *) echo -e "${YELLOW}Unknown target: ${target}${NC}"; return 1 ;;
+  esac
+}
+
+stop_target_external() {
+  local target="$1"
+  case "$target" in
+    local) stop_ngrok_local ;;
+    staging) stop_ngrok_staging_remote ;;
+    *) echo -e "${YELLOW}Unknown target: ${target}${NC}"; return 1 ;;
+  esac
+}
+
+apply_target_external() {
+  local target="$1"
+  local candidate
+
+  if ! is_supported_target "$target"; then
+    echo -e "${RED}Invalid target: ${target}${NC}"
+    return 1
+  fi
+
+  # Stop all other targets first, then start selected target.
+  for candidate in local staging; do
+    if [[ "$candidate" != "$target" ]]; then
+      stop_target_external "$candidate"
+    fi
+  done
+  start_target_external "$target"
+}
+
+switch_target() {
+  echo ""
+  echo -e "${BOLD}Switch target:${NC}"
+  echo -e "  ${GREEN}1)${NC} Local (taliahub.com -> local)"
+  echo -e "  ${GREEN}2)${NC} Staging (taliahub.com -> staging)"
+  echo -e "  ${YELLOW}0)${NC} Back"
+  echo ""
+  echo -n -e "${BOLD}Enter target: ${NC}"
+  read -r target
+
+  case "$target" in
+    1|local)
+      echo -e "${CYAN}Switching target to LOCAL...${NC}"
+      remember_target "local" || true
+      apply_target_external "local"
+      ;;
+    2|staging)
+      echo -e "${CYAN}Switching target to STAGING...${NC}"
+      remember_target "staging" || true
+      apply_target_external "staging"
+      ;;
+    0|back|q|quit|exit)
+      return 0
+      ;;
+    *)
+      echo -e "${RED}Invalid target option${NC}"
+      return 1
+      ;;
+  esac
+
+  local new_target
+  local new_target_upper
+  local checks=0
+  while [[ "$checks" -lt 8 ]]; do
+    new_target=$(get_current_target)
+    if [[ "$new_target" != "none" && "$new_target" != "unknown" ]]; then
+      break
+    fi
+    checks=$((checks + 1))
+    sleep 1
+  done
+  new_target_upper=$(echo "$new_target" | tr '[:lower:]' '[:upper:]')
+  echo ""
+  echo -e "${BOLD}Current target is now:${NC} ${GREEN}${new_target_upper}${NC}"
+}
+
+stop_external_everywhere() {
+  echo -e "${CYAN}Stopping external access everywhere (local + staging)...${NC}"
+  stop_target_external "local"
+  stop_target_external "staging"
+  echo ""
+  local remembered_target
+  remembered_target=$(get_remembered_target)
+  echo -e "${BOLD}External interface status:${NC} ${YELLOW}OFFLINE${NC} (no local/staging ngrok target)"
+  echo -e "${DIM}Remembered target preserved: ${remembered_target:-none}${NC}"
+}
+
+enable_remembered_target_external() {
+  local remembered_target
+  local current_target
+  remembered_target=$(get_remembered_target)
+  current_target=$(get_current_target)
+
+  if [[ -z "$remembered_target" ]]; then
+    if is_supported_target "$current_target"; then
+      remembered_target="$current_target"
+      remember_target "$remembered_target" || true
+    else
+      echo -e "${YELLOW}No remembered target found.${NC}"
+      echo -e "${YELLOW}Use option 6 to select local or staging first.${NC}"
+      return 1
+    fi
+  fi
+
+  echo -e "${CYAN}Enabling external access on remembered target: ${remembered_target}${NC}"
+  apply_target_external "$remembered_target"
+
+  local new_target
+  local new_target_upper
+  new_target=$(get_current_target)
+  new_target_upper=$(echo "$new_target" | tr '[:lower:]' '[:upper:]')
+  echo ""
+  echo -e "${BOLD}Current target after enable:${NC} ${GREEN}${new_target_upper}${NC}"
 }
 
 check_duplicate_dev_servers() {
@@ -990,6 +1406,15 @@ handle_remote_menu() {
       target=$(prompt_target)
       [[ "$target" == "back" || "$target" == "invalid" ]] && return 1
       complete_check "$target"
+      ;;
+    6|switch|target|switch-target)
+      switch_target
+      ;;
+    7|stop-external|external-off|offline)
+      stop_external_everywhere
+      ;;
+    8|enable-external|external-on|restart-external|external-restart|bounce-external)
+      enable_remembered_target_external
       ;;
     0|q|quit|exit)
       echo -e "${GREEN}Goodbye!${NC}"

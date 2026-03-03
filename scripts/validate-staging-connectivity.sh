@@ -16,10 +16,14 @@ SCRIPT_VERSION="2026-01-30.1"
 STAGING_USER="${STAGING_USER:-zomarc}"
 STAGING_HOST="${STAGING_HOST:-192.168.1.120}"
 STAGING_DIR="${STAGING_DIR:-/home/${STAGING_USER}/talia-docker}"
+LOCAL_UI_URL="${LOCAL_UI_URL:-http://localhost:5173}"
+STAGING_UI_URL="${STAGING_UI_URL:-http://${STAGING_HOST}:5173}"
 
 NGROK_USER="${NGROK_USER:-talia}"
 NGROK_PASS="${NGROK_PASS:-dev2025tal}"
 NGROK_URL="${NGROK_URL:-https://taliahub.com}"
+NGROK_DOMAIN="${NGROK_URL#https://}"
+NGROK_DOMAIN="${NGROK_DOMAIN#http://}"
 
 EXPECTED_VPN_IP="149.40.48.92"
 TEST_AZURE=false
@@ -59,17 +63,130 @@ check_status() {
   
   if [[ "$status" == "OK" ]]; then
     echo -e "${GREEN}[OK]${NC}   ${label}${details:+ - $details}"
-    return 0
   elif [[ "$status" == "WARN" ]]; then
     echo -e "${YELLOW}[WARN]${NC} ${label}${details:+ - $details}"
     ((ISSUES++)) || true
-    return 1
   else
     echo -e "${RED}[FAIL]${NC} ${label}${details:+ - $details}"
     ((ISSUES++)) || true
-    return 1
   fi
+  return 0
 }
+
+print_info() {
+  local label="$1"
+  local value="$2"
+  echo -e "${BLUE}[INFO]${NC} ${label}: ${value}"
+}
+
+get_ui_version() {
+  local base_url="$1"
+  python3 - "$base_url" <<'PY'
+import re
+import sys
+import urllib.request
+import urllib.error
+
+base = sys.argv[1].rstrip("/")
+index_url = f"{base}/"
+try:
+    html = urllib.request.urlopen(index_url, timeout=5).read().decode("utf-8", "ignore")
+except Exception:
+    print("UNREACHABLE")
+    raise SystemExit(0)
+
+asset_match = re.search(r'assets/index-[^"\']+\.js', html)
+if not asset_match:
+    print("NO_ASSET")
+    raise SystemExit(0)
+
+asset = asset_match.group(0)
+try:
+    js = urllib.request.urlopen(f"{base}/{asset}", timeout=5).read().decode("utf-8", "ignore")
+except Exception:
+    print("NO_BUNDLE")
+    raise SystemExit(0)
+
+versions = sorted(
+    {int(n) for n in re.findall(r'0\.1\.(\d+)', js)},
+    reverse=True
+)
+if versions:
+    print(f"0.1.{versions[0]}")
+else:
+    print("UNKNOWN")
+PY
+}
+
+get_local_source_version() {
+  python3 - "$ROOT_DIR" <<'PY'
+import json
+import os
+import sys
+
+root = sys.argv[1]
+path = os.path.join(root, "talia-ui", "package.json")
+try:
+    with open(path, "r", encoding="utf-8") as f:
+        print(json.load(f).get("version", "UNKNOWN"))
+except Exception:
+    print("UNKNOWN")
+PY
+}
+
+http_code() {
+  local url="$1"
+  curl -sS -o /dev/null -w '%{http_code}' --max-time 6 "${url}" 2>/dev/null || echo "000"
+}
+
+echo -e "${BLUE}=== Front Screen Status ===${NC}"
+LOCAL_UI_CODE_FRONT=$(http_code "${LOCAL_UI_URL}/")
+STAGING_UI_CODE_FRONT=$(http_code "${STAGING_UI_URL}/")
+LOCAL_UI_VERSION_FRONT=$(get_ui_version "${LOCAL_UI_URL}")
+STAGING_UI_VERSION_FRONT=$(get_ui_version "${STAGING_UI_URL}")
+LOCAL_SOURCE_VERSION_FRONT=$(get_local_source_version)
+
+if [[ "$LOCAL_UI_VERSION_FRONT" == "NO_ASSET" ]] && [[ "$LOCAL_SOURCE_VERSION_FRONT" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  LOCAL_UI_VERSION_FRONT="${LOCAL_SOURCE_VERSION_FRONT} (dev)"
+fi
+
+LOCAL_NGROK_PROC=$(pgrep -af "ngrok .*${NGROK_DOMAIN}" 2>/dev/null | head -n 1 || true)
+if [[ -n "$LOCAL_NGROK_PROC" ]]; then
+  LOCAL_NGROK_STATUS="active"
+else
+  LOCAL_NGROK_STATUS="inactive"
+fi
+
+STAGING_NGROK_STATUS_FRONT=$(ssh "${STAGING_USER}@${STAGING_HOST}" "sudo systemctl is-active ngrok-taliahub 2>/dev/null || true" 2>/dev/null | head -n 1 || true)
+if [[ -z "$STAGING_NGROK_STATUS_FRONT" ]]; then STAGING_NGROK_STATUS_FRONT="unreachable"; fi
+TALIAHUB_HEADERS=$(curl -sS -I --max-time 10 "${NGROK_URL}" 2>/dev/null || true)
+TALIAHUB_CODE=$(printf "%s\n" "$TALIAHUB_HEADERS" | awk 'tolower($1) ~ /^http/{print $2; exit}')
+if [[ -z "$TALIAHUB_CODE" ]]; then TALIAHUB_CODE="000"; fi
+TALIAHUB_GATEWAY=$(printf "%s\n" "$TALIAHUB_HEADERS" | awk -F': ' 'tolower($1)=="x-taliahub-gateway"{gsub("\r","",$2); print $2; exit}')
+if [[ -z "$TALIAHUB_GATEWAY" ]]; then TALIAHUB_GATEWAY="n/a"; fi
+
+PRESENTER_STATUS="unknown"
+if [[ "$LOCAL_NGROK_STATUS" == "active" && "$STAGING_NGROK_STATUS_FRONT" != "active" ]]; then
+  PRESENTER_STATUS="local"
+elif [[ "$LOCAL_NGROK_STATUS" != "active" && "$STAGING_NGROK_STATUS_FRONT" == "active" ]]; then
+  PRESENTER_STATUS="staging"
+elif [[ "$LOCAL_NGROK_STATUS" == "active" && "$STAGING_NGROK_STATUS_FRONT" == "active" ]]; then
+  PRESENTER_STATUS="conflict"
+elif [[ "$LOCAL_NGROK_STATUS" != "active" && "$STAGING_NGROK_STATUS_FRONT" != "active" ]]; then
+  PRESENTER_STATUS="none"
+fi
+
+print_info "Local UI" "${LOCAL_UI_URL} (HTTP ${LOCAL_UI_CODE_FRONT}, version ${LOCAL_UI_VERSION_FRONT})"
+print_info "Staging UI" "${STAGING_UI_URL} (HTTP ${STAGING_UI_CODE_FRONT}, version ${STAGING_UI_VERSION_FRONT})"
+print_info "Local ngrok (${NGROK_DOMAIN})" "${LOCAL_NGROK_STATUS}"
+print_info "Staging ngrok service" "${STAGING_NGROK_STATUS_FRONT}"
+print_info "Public ${NGROK_URL}" "HTTP ${TALIAHUB_CODE}, gateway ${TALIAHUB_GATEWAY}"
+print_info "Current presenter via ngrok" "${PRESENTER_STATUS}"
+echo ""
+echo "Quick switch:"
+echo "  -> Present LOCAL:   run local ngrok, stop staging ngrok"
+echo "  -> Present STAGING: stop local ngrok, start staging ngrok"
+echo ""
 
 echo -e "${BLUE}=== VPN Connection ===${NC}"
 
@@ -105,7 +222,8 @@ echo ""
 echo -e "${BLUE}=== ngrok Tunnel ===${NC}"
 
 # Check ngrok service status
-NGROK_STATUS=$(ssh "${STAGING_USER}@${STAGING_HOST}" "sudo systemctl is-active ngrok-taliahub 2>/dev/null || echo 'inactive'" 2>/dev/null || echo "unreachable")
+NGROK_STATUS=$(ssh "${STAGING_USER}@${STAGING_HOST}" "sudo systemctl is-active ngrok-taliahub 2>/dev/null || true" 2>/dev/null | head -n 1 || true)
+if [[ -z "$NGROK_STATUS" ]]; then NGROK_STATUS="unreachable"; fi
 if [[ "$NGROK_STATUS" == "active" ]]; then
   check_status "ngrok service" "OK" "running"
 else
@@ -244,6 +362,40 @@ if [[ -z "$extra_services" ]]; then
   check_status "Unexpected services" "OK" "none"
 else
   check_status "Unexpected services" "WARN" "extra: ${extra_services}"
+fi
+
+echo ""
+echo -e "${BLUE}=== UI Endpoints & Versions ===${NC}"
+
+LOCAL_UI_CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "${LOCAL_UI_URL}/" 2>/dev/null || echo "000")
+LOCAL_UI_VERSION=$(get_ui_version "${LOCAL_UI_URL}")
+if [[ "$LOCAL_UI_CODE" == "200" ]]; then
+  if [[ "$LOCAL_UI_VERSION" == "NO_ASSET" ]]; then
+    LOCAL_SOURCE_VERSION=$(get_local_source_version)
+    if [[ "$LOCAL_SOURCE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      check_status "Local UI health" "OK" "reachable, v${LOCAL_SOURCE_VERSION} (dev server)"
+    else
+      check_status "Local UI health" "WARN" "reachable, dev server (source version unknown)"
+    fi
+  elif [[ "$LOCAL_UI_VERSION" =~ ^0\.1\.[0-9]+$ ]]; then
+    check_status "Local UI health" "OK" "reachable, v${LOCAL_UI_VERSION}"
+  else
+    check_status "Local UI health" "WARN" "reachable, version=${LOCAL_UI_VERSION}"
+  fi
+else
+  check_status "Local UI health" "FAIL" "not reachable (HTTP ${LOCAL_UI_CODE})"
+fi
+
+STAGING_UI_CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "${STAGING_UI_URL}/" 2>/dev/null || echo "000")
+STAGING_UI_VERSION=$(get_ui_version "${STAGING_UI_URL}")
+if [[ "$STAGING_UI_CODE" == "200" ]]; then
+  if [[ "$STAGING_UI_VERSION" =~ ^0\.1\.[0-9]+$ ]]; then
+    check_status "Staging UI health" "OK" "reachable, v${STAGING_UI_VERSION}"
+  else
+    check_status "Staging UI health" "WARN" "reachable, version=${STAGING_UI_VERSION}"
+  fi
+else
+  check_status "Staging UI health" "FAIL" "not reachable (HTTP ${STAGING_UI_CODE})"
 fi
 
 echo ""

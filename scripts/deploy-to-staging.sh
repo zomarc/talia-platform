@@ -125,6 +125,9 @@ else
   docker compose -f docker-compose.staging.yml up -d graphql-server ui
 fi
 
+echo '🗄️ Running schema guard (apply + verify required tables)...'
+bash ./scripts/staging-db-guard.sh
+
 echo '⏳ Waiting for services to be healthy...'
 sleep 10
 
@@ -169,6 +172,16 @@ if [ \"\$table_count\" -gt \"0\" ]; then
   echo \"✅ OK (\$table_count tables)\"
 else
   echo '❌ FAILED - No tables returned'
+  exit 1
+fi
+
+# Test required schema tables for ship tracker/inventory memo features
+echo -n '  Testing required tables (inventory_item, inventory_item_memo)... '
+required_tables_check=\$(docker compose -f docker-compose.staging.yml exec -T supabase-db psql -U postgres -d postgres -tAc \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('inventory_item','inventory_item_memo');\" | tr -d '[:space:]')
+if [ \"\$required_tables_check\" = \"2\" ]; then
+  echo '✅ OK'
+else
+  echo \"❌ FAILED - Required tables missing (found \$required_tables_check/2)\"
   exit 1
 fi
 

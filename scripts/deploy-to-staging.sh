@@ -1,14 +1,17 @@
 #!/bin/bash
 # Deploy Talia Platform from local to staging environment
-# Usage: ./scripts/deploy-to-staging.sh [--code-only|--full|--dry-run]
+# Default mode is local sync (no git push/pull).
+# Usage: ./scripts/deploy-to-staging.sh [--code-only|--full|--dry-run|--git-sync]
 
-set -e
+set -euo pipefail
 
 # Configuration
 STAGING_USER="zomarc"
 STAGING_HOST="192.168.1.120"
 STAGING_DIR="~/talia-docker"
 STAGING_GIT_DIR="~/talia-docker"
+LOCAL_ARCHIVE="/tmp/talia-staging-code-sync.tar.gz"
+REMOTE_ARCHIVE="/tmp/talia-staging-code-sync.tar.gz"
 
 # Colors for output
 RED='\033[0;31m'
@@ -20,6 +23,7 @@ NC='\033[0m' # No Color
 # Parse arguments
 DEPLOY_MODE="code-only"
 DRY_RUN=false
+SYNC_MODE="local"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -35,9 +39,13 @@ while [[ $# -gt 0 ]]; do
       DRY_RUN=true
       shift
       ;;
+    --git-sync)
+      SYNC_MODE="git"
+      shift
+      ;;
     *)
       echo -e "${RED}Unknown option: $1${NC}"
-      echo "Usage: $0 [--code-only|--full|--dry-run]"
+      echo "Usage: $0 [--code-only|--full|--dry-run|--git-sync]"
       exit 1
       ;;
   esac
@@ -48,6 +56,7 @@ echo -e "${BLUE}  Deploy to Staging (taliahub.com)${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 echo -e "Mode: ${YELLOW}${DEPLOY_MODE}${NC}"
+echo -e "Sync: ${YELLOW}${SYNC_MODE}${NC} (default: local)"
 if [ "$DRY_RUN" = true ]; then
   echo -e "Dry Run: ${YELLOW}YES${NC}"
 fi
@@ -59,34 +68,36 @@ if [ ! -f "package.json" ] || [ ! -d "talia-ui" ] || [ ! -d "talia-server" ]; th
   exit 1
 fi
 
-# Check git status
-echo -e "${BLUE}📋 Checking git status...${NC}"
-if [ -n "$(git status --porcelain)" ]; then
-  echo -e "${YELLOW}⚠️  You have uncommitted changes${NC}"
-  echo ""
-  read -p "Do you want to commit them now? (y/n) " -n 1 -r
-  echo
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-    read -p "Commit message: " COMMIT_MSG
-    if [ -z "$COMMIT_MSG" ]; then
-      COMMIT_MSG="chore: deploy to staging"
+if [ "$SYNC_MODE" = "git" ]; then
+  echo -e "${BLUE}📋 Checking git status...${NC}"
+  if [ -n "$(git status --porcelain)" ]; then
+    echo -e "${YELLOW}⚠️  You have uncommitted changes${NC}"
+    echo ""
+    read -p "Do you want to commit them now? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      read -p "Commit message: " COMMIT_MSG
+      if [ -z "$COMMIT_MSG" ]; then
+        COMMIT_MSG="chore: deploy to staging"
+      fi
+      git add .
+      git commit -m "$COMMIT_MSG"
+      echo -e "${GREEN}✅ Changes committed${NC}"
+    else
+      echo -e "${YELLOW}⚠️  Proceeding with uncommitted changes${NC}"
     fi
-    git add .
-    git commit -m "$COMMIT_MSG"
-    echo -e "${GREEN}✅ Changes committed${NC}"
-  else
-    echo -e "${YELLOW}⚠️  Proceeding with uncommitted changes${NC}"
   fi
-fi
 
-# Push to git
-echo ""
-echo -e "${BLUE}📤 Pushing to git...${NC}"
-if [ "$DRY_RUN" = false ]; then
-  git push
-  echo -e "${GREEN}✅ Code pushed to git${NC}"
+  echo ""
+  echo -e "${BLUE}📤 Pushing to git...${NC}"
+  if [ "$DRY_RUN" = false ]; then
+    git push
+    echo -e "${GREEN}✅ Code pushed to git${NC}"
+  else
+    echo -e "${YELLOW}[DRY RUN] Would run: git push${NC}"
+  fi
 else
-  echo -e "${YELLOW}[DRY RUN] Would run: git push${NC}"
+  echo -e "${BLUE}📦 Local sync mode selected (no git push/pull).${NC}"
 fi
 
 # Deploy to staging
@@ -100,14 +111,42 @@ if [ "$DEPLOY_MODE" = "full" ]; then
   echo ""
 fi
 
-# SSH to staging and pull/restart
+# Local sync package transfer (default mode)
+if [ "$SYNC_MODE" = "local" ]; then
+  echo ""
+  echo -e "${BLUE}📦 Preparing local code archive for staging...${NC}"
+  if [ "$DRY_RUN" = false ]; then
+    tar -czf "$LOCAL_ARCHIVE" \
+      --exclude='.git' \
+      --exclude='talia-ui/node_modules' \
+      --exclude='talia-server/node_modules' \
+      --exclude='talia-ui/dist' \
+      --exclude='talia-server/dist' \
+      --exclude='.DS_Store' \
+      docker-compose.staging.yml talia-ui talia-server scripts supabase
+    scp "$LOCAL_ARCHIVE" "${STAGING_USER}@${STAGING_HOST}:${REMOTE_ARCHIVE}"
+    rm -f "$LOCAL_ARCHIVE"
+    echo -e "${GREEN}✅ Local code archive copied to staging${NC}"
+  else
+    echo -e "${YELLOW}[DRY RUN] Would create and copy archive: ${LOCAL_ARCHIVE}${NC}"
+  fi
+fi
+
+# SSH to staging and deploy
 DEPLOY_SCRIPT="
 set -e
+mkdir -p $STAGING_GIT_DIR
 cd $STAGING_GIT_DIR
 
-echo '📥 Pulling latest code...'
-git fetch origin
-git reset --hard origin/main
+if [ \"$SYNC_MODE\" = \"git\" ]; then
+  echo '📥 Pulling latest code from git...'
+  git fetch origin
+  git reset --hard origin/main
+else
+  echo '📦 Extracting local code archive...'
+  tar -xzf $REMOTE_ARCHIVE -C .
+  rm -f $REMOTE_ARCHIVE
+fi
 
 if [ \"$DEPLOY_MODE\" = \"full\" ]; then
   echo '🐳 Rebuilding Docker containers...'
@@ -207,7 +246,7 @@ fi
 
 echo ''
 echo '✅ Deployment complete and verified!'
-echo '🌐 Verify at: https://taliahub.com'
+echo '🌐 Verify direct staging: http://192.168.1.120:5173'
 "
 
 if [ "$DRY_RUN" = false ]; then
@@ -216,7 +255,7 @@ if [ "$DRY_RUN" = false ]; then
   echo -e "${GREEN}✅ Deployment successful!${NC}"
   echo ""
   echo -e "${BLUE}Next steps:${NC}"
-  echo "  1. Verify staging: https://taliahub.com"
+  echo "  1. Verify direct staging: http://192.168.1.120:5173"
   echo "  2. Check logs if needed: ssh ${STAGING_USER}@${STAGING_HOST} 'cd ${STAGING_DIR} && docker compose logs'"
 else
   echo -e "${YELLOW}[DRY RUN] Would execute on staging:${NC}"

@@ -149,6 +149,107 @@
   width: 100%;
 }
 
+/* Dockview-supported custom tab renderer styles */
+.dashboard-dockview .talia-dv-tab {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.dashboard-dockview .talia-dv-tab .dv-default-tab {
+  flex: 1;
+  min-width: 0;
+}
+
+.dashboard-dockview .talia-dv-tab__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+  position: relative;
+}
+
+.dashboard-dockview .talia-dv-tab__button {
+  border: 1px solid var(--theme-border-light, rgba(0, 0, 0, 0.16));
+  background: transparent;
+  color: inherit;
+  border-radius: 4px;
+  font-size: inherit;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.dashboard-dockview .talia-dv-tab__button:hover {
+  background: var(--theme-glass-hover, rgba(0, 0, 0, 0.06));
+}
+
+.dashboard-dockview .talia-dv-tab__button--primary {
+  min-width: 24px;
+  padding: 2px 0;
+  font-weight: 700;
+}
+
+.dashboard-dockview .talia-dv-tab__button--layout {
+  min-width: 20px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
+.dashboard-dockview .talia-dv-tab__button--details {
+  min-width: 20px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
+.dashboard-dockview .talia-dv-tab__button--refresh {
+  min-width: 20px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
+.dashboard-dockview .talia-dv-tab__inline-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 2px;
+}
+
+.dashboard-dockview .talia-dv-tab__confirm-btn {
+  border: 1px solid var(--theme-border-light, rgba(255, 255, 255, 0.24));
+  background: transparent;
+  color: inherit;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.dashboard-dockview .talia-dv-tab__confirm-btn:hover {
+  background: var(--theme-glass-hover, rgba(255, 255, 255, 0.08));
+}
+
+.dashboard-dockview .talia-dv-tab__confirm-btn--danger {
+  border-color: #b83b3b;
+  color: #ff8e8e;
+}
+
 .dashboard-resize-handle {
   width: var(--dashboard-resize-handle-width);
   height: 100%;

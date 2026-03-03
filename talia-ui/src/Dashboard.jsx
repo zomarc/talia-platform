@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useEffect, useState } from "react";
-import { DockviewReact } from "dockview";
+import { DockviewReact, DockviewDefaultTab } from "dockview";
 import "dockview/dist/styles/dockview.css"; // required Dockview CSS
 import reportRegistry from "./components/focus-panels/registry";
 import ReportEventMeta from "./components/shared/ReportEventMeta";
@@ -31,6 +31,22 @@ const debugLog = (message, data = null) => {
 };
 
 const REPORT_REFRESH_EVENT = 'talia:report.refresh';
+const REPORT_TOGGLE_DETAILS_EVENT = 'talia:report.toggleDetails';
+const DOCKVIEW_MAXIMIZE_STATE_EVENT = 'talia:dockview.maximizeStateChanged';
+
+const toggleDockviewPanelLayout = (panelApi, dockviewApi) => {
+  if (!panelApi) return;
+  const currentlyMaximized = panelApi?.isMaximized?.() ?? false;
+  if (currentlyMaximized) {
+    panelApi?.exitMaximized?.();
+    dockviewApi?.exitMaximizedGroup?.();
+    return;
+  }
+  if (dockviewApi?.hasMaximizedGroup?.()) {
+    dockviewApi?.exitMaximizedGroup?.();
+  }
+  panelApi?.maximize?.();
+};
 
 const deriveReportSources = (report) => {
   if (Array.isArray(report?.dataSources) && report.dataSources.length) {
@@ -42,42 +58,183 @@ const deriveReportSources = (report) => {
   return [];
 };
 
-const ReportShell = ({ report, children }) => {
+const ReportShell = ({ report, panelInstanceId, children }) => {
   const emits = report?.events?.emits || [];
   const respondsTo = report?.events?.respondsTo || [];
   const sources = deriveReportSources(report);
   const [showDetails, setShowDetails] = useState(false);
-  const supportsRefresh = report?.supportsRefresh;
 
-  const handleRefresh = () => {
-    if (!report?.panelId) return;
-    window.dispatchEvent(new CustomEvent(REPORT_REFRESH_EVENT, { detail: { panelId: report.panelId } }));
-  };
+  useEffect(() => {
+    const handleToggleDetails = (event) => {
+      const requestedPanelId = event?.detail?.panelId;
+      if (!requestedPanelId) return;
+      if (requestedPanelId !== panelInstanceId && requestedPanelId !== report?.panelId) return;
+      setShowDetails((prev) => !prev);
+    };
+    window.addEventListener(REPORT_TOGGLE_DETAILS_EVENT, handleToggleDetails);
+    return () => window.removeEventListener(REPORT_TOGGLE_DETAILS_EVENT, handleToggleDetails);
+  }, [panelInstanceId, report?.panelId]);
 
   return (
     <div className="talia-report-shell">
-      <div className="talia-report-shell__header">
-        <div className="talia-report-shell__header-actions">
-          {supportsRefresh && (
-            <button type="button" className="talia-btn talia-btn--small" onClick={handleRefresh}>
-              Refresh
-            </button>
-          )}
-        </div>
-        <button
-          type="button"
-          className={`talia-btn talia-btn--small ${showDetails ? 'talia-btn--active' : ''}`}
-          onClick={() => setShowDetails((prev) => !prev)}
-          aria-pressed={showDetails}
-          title="Show event contract"
-        >
-          Details
-        </button>
-      </div>
       {showDetails && (
         <ReportEventMeta emits={emits} respondsTo={respondsTo} sources={sources} />
       )}
       <div className="talia-report-shell__content">{children}</div>
+    </div>
+  );
+};
+
+const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, maximizeStateToken, ...props }) => {
+  const panelApi = props?.api;
+  const panelId = panelApi?.id;
+  const panelComponent = panelApi?.component;
+  const isReportTab = !!panelComponent && reportPanelIds?.has?.(panelComponent);
+  const isRefreshableTab = !!panelComponent && refreshableReportPanelIds?.has?.(panelComponent);
+  const [isMaximized, setIsMaximized] = React.useState(() => panelApi?.isMaximized?.() ?? false);
+  const layoutGlyph = isMaximized ? "↙" : "↗";
+  const layoutTitle = isMaximized ? "Return to layout" : "Expand panel";
+  const [showCloseConfirm, setShowCloseConfirm] = React.useState(false);
+
+  const syncMaximizedState = React.useCallback(() => {
+    setIsMaximized(panelApi?.isMaximized?.() ?? false);
+  }, [panelApi]);
+
+  // Keep tab icon/tooltip synced with Dockview maximize state.
+  React.useEffect(() => {
+    syncMaximizedState();
+  }, [syncMaximizedState, maximizeStateToken]);
+
+  React.useEffect(() => {
+    const handleMaximizeStateChanged = () => syncMaximizedState();
+    window.addEventListener(DOCKVIEW_MAXIMIZE_STATE_EVENT, handleMaximizeStateChanged);
+    return () => {
+      window.removeEventListener(DOCKVIEW_MAXIMIZE_STATE_EVENT, handleMaximizeStateChanged);
+    };
+  }, [syncMaximizedState]);
+  React.useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setShowCloseConfirm(false);
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, []);
+
+  const handlePrimaryAction = (event) => {
+    event.stopPropagation();
+    setShowCloseConfirm((prev) => !prev);
+  };
+
+  const handleLayoutToggle = (event) => {
+    event.stopPropagation();
+    setShowCloseConfirm(false);
+    toggleDockviewPanelLayout(panelApi, window.dockviewApi);
+    setIsMaximized(panelApi?.isMaximized?.() ?? false);
+    window.dispatchEvent(new CustomEvent(DOCKVIEW_MAXIMIZE_STATE_EVENT));
+    window.requestAnimationFrame(syncMaximizedState);
+  };
+
+  const handleConfirmClose = (event) => {
+    event.stopPropagation();
+    setShowCloseConfirm(false);
+    panelApi?.close?.();
+  };
+
+  const handleCancelClose = (event) => {
+    event.stopPropagation();
+    setShowCloseConfirm(false);
+  };
+
+  const handleToggleDetails = (event) => {
+    event.stopPropagation();
+    if (!panelId) return;
+    window.dispatchEvent(
+      new CustomEvent(REPORT_TOGGLE_DETAILS_EVENT, {
+        detail: { panelId, panelComponent },
+      })
+    );
+  };
+
+  const handleRefresh = (event) => {
+    event.stopPropagation();
+    const refreshPanelId = panelComponent;
+    if (!refreshPanelId) return;
+    window.dispatchEvent(
+      new CustomEvent(REPORT_REFRESH_EVENT, {
+        detail: { panelId: refreshPanelId, panelInstanceId: panelId, panelComponent: panelComponent },
+      })
+    );
+  };
+
+  return (
+    <div className="talia-dv-tab">
+      <DockviewDefaultTab {...props} hideClose />
+      <div className="talia-dv-tab__actions">
+        {isRefreshableTab && (
+          <button
+            type="button"
+            className="talia-dv-tab__button talia-dv-tab__button--refresh"
+            title="Refresh panel"
+            aria-label="Refresh panel"
+            onClick={handleRefresh}
+          >
+            ↻
+          </button>
+        )}
+        {isReportTab && (
+          <button
+            type="button"
+            className="talia-dv-tab__button talia-dv-tab__button--details"
+            title="Toggle details"
+            aria-label="Toggle details"
+            onClick={handleToggleDetails}
+          >
+            ⓘ
+          </button>
+        )}
+        <button
+          type="button"
+          className="talia-dv-tab__button talia-dv-tab__button--layout"
+          title={layoutTitle}
+          aria-label={layoutTitle}
+          onClick={handleLayoutToggle}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          {layoutGlyph}
+        </button>
+        <button
+          type="button"
+          className="talia-dv-tab__button talia-dv-tab__button--primary"
+          title="Close tab"
+          aria-label="Close tab"
+          onClick={handlePrimaryAction}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          X
+        </button>
+        {showCloseConfirm && (
+          <div className="talia-dv-tab__inline-confirm" role="group" aria-label="Confirm close panel">
+            <button
+              type="button"
+              className="talia-dv-tab__confirm-btn talia-dv-tab__confirm-btn--danger"
+              onClick={handleConfirmClose}
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              className="talia-dv-tab__confirm-btn"
+              onClick={handleCancelClose}
+            >
+              No
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -1231,7 +1388,10 @@ function Dashboard({ user }) {
       }
       const Component = report.component;
       map[report.panelId] = (props) => (
-        <ReportShell report={report}>
+        <ReportShell
+          report={report}
+          panelInstanceId={props?.api?.id || props?.params?.panel?.id || report.panelId}
+        >
           <Component theme={theme} {...props} />
         </ReportShell>
       );
@@ -1328,7 +1488,22 @@ function Dashboard({ user }) {
 
   const apiRef = useRef(null);
   const shellRef = useRef(null);
+  const dockviewHostRef = useRef(null);
   const initializedRef = useRef(false); // guard for React 18 StrictMode
+  const [isGroupMaximized, setIsGroupMaximized] = useState(false);
+  const reportPanelIds = React.useMemo(
+    () => new Set(Object.values(reportRegistry).map((report) => report.panelId).filter(Boolean)),
+    []
+  );
+  const refreshableReportPanelIds = React.useMemo(
+    () =>
+      new Set(
+        Object.values(reportRegistry)
+          .filter((report) => report.panelId && report.supportsRefresh)
+          .map((report) => report.panelId)
+      ),
+    []
+  );
 
   // Sidebar state
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
@@ -1748,6 +1923,46 @@ function Dashboard({ user }) {
 
   // REMOVED: Manual layout triggering - let Dockview handle sidebar changes naturally
 
+  const toggleActivePanelMaximize = useCallback(() => {
+    const api = apiRef.current;
+    const activePanel = api?.activePanel;
+    const panelApi = activePanel?.api;
+    if (!panelApi) return;
+    // Use the exact same maximize/restore path as the tab layout button.
+    toggleDockviewPanelLayout(panelApi, api);
+    setIsGroupMaximized(typeof api?.hasMaximizedGroup === 'function' ? api.hasMaximizedGroup() : false);
+    window.dispatchEvent(new CustomEvent(DOCKVIEW_MAXIMIZE_STATE_EVENT));
+  }, []);
+
+  React.useEffect(() => {
+    const host = dockviewHostRef.current;
+    if (!host) return;
+
+    const onDoubleClick = (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('.talia-dv-tab__actions')) return;
+      const tabHeader = target.closest('.dv-tab');
+      if (!tabHeader) return;
+      toggleActivePanelMaximize();
+    };
+
+    host.addEventListener('dblclick', onDoubleClick);
+    return () => host.removeEventListener('dblclick', onDoubleClick);
+  }, [toggleActivePanelMaximize]);
+
+  const defaultTabComponent = useCallback(
+    (props) => (
+      <TaliaDockviewTab
+        {...props}
+        reportPanelIds={reportPanelIds}
+        refreshableReportPanelIds={refreshableReportPanelIds}
+        maximizeStateToken={isGroupMaximized}
+      />
+    ),
+    [reportPanelIds, refreshableReportPanelIds, isGroupMaximized]
+  );
+
   const onReady = useCallback((event) => {
     debugLog('Dockview onReady called');
     if (initializedRef.current) {
@@ -1848,6 +2063,17 @@ function Dashboard({ user }) {
     api.onDidMovePanel(() => {
       console.log('Panel moved - letting Dockview handle layout');
     });
+
+    if (typeof api.onDidMaximizedGroupChange === 'function') {
+      api.onDidMaximizedGroupChange(() => {
+        const maximized = typeof api.hasMaximizedGroup === 'function' ? api.hasMaximizedGroup() : false;
+        setIsGroupMaximized(maximized);
+        window.dispatchEvent(new CustomEvent(DOCKVIEW_MAXIMIZE_STATE_EVENT));
+      });
+    }
+
+    setIsGroupMaximized(typeof api.hasMaximizedGroup === 'function' ? api.hasMaximizedGroup() : false);
+    window.dispatchEvent(new CustomEvent(DOCKVIEW_MAXIMIZE_STATE_EVENT));
     
     // Let Dockview handle all layout and rendering naturally
     // No MutationObserver or DOM manipulation needed
@@ -1983,7 +2209,7 @@ function Dashboard({ user }) {
       {/* Status Bar is now at top level (main.jsx) - not rendered here */}
       {/* DevRoleSelector is now in ModeSelector dropdown */}
       <div 
-      className={`dashboard-shell dockview-theme-${theme.name.toLowerCase().replace(' ', '-')}`} 
+      className={`dashboard-shell dockview-theme-${theme.name.toLowerCase().replace(' ', '-')} ${isGroupMaximized ? 'dashboard-shell--maximized' : ''}`} 
       ref={shellRef}
     >
       {/* Top Toolbar */}
@@ -2034,7 +2260,7 @@ function Dashboard({ user }) {
         )}
         
         {/* Dockview container with flex: 1 to fill remaining space */}
-        <div className="dashboard-content">
+        <div className="dashboard-content" ref={dockviewHostRef}>
           <DockviewReact 
             components={{ 
               panel: InfoPanel, 
@@ -2050,6 +2276,7 @@ function Dashboard({ user }) {
               "talia-user-table": TaliaUserTable,
               "context-row-monitor": ContextRowMonitor
             }} 
+            defaultTabComponent={defaultTabComponent}
             onReady={onReady}
             className="dashboard-dockview"
           />

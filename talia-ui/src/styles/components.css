@@ -904,50 +904,11 @@
   min-height: 0;
 }
 
-.talia-report-shell__header {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--theme-border-light);
-  background: var(--theme-glass);
-}
-
-.talia-report-shell__header-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-right: auto;
-}
-
 .talia-report-shell__content {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-.talia-dockview-tab__button {
-  margin-left: 6px;
-  padding: 0 6px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: inherit;
-  font-size: var(--theme-font-size-sm);
-  cursor: pointer;
-}
-
-.talia-dockview-tab__button:hover {
-  border-color: var(--theme-border-light);
-  background: var(--theme-glass);
-}
-
-.talia-dockview-tab__button--active {
-  border-color: var(--theme-accent);
-  color: var(--theme-accent);
 }
 
 .dockview-theme-talia .dv-tab,

@@ -56,9 +56,8 @@ const PUBLIC_FALLBACK_SHIPS = [
 ];
 
 const PREFERRED_SHIP_ORDER = ['DIS', 'JRN'];
-const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast';
-const WEATHER_ARCHIVE_URL = 'https://archive-api.open-meteo.com/v1/archive';
 const GRAPHQL_URL = '/api/graphql';
+const LIVE_REFRESH_MS = 120000;
 const PORT_NEWS_QUERY_ALIASES = {
   DUB: 'Dubai',
   ABD: 'Abu Dhabi',
@@ -233,29 +232,44 @@ const portNewsQuery = (portValue) => {
   return PORT_NEWS_QUERY_ALIASES[upper] || String(portValue || '').trim();
 };
 
-const weatherCodeLabel = (code) => {
-  const weatherMap = {
-    0: 'Clear',
-    1: 'Mainly clear',
-    2: 'Partly cloudy',
-    3: 'Overcast',
-    45: 'Fog',
-    48: 'Fog',
-    51: 'Light drizzle',
-    53: 'Drizzle',
-    55: 'Dense drizzle',
-    61: 'Light rain',
-    63: 'Rain',
-    65: 'Heavy rain',
-    71: 'Light snow',
-    73: 'Snow',
-    75: 'Heavy snow',
-    80: 'Rain showers',
-    81: 'Rain showers',
-    82: 'Heavy showers',
-    95: 'Thunderstorm'
-  };
-  return weatherMap[code] || 'Unknown';
+const fetchWeatherAt = async (latitude, longitude, date = null) => {
+  const query = `
+    query GetWeatherAt($latitude: Float!, $longitude: Float!, $date: String) {
+      weatherAt(latitude: $latitude, longitude: $longitude, date: $date) {
+        label
+        code
+        temperature
+        windSpeed
+        date
+      }
+    }
+  `;
+
+  const response = await fetch(GRAPHQL_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, variables: { latitude, longitude, date } })
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const payload = await response.json();
+  if (payload.errors?.length) {
+    throw new Error(payload.errors[0].message);
+  }
+  return payload?.data?.weatherAt || null;
+};
+
+const withTimeout = async (promiseFactory, timeoutMs = 8000) => {
+  let timer = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
+  });
+  try {
+    return await Promise.race([promiseFactory(), timeoutPromise]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 };
 
 const buildPaxBySailCode = (occupancyRows = []) => {
@@ -570,6 +584,7 @@ const ShipTrackerMapContainer = () => {
   const [livePositionsError, setLivePositionsError] = useState(null);
   const [livePositionsLoading, setLivePositionsLoading] = useState(false);
   const [liveRefreshTick, setLiveRefreshTick] = useState(0);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -602,12 +617,17 @@ const ShipTrackerMapContainer = () => {
     };
 
     loadLivePositions();
-    const interval = setInterval(loadLivePositions, 30000);
+    if (!autoRefreshEnabled) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    const interval = setInterval(loadLivePositions, LIVE_REFRESH_MS);
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [shipSummaries, liveRefreshTick]);
+  }, [shipSummaries, liveRefreshTick, autoRefreshEnabled]);
 
   const [weatherByShip, setWeatherByShip] = useState({});
   const [weatherLoading, setWeatherLoading] = useState(false);
@@ -653,22 +673,8 @@ const ShipTrackerMapContainer = () => {
             if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
               return [ship.shipCode, null];
             }
-            const url = `${WEATHER_URL}?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=temperature_2m,wind_speed_10m,weather_code&timezone=auto`;
-            const response = await fetch(url);
-            if (!response.ok) {
-              return [ship.shipCode, null];
-            }
-            const payload = await response.json();
-            const current = payload?.current;
-            if (!current) {
-              return [ship.shipCode, null];
-            }
-            return [ship.shipCode, {
-              temperature: current.temperature_2m,
-              windSpeed: current.wind_speed_10m,
-              code: current.weather_code,
-              label: weatherCodeLabel(current.weather_code)
-            }];
+            const weather = await withTimeout(() => fetchWeatherAt(Number(lat), Number(lon), null), 7000);
+            return [ship.shipCode, weather];
           })
         );
 
@@ -690,7 +696,12 @@ const ShipTrackerMapContainer = () => {
     return () => {
       cancelled = true;
     };
-  }, [displayShips]);
+  }, [
+    displayShips
+      .map((ship) => `${ship.shipCode}:${Number(ship.currentLocation?.lat || 0).toFixed(3)}:${Number(ship.currentLocation?.lon || 0).toFixed(3)}`)
+      .sort()
+      .join('|')
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -733,7 +744,12 @@ const ShipTrackerMapContainer = () => {
     return () => {
       cancelled = true;
     };
-  }, [displayShips]);
+  }, [
+    displayShips
+      .flatMap((ship) => (ship.mapRoutes || []).flatMap((route) => [route.fromPort, route.toPort]).filter(Boolean))
+      .sort()
+      .join('|')
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -761,26 +777,13 @@ const ShipTrackerMapContainer = () => {
 
       setRouteWeatherLoading(true);
       try {
-        const today = toDateOnly(new Date());
         const weatherEntries = await Promise.all(
           routeRequests.map(async (request) => {
-            const endpoint = request.date < today ? WEATHER_ARCHIVE_URL : WEATHER_URL;
-            const url = `${endpoint}?latitude=${request.lat.toFixed(4)}&longitude=${request.lon.toFixed(4)}&daily=weather_code,temperature_2m_max,wind_speed_10m_max&timezone=auto&start_date=${request.date}&end_date=${request.date}`;
-            const response = await fetch(url);
-            if (!response.ok) return [request.key, null];
-            const payload = await response.json();
-            const daily = payload?.daily;
-            const code = Array.isArray(daily?.weather_code) ? daily.weather_code[0] : null;
-            const temp = Array.isArray(daily?.temperature_2m_max) ? daily.temperature_2m_max[0] : null;
-            const wind = Array.isArray(daily?.wind_speed_10m_max) ? daily.wind_speed_10m_max[0] : null;
-            if (code === null || temp === null) return [request.key, null];
-            return [request.key, {
-              date: request.date,
-              code,
-              label: weatherCodeLabel(code),
-              temperature: temp,
-              windSpeed: wind
-            }];
+            const weather = await withTimeout(
+              () => fetchWeatherAt(Number(request.lat), Number(request.lon), request.date),
+              7000
+            );
+            return [request.key, weather];
           })
         );
 
@@ -802,7 +805,12 @@ const ShipTrackerMapContainer = () => {
     return () => {
       cancelled = true;
     };
-  }, [displayShips]);
+  }, [
+    displayShips
+      .flatMap((ship) => (ship.mapRoutes || []).map((route) => route.routeKey || ''))
+      .sort()
+      .join('|')
+  ]);
 
   const loading = sailingsLoading || occupancyLoading || inventoryLoading;
   const error = sailingsError || occupancyError || inventoryError;
@@ -832,6 +840,8 @@ const ShipTrackerMapContainer = () => {
         routeWeatherLoading={routeWeatherLoading}
         portNewsByPort={portNewsByPort}
         portNewsLoading={portNewsLoading}
+        autoRefreshEnabled={autoRefreshEnabled}
+        onToggleAutoRefresh={() => setAutoRefreshEnabled((prev) => !prev)}
         livePositionsError={livePositionsError}
         onRefresh={handleRefresh}
       />

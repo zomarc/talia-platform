@@ -189,6 +189,14 @@ export const componentRegistry = {
     description: 'Live map of both ships with weather, occupancy, and route history',
     props: {},
     dataRequirements: 'Uses master_sail and sail_by_cabin_occupancy tables; weather from Open-Meteo API',
+    dataSources: [
+      'Supabase: inventory_item',
+      'Supabase: master_sail',
+      'Supabase: sail_by_cabin_occupancy',
+      'AISStream live positions (via backend resolver)',
+      'Weather providers: Open-Meteo + api.met.no fallback',
+      'Port news: Google News RSS (via backend resolver)'
+    ],
     events: { emits: [], respondsTo: [] },
     showInReports: true,
     filePath: 'src/components/focus-panels/ShipTrackerMap/index.jsx'

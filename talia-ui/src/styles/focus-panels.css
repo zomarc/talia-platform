@@ -2848,6 +2848,7 @@
 
 .ship-tracker-map {
   height: 100%;
+  max-height: 100%;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -2856,7 +2857,8 @@
   box-sizing: border-box;
   background: var(--theme-bg-solid);
   color: var(--theme-fg);
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .ship-tracker-map__header {
@@ -2871,6 +2873,17 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.ship-tracker-map__compact-controls {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid var(--theme-border);
+  border-radius: 4px;
+  background: var(--theme-bg-elevated);
+  padding: 4px 6px;
 }
 
 .ship-tracker-map__ship-filter-label {
@@ -2936,16 +2949,69 @@
   width: 100%;
 }
 
+.ship-tracker-map__timeline-slider--compact {
+  width: 110px;
+}
+
+.ship-tracker-map__route-mode {
+  min-width: 104px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size-sm);
+}
+
 .ship-tracker-map__timeline-value {
   font-size: var(--theme-font-size-sm);
   color: var(--theme-fg);
   white-space: nowrap;
 }
 
+.ship-tracker-map__section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.ship-tracker-map__section-heading {
+  margin: 0;
+  font-size: var(--theme-font-size);
+}
+
+.ship-tracker-map__collapse-btn {
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated);
+  color: var(--theme-fg);
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
 @media (max-width: 900px) {
+  .ship-tracker-map__compact-controls {
+    width: 100%;
+  }
+
+  .ship-tracker-map__timeline-slider--compact {
+    width: 100%;
+  }
+
   .ship-tracker-map__timeline-row {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+
+  .ship-tracker-map__map-layout--news {
+    grid-template-columns: 1fr;
+  }
+
+  .ship-tracker-map__news-split {
+    max-height: 260px;
   }
 }
 
@@ -2956,19 +3022,31 @@
   background: #b9e1ff;
   height: 320px;
   position: relative;
-  cursor: zoom-in;
+  cursor: default;
+  min-height: 280px;
+}
+
+.ship-tracker-map__map-layout {
+  display: block;
+}
+
+.ship-tracker-map__map-layout--news {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 8px;
+  align-items: stretch;
 }
 
 .ship-tracker-map__map-wrap--expanded {
-  position: fixed;
-  top: 10px;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
-  z-index: 1200;
-  height: auto;
+  position: relative;
+  z-index: 2;
+  height: min(78vh, 900px);
   border-width: 2px;
   cursor: default;
+}
+
+.ship-tracker-map__map-wrap--news {
+  height: min(72vh, 840px);
 }
 
 .ship-tracker-map__leaflet {
@@ -2977,11 +3055,16 @@
   display: block;
 }
 
-.ship-tracker-map__expand-btn {
+.ship-tracker-map__map-view-actions {
   position: absolute;
   top: 8px;
   right: 8px;
   z-index: 500;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.ship-tracker-map__expand-btn {
   border: 1px solid var(--theme-border);
   border-radius: 4px;
   background: rgba(12, 18, 42, 0.85);
@@ -2989,6 +3072,21 @@
   font-size: var(--theme-font-size-sm);
   padding: 4px 8px;
   cursor: pointer;
+}
+
+.ship-tracker-map__expand-btn--active {
+  border-color: #ffffff;
+  background: rgba(12, 18, 42, 0.98);
+}
+
+.ship-tracker-map__expand-btn:hover,
+.ship-tracker-map__expand-btn:focus,
+.ship-tracker-map__expand-btn:active {
+  background: rgba(12, 18, 42, 0.92);
+  color: #ffffff;
+  border-color: #ffffff;
+  text-decoration: none;
+  opacity: 1;
 }
 
 .ship-tracker-map__map-overlay {
@@ -3022,6 +3120,26 @@
   padding: 8px;
 }
 
+.ship-tracker-map__news-split {
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  background: var(--theme-bg-elevated);
+  padding: 8px;
+  overflow: auto;
+}
+
+.ship-tracker-map__news-split-title {
+  margin: 0 0 8px 0;
+  font-size: var(--theme-font-size);
+  font-weight: 600;
+}
+
+.ship-tracker-map__news--compact {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
 .ship-tracker-map__news-title {
   margin: 0 0 8px 0;
   font-size: var(--theme-font-size);
@@ -3031,6 +3149,10 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 8px;
+}
+
+.ship-tracker-map__news-grid--compact {
+  grid-template-columns: 1fr;
 }
 
 .ship-tracker-map__news-port {
@@ -3084,6 +3206,26 @@
 .ship-tracker-map__marker-weather {
   font-size: 11px;
   white-space: nowrap;
+}
+
+.ship-tracker-map__route-arrow-wrap {
+  background: transparent;
+  border: 0;
+}
+
+.ship-tracker-map__route-arrow {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--route-color, #0d47a1);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid color-mix(in srgb, var(--route-color, #0d47a1) 45%, #ffffff);
+  border-radius: 999px;
+  width: 16px;
+  height: 16px;
+  text-align: center;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.2);
+  opacity: 1;
 }
 
 .ship-tracker-map__cards {

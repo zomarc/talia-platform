@@ -116,6 +116,124 @@ const fetchPortNewsItems = async (port: string, limit = 5) => {
   }
 };
 
+const weatherCodeLabel = (code: number | null | undefined) => {
+  const weatherMap: Record<number, string> = {
+    0: 'Clear',
+    1: 'Mainly clear',
+    2: 'Partly cloudy',
+    3: 'Overcast',
+    45: 'Fog',
+    48: 'Fog',
+    51: 'Light drizzle',
+    53: 'Drizzle',
+    55: 'Dense drizzle',
+    61: 'Light rain',
+    63: 'Rain',
+    65: 'Heavy rain',
+    71: 'Light snow',
+    73: 'Snow',
+    75: 'Heavy snow',
+    80: 'Rain showers',
+    81: 'Rain showers',
+    82: 'Heavy showers',
+    95: 'Thunderstorm'
+  };
+  if (code == null) return 'Unknown';
+  return weatherMap[code] || 'Unknown';
+};
+
+const fetchWeatherPoint = async (latitude: number, longitude: number, date?: string | null) => {
+  const lat = Number(latitude);
+  const lon = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const targetDate = String(date || '').trim() || null;
+  const isArchive = Boolean(targetDate && targetDate < today);
+  const endpoint = isArchive
+    ? 'https://archive-api.open-meteo.com/v1/archive'
+    : 'https://api.open-meteo.com/v1/forecast';
+  const query = isArchive
+    ? `daily=weather_code,temperature_2m_max,wind_speed_10m_max&start_date=${targetDate}&end_date=${targetDate}`
+    : 'current=temperature_2m,wind_speed_10m,weather_code';
+  const url = `${endpoint}?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&${query}&timezone=GMT`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 7000);
+  const fetchFallbackWeather = async () => {
+    const fallbackUrl = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`;
+    const fallbackResponse = await fetch(fallbackUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'talia-local/0.1 (+https://localhost)'
+      }
+    });
+    if (!fallbackResponse.ok) return null;
+    const fallbackPayload: any = await fallbackResponse.json();
+    const first = fallbackPayload?.properties?.timeseries?.[0];
+    const instant = first?.data?.instant?.details || null;
+    if (!instant) return null;
+    const description =
+      first?.data?.next_1_hours?.summary?.symbol_code ||
+      first?.data?.next_6_hours?.summary?.symbol_code ||
+      first?.data?.next_12_hours?.summary?.symbol_code ||
+      'Current conditions';
+    const temperature = Number.isFinite(Number(instant?.air_temperature)) ? Number(instant.air_temperature) : null;
+    const windMs = Number.isFinite(Number(instant?.wind_speed)) ? Number(instant.wind_speed) : null;
+    const windSpeed = Number.isFinite(windMs) ? windMs * 3.6 : null;
+    return {
+      label: `${String(description).replace(/_/g, ' ')} (live)`,
+      code: null,
+      temperature,
+      windSpeed,
+      date: first?.time || today
+    };
+  };
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      return await fetchFallbackWeather();
+    }
+    const payload: any = await response.json();
+    if (payload?.error) {
+      return await fetchFallbackWeather();
+    }
+    if (isArchive) {
+      const daily = payload?.daily;
+      const code = Array.isArray(daily?.weather_code) ? Number(daily.weather_code[0]) : null;
+      const temperature = Array.isArray(daily?.temperature_2m_max) ? Number(daily.temperature_2m_max[0]) : null;
+      const windSpeed = Array.isArray(daily?.wind_speed_10m_max) ? Number(daily.wind_speed_10m_max[0]) : null;
+      if (code == null && temperature == null && windSpeed == null) {
+        return await fetchFallbackWeather();
+      }
+      return {
+        label: weatherCodeLabel(code),
+        code,
+        temperature: Number.isFinite(temperature) ? temperature : null,
+        windSpeed: Number.isFinite(windSpeed) ? windSpeed : null,
+        date: targetDate
+      };
+    }
+    const current = payload?.current;
+    if (!current) return await fetchFallbackWeather();
+    const code = Number.isFinite(Number(current.weather_code)) ? Number(current.weather_code) : null;
+    const temperature = Number.isFinite(Number(current.temperature_2m)) ? Number(current.temperature_2m) : null;
+    const windSpeed = Number.isFinite(Number(current.wind_speed_10m)) ? Number(current.wind_speed_10m) : null;
+    return {
+      label: weatherCodeLabel(code),
+      code,
+      temperature,
+      windSpeed,
+      date: today
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 const TABLE_SYNC_MAP: Record<string, string> = {
   'ship': 'ships',
   'cabin_availability': 'cabin_availability',
@@ -657,6 +775,18 @@ export const resolvers = {
       } catch (error) {
         console.error('Error fetching port news:', error);
         return [];
+      }
+    },
+
+    weatherAt: async (parent: any, args: any) => {
+      try {
+        const latitude = Number(args?.latitude);
+        const longitude = Number(args?.longitude);
+        const date = args?.date ? String(args.date) : null;
+        return await fetchWeatherPoint(latitude, longitude, date);
+      } catch (error) {
+        console.error('Error fetching weather point:', error);
+        return null;
       }
     },
 

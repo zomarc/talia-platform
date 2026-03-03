@@ -335,6 +335,14 @@ export const typeDefs = `#graphql
     port: String!
   }
 
+  type WeatherPoint {
+    label: String!
+    code: Int
+    temperature: Float
+    windSpeed: Float
+    date: String
+  }
+
   input InventoryItemFilters {
     id: ID
     localKey: String
@@ -868,6 +876,7 @@ export const typeDefs = `#graphql
     inventoryItems(filters: InventoryItemFilters): [InventoryItem!]!
     inventoryMemos(inventoryItemId: ID!): [InventoryMemo!]!
     portNews(port: String!, limit: Int): [PortNewsItem!]!
+    weatherAt(latitude: Float!, longitude: Float!, date: String): WeatherPoint
     kpis(userRole: UserRole): [KPI!]!
     exceptions(userRole: UserRole): [Exception!]!
     

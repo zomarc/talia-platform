@@ -1017,6 +1017,31 @@
   color: var(--theme-text-muted);
 }
 
+.talia-event-meta__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.talia-event-meta__copy-btn {
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  border-radius: 4px;
+  font-size: 9px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.talia-event-meta__copy-btn:hover {
+  border-color: var(--theme-accent);
+}
+
+.talia-event-meta__copy-status {
+  color: var(--theme-text-secondary);
+  font-size: 9px;
+}
+
 .talia-event-meta__group {
   display: flex;
   align-items: center;
@@ -1046,6 +1071,11 @@
 .talia-event-meta__chip--secondary {
   background: color-mix(in srgb, var(--theme-accent) 15%, transparent);
   color: var(--theme-accent);
+}
+
+.talia-event-meta__chip--source {
+  background: color-mix(in srgb, var(--theme-success) 14%, transparent);
+  color: var(--theme-success);
 }
 /* ============================================================================
    Grid Layout

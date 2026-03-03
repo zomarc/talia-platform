@@ -1,8 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import L from 'leaflet';
+import { CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, Tooltip, useMap, ZoomControl } from 'react-leaflet';
 
 const DEFAULT_CENTER = [36.8, 25.9];
 const SHIP_COLORS = ['#0d47a1', '#b71c1c'];
+const PORT_DISPLAY_NAMES = {
+  DUB: 'Dubai',
+  ABD: 'Abu Dhabi',
+  DOH: 'Doha',
+  KUS: 'Kusadasi',
+  RHO: 'Rhodes',
+  PIR: 'Piraeus',
+  ATH: 'Athens'
+};
 
 const formatDate = (value) => {
   if (!value) return 'N/A';
@@ -19,8 +29,10 @@ const formatDateTime = (value) => {
 };
 
 const routeLabel = (route) => {
-  const from = route?.fromPort || 'Unknown';
-  const to = route?.toPort || 'Unknown';
+  const fromRaw = route?.from?.label || route?.fromPort;
+  const toRaw = route?.to?.label || route?.toPort;
+  const from = PORT_DISPLAY_NAMES[String(fromRaw || '').toUpperCase()] || fromRaw || 'Unknown';
+  const to = PORT_DISPLAY_NAMES[String(toRaw || '').toUpperCase()] || toRaw || 'Unknown';
   return `${from} -> ${to}`;
 };
 
@@ -107,9 +119,15 @@ const greatCirclePath = (from, to) => {
 
 const FitMapToShips = ({ points }) => {
   const map = useMap();
+  const lastSignatureRef = useRef('');
 
   useEffect(() => {
     if (!points.length) return;
+    const signature = points
+      .map((point) => `${Number(point[0]).toFixed(3)},${Number(point[1]).toFixed(3)}`)
+      .join('|');
+    if (signature === lastSignatureRef.current) return;
+    lastSignatureRef.current = signature;
 
     if (points.length === 1) {
       map.setView(points[0], 6, { animate: false });
@@ -143,6 +161,35 @@ const getRouteEndpoints = (route) => {
   return { from, to };
 };
 
+const getArrowForPath = (path, color) => {
+  if (!Array.isArray(path) || path.length < 2) return null;
+  const ratio = 0.96;
+  const targetIndex = Math.max(1, Math.min(path.length - 1, Math.round((path.length - 1) * ratio)));
+  const prevPoint = path[targetIndex - 1];
+  const point = path[targetIndex];
+  if (!prevPoint || !point) return null;
+  const [prevLat, prevLon] = prevPoint;
+  const [lat, lon] = point;
+  if (![prevLat, prevLon, lat, lon].every(Number.isFinite)) return null;
+
+  const latDiff = lat - prevLat;
+  const lonDiff = lon - prevLon;
+  if (Math.abs(latDiff) < 0.000001 && Math.abs(lonDiff) < 0.000001) return null;
+
+  const angle = (Math.atan2(latDiff, lonDiff) * 180) / Math.PI;
+  const icon = L.divIcon({
+    className: 'ship-tracker-map__route-arrow-wrap',
+    html: `<span class="ship-tracker-map__route-arrow" style="--route-color:${color}; transform: rotate(${angle}deg);">&#10148;</span>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9]
+  });
+
+  return {
+    center: [lat, lon],
+    icon
+  };
+};
+
 const ShipTrackerMapPresenter = ({
   ships,
   weatherByShip,
@@ -151,13 +198,23 @@ const ShipTrackerMapPresenter = ({
   routeWeatherLoading,
   portNewsByPort,
   portNewsLoading,
+  autoRefreshEnabled,
+  onToggleAutoRefresh,
   livePositionsError,
   onRefresh
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [viewMode, setViewMode] = useState('default');
   const [selectedShipCode, setSelectedShipCode] = useState('ALL');
   const [pastWindow, setPastWindow] = useState(3);
   const [futureWindow, setFutureWindow] = useState(3);
+  const [routeDisplayMode, setRouteDisplayMode] = useState('overlay');
+  const [singleRouteIndex, setSingleRouteIndex] = useState(0);
+  const preExpandedSectionsRef = useRef(null);
+  const [sections, setSections] = useState({
+    map: true,
+    news: true,
+    details: true
+  });
   const visibleShips = useMemo(
     () => (selectedShipCode === 'ALL' ? ships : ships.filter((ship) => ship.shipCode === selectedShipCode)),
     [ships, selectedShipCode]
@@ -196,37 +253,7 @@ const ShipTrackerMapPresenter = ({
     return [avgLat, avgLon];
   }, [visibleShips]);
 
-  const mapPoints = useMemo(() => {
-    const points = [];
-
-    visibleShips.forEach((ship) => {
-      const currentLat = ship.currentLocation?.lat;
-      const currentLon = ship.currentLocation?.lon;
-      if (Number.isFinite(currentLat) && Number.isFinite(currentLon)) {
-        points.push([currentLat, currentLon]);
-      }
-
-      const windowedRoutes = [
-        ...(ship.pastRoutes || []).slice(-pastWindow),
-        ...(ship.activeRoute ? [ship.activeRoute] : []),
-        ...(ship.futureRoutes || []).slice(0, futureWindow)
-      ];
-
-      windowedRoutes.forEach((route) => {
-        const { from, to } = getRouteEndpoints(route);
-        if (Number.isFinite(from?.lat) && Number.isFinite(from?.lon)) {
-          points.push([from.lat, from.lon]);
-        }
-        if (Number.isFinite(to?.lat) && Number.isFinite(to?.lon)) {
-          points.push([to.lat, to.lon]);
-        }
-      });
-    });
-
-    return points;
-  }, [visibleShips, pastWindow, futureWindow]);
-
-  const displayedRoutesByShip = useMemo(() => (
+  const windowedRoutesByShip = useMemo(() => (
     Object.fromEntries(
       visibleShips.map((ship) => [
         ship.shipCode,
@@ -239,6 +266,71 @@ const ShipTrackerMapPresenter = ({
     )
   ), [visibleShips, pastWindow, futureWindow]);
 
+  const timelineRouteEntries = useMemo(() => {
+    const entries = [];
+    visibleShips.forEach((ship, shipIndex) => {
+      const routes = windowedRoutesByShip[ship.shipCode] || [];
+      routes.forEach((route) => {
+        const startTime = route?.startDate ? new Date(route.startDate).getTime() : Number.POSITIVE_INFINITY;
+        entries.push({ shipCode: ship.shipCode, shipIndex, route, startTime });
+      });
+    });
+    return entries.sort((a, b) => a.startTime - b.startTime);
+  }, [visibleShips, windowedRoutesByShip]);
+
+  useEffect(() => {
+    if (!timelineRouteEntries.length) {
+      setSingleRouteIndex(0);
+      return;
+    }
+    setSingleRouteIndex((prev) => Math.max(0, Math.min(prev, timelineRouteEntries.length - 1)));
+  }, [timelineRouteEntries]);
+
+  const displayedRoutesByShip = useMemo(() => {
+    if (routeDisplayMode !== 'single') {
+      return windowedRoutesByShip;
+    }
+    const selectedEntry = timelineRouteEntries[singleRouteIndex] || null;
+    return Object.fromEntries(
+      visibleShips.map((ship) => [
+        ship.shipCode,
+        selectedEntry && selectedEntry.shipCode === ship.shipCode ? [selectedEntry.route] : []
+      ])
+    );
+  }, [routeDisplayMode, windowedRoutesByShip, timelineRouteEntries, singleRouteIndex, visibleShips]);
+
+  const mapPoints = useMemo(() => {
+    const points = [];
+
+    visibleShips.forEach((ship) => {
+      const currentLat = ship.currentLocation?.lat;
+      const currentLon = ship.currentLocation?.lon;
+      if (Number.isFinite(currentLat) && Number.isFinite(currentLon)) {
+        points.push([currentLat, currentLon]);
+      }
+    });
+
+    if (routeDisplayMode === 'single') {
+      const selectedEntry = timelineRouteEntries[singleRouteIndex];
+      const { from, to } = getRouteEndpoints(selectedEntry?.route);
+      if (Number.isFinite(from?.lat) && Number.isFinite(from?.lon)) points.push([from.lat, from.lon]);
+      if (Number.isFinite(to?.lat) && Number.isFinite(to?.lon)) points.push([to.lat, to.lon]);
+      return points;
+    }
+
+    visibleShips.forEach((ship) => {
+      const activeRoute = windowedRoutesByShip[ship.shipCode]?.find((route) => route?.status === 'active') || null;
+      const routesToFit = activeRoute ? [activeRoute] : (windowedRoutesByShip[ship.shipCode] || []).slice(-1);
+      routesToFit.forEach((route) => {
+        const { from, to } = getRouteEndpoints(route);
+        if (Number.isFinite(from?.lat) && Number.isFinite(from?.lon)) points.push([from.lat, from.lon]);
+        if (Number.isFinite(to?.lat) && Number.isFinite(to?.lon)) points.push([to.lat, to.lon]);
+      });
+    });
+
+    return points;
+  }, [visibleShips, routeDisplayMode, timelineRouteEntries, singleRouteIndex, windowedRoutesByShip]);
+
   const visiblePorts = useMemo(() => (
     Array.from(new Set(
       visibleShips.flatMap((ship) => (
@@ -246,6 +338,61 @@ const ShipTrackerMapPresenter = ({
       ))
     )).slice(0, 8)
   ), [visibleShips]);
+
+  const toggleSection = (key) => {
+    setSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const setSpecialViewMode = (nextMode) => {
+    setViewMode((prevMode) => {
+      if (prevMode === nextMode) {
+        if (preExpandedSectionsRef.current) {
+          setSections(preExpandedSectionsRef.current);
+          preExpandedSectionsRef.current = null;
+        }
+        return 'default';
+      }
+      if (prevMode === 'default') {
+        preExpandedSectionsRef.current = sections;
+      }
+      setSections((current) => ({ ...current, map: true, news: false, details: false }));
+      return nextMode;
+    });
+  };
+
+  const isExpanded = viewMode === 'full';
+  const isNewsView = viewMode === 'news';
+  const isMapFocusedView = isExpanded || isNewsView;
+
+  const renderNewsContent = (compact = false) => (
+    portNewsLoading ? (
+      <div className="ship-tracker-map__news-empty">Loading local port news...</div>
+    ) : (
+      <div className={compact ? 'ship-tracker-map__news-grid ship-tracker-map__news-grid--compact' : 'ship-tracker-map__news-grid'}>
+        {visiblePorts.map((port) => {
+          const items = portNewsByPort?.[port] || [];
+          const compactItems = compact ? items.slice(0, 2) : items;
+          return (
+            <article key={port} className="ship-tracker-map__news-port">
+              <div className="ship-tracker-map__news-port-title">
+                {PORT_DISPLAY_NAMES[String(port).toUpperCase()] || port}
+              </div>
+              <ul className="ship-tracker-map__news-list">
+                {compactItems.length ? compactItems.map((item) => (
+                  <li key={item.id} className="ship-tracker-map__news-item">
+                    <a href={item.url} target="_blank" rel="noreferrer">
+                      {item.title}
+                    </a>
+                    <span>{item.source}{item.publishedAt ? ` · ${formatPublished(item.publishedAt)}` : ''}</span>
+                  </li>
+                )) : <li className="ship-tracker-map__news-empty">No recent items</li>}
+              </ul>
+            </article>
+          );
+        })}
+      </div>
+    )
+  );
 
   return (
     <div className="ship-tracker-map">
@@ -276,6 +423,63 @@ const ShipTrackerMapPresenter = ({
           <button className="talia-btn talia-btn--small" onClick={onRefresh}>
             ↻ Refresh
           </button>
+          <button className="talia-btn talia-btn--small" onClick={onToggleAutoRefresh}>
+            {autoRefreshEnabled ? 'Auto: ON' : 'Auto: OFF'}
+          </button>
+          <div className="ship-tracker-map__compact-controls">
+            <label htmlFor="ship-route-display-mode" className="ship-tracker-map__timeline-label">Mode</label>
+            <select
+              id="ship-route-display-mode"
+              className="ship-tracker-map__route-mode"
+              value={routeDisplayMode}
+              onChange={(event) => setRouteDisplayMode(event.target.value)}
+            >
+              <option value="overlay">Overlay</option>
+              <option value="single">Single route</option>
+            </select>
+            <label htmlFor="ship-route-window-past" className="ship-tracker-map__timeline-label">Past</label>
+            <input
+              id="ship-route-window-past"
+              className="ship-tracker-map__timeline-slider ship-tracker-map__timeline-slider--compact"
+              type="range"
+              min="1"
+              max={maxWindows.past}
+              step="1"
+              value={Math.min(pastWindow, maxWindows.past)}
+              onChange={(event) => setPastWindow(Number(event.target.value))}
+            />
+            <span className="ship-tracker-map__timeline-value">{Math.min(pastWindow, maxWindows.past)}</span>
+            <label htmlFor="ship-route-window-future" className="ship-tracker-map__timeline-label">Future</label>
+            <input
+              id="ship-route-window-future"
+              className="ship-tracker-map__timeline-slider ship-tracker-map__timeline-slider--compact"
+              type="range"
+              min="1"
+              max={maxWindows.future}
+              step="1"
+              value={Math.min(futureWindow, maxWindows.future)}
+              onChange={(event) => setFutureWindow(Number(event.target.value))}
+            />
+            <span className="ship-tracker-map__timeline-value">{Math.min(futureWindow, maxWindows.future)}</span>
+            {routeDisplayMode === 'single' && (
+              <>
+                <label htmlFor="ship-route-single-index" className="ship-tracker-map__timeline-label">Route</label>
+                <input
+                  id="ship-route-single-index"
+                  className="ship-tracker-map__timeline-slider ship-tracker-map__timeline-slider--compact"
+                  type="range"
+                  min="0"
+                  max={Math.max(0, timelineRouteEntries.length - 1)}
+                  step="1"
+                  value={Math.min(singleRouteIndex, Math.max(0, timelineRouteEntries.length - 1))}
+                  onChange={(event) => setSingleRouteIndex(Number(event.target.value))}
+                />
+                <span className="ship-tracker-map__timeline-value">
+                  {timelineRouteEntries.length ? `${singleRouteIndex + 1}/${timelineRouteEntries.length}` : '0/0'}
+                </span>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -284,87 +488,66 @@ const ShipTrackerMapPresenter = ({
           AIS feed unavailable. Showing schedule/public fallback positions.
         </div>
       )}
-      <div className="ship-tracker-map__timeline">
-        <div className="ship-tracker-map__timeline-row">
-          <label htmlFor="ship-route-window-past" className="ship-tracker-map__timeline-label">
-            Past history
-          </label>
-          <input
-            id="ship-route-window-past"
-            className="ship-tracker-map__timeline-slider"
-            type="range"
-            min="1"
-            max={maxWindows.past}
-            step="1"
-            value={Math.min(pastWindow, maxWindows.past)}
-            onChange={(event) => setPastWindow(Number(event.target.value))}
-          />
-          <span className="ship-tracker-map__timeline-value">
-            {Math.min(pastWindow, maxWindows.past)} legs
-          </span>
-        </div>
-        <div className="ship-tracker-map__timeline-row">
-          <label htmlFor="ship-route-window-future" className="ship-tracker-map__timeline-label">
-            Future itinerary
-          </label>
-          <input
-            id="ship-route-window-future"
-            className="ship-tracker-map__timeline-slider"
-            type="range"
-            min="1"
-            max={maxWindows.future}
-            step="1"
-            value={Math.min(futureWindow, maxWindows.future)}
-            onChange={(event) => setFutureWindow(Number(event.target.value))}
-          />
-          <span className="ship-tracker-map__timeline-value">
-            {Math.min(futureWindow, maxWindows.future)} legs
-          </span>
-        </div>
+      <div className="ship-tracker-map__section-header">
+        <h4 className="ship-tracker-map__section-heading">Map</h4>
+        <button className="ship-tracker-map__collapse-btn" onClick={() => toggleSection('map')}>
+          {sections.map ? '▾' : '▸'}
+        </button>
       </div>
 
-      <div
-        className={`ship-tracker-map__map-wrap ${isExpanded ? 'ship-tracker-map__map-wrap--expanded' : ''}`}
-        onClick={() => {
-          if (!isExpanded) setIsExpanded(true);
-        }}
+      {sections.map && <div
+        className={`ship-tracker-map__map-layout ${isNewsView ? 'ship-tracker-map__map-layout--news' : ''}`}
       >
-        <button
-          className="ship-tracker-map__expand-btn"
-          onClick={(event) => {
-            event.stopPropagation();
-            setIsExpanded((prev) => !prev);
-          }}
-          title={isExpanded ? 'Exit full view' : 'Expand full view'}
-        >
-          {isExpanded ? '✕ Close' : '⤢ Full view'}
-        </button>
+        <div className={`ship-tracker-map__map-wrap ${isExpanded ? 'ship-tracker-map__map-wrap--expanded' : ''} ${isNewsView ? 'ship-tracker-map__map-wrap--news' : ''}`}>
+          <div className="ship-tracker-map__map-view-actions">
+            <button
+              className="ship-tracker-map__expand-btn"
+              onClick={(event) => {
+                event.stopPropagation();
+                setSpecialViewMode('full');
+              }}
+              title={isExpanded ? 'Exit full view' : 'Expand full view'}
+            >
+              {isExpanded ? '✕ Close' : '⤢ Full view'}
+            </button>
+            <button
+              className={`ship-tracker-map__expand-btn ${isNewsView ? 'ship-tracker-map__expand-btn--active' : ''}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                setSpecialViewMode('news');
+              }}
+              title={isNewsView ? 'Exit news view' : 'Show news split view'}
+            >
+              {isNewsView ? '✕ Close' : '📰 News view'}
+            </button>
+          </div>
 
-        <div className="ship-tracker-map__map-overlay">
-          {visibleShips.map((ship) => {
-            const weather = weatherByShip[ship.shipCode];
-            return (
-              <div key={ship.shipCode} className="ship-tracker-map__weather-chip">
-                <strong>{ship.shipName}</strong>
-                <span>
-                  {weatherLoading
-                    ? 'Weather loading...'
-                    : weather
-                      ? `${weather.label}, ${Math.round(weather.temperature)}C, wind ${Math.round(weather.windSpeed)} km/h`
-                      : 'Weather N/A'}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+          <div className="ship-tracker-map__map-overlay">
+            {visibleShips.map((ship) => {
+              const weather = weatherByShip[ship.shipCode];
+              return (
+                <div key={ship.shipCode} className="ship-tracker-map__weather-chip">
+                  <strong>{ship.shipName}</strong>
+                  <span>
+                    {weatherLoading
+                      ? 'Weather loading...'
+                      : weather
+                        ? `${weather.label}, ${Math.round(weather.temperature)}C, wind ${Math.round(weather.windSpeed)} km/h`
+                        : 'Weather N/A'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
 
-        <MapContainer center={mapCenter} zoom={5} className="ship-tracker-map__leaflet">
-          <MapResizeOnLayout expanded={isExpanded} />
-          <FitMapToShips points={mapPoints} />
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <MapContainer center={mapCenter} zoom={5} className="ship-tracker-map__leaflet" zoomControl={false}>
+            <MapResizeOnLayout expanded={isMapFocusedView} />
+            <FitMapToShips points={mapPoints} />
+            <ZoomControl position="bottomright" />
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; CARTO'
+              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+            />
 
           {visibleShips.map((ship, shipIndex) => {
             const color = SHIP_COLORS[shipIndex % SHIP_COLORS.length];
@@ -376,12 +559,23 @@ const ShipTrackerMapPresenter = ({
                   const { from, to } = getRouteEndpoints(route);
                   if (!from || !to) return null;
                   const curvedPath = greatCirclePath(from, to);
+                  const linePath = curvedPath.length ? curvedPath : [[from.lat, from.lon], [to.lat, to.lon]];
+                  const arrow = getArrowForPath(linePath, color);
                   return (
-                    <Polyline
-                      key={`${ship.shipCode}-route-${routeIndex}`}
-                      positions={curvedPath.length ? curvedPath : [[from.lat, from.lon], [to.lat, to.lon]]}
-                      pathOptions={getRouteStyle(route.status, color)}
-                    />
+                    <React.Fragment key={`${ship.shipCode}-route-${routeIndex}`}>
+                      <Polyline
+                        positions={linePath}
+                        pathOptions={getRouteStyle(route.status, color)}
+                      />
+                      {arrow && (
+                        <Marker position={arrow.center} icon={arrow.icon} interactive={false} />
+                      )}
+                      <CircleMarker
+                        center={[to.lat, to.lon]}
+                        radius={4}
+                        pathOptions={{ color: '#ffffff', weight: 1, fillColor: color, fillOpacity: 0.95 }}
+                      />
+                    </React.Fragment>
                   );
                 })}
 
@@ -411,106 +605,105 @@ const ShipTrackerMapPresenter = ({
               </React.Fragment>
             );
           })}
-        </MapContainer>
-      </div>
+          </MapContainer>
+        </div>
+        {isNewsView && (
+          <aside className="ship-tracker-map__news-split">
+            <div className="ship-tracker-map__news-split-title">Live Port News</div>
+            <div className="ship-tracker-map__news ship-tracker-map__news--compact">
+              {renderNewsContent(true)}
+            </div>
+          </aside>
+        )}
+      </div>}
 
-      <div className="ship-tracker-map__news">
-        <h4 className="ship-tracker-map__news-title">Live Port News</h4>
-        {portNewsLoading ? (
-          <div className="ship-tracker-map__news-empty">Loading local port news...</div>
-        ) : (
-          <div className="ship-tracker-map__news-grid">
-            {visiblePorts.map((port) => {
-              const items = portNewsByPort?.[port] || [];
+      {!isMapFocusedView && (
+        <>
+          <div className="ship-tracker-map__section-header">
+            <h4 className="ship-tracker-map__section-heading">Live Port News</h4>
+            <button className="ship-tracker-map__collapse-btn" onClick={() => toggleSection('news')}>
+              {sections.news ? '▾' : '▸'}
+            </button>
+          </div>
+          {sections.news && <div className="ship-tracker-map__news">{renderNewsContent(false)}</div>}
+
+          <div className="ship-tracker-map__section-header">
+            <h4 className="ship-tracker-map__section-heading">Ship Details</h4>
+            <button className="ship-tracker-map__collapse-btn" onClick={() => toggleSection('details')}>
+              {sections.details ? '▾' : '▸'}
+            </button>
+          </div>
+          {sections.details && <div className="ship-tracker-map__cards">
+            {visibleShips.map((ship, index) => {
+              const weather = weatherByShip[ship.shipCode];
               return (
-                <article key={port} className="ship-tracker-map__news-port">
-                  <div className="ship-tracker-map__news-port-title">{port}</div>
-                  <ul className="ship-tracker-map__news-list">
-                    {items.length ? items.map((item) => (
-                      <li key={item.id} className="ship-tracker-map__news-item">
-                        <a href={item.url} target="_blank" rel="noreferrer">
-                          {item.title}
-                        </a>
-                        <span>{item.source}{item.publishedAt ? ` · ${formatPublished(item.publishedAt)}` : ''}</span>
-                      </li>
-                    )) : <li className="ship-tracker-map__news-empty">No recent items</li>}
-                  </ul>
+                <article key={ship.shipCode} className={`ship-tracker-map__card ship-tracker-map__card--${index + 1}`}>
+                  <header className="ship-tracker-map__card-header">
+                    <h3 className="ship-tracker-map__card-title">{ship.shipName}</h3>
+                    <span className="ship-tracker-map__chip">{ship.shipCode}</span>
+                  </header>
+
+                  <div className="ship-tracker-map__meta">
+                    <span><strong>Current location:</strong> {ship.currentLocation?.label || 'At sea'}</span>
+                    <span><strong>Position source:</strong> {ship.livePosition?.isLive ? 'AIS live' : 'Schedule estimate'}</span>
+                    <span>
+                      <strong>Occupancy:</strong>{' '}
+                      {ship.occupancy?.percentage !== null && ship.occupancy?.percentage !== undefined
+                        ? `${ship.occupancy.percentage}% (${ship.occupancy.occupiedCabins}/${ship.occupancy.totalCabins})`
+                        : 'N/A'}
+                    </span>
+                    <span>
+                      <strong>Weather:</strong>{' '}
+                      {weatherLoading
+                        ? 'Loading...'
+                        : weather
+                          ? `${weather.label}, ${Math.round(weather.temperature)}C, wind ${Math.round(weather.windSpeed)} km/h`
+                          : 'N/A'}
+                    </span>
+                    {ship.livePosition?.timestamp && (
+                      <span><strong>AIS update:</strong> {formatDateTime(ship.livePosition.timestamp)}</span>
+                    )}
+                  </div>
+
+                  <div className="ship-tracker-map__route-sections">
+                    <div>
+                      <h4 className="ship-tracker-map__section-title">Past routes</h4>
+                      <ul className="ship-tracker-map__route-list">
+                        {ship.pastRoutes.length ? ship.pastRoutes.slice(-pastWindow).map((route, routeIndex) => {
+                          const routeWeather = routeWeatherByKey?.[route.routeKey];
+                          const paxText = Number.isFinite(Number(route.estimatedPax)) ? `Pax ${Math.round(Number(route.estimatedPax))}` : 'Pax N/A';
+                          return (
+                          <li key={`past-${routeIndex}`} className="ship-tracker-map__route-item">
+                            <span>{routeLabel(route)}</span>
+                            <span>{`${formatDate(route.startDate)} · ${paxText} · ${routeWeatherText(routeWeather, routeWeatherLoading)}`}</span>
+                          </li>
+                          );
+                        }) : <li className="ship-tracker-map__route-item ship-tracker-map__route-item--empty">No past routes</li>}
+                      </ul>
+                    </div>
+
+                    <div>
+                      <h4 className="ship-tracker-map__section-title">Future routes</h4>
+                      <ul className="ship-tracker-map__route-list">
+                        {ship.futureRoutes.length ? ship.futureRoutes.slice(0, futureWindow).map((route, routeIndex) => {
+                          const routeWeather = routeWeatherByKey?.[route.routeKey];
+                          const paxText = Number.isFinite(Number(route.estimatedPax)) ? `Pax ${Math.round(Number(route.estimatedPax))}` : 'Pax N/A';
+                          return (
+                          <li key={`future-${routeIndex}`} className="ship-tracker-map__route-item">
+                            <span>{routeLabel(route)}</span>
+                            <span>{`${formatDate(route.startDate)} · ${paxText} · ${routeWeatherText(routeWeather, routeWeatherLoading)}`}</span>
+                          </li>
+                          );
+                        }) : <li className="ship-tracker-map__route-item ship-tracker-map__route-item--empty">No future routes</li>}
+                      </ul>
+                    </div>
+                  </div>
                 </article>
               );
             })}
-          </div>
-        )}
-      </div>
-
-      <div className="ship-tracker-map__cards">
-        {visibleShips.map((ship, index) => {
-          const weather = weatherByShip[ship.shipCode];
-          return (
-            <article key={ship.shipCode} className={`ship-tracker-map__card ship-tracker-map__card--${index + 1}`}>
-              <header className="ship-tracker-map__card-header">
-                <h3 className="ship-tracker-map__card-title">{ship.shipName}</h3>
-                <span className="ship-tracker-map__chip">{ship.shipCode}</span>
-              </header>
-
-              <div className="ship-tracker-map__meta">
-                <span><strong>Current location:</strong> {ship.currentLocation?.label || 'At sea'}</span>
-                <span><strong>Position source:</strong> {ship.livePosition?.isLive ? 'AIS live' : 'Schedule estimate'}</span>
-                <span>
-                  <strong>Occupancy:</strong>{' '}
-                  {ship.occupancy?.percentage !== null && ship.occupancy?.percentage !== undefined
-                    ? `${ship.occupancy.percentage}% (${ship.occupancy.occupiedCabins}/${ship.occupancy.totalCabins})`
-                    : 'N/A'}
-                </span>
-                <span>
-                  <strong>Weather:</strong>{' '}
-                  {weatherLoading
-                    ? 'Loading...'
-                    : weather
-                      ? `${weather.label}, ${Math.round(weather.temperature)}C, wind ${Math.round(weather.windSpeed)} km/h`
-                      : 'N/A'}
-                </span>
-                {ship.livePosition?.timestamp && (
-                  <span><strong>AIS update:</strong> {formatDateTime(ship.livePosition.timestamp)}</span>
-                )}
-              </div>
-
-              <div className="ship-tracker-map__route-sections">
-                <div>
-                  <h4 className="ship-tracker-map__section-title">Past routes</h4>
-                  <ul className="ship-tracker-map__route-list">
-                    {ship.pastRoutes.length ? ship.pastRoutes.slice(-pastWindow).map((route, routeIndex) => {
-                      const routeWeather = routeWeatherByKey?.[route.routeKey];
-                      const paxText = Number.isFinite(Number(route.estimatedPax)) ? `Pax ${Math.round(Number(route.estimatedPax))}` : 'Pax N/A';
-                      return (
-                      <li key={`past-${routeIndex}`} className="ship-tracker-map__route-item">
-                        <span>{routeLabel(route)}</span>
-                        <span>{`${formatDate(route.startDate)} · ${paxText} · ${routeWeatherText(routeWeather, routeWeatherLoading)}`}</span>
-                      </li>
-                      );
-                    }) : <li className="ship-tracker-map__route-item ship-tracker-map__route-item--empty">No past routes</li>}
-                  </ul>
-                </div>
-
-                <div>
-                  <h4 className="ship-tracker-map__section-title">Future routes</h4>
-                  <ul className="ship-tracker-map__route-list">
-                    {ship.futureRoutes.length ? ship.futureRoutes.slice(0, futureWindow).map((route, routeIndex) => {
-                      const routeWeather = routeWeatherByKey?.[route.routeKey];
-                      const paxText = Number.isFinite(Number(route.estimatedPax)) ? `Pax ${Math.round(Number(route.estimatedPax))}` : 'Pax N/A';
-                      return (
-                      <li key={`future-${routeIndex}`} className="ship-tracker-map__route-item">
-                        <span>{routeLabel(route)}</span>
-                        <span>{`${formatDate(route.startDate)} · ${paxText} · ${routeWeatherText(routeWeather, routeWeatherLoading)}`}</span>
-                      </li>
-                      );
-                    }) : <li className="ship-tracker-map__route-item ship-tracker-map__route-item--empty">No future routes</li>}
-                  </ul>
-                </div>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+          </div>}
+        </>
+      )}
     </div>
   );
 };

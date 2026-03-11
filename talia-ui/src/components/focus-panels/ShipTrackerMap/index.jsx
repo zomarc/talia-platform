@@ -28,33 +28,6 @@ const SHIP_HOME_PORT = {
   JRN: DEFAULT_PORT_COORDINATES.piraeus
 };
 
-const PUBLIC_FALLBACK_SHIPS = [
-  {
-    shipCode: 'DIS',
-    shipName: 'Celestyal Discovery',
-    currentLocation: { lat: 37.942, lon: 23.646, label: 'Piraeus (public fallback)' },
-    scheduleLocation: { lat: 37.942, lon: 23.646, label: 'Piraeus (public fallback)' },
-    mapRoutes: [],
-    pastRoutes: [],
-    futureRoutes: [],
-    activeRoute: null,
-    occupancy: { totalCabins: 0, occupiedCabins: 0, percentage: null },
-    livePosition: null
-  },
-  {
-    shipCode: 'JRN',
-    shipName: 'Celestyal Journey',
-    currentLocation: { lat: 36.4341, lon: 28.2176, label: 'Rhodes (public fallback)' },
-    scheduleLocation: { lat: 36.4341, lon: 28.2176, label: 'Rhodes (public fallback)' },
-    mapRoutes: [],
-    pastRoutes: [],
-    futureRoutes: [],
-    activeRoute: null,
-    occupancy: { totalCabins: 0, occupiedCabins: 0, percentage: null },
-    livePosition: null
-  }
-];
-
 const PREFERRED_SHIP_ORDER = ['DIS', 'JRN'];
 const GRAPHQL_URL = '/api/graphql';
 const LIVE_REFRESH_MS = 120000;
@@ -72,6 +45,11 @@ const SHIP_CODE_ALIASES = {
   CJ: 'JRN',
   DISCOVERY: 'DIS',
   JOURNEY: 'JRN'
+};
+
+const normalizeFleetGroup = (value) => {
+  const normalized = normalizeText(value);
+  return normalized === 'celestyal' ? 'celestyal' : 'other';
 };
 
 const normalizeText = (value) => {
@@ -356,7 +334,7 @@ const buildItinerarySegmentsBySailCode = (occupancyRows = []) => {
   );
 };
 
-const computeShipSummaries = (masterSailRows, occupancyRows, inventoryItems = []) => {
+const computeShipSummaries = (masterSailRows, occupancyRows, inventoryItems = [], shipCatalogRows = []) => {
   const paxBySailCode = buildPaxBySailCode(occupancyRows);
   const itineraryBySailCode = buildItinerarySegmentsBySailCode(occupancyRows);
   const inventoryByShip = new Map();
@@ -410,10 +388,28 @@ const computeShipSummaries = (masterSailRows, occupancyRows, inventoryItems = []
     if (orderB >= 0) return 1;
     return a.localeCompare(b);
   });
-  const selectedShipKeys = (rankedInventoryShips.length ? rankedInventoryShips : rankedShips).slice(0, 2);
+
+  const catalogByShip = new Map(
+    (shipCatalogRows || [])
+      .filter((row) => row?.enabled !== false)
+      .map((row) => {
+        const code = canonicalShipCode(row?.ship_code);
+        if (!code) return null;
+        return [code, row];
+      })
+      .filter(Boolean)
+  );
+  const rankedCatalogShips = Array.from(catalogByShip.keys()).sort((a, b) => {
+    const aOrder = Number(catalogByShip.get(a)?.display_order ?? 100);
+    const bOrder = Number(catalogByShip.get(b)?.display_order ?? 100);
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    return a.localeCompare(b);
+  });
+  const selectedShipKeys = rankedCatalogShips;
   const now = new Date();
 
   return selectedShipKeys.map((shipCode) => {
+    const catalogShip = catalogByShip.get(shipCode) || null;
     const inventorySummary = inventoryByShip.get(shipCode);
     const shipRows = (grouped.get(shipCode) || []).filter((row) => {
       if (!inventorySummary) return true;
@@ -506,7 +502,17 @@ const computeShipSummaries = (masterSailRows, occupancyRows, inventoryItems = []
     const nextRoute = futureRoutes[0] || null;
     const previousRoute = pastRoutes[pastRoutes.length - 1] || null;
 
-    const fallbackPort = SHIP_HOME_PORT[shipCode] || DEFAULT_PORT_COORDINATES.piraeus;
+    const catalogHomeLat = Number(catalogShip?.home_latitude);
+    const catalogHomeLon = Number(catalogShip?.home_longitude);
+    const catalogHome =
+      Number.isFinite(catalogHomeLat) && Number.isFinite(catalogHomeLon)
+        ? {
+            lat: catalogHomeLat,
+            lon: catalogHomeLon,
+            label: catalogShip?.home_port_label || `${catalogShip?.ship_name || shipCode} (catalog)`
+          }
+        : null;
+    const fallbackPort = catalogHome || SHIP_HOME_PORT[shipCode] || DEFAULT_PORT_COORDINATES.piraeus;
     const scheduleLocation = activeRoute
       ? interpolatePoint(activeRoute.fromCoord || fallbackPort, activeRoute.toCoord || fallbackPort, activeRoute.startDate, activeRoute.endDate, now)
       : nextRoute?.fromCoord || previousRoute?.toCoord || fallbackPort;
@@ -533,8 +539,11 @@ const computeShipSummaries = (masterSailRows, occupancyRows, inventoryItems = []
 
     return {
       shipCode,
-      shipName: inventorySummary?.shipName || normalizedRows[0]?.shipName || shipCode,
-      currentLocation: scheduleLocation,
+      shipName: catalogShip?.ship_name || inventorySummary?.shipName || normalizedRows[0]?.shipName || shipCode,
+      operatorName: catalogShip?.operator_name || (shipCode === 'DIS' || shipCode === 'JRN' ? 'Celestyal' : 'Other'),
+      fleetGroup: normalizeFleetGroup(catalogShip?.fleet_group || (shipCode === 'DIS' || shipCode === 'JRN' ? 'celestyal' : 'other')),
+      regionScope: Array.isArray(catalogShip?.region_scope) ? catalogShip.region_scope : [],
+      currentLocation: null,
       scheduleLocation,
       activeRoute,
       pastRoutes: mapRoutes.filter((route) => route.status === 'past').slice(-6),
@@ -576,9 +585,21 @@ const ShipTrackerMapContainer = () => {
     limit: 12000
   });
 
+  const {
+    data: shipCatalogRows,
+    loading: shipCatalogLoading,
+    error: shipCatalogError,
+    refetch: refetchShipCatalog
+  } = useTableDataWithContext({
+    tableName: 'ship_tracking_target',
+    eventName: null,
+    contextMapper: () => null,
+    limit: 500
+  });
+
   const shipSummaries = useMemo(
-    () => computeShipSummaries(sailings || [], occupancyRows || [], inventoryItems || []),
-    [sailings, occupancyRows, inventoryItems]
+    () => computeShipSummaries(sailings || [], occupancyRows || [], inventoryItems || [], shipCatalogRows || []),
+    [sailings, occupancyRows, inventoryItems, shipCatalogRows]
   );
   const [livePositionsByShip, setLivePositionsByShip] = useState({});
   const [livePositionsError, setLivePositionsError] = useState(null);
@@ -648,12 +669,12 @@ const ShipTrackerMapContainer = () => {
               lon: Number(livePosition.longitude),
               label: 'AIS live position'
             }
-          : ship.scheduleLocation,
+          : null,
         livePosition: livePosition || null
       };
     })
   ), [shipSummaries, livePositionsByShip]);
-  const displayShips = shipsWithLiveLocation.length > 0 ? shipsWithLiveLocation : PUBLIC_FALLBACK_SHIPS;
+  const displayShips = shipsWithLiveLocation;
 
   useEffect(() => {
     let cancelled = false;
@@ -812,13 +833,17 @@ const ShipTrackerMapContainer = () => {
       .join('|')
   ]);
 
-  const loading = sailingsLoading || occupancyLoading || inventoryLoading;
-  const error = sailingsError || occupancyError || inventoryError;
+  const loading = sailingsLoading || occupancyLoading || inventoryLoading || shipCatalogLoading;
+  const error = sailingsError || occupancyError || inventoryError || null;
+  if (shipCatalogError) {
+    console.warn('[ShipTrackerMap] ship_tracking_target unavailable:', shipCatalogError?.message || shipCatalogError);
+  }
 
   const handleRefresh = () => {
     refetchSailings();
     refetchOccupancy();
     refetchInventory();
+    refetchShipCatalog();
     setLiveRefreshTick((tick) => tick + 1);
   };
 

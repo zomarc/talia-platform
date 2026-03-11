@@ -3113,6 +3113,11 @@
   gap: 2px;
 }
 
+.ship-tracker-map__weather-updated {
+  opacity: 0.82;
+  font-size: 10px;
+}
+
 .ship-tracker-map__news {
   border: 1px solid var(--theme-border);
   border-radius: 8px;
@@ -3206,6 +3211,41 @@
 .ship-tracker-map__marker-weather {
   font-size: 11px;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ship-tracker-map__marker-ais {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  opacity: 0.95;
+}
+
+.ship-tracker-map__traffic-light {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+}
+
+.ship-tracker-map__traffic-light--fresh {
+  background: #2ecc71;
+}
+
+.ship-tracker-map__traffic-light--recent {
+  background: #f1c40f;
+}
+
+.ship-tracker-map__traffic-light--stale {
+  background: #e74c3c;
+}
+
+.ship-tracker-map__traffic-light--none {
+  background: #7f8c8d;
 }
 
 .ship-tracker-map__route-arrow-wrap {

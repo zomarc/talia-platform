@@ -1258,6 +1258,42 @@ export class SupabaseDataService {
 
   // ===== Inventory Item Mapping + Memos =====
 
+  async getShipTrackingTargets(filters = {}) {
+    try {
+      let query = this.client
+        .from('ship_tracking_target')
+        .select('*')
+        .order('display_order', { ascending: true })
+        .order('ship_code', { ascending: true });
+
+      if (filters.enabled !== undefined) {
+        query = query.eq('enabled', Boolean(filters.enabled));
+      } else {
+        query = query.eq('enabled', true);
+      }
+
+      if (filters.ship_code) {
+        query = query.eq('ship_code', String(filters.ship_code).toUpperCase());
+      }
+
+      if (Array.isArray(filters.ship_codes) && filters.ship_codes.length) {
+        const shipCodes = filters.ship_codes.map((code) => String(code).toUpperCase());
+        query = query.in('ship_code', shipCodes);
+      }
+
+      query = query.limit(filters.limit || 500);
+
+      const { data, error } = await query;
+      if (error) {
+        throw new Error(error.message || 'Failed to fetch ship_tracking_target rows');
+      }
+      return data || [];
+    } catch (error) {
+      console.error('Error getting ship tracking targets:', error);
+      throw new Error(error?.message || 'Failed to load ship tracking targets');
+    }
+  }
+
   async getInventoryItems(filters = {}) {
     try {
       let query = this.client

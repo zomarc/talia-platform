@@ -856,8 +856,14 @@ export const resolvers = {
           const rows = await supabaseDataService.getInventoryItems({ ship_code: code, limit: 500 });
           inventoryRows.push(...rows);
         }
+        const trackingRows: any[] = await supabaseDataService.getShipTrackingTargets({
+          ship_codes: canonicalRequested,
+          enabled: true,
+          limit: 500
+        });
 
         const bestInventoryByShip = new Map<string, any>();
+        const bestTrackingByShip = new Map<string, any>();
         inventoryRows.forEach((row) => {
           const canonicalCode = toCanonical(row?.ship_code);
           if (!requestedSet.has(canonicalCode)) return;
@@ -879,13 +885,28 @@ export const resolvers = {
             bestInventoryByShip.set(canonicalCode, row);
           }
         });
+        trackingRows.forEach((row) => {
+          const canonicalCode = toCanonical(row?.ship_code);
+          if (!requestedSet.has(canonicalCode)) return;
+          const existing = bestTrackingByShip.get(canonicalCode);
+          if (!existing) {
+            bestTrackingByShip.set(canonicalCode, row);
+            return;
+          }
+          const existingUpdated = existing?.updated_at ? new Date(existing.updated_at).getTime() : 0;
+          const rowUpdated = row?.updated_at ? new Date(row.updated_at).getTime() : 0;
+          if (rowUpdated > existingUpdated) {
+            bestTrackingByShip.set(canonicalCode, row);
+          }
+        });
 
         const shipConfigs = canonicalRequested.map((shipCode) => {
           const inventory = bestInventoryByShip.get(shipCode);
+          const tracking = bestTrackingByShip.get(shipCode);
           return {
             shipCode,
-            shipName: inventory?.ship_name || defaultNameFor(shipCode),
-            mmsi: inventory?.mmsi || null
+            shipName: tracking?.ship_name || inventory?.ship_name || defaultNameFor(shipCode),
+            mmsi: tracking?.mmsi || inventory?.mmsi || null
           };
         });
 

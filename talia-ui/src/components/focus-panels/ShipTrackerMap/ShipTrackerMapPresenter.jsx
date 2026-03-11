@@ -4,6 +4,8 @@ import { CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, Tooltip
 
 const DEFAULT_CENTER = [36.8, 25.9];
 const SHIP_COLORS = ['#0d47a1', '#b71c1c'];
+const SHIP_FILTER_OUR = '__OUR_SHIPS__';
+const SHIP_FILTER_ALL = 'ALL';
 const PORT_DISPLAY_NAMES = {
   DUB: 'Dubai',
   ABD: 'Abu Dhabi',
@@ -28,6 +30,16 @@ const formatDateTime = (value) => {
   return date.toLocaleString();
 };
 
+const formatDayYearShort = (value) => {
+  if (!value) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = String(date.getFullYear()).slice(-2);
+  return `${day}/${month}/${year}`;
+};
+
 const routeLabel = (route) => {
   const fromRaw = route?.from?.label || route?.fromPort;
   const toRaw = route?.to?.label || route?.toPort;
@@ -48,6 +60,37 @@ const shipWeatherText = (shipWeather, loading) => {
   if (loading) return 'Weather loading...';
   if (!shipWeather) return 'Weather feed unavailable';
   return `${shipWeather.label}, ${Math.round(shipWeather.temperature)}C wind ${Math.round(shipWeather.windSpeed)} km/h`;
+};
+
+const shipLocationUpdatedText = (ship) => {
+  const liveTimestamp = ship?.livePosition?.timestamp;
+  if (liveTimestamp) {
+    return `Last known location: ${formatDayYearShort(liveTimestamp)}`;
+  }
+  return 'Last known location: N/A';
+};
+
+const getAisRecency = (ship) => {
+  const isLive = !!ship?.livePosition?.isLive;
+  if (!isLive) return { level: 'none', text: 'No AIS' };
+
+  const freshnessSeconds = Number(ship?.livePosition?.freshnessSeconds);
+  if (Number.isFinite(freshnessSeconds)) {
+    if (freshnessSeconds <= 15 * 60) return { level: 'fresh', text: 'AIS fresh' };
+    if (freshnessSeconds <= 60 * 60) return { level: 'recent', text: 'AIS recent' };
+    return { level: 'stale', text: 'AIS stale' };
+  }
+
+  const timestamp = ship?.livePosition?.timestamp;
+  const tsMs = timestamp ? new Date(timestamp).getTime() : NaN;
+  if (Number.isFinite(tsMs)) {
+    const ageSeconds = Math.max(0, (Date.now() - tsMs) / 1000);
+    if (ageSeconds <= 15 * 60) return { level: 'fresh', text: 'AIS fresh' };
+    if (ageSeconds <= 60 * 60) return { level: 'recent', text: 'AIS recent' };
+    return { level: 'stale', text: 'AIS stale' };
+  }
+
+  return { level: 'recent', text: 'AIS' };
 };
 
 const formatPublished = (value) => {
@@ -204,7 +247,7 @@ const ShipTrackerMapPresenter = ({
   onRefresh
 }) => {
   const [viewMode, setViewMode] = useState('default');
-  const [selectedShipCode, setSelectedShipCode] = useState('ALL');
+  const [selectedShipCode, setSelectedShipCode] = useState(SHIP_FILTER_OUR);
   const [pastWindow, setPastWindow] = useState(3);
   const [futureWindow, setFutureWindow] = useState(3);
   const [routeDisplayMode, setRouteDisplayMode] = useState('overlay');
@@ -215,16 +258,26 @@ const ShipTrackerMapPresenter = ({
     news: true,
     details: true
   });
-  const visibleShips = useMemo(
-    () => (selectedShipCode === 'ALL' ? ships : ships.filter((ship) => ship.shipCode === selectedShipCode)),
-    [ships, selectedShipCode]
+  const celestyalShips = useMemo(
+    () => ships.filter((ship) => String(ship.fleetGroup || '').toLowerCase() === 'celestyal'),
+    [ships]
+  );
+  const otherShips = useMemo(
+    () => ships.filter((ship) => String(ship.fleetGroup || '').toLowerCase() !== 'celestyal'),
+    [ships]
   );
 
+  const visibleShips = useMemo(() => {
+    if (selectedShipCode === SHIP_FILTER_ALL) return ships;
+    if (selectedShipCode === SHIP_FILTER_OUR) return celestyalShips.length ? celestyalShips : ships;
+    return ships.filter((ship) => ship.shipCode === selectedShipCode);
+  }, [ships, celestyalShips, selectedShipCode]);
+
   useEffect(() => {
-    if (selectedShipCode === 'ALL') return;
+    if (selectedShipCode === SHIP_FILTER_ALL || selectedShipCode === SHIP_FILTER_OUR) return;
     const exists = ships.some((ship) => ship.shipCode === selectedShipCode);
     if (!exists) {
-      setSelectedShipCode('ALL');
+      setSelectedShipCode(SHIP_FILTER_OUR);
     }
   }, [ships, selectedShipCode]);
 
@@ -413,12 +466,26 @@ const ShipTrackerMapPresenter = ({
             value={selectedShipCode}
             onChange={(event) => setSelectedShipCode(event.target.value)}
           >
-            <option value="ALL">All ships</option>
-            {ships.map((ship) => (
-              <option key={ship.shipCode} value={ship.shipCode}>
-                {ship.shipName}
-              </option>
-            ))}
+            <option value={SHIP_FILTER_OUR}>Celestyal ships</option>
+            <option value={SHIP_FILTER_ALL}>All tracked ships</option>
+            {celestyalShips.length > 0 && (
+              <optgroup label="Celestyal ships">
+                {celestyalShips.map((ship) => (
+                  <option key={ship.shipCode} value={ship.shipCode}>
+                    {ship.shipName}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {otherShips.length > 0 && (
+              <optgroup label="Other ships (Gulf & Med)">
+                {otherShips.map((ship) => (
+                  <option key={ship.shipCode} value={ship.shipCode}>
+                    {ship.shipName}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
           <button className="talia-btn talia-btn--small" onClick={onRefresh}>
             ↻ Refresh
@@ -485,7 +552,7 @@ const ShipTrackerMapPresenter = ({
 
       {livePositionsError && (
         <div className="ship-tracker-map__note">
-          AIS feed unavailable. Showing schedule/public fallback positions.
+          AIS feed unavailable. No live positions available.
         </div>
       )}
       <div className="ship-tracker-map__section-header">
@@ -535,6 +602,7 @@ const ShipTrackerMapPresenter = ({
                         ? `${weather.label}, ${Math.round(weather.temperature)}C, wind ${Math.round(weather.windSpeed)} km/h`
                         : 'Weather N/A'}
                   </span>
+                  <span className="ship-tracker-map__weather-updated">{shipLocationUpdatedText(ship)}</span>
                 </div>
               );
             })}
@@ -553,6 +621,7 @@ const ShipTrackerMapPresenter = ({
             const color = SHIP_COLORS[shipIndex % SHIP_COLORS.length];
             const displayedRoutes = displayedRoutesByShip[ship.shipCode] || [];
             const shipWeather = weatherByShip[ship.shipCode];
+            const aisRecency = getAisRecency(ship);
             return (
               <React.Fragment key={ship.shipCode}>
                 {displayedRoutes.map((route, routeIndex) => {
@@ -597,7 +666,14 @@ const ShipTrackerMapPresenter = ({
                     </Popup>
                     <Tooltip direction="top" offset={[0, -10]} permanent>
                       <div className="ship-tracker-map__marker-weather">
-                        <strong>{ship.shipCode}</strong> {shipWeatherText(shipWeather, weatherLoading)}
+                        <strong>{ship.shipCode}</strong>
+                        <span className="ship-tracker-map__marker-ais">
+                          <span
+                            className={`ship-tracker-map__traffic-light ship-tracker-map__traffic-light--${aisRecency.level}`}
+                            aria-hidden="true"
+                          />
+                          {aisRecency.text}
+                        </span>
                       </div>
                     </Tooltip>
                   </CircleMarker>
@@ -644,8 +720,8 @@ const ShipTrackerMapPresenter = ({
                   </header>
 
                   <div className="ship-tracker-map__meta">
-                    <span><strong>Current location:</strong> {ship.currentLocation?.label || 'At sea'}</span>
-                    <span><strong>Position source:</strong> {ship.livePosition?.isLive ? 'AIS live' : 'Schedule estimate'}</span>
+                    <span><strong>Current location:</strong> {ship.currentLocation?.label || 'AIS unavailable'}</span>
+                    <span><strong>Position source:</strong> {ship.livePosition?.isLive ? 'AIS live' : 'No AIS live signal'}</span>
                     <span>
                       <strong>Occupancy:</strong>{' '}
                       {ship.occupancy?.percentage !== null && ship.occupancy?.percentage !== undefined

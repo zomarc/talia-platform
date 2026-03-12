@@ -904,7 +904,7 @@ function InfoPanel(props) {
 }
 
 // ---- VS Code-style Sidebar Component ----
-function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFiltersChange, saveLayout, loadLayout, addPanel, clearSelection, clearFilters, resetLayout, createLayoutPreset, currentFocus, onFocusChange, userRole, focusLoading, focusError, onSaveCurrentLayout }) {
+function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFiltersChange, currentFocus, onFocusChange, userRole, focusLoading, focusError, onSaveCurrentLayout }) {
   const { fontFamily, setFontFamily, selectedFont, fontFamilies, fontSize, setFontSize } = useTheme();
 
   const reportGroups = React.useMemo(() => {
@@ -928,7 +928,6 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
     criteria: false,
     reports: false,
     appearance: false,
-    controls: false,
     admin: false
   });
 
@@ -952,7 +951,6 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
           criteria: false,
           reports: false,
           appearance: false,
-          controls: false,
           admin: false,
           [section]: true
         };
@@ -1153,80 +1151,6 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
               Compact range tuned for dense layouts.
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Control Centre Section */}
-      <div className="dashboard-section">
-        <div
-          className="dashboard-section__header"
-          onClick={() => toggleSection('controls')}
-        >
-          <span className="dashboard-section__title">Control Centre</span>
-          <span className={`dashboard-section__icon ${expandedSections.controls ? 'dashboard-section__icon--expanded' : ''}`}>
-            ▶
-          </span>
-        </div>
-        <div className={`dashboard-section__content ${expandedSections.controls ? 'dashboard-section__content--expanded' : ''}`}>
-          <button
-            className="dashboard-btn"
-            onClick={saveLayout}
-          >
-            💾 Save Layout
-          </button>
-          <button
-            className="dashboard-btn"
-            onClick={loadLayout}
-          >
-            📂 Load Layout
-          </button>
-          <button
-            className="dashboard-btn"
-            onClick={addPanel}
-          >
-            ➕ Add Panel
-          </button>
-          
-          {/* Layout Preset Buttons */}
-          <div className="dashboard-btn-group">
-            <button
-              className="dashboard-btn dashboard-btn--small"
-              onClick={() => createLayoutPreset('grid')}
-            >
-              🔲 Grid
-            </button>
-            <button
-              className="dashboard-btn dashboard-btn--small"
-              onClick={() => createLayoutPreset('horizontal')}
-            >
-              ↔️ Horizontal
-            </button>
-            <button
-              className="dashboard-btn dashboard-btn--small"
-              onClick={() => createLayoutPreset('vertical')}
-            >
-              ↕️ Vertical
-            </button>
-          </div>
-          
-          <button
-            className="dashboard-btn"
-            onClick={clearSelection}
-          >
-            ❌ Clear Selection
-          </button>
-          <button
-            className="dashboard-btn"
-            onClick={clearFilters}
-          >
-            🔄 Clear Filters
-          </button>
-          <button
-            className="dashboard-btn"
-            onClick={resetLayout}
-          >
-            🔄 Reset Layout
-          </button>
         </div>
       </div>
 
@@ -1431,7 +1355,7 @@ const GraphQLPanel = React.memo(function GraphQLPanel(props) {
 });
 
 function Dashboard({ user }) {
-  const { theme, currentTheme, setCurrentTheme, fontSize, fontFamily, spacingMode, setFontSize, setFontFamily, setSpacingMode } = useTheme();
+  const { theme, setCurrentTheme, fontSize, setFontSize, setFontFamily, setSpacingMode } = useTheme();
 
   const reportComponentMap = React.useMemo(() => {
     const map = {};
@@ -1749,152 +1673,6 @@ function Dashboard({ user }) {
     initializedRef.current = false; 
   }, []);
 
-  const saveLayout = () => {
-    if (!apiRef.current) return;
-    const json = apiRef.current.toJSON();
-    const payload = {
-      version: LAYOUT_VERSION,
-      data: json,
-      sidebar: {
-        collapsed: sidebarCollapsed,
-        width: sidebarWidth
-      },
-      globalFilters: globalFilters,
-      fontSettings: {
-        theme: currentTheme,
-        fontSize: fontSize,
-        fontFamily: fontFamily,
-        spacingMode: spacingMode
-      }
-    };
-    localStorage.setItem(LAYOUT_KEY, JSON.stringify(payload));
-    console.log('Layout saved:', payload);
-    alert("Layout saved.");
-  };
-
-  const loadLayout = () => {
-    if (!apiRef.current) {
-      console.warn('Dockview API not ready, cannot load layout');
-      return;
-    }
-    
-    const saved = localStorage.getItem(LAYOUT_KEY);
-    console.log('Loading layout from localStorage:', saved);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        console.log('Parsed layout:', parsed);
-        if (parsed?.version === LAYOUT_VERSION && parsed?.data) {
-          // Validate layout data before attempting to restore
-          if (!validateLayoutData(parsed.data)) {
-            console.warn('Invalid layout data structure, cannot load');
-            alert('Layout data is corrupted and cannot be loaded. Please save a new layout.');
-            return;
-          }
-          
-          // Clear existing panels before loading new layout
-          try {
-            apiRef.current.clear();
-          } catch (e) {
-            console.warn('Failed to clear existing panels:', e);
-          }
-          
-          // Load the layout
-          apiRef.current.fromJSON(parsed.data);
-          console.log('Layout loaded successfully');
-          
-          // Restore sidebar state
-          if (parsed.sidebar) {
-            setSidebarCollapsed(parsed.sidebar.collapsed || false);
-            setSidebarWidth(parsed.sidebar.width || 280);
-            console.log('Sidebar state restored:', parsed.sidebar);
-          }
-          
-          // Restore global filters
-          if (parsed.globalFilters) {
-            setGlobalFilters(parsed.globalFilters);
-            console.log('Global filters restored:', parsed.globalFilters);
-          }
-          
-          // Restore font settings
-          if (parsed.fontSettings) {
-            setCurrentTheme(parsed.fontSettings.theme || DEFAULT_THEME);
-            setFontSize(parsed.fontSettings.fontSize || 12);
-            setFontFamily(parsed.fontSettings.fontFamily || 'Inter');
-            setSpacingMode(parsed.fontSettings.spacingMode || 'default');
-            console.log('Font settings restored:', parsed.fontSettings);
-          }
-        } else {
-          console.warn('Layout version mismatch or no data:', parsed);
-        }
-      } catch (e) { 
-        console.warn("Layout restore failed", e);
-        alert('Failed to load layout: ' + e.message);
-      }
-    } else {
-      console.log('No saved layout found');
-    }
-  };
-
-  const addPanel = () => {
-    if (!apiRef.current) return;
-    const id = "win-" + Date.now();
-    
-    // Get existing panels using toJSON method
-    let position = null;
-    try {
-      const layout = apiRef.current.toJSON();
-      if (layout.panels && Object.keys(layout.panels).length > 0) {
-        // Get the currently active panel or the last panel
-        const activeGroup = layout.activeGroup;
-        let referencePanelId = null;
-        let direction = "right"; // Default direction
-        
-        if (activeGroup && layout.panels[activeGroup]) {
-          // Use the active panel as reference
-          referencePanelId = activeGroup;
-        } else {
-          // Fallback to the last panel
-          const panelIds = Object.keys(layout.panels);
-          referencePanelId = panelIds[panelIds.length - 1];
-        }
-        
-        if (referencePanelId) {
-          // Smart positioning: alternate between right and below for better layout
-          const panelCount = Object.keys(layout.panels).length;
-          if (panelCount % 2 === 0) {
-            direction = "below"; // Even panels go below
-          } else {
-            direction = "right"; // Odd panels go to the right
-          }
-          
-          position = { referencePanel: referencePanelId, direction };
-        }
-      }
-    } catch (e) {
-      console.warn('Could not get existing panels:', e);
-    }
-    
-    apiRef.current.addPanel({ 
-      id, 
-      component: "panel", 
-      title: "New Window",
-      position
-    });
-  };
-
-  const resetLayout = () => {
-    localStorage.removeItem(LAYOUT_KEY);
-    window.location.reload();
-  };
-
-  const clearSelection = () => { emitSailClear({ timestamp: new Date().toISOString() }); };
-  const clearFilters = () => { 
-    if (window.clearTableFilters) {
-      window.clearTableFilters();
-    }
-  };
-
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => !prev);
   }, []);
@@ -2186,13 +1964,6 @@ function Dashboard({ user }) {
     setTimeout(() => { emitSelect({ id:1, ship:"Celestyal Discovery", sailing:"7N Islands" }); }, 700);
   }, [loadFocusLayout, normalizedUserRole]);
 
-  // Enhanced layout creation with different presets
-  const createLayoutPreset = useCallback((preset) => {
-    // Store the preset preference and reload the page
-    localStorage.setItem('dockview-layout-preset', preset);
-    window.location.reload();
-  }, []);
-
   // Load layout preset on startup
   const loadLayoutPreset = useCallback((api) => {
     const preset = localStorage.getItem('dockview-layout-preset');
@@ -2303,13 +2074,6 @@ function Dashboard({ user }) {
           onAddPanel={addNewPanel}
           globalFilters={globalFilters}
           onGlobalFiltersChange={handleGlobalFiltersChange}
-          saveLayout={saveLayout}
-          loadLayout={loadLayout}
-          addPanel={addPanel}
-          clearSelection={clearSelection}
-          clearFilters={clearFilters}
-          resetLayout={resetLayout}
-          createLayoutPreset={createLayoutPreset}
           currentFocus={currentFocus}
           onFocusChange={handleFocusChange}
           userRole={userRole}

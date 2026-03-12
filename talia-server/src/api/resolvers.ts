@@ -275,6 +275,18 @@ const getSyncConfigNameForTable = (tableName: string): string => {
   return TABLE_SYNC_CONFIG_MAP[tableName] || tableName;
 };
 
+const getOperationMetadataKeysForTable = (tableName: string): string[] => {
+  // Prefer config-format names used by current sync configuration,
+  // while still supporting legacy sync-type/table-name records.
+  return Array.from(
+    new Set([
+      getSyncConfigNameForTable(tableName),
+      getSyncTypeForTable(tableName),
+      tableName
+    ])
+  );
+};
+
 const getDateColumnsForTable = (tableName: string): string[] => {
   const tableDateColumns: { [key: string]: string[] } = {
     'ship': [],
@@ -1619,11 +1631,11 @@ export const resolvers = {
             // Configured date range (what should be synced)
             const dateRange = configuredDateRange;
 
-            // Get sync metadata for this table (check by tableName which matches operation_name)
-            // Note: operation_name in operation_metadata matches syncType, not always tableName
-            // Try tableName first, then check if there's a syncType mapping
-            const syncKey = getSyncTypeForTable(tableName);
-            const syncRecord = syncMetadataMap[syncKey];
+            // Resolve operation_name using config-format keys first, then legacy fallbacks.
+            const operationKeys = getOperationMetadataKeysForTable(tableName);
+            const syncRecord = operationKeys
+              .map((key) => syncMetadataMap[key])
+              .find(Boolean);
             
             // Get latest snapshot date from sync metadata (most accurate)
             // Fall back to last_processed_date if latest_available_snapshot_date is not available
@@ -1654,7 +1666,7 @@ export const resolvers = {
               syncStatus: syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced',
               dataStatus: rowCount === 0 ? 'Empty' : 'Has Data',
               status: `${syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced'} • ${rowCount === 0 ? 'Empty' : 'Has Data'}`,
-              syncType: syncKey
+              syncType: getSyncTypeForTable(tableName)
             };
           } catch (err) {
             // Table doesn't exist or error
@@ -1695,12 +1707,12 @@ export const resolvers = {
         const latestAvailableData = await fetchLatestAvailableData(tableName, rowCount);
 
         // Get sync metadata from unified table
-        const syncKey = getSyncTypeForTable(tableName);
+        const operationKeys = getOperationMetadataKeysForTable(tableName);
         const { data: syncData } = await supabaseDataService.client
           .from('operation_metadata')
           .select('*')
           .eq('operation_type', 'sync')
-          .eq('operation_name', syncKey)
+          .in('operation_name', operationKeys)
           .order('last_run_at', { ascending: false })
           .limit(1);
         
@@ -1732,7 +1744,7 @@ export const resolvers = {
           syncStatus: syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced',
           dataStatus: rowCount === 0 ? 'Empty' : 'Has Data',
           status: `${syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced'} • ${rowCount === 0 ? 'Empty' : 'Has Data'}`,
-          syncType: syncKey
+          syncType: getSyncTypeForTable(tableName)
         };
       } catch (error: any) {
         console.error(`Error in tableMetadata resolver for ${tableName}:`, error);

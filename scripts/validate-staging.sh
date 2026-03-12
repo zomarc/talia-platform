@@ -331,7 +331,7 @@ check_local_code_origin() {
   local issues=0
 
   local ui_pids
-  ui_pids=$(lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ' | xargs || true)
+  ui_pids=$({ lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null; } | tr '\n' ' ' | xargs || true)
   if [[ -z "$ui_pids" ]]; then
     check_status "UI process" "WARN" "no process on 5173/5174/5175"
   else

@@ -960,7 +960,7 @@ check_duplicate_dev_servers() {
   if $has_duplicates && [[ "$auto_fix" == "true" ]]; then
     echo -e "  ${YELLOW}⚠️  Duplicate dev servers detected. Stopping all UI instances...${NC}"
     local port_pids
-    port_pids=$(lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ' | xargs)
+    port_pids=$({ lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null; } | tr '\n' ' ' | xargs)
     if [[ -n "$port_pids" ]]; then
       kill $port_pids 2>/dev/null || true
       sleep 1
@@ -1037,7 +1037,7 @@ check_local_code_origin() {
   }
 
   local ui_pids
-  ui_pids=$(lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ' | xargs || true)
+  ui_pids=$({ lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null; } | tr '\n' ' ' | xargs || true)
   if [[ -z "$ui_pids" ]]; then
     echo -e "  ${YELLOW}⚠️  No UI process detected on ports 5173/5174/5175${NC}"
   else

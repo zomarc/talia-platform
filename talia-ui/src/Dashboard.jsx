@@ -34,6 +34,8 @@ const REPORT_REFRESH_EVENT = 'talia:report.refresh';
 const REPORT_TOGGLE_DETAILS_EVENT = 'talia:report.toggleDetails';
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 const DOCKVIEW_MAXIMIZE_STATE_EVENT = 'talia:dockview.maximizeStateChanged';
+const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
+const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';
 
 const toggleDockviewPanelLayout = (panelApi, dockviewApi) => {
   if (!panelApi) return;
@@ -1893,10 +1895,26 @@ function Dashboard({ user }) {
     }
   };
 
-  const toggleSidebar = () => {
-    console.log('Toggling sidebar. Current width:', sidebarWidth, 'Collapsed:', sidebarCollapsed);
-    setSidebarCollapsed(!sidebarCollapsed);
-  };
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => !prev);
+  }, []);
+
+  useEffect(() => {
+    const handleExternalSidebarToggle = () => {
+      toggleSidebar();
+    };
+    window.addEventListener(DASHBOARD_TOGGLE_SIDEBAR_EVENT, handleExternalSidebarToggle);
+    return () => window.removeEventListener(DASHBOARD_TOGGLE_SIDEBAR_EVENT, handleExternalSidebarToggle);
+  }, [toggleSidebar]);
+
+  useEffect(() => {
+    window.__taliaSidebarCollapsed = sidebarCollapsed;
+    window.dispatchEvent(
+      new CustomEvent(DASHBOARD_SIDEBAR_STATE_EVENT, {
+        detail: { collapsed: sidebarCollapsed },
+      })
+    );
+  }, [sidebarCollapsed]);
 
   const addNewPanel = (componentType, title, panelParams = {}) => {
     if (!apiRef.current) return;
@@ -2278,19 +2296,6 @@ function Dashboard({ user }) {
       className={`dashboard-shell dockview-theme-${theme.name.toLowerCase().replace(' ', '-')} ${isGroupMaximized ? 'dashboard-shell--maximized' : ''}`} 
       ref={shellRef}
     >
-      {/* Top Toolbar */}
-      <div className="dashboard-toolbar">
-        <button 
-          onClick={toggleSidebar} 
-          className="dashboard-toolbar__toggle"
-        >
-          {sidebarCollapsed ? "☰ Show Sidebar" : "◀ Hide Sidebar"}
-        </button>
-        <div className="dashboard-toolbar__meta">
-          Dockview Dashboard - {theme.name}
-        </div>
-      </div>
-
       <div className="dashboard-layout">
         <Sidebar
           isCollapsed={sidebarCollapsed}

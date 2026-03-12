@@ -65,10 +65,11 @@ body > .mode-selector .mode-selector__container,
 
 .mode-selector__btn {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 2px;
-  padding: var(--theme-padding-xs) var(--theme-padding-sm);
+  justify-content: center;
+  gap: 0;
+  padding: 0;
   background: var(--theme-glass);
   border: 1px solid var(--theme-border);
   border-radius: var(--theme-radius-sm);
@@ -78,7 +79,9 @@ body > .mode-selector .mode-selector__container,
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
-  min-width: 50px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
 }
 
 .mode-selector__btn:hover {
@@ -100,7 +103,7 @@ body > .mode-selector .mode-selector__container,
 }
 
 .mode-selector__icon {
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1;
 }
 

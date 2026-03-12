@@ -21,9 +21,9 @@ export const theme = {
     elevated: '#1a1a2e',
     
     // Text
-    foreground: '#e8e8f0',
-    textSecondary: 'rgba(232, 232, 240, 0.75)',
-    textMuted: 'rgba(232, 232, 240, 0.55)',
+    foreground: '#d9e2ef',
+    textSecondary: 'rgba(217, 226, 239, 0.84)',
+    textMuted: 'rgba(217, 226, 239, 0.66)',
     
     // Accent
     accent: '#5b9bd5',
@@ -72,15 +72,15 @@ export const theme = {
     size: 12,
     sizeSm: 11,
     sizeXs: 10,
-    sizeLg: 14,
-    sizeXl: 16,
+    sizeLg: 13,
+    sizeXl: 14,
   },
   
   // Table settings
   table: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: 'monospace',
-    headerHeight: 28,
+    headerHeight: 26,
     rowHeight: 24,
     headerFontWeight: 600,
   },

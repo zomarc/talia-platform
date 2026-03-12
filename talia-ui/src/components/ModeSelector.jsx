@@ -71,9 +71,9 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
             className={`mode-selector__btn ${currentMode === 'test' ? 'mode-selector__btn--active' : ''}`}
             onClick={() => handleModeClick('test')}
             title="Test Mode"
+            aria-label="Switch to test mode"
           >
             <span className="mode-selector__icon">🧪</span>
-            <span className="mode-selector__label">Test</span>
           </button>
           
           <div className="mode-selector__app-wrapper">
@@ -81,9 +81,9 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
               className={`mode-selector__btn mode-selector__btn--app ${currentMode === 'app' ? 'mode-selector__btn--active' : ''}`}
               onClick={handleAppModeClick}
               title="App Mode"
+              aria-label="Switch to app mode"
             >
               <span className="mode-selector__icon">🚀</span>
-              <span className="mode-selector__label">App</span>
             </button>
             
             {/* Dev Tools Toggle Button (only in dev mode) */}
@@ -121,9 +121,9 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
             className={`mode-selector__btn ${currentMode === 'data' ? 'mode-selector__btn--active' : ''}`}
             onClick={() => handleModeClick('data')}
             title="Data Mode"
+            aria-label="Switch to data mode"
           >
             <span className="mode-selector__icon">📊</span>
-            <span className="mode-selector__label">Data</span>
           </button>
         </div>
 

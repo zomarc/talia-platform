@@ -26,9 +26,9 @@
   --theme-panel-bg: #20203b;
   
   /* Foreground/text colors */
-  --theme-fg: #e8e8f0;
-  --theme-text-secondary: rgba(232, 232, 240, 0.82);
-  --theme-text-muted: rgba(232, 232, 240, 0.62);
+  --theme-fg: #d9e2ef;
+  --theme-text-secondary: rgba(217, 226, 239, 0.84);
+  --theme-text-muted: rgba(217, 226, 239, 0.66);
   
   /* Accent color (blue) */
   --theme-accent: #5b9bd5;
@@ -83,7 +83,7 @@
   
   /* Tabulator-specific */
   --theme-tabulator-header-bg: rgba(255, 255, 255, 0.12);
-  --theme-tabulator-header-text: #f2f2f7;
+  --theme-tabulator-header-text: #dbe5f5;
   --theme-tabulator-filter-bg: #10101f;
   --theme-tabulator-filter-border: rgba(255, 255, 255, 0.2);
   --theme-tabulator-sort-active: #7db3ea;
@@ -97,16 +97,16 @@
   --theme-font-family-monospace: "JetBrains Mono", "SF Mono", "Monaco", "Consolas", monospace;
   
   /* Base font sizes - compact and readable */
-  --theme-font-size: 11px;
-  --theme-font-size-sm: 10px;
-  --theme-font-size-xs: 9px;
-  --theme-font-size-lg: 12px;
-  --theme-font-size-xl: 13px;
+  --theme-font-size: 12px;
+  --theme-font-size-sm: 11px;
+  --theme-font-size-xs: 10px;
+  --theme-font-size-lg: 13px;
+  --theme-font-size-xl: 14px;
   
   /* Table-specific typography - optimized for data density */
-  --theme-table-font-size: var(--theme-font-size);
+  --theme-table-font-size: 11px;
   --theme-table-font-family: var(--theme-font-family);
-  --theme-table-header-font-size: var(--theme-font-size);
+  --theme-table-header-font-size: 11px;
   --theme-table-header-font-weight: 600;
   
   /* ============================================================================
@@ -114,8 +114,8 @@
      ============================================================================ */
   
   /* Table dimensions */
-  --theme-table-header-height: 24px;
-  --theme-table-row-height: 22px;
+  --theme-table-header-height: 26px;
+  --theme-table-row-height: 24px;
   --theme-table-cell-padding-y: 3px;
   --theme-table-cell-padding-x: 6px;
   --theme-table-filter-height: 20px;
@@ -166,6 +166,10 @@
 html {
   font-size: var(--theme-font-size);
   font-family: var(--theme-font-family);
+  line-height: 1.4;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {

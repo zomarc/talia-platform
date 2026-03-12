@@ -12,10 +12,12 @@
   background: var(--theme-bg-solid) !important;
   border: 1px solid var(--theme-border) !important;
   border-radius: 6px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .tabulator .tabulator-header {
-  background: var(--theme-bg-solid) !important;
+  background: color-mix(in srgb, var(--theme-bg-elevated) 80%, var(--theme-bg-solid)) !important;
   color: var(--theme-tabulator-header-text);
   border-bottom: 1px solid var(--theme-border) !important;
   font-size: var(--theme-table-header-font-size) !important;
@@ -42,6 +44,9 @@
 .tabulator .tabulator-header .tabulator-col .tabulator-col-title {
   font-size: var(--theme-table-header-font-size) !important;
   font-family: var(--theme-table-font-family) !important;
+  font-weight: 600;
+  color: var(--theme-tabulator-header-text) !important;
+  letter-spacing: 0.01em;
 }
 
 .tabulator .tabulator-header .tabulator-col .tabulator-header-filter {
@@ -54,7 +59,7 @@
 .tabulator .tabulator-header select {
   background: var(--theme-tabulator-filter-bg);
   border: 1px solid var(--theme-tabulator-filter-border);
-  color: var(--theme-fg);
+  color: var(--theme-text-secondary);
   font-size: var(--theme-table-font-size) !important;
   font-family: var(--theme-table-font-family) !important;
   padding: var(--theme-table-cell-padding-y) var(--theme-table-cell-padding-x);
@@ -82,7 +87,7 @@
 .tabulator .tabulator-tableholder .tabulator-table .tabulator-row {
   min-height: var(--theme-table-row-height);
   height: var(--theme-table-row-height);
-  border-bottom: 1px solid var(--theme-border-light) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-border-light) 80%, transparent) !important;
 }
 
 .tabulator .tabulator-row.tabulator-row-even,
@@ -92,7 +97,7 @@
 
 .tabulator .tabulator-row.tabulator-row-odd,
 .tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row-odd {
-  background: transparent !important;
+  background: color-mix(in srgb, var(--theme-bg-elevated) 30%, transparent) !important;
 }
 
 .tabulator .tabulator-row:hover,
@@ -112,9 +117,12 @@
 
 .tabulator .tabulator-cell {
   padding: var(--theme-table-cell-padding-y) var(--theme-table-cell-padding-x);
-  line-height: 1.25;
+  line-height: 1.3;
   font-size: var(--theme-table-font-size) !important;
   font-family: var(--theme-table-font-family) !important;
+  font-weight: 500;
+  color: var(--theme-fg) !important;
+  font-variant-numeric: tabular-nums;
   height: var(--theme-table-row-height);
   border-right: 0 !important;
   border-left: 0 !important;
@@ -141,58 +149,67 @@
 /* Master Sailing hierarchy readability */
 .master-sailing-table .tabulator-row.tabulator-group.tabulator-group-level-0,
 .master-sailing-table .tabulator-row.tabulator-group[data-level="0"] {
-  background: rgba(34, 72, 138, 0.56) !important;
-  border-left: 4px solid rgba(122, 174, 255, 0.9) !important;
-  box-shadow: inset 0 0 0 1px rgba(122, 174, 255, 0.28);
+  background: rgba(29, 63, 122, 0.64) !important;
+  border-left: 4px solid rgba(125, 180, 255, 0.95) !important;
+  box-shadow: inset 0 0 0 1px rgba(125, 180, 255, 0.34);
 }
 
 .master-sailing-table .tabulator-row.tabulator-group.tabulator-group-level-1,
 .master-sailing-table .tabulator-row.tabulator-group[data-level="1"] {
-  background: rgba(86, 102, 130, 0.5) !important;
-  border-left: 4px solid rgba(176, 192, 220, 0.82) !important;
-  box-shadow: inset 0 0 0 1px rgba(176, 192, 220, 0.2);
+  background: rgba(77, 93, 122, 0.58) !important;
+  border-left: 4px solid rgba(178, 198, 230, 0.88) !important;
+  box-shadow: inset 0 0 0 1px rgba(178, 198, 230, 0.24);
 }
 
 .master-sailing-table .tabulator-row.tabulator-group {
-  min-height: 30px !important;
+  min-height: 32px !important;
   height: auto !important;
-  padding-top: 2px !important;
-  padding-bottom: 2px !important;
+  padding-top: 3px !important;
+  padding-bottom: 3px !important;
   border-right: 0 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
 }
 
 .master-sailing-table .tabulator-row.tabulator-group .tabulator-group-header {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   line-height: 1.25;
 }
 
 .master-sailing-table .tabulator-row.tabulator-group.tabulator-group-level-1 .tabulator-group-header,
 .master-sailing-table .tabulator-row.tabulator-group[data-level="1"] .tabulator-group-header {
-  padding-left: 24px !important;
+  padding-left: 30px !important;
 }
 
 .master-sailing-table .tabulator-row.tabulator-group.tabulator-group-level-1 .tabulator-arrow,
 .master-sailing-table .tabulator-row.tabulator-group[data-level="1"] .tabulator-arrow {
-  margin-left: 24px !important;
+  margin-left: 30px !important;
+}
+
+.master-sailing-table .tabulator-row.tabulator-group .tabulator-arrow {
+  color: rgba(222, 232, 248, 0.95) !important;
+  font-size: 11px !important;
 }
 
 .master-sailing-table .tabulator-row:not(.tabulator-group) .tabulator-cell:first-child {
-  padding-left: calc(var(--theme-table-cell-padding-x) + 44px) !important;
+  padding-left: calc(var(--theme-table-cell-padding-x) + 52px) !important;
 }
 
 .master-sailing-table .tabulator-row:not(.tabulator-group) .tabulator-cell {
-  border-left: 2px solid rgba(176, 192, 220, 0.22) !important;
+  border-left: 2px solid rgba(176, 192, 220, 0.28) !important;
 }
 
 .master-sailing-table .master-sailing-group {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  padding: 3px 9px;
   border-radius: 999px;
   font-weight: 700;
   letter-spacing: 0.01em;
+  font-size: 11px;
+  line-height: 1.15;
 }
 
 .master-sailing-table .master-sailing-group--month {

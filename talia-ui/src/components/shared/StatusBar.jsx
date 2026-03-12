@@ -12,10 +12,13 @@
 import React, { useState, useEffect } from 'react';
 import ModeSelector from '../ModeSelector';
 // CSS imported globally in main.jsx
+const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
+const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';
 
 const StatusBar = ({ statusMessage, currentEvent, persistedEvent, currentMode, onModeChange, dataStatus }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [displayMessage, setDisplayMessage] = useState(statusMessage);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => !!window.__taliaSidebarCollapsed);
 
   // Update display message when statusMessage changes
   useEffect(() => {
@@ -28,6 +31,21 @@ const StatusBar = ({ statusMessage, currentEvent, persistedEvent, currentMode, o
       return () => clearTimeout(timer);
     }
   }, [statusMessage]);
+
+  useEffect(() => {
+    const handleSidebarState = (event) => {
+      const collapsed = event?.detail?.collapsed;
+      if (typeof collapsed === 'boolean') {
+        setSidebarCollapsed(collapsed);
+      }
+    };
+    window.addEventListener(DASHBOARD_SIDEBAR_STATE_EVENT, handleSidebarState);
+    return () => window.removeEventListener(DASHBOARD_SIDEBAR_STATE_EVENT, handleSidebarState);
+  }, []);
+
+  const handleSidebarToggle = () => {
+    window.dispatchEvent(new CustomEvent(DASHBOARD_TOGGLE_SIDEBAR_EVENT));
+  };
 
   // Get event summary
   const getEventSummary = (event) => {
@@ -130,6 +148,21 @@ const StatusBar = ({ statusMessage, currentEvent, persistedEvent, currentMode, o
             </div>
           )}
         </div>
+
+        {currentMode === 'app' && (
+          <div className="status-bar__header">
+            <button
+              type="button"
+              className="status-bar__header-btn"
+              onClick={handleSidebarToggle}
+              title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+              aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+            >
+              {sidebarCollapsed ? '☰' : '◧'}
+            </button>
+            <span className="status-bar__header-title">Dockview Dashboard - Talia Professional</span>
+          </div>
+        )}
 
         {/* Right side: Mode selector (always visible) */}
         {currentMode && onModeChange && (

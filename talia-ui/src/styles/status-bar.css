@@ -50,6 +50,39 @@
   margin-left: auto;
 }
 
+.status-bar__header {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-padding-xs);
+  margin-left: auto;
+  margin-right: var(--theme-padding-sm);
+}
+
+.status-bar__header-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  background: var(--theme-glass);
+  color: var(--theme-fg);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.status-bar__header-btn:hover {
+  background: var(--theme-glass-hover);
+  border-color: var(--theme-border-strong);
+}
+
+.status-bar__header-title {
+  color: var(--theme-text-secondary);
+  font-size: var(--theme-font-size-sm);
+  white-space: nowrap;
+}
+
 /* ============================================================================
    Status Messages (Temporary)
    ============================================================================ */

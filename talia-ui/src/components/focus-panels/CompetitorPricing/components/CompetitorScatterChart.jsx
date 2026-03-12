@@ -43,7 +43,52 @@ const getColorForCruiseLine = (cruiseLine, index) => {
   return fallbackColors[index % fallbackColors.length];
 };
 
-const CompetitorScatterChart = ({ data, theme }) => {
+const ALL_CABIN_TYPES = ['BALCONY', 'INSIDE', 'OUTSIDE', 'SUITE'];
+const PRIMARY_COLOR = '#ef4444';
+const normalizeLine = (value) => String(value || '').trim().toLowerCase();
+
+const getPointStyleForCabinType = (cabinType) => {
+  switch (String(cabinType || '').toUpperCase()) {
+    case 'INSIDE':
+      return 'circle';
+    case 'OUTSIDE':
+      return 'triangle';
+    case 'BALCONY':
+      return 'rect';
+    case 'SUITE':
+      return 'star';
+    default:
+      return 'circle';
+  }
+};
+
+const withAlpha = (hexColor, alpha) => {
+  if (!hexColor || typeof hexColor !== 'string') return `rgba(153, 153, 153, ${alpha})`;
+  const normalized = hexColor.replace('#', '');
+  if (normalized.length !== 6) return `rgba(153, 153, 153, ${alpha})`;
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const CompetitorScatterChart = ({
+  data,
+  theme,
+  filters,
+  expandedCabinType,
+  onToggleExpand,
+  tableVisible = true,
+  chartOptions = { pppdScaleMode: 'AUTO', pppdMax: 200 }
+}) => {
+  const containerRef = useRef(null);
+  const filteredCabinTypes = (filters?.cabinType && filters.cabinType !== 'ALL')
+    ? [filters.cabinType]
+    : ALL_CABIN_TYPES;
+  const activeCabinTypes = expandedCabinType ? [expandedCabinType] : filteredCabinTypes;
+  const primaryCruiseLine = filters?.primaryCruiseLine || null;
+  const secondaryCruiseLine = filters?.secondaryCruiseLine || 'ALL';
+
   const chartRefs = {
     BALCONY: useRef(null),
     INSIDE: useRef(null),
@@ -54,12 +99,11 @@ const CompetitorScatterChart = ({ data, theme }) => {
 
   useEffect(() => {
     if (!data || data.length === 0) return;
-
-    const cabinTypes = ['BALCONY', 'INSIDE', 'OUTSIDE', 'SUITE'];
+    const cabinTypes = activeCabinTypes;
 
     // Group data by cabin type
     const dataByCabinType = {};
-    cabinTypes.forEach(type => {
+    ALL_CABIN_TYPES.forEach(type => {
       dataByCabinType[type] = data.filter(d => d.cabinType === type);
     });
 
@@ -79,9 +123,22 @@ const CompetitorScatterChart = ({ data, theme }) => {
     // Round to nice numbers
     const roundedMin = Math.floor(yAxisMin / 10) * 10;
     const roundedMax = Math.ceil(yAxisMax / 10) * 10;
+    const useFixedPppd = chartOptions?.pppdScaleMode === 'FIXED';
+    const fixedMax = Number(chartOptions?.pppdMax) || 200;
+    const effectiveYMin = useFixedPppd ? 0 : roundedMin;
+    const effectiveYMax = useFixedPppd ? fixedMax : roundedMax;
 
     // Get unique cruise lines
-    const cruiseLines = [...new Set(data.map(d => d.cruiseLine).filter(Boolean))].sort();
+    const allCruiseLines = [...new Set(data.map(d => d.cruiseLine).filter(Boolean))].sort();
+    const cruiseLines = allCruiseLines.filter((line) => {
+      if (primaryCruiseLine && normalizeLine(line) === normalizeLine(primaryCruiseLine)) return true;
+      if (secondaryCruiseLine === 'NONE') return false;
+      if (secondaryCruiseLine && secondaryCruiseLine !== 'ALL') {
+        return normalizeLine(line) === normalizeLine(secondaryCruiseLine);
+      }
+      if (primaryCruiseLine) return normalizeLine(line) !== normalizeLine(primaryCruiseLine);
+      return true;
+    });
 
     cabinTypes.forEach(cabinType => {
       const canvasRef = chartRefs[cabinType].current;
@@ -107,25 +164,22 @@ const CompetitorScatterChart = ({ data, theme }) => {
             plugins: {
               title: {
                 display: true,
-                text: cabinType,
-                color: theme?.colors?.foreground || '#2b2b2b'
+                text: `${cabinType} (PPPD/Departure Date)`,
+                color: theme?.colors?.foreground || '#2b2b2b',
+                font: { size: 12, weight: '600' }
               }
             },
             scales: {
               y: {
                 beginAtZero: false,
-                min: roundedMin,
-                max: roundedMax,
-                title: {
-                  display: true,
-                  text: 'PPPD',
-                  color: theme?.colors?.textSecondary || '#666'
-                },
+                min: effectiveYMin,
+                max: effectiveYMax,
                 grid: {
                   color: theme?.colors?.border || 'rgba(0,0,0,0.1)'
                 },
                 ticks: {
                   color: theme?.colors?.textSecondary || '#666',
+                  font: { size: 9 },
                   callback: function(value) {
                     return Math.round(value);
                   }
@@ -133,16 +187,17 @@ const CompetitorScatterChart = ({ data, theme }) => {
               },
               x: {
                 type: 'linear',
-                title: {
-                  display: true,
-                  text: 'Departure Date',
-                  color: theme?.colors?.textSecondary || '#666'
-                },
                 grid: {
                   color: theme?.colors?.border || 'rgba(0,0,0,0.1)'
                 },
                 ticks: {
-                  color: theme?.colors?.textSecondary || '#666'
+                  color: theme?.colors?.textSecondary || '#666',
+                  font: { size: 9 },
+                  callback: function(value) {
+                    const date = new Date(value);
+                    const monthYear = date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+                    return monthYear.replace(' ', '/');
+                  }
                 }
               }
             }
@@ -154,18 +209,24 @@ const CompetitorScatterChart = ({ data, theme }) => {
       // Create datasets for each cruise line
       const datasets = cruiseLines.map((cruiseLine, index) => {
         const cruiseLineData = cabinData.filter(d => d.cruiseLine === cruiseLine);
+        const isPrimary = primaryCruiseLine && normalizeLine(cruiseLine) === normalizeLine(primaryCruiseLine);
+        const baseColor = isPrimary ? PRIMARY_COLOR : getColorForCruiseLine(cruiseLine, index);
+        const color = isPrimary ? baseColor : withAlpha(baseColor, 0.35);
+        const pointStyle = getPointStyleForCabinType(cabinType);
+        const baseRadius = cabinType === 'SUITE' ? 2.4 : 2.8;
         return {
           label: cruiseLine,
           data: cruiseLineData.map(d => ({
             x: new Date(d.departureDate).getTime(),
             y: d.pppd
           })),
-          backgroundColor: getColorForCruiseLine(cruiseLine, index),
-          borderColor: getColorForCruiseLine(cruiseLine, index),
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          pointBorderWidth: 1,
-          pointBorderColor: '#fff'
+          backgroundColor: color,
+          borderColor: color,
+          pointStyle,
+          pointRadius: isPrimary ? baseRadius + 0.6 : baseRadius,
+          pointHoverRadius: isPrimary ? baseRadius + 1.2 : baseRadius + 0.6,
+          pointBorderWidth: 0,
+          pointBorderColor: color
         };
       });
 
@@ -182,9 +243,9 @@ const CompetitorScatterChart = ({ data, theme }) => {
           plugins: {
             title: {
               display: true,
-              text: cabinType,
+              text: `${cabinType} (PPPD/Departure Date)`,
               color: theme?.colors?.foreground || '#2b2b2b',
-              font: { size: 16, weight: 'bold' }
+              font: { size: 10, weight: '600' }
             },
             legend: {
               display: false, // Hide legend in individual charts (will show in main legend)
@@ -208,8 +269,10 @@ const CompetitorScatterChart = ({ data, theme }) => {
                 label: function(context) {
                   const dataset = context.dataset;
                   const point = context.raw;
+                  const cabin = cabinType || 'N/A';
                   return [
                     `Cruise Line: ${dataset.label}`,
+                    `Cabin Type: ${cabin}`,
                     `PPPD: ${point.y.toFixed(2)}`,
                     `Date: ${new Date(point.x).toLocaleDateString()}`
                   ];
@@ -220,41 +283,34 @@ const CompetitorScatterChart = ({ data, theme }) => {
           scales: {
             x: {
               type: 'linear',
-              title: {
-                display: true,
-                text: 'Departure Date',
-                color: theme?.colors?.textSecondary || '#666'
-              },
               grid: {
                 color: theme?.colors?.border || 'rgba(0,0,0,0.1)'
               },
               ticks: {
                 color: theme?.colors?.textSecondary || '#666',
+                font: { size: 9 },
                 callback: function(value) {
                   const date = new Date(value);
-                  return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                  const monthYear = date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+                  return monthYear.replace(' ', '/');
                 }
               }
             },
             y: {
               beginAtZero: false,
-              min: roundedMin,
-              max: roundedMax,
-              title: {
-                display: true,
-                text: 'PPPD',
-                color: theme?.colors?.textSecondary || '#666'
-              },
+              min: effectiveYMin,
+              max: effectiveYMax,
               grid: {
                 color: theme?.colors?.border || 'rgba(0,0,0,0.1)'
               },
               ticks: {
                 color: theme?.colors?.textSecondary || '#666',
+                font: { size: 9 },
                 callback: function(value) {
                   return Math.round(value);
                 },
                 // Calculate step size to get approximately 8-12 ticks
-                stepSize: Math.max(1, Math.ceil((roundedMax - roundedMin) / 12))
+                stepSize: Math.max(1, Math.ceil((effectiveYMax - effectiveYMin) / 12))
               }
             }
           },
@@ -273,14 +329,41 @@ const CompetitorScatterChart = ({ data, theme }) => {
         }
       });
     };
-  }, [data, theme]);
+  }, [data, theme, activeCabinTypes, primaryCruiseLine, secondaryCruiseLine, chartOptions?.pppdScaleMode, chartOptions?.pppdMax]);
 
-  const cabinTypes = ['BALCONY', 'INSIDE', 'OUTSIDE', 'SUITE'];
+  useEffect(() => {
+    if (!containerRef.current || typeof ResizeObserver === 'undefined') return undefined;
+
+    const observer = new ResizeObserver(() => {
+      Object.values(chartInstances.current).forEach((chart) => {
+        try {
+          chart?.resize?.();
+        } catch {
+          // noop
+        }
+      });
+    });
+
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <div className="competitor-scatter-grid">
-      {cabinTypes.map(cabinType => (
+    <div
+      ref={containerRef}
+      className={`competitor-scatter-grid ${activeCabinTypes.length === 1 ? 'competitor-scatter-grid--single' : ''} ${expandedCabinType ? 'competitor-scatter-grid--expanded' : ''} ${!tableVisible ? 'competitor-scatter-grid--table-hidden' : ''}`}
+    >
+      {activeCabinTypes.map(cabinType => (
         <div key={cabinType} className="competitor-scatter-grid__chart">
+          <button
+            type="button"
+            className="competitor-scatter-grid__expand-btn"
+            aria-label={expandedCabinType ? `Collapse ${cabinType} chart` : `Expand ${cabinType} chart`}
+            title={expandedCabinType ? 'Return to panel layout' : 'Expand chart'}
+            onClick={() => onToggleExpand?.(expandedCabinType ? null : cabinType)}
+          >
+            {expandedCabinType ? '↙' : '↗'}
+          </button>
           <canvas ref={chartRefs[cabinType]} />
         </div>
       ))}

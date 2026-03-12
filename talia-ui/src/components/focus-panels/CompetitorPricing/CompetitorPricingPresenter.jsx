@@ -8,52 +8,62 @@ import CompetitorPricingFilters from './components/CompetitorPricingFilters';
 import CompetitorScatterChart from './components/CompetitorScatterChart';
 import CompetitorPricingTable from './components/CompetitorPricingTable';
 
-const CompetitorPricingPresenter = ({ data, filters, onFiltersChange, theme }) => {
-  return (
-    <div className="competitor-pricing">
-      {/* Title */}
-      <div className="competitor-pricing__title">
-        Competitor Pricing | Latest Prices By Cabin Type
-      </div>
+const CompetitorPricingPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }) => {
+  const [expandedCabinType, setExpandedCabinType] = React.useState(null);
+  const [showTable, setShowTable] = React.useState(true);
+  const [chartOptions, setChartOptions] = React.useState({
+    pppdScaleMode: 'AUTO',
+    pppdMax: 200
+  });
 
-      {/* Filters */}
+  return (
+    <div className="talia-report competitor-pricing" role="region" aria-label="Competitor pricing report">
+      <header className="talia-report__header competitor-pricing__header">
+        <div className="talia-report__header-left">
+          <h2 className="talia-report__title">Competitor Pricing</h2>
+          <span className="talia-report__subtitle">Latest prices by cabin type</span>
+        </div>
+        <div className="talia-report__actions">
+          {onRefresh && (
+            <button
+              className="talia-btn talia-btn--ghost talia-btn--small"
+              onClick={onRefresh}
+              aria-label="Refresh competitor pricing"
+              title="Refresh competitor pricing"
+            >
+              Refresh
+            </button>
+          )}
+        </div>
+      </header>
+
       <CompetitorPricingFilters
         data={data}
         filters={filters}
         onFiltersChange={onFiltersChange}
+        showTable={showTable}
+        onToggleTable={() => setShowTable((prev) => !prev)}
+        chartOptions={chartOptions}
+        onChartOptionsChange={setChartOptions}
       />
 
-      {/* Main Content */}
-      <div className="competitor-pricing__content">
-        {/* Left Column: Charts */}
-        <div className="competitor-pricing__left">
-          <CompetitorScatterChart data={data} theme={theme} />
-        </div>
+      <main className="talia-report__content competitor-pricing__content">
+        <CompetitorScatterChart
+          data={data}
+          theme={theme}
+          filters={filters}
+          expandedCabinType={expandedCabinType}
+          onToggleExpand={setExpandedCabinType}
+          tableVisible={showTable}
+          chartOptions={chartOptions}
+        />
+        {!expandedCabinType && showTable && <CompetitorPricingTable data={data} />}
+      </main>
 
-        {/* Right Column: Filter Pane */}
-        <div className="competitor-pricing__right">
-          <div className="competitor-pricing__filter-pane">
-            <div className="competitor-pricing__filter-title">Filters</div>
-            <div className="competitor-pricing__filter-row">
-              <label className="competitor-pricing__filter-label">
-                <input
-                  type="checkbox"
-                  checked={filters.isLatest !== false}
-                  onChange={(e) => onFiltersChange({
-                    ...filters,
-                    isLatest: e.target.checked
-                  })}
-                  className="competitor-pricing__filter-checkbox"
-                />
-                Is Latest
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Table */}
-      <CompetitorPricingTable data={data} />
+      <footer className="talia-report__footer">
+        <span>{(data || []).length.toLocaleString()} records</span>
+        <span>Competitor current state</span>
+      </footer>
     </div>
   );
 };

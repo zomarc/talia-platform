@@ -5,11 +5,22 @@
 
 import React from 'react';
 
-const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange }) => {
+const PPPD_MAX_OPTIONS = [100, 200, 300, 400, 500, 600, 700];
+
+const CompetitorPricingFilters = ({
+  data = [],
+  filters,
+  onFiltersChange,
+  showTable = true,
+  onToggleTable,
+  chartOptions = { pppdScaleMode: 'AUTO', pppdMax: 200 },
+  onChartOptionsChange
+}) => {
   // Extract unique values for dropdowns from data
   const currencies = [...new Set(data.map(d => d.currency).filter(Boolean))].sort();
   const durations = [...new Set(data.map(d => d.duration).filter(Boolean))].sort((a, b) => a - b);
   const destinations = [...new Set(data.map(d => d.destination).filter(Boolean))].sort();
+  const cruiseLines = [...new Set(data.map(d => d.cruiseLine).filter(Boolean))].sort();
 
   const months = [
     { value: null, label: 'All Months' },
@@ -42,6 +53,14 @@ const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange }) => {
     });
   };
 
+  const handleChartOptionChange = (key, value) => {
+    if (typeof onChartOptionsChange !== 'function') return;
+    onChartOptionsChange({
+      ...chartOptions,
+      [key]: value
+    });
+  };
+
   return (
     <div className="competitor-filters">
       <div className="competitor-filters__group">
@@ -62,7 +81,7 @@ const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange }) => {
       </div>
 
       <div className="competitor-filters__group">
-        <label className="competitor-filters__label">Cruise Duration</label>
+        <label className="competitor-filters__label">Duration</label>
         <select
           value={filters.duration || ''}
           onChange={(e) => handleFilterChange('duration', e.target.value ? parseFloat(e.target.value) : null)}
@@ -76,7 +95,7 @@ const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange }) => {
       </div>
 
       <div className="competitor-filters__group">
-        <label className="competitor-filters__label">Source Destination</label>
+        <label className="competitor-filters__label">Destination</label>
         <select
           value={filters.destination || ''}
           onChange={(e) => handleFilterChange('destination', e.target.value)}
@@ -94,6 +113,54 @@ const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange }) => {
       </div>
 
       <div className="competitor-filters__group">
+        <label className="competitor-filters__label">Primary</label>
+        <select
+          value={filters.primaryCruiseLine || ''}
+          onChange={(e) => {
+            const nextPrimary = e.target.value;
+            const nextSecondary = filters.secondaryCruiseLine === nextPrimary ? 'ALL' : filters.secondaryCruiseLine;
+            onFiltersChange({
+              ...filters,
+              primaryCruiseLine: nextPrimary || null,
+              secondaryCruiseLine: nextSecondary || 'ALL'
+            });
+          }}
+          className="competitor-filters__input"
+        >
+          <option value="">None</option>
+          {cruiseLines.map(line => (
+            <option key={line} value={line}>{line}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="competitor-filters__group">
+        <label className="competitor-filters__label">Secondary</label>
+        {(() => {
+          const availableSecondaryLines = cruiseLines.filter((line) => !filters.primaryCruiseLine || line !== filters.primaryCruiseLine);
+          const secondaryValue = filters.secondaryCruiseLine && (
+            filters.secondaryCruiseLine === 'ALL' || availableSecondaryLines.includes(filters.secondaryCruiseLine)
+          )
+            ? filters.secondaryCruiseLine
+            : 'ALL';
+
+          return (
+            <select
+              value={secondaryValue}
+              onChange={(e) => handleFilterChange('secondaryCruiseLine', e.target.value || 'ALL')}
+              className="competitor-filters__input"
+            >
+              <option value="ALL">All</option>
+              <option value="NONE">None</option>
+              {availableSecondaryLines.map((line) => (
+                <option key={line} value={line}>{line}</option>
+              ))}
+            </select>
+          );
+        })()}
+      </div>
+
+      <div className="competitor-filters__group">
         <label className="competitor-filters__label">Cabin Type</label>
         <select
           value={filters.cabinType || 'ALL'}
@@ -107,7 +174,7 @@ const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange }) => {
       </div>
 
       <div className="competitor-filters__group">
-        <label className="competitor-filters__label">Departure Month</label>
+        <label className="competitor-filters__label">Month</label>
         <select
           value={filters.departureMonth || ''}
           onChange={(e) => handleFilterChange('departureMonth', e.target.value ? parseInt(e.target.value) : null)}
@@ -115,6 +182,34 @@ const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange }) => {
         >
           {months.map(month => (
             <option key={month.value || 'all'} value={month.value || ''}>{month.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="competitor-filters__group">
+        <label className="competitor-filters__label">PPPD</label>
+        <select
+          value={chartOptions.pppdScaleMode || 'AUTO'}
+          onChange={(e) => handleChartOptionChange('pppdScaleMode', e.target.value)}
+          className="competitor-filters__input"
+        >
+          <option value="AUTO">Auto</option>
+          <option value="FIXED">Fixed</option>
+        </select>
+      </div>
+
+      <div className="competitor-filters__group">
+        <label className="competitor-filters__label">PPPD Max</label>
+        <select
+          value={String(chartOptions.pppdMax || 200)}
+          onChange={(e) => handleChartOptionChange('pppdMax', Number(e.target.value))}
+          className="competitor-filters__input"
+          disabled={(chartOptions.pppdScaleMode || 'AUTO') !== 'FIXED'}
+        >
+          {PPPD_MAX_OPTIONS.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
           ))}
         </select>
       </div>
@@ -129,6 +224,18 @@ const CompetitorPricingFilters = ({ data = [], filters, onFiltersChange }) => {
           />
           Latest Only
         </label>
+      </div>
+
+      <div className="competitor-filters__group competitor-filters__group--action">
+        <button
+          type="button"
+          className={`competitor-filters__table-toggle ${showTable ? 'competitor-filters__table-toggle--active' : ''}`}
+          onClick={onToggleTable}
+          aria-label={showTable ? 'Hide data table' : 'Show data table'}
+          title={showTable ? 'Hide data table' : 'Show data table'}
+        >
+          ▦
+        </button>
       </div>
     </div>
   );

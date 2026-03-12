@@ -39,6 +39,7 @@ const mapDbInventoryItemToGraphQL = (row: any) => ({
   id: row.id,
   localKey: row.local_key,
   sailCode: row.sail_code,
+  referenceSailCode: row.reference_sail_code,
   mmsi: row.mmsi,
   imoNumber: row.imo_number,
   shipCode: row.ship_code,
@@ -739,6 +740,7 @@ export const resolvers = {
         if (filters.id) dbFilters.id = Number(filters.id);
         if (filters.localKey) dbFilters.local_key = filters.localKey;
         if (filters.sailCode) dbFilters.sail_code = filters.sailCode;
+        if (filters.referenceSailCode) dbFilters.reference_sail_code = filters.referenceSailCode;
         if (filters.mmsi) dbFilters.mmsi = filters.mmsi;
         if (filters.shipCode) dbFilters.ship_code = filters.shipCode;
         if (filters.masterSailId != null) dbFilters.master_sail_id = filters.masterSailId;
@@ -3064,6 +3066,7 @@ export const resolvers = {
         const row = await supabaseDataService.upsertInventoryItem({
           id: input.id ? Number(input.id) : null,
           sailCode: input.sailCode,
+          referenceSailCode: input.referenceSailCode,
           mmsi: input.mmsi,
           imoNumber: input.imoNumber,
           shipCode: input.shipCode,
@@ -3094,6 +3097,7 @@ export const resolvers = {
           const itemRow = await supabaseDataService.upsertInventoryItem({
             id: inventoryItemInput.id ? Number(inventoryItemInput.id) : null,
             sailCode: inventoryItemInput.sailCode,
+            referenceSailCode: inventoryItemInput.referenceSailCode,
             mmsi: inventoryItemInput.mmsi,
             imoNumber: inventoryItemInput.imoNumber,
             shipCode: inventoryItemInput.shipCode,

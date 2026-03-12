@@ -154,6 +154,15 @@ const MyComponent = () => {
 - Use `selectableRows: 1` for single row selection
 - Use `headerFilter: "list"` with `autocomplete: true` for dropdown filters
 - Emit events on row selection: `talia:componentname.select`
+- For grouped tables that need tab-header controls, set `supportsGroupActions: true` in `registry.js` and register presenter actions in `window.__taliaPanelGroupActions`
+
+**Grouped Tab Header Controls (optional):**
+- Use only when the panel has Tabulator grouping and users need global expand/collapse
+- Keep actions in presenter (`openAllGroups`, `collapseAllGroups`)
+- Register actions by both keys:
+  - `panelComponentId` (stable panel type key, e.g. `master-sailing`)
+  - `panelInstanceId` (instance key, when available)
+- Cleanup registrations on unmount to avoid stale handlers
 
 **Example:**
 ```jsx

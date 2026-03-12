@@ -302,6 +302,7 @@ export const typeDefs = `#graphql
     id: ID!
     localKey: String!
     sailCode: String
+    referenceSailCode: String
     mmsi: String
     imoNumber: String
     shipCode: String
@@ -347,6 +348,7 @@ export const typeDefs = `#graphql
     id: ID
     localKey: String
     sailCode: String
+    referenceSailCode: String
     mmsi: String
     shipCode: String
     masterSailId: Float
@@ -356,6 +358,7 @@ export const typeDefs = `#graphql
   input InventoryItemInput {
     id: ID
     sailCode: String
+    referenceSailCode: String
     mmsi: String
     imoNumber: String
     shipCode: String

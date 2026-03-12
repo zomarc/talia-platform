@@ -1310,6 +1310,9 @@ export class SupabaseDataService {
       if (filters.sail_code) {
         query = query.eq('sail_code', filters.sail_code);
       }
+      if (filters.reference_sail_code) {
+        query = query.eq('reference_sail_code', filters.reference_sail_code);
+      }
       if (filters.mmsi) {
         query = query.eq('mmsi', String(filters.mmsi));
       }
@@ -1339,6 +1342,7 @@ export class SupabaseDataService {
 
       const payload = {
         sail_code: input.sailCode || null,
+        reference_sail_code: input.referenceSailCode || null,
         mmsi: normalizedMmsi,
         imo_number: input.imoNumber || null,
         ship_code: input.shipCode || null,

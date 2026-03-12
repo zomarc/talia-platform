@@ -13,6 +13,7 @@
  * - Emit events when rows are selected (talia:yourcomponent.select)
  * - Use selectableRows: 1 for single row selection
  * - Use headerFilter: "list" with autocomplete: true for dropdown filters
+ * - Optional grouped tab actions: register openAll/collapseAll handlers on window.__taliaPanelGroupActions
  * 
  * TO USE THIS TEMPLATE:
  * 1. Update the columns array with your column definitions
@@ -27,7 +28,7 @@ import { initTabulator } from '../../../lib/tabulatorConfig';
 /**
  * Presentational component template
  */
-const TemplatePresenter = ({ data, onRefresh }) => {
+const TemplatePresenter = ({ data, onRefresh, panelInstanceId, panelComponentId }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const [tableInitialized, setTableInitialized] = useState(false);
@@ -158,6 +159,24 @@ const TemplatePresenter = ({ data, onRefresh }) => {
       console.warn('[Template] Error updating data:', e);
     }
   }, [data, tableInitialized]); // Update when data changes
+
+  // OPTIONAL: register grouped table actions for Dockview tab icons.
+  // Use this only when your panel config sets supportsGroupActions: true in registry.js.
+  useEffect(() => {
+    // TODO: Uncomment and implement when this panel uses Tabulator grouping.
+    // window.__taliaPanelGroupActions = window.__taliaPanelGroupActions || {};
+    // const key = panelComponentId || 'your-panel-id';
+    // const actions = {
+    //   openAll: () => { /* expand all groups */ },
+    //   collapseAll: () => { /* collapse all groups */ },
+    // };
+    // window.__taliaPanelGroupActions[key] = actions;
+    // if (panelInstanceId) window.__taliaPanelGroupActions[panelInstanceId] = actions;
+    // return () => {
+    //   delete window.__taliaPanelGroupActions[key];
+    //   if (panelInstanceId) delete window.__taliaPanelGroupActions[panelInstanceId];
+    // };
+  }, [panelComponentId, panelInstanceId]);
 
   return (
     <div className="focus-panel">

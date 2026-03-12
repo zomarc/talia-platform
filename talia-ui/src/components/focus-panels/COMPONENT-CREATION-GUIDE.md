@@ -191,19 +191,55 @@ export default YourReportPresenter;
 
 ### 3. Register the Component
 
-Add to `Dashboard.jsx`:
+Register in `src/components/focus-panels/registry.js`:
 
 ```jsx
-// Import
-import YourReport from "./components/focus-panels/YourReport";
+YourReport: {
+  component: YourReportContainer,
+  panelId: 'your-report',
+  title: 'Your Report',
+  category: 'Tables',
+  showInReports: true,
+  events: { emits: [], respondsTo: [] },
+}
+```
 
-// Add to DockviewReact components
-"your-report": (props) => <YourReport {...props} />,
+### 4. Optional Group Actions in Tab Header
 
-// Add sidebar button
-<button className="talia-btn" onClick={() => onAddPanel('your-report', 'Your Report')}>
-  📊 Your Report
-</button>
+Use this only for grouped Tabulator panels that need tab-level `open all` / `collapse all` icons.
+
+1. In `registry.js`, opt in:
+
+```jsx
+supportsGroupActions: true,
+```
+
+2. In your container, accept and pass Dockview ids:
+
+```jsx
+const YourReportContainer = ({ panelInstanceId, panelComponentId }) => (
+  <YourReportPresenter
+    panelInstanceId={panelInstanceId}
+    panelComponentId={panelComponentId}
+    // ...
+  />
+);
+```
+
+3. In your presenter, register actions:
+
+```jsx
+useEffect(() => {
+  window.__taliaPanelGroupActions = window.__taliaPanelGroupActions || {};
+  const key = panelComponentId || 'your-report';
+  const actions = { openAll: openAllGroups, collapseAll: collapseAllGroups };
+  window.__taliaPanelGroupActions[key] = actions;
+  if (panelInstanceId) window.__taliaPanelGroupActions[panelInstanceId] = actions;
+  return () => {
+    delete window.__taliaPanelGroupActions[key];
+    if (panelInstanceId) delete window.__taliaPanelGroupActions[panelInstanceId];
+  };
+}, [openAllGroups, collapseAllGroups, panelComponentId, panelInstanceId]);
 ```
 
 ## CSS Classes Reference

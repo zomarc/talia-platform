@@ -1005,7 +1005,7 @@
 
 .talia-event-meta__group {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
 }
 

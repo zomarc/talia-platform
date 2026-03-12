@@ -3,20 +3,20 @@
  * Displays detailed competitor pricing data using Tabulator
  */
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { initTabulator } from '../../../../lib/tabulatorConfig';
 
 const CompetitorPricingTable = ({ data }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
-  const [initialized, setInitialized] = useState(false);
+  const initialDataRef = useRef(data || []);
 
   useEffect(() => {
     let cancelled = false;
 
     const initTable = async () => {
       try {
-        if (!tableRef.current || initialized || cancelled) return;
+        if (!tableRef.current || cancelled) return;
 
         const Tabulator = await initTabulator();
         if (!Tabulator || cancelled) return;
@@ -142,7 +142,7 @@ const CompetitorPricingTable = ({ data }) => {
         ];
 
         // Clone data to avoid read-only property errors (GraphQL may return frozen objects)
-        const clonedData = (data || []).map(item => ({ ...item }));
+        const clonedData = (initialDataRef.current || []).map(item => ({ ...item }));
 
         // Initialize Tabulator
         instanceRef.current = new Tabulator(tableRef.current, {
@@ -157,10 +157,8 @@ const CompetitorPricingTable = ({ data }) => {
           initialSort: [
             { column: 'departureDate', dir: 'asc' }
           ],
-          height: '400px'
+          height: '100%'
         });
-
-        setInitialized(true);
       } catch (error) {
         console.error('[CompetitorPricingTable] Error initializing table:', error);
       }
@@ -178,15 +176,17 @@ const CompetitorPricingTable = ({ data }) => {
         }
       }
     };
-  }, [data, initialized]);
+  }, []);
 
-  if (!data || data.length === 0) {
-    return (
-      <div className="competitor-table">
-        <p className="competitor-table__empty">No competitor pricing data available</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!instanceRef.current) return;
+    try {
+      const clonedData = (data || []).map(item => ({ ...item }));
+      instanceRef.current.replaceData(clonedData);
+    } catch (error) {
+      console.warn('[CompetitorPricingTable] Failed to update table data:', error);
+    }
+  }, [data]);
 
   return (
     <div className="competitor-table">

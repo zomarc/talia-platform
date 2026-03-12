@@ -18,7 +18,7 @@ import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithCon
 import TemplatePresenter from './TemplatePresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
-const TemplateContainer = () => {
+const TemplateContainer = ({ panelInstanceId, panelComponentId }) => {
   console.log('[TemplateContainer] Component rendering');
   
   // Use reusable hook for context-based data fetching with server-side filtering
@@ -88,6 +88,8 @@ const TemplateContainer = () => {
     <TemplatePresenter 
       data={transformedData} 
       onRefresh={refetch}
+      panelInstanceId={panelInstanceId}
+      panelComponentId={panelComponentId}
       // TODO: Pass additional props as needed
     />
   );

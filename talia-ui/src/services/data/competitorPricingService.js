@@ -45,9 +45,26 @@ class CompetitorPricingService {
    */
   async fetch(filters = {}) {
     try {
+      const allowedServerFilterKeys = new Set([
+        'currency',
+        'duration',
+        'destination',
+        'cabinType',
+        'departureMonth',
+        'isLatest',
+        'cruiseLine',
+        'market'
+      ]);
+
       // Remove null/undefined values from filters to avoid GraphQL errors
       const cleanFilters = Object.fromEntries(
-        Object.entries(filters).filter(([, value]) => value !== null && value !== undefined && value !== '')
+        Object.entries(filters).filter(
+          ([key, value]) =>
+            allowedServerFilterKeys.has(key) &&
+            value !== null &&
+            value !== undefined &&
+            value !== ''
+        )
       );
       
       // Only include filters in variables if there are actual filter values

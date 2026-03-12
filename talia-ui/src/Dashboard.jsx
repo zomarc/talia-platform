@@ -32,6 +32,7 @@ const debugLog = (message, data = null) => {
 
 const REPORT_REFRESH_EVENT = 'talia:report.refresh';
 const REPORT_TOGGLE_DETAILS_EVENT = 'talia:report.toggleDetails';
+const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 const DOCKVIEW_MAXIMIZE_STATE_EVENT = 'talia:dockview.maximizeStateChanged';
 
 const toggleDockviewPanelLayout = (panelApi, dockviewApi) => {
@@ -85,12 +86,13 @@ const ReportShell = ({ report, panelInstanceId, children }) => {
   );
 };
 
-const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, maximizeStateToken, ...props }) => {
+const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, groupActionPanelIds, maximizeStateToken, ...props }) => {
   const panelApi = props?.api;
   const panelId = panelApi?.id;
   const panelComponent = panelApi?.component;
   const isReportTab = !!panelComponent && reportPanelIds?.has?.(panelComponent);
   const isRefreshableTab = !!panelComponent && refreshableReportPanelIds?.has?.(panelComponent);
+  const hasGroupActions = !!panelComponent && groupActionPanelIds?.has?.(panelComponent);
   const [isMaximized, setIsMaximized] = React.useState(() => panelApi?.isMaximized?.() ?? false);
   const layoutGlyph = isMaximized ? "↙" : "↗";
   const layoutTitle = isMaximized ? "Return to layout" : "Expand panel";
@@ -170,6 +172,33 @@ const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, maximizeS
     );
   };
 
+  const handleGroupAction = (action) => (event) => {
+    event.stopPropagation();
+    if (!panelId) return;
+    const registeredActions = window.__taliaPanelGroupActions || {};
+    const panelActions =
+      registeredActions[panelId] ||
+      (panelComponent ? registeredActions[panelComponent] : null) ||
+      registeredActions['master-sailing'];
+    if (panelActions) {
+      if (action === 'openAll') {
+        panelActions.openAll?.();
+      } else if (action === 'collapseAll') {
+        panelActions.collapseAll?.();
+      }
+      return;
+    }
+    const groupActionEvent = new CustomEvent(REPORT_GROUP_ACTION_EVENT, {
+      detail: { panelId, panelComponent, action },
+    });
+    window.dispatchEvent(groupActionEvent);
+    document.dispatchEvent(
+      new CustomEvent(REPORT_GROUP_ACTION_EVENT, {
+        detail: { panelId, panelComponent, action },
+      })
+    );
+  };
+
   return (
     <div className="talia-dv-tab">
       <DockviewDefaultTab {...props} hideClose />
@@ -195,6 +224,28 @@ const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, maximizeS
           >
             ⓘ
           </button>
+        )}
+        {hasGroupActions && (
+          <>
+            <button
+              type="button"
+              className="talia-dv-tab__button talia-dv-tab__button--group"
+              title="Open all groups"
+              aria-label="Open all groups"
+              onClick={handleGroupAction('openAll')}
+            >
+              ⊞
+            </button>
+            <button
+              type="button"
+              className="talia-dv-tab__button talia-dv-tab__button--group"
+              title="Collapse all groups"
+              aria-label="Collapse all groups"
+              onClick={handleGroupAction('collapseAll')}
+            >
+              ⊟
+            </button>
+          </>
         )}
         <button
           type="button"
@@ -1392,7 +1443,12 @@ function Dashboard({ user }) {
           report={report}
           panelInstanceId={props?.api?.id || props?.params?.panel?.id || report.panelId}
         >
-          <Component theme={theme} {...props} />
+          <Component
+            theme={theme}
+            panelInstanceId={props?.api?.id || props?.params?.panel?.id || report.panelId}
+            panelComponentId={report.panelId}
+            {...props}
+          />
         </ReportShell>
       );
     });
@@ -1500,6 +1556,15 @@ function Dashboard({ user }) {
       new Set(
         Object.values(reportRegistry)
           .filter((report) => report.panelId && report.supportsRefresh)
+          .map((report) => report.panelId)
+      ),
+    []
+  );
+  const groupActionPanelIds = React.useMemo(
+    () =>
+      new Set(
+        Object.values(reportRegistry)
+          .filter((report) => report.panelId && report.supportsGroupActions)
           .map((report) => report.panelId)
       ),
     []
@@ -1957,10 +2022,11 @@ function Dashboard({ user }) {
         {...props}
         reportPanelIds={reportPanelIds}
         refreshableReportPanelIds={refreshableReportPanelIds}
+        groupActionPanelIds={groupActionPanelIds}
         maximizeStateToken={isGroupMaximized}
       />
     ),
-    [reportPanelIds, refreshableReportPanelIds, isGroupMaximized]
+    [reportPanelIds, refreshableReportPanelIds, groupActionPanelIds, isGroupMaximized]
   );
 
   const onReady = useCallback((event) => {

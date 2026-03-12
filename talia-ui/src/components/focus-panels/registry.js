@@ -1,4 +1,5 @@
 import SailingTableContainer from './SailingTable';
+import MasterSailingContainer from './MasterSailing';
 import SimpleTable from './SimpleTable';
 import KPICards from './KPICards';
 import PublishedRates from './PublishedRates';
@@ -36,6 +37,7 @@ const publishedRatesClear = 'talia:publishedRates.clear';
 const reservationSelect = 'talia:reservation.select';
 const reservationClear = 'talia:reservation.clear';
 const directSourceSelect = 'talia:directsource.select';
+const sailSelectDotEvent = 'talia.sail.select';
 const voyageReportSelect = 'talia:voyagereport.select';
 const masterVoyageSelect = 'talia:mastervoyage.select';
 
@@ -60,6 +62,22 @@ export const componentRegistry = {
     },
     showInReports: true,
     filePath: 'src/components/focus-panels/SailingTable/index.jsx'
+  },
+  MasterSailing: {
+    component: MasterSailingContainer,
+    panelId: 'master-sailing',
+    category: 'Tables',
+    title: 'Master Sailing',
+    description: 'Top-level grouped sailing selector (month, ship, master sail, sail code)',
+    props: {},
+    dataRequirements: 'Requires master_sail and inventory_item (reference_sail_code)',
+    events: {
+      emits: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT],
+      respondsTo: []
+    },
+    supportsGroupActions: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/MasterSailing/index.jsx'
   },
   SimpleTable: {
     component: SimpleTable,
@@ -319,8 +337,8 @@ export const componentRegistry = {
     props: {
       theme: { type: 'object', required: false, description: 'Theme object for styling' }
     },
-    dataRequirements: 'Requires GraphQL connection to competitorPricing endpoint',
-    events: { emits: [], respondsTo: [] },
+    dataRequirements: 'Requires GraphQL connection to competitorPricing endpoint and inventory_item context mapping',
+    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, sailSelectDotEvent] },
     showInReports: true,
     filePath: 'src/components/focus-panels/CompetitorPricing/index.jsx'
   },

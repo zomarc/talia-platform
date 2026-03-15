@@ -331,14 +331,22 @@ check_local_code_origin() {
   local issues=0
 
   local ui_pids
-  ui_pids=$({ lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null; } | tr '\n' ' ' | xargs || true)
+  if declare -f collect_ui_port_pids >/dev/null 2>&1; then
+    ui_pids=$(collect_ui_port_pids)
+  else
+    ui_pids=$({ lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null; } | tr '\n' ' ' | xargs || true)
+  fi
   if [[ -z "$ui_pids" ]]; then
     check_status "UI process" "WARN" "no process on 5173/5174/5175"
   else
     local pid
     for pid in $ui_pids; do
       local cwd
-      cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
+      if declare -f get_pid_cwd >/dev/null 2>&1; then
+        cwd=$(get_pid_cwd "$pid")
+      else
+        cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
+      fi
       if [[ -n "$cwd" && "$cwd" == "$ui_dir"* ]]; then
         check_status "UI PID ${pid}" "OK" "cwd ${cwd}"
       else
@@ -357,7 +365,11 @@ check_local_code_origin() {
     local pid
     for pid in $api_pids; do
       local cwd
-      cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
+      if declare -f get_pid_cwd >/dev/null 2>&1; then
+        cwd=$(get_pid_cwd "$pid")
+      else
+        cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
+      fi
       if [[ -n "$cwd" && "$cwd" == "$api_dir"* ]]; then
         check_status "API PID ${pid}" "OK" "cwd ${cwd}"
       else

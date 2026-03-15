@@ -60,10 +60,9 @@ return <div className="my-component">Content</div>;
 
 ### Inline Styles
 
-- **Do not use inline styles by default.** Only allow inline styles for:
-  - Dynamic values (calculated widths, positions)
-  - Rare runtime values that cannot be represented with CSS variables/classes
-  - Temporary development styles (must be removed before commit)
+- **Do not use inline React styles (`style={{...}}`).**
+- Use CSS classes and CSS variables instead.
+- If runtime styling is unavoidable (for example, Tabulator cell formatters), keep it localized to formatter logic and avoid JSX inline style props.
 
 ### CSS Files
 
@@ -282,7 +281,7 @@ Before committing a new component, ensure:
 - [ ] Uses React functional components with hooks
 - [ ] Uses CSS variables from theme system (no hardcoded colors)
 - [ ] `npm run check:standards` reports no new inline-style violations
-- [ ] Uses Apollo Client for GraphQL queries
+- [ ] Uses project data hooks (or Apollo Client when hooks are not applicable)
 - [ ] Uses Tabulator for tables (if applicable)
 - [ ] Uses Chart.js for charts (if applicable)
 - [ ] Uses Dockview for layout (if applicable)
@@ -309,10 +308,7 @@ const GoodComponent = ({ onRefresh }) => {
   if (error) return <div>Error: {error.message}</div>;
   
   return (
-    <div style={{
-      background: theme.colors.background,
-      color: theme.colors.foreground
-    }}>
+    <div className="talia-card">
       {data.focuses.map(focus => (
         <div key={focus.id}>{focus.name}</div>
       ))}

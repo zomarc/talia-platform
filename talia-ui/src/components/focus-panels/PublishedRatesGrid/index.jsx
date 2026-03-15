@@ -6,8 +6,7 @@
 import React from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import PublishedRatesGridPresenter from './PublishedRatesGridPresenter';
-import LoadingSpinner from '../../shared/LoadingSpinner';
-import ErrorMessage from '../../shared/ErrorMessage';
+import PanelDataState from '../../shared/PanelDataState';
 import { extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
 const PublishedRatesGridContainer = () => {
@@ -71,47 +70,26 @@ const PublishedRatesGridContainer = () => {
       });
   }, [data, selectedSailCode]);
 
-  if (loading) {
-    return <LoadingSpinner message="Loading published rates grid..." fullScreen={false} />;
-  }
-
-  if (error) {
-    return (
-      <ErrorMessage
-        error={error}
-        title="Failed to load published rates grid"
-        onRetry={refetch}
-      />
-    );
-  }
-
-  if (!selectedSailCode) {
-    return (
-      <div className="focus-panel-empty">
-        <p>Select a sailing to view published rates.</p>
-      </div>
-    );
-  }
-
-  if (!normalizedData || normalizedData.length === 0) {
-    return (
-      <div className="focus-panel-empty">
-        <p>No published rate history found for sail code: {selectedSailCode}</p>
-        <div className="focus-panel-empty__action">
-          <button onClick={refetch} className="talia-btn talia-btn--primary">
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <PublishedRatesGridPresenter
-      data={normalizedData}
-      selectedSailCode={selectedSailCode}
-      onRefresh={refetch}
-    />
+    <PanelDataState
+      loading={loading}
+      loadingMessage="Loading published rates grid..."
+      error={error}
+      errorTitle="Failed to load published rates grid"
+      empty={!selectedSailCode || !normalizedData || normalizedData.length === 0}
+      emptyMessage={
+        selectedSailCode
+          ? `No published rate history found for sail code: ${selectedSailCode}`
+          : 'Select a sailing to view published rates.'
+      }
+      onRetry={selectedSailCode ? refetch : null}
+    >
+      <PublishedRatesGridPresenter
+        data={normalizedData}
+        selectedSailCode={selectedSailCode}
+        onRefresh={refetch}
+      />
+    </PanelDataState>
   );
 };
 

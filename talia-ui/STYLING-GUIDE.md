@@ -57,7 +57,7 @@ Talia UI uses a **single, unified CSS system** with no inline styles or CSS inje
 - All CSS must be in `.css` files imported at build time
 
 ### 5. Library Theming
-- **Tabulator**: Uses `tabulator_midnight` theme from npm package. No overrides.
+- **Tabulator**: Uses `tabulator_midnight` as the base theme with controlled overrides in `styles/tabulator-theme.css`.
 - **Chart.js**: Uses `chartConfig.js` to set global defaults based on CSS variables.
 
 ## File Structure
@@ -68,7 +68,7 @@ src/
 │   ├── theme.css          # CSS variables (single source of truth)
 │   ├── components.css     # Shared component classes
 │   ├── dashboard.css      # Dashboard-specific styles
-│   └── tabulator-theme.css # Empty (Tabulator uses npm theme)
+│   └── tabulator-theme.css # Tabulator overrides aligned to theme vars
 ├── lib/
 │   ├── chartConfig.js     # Chart.js global configuration
 │   └── tabulatorConfig.js # Tabulator configuration (imports theme)

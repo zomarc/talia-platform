@@ -54,6 +54,7 @@ Prefer the shared panel state wrapper pattern for loading/error/empty handling (
 import React, { useMemo } from 'react';
 import YourReportPresenter from './YourReportPresenter';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
+import PanelDataState from '../../shared/PanelDataState';
 
 const YourReportContainer = () => {
   const { data, loading, error, refetch } = useTableDataWithContext({
@@ -63,40 +64,19 @@ const YourReportContainer = () => {
     limit: 1000
   });
 
-  // Loading state - use CSS classes
-  if (loading) {
-    return (
-      <div className="talia-loading" role="status" aria-live="polite">
-        <div className="talia-loading__spinner" aria-hidden="true" />
-        <span className="talia-loading__text">Loading data...</span>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="talia-error" role="alert">
-        <span className="talia-error__icon" aria-hidden="true">⚠️</span>
-        <h3 className="talia-error__title">Error Loading Data</h3>
-        <p className="talia-error__message">{error.message}</p>
-        <button className="talia-btn" onClick={refetch}>Try Again</button>
-      </div>
-    );
-  }
-
-  // Empty state
-  if (!data?.length) {
-    return (
-      <div className="talia-empty" role="status">
-        <span className="talia-empty__icon" aria-hidden="true">📊</span>
-        <h3 className="talia-empty__title">No Data Available</h3>
-        <p className="talia-empty__message">No data found.</p>
-      </div>
-    );
-  }
-
-  return <YourReportPresenter data={data} onRefresh={refetch} />;
+  return (
+    <PanelDataState
+      loading={loading}
+      loadingMessage="Loading data..."
+      error={error}
+      errorTitle="Error Loading Data"
+      empty={!data?.length}
+      emptyMessage="No data found."
+      onRetry={refetch}
+    >
+      <YourReportPresenter data={data} onRefresh={refetch} />
+    </PanelDataState>
+  );
 };
 
 export default YourReportContainer;

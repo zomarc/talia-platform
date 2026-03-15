@@ -120,6 +120,21 @@ http_check_auth() {
   echo "$code"
 }
 
+# Collect listening PIDs for common local UI ports (5173-5175)
+collect_ui_port_pids() {
+  if ! command -v lsof >/dev/null 2>&1; then
+    echo ""
+    return 0
+  fi
+  { lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null; } | tr '\n' ' ' | xargs || true
+}
+
+# Resolve current working directory for a process PID
+get_pid_cwd() {
+  local pid="$1"
+  lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1
+}
+
 # Ping latency test
 # Usage: ping_latency "host" [count]
 # Returns: avg latency in ms or "timeout"

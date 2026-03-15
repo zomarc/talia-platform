@@ -19,6 +19,7 @@ const StatusBar = ({ statusMessage, currentEvent, persistedEvent, currentMode, o
   const [showDetails, setShowDetails] = useState(false);
   const [displayMessage, setDisplayMessage] = useState(statusMessage);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => !!window.__taliaSidebarCollapsed);
+  const appVersion = import.meta.env.VITE_APP_VERSION || '0.1.4';
 
   // Update display message when statusMessage changes
   useEffect(() => {
@@ -160,7 +161,7 @@ const StatusBar = ({ statusMessage, currentEvent, persistedEvent, currentMode, o
             >
               {sidebarCollapsed ? '☰' : '◧'}
             </button>
-            <span className="status-bar__header-title">Dockview Dashboard - Talia Professional</span>
+            <span className="status-bar__header-title">{`Dockview Dashboard - Talia Professional v${appVersion}-dev`}</span>
           </div>
         )}
 

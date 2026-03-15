@@ -12,7 +12,7 @@ import '../styles/mode-selector.css';
 const ModeSelector = ({ currentMode, onModeChange }) => {
   const [showDevDropdown, setShowDevDropdown] = useState(false);
   const [source, setSource] = useState('local');
-  const [version, setVersion] = useState('0.1.0');
+  const [version, setVersion] = useState('0.1.4');
 
   // Determine source from environment
   useEffect(() => {
@@ -23,9 +23,11 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
 
   // Get version from package.json (would need to be injected at build time)
   useEffect(() => {
-    const envVersion = import.meta.env.VITE_APP_VERSION || '0.1.0';
+    const envVersion = import.meta.env.VITE_APP_VERSION || '0.1.4';
     setVersion(envVersion);
   }, []);
+  const versionLabel = `${version}-dev`;
+
 
 
   const isDevMode = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_MODE === 'true';
@@ -137,7 +139,7 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
           </div>
           <div className="mode-selector__version">
             <span className="mode-selector__version-label">v</span>
-            <span className="mode-selector__version-value">{version}</span>
+            <span className="mode-selector__version-value">{versionLabel}</span>
           </div>
         </div>
       </div>

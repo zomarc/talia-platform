@@ -98,6 +98,32 @@ else:
 PY
 }
 
+collect_ui_port_pids() {
+  if ! command -v lsof >/dev/null 2>&1; then
+    echo ""
+    return 0
+  fi
+  { lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null; } | tr '\n' ' ' | xargs || true
+}
+
+get_pid_cwd() {
+  local pid="$1"
+  lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1
+}
+
+stop_port_processes() {
+  local pids="$1"
+  local description="$2"
+  if [[ -n "$pids" ]]; then
+    kill $pids 2>/dev/null || true
+    sleep 1
+    kill -9 $pids 2>/dev/null || true
+    echo -e "  ${GREEN}✓${NC} Stopped ${description}"
+  else
+    echo -e "  ${DIM}No processes for ${description}${NC}"
+  fi
+}
+
 get_local_source_version() {
   python3 - "$ROOT_DIR" <<'PY'
 import json
@@ -717,14 +743,7 @@ stop_local_dev_services() {
   if command -v lsof >/dev/null 2>&1; then
     local pids
     pids=$(lsof -ti:5173,4000 2>/dev/null | tr '\n' ' ' | xargs)
-    if [[ -n "$pids" ]]; then
-      kill $pids 2>/dev/null || true
-      sleep 1
-      kill -9 $pids 2>/dev/null || true
-      echo -e "  ${GREEN}✓${NC} Stopped processes on ports 5173/4000"
-    else
-      echo -e "  ${DIM}No processes on ports 5173/4000${NC}"
-    fi
+    stop_port_processes "$pids" "processes on ports 5173/4000"
   else
     echo -e "  ${YELLOW}lsof not available; skipping port-based stop${NC}"
   fi
@@ -735,14 +754,7 @@ stop_local_services() {
   if command -v lsof >/dev/null 2>&1; then
     local pids
     pids=$(lsof -ti:5173,4000 2>/dev/null | tr '\n' ' ' | xargs)
-    if [[ -n "$pids" ]]; then
-      kill $pids 2>/dev/null || true
-      sleep 1
-      kill -9 $pids 2>/dev/null || true
-      echo -e "  ${GREEN}✓${NC} Stopped processes on ports 5173/4000"
-    else
-      echo -e "  ${DIM}No processes on ports 5173/4000${NC}"
-    fi
+    stop_port_processes "$pids" "processes on ports 5173/4000"
   else
     echo -e "  ${YELLOW}lsof not available; skipping port-based stop${NC}"
   fi
@@ -921,11 +933,6 @@ check_duplicate_dev_servers() {
 
   local ui_dir="${ROOT_DIR}/talia-ui"
 
-  get_pid_cwd() {
-    local pid="$1"
-    lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1
-  }
-
   # Check for multiple Vite processes
   local vite_count
   vite_count=$(ps aux | grep -E "[v]ite" | grep -v grep | wc -l | tr -d ' ')
@@ -960,7 +967,7 @@ check_duplicate_dev_servers() {
   if $has_duplicates && [[ "$auto_fix" == "true" ]]; then
     echo -e "  ${YELLOW}⚠️  Duplicate dev servers detected. Stopping all UI instances...${NC}"
     local port_pids
-    port_pids=$({ lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null; } | tr '\n' ' ' | xargs)
+    port_pids=$(collect_ui_port_pids)
     if [[ -n "$port_pids" ]]; then
       kill $port_pids 2>/dev/null || true
       sleep 1
@@ -1031,13 +1038,8 @@ check_local_code_origin() {
   local api_dir="${ROOT_DIR}/talia-server"
   local issues=0
 
-  get_pid_cwd() {
-    local pid="$1"
-    lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1
-  }
-
   local ui_pids
-  ui_pids=$({ lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null; } | tr '\n' ' ' | xargs || true)
+  ui_pids=$(collect_ui_port_pids)
   if [[ -z "$ui_pids" ]]; then
     echo -e "  ${YELLOW}⚠️  No UI process detected on ports 5173/5174/5175${NC}"
   else
@@ -1116,6 +1118,19 @@ run_comprehensive_check() {
     fi
   else
     echo -e "  ${YELLOW}⚠️${NC} Not a git repository: ${ROOT_DIR}"
+  fi
+
+  echo ""
+  echo -e "${BOLD}=== STANDARDS CHECKS ===${NC}"
+  if [[ -d "${ROOT_DIR}/talia-ui" ]] && command -v npm >/dev/null 2>&1; then
+    if (cd "${ROOT_DIR}/talia-ui" && npm run check:standards >/dev/null 2>&1); then
+      echo -e "  ${GREEN}✓${NC} UI component standards check passed"
+    else
+      echo -e "  ${YELLOW}⚠️${NC} UI component standards check reported violations"
+      echo -e "  ${DIM}   Run: cd talia-ui && npm run check:standards${NC}"
+    fi
+  else
+    echo -e "  ${YELLOW}⚠️${NC} Skipping standards checks (npm or talia-ui missing)"
   fi
 
   echo ""

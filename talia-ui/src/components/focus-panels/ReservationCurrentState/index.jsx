@@ -7,8 +7,7 @@
 import React from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import ReservationCurrentStatePresenter from './ReservationCurrentStatePresenter';
-import LoadingSpinner from '../../shared/LoadingSpinner';
-import ErrorMessage from '../../shared/ErrorMessage';
+import PanelDataState from '../../shared/PanelDataState';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
@@ -33,51 +32,27 @@ const ReservationCurrentStateContainer = () => {
 
   console.log('[ReservationCurrentStateContainer] State:', { loading, error: error?.message, dataLength: data?.length, selectedSailCode });
 
-  // Handle loading state
-  if (loading) {
-    return <LoadingSpinner message="Loading reservations..." fullScreen={false} />;
-  }
-
-  // Handle error state
-  if (error) {
-    return (
-      <ErrorMessage 
-        error={error} 
-        title="Failed to load reservations"
-        onRetry={refetch}
-      />
-    );
-  }
-
-  // Handle empty data
-  if (!data || data.length === 0) {
-    return (
-      <div className="focus-panel-empty">
-        <p>
-          {selectedSailCode 
-            ? `No reservations found for sail code: ${selectedSailCode}`
-            : 'No reservation data available'}
-        </p>
-        <div className="focus-panel-empty__action">
-          <button 
-            onClick={refetch}
-            className="talia-btn talia-btn--primary"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Render presenter with data
   return (
-    <ReservationCurrentStatePresenter 
-      data={data} 
-      theme={theme}
-      onRefresh={refetch}
-      selectedSailCode={selectedSailCode}
-    />
+    <PanelDataState
+      loading={loading}
+      loadingMessage="Loading reservations..."
+      error={error}
+      errorTitle="Failed to load reservations"
+      empty={!data || data.length === 0}
+      emptyMessage={
+        selectedSailCode
+          ? `No reservations found for sail code: ${selectedSailCode}`
+          : 'No reservation data available'
+      }
+      onRetry={refetch}
+    >
+      <ReservationCurrentStatePresenter
+        data={data}
+        theme={theme}
+        onRefresh={refetch}
+        selectedSailCode={selectedSailCode}
+      />
+    </PanelDataState>
   );
 };
 

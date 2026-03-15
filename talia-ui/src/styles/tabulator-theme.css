@@ -8,7 +8,7 @@
 .tabulator {
   font-family: var(--theme-table-font-family) !important;
   font-size: var(--theme-table-font-size) !important;
-  color: var(--theme-fg);
+  color: color-mix(in srgb, var(--theme-fg) 88%, var(--theme-text-muted));
   background: var(--theme-bg-solid) !important;
   border: 1px solid var(--theme-border) !important;
   border-radius: 6px;
@@ -18,7 +18,7 @@
 
 .tabulator .tabulator-header {
   background: color-mix(in srgb, var(--theme-bg-elevated) 80%, var(--theme-bg-solid)) !important;
-  color: var(--theme-tabulator-header-text);
+  color: color-mix(in srgb, var(--theme-tabulator-header-text) 86%, var(--theme-text-muted));
   border-bottom: 1px solid var(--theme-border) !important;
   font-size: var(--theme-table-header-font-size) !important;
   font-family: var(--theme-table-font-family) !important;
@@ -45,7 +45,7 @@
   font-size: var(--theme-table-header-font-size) !important;
   font-family: var(--theme-table-font-family) !important;
   font-weight: 600;
-  color: var(--theme-tabulator-header-text) !important;
+  color: color-mix(in srgb, var(--theme-tabulator-header-text) 86%, var(--theme-text-muted)) !important;
   letter-spacing: 0.01em;
 }
 
@@ -87,7 +87,8 @@
 .tabulator .tabulator-tableholder .tabulator-table .tabulator-row {
   min-height: var(--theme-table-row-height);
   height: var(--theme-table-row-height);
-  border-bottom: 1px solid color-mix(in srgb, var(--theme-border-light) 80%, transparent) !important;
+  border-top: 0 !important;
+  border-bottom: 0 !important;
 }
 
 .tabulator .tabulator-row.tabulator-row-even,
@@ -121,13 +122,13 @@
   font-size: var(--theme-table-font-size) !important;
   font-family: var(--theme-table-font-family) !important;
   font-weight: 500;
-  color: var(--theme-fg) !important;
+  color: color-mix(in srgb, var(--theme-fg) 86%, var(--theme-text-muted)) !important;
   font-variant-numeric: tabular-nums;
   height: var(--theme-table-row-height);
   border-right: 0 !important;
   border-left: 0 !important;
   border-top: 0 !important;
-  border-bottom: 0 !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-border-light) 48%, transparent) !important;
 }
 
 .tabulator .tabulator-row .tabulator-cell:first-child {
@@ -136,10 +137,14 @@
 
 .tabulator .tabulator-row.tabulator-group {
   background: var(--theme-bg-elevated) !important;
-  color: var(--theme-fg) !important;
-  border-top: 1px solid var(--theme-border-light) !important;
-  border-bottom: 1px solid var(--theme-border-light) !important;
+  color: color-mix(in srgb, var(--theme-fg) 84%, var(--theme-text-muted)) !important;
+  border-top: 0 !important;
+  border-bottom: 0 !important;
   font-weight: 600;
+}
+
+.tabulator .tabulator-row.tabulator-group .tabulator-cell {
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-border-light) 52%, transparent) !important;
 }
 
 .tabulator .tabulator-row.tabulator-group.tabulator-group-visible {
@@ -247,29 +252,38 @@
 }
 
 .master-sailing-panel__filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 6px;
-  padding: 8px;
-  border-bottom: 1px solid var(--theme-border-light);
-  background: rgba(12, 17, 30, 0.65);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated);
+  align-items: flex-end;
 }
 
 .master-sailing-panel__filter {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  font-size: 11px;
+  width: max-content;
+  max-width: 100%;
+  gap: 4px;
+  font-size: var(--theme-font-size-sm);
+  font-weight: 600;
   color: var(--theme-text-secondary);
 }
 
 .master-sailing-panel__filter select {
-  height: 24px;
+  height: 28px;
+  padding: 4px 8px;
   border-radius: 4px;
-  border: 1px solid rgba(167, 179, 204, 0.55);
-  background: #1b2034;
-  color: #e6ebff;
-  font-size: 12px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size-sm);
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .master-sailing-panel__actions {
@@ -421,4 +435,11 @@
   border-top: 1px solid var(--theme-border) !important;
   color: var(--theme-text-muted);
   font-size: var(--theme-font-size-xs);
+}
+
+.talia-filters-hidden .tabulator .tabulator-header .tabulator-col .tabulator-header-filter {
+  display: none !important;
+  min-height: 0 !important;
+  height: 0 !important;
+  margin-top: 0 !important;
 }

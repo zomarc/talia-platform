@@ -70,6 +70,8 @@
   align-items: center;
   justify-content: center;
   padding: 0;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .status-bar__header-btn:hover {
@@ -77,10 +79,24 @@
   border-color: var(--theme-border-strong);
 }
 
+.status-bar__header-btn--active {
+  border-color: var(--theme-accent);
+  color: var(--theme-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-accent) 35%, transparent);
+}
+
+.status-bar__header-btn--focus {
+  font-size: 13px;
+}
+
 .status-bar__header-title {
   color: var(--theme-text-secondary);
   font-size: var(--theme-font-size-sm);
+  font-weight: 500;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(62vw, 760px);
 }
 
 /* ============================================================================

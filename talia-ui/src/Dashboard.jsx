@@ -36,6 +36,7 @@ const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 const DOCKVIEW_MAXIMIZE_STATE_EVENT = 'talia:dockview.maximizeStateChanged';
 const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
 const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';
+const DASHBOARD_CYCLE_FOCUS_EVENT = 'talia:dashboard.cycleFocus';
 
 const toggleDockviewPanelLayout = (panelApi, dockviewApi) => {
   if (!panelApi) return;
@@ -1654,6 +1655,21 @@ function Dashboard({ user }) {
     }
   }, [loadFocusLayout]);
 
+  const cycleFocus = useCallback(async () => {
+    if (!Array.isArray(taliaFocuses) || taliaFocuses.length === 0) {
+      return;
+    }
+    const currentFocusValue = typeof currentFocus === 'string' ? currentFocus.toLowerCase() : null;
+    const currentIndex = taliaFocuses.findIndex((focus) =>
+      focus?.id === currentFocus || (currentFocusValue && typeof focus?.name === 'string' && focus.name.toLowerCase() === currentFocusValue)
+    );
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % taliaFocuses.length : 0;
+    const nextFocus = taliaFocuses[nextIndex];
+    if (!nextFocus?.id) return;
+    await handleFocusChange(nextFocus.id);
+    setStatusMessage(`Focus switched to "${nextFocus.name || nextFocus.id}"`);
+  }, [currentFocus, handleFocusChange, taliaFocuses]);
+
   // Save current layout to focus
   const handleSaveCurrentLayoutToFocus = useCallback(async (focusId) => {
     if (!apiRef.current) {
@@ -1724,6 +1740,14 @@ function Dashboard({ user }) {
     window.addEventListener(DASHBOARD_TOGGLE_SIDEBAR_EVENT, handleExternalSidebarToggle);
     return () => window.removeEventListener(DASHBOARD_TOGGLE_SIDEBAR_EVENT, handleExternalSidebarToggle);
   }, [toggleSidebar]);
+
+  useEffect(() => {
+    const handleCycleFocus = () => {
+      cycleFocus();
+    };
+    window.addEventListener(DASHBOARD_CYCLE_FOCUS_EVENT, handleCycleFocus);
+    return () => window.removeEventListener(DASHBOARD_CYCLE_FOCUS_EVENT, handleCycleFocus);
+  }, [cycleFocus]);
 
   useEffect(() => {
     window.__taliaSidebarCollapsed = sidebarCollapsed;

@@ -23,7 +23,9 @@ import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
 import { applyTheme, DEFAULT_THEME } from './config/themes.js';
 import { initChartDefaults } from './lib/chartConfig.js';
+import { GraphQLUtils } from './lib/apolloClient.js';
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from './lib/eventBus.js';
+import { normalizeRole, canUseAdvancedHeader } from './utils/roleUtils.js';
 
 // Apollo Client temporarily disabled during database restoration
 // TODO: Re-enable when database is restored
@@ -120,6 +122,7 @@ window.__taliaStatus = {
 // Dev Mode Switcher Component
 const DevSwitcher = () => {
   const [mode, setMode] = useState('app'); // 'app', 'test', or 'data'
+  const [userRole, setUserRole] = useState(() => normalizeRole(GraphQLUtils.getUserRole()));
   const [statusState, setStatusState] = useState({
     statusMessage: null,
     currentEvent: null,
@@ -134,6 +137,26 @@ const DevSwitcher = () => {
     if (savedMode && ['app', 'test', 'data'].includes(savedMode)) {
       setMode(savedMode);
     }
+  }, []);
+
+  useEffect(() => {
+    const syncUserRole = () => {
+      setUserRole(normalizeRole(GraphQLUtils.getUserRole()));
+    };
+    const handleStorage = (event) => {
+      if (!event || event.key === 'userRole') {
+        syncUserRole();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('focus', syncUserRole);
+    document.addEventListener('visibilitychange', syncUserRole);
+    syncUserRole();
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', syncUserRole);
+      document.removeEventListener('visibilitychange', syncUserRole);
+    };
   }, []);
 
   const handleModeChange = (newMode) => {
@@ -275,6 +298,8 @@ const DevSwitcher = () => {
         dataStatus={statusState.dataStatus}
         currentMode={mode}
         onModeChange={handleModeChange}
+        userRole={userRole}
+        canUseAdvancedControls={canUseAdvancedHeader(userRole)}
       />
       
       {/* Content with padding for status bar (always present) */}

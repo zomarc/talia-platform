@@ -364,11 +364,12 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
 
   return (
     <div className="focus-panel master-sailing-panel">
-      <div className="master-sailing-panel__filters">
+      <div className="master-sailing-panel__filters talia-report-filters">
         {FILTER_FIELDS.map(([field, label]) => (
-          <label key={field} className="master-sailing-panel__filter">
-            <span>{label}</span>
+          <label key={field} className="master-sailing-panel__filter talia-report-filters__group">
+            <span className="talia-report-filters__label">{label}</span>
             <select
+              className="talia-report-filters__input"
               value={filters[field] || ''}
               onChange={(event) => setFilters((prev) => ({ ...prev, [field]: event.target.value }))}
             >

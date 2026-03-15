@@ -62,7 +62,7 @@ const CompetitorPricingFilters = ({
   };
 
   return (
-    <div className="competitor-filters">
+    <div className="competitor-filters talia-report-filters">
       <div className="competitor-filters__group">
         <label className="competitor-filters__label">Currency</label>
         <select

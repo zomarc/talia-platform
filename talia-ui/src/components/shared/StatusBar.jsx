@@ -11,15 +11,31 @@
 
 import React, { useState, useEffect } from 'react';
 import ModeSelector from '../ModeSelector';
+import { canUseAdvancedHeader } from '../../utils/roleUtils';
 // CSS imported globally in main.jsx
 const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
 const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';
+const DASHBOARD_FILTER_VISIBILITY_EVENT = 'talia:dashboard.filterVisibility';
+const DASHBOARD_CYCLE_FOCUS_EVENT = 'talia:dashboard.cycleFocus';
 
-const StatusBar = ({ statusMessage, currentEvent, persistedEvent, currentMode, onModeChange, dataStatus }) => {
+const StatusBar = ({
+  statusMessage,
+  currentEvent,
+  persistedEvent,
+  currentMode,
+  onModeChange,
+  dataStatus,
+  userRole,
+  canUseAdvancedControls
+}) => {
   const [showDetails, setShowDetails] = useState(false);
   const [displayMessage, setDisplayMessage] = useState(statusMessage);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => !!window.__taliaSidebarCollapsed);
+  const [filtersVisible, setFiltersVisible] = useState(() => window.__taliaFiltersVisible !== false);
   const appVersion = import.meta.env.VITE_APP_VERSION || '0.1.4';
+  const hasAdvancedControls = typeof canUseAdvancedControls === 'boolean'
+    ? canUseAdvancedControls
+    : canUseAdvancedHeader(userRole);
 
   // Update display message when statusMessage changes
   useEffect(() => {
@@ -47,6 +63,29 @@ const StatusBar = ({ statusMessage, currentEvent, persistedEvent, currentMode, o
   const handleSidebarToggle = () => {
     window.dispatchEvent(new CustomEvent(DASHBOARD_TOGGLE_SIDEBAR_EVENT));
   };
+
+  const handleFiltersToggle = () => {
+    setFiltersVisible((prev) => !prev);
+  };
+
+  const handleCycleFocus = () => {
+    window.dispatchEvent(new CustomEvent(DASHBOARD_CYCLE_FOCUS_EVENT));
+  };
+
+  useEffect(() => {
+    window.__taliaFiltersVisible = filtersVisible;
+    const root = document.documentElement;
+    if (filtersVisible) {
+      root.classList.remove('talia-filters-hidden');
+    } else {
+      root.classList.add('talia-filters-hidden');
+    }
+    window.dispatchEvent(
+      new CustomEvent(DASHBOARD_FILTER_VISIBILITY_EVENT, {
+        detail: { visible: filtersVisible },
+      })
+    );
+  }, [filtersVisible]);
 
   // Get event summary
   const getEventSummary = (event) => {
@@ -109,7 +148,7 @@ const StatusBar = ({ statusMessage, currentEvent, persistedEvent, currentMode, o
           )}
 
           {/* Current Event */}
-          {currentEventSummary && (
+          {hasAdvancedControls && currentEventSummary && (
             <div 
               className="status-bar__item status-bar__item--clickable"
               onClick={() => setShowDetails(!showDetails)}
@@ -126,7 +165,7 @@ const StatusBar = ({ statusMessage, currentEvent, persistedEvent, currentMode, o
           )}
 
           {/* Persisted Event */}
-          {persistedEventSummary && (
+          {hasAdvancedControls && persistedEventSummary && (
             <div 
               className="status-bar__item status-bar__item--clickable"
               onClick={() => setShowDetails(!showDetails)}
@@ -161,6 +200,28 @@ const StatusBar = ({ statusMessage, currentEvent, persistedEvent, currentMode, o
             >
               {sidebarCollapsed ? '☰' : '◧'}
             </button>
+            <button
+              type="button"
+              className={`status-bar__header-btn ${filtersVisible ? 'status-bar__header-btn--active' : ''}`}
+              onClick={handleFiltersToggle}
+              title={filtersVisible ? 'Hide filters on all reports' : 'Show filters on all reports'}
+              aria-label={filtersVisible ? 'Hide filters on all reports' : 'Show filters on all reports'}
+            >
+              ▾
+            </button>
+            {hasAdvancedControls && (
+              <>
+                <button
+                  type="button"
+                  className="status-bar__header-btn status-bar__header-btn--focus"
+                  onClick={handleCycleFocus}
+                  title="Cycle focus"
+                  aria-label="Cycle focus"
+                >
+                  ⟳
+                </button>
+              </>
+            )}
             <span className="status-bar__header-title">{`Dockview Dashboard - Talia Professional v${appVersion}-dev`}</span>
           </div>
         )}
@@ -174,7 +235,7 @@ const StatusBar = ({ statusMessage, currentEvent, persistedEvent, currentMode, o
       </div>
 
       {/* Details Panel */}
-      {showDetails && (currentEventSummary || persistedEventSummary) && (
+      {hasAdvancedControls && showDetails && (currentEventSummary || persistedEventSummary) && (
         <div className="status-bar__details">
           <div className="status-bar__details-header">
             <span className="status-bar__details-title">Event Details</span>

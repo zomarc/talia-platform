@@ -282,52 +282,52 @@ const PublishedRatesGridPresenter = ({ data, selectedSailCode, onRefresh }) => {
             Sail: {selectedSailCode || 'None'} • {snapshotRows.length} snapshots
           </p>
         </div>
-        <div className="published-rates-grid__controls">
-          <label className="published-rates-grid__select-label" htmlFor="published-rates-promo">
-            Promo
+        <div className="published-rates-grid__controls talia-report-filters">
+          <label className="talia-report-filters__group" htmlFor="published-rates-promo">
+            <span className="talia-report-filters__label">Promo</span>
+            <select
+              id="published-rates-promo"
+              className="published-rates-grid__select talia-report-filters__input"
+              value={selectedPromo}
+              onChange={(event) => setSelectedPromo(event.target.value)}
+            >
+              {promoOptions.map((promo) => (
+                <option key={promo} value={promo}>
+                  {promo}
+                </option>
+              ))}
+            </select>
           </label>
-          <select
-            id="published-rates-promo"
-            className="published-rates-grid__select"
-            value={selectedPromo}
-            onChange={(event) => setSelectedPromo(event.target.value)}
-          >
-            {promoOptions.map((promo) => (
-              <option key={promo} value={promo}>
-                {promo}
-              </option>
-            ))}
-          </select>
-          <label className="published-rates-grid__select-label" htmlFor="published-rates-rate-type">
-            Rate Type
+          <label className="talia-report-filters__group" htmlFor="published-rates-rate-type">
+            <span className="talia-report-filters__label">Rate Type</span>
+            <select
+              id="published-rates-rate-type"
+              className="published-rates-grid__select talia-report-filters__input"
+              value={selectedRateType}
+              onChange={(event) => setSelectedRateType(event.target.value)}
+            >
+              {rateTypeOptions.map((rateType) => (
+                <option key={rateType} value={rateType}>
+                  {rateType}
+                </option>
+              ))}
+            </select>
           </label>
-          <select
-            id="published-rates-rate-type"
-            className="published-rates-grid__select"
-            value={selectedRateType}
-            onChange={(event) => setSelectedRateType(event.target.value)}
-          >
-            {rateTypeOptions.map((rateType) => (
-              <option key={rateType} value={rateType}>
-                {rateType}
-              </option>
-            ))}
-          </select>
-          <label className="published-rates-grid__select-label" htmlFor="published-rates-currency">
-            Currency
+          <label className="talia-report-filters__group" htmlFor="published-rates-currency">
+            <span className="talia-report-filters__label">Currency</span>
+            <select
+              id="published-rates-currency"
+              className="published-rates-grid__select talia-report-filters__input"
+              value={selectedCurrency}
+              onChange={(event) => setSelectedCurrency(event.target.value)}
+            >
+              {currencyOptions.map((currency) => (
+                <option key={currency} value={currency}>
+                  {currency}
+                </option>
+              ))}
+            </select>
           </label>
-          <select
-            id="published-rates-currency"
-            className="published-rates-grid__select"
-            value={selectedCurrency}
-            onChange={(event) => setSelectedCurrency(event.target.value)}
-          >
-            {currencyOptions.map((currency) => (
-              <option key={currency} value={currency}>
-                {currency}
-              </option>
-            ))}
-          </select>
           <button
             className="published-rates-grid__button"
             onClick={() => setShowSailDetails((prev) => !prev)}

@@ -22,6 +22,25 @@ export const isAdmin = (role) => {
 };
 
 /**
+ * Check if user is super user (supports naming variants)
+ * @param {string} role - User role
+ * @returns {boolean} - True if super user
+ */
+export const isSuperUser = (role) => {
+  const normalized = normalizeRole(role);
+  return normalized === 'SUPER_USER' || normalized === 'SUPERUSER';
+};
+
+/**
+ * Header capability gate for advanced controls
+ * @param {string} role - User role
+ * @returns {boolean} - True if role can use advanced header controls
+ */
+export const canUseAdvancedHeader = (role) => {
+  return isAdmin(role) || isSuperUser(role);
+};
+
+/**
  * Check if user has required role or higher
  * @param {string} userRole - User's role
  * @param {string} requiredRole - Required role

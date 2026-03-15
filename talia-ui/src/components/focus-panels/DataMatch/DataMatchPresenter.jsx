@@ -433,43 +433,43 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh, panelIn
   return (
     <div className="focus-panel data-match data-match-panel">
       {/* Filter Panel */}
-      <div className="data-match__filters">
-        <label className="data-match__label">
-          <span>Ship Code:</span>
+      <div className="data-match__filters talia-report-filters">
+        <label className="data-match__label talia-report-filters__group">
+          <span className="talia-report-filters__label">Ship Code:</span>
           <input
             type="text"
             value={filters.ship_code || ''}
             onChange={(e) => onFiltersChange({ ...filters, ship_code: e.target.value || null })}
             placeholder="Filter by ship code"
-            className="data-match__input"
+            className="data-match__input talia-report-filters__input"
           />
         </label>
-        <label className="data-match__label">
-          <span>Sail Code:</span>
+        <label className="data-match__label talia-report-filters__group">
+          <span className="talia-report-filters__label">Sail Code:</span>
           <input
             type="text"
             value={filters.sail_code || ''}
             onChange={(e) => onFiltersChange({ ...filters, sail_code: e.target.value || null })}
             placeholder="Filter by sail code"
-            className="data-match__input"
+            className="data-match__input talia-report-filters__input"
           />
         </label>
-        <label className="data-match__label">
-          <span>Date From:</span>
+        <label className="data-match__label talia-report-filters__group">
+          <span className="talia-report-filters__label">Date From:</span>
           <input
             type="date"
             value={filters.date_from || ''}
             onChange={(e) => onFiltersChange({ ...filters, date_from: e.target.value || null })}
-            className="data-match__input data-match__input--date"
+            className="data-match__input data-match__input--date talia-report-filters__input"
           />
         </label>
-        <label className="data-match__label">
-          <span>Date To:</span>
+        <label className="data-match__label talia-report-filters__group">
+          <span className="talia-report-filters__label">Date To:</span>
           <input
             type="date"
             value={filters.date_to || ''}
             onChange={(e) => onFiltersChange({ ...filters, date_to: e.target.value || null })}
-            className="data-match__input data-match__input--date"
+            className="data-match__input data-match__input--date talia-report-filters__input"
           />
         </label>
         {onRefresh && (

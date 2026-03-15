@@ -215,14 +215,20 @@ const YourReportContainer = ({ panelInstanceId, panelComponentId }) => (
 useEffect(() => {
   window.__taliaPanelGroupActions = window.__taliaPanelGroupActions || {};
   const key = panelComponentId || 'your-report';
-  const actions = { openAll: openAllGroups, collapseAll: collapseAllGroups };
+  const actions = {
+    cycle: cycleGroupState, // closed -> level1 -> level2 ... -> closed
+    getCycleState: () => ({ depth: currentDepth, maxDepth: 2 }),
+    // optional compatibility:
+    openAll: openAllGroups,
+    collapseAll: collapseAllGroups,
+  };
   window.__taliaPanelGroupActions[key] = actions;
   if (panelInstanceId) window.__taliaPanelGroupActions[panelInstanceId] = actions;
   return () => {
     delete window.__taliaPanelGroupActions[key];
     if (panelInstanceId) delete window.__taliaPanelGroupActions[panelInstanceId];
   };
-}, [openAllGroups, collapseAllGroups, panelComponentId, panelInstanceId]);
+}, [collapseAllGroups, cycleGroupState, openAllGroups, panelComponentId, panelInstanceId]);
 ```
 
 ## CSS Classes Reference

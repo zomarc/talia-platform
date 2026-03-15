@@ -47,6 +47,7 @@ const GROUP_BY = [
   (rowData) => rowData?.departure_month_label || 'Unknown month',
   (rowData) => rowData?.ship_group_label || 'Unknown ship'
 ];
+const GROUP_MAX_DEPTH = GROUP_BY.length;
 
 const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => {
   const tableRef = useRef(null);
@@ -55,6 +56,7 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
   const suppressMonthAutoOpenRef = useRef(false);
   const tableBuiltRef = useRef(false);
   const pendingGroupActionRef = useRef(null);
+  const groupCycleDepthRef = useRef(1);
   const [filters, setFilters] = useState({
     sail_code: '',
     sail_date_from: '',
@@ -153,31 +155,40 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
     });
   }, []);
 
-  const collapseAllGroups = useCallback(() => {
+  const applyGroupDepth = useCallback((depth) => {
     const table = instanceRef.current;
-    if (!table) return;
+    const targetDepth = Math.max(0, Math.min(depth, GROUP_MAX_DEPTH));
+    groupCycleDepthRef.current = targetDepth;
+    if (!table) return targetDepth;
     if (!tableBuiltRef.current) {
-      pendingGroupActionRef.current = 'collapseAll';
-      return;
+      pendingGroupActionRef.current = `depth:${targetDepth}`;
+      return targetDepth;
     }
-    table.setGroupStartOpen?.(() => false);
+    const groupStartOpen = Array.from({ length: GROUP_MAX_DEPTH }, (_unused, index) => index < targetDepth);
+    table.setGroupStartOpen?.(groupStartOpen);
     table.setGroupBy?.(GROUP_BY);
     const currentRows = table.getData?.() || [];
     table.setData?.(currentRows);
+    return targetDepth;
   }, []);
 
+  const collapseAllGroups = useCallback(() => {
+    applyGroupDepth(0);
+  }, [applyGroupDepth]);
+
   const openAllGroups = useCallback(() => {
-    const table = instanceRef.current;
-    if (!table) return;
-    if (!tableBuiltRef.current) {
-      pendingGroupActionRef.current = 'openAll';
-      return;
-    }
-    table.setGroupStartOpen?.(() => true);
-    table.setGroupBy?.(GROUP_BY);
-    const currentRows = table.getData?.() || [];
-    table.setData?.(currentRows);
-  }, []);
+    applyGroupDepth(GROUP_MAX_DEPTH);
+  }, [applyGroupDepth]);
+
+  const cycleGroupState = useCallback(() => {
+    const nextDepth = (groupCycleDepthRef.current + 1) % (GROUP_MAX_DEPTH + 1);
+    return applyGroupDepth(nextDepth);
+  }, [applyGroupDepth]);
+
+  const getGroupCycleState = useCallback(() => ({
+    depth: groupCycleDepthRef.current,
+    maxDepth: GROUP_MAX_DEPTH,
+  }), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -222,6 +233,10 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
           } else if (pendingAction === 'collapseAll') {
             pendingGroupActionRef.current = null;
             collapseAllGroups();
+          } else if (typeof pendingAction === 'string' && pendingAction.startsWith('depth:')) {
+            pendingGroupActionRef.current = null;
+            const depth = Number.parseInt(pendingAction.split(':')[1], 10);
+            applyGroupDepth(Number.isNaN(depth) ? 0 : depth);
           }
         });
 
@@ -265,7 +280,7 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
         try { instanceRef.current.destroy(); } catch { /* noop */ }
       }
     };
-  }, [collapseAllGroups, columns, data, openAllGroups, openFirstMonthOnly, openOnlyMonthGroup]);
+  }, [applyGroupDepth, collapseAllGroups, columns, data, openAllGroups, openFirstMonthOnly, openOnlyMonthGroup]);
 
   useEffect(() => {
     if (!instanceRef.current || !tableBuiltRef.current) return;
@@ -299,11 +314,15 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
     window.__taliaPanelGroupActions[componentKey] = {
       openAll: openAllGroups,
       collapseAll: collapseAllGroups,
+      cycle: cycleGroupState,
+      getCycleState: getGroupCycleState,
     };
     if (panelInstanceId) {
       window.__taliaPanelGroupActions[panelInstanceId] = {
         openAll: openAllGroups,
         collapseAll: collapseAllGroups,
+        cycle: cycleGroupState,
+        getCycleState: getGroupCycleState,
       };
     }
     return () => {
@@ -313,16 +332,26 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
         delete window.__taliaPanelGroupActions[panelInstanceId];
       }
     };
-  }, [collapseAllGroups, openAllGroups, panelComponentId, panelInstanceId]);
+  }, [collapseAllGroups, cycleGroupState, getGroupCycleState, openAllGroups, panelComponentId, panelInstanceId]);
 
   useEffect(() => {
     const handleGroupAction = (event) => {
       const detail = event?.detail || {};
       const action = detail.action;
+      const targetPanelInstance = detail.panelId;
+      const targetPanelComponent = detail.panelComponent;
+      const thisComponent = panelComponentId || 'master-sailing';
+      const isTargeted =
+        !targetPanelInstance && !targetPanelComponent
+          ? true
+          : targetPanelInstance === panelInstanceId || targetPanelComponent === thisComponent;
+      if (!isTargeted) return;
       if (action === 'openAll') {
         openAllGroups();
       } else if (action === 'collapseAll') {
         collapseAllGroups();
+      } else if (action === 'cycle') {
+        cycleGroupState();
       }
     };
     window.addEventListener(REPORT_GROUP_ACTION_EVENT, handleGroupAction);
@@ -331,7 +360,7 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
       window.removeEventListener(REPORT_GROUP_ACTION_EVENT, handleGroupAction);
       document.removeEventListener(REPORT_GROUP_ACTION_EVENT, handleGroupAction);
     };
-  }, [collapseAllGroups, openAllGroups]);
+  }, [collapseAllGroups, cycleGroupState, openAllGroups, panelComponentId, panelInstanceId]);
 
   return (
     <div className="focus-panel master-sailing-panel">

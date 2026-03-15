@@ -96,6 +96,8 @@ const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, groupActi
   const isRefreshableTab = !!panelComponent && refreshableReportPanelIds?.has?.(panelComponent);
   const hasGroupActions = !!panelComponent && groupActionPanelIds?.has?.(panelComponent);
   const [isMaximized, setIsMaximized] = React.useState(() => panelApi?.isMaximized?.() ?? false);
+  const [groupCycleDepth, setGroupCycleDepth] = React.useState(0);
+  const [groupCycleMaxDepth, setGroupCycleMaxDepth] = React.useState(2);
   const layoutGlyph = isMaximized ? "↙" : "↗";
   const layoutTitle = isMaximized ? "Return to layout" : "Expand panel";
   const [showCloseConfirm, setShowCloseConfirm] = React.useState(false);
@@ -127,6 +129,32 @@ const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, groupActi
       window.removeEventListener('keydown', handleEscape);
     };
   }, []);
+
+  React.useEffect(() => {
+    if (!hasGroupActions) return;
+    const syncGroupCycleState = () => {
+      const registeredActions = window.__taliaPanelGroupActions || {};
+      const panelActions =
+        registeredActions[panelId] ||
+        (panelComponent ? registeredActions[panelComponent] : null);
+      const cycleState = panelActions?.getCycleState?.();
+      if (!cycleState) return false;
+      if (typeof cycleState.depth === 'number') {
+        setGroupCycleDepth(cycleState.depth);
+      }
+      if (typeof cycleState.maxDepth === 'number' && cycleState.maxDepth > 0) {
+        setGroupCycleMaxDepth(cycleState.maxDepth);
+      }
+      return true;
+    };
+
+    const syncedImmediately = syncGroupCycleState();
+    if (syncedImmediately) return;
+    const timer = window.setTimeout(() => {
+      syncGroupCycleState();
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [hasGroupActions, panelComponent, panelId, maximizeStateToken]);
 
   const handlePrimaryAction = (event) => {
     event.stopPropagation();
@@ -180,10 +208,20 @@ const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, groupActi
     const registeredActions = window.__taliaPanelGroupActions || {};
     const panelActions =
       registeredActions[panelId] ||
-      (panelComponent ? registeredActions[panelComponent] : null) ||
-      registeredActions['master-sailing'];
+      (panelComponent ? registeredActions[panelComponent] : null);
     if (panelActions) {
-      if (action === 'openAll') {
+      if (action === 'cycle') {
+        const nextDepth = panelActions.cycle?.();
+        const cycleState = panelActions.getCycleState?.();
+        if (typeof nextDepth === 'number') {
+          setGroupCycleDepth(nextDepth);
+        } else if (typeof cycleState?.depth === 'number') {
+          setGroupCycleDepth(cycleState.depth);
+        }
+        if (typeof cycleState?.maxDepth === 'number' && cycleState.maxDepth > 0) {
+          setGroupCycleMaxDepth(cycleState.maxDepth);
+        }
+      } else if (action === 'openAll') {
         panelActions.openAll?.();
       } else if (action === 'collapseAll') {
         panelActions.collapseAll?.();
@@ -200,6 +238,13 @@ const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, groupActi
       })
     );
   };
+
+  const cycleLabel = `Group view level ${groupCycleDepth} of ${groupCycleMaxDepth}`;
+  const cycleIcon = groupCycleDepth === 0
+    ? '⊟'
+    : groupCycleDepth >= groupCycleMaxDepth
+      ? '⊠'
+      : '⊞';
 
   return (
     <div className="talia-dv-tab">
@@ -228,26 +273,15 @@ const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, groupActi
           </button>
         )}
         {hasGroupActions && (
-          <>
-            <button
-              type="button"
-              className="talia-dv-tab__button talia-dv-tab__button--group"
-              title="Open all groups"
-              aria-label="Open all groups"
-              onClick={handleGroupAction('openAll')}
-            >
-              ⊞
-            </button>
-            <button
-              type="button"
-              className="talia-dv-tab__button talia-dv-tab__button--group"
-              title="Collapse all groups"
-              aria-label="Collapse all groups"
-              onClick={handleGroupAction('collapseAll')}
-            >
-              ⊟
-            </button>
-          </>
+          <button
+            type="button"
+            className="talia-dv-tab__button talia-dv-tab__button--group"
+            title={`${cycleLabel} (click to cycle)`}
+            aria-label={`${cycleLabel}. Click to cycle group expansion.`}
+            onClick={handleGroupAction('cycle')}
+          >
+            {cycleIcon}
+          </button>
         )}
         <button
           type="button"

@@ -13,7 +13,7 @@
  * - Emit events when rows are selected (talia:yourcomponent.select)
  * - Use selectableRows: 1 for single row selection
  * - Use headerFilter: "list" with autocomplete: true for dropdown filters
- * - Optional grouped tab actions: register openAll/collapseAll handlers on window.__taliaPanelGroupActions
+ * - Optional grouped tab actions: register cycle/getCycleState handlers on window.__taliaPanelGroupActions
  * 
  * TO USE THIS TEMPLATE:
  * 1. Update the columns array with your column definitions
@@ -167,6 +167,9 @@ const TemplatePresenter = ({ data, onRefresh, panelInstanceId, panelComponentId 
     // window.__taliaPanelGroupActions = window.__taliaPanelGroupActions || {};
     // const key = panelComponentId || 'your-panel-id';
     // const actions = {
+    //   cycle: () => { /* closed -> level1 -> level2 ... -> closed */ },
+    //   getCycleState: () => ({ depth: 0, maxDepth: 2 }),
+    //   // optional compatibility:
     //   openAll: () => { /* expand all groups */ },
     //   collapseAll: () => { /* collapse all groups */ },
     // };

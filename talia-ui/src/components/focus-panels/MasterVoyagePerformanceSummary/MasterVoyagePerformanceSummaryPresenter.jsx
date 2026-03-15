@@ -17,6 +17,7 @@ import {
   isEmpty,
   parseNumber
 } from '../../../lib/dataTypes';
+const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 
 /**
  * Helper function to format currency (uses shared parseNumber)
@@ -62,6 +63,7 @@ const GROUP_BY = [
   (rowData) => rowData?.accMonth || 'Unknown Month',
   (rowData) => rowData?.voyageCategory || 'Uncategorized',
 ];
+const GROUP_MAX_DEPTH = GROUP_BY.length;
 
 const GROUP_HEADERS = [
   (value, count) => `<span class="master-voyage-performance-summary-group master-voyage-performance-summary-group--month">${value} (${count})</span>`,
@@ -77,6 +79,7 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh, panelInstanc
   const tableBuiltRef = useRef(false);
   const pendingGroupActionRef = useRef(null);
   const didApplyInitialGroupOpenRef = useRef(false);
+  const groupCycleDepthRef = useRef(1);
   const [tableInitialized, setTableInitialized] = useState(false);
   const lastDataRef = useRef(null);
 
@@ -603,31 +606,40 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh, panelInstanc
     });
   }, []);
 
-  const collapseAllGroups = useCallback(() => {
+  const applyGroupDepth = useCallback((depth) => {
     const table = instanceRef.current;
-    if (!table) return;
+    const targetDepth = Math.max(0, Math.min(depth, GROUP_MAX_DEPTH));
+    groupCycleDepthRef.current = targetDepth;
+    if (!table) return targetDepth;
     if (!tableBuiltRef.current) {
-      pendingGroupActionRef.current = 'collapseAll';
-      return;
+      pendingGroupActionRef.current = `depth:${targetDepth}`;
+      return targetDepth;
     }
-    table.setGroupStartOpen?.(() => false);
+    const groupStartOpen = Array.from({ length: GROUP_MAX_DEPTH }, (_unused, index) => index < targetDepth);
+    table.setGroupStartOpen?.(groupStartOpen);
     table.setGroupBy?.(GROUP_BY);
     const currentRows = table.getData?.() || [];
     table.setData?.(currentRows);
+    return targetDepth;
   }, []);
 
+  const collapseAllGroups = useCallback(() => {
+    applyGroupDepth(0);
+  }, [applyGroupDepth]);
+
   const openAllGroups = useCallback(() => {
-    const table = instanceRef.current;
-    if (!table) return;
-    if (!tableBuiltRef.current) {
-      pendingGroupActionRef.current = 'openAll';
-      return;
-    }
-    table.setGroupStartOpen?.(() => true);
-    table.setGroupBy?.(GROUP_BY);
-    const currentRows = table.getData?.() || [];
-    table.setData?.(currentRows);
-  }, []);
+    applyGroupDepth(GROUP_MAX_DEPTH);
+  }, [applyGroupDepth]);
+
+  const cycleGroupState = useCallback(() => {
+    const nextDepth = (groupCycleDepthRef.current + 1) % (GROUP_MAX_DEPTH + 1);
+    return applyGroupDepth(nextDepth);
+  }, [applyGroupDepth]);
+
+  const getGroupCycleState = useCallback(() => ({
+    depth: groupCycleDepthRef.current,
+    maxDepth: GROUP_MAX_DEPTH,
+  }), []);
 
   // Initialize Tabulator table
   useEffect(() => {
@@ -698,6 +710,10 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh, panelInstanc
           } else if (pendingAction === 'collapseAll') {
             pendingGroupActionRef.current = null;
             collapseAllGroups();
+          } else if (typeof pendingAction === 'string' && pendingAction.startsWith('depth:')) {
+            pendingGroupActionRef.current = null;
+            const depth = Number.parseInt(pendingAction.split(':')[1], 10);
+            applyGroupDepth(Number.isNaN(depth) ? 0 : depth);
           }
         });
 
@@ -723,7 +739,7 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh, panelInstanc
         }
       }
     };
-  }, [collapseAllGroups, columns, data.length, openAllGroups, openFirstMonthOnly]); // Only initialize once when data is available
+  }, [applyGroupDepth, collapseAllGroups, columns, data.length, openAllGroups, openFirstMonthOnly]); // Only initialize once when data is available
 
   // Update table data when data changes
   useEffect(() => {
@@ -754,6 +770,8 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh, panelInstanc
     const actions = {
       openAll: openAllGroups,
       collapseAll: collapseAllGroups,
+      cycle: cycleGroupState,
+      getCycleState: getGroupCycleState,
     };
     window.__taliaPanelGroupActions[componentKey] = actions;
     if (panelInstanceId) {
@@ -767,7 +785,35 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh, panelInstanc
         delete window.__taliaPanelGroupActions[panelInstanceId];
       }
     };
-  }, [collapseAllGroups, openAllGroups, panelComponentId, panelInstanceId]);
+  }, [collapseAllGroups, cycleGroupState, getGroupCycleState, openAllGroups, panelComponentId, panelInstanceId]);
+
+  useEffect(() => {
+    const handleGroupAction = (event) => {
+      const detail = event?.detail || {};
+      const action = detail.action;
+      const targetPanelInstance = detail.panelId;
+      const targetPanelComponent = detail.panelComponent;
+      const thisComponent = panelComponentId || 'master-voyage-performance-summary';
+      const isTargeted =
+        !targetPanelInstance && !targetPanelComponent
+          ? true
+          : targetPanelInstance === panelInstanceId || targetPanelComponent === thisComponent;
+      if (!isTargeted) return;
+      if (action === 'openAll') {
+        openAllGroups();
+      } else if (action === 'collapseAll') {
+        collapseAllGroups();
+      } else if (action === 'cycle') {
+        cycleGroupState();
+      }
+    };
+    window.addEventListener(REPORT_GROUP_ACTION_EVENT, handleGroupAction);
+    document.addEventListener(REPORT_GROUP_ACTION_EVENT, handleGroupAction);
+    return () => {
+      window.removeEventListener(REPORT_GROUP_ACTION_EVENT, handleGroupAction);
+      document.removeEventListener(REPORT_GROUP_ACTION_EVENT, handleGroupAction);
+    };
+  }, [collapseAllGroups, cycleGroupState, openAllGroups, panelComponentId, panelInstanceId]);
 
   return (
     <div className="focus-panel master-voyage-performance-summary-panel">

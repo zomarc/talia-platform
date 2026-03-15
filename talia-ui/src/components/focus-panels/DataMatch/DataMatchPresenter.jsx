@@ -7,11 +7,13 @@
 import React, { useRef, useEffect, useMemo, useCallback } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
 import { emitSailClear, emitSailSelect, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 
 const GROUP_BY = [
   (rowData) => rowData?.ship_code || 'Unknown Ship',
   (rowData) => rowData?.month_name || 'Unknown Month',
 ];
+const GROUP_MAX_DEPTH = GROUP_BY.length;
 
 const GROUP_HEADERS = [
   (value, count) => `<span class="data-match-group data-match-group--ship">${value} (${count})</span>`,
@@ -24,6 +26,7 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh, panelIn
   const tableBuiltRef = useRef(false);
   const pendingGroupActionRef = useRef(null);
   const didApplyInitialGroupOpenRef = useRef(false);
+  const groupCycleDepthRef = useRef(1);
   const lastDataRef = useRef(null);
 
   // Transform data into cross-tab format for Tabulator
@@ -185,31 +188,40 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh, panelIn
     });
   }, []);
 
-  const collapseAllGroups = useCallback(() => {
+  const applyGroupDepth = useCallback((depth) => {
     const table = instanceRef.current;
-    if (!table) return;
+    const targetDepth = Math.max(0, Math.min(depth, GROUP_MAX_DEPTH));
+    groupCycleDepthRef.current = targetDepth;
+    if (!table) return targetDepth;
     if (!tableBuiltRef.current) {
-      pendingGroupActionRef.current = 'collapseAll';
-      return;
+      pendingGroupActionRef.current = `depth:${targetDepth}`;
+      return targetDepth;
     }
-    table.setGroupStartOpen?.(() => false);
+    const groupStartOpen = Array.from({ length: GROUP_MAX_DEPTH }, (_unused, index) => index < targetDepth);
+    table.setGroupStartOpen?.(groupStartOpen);
     table.setGroupBy?.(GROUP_BY);
     const currentRows = table.getData?.() || [];
     table.setData?.(currentRows);
+    return targetDepth;
   }, []);
 
+  const collapseAllGroups = useCallback(() => {
+    applyGroupDepth(0);
+  }, [applyGroupDepth]);
+
   const openAllGroups = useCallback(() => {
-    const table = instanceRef.current;
-    if (!table) return;
-    if (!tableBuiltRef.current) {
-      pendingGroupActionRef.current = 'openAll';
-      return;
-    }
-    table.setGroupStartOpen?.(() => true);
-    table.setGroupBy?.(GROUP_BY);
-    const currentRows = table.getData?.() || [];
-    table.setData?.(currentRows);
-  }, []);
+    applyGroupDepth(GROUP_MAX_DEPTH);
+  }, [applyGroupDepth]);
+
+  const cycleGroupState = useCallback(() => {
+    const nextDepth = (groupCycleDepthRef.current + 1) % (GROUP_MAX_DEPTH + 1);
+    return applyGroupDepth(nextDepth);
+  }, [applyGroupDepth]);
+
+  const getGroupCycleState = useCallback(() => ({
+    depth: groupCycleDepthRef.current,
+    maxDepth: GROUP_MAX_DEPTH,
+  }), []);
 
   // Initialize table once when component mounts
   useEffect(() => {
@@ -262,6 +274,10 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh, panelIn
           } else if (pendingAction === 'collapseAll') {
             pendingGroupActionRef.current = null;
             collapseAllGroups();
+          } else if (typeof pendingAction === 'string' && pendingAction.startsWith('depth:')) {
+            pendingGroupActionRef.current = null;
+            const depth = Number.parseInt(pendingAction.split(':')[1], 10);
+            applyGroupDepth(Number.isNaN(depth) ? 0 : depth);
           }
         });
 
@@ -331,7 +347,7 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh, panelIn
         }
       }
     };
-  }, [collapseAllGroups, openAllGroups, openFirstShipOnly]); // Initialize once on mount
+  }, [applyGroupDepth, collapseAllGroups, openAllGroups, openFirstShipOnly]); // Initialize once on mount
 
   // Update table data and columns when data changes
   useEffect(() => {
@@ -370,6 +386,8 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh, panelIn
     const actions = {
       openAll: openAllGroups,
       collapseAll: collapseAllGroups,
+      cycle: cycleGroupState,
+      getCycleState: getGroupCycleState,
     };
     window.__taliaPanelGroupActions[componentKey] = actions;
     if (panelInstanceId) {
@@ -382,7 +400,35 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh, panelIn
         delete window.__taliaPanelGroupActions[panelInstanceId];
       }
     };
-  }, [collapseAllGroups, openAllGroups, panelComponentId, panelInstanceId]);
+  }, [collapseAllGroups, cycleGroupState, getGroupCycleState, openAllGroups, panelComponentId, panelInstanceId]);
+
+  useEffect(() => {
+    const handleGroupAction = (event) => {
+      const detail = event?.detail || {};
+      const action = detail.action;
+      const targetPanelInstance = detail.panelId;
+      const targetPanelComponent = detail.panelComponent;
+      const thisComponent = panelComponentId || 'data-match';
+      const isTargeted =
+        !targetPanelInstance && !targetPanelComponent
+          ? true
+          : targetPanelInstance === panelInstanceId || targetPanelComponent === thisComponent;
+      if (!isTargeted) return;
+      if (action === 'openAll') {
+        openAllGroups();
+      } else if (action === 'collapseAll') {
+        collapseAllGroups();
+      } else if (action === 'cycle') {
+        cycleGroupState();
+      }
+    };
+    window.addEventListener(REPORT_GROUP_ACTION_EVENT, handleGroupAction);
+    document.addEventListener(REPORT_GROUP_ACTION_EVENT, handleGroupAction);
+    return () => {
+      window.removeEventListener(REPORT_GROUP_ACTION_EVENT, handleGroupAction);
+      document.removeEventListener(REPORT_GROUP_ACTION_EVENT, handleGroupAction);
+    };
+  }, [collapseAllGroups, cycleGroupState, openAllGroups, panelComponentId, panelInstanceId]);
 
   return (
     <div className="focus-panel data-match data-match-panel">

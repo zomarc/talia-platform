@@ -201,6 +201,7 @@ YourReport: {
   panelId: 'your-report',
   title: 'Your Report',
   category: 'Tables',
+  legacy: false, // optional: set true for legacy-but-supported panels
   showInReports: true,
   events: { emits: [], respondsTo: [] },
 }

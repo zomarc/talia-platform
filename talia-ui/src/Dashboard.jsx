@@ -1094,16 +1094,22 @@ function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFil
           {Object.entries(reportGroups).sort(([a], [b]) => a.localeCompare(b)).map(([category, reports]) => (
             <div key={category} className="dashboard-section__group">
               <div className="dashboard-section__subtitle">{category}</div>
-              {reports.map((report) => (
-                <button
-                  key={report.panelId}
-                  className="dashboard-btn"
-                  onClick={() => onAddPanel(report.panelId, report.title, { reportId: report.panelId })}
-                  title={report.description}
-                >
-                  {report.title}
-                </button>
-              ))}
+              {reports.map((report) => {
+                const reportLabel = report.legacy ? `${report.title} (Legacy)` : report.title;
+                const reportDescription = report.legacy
+                  ? `${report.description || ''} Legacy component.`
+                  : report.description;
+                return (
+                  <button
+                    key={report.panelId}
+                    className="dashboard-btn"
+                    onClick={() => onAddPanel(report.panelId, reportLabel, { reportId: report.panelId })}
+                    title={reportDescription}
+                  >
+                    {reportLabel}
+                  </button>
+                );
+              })}
             </div>
           ))}
         </div>

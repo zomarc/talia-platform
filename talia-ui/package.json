@@ -8,6 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "check:standards": "node ./scripts/check-component-standards.mjs",
+    "check:standards:strict": "node ./scripts/check-component-standards.mjs --strict",
     "preview": "vite preview"
   },
   "dependencies": {

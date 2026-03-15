@@ -14,6 +14,13 @@ import { syncEventEmitter } from '../services/sync-event-emitter.js';
 import { getDateRangeConfigSummary, getDateRange } from '../config/date-range-config.js';
 import { configService } from '../services/config-service.js';
 import { aisLiveService } from '../services/ais-live-service.js';
+import {
+  getAvailableSyncConfigTableNames,
+  getDateColumnsForTable,
+  getSyncConfigNameForTable,
+  getSyncTypeForTable,
+  hasSyncConfigForTable,
+} from '../config/table-mappings.js';
 
 // Helper function to check user permissions
 const hasPermission = (userRole: string, requiredRole: string): boolean => {
@@ -235,46 +242,6 @@ const fetchWeatherPoint = async (latitude: number, longitude: number, date?: str
   }
 };
 
-const TABLE_SYNC_MAP: Record<string, string> = {
-  'ship': 'ships',
-  'cabin_availability': 'cabin_availability',
-  'reservation': 'reservation',
-  'reservation_promotion': 'reservation_promotion',
-  'master_sail': 'master_sail',
-  'sail_by_cabin_occupancy': 'sail_by_cabin_occupancy',
-  'reservation_changes': 'reservation_changes',
-  'reservation_current_state': 'reservation_changes',
-  'published_rates': 'published_rates',
-  'published_rates_changes': 'published_rates',
-  'published_rates_current_state': 'published_rates',
-  'competitor': 'competitor',
-  'competitor_current_state': 'competitor'
-};
-
-const TABLE_SYNC_CONFIG_MAP: Record<string, string> = {
-  'ship': 'ships',
-  'cabin_availability': 'cabinAvailability',
-  'reservation': 'reservations',
-  'reservation_promotion': 'reservationPromotion',
-  'master_sail': 'masterSail',
-  'sail_by_cabin_occupancy': 'sailByCabinOccupancy',
-  'reservation_changes': 'reservationChanges',
-  'reservation_current_state': 'reservationChanges',
-  'published_rates': 'publishedRates',
-  'published_rates_changes': 'publishedRates',
-  'published_rates_current_state': 'publishedRates',
-  'competitor': 'competitor',
-  'competitor_current_state': 'competitor'
-};
-
-const getSyncTypeForTable = (tableName: string): string => {
-  return TABLE_SYNC_MAP[tableName] || tableName;
-};
-
-const getSyncConfigNameForTable = (tableName: string): string => {
-  return TABLE_SYNC_CONFIG_MAP[tableName] || tableName;
-};
-
 const getOperationMetadataKeysForTable = (tableName: string): string[] => {
   // Prefer config-format names used by current sync configuration,
   // while still supporting legacy sync-type/table-name records.
@@ -285,42 +252,6 @@ const getOperationMetadataKeysForTable = (tableName: string): string[] => {
       tableName
     ])
   );
-};
-
-const getDateColumnsForTable = (tableName: string): string[] => {
-  const tableDateColumns: { [key: string]: string[] } = {
-    'ship': [],
-    'ship_cabin': [],
-    'cabin_availability': ['snapshot_date'],
-    'gql_cabin_availability': ['snapshot_date'],
-    'reservation': ['sail_from_date', 'sail_to_date'],
-    'reservation_promotion': [],
-    'master_sail': ['sail_date_from', 'sail_date_to', 'vacation_date', 'master_voyage_departure_date'],
-    'sail_by_cabin_occupancy': ['sail_date_from', 'sail_itinerary_date'],
-    'reservation_changes': ['snapshot_date'],
-    'reservation_current_state': ['snapshot_date'],
-    'published_rates': ['snapshot_date', 'departure_date'],
-    'published_rates_changes': ['snapshot_date', 'departure_date'],
-    'published_rates_current_state': ['snapshot_date', 'departure_date'],
-    'competitor': ['snapshot_date', 'departure_date'],
-    'competitor_current_state': ['snapshot_date', 'departure_date'],
-    'inventory_status_by_day': ['snapshot_date', 'sail_date'],
-    'google_trends_data': ['date'],
-    'google_trends_search_terms': ['created_at', 'updated_at'],
-    'sail_header': ['sail_date_from', 'sail_date_to'],
-    'itinerary': ['sail_date'],
-    'cabin_allocation': ['allocation_date'],
-    'sync_metadata': ['last_sync_at', 'created_at', 'updated_at'],
-    'focuses': ['created_at', 'updated_at'],
-    'data_refresh_metadata': ['last_refreshed_at', 'created_at', 'updated_at']
-  };
-  
-  if (tableName in tableDateColumns) {
-    return tableDateColumns[tableName];
-  }
-
-  return ['sail_date_from', 'sail_date_to', 'departure_date', 'snapshot_date',
-    'sail_from_date', 'sail_to_date', 'created_at', 'updated_at'];
 };
 
 const fetchActualDataRange = async (tableName: string, rowCount: number) => {
@@ -2799,14 +2730,14 @@ export const resolvers = {
         }
         
         // Check if table has a sync configuration BEFORE using it
-        if (!TABLE_SYNC_CONFIG_MAP[tableName]) {
+        if (!hasSyncConfigForTable(tableName)) {
           return {
             success: false,
             tableName,
             message: `Table "${tableName}" does not have a sync configuration`,
             recordsProcessed: null,
             duration: null,
-            error: `No sync configuration found for table: ${tableName}. Available tables: ${Object.keys(TABLE_SYNC_CONFIG_MAP).join(', ')}`,
+            error: `No sync configuration found for table: ${tableName}. Available tables: ${getAvailableSyncConfigTableNames().join(', ')}`,
             detailedLogs: []
           };
         }

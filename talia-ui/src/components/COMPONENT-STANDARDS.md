@@ -51,32 +51,18 @@ const ComponentName = ({ data, theme, onRefresh }) => {
 
 - **Always use CSS variables from the theme system** (`config/themes.js`)
 - Access theme via `useTheme()` hook from `contexts/ThemeContext`
-- Use theme colors for all styling
+- Use theme colors via CSS variables/classes (not inline style blocks)
 
 **Example:**
 ```jsx
-import { useTheme } from '../contexts/ThemeContext';
-
-const MyComponent = () => {
-  const { theme } = useTheme();
-  
-  return (
-    <div style={{
-      background: theme.colors.background,
-      color: theme.colors.foreground,
-      border: `1px solid ${theme.colors.border}`
-    }}>
-      Content
-    </div>
-  );
-};
+return <div className="my-component">Content</div>;
 ```
 
 ### Inline Styles
 
-- **Avoid inline styles** except for:
+- **Do not use inline styles by default.** Only allow inline styles for:
   - Dynamic values (calculated widths, positions)
-  - Component-specific overrides that can't be achieved via CSS variables
+  - Rare runtime values that cannot be represented with CSS variables/classes
   - Temporary development styles (must be removed before commit)
 
 ### CSS Files
@@ -84,16 +70,21 @@ const MyComponent = () => {
 - Use existing theme CSS variables from `styles/theme.css`
 - Follow patterns in `styles/theme.css`
 - Do not create new CSS files unless absolutely necessary
-- Prefer CSS-in-JS via theme system
+- Prefer shared style files (`theme.css`, `components.css`, `focus-panels.css`, `tabulator-theme.css`)
 
 ## Data Fetching
 
-### Apollo Client (GraphQL)
+### Focus Panels (Preferred Pattern)
 
-- Use Apollo Client for all GraphQL queries
+- For focus panel reports, prefer `useTableDataWithContext` and container/presenter separation.
+- Standardize loading/error/empty handling via shared wrappers (for example `PanelDataState`) where possible.
+
+### Apollo Client (GraphQL, When Needed)
+
+- Use Apollo Client for GraphQL-specific endpoints that are not served by standard table/context hooks.
 - Import from `lib/apolloClient.js`
 - Use hooks from `hooks/data/` for data fetching when available
-- Follow patterns in `services/GraphQLFocusService.js`
+- Keep query/mutation usage localized and documented in the owning feature module
 
 **Example:**
 ```jsx
@@ -290,6 +281,7 @@ Before committing a new component, ensure:
 
 - [ ] Uses React functional components with hooks
 - [ ] Uses CSS variables from theme system (no hardcoded colors)
+- [ ] `npm run check:standards` reports no new inline-style violations
 - [ ] Uses Apollo Client for GraphQL queries
 - [ ] Uses Tabulator for tables (if applicable)
 - [ ] Uses Chart.js for charts (if applicable)

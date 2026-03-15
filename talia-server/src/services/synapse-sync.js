@@ -26,6 +26,7 @@ import { SyncOperation } from './sync-operation.js';
 import { SyncMetadataService } from './sync-metadata-service.js';
 import { syncEventEmitter } from './sync-event-emitter.js';
 import { getDateRange, getDateRangeConfigSummary } from '../config/date-range-config.js';
+import { getSyncConfigNameForTable, getSyncTypeForTable } from '../config/table-mappings.js';
 
 const require = createRequire(import.meta.url);
 const syncConfig = require('../../sync.config.json');
@@ -88,19 +89,7 @@ class SynapseSyncService {
    * This ensures metadata uses consistent naming that matches tableSources.js
    */
   getSyncType(tableName) {
-    const syncTypeMap = {
-      'ships': 'ships',
-      'cabinAvailability': 'cabin_availability',
-      'reservations': 'reservation',
-      'masterSail': 'master_sail',
-      'sailByCabinOccupancy': 'sail_by_cabin_occupancy',
-      'publishedRates': 'published_rates',
-      'competitor': 'competitor',
-      'reservationChanges': 'reservation_changes',
-      'reservationPromotion': 'reservation_promotion'
-    };
-    
-    return syncTypeMap[tableName] || tableName; // Fallback to tableName if not in map
+    return getSyncTypeForTable(tableName);
   }
   
   /**
@@ -112,30 +101,16 @@ class SynapseSyncService {
     // Try direct lookup first
     let syncInfo = this.activeSyncs.get(tableName);
     
-      // If not found, try reverse mapping (for UI table names)
-      // Map UI table names (snake_case) to sync.config.json keys (camelCase)
-      if (!syncInfo) {
-        const uiToSyncConfigMap = {
-          'ship': 'ships',
-          'cabin_availability': 'cabinAvailability',
-          'reservation': 'reservations',
-          'reservation_promotion': 'reservationPromotion',
-          'master_sail': 'masterSail',
-          'sail_by_cabin_occupancy': 'sailByCabinOccupancy',
-          'reservation_changes': 'reservationChanges',
-          'published_rates': 'publishedRates',
-          'competitor': 'competitor'
-        };
-        
-        // Check if any active sync matches this UI table name
-        const syncConfigName = uiToSyncConfigMap[tableName];
-        if (syncConfigName) {
-          syncInfo = this.activeSyncs.get(syncConfigName);
-          if (syncInfo) {
-            tableName = syncConfigName; // Use sync config name for return
-          }
+    // If not found, try mapped sync config key for UI table names.
+    if (!syncInfo) {
+      const syncConfigName = getSyncConfigNameForTable(tableName);
+      if (syncConfigName) {
+        syncInfo = this.activeSyncs.get(syncConfigName);
+        if (syncInfo) {
+          tableName = syncConfigName;
         }
       }
+    }
     
     if (!syncInfo) {
       return null;

@@ -48,6 +48,8 @@ window.addEventListener(SAIL_SELECT_EVENT, handler);
 
 Handles data fetching, transformation, and state management.
 
+Prefer the shared panel state wrapper pattern for loading/error/empty handling (`PanelDataState`) instead of duplicating bespoke state markup in each container.
+
 ```jsx
 import React, { useMemo } from 'react';
 import YourReportPresenter from './YourReportPresenter';
@@ -330,7 +332,7 @@ const chart = new Chart(ctx, {
 - Use shared formatters from `dataTypes`
 - Keep presenters pure (no data fetching)
 - Include ARIA labels and roles
-- Handle loading/error/empty states
+- Handle loading/error/empty states using shared panel patterns (`PanelDataState`, `LoadingSpinner`, `ErrorMessage`)
 
 ### DON'T
 - Use inline styles

@@ -8,14 +8,14 @@ import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithCon
 import PublishedRatesGridPresenter from './PublishedRatesGridPresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
-import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
 const PublishedRatesGridContainer = () => {
   const { data, loading, error, refetch, context } = useTableDataWithContext({
     tableName: 'published_rates_changes',
     eventName: SAIL_SELECT_EVENT,
     contextMapper: (detail) => {
-      const sailCode = detail?.sail_code || detail?.Sail_Code || detail?.row_data?.sail_code || (typeof detail === 'string' ? detail : null);
+      const sailCode = extractSailCodeFromEvent(detail);
       return sailCode ? { sail_code: sailCode } : null;
     },
     limit: 2000

@@ -18,6 +18,7 @@ import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithCon
 import TemplatePresenter from './TemplatePresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
+import { extractSailCodeFromEvent } from '../../../lib/eventBus';
 const TemplateContainer = ({ panelInstanceId, panelComponentId }) => {
   console.log('[TemplateContainer] Component rendering');
   
@@ -28,7 +29,7 @@ const TemplateContainer = ({ panelInstanceId, panelComponentId }) => {
     contextMapper: (detail) => {
       // TODO: Extract filter fields from event detail
       // Example: Extract sail_code for filtering
-      const sailCode = detail?.sail_code || detail?.Sail_Code || detail?.row_data?.sail_code || (typeof detail === 'string' ? detail : null);
+      const sailCode = extractSailCodeFromEvent(detail);
       console.log('[TemplateContainer] Mapped context to filters:', { sail_code: sailCode });
       return sailCode ? { sail_code: sailCode } : null;
       // TODO: Add other filter fields as needed (e.g., ship_code, cabin_category, etc.)

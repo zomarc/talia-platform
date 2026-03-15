@@ -10,7 +10,7 @@ import ReservationCurrentStatePresenter from './ReservationCurrentStatePresenter
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
 const ReservationCurrentStateContainer = () => {
   const { theme } = useTheme();
@@ -22,8 +22,7 @@ const ReservationCurrentStateContainer = () => {
     tableName: 'reservation_current_state',
     eventName: SAIL_SELECT_EVENT,
     contextMapper: (detail) => {
-      // Extract sail_code from event detail (supports multiple formats)
-      const sailCode = detail?.sail_code || detail?.Sail_Code || detail?.row_data?.sail_code || (typeof detail === 'string' ? detail : null);
+      const sailCode = extractSailCodeFromEvent(detail);
       console.log('[ReservationCurrentStateContainer] Mapped context to filters:', { sail_code: sailCode });
       return sailCode ? { sail_code: sailCode } : null;
     },

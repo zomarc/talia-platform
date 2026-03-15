@@ -4,14 +4,14 @@ import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithCon
 import queryTracker from '../../../services/data/queryTracker';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
-import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
 const SailingByCabinCategory = () => {
   const { data, loading, error, context } = useTableDataWithContext({
     tableName: 'sail_by_cabin_occupancy',
     eventName: SAIL_SELECT_EVENT,
     contextMapper: (detail) => {
-      const sailCode = detail?.sail_code || detail?.Sail_Code || (typeof detail === 'string' ? detail : null);
+      const sailCode = extractSailCodeFromEvent(detail);
       return sailCode ? { sail_code: sailCode } : null;
     },
     limit: 1000

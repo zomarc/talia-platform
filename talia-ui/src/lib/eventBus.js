@@ -1,6 +1,13 @@
 export const SAIL_SELECT_EVENT = 'talia:sail.select';
 export const SAIL_CLEAR_EVENT = 'talia:sail.clear';
 
+export const extractSailCodeFromEvent = (detail) => (
+  detail?.sail_code ||
+  detail?.Sail_Code ||
+  detail?.row_data?.sail_code ||
+  (typeof detail === 'string' ? detail : null)
+);
+
 export const emitSailSelect = (detail) => {
   try {
     // Persist last sail select for late listeners (app & test)

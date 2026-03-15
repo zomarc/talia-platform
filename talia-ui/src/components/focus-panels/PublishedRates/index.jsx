@@ -8,7 +8,7 @@ import React from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import PublishedRatesPresenter from './PublishedRatesPresenter';
 import PanelDataState from '../../shared/PanelDataState';
-import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
 const PublishedRatesContainer = () => {
   // Use reusable hook for context-based data fetching with server-side filtering
@@ -16,8 +16,7 @@ const PublishedRatesContainer = () => {
     tableName: 'published_rates_current_state',
     eventName: SAIL_SELECT_EVENT,
     contextMapper: (detail) => {
-      // Extract sail_code from event detail (supports multiple formats)
-      const sailCode = detail?.sail_code || detail?.Sail_Code || detail?.row_data?.sail_code || (typeof detail === 'string' ? detail : null);
+      const sailCode = extractSailCodeFromEvent(detail);
       return sailCode ? { sail_code: sailCode } : null;
     },
     limit: 1000

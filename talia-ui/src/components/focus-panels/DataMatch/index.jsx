@@ -9,7 +9,7 @@ import DataMatchPresenter from './DataMatchPresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 
-const DataMatchContainer = ({ theme: themeProp }) => {
+const DataMatchContainer = ({ panelInstanceId, panelComponentId }) => {
   const [filters, setFilters] = useState({
     ship_code: null,
     sail_code: null,
@@ -18,9 +18,6 @@ const DataMatchContainer = ({ theme: themeProp }) => {
   });
 
   const { data, loading, error, refetch } = useDataMatch(filters);
-
-  // Use theme prop if provided, otherwise use default
-  const theme = themeProp || { colors: { foreground: '#ffffff', background: '#1a1a1a' } };
 
   // Handle loading state
   if (loading) {
@@ -56,8 +53,9 @@ const DataMatchContainer = ({ theme: themeProp }) => {
       data={data}
       filters={filters}
       onFiltersChange={setFilters}
-      theme={theme}
       onRefresh={refetch}
+      panelInstanceId={panelInstanceId}
+      panelComponentId={panelComponentId}
     />
   );
 };

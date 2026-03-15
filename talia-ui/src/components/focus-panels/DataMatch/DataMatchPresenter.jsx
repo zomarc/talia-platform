@@ -4,14 +4,26 @@
  * Shows matching vs missing record counts for each table per sail
  */
 
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useCallback } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
 import { emitSailClear, emitSailSelect, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
-const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh }) => {
+const GROUP_BY = [
+  (rowData) => rowData?.ship_code || 'Unknown Ship',
+  (rowData) => rowData?.month_name || 'Unknown Month',
+];
+
+const GROUP_HEADERS = [
+  (value, count) => `<span class="data-match-group data-match-group--ship">${value} (${count})</span>`,
+  (value, count) => `<span class="data-match-group data-match-group--month">${value} (${count})</span>`,
+];
+
+const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh, panelInstanceId, panelComponentId }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
-  const [tableInitialized, setTableInitialized] = useState(false);
+  const tableBuiltRef = useRef(false);
+  const pendingGroupActionRef = useRef(null);
+  const didApplyInitialGroupOpenRef = useRef(false);
   const lastDataRef = useRef(null);
 
   // Transform data into cross-tab format for Tabulator
@@ -152,10 +164,55 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh }) => {
     return [...baseColumns, ...tableColumns];
   }, [data]);
 
+  const openFirstShipOnly = useCallback(() => {
+    const table = instanceRef.current;
+    if (!table) return;
+    const topGroups = table.getGroups?.() || [];
+    if (!topGroups.length) return;
+    topGroups.forEach((group, index) => {
+      if (!group) return;
+      if (index === 0) {
+        group.show?.();
+        const monthGroups = group.getSubGroups?.() || [];
+        monthGroups.forEach((subGroup, subIndex) => {
+          if (!subGroup) return;
+          if (subIndex === 0) subGroup.show?.();
+          else subGroup.hide?.();
+        });
+      } else {
+        group.hide?.();
+      }
+    });
+  }, []);
+
+  const collapseAllGroups = useCallback(() => {
+    const table = instanceRef.current;
+    if (!table) return;
+    if (!tableBuiltRef.current) {
+      pendingGroupActionRef.current = 'collapseAll';
+      return;
+    }
+    table.setGroupStartOpen?.(() => false);
+    table.setGroupBy?.(GROUP_BY);
+    const currentRows = table.getData?.() || [];
+    table.setData?.(currentRows);
+  }, []);
+
+  const openAllGroups = useCallback(() => {
+    const table = instanceRef.current;
+    if (!table) return;
+    if (!tableBuiltRef.current) {
+      pendingGroupActionRef.current = 'openAll';
+      return;
+    }
+    table.setGroupStartOpen?.(() => true);
+    table.setGroupBy?.(GROUP_BY);
+    const currentRows = table.getData?.() || [];
+    table.setData?.(currentRows);
+  }, []);
+
   // Initialize table once when component mounts
   useEffect(() => {
-    if (tableInitialized) return;
-
     let cancelled = false;
 
     const initTable = async () => {
@@ -172,40 +229,14 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh }) => {
         instanceRef.current = new Tabulator(tableRef.current, {
           data: transformedData,
           columns: columns,
-          layout: 'fitColumns',
+          layout: 'fitDataTable',
           height: '100%',
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,
           selectableRows: 1, // Single row selection
-          groupBy: ['ship_code', 'month_name'], // Group by ship_code first, then month_name
-          groupHeader: (value, count, data, group) => {
-            // Custom group header formatting
-            try {
-              // Check group structure to determine level
-              // First level groups are by ship_code, second level by month_name
-              const groupKey = group.getKey();
-              if (groupKey && typeof groupKey === 'string') {
-                // Check if this is a ship code (typically 2 characters) or month name
-                if (groupKey.length <= 3 && /^[A-Z]{2,3}$/.test(groupKey)) {
-                  // Likely ship code
-                  return `<strong>Ship: ${value}</strong> <span class="data-match__group-meta">(${count} sail${count !== 1 ? 's' : ''})</span>`;
-                } else {
-                  // Likely month name
-                  return `<strong>Month: ${value}</strong> <span class="data-match__group-meta">(${count} sail${count !== 1 ? 's' : ''})</span>`;
-                }
-              }
-              // Fallback: use count to guess level (first level usually has more items)
-              if (count > 10) {
-                return `<strong>Ship: ${value}</strong> <span class="data-match__group-meta">(${count} sail${count !== 1 ? 's' : ''})</span>`;
-              } else {
-                return `<strong>Month: ${value}</strong> <span class="data-match__group-meta">(${count} sail${count !== 1 ? 's' : ''})</span>`;
-              }
-            } catch (e) {
-              console.warn('[DataMatch] Error in groupHeader:', e);
-              return `${value} (${count})`;
-            }
-          },
-          groupStartOpen: true,
+          groupBy: GROUP_BY, // Group by ship_code first, then month_name
+          groupHeader: GROUP_HEADERS,
+          groupStartOpen: [true, false],
           groupToggleElement: 'header',
           pagination: true,
           paginationSize: 50,
@@ -216,6 +247,22 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh }) => {
           ],
           frozenRows: 0,
           frozenColumns: 4 // Ship Code, Month, Departure Date, Sail Code
+        });
+
+        instanceRef.current.on('tableBuilt', () => {
+          tableBuiltRef.current = true;
+          if (!didApplyInitialGroupOpenRef.current) {
+            openFirstShipOnly();
+            didApplyInitialGroupOpenRef.current = true;
+          }
+          const pendingAction = pendingGroupActionRef.current;
+          if (pendingAction === 'openAll') {
+            pendingGroupActionRef.current = null;
+            openAllGroups();
+          } else if (pendingAction === 'collapseAll') {
+            pendingGroupActionRef.current = null;
+            collapseAllGroups();
+          }
         });
 
         // Register event listeners using Tabulator's .on() method (same as SailingTablePresenter)
@@ -264,7 +311,6 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh }) => {
 
         console.log('[DataMatch] Table initialized with', transformedData.length, 'rows');
         lastDataRef.current = transformedData ? JSON.stringify(transformedData) : null;
-        setTableInitialized(true);
       } catch (err) {
         console.error('[DataMatch] Error initializing table:', err);
       }
@@ -274,19 +320,22 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh }) => {
 
     return () => {
       cancelled = true;
+      tableBuiltRef.current = false;
+      pendingGroupActionRef.current = null;
       if (instanceRef.current) {
         try {
           instanceRef.current.destroy();
+          instanceRef.current = null;
         } catch (e) {
           console.warn('[DataMatch] Error destroying table:', e);
         }
       }
     };
-  }, []); // Initialize once on mount
+  }, [collapseAllGroups, openAllGroups, openFirstShipOnly]); // Initialize once on mount
 
   // Update table data and columns when data changes
   useEffect(() => {
-    if (!tableInitialized || !instanceRef.current) return;
+    if (!instanceRef.current) return;
 
     // Check if data actually changed
     const currentDataStr = transformedData ? JSON.stringify(transformedData) : null;
@@ -304,14 +353,39 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh }) => {
       
       // Update data
       instanceRef.current.replaceData(transformedData);
+      if (!didApplyInitialGroupOpenRef.current) {
+        openFirstShipOnly();
+        didApplyInitialGroupOpenRef.current = true;
+      }
       lastDataRef.current = currentDataStr;
     } catch (e) {
       console.warn('[DataMatch] Error updating data:', e);
     }
-  }, [transformedData, columns, tableInitialized]);
+  }, [columns, openFirstShipOnly, transformedData]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    window.__taliaPanelGroupActions = window.__taliaPanelGroupActions || {};
+    const componentKey = panelComponentId || 'data-match';
+    const actions = {
+      openAll: openAllGroups,
+      collapseAll: collapseAllGroups,
+    };
+    window.__taliaPanelGroupActions[componentKey] = actions;
+    if (panelInstanceId) {
+      window.__taliaPanelGroupActions[panelInstanceId] = actions;
+    }
+    return () => {
+      if (!window.__taliaPanelGroupActions) return;
+      delete window.__taliaPanelGroupActions[componentKey];
+      if (panelInstanceId) {
+        delete window.__taliaPanelGroupActions[panelInstanceId];
+      }
+    };
+  }, [collapseAllGroups, openAllGroups, panelComponentId, panelInstanceId]);
 
   return (
-    <div className="data-match">
+    <div className="focus-panel data-match data-match-panel">
       {/* Filter Panel */}
       <div className="data-match__filters">
         <label className="data-match__label">
@@ -365,7 +439,7 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh }) => {
       {/* Table */}
       <div 
         ref={tableRef} 
-        className="data-match__table"
+        className="focus-panel__table data-match__table data-match-table"
       />
     </div>
   );

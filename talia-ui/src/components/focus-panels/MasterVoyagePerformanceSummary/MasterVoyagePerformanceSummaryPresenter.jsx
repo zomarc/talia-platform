@@ -9,12 +9,11 @@
  * - Conditional formatting via shared formatters from dataTypes library
  */
 
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
 import {
   createPerformanceFormatter,
   createDeltaFormatter,
-  createRowFormatter,
   isEmpty,
   parseNumber
 } from '../../../lib/dataTypes';
@@ -59,14 +58,25 @@ const performanceFormatter = (cell, threshold = 100) => {
 
 const deltaFormatter = createDeltaFormatter();
 
-const rowFormatter = createRowFormatter();
+const GROUP_BY = [
+  (rowData) => rowData?.accMonth || 'Unknown Month',
+  (rowData) => rowData?.voyageCategory || 'Uncategorized',
+];
+
+const GROUP_HEADERS = [
+  (value, count) => `<span class="master-voyage-performance-summary-group master-voyage-performance-summary-group--month">${value} (${count})</span>`,
+  (value, count) => `<span class="master-voyage-performance-summary-group master-voyage-performance-summary-group--category">${value} (${count})</span>`,
+];
 
 /**
  * Presentational component for Master Voyage Performance Summary
  */
-const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh }) => {
+const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh, panelInstanceId, panelComponentId }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
+  const tableBuiltRef = useRef(false);
+  const pendingGroupActionRef = useRef(null);
+  const didApplyInitialGroupOpenRef = useRef(false);
   const [tableInitialized, setTableInitialized] = useState(false);
   const lastDataRef = useRef(null);
 
@@ -82,14 +92,7 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh }) => {
         valuesLookup: true,
         autocomplete: true
       },
-      formatter: (cell) => {
-        const value = cell.getValue();
-        const rowData = cell.getRow().getData();
-        if (rowData.rowType === 'month' || rowData.rowType === 'total') {
-          cell.getElement().style.fontWeight = 'bold';
-        }
-        return value || '';
-      }
+      formatter: (cell) => cell.getValue() || ''
     },
     { 
       field: "voyageCode", 
@@ -100,15 +103,7 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh }) => {
         valuesLookup: true,
         autocomplete: true
       },
-      formatter: (cell) => {
-        const rowData = cell.getRow().getData();
-        if (rowData.rowType === 'month' || rowData.rowType === 'total') {
-          cell.getElement().style.fontWeight = 'bold';
-        } else if (rowData.rowType === 'category') {
-          cell.getElement().style.fontStyle = 'italic';
-        }
-        return cell.getValue() || '';
-      }
+      formatter: (cell) => cell.getValue() || ''
     },
     { 
       field: "ship", 
@@ -586,6 +581,54 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh }) => {
     }
   ], []);
 
+  const openFirstMonthOnly = useCallback(() => {
+    const table = instanceRef.current;
+    if (!table) return;
+    const topGroups = table.getGroups?.() || [];
+    if (!topGroups.length) return;
+    topGroups.forEach((group, index) => {
+      if (!group) return;
+      if (index === 0) {
+        group.show?.();
+        const categoryGroups = group.getSubGroups?.() || [];
+        categoryGroups.forEach((subGroup, subIndex) => {
+          if (subGroup) {
+            if (subIndex === 0) subGroup.show?.();
+            else subGroup.hide?.();
+          }
+        });
+      } else {
+        group.hide?.();
+      }
+    });
+  }, []);
+
+  const collapseAllGroups = useCallback(() => {
+    const table = instanceRef.current;
+    if (!table) return;
+    if (!tableBuiltRef.current) {
+      pendingGroupActionRef.current = 'collapseAll';
+      return;
+    }
+    table.setGroupStartOpen?.(() => false);
+    table.setGroupBy?.(GROUP_BY);
+    const currentRows = table.getData?.() || [];
+    table.setData?.(currentRows);
+  }, []);
+
+  const openAllGroups = useCallback(() => {
+    const table = instanceRef.current;
+    if (!table) return;
+    if (!tableBuiltRef.current) {
+      pendingGroupActionRef.current = 'openAll';
+      return;
+    }
+    table.setGroupStartOpen?.(() => true);
+    table.setGroupBy?.(GROUP_BY);
+    const currentRows = table.getData?.() || [];
+    table.setData?.(currentRows);
+  }, []);
+
   // Initialize Tabulator table
   useEffect(() => {
     if (!data || data.length === 0 || tableInitialized) return;
@@ -609,7 +652,7 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh }) => {
         instanceRef.current = new Tabulator(tableRef.current, {
           data: data,
           columns: columns,
-          layout: "fitColumns",
+          layout: "fitDataTable",
           initialSort: [
             { column: "accMonth", dir: "asc" },
             { column: "voyageCode", dir: "asc" }
@@ -620,16 +663,16 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh }) => {
           movableColumns: true,
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,
-          pagination: true,
-          paginationSize: 50,
-          paginationSizeSelector: [25, 50, 100, 200],
-          rowFormatter: rowFormatter,
+          pagination: false,
+          groupBy: GROUP_BY,
+          groupStartOpen: [true, false],
+          groupHeader: GROUP_HEADERS,
           rowClick: (e, row) => {
             try { row?.select?.(); } catch { /* noop */ }
           },
           rowSelectionChanged: (selectedData) => {
             const rec = selectedData && selectedData[0];
-            if (rec && rec.rowType === 'voyage') {
+            if (rec) {
               console.log("[MasterVoyagePerformance] Row selected:", rec);
               window.dispatchEvent(new CustomEvent('talia:mastervoyage.select', { 
                 detail: {
@@ -640,6 +683,22 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh }) => {
               }));
             }
           },
+        });
+
+        instanceRef.current.on('tableBuilt', () => {
+          tableBuiltRef.current = true;
+          if (!didApplyInitialGroupOpenRef.current) {
+            openFirstMonthOnly();
+            didApplyInitialGroupOpenRef.current = true;
+          }
+          const pendingAction = pendingGroupActionRef.current;
+          if (pendingAction === 'openAll') {
+            pendingGroupActionRef.current = null;
+            openAllGroups();
+          } else if (pendingAction === 'collapseAll') {
+            pendingGroupActionRef.current = null;
+            collapseAllGroups();
+          }
         });
 
         console.log('[MasterVoyagePerformance] Table initialized with', data.length, 'records');
@@ -654,6 +713,8 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh }) => {
 
     return () => {
       cancelled = true;
+      tableBuiltRef.current = false;
+      pendingGroupActionRef.current = null;
       if (instanceRef.current) {
         try {
           instanceRef.current.destroy();
@@ -662,7 +723,7 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh }) => {
         }
       }
     };
-  }, [data.length]); // Only initialize once when data is available
+  }, [collapseAllGroups, columns, data.length, openAllGroups, openFirstMonthOnly]); // Only initialize once when data is available
 
   // Update table data when data changes
   useEffect(() => {
@@ -676,51 +737,52 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh }) => {
     try {
       console.log('[MasterVoyagePerformance] Updating table data:', data.length, 'records');
       instanceRef.current.replaceData(data);
+      if (!didApplyInitialGroupOpenRef.current) {
+        openFirstMonthOnly();
+        didApplyInitialGroupOpenRef.current = true;
+      }
       lastDataRef.current = currentDataStr;
     } catch (e) {
       console.warn('[MasterVoyagePerformance] Error updating data:', e);
     }
-  }, [data, tableInitialized]);
+  }, [data, openFirstMonthOnly, tableInitialized]);
 
-  // Get current date for footer
-  const currentDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    window.__taliaPanelGroupActions = window.__taliaPanelGroupActions || {};
+    const componentKey = panelComponentId || 'master-voyage-performance-summary';
+    const actions = {
+      openAll: openAllGroups,
+      collapseAll: collapseAllGroups,
+    };
+    window.__taliaPanelGroupActions[componentKey] = actions;
+    if (panelInstanceId) {
+      window.__taliaPanelGroupActions[panelInstanceId] = actions;
+    }
+
+    return () => {
+      if (!window.__taliaPanelGroupActions) return;
+      delete window.__taliaPanelGroupActions[componentKey];
+      if (panelInstanceId) {
+        delete window.__taliaPanelGroupActions[panelInstanceId];
+      }
+    };
+  }, [collapseAllGroups, openAllGroups, panelComponentId, panelInstanceId]);
 
   return (
-    <div className="master-voyage">
-      {/* Header */}
-      <div className="master-voyage__header">
-        <div className="master-voyage__header-row">
-          <div>
-            <h1 className="master-voyage__title">
-              Master Voyage Performance Summary
-            </h1>
-            <p className="master-voyage__subtitle">
-              YTD performance on Occupancy YTD, Target and Budget, Cabins Availability, Fares per person, Outstanding group payments, and Last Week Performance by Passenger Type, and FIT ROS for Last 4 Weeks.
-            </p>
-          </div>
-          {onRefresh && (
-            <button
-              onClick={onRefresh}
-              className="master-voyage__refresh"
-            >
-              ↻ Refresh
-            </button>
-          )}
+    <div className="focus-panel master-voyage-performance-summary-panel">
+      {onRefresh && (
+        <div className="focus-panel__overlay focus-panel__overlay--right">
+          <button onClick={onRefresh} className="talia-btn talia-btn--small">
+            ↻ Refresh
+          </button>
         </div>
-      </div>
-
-      {/* Table Container */}
-      <div className="master-voyage__table">
-        <div 
-          ref={tableRef} 
-          className="master-voyage__table-host"
+      )}
+      <div className="master-voyage-performance-summary-table-wrap">
+        <div
+          ref={tableRef}
+          className="focus-panel__table master-voyage-performance-summary-table"
         />
-      </div>
-
-      {/* Footer */}
-      <div className="master-voyage__footer">
-        <div>Data updated Weekly</div>
-        <div>Data to: {currentDate}</div>
       </div>
     </div>
   );

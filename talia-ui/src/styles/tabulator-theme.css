@@ -291,6 +291,131 @@
   cursor: pointer;
 }
 
+/* Master Voyage Performance Summary grouped-table styling */
+.master-voyage-performance-summary-panel {
+  min-height: 0;
+  height: 100%;
+}
+
+.master-voyage-performance-summary-table-wrap {
+  min-height: 0;
+  height: 100%;
+}
+
+.master-voyage-performance-summary-table .tabulator-row.tabulator-group.tabulator-group-level-0,
+.master-voyage-performance-summary-table .tabulator-row.tabulator-group[data-level="0"] {
+  background: rgba(24, 70, 122, 0.56) !important;
+  border-left: 4px solid rgba(117, 177, 255, 0.9) !important;
+}
+
+.master-voyage-performance-summary-table .tabulator-row.tabulator-group.tabulator-group-level-1,
+.master-voyage-performance-summary-table .tabulator-row.tabulator-group[data-level="1"] {
+  background: rgba(71, 90, 122, 0.52) !important;
+  border-left: 4px solid rgba(173, 194, 228, 0.84) !important;
+}
+
+.master-voyage-performance-summary-table .tabulator-row.tabulator-group .tabulator-group-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.master-voyage-performance-summary-table .tabulator-row.tabulator-group.tabulator-group-level-1 .tabulator-group-header,
+.master-voyage-performance-summary-table .tabulator-row.tabulator-group[data-level="1"] .tabulator-group-header {
+  padding-left: 26px !important;
+}
+
+.master-voyage-performance-summary-table .tabulator-row.tabulator-group.tabulator-group-level-1 .tabulator-arrow,
+.master-voyage-performance-summary-table .tabulator-row.tabulator-group[data-level="1"] .tabulator-arrow {
+  margin-left: 26px !important;
+}
+
+.master-voyage-performance-summary-table .tabulator-row:not(.tabulator-group) .tabulator-cell:first-child {
+  padding-left: calc(var(--theme-table-cell-padding-x) + 44px) !important;
+}
+
+.master-voyage-performance-summary-table .master-voyage-performance-summary-group {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.master-voyage-performance-summary-table .master-voyage-performance-summary-group--month {
+  background: rgba(110, 160, 246, 0.24);
+  border: 1px solid rgba(110, 160, 246, 0.55);
+  color: #dbeaff;
+}
+
+.master-voyage-performance-summary-table .master-voyage-performance-summary-group--category {
+  background: rgba(183, 199, 224, 0.2);
+  border: 1px solid rgba(183, 199, 224, 0.42);
+  color: #e8edf7;
+}
+
+/* Data Match grouped-table styling */
+.data-match-panel {
+  min-height: 0;
+  height: 100%;
+}
+
+.data-match-table .tabulator-row.tabulator-group.tabulator-group-level-0,
+.data-match-table .tabulator-row.tabulator-group[data-level="0"] {
+  background: rgba(28, 66, 112, 0.58) !important;
+  border-left: 4px solid rgba(112, 176, 255, 0.9) !important;
+}
+
+.data-match-table .tabulator-row.tabulator-group.tabulator-group-level-1,
+.data-match-table .tabulator-row.tabulator-group[data-level="1"] {
+  background: rgba(72, 90, 120, 0.52) !important;
+  border-left: 4px solid rgba(171, 194, 226, 0.84) !important;
+}
+
+.data-match-table .tabulator-row.tabulator-group .tabulator-group-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.data-match-table .tabulator-row.tabulator-group.tabulator-group-level-1 .tabulator-group-header,
+.data-match-table .tabulator-row.tabulator-group[data-level="1"] .tabulator-group-header {
+  padding-left: 24px !important;
+}
+
+.data-match-table .tabulator-row.tabulator-group.tabulator-group-level-1 .tabulator-arrow,
+.data-match-table .tabulator-row.tabulator-group[data-level="1"] .tabulator-arrow {
+  margin-left: 24px !important;
+}
+
+.data-match-table .tabulator-row:not(.tabulator-group) .tabulator-cell:first-child {
+  padding-left: calc(var(--theme-table-cell-padding-x) + 40px) !important;
+}
+
+.data-match-table .data-match-group {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.data-match-table .data-match-group--ship {
+  background: rgba(110, 160, 246, 0.24);
+  border: 1px solid rgba(110, 160, 246, 0.55);
+  color: #dbeaff;
+}
+
+.data-match-table .data-match-group--month {
+  background: rgba(183, 199, 224, 0.2);
+  border: 1px solid rgba(183, 199, 224, 0.42);
+  color: #e8edf7;
+}
+
 .tabulator .tabulator-footer {
   background: var(--theme-bg-elevated) !important;
   border-top: 1px solid var(--theme-border) !important;

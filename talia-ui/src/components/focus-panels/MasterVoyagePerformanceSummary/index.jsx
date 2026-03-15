@@ -11,7 +11,7 @@ import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 import { transformVoyageData } from './utils/dataTransformation';
 
-const MasterVoyagePerformanceSummaryContainer = () => {
+const MasterVoyagePerformanceSummaryContainer = ({ panelInstanceId, panelComponentId }) => {
 
   // Use reusable hook for context-based data fetching
   // Show all master_sail data without filtering
@@ -63,6 +63,8 @@ const MasterVoyagePerformanceSummaryContainer = () => {
     <MasterVoyagePerformanceSummaryPresenter 
       data={transformedData} 
       onRefresh={refetch}
+      panelInstanceId={panelInstanceId}
+      panelComponentId={panelComponentId}
     />
   );
 };

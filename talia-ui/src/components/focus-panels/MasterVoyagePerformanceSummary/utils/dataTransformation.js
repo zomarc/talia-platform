@@ -237,167 +237,22 @@ const transformVoyageRecord = (voyage, index) => {
 };
 
 /**
- * Create summary row for a category
- */
-const createCategorySummaryRow = (category, voyages) => {
-  const summary = {
-    accMonth: voyages[0]?.accMonth || '',
-    voyageCode: category,
-    ship: '',
-    sailDate: '',
-    package: '',
-    itinerary: '',
-    voyageCategory: category,
-    rowType: 'category',
-    
-    // Aggregate values (sum for most, average for percentages)
-    paxNightsBookedOccupancy: Math.round((voyages.reduce((sum, v) => sum + v.paxNightsBookedOccupancy, 0) / voyages.length) * 100) / 100,
-    targetOccupancy: Math.round((voyages.reduce((sum, v) => sum + v.targetOccupancy, 0) / voyages.length) * 100) / 100,
-    paxNightsReservedOccupancy: Math.round((voyages.reduce((sum, v) => sum + v.paxNightsReservedOccupancy, 0) / voyages.length) * 100) / 100,
-    paxNightsBudgetedOccupancy: Math.round((voyages.reduce((sum, v) => sum + v.paxNightsBudgetedOccupancy, 0) / voyages.length) * 100) / 100,
-    
-    availableCabinsInside: voyages.reduce((sum, v) => sum + v.availableCabinsInside, 0),
-    availabilityPercentInside: Math.round((voyages.reduce((sum, v) => sum + v.availabilityPercentInside, 0) / voyages.length) * 100) / 100,
-    availableCabinsOutside: voyages.reduce((sum, v) => sum + v.availableCabinsOutside, 0),
-    availabilityPercentOutside: Math.round((voyages.reduce((sum, v) => sum + v.availabilityPercentOutside, 0) / voyages.length) * 100) / 100,
-    availableCabinsDeluxe: voyages.reduce((sum, v) => sum + v.availableCabinsDeluxe, 0),
-    availabilityPercentDeluxe: Math.round((voyages.reduce((sum, v) => sum + v.availabilityPercentDeluxe, 0) / voyages.length) * 100) / 100,
-    availableCabinsSuites: voyages.reduce((sum, v) => sum + v.availableCabinsSuites, 0),
-    availabilityPercentSuites: Math.round((voyages.reduce((sum, v) => sum + v.availabilityPercentSuites, 0) / voyages.length) * 100) / 100,
-    
-    minFarePPInside: Math.round(voyages.reduce((sum, v) => sum + v.minFarePPInside, 0) / voyages.length),
-    minFarePPOutside: Math.round(voyages.reduce((sum, v) => sum + v.minFarePPOutside, 0) / voyages.length),
-    minFarePPDeluxe: Math.round(voyages.reduce((sum, v) => sum + v.minFarePPDeluxe, 0) / voyages.length),
-    maxFarePPInside: Math.round(voyages.reduce((sum, v) => sum + v.maxFarePPInside, 0) / voyages.length),
-    maxFarePPOutside: Math.round(voyages.reduce((sum, v) => sum + v.maxFarePPOutside, 0) / voyages.length),
-    maxFarePPDeluxe: Math.round(voyages.reduce((sum, v) => sum + v.maxFarePPDeluxe, 0) / voyages.length),
-    ytdBookedPax: voyages.reduce((sum, v) => sum + v.ytdBookedPax, 0),
-    
-    ytdBookedRevEUR: voyages.reduce((sum, v) => sum + v.ytdBookedRevEUR, 0),
-    vsTargetPercentYTDBookedRevEUR: Math.round((voyages.reduce((sum, v) => sum + v.vsTargetPercentYTDBookedRevEUR, 0) / voyages.length) * 100) / 100,
-    ytdBookedPaxPerformance: voyages.reduce((sum, v) => sum + v.ytdBookedPaxPerformance, 0),
-    vsTargetPercentYTDBookedPax: Math.round((voyages.reduce((sum, v) => sum + v.vsTargetPercentYTDBookedPax, 0) / voyages.length) * 100) / 100,
-    ytdBookedPPP: Math.round((voyages.reduce((sum, v) => sum + v.ytdBookedPPP, 0) / voyages.length) * 100) / 100,
-    vsTargetPercentYTDBookedPPP: Math.round((voyages.reduce((sum, v) => sum + v.vsTargetPercentYTDBookedPPP, 0) / voyages.length) * 100) / 100,
-    ytdBookedPPPEUR: Math.round((voyages.reduce((sum, v) => sum + v.ytdBookedPPPEUR, 0) / voyages.length) * 100) / 100,
-    vsTargetPercentYTDBookedPPPEUR: Math.round((voyages.reduce((sum, v) => sum + v.vsTargetPercentYTDBookedPPPEUR, 0) / voyages.length) * 100) / 100,
-    ytdBudgetYTDBookedPPP: Math.round((voyages.reduce((sum, v) => sum + v.ytdBudgetYTDBookedPPP, 0) / voyages.length) * 100) / 100,
-    ytdBudgetYTDBookedPPPEUR: Math.round((voyages.reduce((sum, v) => sum + v.ytdBudgetYTDBookedPPPEUR, 0) / voyages.length) * 100) / 100,
-    budgetVsForecastDelta: Math.round((voyages.reduce((sum, v) => sum + v.budgetVsForecastDelta, 0) / voyages.length) * 100) / 100,
-    budgetVsForecastDeltaEUR: Math.round((voyages.reduce((sum, v) => sum + v.budgetVsForecastDeltaEUR, 0) / voyages.length) * 100) / 100,
-    
-    lwBookedRevEUR: voyages.reduce((sum, v) => sum + v.lwBookedRevEUR, 0),
-    lwBookedGroupRevEUR: voyages.reduce((sum, v) => sum + v.lwBookedGroupRevEUR, 0),
-    lwBookedFITRevEUR: voyages.reduce((sum, v) => sum + v.lwBookedFITRevEUR, 0),
-    lwBookedGroupPaxTotal: voyages.reduce((sum, v) => sum + v.lwBookedGroupPaxTotal, 0),
-    lwBookedFITPaxTotal: voyages.reduce((sum, v) => sum + v.lwBookedFITPaxTotal, 0),
-    lwBookedGroupROS: Math.round((voyages.reduce((sum, v) => sum + v.lwBookedGroupROS, 0) / voyages.length) * 10) / 10,
-    lwBookedFITROS: Math.round((voyages.reduce((sum, v) => sum + v.lwBookedFITROS, 0) / voyages.length) * 10) / 10,
-    lwBookedPaxTotal: voyages.reduce((sum, v) => sum + v.lwBookedPaxTotal, 0),
-    lwBookedRosTotal: Math.round((voyages.reduce((sum, v) => sum + v.lwBookedRosTotal, 0) / voyages.length) * 10) / 10,
-    lwAvgGroupROS: Math.round((voyages.reduce((sum, v) => sum + v.lwAvgGroupROS, 0) / voyages.length) * 10) / 10,
-    lwAvgFITROS: Math.round((voyages.reduce((sum, v) => sum + v.lwAvgFITROS, 0) / voyages.length) * 10) / 10,
-    lwAvgCombinedROS: Math.round((voyages.reduce((sum, v) => sum + v.lwAvgCombinedROS, 0) / voyages.length) * 10) / 10,
-    groupsLessThan10: voyages.reduce((sum, v) => sum + v.groupsLessThan10, 0),
-    groupsGreaterThanEqual10: voyages.reduce((sum, v) => sum + v.groupsGreaterThanEqual10, 0),
-    groupsReleased: voyages.reduce((sum, v) => sum + v.groupsReleased, 0),
-    
-    releasedBookedOFGreaterCX: voyages.reduce((sum, v) => sum + v.releasedBookedOFGreaterCX, 0),
-    groupsBKGreaterCX: voyages.reduce((sum, v) => sum + v.groupsBKGreaterCX, 0),
-    fitOFGreaterCX: voyages.reduce((sum, v) => sum + v.fitOFGreaterCX, 0),
-    fitBKGreaterCX: voyages.reduce((sum, v) => sum + v.fitBKGreaterCX, 0),
-    
-    outstandingNoGroups: voyages.reduce((sum, v) => sum + v.outstandingNoGroups, 0),
-    outstandingBookedPax: voyages.reduce((sum, v) => sum + v.outstandingBookedPax, 0),
-    outstandingGroupReservedPax: voyages.reduce((sum, v) => sum + v.outstandingGroupReservedPax, 0),
-    outstandingGroupAmountEUR: voyages.reduce((sum, v) => sum + v.outstandingGroupAmountEUR, 0),
-    outstandingGroupAmountPercentOfDue: Math.round((voyages.reduce((sum, v) => sum + v.outstandingGroupAmountPercentOfDue, 0) / voyages.length) * 100) / 100
-  };
-  
-  return summary;
-};
-
-/**
- * Create summary row for a month
- */
-const createMonthSummaryRow = (month, categories) => {
-  // Flatten all voyages from all categories
-  const allVoyages = categories.flatMap(cat => cat.voyages);
-  
-  // Use same aggregation logic as category summary
-  return createCategorySummaryRow(month, allVoyages);
-};
-
-/**
  * Transform raw master_sail data into hierarchical structure
  */
 export const transformVoyageData = (rawData) => {
   if (!rawData || rawData.length === 0) {
     return [];
   }
-  
-  // Transform all voyage records
-  const transformedVoyages = rawData.map((voyage, index) => 
-    transformVoyageRecord(voyage, index)
-  );
-  
-  // Group by month
-  const byMonth = {};
-  transformedVoyages.forEach(voyage => {
-    const month = voyage.accMonth;
-    if (!byMonth[month]) {
-      byMonth[month] = [];
-    }
-    byMonth[month].push(voyage);
+
+  const transformedVoyages = rawData
+    .map((voyage, index) => transformVoyageRecord(voyage, index))
+    .filter((voyage) => voyage.voyageCode);
+
+  return transformedVoyages.sort((a, b) => {
+    const monthCompare = String(a.accMonth || '').localeCompare(String(b.accMonth || ''), undefined, { numeric: true, sensitivity: 'base' });
+    if (monthCompare !== 0) return monthCompare;
+    const categoryCompare = String(a.voyageCategory || '').localeCompare(String(b.voyageCategory || ''), undefined, { numeric: true, sensitivity: 'base' });
+    if (categoryCompare !== 0) return categoryCompare;
+    return String(a.voyageCode || '').localeCompare(String(b.voyageCode || ''), undefined, { numeric: true, sensitivity: 'base' });
   });
-  
-  // Build hierarchical structure
-  const result = [];
-  
-  Object.keys(byMonth).sort().forEach(month => {
-    const monthVoyages = byMonth[month];
-    
-    // Group by category within month
-    const byCategory = {};
-    monthVoyages.forEach(voyage => {
-      const category = voyage.voyageCategory;
-      if (!byCategory[category]) {
-        byCategory[category] = [];
-      }
-      byCategory[category].push(voyage);
-    });
-    
-    // Create month header row
-    const monthSummary = {
-      ...createMonthSummaryRow(month, Object.values(byCategory).map(v => ({ voyages: v }))),
-      accMonth: month,
-      voyageCode: month,
-      rowType: 'month',
-      voyageCategory: ''
-    };
-    result.push(monthSummary);
-    
-    // Add category groups and voyages
-    Object.keys(byCategory).sort().forEach(category => {
-      const categoryVoyages = byCategory[category];
-      
-      // Create category summary row
-      const categorySummary = createCategorySummaryRow(category, categoryVoyages);
-      result.push(categorySummary);
-      
-      // Add individual voyage rows
-      categoryVoyages.forEach(voyage => {
-        result.push(voyage);
-      });
-    });
-  });
-  
-  // Add total row at the end
-  const totalRow = createCategorySummaryRow('Total', transformedVoyages);
-  totalRow.accMonth = 'Total';
-  totalRow.voyageCode = 'Total';
-  totalRow.rowType = 'total';
-  result.push(totalRow);
-  
-  return result;
 };

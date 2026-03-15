@@ -430,14 +430,13 @@ export const componentRegistry = {
     title: 'Data Match',
     description: 'Data completeness overview across tables',
     usesMockData: false,
-    props: {
-      theme: { type: 'object', required: false, description: 'Theme object for styling' }
-    },
+    props: {},
     dataRequirements: 'Requires GraphQL connection to dataMatch endpoint',
     events: {
       emits: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT],
       respondsTo: []
     },
+    supportsGroupActions: true,
     showInReports: true,
     filePath: 'src/components/focus-panels/DataMatch/index.jsx'
   },
@@ -457,6 +456,7 @@ export const componentRegistry = {
       emits: [masterVoyageSelect],
       respondsTo: []
     },
+    supportsGroupActions: true,
     showInReports: true,
     filePath: 'src/components/focus-panels/MasterVoyagePerformanceSummary/index.jsx'
   },

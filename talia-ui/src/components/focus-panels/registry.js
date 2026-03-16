@@ -13,6 +13,7 @@ import InventoryMemo from './InventoryMemo';
 import SailingByCabinCategory from './SailingByCabinCategory';
 import ExceptionList from './ExceptionList';
 import ItineraryList from './ItineraryList';
+import ItineraryExtract from './ItineraryExtract';
 import ReservationCurrentStateContainer from './ReservationCurrentState';
 import BookingProfileContainer from './BookingProfile';
 import TargetProfileEditorContainer from './TargetProfileEditor';
@@ -279,6 +280,19 @@ export const componentRegistry = {
     events: { emits: [], respondsTo: [] },
     showInReports: true,
     filePath: 'src/components/focus-panels/ItineraryList/index.jsx'
+  },
+  ItineraryExtract: {
+    component: ItineraryExtract,
+    panelId: 'itinerary-extract',
+    category: 'Lists',
+    title: 'Itinerary Extract',
+    description: 'Compact itinerary snapshot grouped for quick operational review',
+    usesMockData: false,
+    props: {},
+    dataRequirements: 'Uses inventory_item as primary source with master_sail enrichment and cached public reference metadata',
+    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/ItineraryExtract/index.jsx'
   },
   ReservationCurrentState: {
     component: ReservationCurrentStateContainer,

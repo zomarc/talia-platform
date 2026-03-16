@@ -2620,6 +2620,109 @@
 }
 
 /* ============================================================================
+   Itinerary Extract
+   ============================================================================ */
+
+.itinerary-extract__layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+
+.itinerary-extract__list {
+  overflow: auto;
+  min-height: 0;
+}
+
+.itinerary-extract__item {
+  cursor: pointer;
+  border: 1px solid var(--theme-border);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.itinerary-extract__item:hover {
+  border-color: var(--theme-accent);
+}
+
+.itinerary-extract__item--active {
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-accent) 35%, transparent);
+}
+
+.itinerary-extract__image {
+  width: 100%;
+  max-height: 140px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated);
+}
+
+.itinerary-extract__image--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-secondary);
+}
+
+.itinerary-extract__map-card {
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  background: var(--theme-bg-elevated);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.itinerary-extract__map-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--theme-border);
+}
+
+.itinerary-extract__map-title {
+  margin: 0;
+  font-size: var(--theme-font-size);
+  font-weight: 600;
+}
+
+.itinerary-extract__source-link {
+  color: var(--theme-accent);
+  font-size: var(--theme-font-size-sm);
+  text-decoration: none;
+}
+
+.itinerary-extract__source-link:hover {
+  text-decoration: underline;
+}
+
+.itinerary-extract__map-wrap {
+  flex: 1;
+  min-height: 300px;
+  border-radius: 0 0 8px 8px;
+  overflow: hidden;
+}
+
+.itinerary-extract__leaflet {
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 1080px) {
+  .itinerary-extract__layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(320px, 1fr);
+  }
+}
+
+/* ============================================================================
    Data Match Panel
    ============================================================================ */
 

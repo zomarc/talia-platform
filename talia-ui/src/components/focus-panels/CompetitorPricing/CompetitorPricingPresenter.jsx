@@ -8,13 +8,52 @@ import CompetitorPricingFilters from './components/CompetitorPricingFilters';
 import CompetitorScatterChart from './components/CompetitorScatterChart';
 import CompetitorPricingTable from './components/CompetitorPricingTable';
 
-const CompetitorPricingPresenter = ({ data, filters, onFiltersChange, theme, onRefresh }) => {
+const DASHBOARD_DETAILS_VISIBILITY_EVENT = 'talia:dashboard.detailsVisibility';
+
+const getDetailsStoreValue = ({ panelInstanceId, panelComponentId, fallback = true }) => {
+  const store = window.__taliaPanelDetailsVisibility || {};
+  if (panelInstanceId && Object.prototype.hasOwnProperty.call(store, panelInstanceId)) {
+    return store[panelInstanceId] !== false;
+  }
+  if (panelComponentId && Object.prototype.hasOwnProperty.call(store, panelComponentId)) {
+    return store[panelComponentId] !== false;
+  }
+  return fallback;
+};
+
+const CompetitorPricingPresenter = ({
+  data,
+  filters,
+  onFiltersChange,
+  theme,
+  onRefresh,
+  panelInstanceId,
+  panelComponentId,
+}) => {
   const [expandedCabinType, setExpandedCabinType] = React.useState(null);
-  const [showTable, setShowTable] = React.useState(true);
+  const [showTable, setShowTable] = React.useState(() => getDetailsStoreValue({
+    panelInstanceId,
+    panelComponentId: panelComponentId || 'competitor-pricing',
+  }));
   const [chartOptions, setChartOptions] = React.useState({
     pppdScaleMode: 'AUTO',
     pppdMax: 200
   });
+  React.useEffect(() => {
+    const handleDetailsVisibility = (event) => {
+      const detail = event?.detail || {};
+      const targetPanelInstance = detail.panelId;
+      const targetPanelComponent = detail.panelComponent;
+      const thisComponent = panelComponentId || 'competitor-pricing';
+      const targetsThisPanel = targetPanelInstance
+        ? (targetPanelInstance === panelInstanceId || targetPanelComponent === thisComponent)
+        : targetPanelComponent === thisComponent;
+      if (!targetsThisPanel) return;
+      setShowTable(detail.visible !== false);
+    };
+    window.addEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibility);
+    return () => window.removeEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibility);
+  }, [panelComponentId, panelInstanceId]);
 
   return (
     <div className="talia-report competitor-pricing" role="region" aria-label="Competitor pricing report">
@@ -41,8 +80,6 @@ const CompetitorPricingPresenter = ({ data, filters, onFiltersChange, theme, onR
         data={data}
         filters={filters}
         onFiltersChange={onFiltersChange}
-        showTable={showTable}
-        onToggleTable={() => setShowTable((prev) => !prev)}
         chartOptions={chartOptions}
         onChartOptionsChange={setChartOptions}
       />

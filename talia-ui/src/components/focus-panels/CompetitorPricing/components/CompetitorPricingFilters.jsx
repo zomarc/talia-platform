@@ -11,8 +11,6 @@ const CompetitorPricingFilters = ({
   data = [],
   filters,
   onFiltersChange,
-  showTable = true,
-  onToggleTable,
   chartOptions = { pppdScaleMode: 'AUTO', pppdMax: 200 },
   onChartOptionsChange
 }) => {
@@ -226,17 +224,6 @@ const CompetitorPricingFilters = ({
         </label>
       </div>
 
-      <div className="competitor-filters__group competitor-filters__group--action">
-        <button
-          type="button"
-          className={`competitor-filters__table-toggle ${showTable ? 'competitor-filters__table-toggle--active' : ''}`}
-          onClick={onToggleTable}
-          aria-label={showTable ? 'Hide data table' : 'Show data table'}
-          title={showTable ? 'Hide data table' : 'Show data table'}
-        >
-          ▦
-        </button>
-      </div>
     </div>
   );
 };

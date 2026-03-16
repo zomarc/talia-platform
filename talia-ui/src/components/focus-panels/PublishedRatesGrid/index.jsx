@@ -9,7 +9,7 @@ import PublishedRatesGridPresenter from './PublishedRatesGridPresenter';
 import PanelDataState from '../../shared/PanelDataState';
 import { extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
-const PublishedRatesGridContainer = () => {
+const PublishedRatesGridContainer = ({ panelInstanceId, panelComponentId }) => {
   const { data, loading, error, refetch, context } = useTableDataWithContext({
     tableName: 'published_rates_changes',
     eventName: SAIL_SELECT_EVENT,
@@ -88,6 +88,8 @@ const PublishedRatesGridContainer = () => {
         data={normalizedData}
         selectedSailCode={selectedSailCode}
         onRefresh={refetch}
+        panelInstanceId={panelInstanceId}
+        panelComponentId={panelComponentId}
       />
     </PanelDataState>
   );

@@ -17,6 +17,8 @@ const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
 const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';
 const DASHBOARD_FILTER_VISIBILITY_EVENT = 'talia:dashboard.filterVisibility';
 const DASHBOARD_CYCLE_FOCUS_EVENT = 'talia:dashboard.cycleFocus';
+const DASHBOARD_VIEW_SCOPE_EVENT = 'talia:dashboard.viewScope';
+const DASHBOARD_DETAILS_VISIBILITY_EVENT = 'talia:dashboard.detailsVisibility';
 
 const StatusBar = ({
   statusMessage,
@@ -32,6 +34,7 @@ const StatusBar = ({
   const [displayMessage, setDisplayMessage] = useState(statusMessage);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => !!window.__taliaSidebarCollapsed);
   const [filtersVisible, setFiltersVisible] = useState(() => window.__taliaFiltersVisible !== false);
+  const [viewScope, setViewScope] = useState(() => window.__taliaViewScope === 'wide' ? 'wide' : 'local');
   const appVersion = import.meta.env.VITE_APP_VERSION || '0.1.4';
   const hasAdvancedControls = typeof canUseAdvancedControls === 'boolean'
     ? canUseAdvancedControls
@@ -72,6 +75,50 @@ const StatusBar = ({
     window.dispatchEvent(new CustomEvent(DASHBOARD_CYCLE_FOCUS_EVENT));
   };
 
+  const handleViewScopeToggle = () => {
+    setViewScope((prev) => (prev === 'wide' ? 'local' : 'wide'));
+  };
+
+  const getActivePanelTarget = () => {
+    const panelApi = window?.dockviewApi?.activePanel?.api || null;
+    const panelId = panelApi?.id || null;
+    const panelComponent = panelApi?.component || null;
+    return { panelId, panelComponent };
+  };
+
+  const getPanelDetailsVisible = (panelId, panelComponent) => {
+    const store = window.__taliaPanelDetailsVisibility || {};
+    if (panelId && Object.prototype.hasOwnProperty.call(store, panelId)) {
+      return store[panelId] !== false;
+    }
+    if (panelComponent && Object.prototype.hasOwnProperty.call(store, panelComponent)) {
+      return store[panelComponent] !== false;
+    }
+    return true;
+  };
+
+  const handleDetailsToggle = () => {
+    const { panelId, panelComponent } = getActivePanelTarget();
+    if (!panelId && !panelComponent) return;
+    const currentVisible = getPanelDetailsVisible(panelId, panelComponent);
+    const nextVisible = !currentVisible;
+    window.__taliaPanelDetailsVisibility = {
+      ...(window.__taliaPanelDetailsVisibility || {}),
+      ...(panelId ? { [panelId]: nextVisible } : {}),
+      ...(panelComponent ? { [panelComponent]: nextVisible } : {}),
+    };
+    window.dispatchEvent(
+      new CustomEvent(DASHBOARD_DETAILS_VISIBILITY_EVENT, {
+        detail: {
+          panelId,
+          panelComponent,
+          visible: nextVisible,
+          action: 'set',
+        },
+      })
+    );
+  };
+
   useEffect(() => {
     window.__taliaFiltersVisible = filtersVisible;
     const root = document.documentElement;
@@ -86,6 +133,15 @@ const StatusBar = ({
       })
     );
   }, [filtersVisible]);
+
+  useEffect(() => {
+    window.__taliaViewScope = viewScope;
+    window.dispatchEvent(
+      new CustomEvent(DASHBOARD_VIEW_SCOPE_EVENT, {
+        detail: { scope: viewScope },
+      })
+    );
+  }, [viewScope]);
 
   // Get event summary
   const getEventSummary = (event) => {
@@ -208,6 +264,24 @@ const StatusBar = ({
               aria-label={filtersVisible ? 'Hide filters on all reports' : 'Show filters on all reports'}
             >
               ▾
+            </button>
+            <button
+              type="button"
+              className={`status-bar__header-btn ${viewScope === 'wide' ? 'status-bar__header-btn--active' : ''}`}
+              onClick={handleViewScopeToggle}
+              title={viewScope === 'wide' ? 'Wide view active (click for local view)' : 'Local view active (click for wide view)'}
+              aria-label={viewScope === 'wide' ? 'Switch to local view' : 'Switch to wide view'}
+            >
+              {viewScope === 'wide' ? 'W' : 'L'}
+            </button>
+            <button
+              type="button"
+              className="status-bar__header-btn"
+              onClick={handleDetailsToggle}
+              title="Show/hide details on active panel"
+              aria-label="Show or hide details on active panel"
+            >
+              ≣
             </button>
             {hasAdvancedControls && (
               <>

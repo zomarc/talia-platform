@@ -1,6 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet';
 
+const DASHBOARD_DETAILS_VISIBILITY_EVENT = 'talia:dashboard.detailsVisibility';
+
+const getDetailsStoreValue = ({ panelInstanceId, panelComponentId, fallback = true }) => {
+  const store = window.__taliaPanelDetailsVisibility || {};
+  if (panelInstanceId && Object.prototype.hasOwnProperty.call(store, panelInstanceId)) {
+    return store[panelInstanceId] !== false;
+  }
+  if (panelComponentId && Object.prototype.hasOwnProperty.call(store, panelComponentId)) {
+    return store[panelComponentId] !== false;
+  }
+  return fallback;
+};
+
 const formatDate = (value) => {
   if (!value) return 'N/A';
   const date = new Date(value);
@@ -33,9 +46,31 @@ const ItineraryExtractPresenter = ({
   onShipFilterChange,
   onDurationFilterChange,
   referenceSourceUrl,
+  panelInstanceId,
+  panelComponentId,
 }) => {
   const [selectedId, setSelectedId] = useState(data?.[0]?.id || null);
   const [failedImageIds, setFailedImageIds] = useState(() => new Set());
+  const [detailsVisible, setDetailsVisible] = useState(() => getDetailsStoreValue({
+    panelInstanceId,
+    panelComponentId: panelComponentId || 'itinerary-extract',
+  }));
+
+  useEffect(() => {
+    const handleDetailsVisibility = (event) => {
+      const detail = event?.detail || {};
+      const targetPanelInstance = detail.panelId;
+      const targetPanelComponent = detail.panelComponent;
+      const thisComponent = panelComponentId || 'itinerary-extract';
+      const targetsThisPanel = targetPanelInstance
+        ? (targetPanelInstance === panelInstanceId || targetPanelComponent === thisComponent)
+        : targetPanelComponent === thisComponent;
+      if (!targetsThisPanel) return;
+      setDetailsVisible(detail.visible !== false);
+    };
+    window.addEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibility);
+    return () => window.removeEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibility);
+  }, [panelComponentId, panelInstanceId]);
 
   useEffect(() => {
     if (!data || data.length === 0) return;
@@ -123,12 +158,12 @@ const ItineraryExtractPresenter = ({
                   {typeof item.durationNights === 'number' ? `${item.durationNights}N` : String(item.durationNights || 'N/A')}
                 </span>
               </div>
-              {item.referenceSourceLabel ? (
+              {detailsVisible && item.referenceSourceLabel ? (
                 <div className="talia-meta">
                   <span className="talia-pill talia-pill--neutral">{item.referenceSourceLabel}</span>
                 </div>
               ) : null}
-              {item.referenceImage && !failedImageIds.has(item.id) ? (
+              {detailsVisible && item.referenceImage && !failedImageIds.has(item.id) ? (
                 <img
                   src={item.referenceImage}
                   alt={`${item.itineraryName} reference artwork`}
@@ -142,28 +177,38 @@ const ItineraryExtractPresenter = ({
                     });
                   }}
                 />
-              ) : (
+              ) : detailsVisible ? (
                 <div className="itinerary-extract__image itinerary-extract__image--empty">
                   Source image not available for this itinerary.
                 </div>
+              ) : null}
+              {detailsVisible ? (
+                <div className="talia-meta">
+                  <span>{item.ship}</span>
+                  <span>{`Departs: ${item.departurePort}`}</span>
+                  <span>{`Next: ${formatDate(item.nextDeparture)}`}</span>
+                </div>
+              ) : (
+                <div className="talia-meta">
+                  <span>{item.ship}</span>
+                  <span>{`Next: ${formatDate(item.nextDeparture)}`}</span>
+                </div>
               )}
-              <div className="talia-meta">
-                <span>{item.ship}</span>
-                <span>{`Departs: ${item.departurePort}`}</span>
-                <span>{`Next: ${formatDate(item.nextDeparture)}`}</span>
-              </div>
-              <div className="talia-meta">
+              {detailsVisible && (
+                <div className="talia-meta">
                 <strong>Stops:</strong>
                 {(item.stops || []).map((stop) => (
                   <span key={`${item.id}-${stop}`}>{stop}</span>
                 ))}
                 {(!item.stops || item.stops.length === 0) && <span>Not published</span>}
-              </div>
+                </div>
+              )}
             </article>
           ))}
           </div>
 
-          <section className="itinerary-extract__map-card" aria-label="Itinerary route map">
+          {detailsVisible && (
+            <section className="itinerary-extract__map-card" aria-label="Itinerary route map">
             <div className="itinerary-extract__map-header">
               <h3 className="itinerary-extract__map-title">
                 {selectedItinerary ? `${selectedItinerary.ship} - ${selectedItinerary.itineraryName}` : 'Route map'}
@@ -210,7 +255,8 @@ const ItineraryExtractPresenter = ({
                 ))}
               </MapContainer>
             </div>
-          </section>
+            </section>
+          )}
         </div>
       </main>
 

@@ -14,6 +14,7 @@ const DOT_SAIL_SELECT_EVENT = 'talia.sail.select';
 const GRAPHQL_URL = '/api/graphql';
 const REPORT_PANEL_ID = 'competitor-pricing';
 const REPORT_CONTEXT_EVENT = 'talia:report.contextChanged';
+const DASHBOARD_VIEW_SCOPE_EVENT = 'talia:dashboard.viewScope';
 
 const DEFAULT_FILTERS = {
   currency: 'EUR',
@@ -132,9 +133,10 @@ const fetchInventoryItems = async ({ sailCode, referenceSailCode, shipCode }) =>
   return [];
 };
 
-const CompetitorPricingContainer = ({ theme }) => {
+const CompetitorPricingContainer = ({ theme, panelInstanceId, panelComponentId }) => {
   const [filters, setFilters] = React.useState(DEFAULT_FILTERS);
   const [pendingContextFilter, setPendingContextFilter] = React.useState(null);
+  const [viewScope, setViewScope] = React.useState(() => window.__taliaViewScope === 'wide' ? 'wide' : 'local');
 
   const { data, loading, error, refetch } = useCompetitorPricing(filters);
 
@@ -159,6 +161,34 @@ const CompetitorPricingContainer = ({ theme }) => {
   }, []);
 
   React.useEffect(() => {
+    const handleScopeChange = (event) => {
+      const nextScope = event?.detail?.scope === 'wide' ? 'wide' : 'local';
+      setViewScope(nextScope);
+    };
+    window.addEventListener(DASHBOARD_VIEW_SCOPE_EVENT, handleScopeChange);
+    return () => window.removeEventListener(DASHBOARD_VIEW_SCOPE_EVENT, handleScopeChange);
+  }, []);
+
+  React.useEffect(() => {
+    if (viewScope === 'wide') {
+      // Wide scope removes sail-local narrowing.
+      setPendingContextFilter(null);
+      setFilters((prev) => ({ ...prev, duration: null, destination: null }));
+      publishReportContext((prevContext) => ({
+        ...(prevContext || {}),
+        mappedDuration: null,
+        mappedDestination: null,
+        viewScope: 'wide',
+      }));
+      return;
+    }
+    publishReportContext((prevContext) => ({
+      ...(prevContext || {}),
+      viewScope: 'local',
+    }));
+  }, [publishReportContext, viewScope]);
+
+  React.useEffect(() => {
     let mounted = true;
 
     const handleSailSelect = async (event) => {
@@ -166,6 +196,21 @@ const CompetitorPricingContainer = ({ theme }) => {
         const selection = extractSelectionFromEvent(event?.detail);
         if (!selection.sailCode && !selection.referenceSailCode) return;
         setFilters((prev) => ({ ...prev, duration: null, destination: null }));
+
+        if (viewScope === 'wide') {
+          publishReportContext({
+            sourceEvent: event?.type || SAIL_SELECT_EVENT,
+            sailCode: selection.sailCode || null,
+            referenceSailCode: selection.referenceSailCode || null,
+            shipCode: selection.shipCode || null,
+            duration: null,
+            destination: null,
+            inventoryItemId: null,
+            viewScope: 'wide'
+          });
+          setPendingContextFilter(null);
+          return;
+        }
 
         const inventoryRows = await fetchInventoryItems(selection);
         if (!mounted) return;
@@ -188,7 +233,8 @@ const CompetitorPricingContainer = ({ theme }) => {
           shipCode: selection.shipCode || null,
           duration: contextDuration ?? null,
           destination: contextDestination ?? null,
-          inventoryItemId: matchedInventory?.id || null
+          inventoryItemId: matchedInventory?.id || null,
+          viewScope: 'local'
         });
 
         setPendingContextFilter({
@@ -221,7 +267,7 @@ const CompetitorPricingContainer = ({ theme }) => {
       window.removeEventListener(SAIL_CLEAR_EVENT, handleSailClear);
       publishReportContext(null);
     };
-  }, [publishReportContext]);
+  }, [publishReportContext, viewScope]);
 
   React.useEffect(() => {
     if (!pendingContextFilter || !data?.length) return;
@@ -269,6 +315,8 @@ const CompetitorPricingContainer = ({ theme }) => {
       onFiltersChange={setFilters}
       theme={theme}
       onRefresh={refetch}
+      panelInstanceId={panelInstanceId}
+      panelComponentId={panelComponentId}
     />
   );
 };

@@ -8,6 +8,18 @@ import React from 'react';
 const ALL_PROMOS = 'All Promos';
 const ALL_RATE_TYPES = 'All Rate Types';
 const ALL_CURRENCIES = 'All Currencies';
+const DASHBOARD_DETAILS_VISIBILITY_EVENT = 'talia:dashboard.detailsVisibility';
+
+const getDetailsStoreValue = ({ panelInstanceId, panelComponentId, fallback = true }) => {
+  const store = window.__taliaPanelDetailsVisibility || {};
+  if (panelInstanceId && Object.prototype.hasOwnProperty.call(store, panelInstanceId)) {
+    return store[panelInstanceId] !== false;
+  }
+  if (panelComponentId && Object.prototype.hasOwnProperty.call(store, panelComponentId)) {
+    return store[panelComponentId] !== false;
+  }
+  return fallback;
+};
 
 const formatDateLabel = (value) => {
   if (!value) return 'N/A';
@@ -38,12 +50,39 @@ const RATE_TYPE_CLASS = {
 
 const getRateTypeClass = (rateType) => RATE_TYPE_CLASS[rateType] || 'published-rates-grid__sparkline-path--other';
 
-const PublishedRatesGridPresenter = ({ data, selectedSailCode, onRefresh }) => {
+const PublishedRatesGridPresenter = ({
+  data,
+  selectedSailCode,
+  onRefresh,
+  panelInstanceId,
+  panelComponentId,
+}) => {
   const [selectedPromo, setSelectedPromo] = React.useState(ALL_PROMOS);
   const [selectedRateType, setSelectedRateType] = React.useState(ALL_RATE_TYPES);
   const [selectedCurrency, setSelectedCurrency] = React.useState(ALL_CURRENCIES);
-  const [showSailDetails, setShowSailDetails] = React.useState(true);
+  const [showDetails, setShowDetails] = React.useState(() => getDetailsStoreValue({
+    panelInstanceId,
+    panelComponentId: panelComponentId || 'published-rates-grid',
+  }));
   const [selectedCabin, setSelectedCabin] = React.useState(null);
+
+  React.useEffect(() => {
+    const handleDetailsVisibility = (event) => {
+      const detail = event?.detail || {};
+      const targetPanelInstance = detail.panelId;
+      const targetPanelComponent = detail.panelComponent;
+      const thisComponent = panelComponentId || 'published-rates-grid';
+      const targetsThisPanel = targetPanelInstance
+        ? (targetPanelInstance === panelInstanceId || targetPanelComponent === thisComponent)
+        : targetPanelComponent === thisComponent;
+      if (!targetsThisPanel) return;
+      const nextVisible = detail.visible !== false;
+      setShowDetails(nextVisible);
+      if (!nextVisible) setSelectedCabin(null);
+    };
+    window.addEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibility);
+    return () => window.removeEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibility);
+  }, [panelComponentId, panelInstanceId]);
 
   const promoOptions = React.useMemo(() => {
     const promos = new Set();
@@ -328,12 +367,6 @@ const PublishedRatesGridPresenter = ({ data, selectedSailCode, onRefresh }) => {
               ))}
             </select>
           </label>
-          <button
-            className="published-rates-grid__button"
-            onClick={() => setShowSailDetails((prev) => !prev)}
-          >
-            {showSailDetails ? 'Hide Sail Details' : 'Show Sail Details'}
-          </button>
           {onRefresh && (
             <button className="published-rates-grid__button published-rates-grid__button--primary" onClick={onRefresh}>
               Refresh
@@ -342,7 +375,7 @@ const PublishedRatesGridPresenter = ({ data, selectedSailCode, onRefresh }) => {
         </div>
       </header>
 
-      {showSailDetails && sailDetails && (
+      {showDetails && sailDetails && (
         <section className="published-rates-grid__details">
           <div className="published-rates-grid__detail">
             <span className="published-rates-grid__detail-label">Ship</span>
@@ -418,7 +451,7 @@ const PublishedRatesGridPresenter = ({ data, selectedSailCode, onRefresh }) => {
         </div>
       </section>
 
-      {selectedCabin && (
+      {showDetails && selectedCabin && (
         <section className="published-rates-grid__details-panel">
           <div className="published-rates-grid__details-header">
             <div>
@@ -470,53 +503,55 @@ const PublishedRatesGridPresenter = ({ data, selectedSailCode, onRefresh }) => {
         </section>
       )}
 
-      <section className="published-rates-grid__history">
-        <div className="published-rates-grid__section-header">
-          <div>
-            <h3 className="published-rates-grid__section-title">Price History</h3>
-            <p className="published-rates-grid__section-subtitle">
-              {selectedPromo === ALL_PROMOS ? 'Lowest available per cabin' : `Promo: ${selectedPromo}`} • {selectedRateType} • {selectedCurrency}
-            </p>
+      {showDetails && (
+        <section className="published-rates-grid__history">
+          <div className="published-rates-grid__section-header">
+            <div>
+              <h3 className="published-rates-grid__section-title">Price History</h3>
+              <p className="published-rates-grid__section-subtitle">
+                {selectedPromo === ALL_PROMOS ? 'Lowest available per cabin' : `Promo: ${selectedPromo}`} • {selectedRateType} • {selectedCurrency}
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="published-rates-grid__table-wrap">
-          <table className="published-rates-grid__table" role="grid">
-            <thead>
-              <tr>
-                <th className="published-rates-grid__th">Snapshot</th>
-                {cabinCategories.map((cabin) => (
-                  <th key={cabin} className="published-rates-grid__th">
-                    {cabin}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {snapshotRows.map((row, index) => (
-                <tr
-                  key={row.snapshot}
-                  className={index === 0 ? 'published-rates-grid__row published-rates-grid__row--latest' : 'published-rates-grid__row'}
-                >
-                  <td className="published-rates-grid__cell published-rates-grid__cell--sticky">
-                    {formatDateLabel(row.snapshot)}
-                  </td>
-                  {cabinCategories.map((cabin) => {
-                    const cell = row.cabinMap.get(cabin);
-                    const title = cell
-                      ? `Promo: ${cell.promo || 'N/A'} • Rate: ${cell.rateType || 'N/A'}`
-                      : 'No data';
-                    return (
-                      <td key={cabin} className="published-rates-grid__cell" title={title}>
-                        {cell ? formatCurrency(cell.value, cell.currency) : '—'}
-                      </td>
-                    );
-                  })}
+          <div className="published-rates-grid__table-wrap">
+            <table className="published-rates-grid__table" role="grid">
+              <thead>
+                <tr>
+                  <th className="published-rates-grid__th">Snapshot</th>
+                  {cabinCategories.map((cabin) => (
+                    <th key={cabin} className="published-rates-grid__th">
+                      {cabin}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {snapshotRows.map((row, index) => (
+                  <tr
+                    key={row.snapshot}
+                    className={index === 0 ? 'published-rates-grid__row published-rates-grid__row--latest' : 'published-rates-grid__row'}
+                  >
+                    <td className="published-rates-grid__cell published-rates-grid__cell--sticky">
+                      {formatDateLabel(row.snapshot)}
+                    </td>
+                    {cabinCategories.map((cabin) => {
+                      const cell = row.cabinMap.get(cabin);
+                      const title = cell
+                        ? `Promo: ${cell.promo || 'N/A'} • Rate: ${cell.rateType || 'N/A'}`
+                        : 'No data';
+                      return (
+                        <td key={cabin} className="published-rates-grid__cell" title={title}>
+                          {cell ? formatCurrency(cell.value, cell.currency) : '—'}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 };

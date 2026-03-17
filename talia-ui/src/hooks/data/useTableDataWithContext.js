@@ -12,6 +12,8 @@
  * @param {Function} options.contextMapper - Maps event detail to GraphQL filters object
  * @param {number} [options.limit=1000] - Maximum number of records to fetch
  * @param {boolean} [options.enabled=true] - Whether the hook is enabled
+ * @param {boolean} [options.fetchWithoutContext=true] - Whether to auto-fetch when no event context is available
+ * @param {number} [options.cacheTtlMs=15000] - Shared cache TTL for identical requests
  * @returns {Object} { data, loading, error, refetch, context }
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -19,13 +21,34 @@ import queryTracker from '../../services/data/queryTracker';
 import { SAIL_SELECT_EVENT } from '../../lib/eventBus';
 
 const GRAPHQL_URL = '/api/graphql';
+const DEFAULT_CACHE_TTL_MS = 15000;
+const inflightRequestCache = new Map();
+const responseCache = new Map();
+
+const stableStringify = (value) => {
+  if (value === null || value === undefined) return 'null';
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableStringify(entry)).join(',')}]`;
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value).sort(([a], [b]) => a.localeCompare(b));
+    return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+};
+
+const buildRequestKey = (tableName, limit, filters) => (
+  `${tableName || ''}|${String(limit || '')}|${stableStringify(filters || null)}`
+);
 
 export const useTableDataWithContext = ({
   tableName,
   eventName,
   contextMapper,
   limit = 1000,
-  enabled = true
+  enabled = true,
+  fetchWithoutContext = true,
+  cacheTtlMs = DEFAULT_CACHE_TTL_MS
 }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +64,8 @@ export const useTableDataWithContext = ({
   const limitRef = useRef(limit);
   const enabledRef = useRef(enabled);
   const eventNameRef = useRef(eventName);
+  const fetchWithoutContextRef = useRef(fetchWithoutContext);
+  const cacheTtlMsRef = useRef(cacheTtlMs);
   const hasCheckedContextRef = useRef(false);
   
   // Keep refs up to date
@@ -50,7 +75,9 @@ export const useTableDataWithContext = ({
     limitRef.current = limit;
     enabledRef.current = enabled;
     eventNameRef.current = eventName;
-  }, [contextMapper, tableName, limit, enabled, eventName]);
+    fetchWithoutContextRef.current = fetchWithoutContext;
+    cacheTtlMsRef.current = cacheTtlMs;
+  }, [contextMapper, tableName, limit, enabled, eventName, fetchWithoutContext, cacheTtlMs]);
 
   // Extract context from event and map to GraphQL filters - store in ref
   const extractFiltersRef = useRef(null);
@@ -60,6 +87,9 @@ export const useTableDataWithContext = ({
     }
     try {
       const mappedFilters = contextMapperRef.current(eventDetail);
+      if (!mappedFilters || typeof mappedFilters !== 'object') {
+        return null;
+      }
       // Remove null/undefined values
       const cleanFilters = Object.fromEntries(
         Object.entries(mappedFilters).filter(([, v]) => v != null)
@@ -97,63 +127,95 @@ export const useTableDataWithContext = ({
     setLoading(true);
     setError(null);
 
-    let trackQueryFn = null;
+    const requestKey = buildRequestKey(tableNameRef.current, limitRef.current, currentFilters || null);
+    const now = Date.now();
+    const ttl = Number(cacheTtlMsRef.current || 0);
+    if (ttl > 0) {
+      const cached = responseCache.get(requestKey);
+      if (cached && cached.expiresAt > now) {
+        setData(cached.data || []);
+        setLoading(false);
+        setError(null);
+        fetchingRef.current = false;
+        return;
+      }
+    }
 
     try {
-      const query = `
+      let requestPromise = inflightRequestCache.get(requestKey);
+      if (!requestPromise) {
+        requestPromise = (async () => {
+          let trackQueryFn = null;
+          const query = `
         query GetTableData($tableName: String!, $limit: Int, $filters: TableDataFilters) {
           tableData(tableName: $tableName, limit: $limit, filters: $filters)
         }
       `;
 
-      const variables = {
-        tableName: tableNameRef.current,
-        limit: limitRef.current,
-        filters: currentFilters || undefined
-      };
+          const variables = {
+            tableName: tableNameRef.current,
+            limit: limitRef.current,
+            filters: currentFilters || undefined
+          };
 
-      console.log(`[useTableDataWithContext] Fetching ${tableNameRef.current}`, currentFilters ? `with filters: ${JSON.stringify(currentFilters)}` : 'without filters');
+          console.log(`[useTableDataWithContext] Fetching ${tableNameRef.current}`, currentFilters ? `with filters: ${JSON.stringify(currentFilters)}` : 'without filters');
 
-      // Track query for InformationPanel
-      trackQueryFn = queryTracker.trackQuery({
-        query,
-        variables,
-        component: tableNameRef.current.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()), // Convert table_name to Table Name
-        purpose: `Fetch ${tableNameRef.current} data`
-      });
+          // Track query for InformationPanel
+          trackQueryFn = queryTracker.trackQuery({
+            query,
+            variables,
+            component: tableNameRef.current.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()), // Convert table_name to Table Name
+            purpose: `Fetch ${tableNameRef.current} data`
+          });
 
-      const response = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, variables })
-      });
+          try {
+            const response = await fetch(GRAPHQL_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query, variables })
+            });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            if (result.errors) {
+              console.error('[useTableDataWithContext] GraphQL errors:', result.errors);
+              throw new Error(result.errors[0].message);
+            }
+
+            const loadedData = result.data?.tableData || [];
+            if (trackQueryFn) {
+              trackQueryFn({ data: loadedData });
+            }
+            const currentTtl = Number(cacheTtlMsRef.current || 0);
+            if (currentTtl > 0) {
+              responseCache.set(requestKey, {
+                data: loadedData,
+                expiresAt: Date.now() + currentTtl
+              });
+            }
+            return loadedData;
+          } catch (error) {
+            if (trackQueryFn) {
+              trackQueryFn({ error });
+            }
+            throw error;
+          } finally {
+            inflightRequestCache.delete(requestKey);
+          }
+        })();
+        inflightRequestCache.set(requestKey, requestPromise);
       }
 
-      const result = await response.json();
-
-      if (result.errors) {
-        console.error('[useTableDataWithContext] GraphQL errors:', result.errors);
-        throw new Error(result.errors[0].message);
-      }
-
-      const loadedData = result.data?.tableData || [];
+      const loadedData = await requestPromise;
       console.log(`[useTableDataWithContext] Loaded ${loadedData.length} records from ${tableNameRef.current}`);
-
-      // Complete query tracking
-      if (trackQueryFn) {
-        trackQueryFn({ data: loadedData });
-      }
 
       setData(loadedData);
     } catch (err) {
       console.error('[useTableDataWithContext] Error:', err);
-      // Track error in query tracker
-      if (trackQueryFn) {
-        trackQueryFn({ error: err });
-      }
       setError(err);
       setData([]);
     } finally {
@@ -228,7 +290,14 @@ export const useTableDataWithContext = ({
       } catch (err) {
         console.warn('[useTableDataWithContext] Error checking existing context:', err);
       }
-      // Mark as checked even if no context found - event listener will handle initial fetch
+      // No prior context found.
+      if (fetchWithoutContextRef.current) {
+        fetchDataRef.current(null);
+      } else {
+        setLoading(false);
+        setError(null);
+        setData([]);
+      }
       hasCheckedContextRef.current = true;
     };
 
@@ -262,7 +331,13 @@ export const useTableDataWithContext = ({
       console.log(`[useTableDataWithContext] Received clear event`);
       setContext(null);
       lastFiltersRef.current = null; // Reset filters so we can fetch again
-      fetchDataRef.current(null);
+      if (fetchWithoutContextRef.current) {
+        fetchDataRef.current(null);
+      } else {
+        setLoading(false);
+        setError(null);
+        setData([]);
+      }
       
       // Clear stored event
       if (currentEventName === SAIL_SELECT_EVENT) {
@@ -348,8 +423,14 @@ export const useTableDataWithContext = ({
         } catch (err) {
           console.warn('[useTableDataWithContext] Error rechecking context:', err);
         }
-        // No context found, fetch without filters
-        fetchDataRef.current(null);
+        // No context found
+        if (fetchWithoutContextRef.current) {
+          fetchDataRef.current(null);
+        } else {
+          setLoading(false);
+          setError(null);
+          setData([]);
+        }
         hasCheckedContextRef.current = true;
       };
       recheckContext();
@@ -368,7 +449,7 @@ export const useTableDataWithContext = ({
       lastFiltersRef.current = null;
       hasCheckedContextRef.current = false;
     };
-  }, [eventName, enabled]); // Only re-run if eventName or enabled changes
+  }, [eventName, enabled, fetchWithoutContext]); // Only re-run if eventName/enabled behavior changes
 
   const refetch = useCallback(() => {
     const currentFilters = context ? extractFiltersRef.current(context) : null;

@@ -59,6 +59,19 @@ export default defineConfig({
         changeOrigin: true,
         ws: true, // WebSocket support for SSE
       },
+      // Public image proxy endpoint
+      '/api/public-image': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
+      '/api/public-itinerary-catalog': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
+      '/api/public-image-pool': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
       // Handle base path for SSE proxy - MUST come before /celestyal/api
       '/celestyal/api/sync/stream': {
         target: 'http://localhost:4001',
@@ -72,6 +85,22 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/celestyal\/api\/btop\/stream/, '/api/btop/stream'),
         ws: true,
+      },
+      // Handle base path for public image proxy
+      '/celestyal/api/public-image': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/celestyal\/api\/public-image/, '/api/public-image'),
+      },
+      '/celestyal/api/public-itinerary-catalog': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/celestyal\/api\/public-itinerary-catalog/, '/api/public-itinerary-catalog'),
+      },
+      '/celestyal/api/public-image-pool': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/celestyal\/api\/public-image-pool/, '/api/public-image-pool'),
       },
       // General API proxy (GraphQL) - comes after SSE routes
       '/api': {

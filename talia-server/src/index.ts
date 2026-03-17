@@ -1,8 +1,9 @@
 import dotenv from 'dotenv';
 import { ApolloServer } from '@apollo/server';
-import { startStandaloneServer } from '@apollo/server/standalone';
+import { expressMiddleware } from '@as-integrations/express5';
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import { typeDefs } from './api/schema.js';
 import { resolvers } from './api/resolvers.js';
 import { syncEventEmitter } from './services/sync-event-emitter.js';
@@ -12,28 +13,43 @@ dotenv.config();
 
 async function startServer() {
   // Create Apollo Server
-  const server = new ApolloServer({ 
-    typeDefs, 
+  const server = new ApolloServer({
+    typeDefs,
     resolvers,
     // Enable GraphQL Playground in development
     introspection: true
   });
 
-  // Start standalone server for GraphQL
-  // Note: CORS is handled by Apollo Server v5 automatically
-  const { url } = await startStandaloneServer(server, {
-    listen: { port: 4000 },
-    context: async ({ req }) => {
-      // In a real app, you would extract user information from the request
-      // For now, we'll return a mock user context
-      return {
-        user: {
-          id: '1',
-          role: 'ADMIN',
-          email: 'admin@celestyal.com'
-        }
-      };
-    }
+  await server.start();
+
+  // GraphQL Express app (port 4000)
+  // Enables response compression for large GraphQL payloads.
+  const graphqlApp = express();
+  graphqlApp.use(cors({
+    origin: '*',
+    credentials: true
+  }));
+  graphqlApp.use(compression({ threshold: 1024 }));
+  const graphqlJsonMiddleware = express.json({ limit: '10mb' });
+  const graphqlHandler = expressMiddleware(server, {
+    context: async () => ({
+      user: {
+        id: '1',
+        role: 'ADMIN',
+        email: 'admin@celestyal.com'
+      }
+    })
+  });
+  // Support both paths:
+  // - /graphql for existing Vite proxy rewrite
+  // - /api/graphql for direct external routing
+  graphqlApp.use('/graphql', graphqlJsonMiddleware, graphqlHandler);
+  graphqlApp.use('/api/graphql', graphqlJsonMiddleware, graphqlHandler);
+
+  const GRAPHQL_PORT = 4000;
+  graphqlApp.listen(GRAPHQL_PORT, () => {
+    console.log(`🚀  Talia GraphQL Server ready at: http://localhost:${GRAPHQL_PORT}/api/graphql`);
+    console.log(`🎮  GraphQL Playground: http://localhost:${GRAPHQL_PORT}/api/graphql`);
   });
 
   // Create Express app for SSE endpoint (on same port via proxy or separate port)
@@ -45,8 +61,253 @@ async function startServer() {
     origin: '*',
     credentials: true
   }));
-  
+  app.use(compression({ threshold: 1024 }));
+
   app.use(express.json());
+
+  const PUBLIC_ITINERARY_CATALOG_TTL_MS = 12 * 60 * 60 * 1000;
+  let publicItineraryCatalogCache: {
+    expiresAt: number;
+    items: Array<{
+      url: string;
+      title: string;
+      description: string;
+      image: string;
+      durationNights: number | null;
+      slug: string;
+    }>;
+  } | null = null;
+
+  // Public image proxy for external itinerary reference assets.
+  // Keeps browser image loads same-origin and avoids cross-origin embed blocks.
+  app.get('/api/public-image', async (req, res) => {
+    const rawUrl = String(req.query.url || '').trim();
+    if (!rawUrl) {
+      res.status(400).json({ error: 'Missing url query parameter' });
+      return;
+    }
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(rawUrl);
+    } catch {
+      res.status(400).json({ error: 'Invalid url query parameter' });
+      return;
+    }
+
+    const allowedHosts = new Set([
+      'celestyal.com',
+      'www.celestyal.com',
+      'tui.co.uk',
+      'www.tui.co.uk',
+      'virginvoyages.com',
+      'www.virginvoyages.com',
+      'virginvoyages.imgix.net',
+      'royalcaribbean.com',
+      'www.royalcaribbean.com',
+      'assets.dm.rccl.com',
+      'celebritycruises.com',
+      'www.celebritycruises.com',
+    ]);
+    const host = parsedUrl.hostname.toLowerCase();
+    const isAllowedHost = allowedHosts.has(host) || host.endsWith('.celestyal.com');
+    if (!isAllowedHost) {
+      res.status(403).json({ error: 'Host not allowed' });
+      return;
+    }
+
+    try {
+      const upstream = await fetch(parsedUrl.toString(), {
+        headers: {
+          'User-Agent': 'Talia-Image-Proxy/1.0',
+          Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+        },
+      });
+
+      if (!upstream.ok) {
+        res.status(upstream.status).json({ error: `Upstream returned ${upstream.status}` });
+        return;
+      }
+
+      const contentType = upstream.headers.get('content-type') || 'image/jpeg';
+      const body = Buffer.from(await upstream.arrayBuffer());
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.status(200).send(body);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(502).json({ error: `Failed to fetch upstream image: ${message}` });
+    }
+  });
+
+  app.get('/api/public-itinerary-catalog', async (req, res) => {
+    const now = Date.now();
+    if (publicItineraryCatalogCache && publicItineraryCatalogCache.expiresAt > now) {
+      res.status(200).json({ cached: true, items: publicItineraryCatalogCache.items });
+      return;
+    }
+
+    const maxPages = Math.max(10, Math.min(200, Number(req.query.limit || 120)));
+    const getMeta = (html: string, key: string, attr: 'property' | 'name') => {
+      const pattern = new RegExp(`<meta[^>]+${attr}=["']${key}["'][^>]+content=["']([^"']+)["']`, 'i');
+      const match = html.match(pattern);
+      return match?.[1]
+        ? match[1]
+          .replace(/&amp;/g, '&')
+          .replace(/&#x26;/gi, '&')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, '\'')
+          .trim()
+        : '';
+    };
+    const getDurationNights = (value: string) => {
+      const match = value.match(/(\d{1,2})\s*night/i);
+      return match ? Number(match[1]) : null;
+    };
+    const getSlug = (urlValue: string) => {
+      try {
+        const pathname = new URL(urlValue).pathname;
+        const parts = pathname.split('/').filter(Boolean);
+        return parts[parts.length - 1] || '';
+      } catch {
+        return '';
+      }
+    };
+
+    try {
+      const sitemapResponse = await fetch('https://celestyal.com/sitemap.xml', {
+        headers: { 'User-Agent': 'Talia-Public-Itinerary-Catalog/1.0' },
+      });
+      if (!sitemapResponse.ok) {
+        res.status(502).json({ error: `Failed to fetch sitemap: ${sitemapResponse.status}` });
+        return;
+      }
+      const sitemapXml = await sitemapResponse.text();
+      const locMatches = Array.from(sitemapXml.matchAll(/<loc>(.*?)<\/loc>/g)).map((match) => match[1]);
+      const itineraryUrls = Array.from(new Set(
+        locMatches
+          .map((urlValue) => (urlValue || '').trim())
+          .filter((urlValue) =>
+            /https:\/\/celestyal\.com\/gb\/our-cruises\/[^/?#]+$/i.test(urlValue)
+          )
+      )).slice(0, maxPages);
+
+      const items: Array<{
+        url: string;
+        title: string;
+        description: string;
+        image: string;
+        durationNights: number | null;
+        slug: string;
+      }> = [];
+
+      for (const urlValue of itineraryUrls) {
+        try {
+          const pageResponse = await fetch(urlValue, {
+            headers: { 'User-Agent': 'Talia-Public-Itinerary-Catalog/1.0' },
+            signal: AbortSignal.timeout(12000),
+          });
+          if (!pageResponse.ok) continue;
+          const pageHtml = await pageResponse.text();
+          const title = getMeta(pageHtml, 'og:title', 'property');
+          const description = getMeta(pageHtml, 'og:description', 'property')
+            || getMeta(pageHtml, 'description', 'name');
+          const image = getMeta(pageHtml, 'og:image', 'property')
+            || getMeta(pageHtml, 'twitter:image', 'name');
+          if (!title || !image) continue;
+
+          items.push({
+            url: urlValue,
+            title,
+            description,
+            image,
+            durationNights: getDurationNights(title),
+            slug: getSlug(urlValue),
+          });
+        } catch {
+          // skip pages that timeout/fail
+        }
+      }
+
+      publicItineraryCatalogCache = {
+        expiresAt: now + PUBLIC_ITINERARY_CATALOG_TTL_MS,
+        items,
+      };
+
+      res.status(200).json({ cached: false, items });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(502).json({ error: `Failed to build itinerary catalog: ${message}` });
+    }
+  });
+
+  app.get('/api/public-image-pool', async (req, res) => {
+    const maxPages = Math.max(3, Math.min(40, Number(req.query.limit || 20)));
+    const sources = [
+      { page: 'https://www.tui.co.uk/cruise/deals/next-summer', label: 'TUI Cruise Deals' },
+      { page: 'https://www.virginvoyages.com/cruise-deals', label: 'Virgin Voyages Deals' },
+      { page: 'https://www.royalcaribbean.com/gbr/en/cruise-deals', label: 'Royal Caribbean Deals' },
+      { page: 'https://www.celebritycruises.com/cruise-deals', label: 'Celebrity Cruises Deals' },
+    ];
+
+    const decodeMeta = (value: string) => value
+      .replace(/&amp;/g, '&')
+      .replace(/&#x26;/gi, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, '\'')
+      .trim();
+    const extractMeta = (html: string, key: string, attr: 'property' | 'name') => {
+      const pattern = new RegExp(`<meta[^>]+${attr}=["']${key}["'][^>]+content=["']([^"']+)["']`, 'i');
+      const match = html.match(pattern);
+      return match?.[1] ? decodeMeta(match[1]) : '';
+    };
+    const normalizeImage = (value: string) => {
+      const raw = (value || '').trim();
+      if (!raw) return '';
+      if (/^https?:\/\//i.test(raw)) return raw;
+      if (raw.startsWith('//')) return `https:${raw}`;
+      return '';
+    };
+    const isUsefulImage = (value: string) => {
+      const v = value.toLowerCase();
+      return v.includes('.jpg') || v.includes('.jpeg') || v.includes('.png') || v.includes('.webp');
+    };
+
+    const items: Array<{ sourcePage: string; sourceLabel: string; imageUrl: string; title: string }> = [];
+    for (const source of sources.slice(0, maxPages)) {
+      try {
+        const pageResponse = await fetch(source.page, {
+          headers: { 'User-Agent': 'Talia-Public-Image-Pool/1.0' },
+          signal: AbortSignal.timeout(12000),
+        });
+        if (!pageResponse.ok) continue;
+        const html = await pageResponse.text();
+
+        const ogImage = normalizeImage(extractMeta(html, 'og:image', 'property'));
+        const twitterImage = normalizeImage(extractMeta(html, 'twitter:image', 'name'));
+        const ogTitle = extractMeta(html, 'og:title', 'property');
+        const title = ogTitle || source.label;
+        const candidates = Array.from(new Set([ogImage, twitterImage].filter(Boolean)));
+
+        candidates.forEach((imageUrl) => {
+          if (!isUsefulImage(imageUrl)) return;
+          items.push({
+            sourcePage: source.page,
+            sourceLabel: source.label,
+            imageUrl,
+            title,
+          });
+        });
+      } catch {
+        // best-effort only
+      }
+    }
+
+    const deduped = Array.from(new Map(items.map((item) => [item.imageUrl, item])).values());
+    res.status(200).json({ items: deduped });
+  });
 
   // SSE endpoint for sync events
   app.get('/api/sync/stream/:tableName', (req, res) => {
@@ -238,8 +499,6 @@ async function startServer() {
   // Start Express server for SSE on port 4001
   const SSE_PORT = 4001;
   app.listen(SSE_PORT, () => {
-    console.log(`🚀  Talia GraphQL Server ready at: ${url}`);
-    console.log(`🎮  GraphQL Playground: ${url}`);
     console.log(`📡  SSE Stream endpoint: http://localhost:${SSE_PORT}/api/sync/stream/:tableName`);
     console.log(`📚  Enhanced with Focus Management & Role-based Access`);
     console.log(`🔐  Current user: admin@celestyal.com (ADMIN)`);

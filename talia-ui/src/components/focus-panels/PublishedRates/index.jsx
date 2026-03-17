@@ -19,6 +19,7 @@ const PublishedRatesContainer = () => {
       const sailCode = extractSailCodeFromEvent(detail);
       return sailCode ? { sail_code: sailCode } : null;
     },
+    fetchWithoutContext: false,
     limit: 1000
   });
 

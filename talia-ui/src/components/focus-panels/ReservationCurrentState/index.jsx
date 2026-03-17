@@ -25,6 +25,7 @@ const ReservationCurrentStateContainer = () => {
       console.log('[ReservationCurrentStateContainer] Mapped context to filters:', { sail_code: sailCode });
       return sailCode ? { sail_code: sailCode } : null;
     },
+    fetchWithoutContext: false,
     limit: 1000
   });
 

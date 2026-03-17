@@ -1644,10 +1644,30 @@ export const resolvers = {
           .select('*')
           .eq('operation_type', 'sync')
           .in('operation_name', operationKeys)
-          .order('last_run_at', { ascending: false })
-          .limit(1);
-        
-        const syncRecord = syncData && syncData.length > 0 ? syncData[0] : null;
+          .order('last_run_at', { ascending: false, nullsFirst: false });
+
+        const toTimestamp = (value: any) => {
+          if (!value) return 0;
+          const parsed = new Date(value).getTime();
+          return Number.isFinite(parsed) ? parsed : 0;
+        };
+
+        // Multiple operation names can exist for one table (config-format + legacy).
+        // Pick the single most recent metadata row across all matches.
+        const syncRecord = (syncData || []).reduce((latest: any, current: any) => {
+          if (!latest) return current;
+          const latestTs = Math.max(
+            toTimestamp(latest.last_run_at),
+            toTimestamp(latest.updated_at),
+            toTimestamp(latest.created_at)
+          );
+          const currentTs = Math.max(
+            toTimestamp(current.last_run_at),
+            toTimestamp(current.updated_at),
+            toTimestamp(current.created_at)
+          );
+          return currentTs > latestTs ? current : latest;
+        }, null);
 
         let latestSnapshotDate = null;
         if (syncRecord) {

@@ -139,12 +139,6 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-table-cell-padding-x', `${cellPadX}px`);
     root.style.setProperty('--theme-table-filter-height', `${filterHeight}px`);
 
-    // Trigger layout recalculation for tables/charts using native resize handling
-    if (typeof window !== 'undefined') {
-      requestAnimationFrame(() => {
-        window.dispatchEvent(new Event('resize'));
-      });
-    }
   }, [fontSize, selectedFont]);
 
   // Context value - provide theme and font settings

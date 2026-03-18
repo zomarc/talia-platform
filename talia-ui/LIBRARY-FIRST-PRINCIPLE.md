@@ -145,12 +145,15 @@ column.headerFilterParams = {
 - Context for state sharing
 - Component composition
 - Proper useEffect usage
+- Let layout/render libraries handle their own resize lifecycle
 
 #### ❌ Don't Do These
 - ~~Inline data fetching~~
 - ~~Prop drilling~~
 - ~~Direct DOM manipulation~~
 - ~~Global variables for state~~
+- ~~Manual `window.resize` dispatches to force redraws~~
+- ~~Calling chart/table resize methods from Dockview layout events~~
 
 ### Data Fetching
 

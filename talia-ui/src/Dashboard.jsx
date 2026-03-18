@@ -134,16 +134,6 @@ const TablePanel = React.memo(function TablePanel() {
   const failSafeRef = useRef(null);    // ensure timeout is always cleared
   const builtRef = useRef(false);       // only redraw after tableBuilt
   const initializedRef = useRef(false);
-  // Define panel close handler outside useEffect to avoid scoping issues
-  const onPanelClosed = useCallback(() => { 
-    try { 
-      if (builtRef.current && instanceRef.current && typeof instanceRef.current.redraw === 'function') {
-        instanceRef.current.redraw(true); 
-      }
-    } catch (e) {
-      console.warn('[TablePanel] panel close redraw failed:', e);
-    }
-  }, []);
 
   useEffect(() => {
 
@@ -358,19 +348,11 @@ const TablePanel = React.memo(function TablePanel() {
           }
         };
 
-        // Set up resize listeners immediately, not just after tableBuilt
-        try {
-          // Set up panel close listener immediately
-          window.addEventListener('panelClosed', onPanelClosed);
-        } catch (e) { console.warn('[Tabulator] panel close listener failed', e); }
-
         // Hook events after init
         try {
           instanceRef.current.on('tableBuilt', () => { 
             builtRef.current = true; 
             console.log('[Tabulator] tableBuilt');
-            
-            // REMOVED: ResizeObserver and resize listeners - let Dockview handle resizing
           });
           instanceRef.current.on('rowSelected', (row) => {
           const rec = row?.getData?.();
@@ -1326,28 +1308,6 @@ function Dashboard({ user }) {
     
     // REMOVED: forcePanelResize function - let Dockview handle layout naturally
     
-    // Let Dockview handle its own layout naturally
-    // Only log events for debugging, don't interfere with Dockview's internal processes
-    api.onDidAddPanel(() => {
-      console.log('Panel added - letting Dockview handle layout');
-    });
-    
-    api.onDidRemovePanel(() => {
-      console.log('Panel removed - letting Dockview handle layout');
-    });
-    
-    api.onDidLayoutChange(() => {
-      console.log('Layout changed - letting Dockview handle layout');
-    });
-    
-    api.onDidActivePanelChange(() => {
-      console.log('Active panel changed - letting Dockview handle layout');
-    });
-    
-    api.onDidMovePanel(() => {
-      console.log('Panel moved - letting Dockview handle layout');
-    });
-
     if (typeof api.onDidMaximizedGroupChange === 'function') {
       api.onDidMaximizedGroupChange(() => {
         const maximized = typeof api.hasMaximizedGroup === 'function' ? api.hasMaximizedGroup() : false;

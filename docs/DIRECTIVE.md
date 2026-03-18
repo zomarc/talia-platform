@@ -9,6 +9,9 @@ This is the canonical directive for development standards in `talia`.
 3. Keep presentation in CSS files; avoid inline style objects and embedded style blocks.
 4. Keep behavior in JavaScript/TypeScript and styling in CSS.
 5. Prefer one active implementation path; remove or archive legacy duplicates.
+6. Do not dispatch manual `window.resize` events to force component redraws.
+7. Do not call component-specific resize APIs (for example `chart.resize()` or Tabulator redraw calls) from Dockview layout events.
+8. Dockview owns layout/resize; Chart.js and Tabulator own their own responsive behavior.
 
 ## UI and Styling Rules
 

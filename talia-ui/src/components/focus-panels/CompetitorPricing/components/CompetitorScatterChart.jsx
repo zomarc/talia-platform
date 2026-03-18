@@ -81,7 +81,6 @@ const CompetitorScatterChart = ({
   tableVisible = true,
   chartOptions = { pppdScaleMode: 'AUTO', pppdMax: 200 }
 }) => {
-  const containerRef = useRef(null);
   const filteredCabinTypes = (filters?.cabinType && filters.cabinType !== 'ALL')
     ? [filters.cabinType]
     : ALL_CABIN_TYPES;
@@ -331,26 +330,8 @@ const CompetitorScatterChart = ({
     };
   }, [data, theme, activeCabinTypes, primaryCruiseLine, secondaryCruiseLine, chartOptions?.pppdScaleMode, chartOptions?.pppdMax]);
 
-  useEffect(() => {
-    if (!containerRef.current || typeof ResizeObserver === 'undefined') return undefined;
-
-    const observer = new ResizeObserver(() => {
-      Object.values(chartInstances.current).forEach((chart) => {
-        try {
-          chart?.resize?.();
-        } catch {
-          // noop
-        }
-      });
-    });
-
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <div
-      ref={containerRef}
       className={`competitor-scatter-grid ${activeCabinTypes.length === 1 ? 'competitor-scatter-grid--single' : ''} ${expandedCabinType ? 'competitor-scatter-grid--expanded' : ''} ${!tableVisible ? 'competitor-scatter-grid--table-hidden' : ''}`}
     >
       {activeCabinTypes.map(cabinType => (

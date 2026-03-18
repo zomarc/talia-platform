@@ -19,6 +19,7 @@
 .talia-report {
   height: 100%;
   width: 100%;
+  min-width: 0;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -71,6 +72,7 @@
 /* Content area - minimal padding, let table breathe */
 .talia-report__content {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
   padding: 0;
@@ -901,11 +903,13 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
+  min-width: 0;
   min-height: 0;
 }
 
 .talia-report-shell__content {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;

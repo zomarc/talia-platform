@@ -366,20 +366,8 @@ const TablePanel = React.memo(function TablePanel() {
     bookedMax: ''
   });
 
-  // Define panel close handler outside useEffect to avoid scoping issues
-  const onPanelClosed = useCallback(() => { 
-    try { 
-      if (builtRef.current && instanceRef.current && typeof instanceRef.current.redraw === 'function') {
-        instanceRef.current.redraw(true); 
-      }
-    } catch (e) {
-      console.warn('[TablePanel] panel close redraw failed:', e);
-    }
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
-    let ro = null;
 
     const waitForNonZeroSize = (el, timeout = 3000) => new Promise((resolve) => {
       const start = performance.now();
@@ -595,38 +583,11 @@ const TablePanel = React.memo(function TablePanel() {
           }
         };
 
-        // Set up resize listeners immediately, not just after tableBuilt
-        try {
-          // Set up panel close listener immediately
-          window.addEventListener('panelClosed', onPanelClosed);
-        } catch (e) { console.warn('[Tabulator] panel close listener failed', e); }
-
         // Hook events after init
         try {
           instanceRef.current.on('tableBuilt', () => { 
             builtRef.current = true; 
             console.log('[Tabulator] tableBuilt');
-            
-            // Set up ResizeObserver AFTER table is built with a small delay
-            setTimeout(() => {
-              try {
-                ro = new ResizeObserver(() => { 
-                  try { 
-                    if (builtRef.current && instanceRef.current && typeof instanceRef.current.redraw === 'function') {
-                      instanceRef.current.redraw(true); 
-                    }
-                  } catch {} 
-                });
-                ro.observe(tableRef.current);
-                window.addEventListener('resize', () => { 
-                  try { 
-                    if (builtRef.current && instanceRef.current && typeof instanceRef.current.redraw === 'function') {
-                      instanceRef.current.redraw(true);
-                    }
-                  } catch {} 
-                });
-              } catch (e) { console.warn('[Tabulator] resize observer failed', e); }
-            }, 100); // Small delay to ensure table is fully ready
           });
           instanceRef.current.on('rowSelected', (row) => {
           const rec = row?.getData?.();
@@ -654,10 +615,7 @@ const TablePanel = React.memo(function TablePanel() {
 
     return () => {
       if (failSafeRef.current) { clearTimeout(failSafeRef.current); failSafeRef.current = null; }
-      try { ro?.disconnect?.(); } catch {}
       try { instanceRef.current?.destroy?.(); } catch {}
-      // Remove panel close listener
-      window.removeEventListener('panelClosed', onPanelClosed);
       instanceRef.current = null;
       builtRef.current = false;
       initializedRef.current = false;
@@ -869,14 +827,6 @@ const ChartPanel = React.memo(function ChartPanel() {
         window.addEventListener(SELECT_EVENT, onSelect);
         window.addEventListener(CLEAR_EVENT, onClear);
         
-        // Listen for panel close events to trigger chart resize
-        const onPanelClosed = () => {
-          if (chartRef.current) {
-            chartRef.current.resize();
-          }
-        };
-        window.addEventListener('panelClosed', onPanelClosed);
-
         // Mark as initialized
         initializedRef.current = true;
 
@@ -886,7 +836,6 @@ const ChartPanel = React.memo(function ChartPanel() {
         return () => {
           window.removeEventListener(SELECT_EVENT, onSelect);
           window.removeEventListener(CLEAR_EVENT, onClear);
-          window.removeEventListener('panelClosed', onPanelClosed);
           if (chartRef.current) {
             try {
               chartRef.current.destroy();

@@ -222,6 +222,9 @@ const MyChart = ({ data }) => {
 - Do not call `api.layout()` manually
 - Do not manipulate panel positioning after creation
 - Let Dockview handle all layout and resizing naturally
+- Do not dispatch manual `window.resize` events from Dockview handlers
+- Do not call component-level resize methods (`chart.resize()`, Tabulator redraw) from Dockview events
+- Never add debounce/throttle/timer logic to "fix" Dockview resize behavior
 
 ### GraphQL: Apollo Client
 

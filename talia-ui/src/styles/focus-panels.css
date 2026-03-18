@@ -1371,6 +1371,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-width: 0;
   background: var(--theme-bg-solid);
   color: var(--theme-fg);
   min-height: 0;
@@ -1381,6 +1382,7 @@
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
   container-type: inline-size;
@@ -1505,7 +1507,8 @@
   padding: 8px;
   background: var(--theme-bg-elevated);
   flex: 1 1 auto;
-  min-height: 220px;
+  min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
@@ -1518,7 +1521,8 @@
 .competitor-table__host {
   background: var(--theme-bg-solid);
   flex: 1;
-  min-height: 180px;
+  min-height: 0;
+  min-width: 0;
   height: 100%;
 }
 
@@ -2834,15 +2838,24 @@
   padding: 6px 8px;
   background: var(--theme-bg-elevated);
   flex: 0 0 auto;
+  min-width: 0;
 }
 
 .competitor-scatter-grid__chart {
   position: relative;
   height: 140px;
+  min-width: 0;
+  min-height: 0;
   background: var(--theme-bg-solid);
   border-radius: 8px;
   border: 1px solid var(--theme-border);
   padding: 6px;
+}
+
+.competitor-scatter-grid__chart canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .competitor-scatter-grid__expand-btn {
@@ -2883,7 +2896,7 @@
 
 .competitor-scatter-grid--table-hidden .competitor-scatter-grid__chart {
   height: auto;
-  min-height: 180px;
+  min-height: 0;
 }
 
 .competitor-scatter-grid--table-hidden.competitor-scatter-grid--single {
@@ -2892,7 +2905,7 @@
 
 .competitor-scatter-grid--expanded .competitor-scatter-grid__chart {
   height: 100%;
-  min-height: 260px;
+  min-height: 0;
 }
 
 .competitor-scatter-grid--expanded {

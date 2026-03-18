@@ -1,20 +1,25 @@
 import React, { useCallback, useRef, useEffect, useState } from "react";
-import { DockviewReact, DockviewDefaultTab } from "dockview";
+import { DockviewReact } from "dockview";
 import "dockview/dist/styles/dockview.css"; // required Dockview CSS
 import reportRegistry from "./components/focus-panels/registry";
-import ReportEventMeta from "./components/shared/ReportEventMeta";
-import UserProfile from "./components/UserProfile";
-import { normalizeRole, isAdmin } from "./utils/roleUtils";
+import { normalizeRole } from "./utils/roleUtils";
 import { GraphQLUtils } from "./lib/apolloClient";
 // Focus Management Integration
-import { FocusSelector, FocusManager } from "./components/focus-management";
 import { useFocusManagement } from "./hooks/useFocusManagement";
+import useDashboardSidebar from "./hooks/useDashboardSidebar";
 import graphQLFocusService from "./services/GraphQLFocusService";
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT, emitSailClear, emitSailSelect } from "./lib/eventBus";
 // Admin Components
 import { AdminDashboard, UserMappingTable, TaliaUserTable } from "./components/admin";
 // Context Row Monitor (Admin only)
 import ContextRowMonitor from "./components/focus-panels/ContextRowMonitor/index.jsx";
+import TaliaDockviewTab from "./components/dockview/TaliaDockviewTab.jsx";
+import ReportShell from "./components/dockview/ReportShell.jsx";
+import DashboardSidebar from "./components/sidebar/DashboardSidebar.jsx";
+import {
+  DOCKVIEW_MAXIMIZE_STATE_EVENT,
+  DASHBOARD_CYCLE_FOCUS_EVENT,
+} from "./components/dockview/eventConstants";
 // Dev Role Selector is now integrated into ModeSelector dropdown
 // Theme System - using centralized theme context
 import { useTheme } from "./contexts/ThemeContext";
@@ -30,15 +35,6 @@ const debugLog = (message, data = null) => {
   console.log(`[App Debug] ${message}`, data || '');
 };
 
-const REPORT_REFRESH_EVENT = 'talia:report.refresh';
-const REPORT_TOGGLE_DETAILS_EVENT = 'talia:report.toggleDetails';
-const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
-const DOCKVIEW_MAXIMIZE_STATE_EVENT = 'talia:dockview.maximizeStateChanged';
-const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
-const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';
-const DASHBOARD_CYCLE_FOCUS_EVENT = 'talia:dashboard.cycleFocus';
-const SIDE_EXPAND_DECISION_TIMEOUT_MS = 3000;
-
 const toggleDockviewPanelLayout = (panelApi, dockviewApi) => {
   if (!panelApi) return;
   const currentlyMaximized = panelApi?.isMaximized?.() ?? false;
@@ -51,436 +47,6 @@ const toggleDockviewPanelLayout = (panelApi, dockviewApi) => {
     dockviewApi?.exitMaximizedGroup?.();
   }
   panelApi?.maximize?.();
-};
-
-const getGroupIdsInSameVisualSide = (dockviewApi, targetGroupId) => {
-  const groups = Array.isArray(dockviewApi?.groups) ? dockviewApi.groups : [];
-  const visibleGroups = groups.filter((group) => !!group?.api?.isVisible && !!group?.element);
-  if (!targetGroupId || visibleGroups.length < 2) return null;
-
-  const targetGroup = visibleGroups.find((group) => group.id === targetGroupId);
-  if (!targetGroup) return null;
-
-  const withCenters = visibleGroups
-    .map((group) => {
-      const rect = group.element.getBoundingClientRect();
-      const hasArea = rect.width > 0 && rect.height > 0;
-      if (!hasArea) return null;
-      return {
-        id: group.id,
-        centerX: rect.left + rect.width / 2,
-      };
-    })
-    .filter(Boolean);
-
-  if (withCenters.length < 2) return null;
-
-  const minX = Math.min(...withCenters.map((entry) => entry.centerX));
-  const maxX = Math.max(...withCenters.map((entry) => entry.centerX));
-  const sideDivider = minX + (maxX - minX) / 2;
-  const targetEntry = withCenters.find((entry) => entry.id === targetGroupId);
-  if (!targetEntry) return null;
-
-  const targetIsLeft = targetEntry.centerX <= sideDivider;
-  return new Set(
-    withCenters
-      .filter((entry) => (targetIsLeft ? entry.centerX <= sideDivider : entry.centerX > sideDivider))
-      .map((entry) => entry.id)
-  );
-};
-
-const deriveReportSources = (report) => {
-  if (Array.isArray(report?.dataSources) && report.dataSources.length) {
-    return report.dataSources;
-  }
-  if (typeof report?.dataRequirements === 'string' && report.dataRequirements.trim()) {
-    return [report.dataRequirements.trim()];
-  }
-  return [];
-};
-
-const ReportShell = ({ report, panelInstanceId, children }) => {
-  const emits = report?.events?.emits || [];
-  const respondsTo = report?.events?.respondsTo || [];
-  const sources = deriveReportSources(report);
-  const [showDetails, setShowDetails] = useState(false);
-
-  useEffect(() => {
-    const handleToggleDetails = (event) => {
-      const requestedPanelId = event?.detail?.panelId;
-      if (!requestedPanelId) return;
-      if (requestedPanelId !== panelInstanceId && requestedPanelId !== report?.panelId) return;
-      setShowDetails((prev) => !prev);
-    };
-    window.addEventListener(REPORT_TOGGLE_DETAILS_EVENT, handleToggleDetails);
-    return () => window.removeEventListener(REPORT_TOGGLE_DETAILS_EVENT, handleToggleDetails);
-  }, [panelInstanceId, report?.panelId]);
-
-  return (
-    <div className="talia-report-shell">
-      {showDetails && (
-        <ReportEventMeta emits={emits} respondsTo={respondsTo} sources={sources} />
-      )}
-      <div className="talia-report-shell__content">{children}</div>
-    </div>
-  );
-};
-
-const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, groupActionPanelIds, maximizeStateToken, ...props }) => {
-  const panelApi = props?.api;
-  const panelId = panelApi?.id;
-  const panelComponent = panelApi?.component;
-  const isReportTab = !!panelComponent && reportPanelIds?.has?.(panelComponent);
-  const isRefreshableTab = !!panelComponent && refreshableReportPanelIds?.has?.(panelComponent);
-  const hasGroupActions = !!panelComponent && groupActionPanelIds?.has?.(panelComponent);
-  const [isMaximized, setIsMaximized] = React.useState(() => panelApi?.isMaximized?.() ?? false);
-  const [layoutCycleState, setLayoutCycleState] = React.useState(0); // 0: original, 1: side-expand window, 2: full-expand, 3: side-expand restore
-  const layoutCycleRef = React.useRef({
-    originalVisibility: null,
-    panelId: null,
-  });
-  const sideExpandTimerRef = React.useRef(null);
-  const [groupCycleDepth, setGroupCycleDepth] = React.useState(0);
-  const [groupCycleMaxDepth, setGroupCycleMaxDepth] = React.useState(2);
-  const layoutGlyph = layoutCycleState === 0 ? "↑" : layoutCycleState === 1 ? "↔" : "↓";
-  const layoutTitle =
-    layoutCycleState === 0
-      ? "Expand panel in current side"
-      : layoutCycleState === 1
-        ? "Expand panel to full width (or wait to restore)"
-        : "Collapse to original layout";
-  const layoutButtonClassName = [
-    "talia-dv-tab__button",
-    "talia-dv-tab__button--layout",
-    layoutCycleState === 1 ? "talia-dv-tab__button--layout-side-active" : "",
-    layoutCycleState === 2 || layoutCycleState === 3 ? "talia-dv-tab__button--layout-restore" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  const [showCloseConfirm, setShowCloseConfirm] = React.useState(false);
-
-  const syncMaximizedState = React.useCallback(() => {
-    const currentlyMaximized = panelApi?.isMaximized?.() ?? false;
-    setIsMaximized(currentlyMaximized);
-  }, [panelApi]);
-
-  // Keep tab icon/tooltip synced with Dockview maximize state.
-  React.useEffect(() => {
-    syncMaximizedState();
-  }, [syncMaximizedState, maximizeStateToken]);
-
-  React.useEffect(() => {
-    const handleMaximizeStateChanged = () => syncMaximizedState();
-    window.addEventListener(DOCKVIEW_MAXIMIZE_STATE_EVENT, handleMaximizeStateChanged);
-    return () => {
-      window.removeEventListener(DOCKVIEW_MAXIMIZE_STATE_EVENT, handleMaximizeStateChanged);
-    };
-  }, [syncMaximizedState]);
-  React.useEffect(() => {
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        setShowCloseConfirm(false);
-      }
-    };
-    window.addEventListener('keydown', handleEscape);
-    return () => {
-      window.removeEventListener('keydown', handleEscape);
-    };
-  }, []);
-
-  React.useEffect(() => {
-    return () => {
-      if (sideExpandTimerRef.current) {
-        window.clearTimeout(sideExpandTimerRef.current);
-        sideExpandTimerRef.current = null;
-      }
-    };
-  }, []);
-
-  React.useEffect(() => {
-    if (!hasGroupActions) return;
-    const syncGroupCycleState = () => {
-      const registeredActions = window.__taliaPanelGroupActions || {};
-      const panelActions =
-        registeredActions[panelId] ||
-        (panelComponent ? registeredActions[panelComponent] : null);
-      const cycleState = panelActions?.getCycleState?.();
-      if (!cycleState) return false;
-      if (typeof cycleState.depth === 'number') {
-        setGroupCycleDepth(cycleState.depth);
-      }
-      if (typeof cycleState.maxDepth === 'number' && cycleState.maxDepth > 0) {
-        setGroupCycleMaxDepth(cycleState.maxDepth);
-      }
-      return true;
-    };
-
-    const syncedImmediately = syncGroupCycleState();
-    if (syncedImmediately) return;
-    const timer = window.setTimeout(() => {
-      syncGroupCycleState();
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [hasGroupActions, panelComponent, panelId, maximizeStateToken]);
-
-  const handlePrimaryAction = (event) => {
-    event.stopPropagation();
-    setShowCloseConfirm((prev) => !prev);
-  };
-
-  const handleLayoutToggle = (event) => {
-    event.stopPropagation();
-    setShowCloseConfirm(false);
-
-    const dockviewApi = window.dockviewApi;
-    const activePanelId = panelApi?.id || layoutCycleRef.current.panelId;
-    const currentPanelApi = activePanelId
-      ? dockviewApi?.getPanel?.(activePanelId)?.api || panelApi
-      : panelApi;
-    const currentGroupId = currentPanelApi?.group?.id;
-
-    if (layoutCycleState === 0) {
-      if (sideExpandTimerRef.current) {
-        window.clearTimeout(sideExpandTimerRef.current);
-        sideExpandTimerRef.current = null;
-      }
-      const sideGroupIds = getGroupIdsInSameVisualSide(dockviewApi, currentGroupId);
-      let appliedSideIsolation = false;
-      if (sideGroupIds && sideGroupIds.size > 0 && activePanelId) {
-        const visibilitySnapshot = {};
-        (dockviewApi?.groups || []).forEach((group) => {
-          visibilitySnapshot[group.id] = !!group?.api?.isVisible;
-        });
-        layoutCycleRef.current.originalVisibility = visibilitySnapshot;
-        layoutCycleRef.current.panelId = activePanelId;
-        (dockviewApi?.groups || []).forEach((group) => {
-          if (sideGroupIds.has(group.id)) {
-            // First step: isolate selected panel within its current left/right side container.
-            group?.api?.setVisible?.(group.id === currentGroupId);
-            return;
-          }
-          // Keep the opposite side unchanged.
-          const originalVisible = visibilitySnapshot[group.id];
-          group?.api?.setVisible?.(typeof originalVisible === 'boolean' ? originalVisible : true);
-        });
-        currentPanelApi?.setActive?.();
-        appliedSideIsolation = true;
-      } else {
-        // Never full-maximize on first click.
-        // If side isolation can't be resolved for this layout, keep current layout unchanged.
-        layoutCycleRef.current.originalVisibility = null;
-        layoutCycleRef.current.panelId = null;
-      }
-      if (appliedSideIsolation) {
-        setLayoutCycleState(1);
-        sideExpandTimerRef.current = window.setTimeout(() => {
-          setLayoutCycleState((previous) => (previous === 1 ? 3 : previous));
-          sideExpandTimerRef.current = null;
-        }, SIDE_EXPAND_DECISION_TIMEOUT_MS);
-      } else {
-        setLayoutCycleState(0);
-      }
-    } else if (layoutCycleState === 1) {
-      if (sideExpandTimerRef.current) {
-        window.clearTimeout(sideExpandTimerRef.current);
-        sideExpandTimerRef.current = null;
-      }
-      const targetPanelApi =
-        (layoutCycleRef.current.panelId ? dockviewApi?.getPanel?.(layoutCycleRef.current.panelId)?.api : null) ||
-        currentPanelApi;
-      if (dockviewApi?.hasMaximizedGroup?.() && !targetPanelApi?.isMaximized?.()) {
-        dockviewApi?.exitMaximizedGroup?.();
-      }
-      if (!targetPanelApi?.isMaximized?.()) {
-        targetPanelApi?.maximize?.();
-      }
-      setLayoutCycleState(2);
-    } else {
-      if (sideExpandTimerRef.current) {
-        window.clearTimeout(sideExpandTimerRef.current);
-        sideExpandTimerRef.current = null;
-      }
-      if (currentPanelApi?.isMaximized?.()) {
-        currentPanelApi?.exitMaximized?.();
-      }
-      if (dockviewApi?.hasMaximizedGroup?.()) {
-        dockviewApi?.exitMaximizedGroup?.();
-      }
-      const originalVisibility = layoutCycleRef.current.originalVisibility;
-      if (originalVisibility && typeof originalVisibility === 'object') {
-        (dockviewApi?.groups || []).forEach((group) => {
-          const previousValue = originalVisibility[group.id];
-          group?.api?.setVisible?.(typeof previousValue === 'boolean' ? previousValue : true);
-        });
-      }
-      const cyclePanelId = layoutCycleRef.current.panelId;
-      const restoredPanel = cyclePanelId ? dockviewApi?.getPanel?.(cyclePanelId)?.api : null;
-      restoredPanel?.setActive?.();
-
-      layoutCycleRef.current.originalVisibility = null;
-      layoutCycleRef.current.panelId = null;
-      setLayoutCycleState(0);
-    }
-
-    setIsMaximized(currentPanelApi?.isMaximized?.() ?? false);
-    window.dispatchEvent(new CustomEvent(DOCKVIEW_MAXIMIZE_STATE_EVENT));
-    window.requestAnimationFrame(syncMaximizedState);
-  };
-
-  const handleConfirmClose = (event) => {
-    event.stopPropagation();
-    setShowCloseConfirm(false);
-    panelApi?.close?.();
-  };
-
-  const handleCancelClose = (event) => {
-    event.stopPropagation();
-    setShowCloseConfirm(false);
-  };
-
-  const handleToggleDetails = (event) => {
-    event.stopPropagation();
-    if (!panelId) return;
-    window.dispatchEvent(
-      new CustomEvent(REPORT_TOGGLE_DETAILS_EVENT, {
-        detail: { panelId, panelComponent },
-      })
-    );
-  };
-
-  const handleRefresh = (event) => {
-    event.stopPropagation();
-    const refreshPanelId = panelComponent;
-    if (!refreshPanelId) return;
-    window.dispatchEvent(
-      new CustomEvent(REPORT_REFRESH_EVENT, {
-        detail: { panelId: refreshPanelId, panelInstanceId: panelId, panelComponent: panelComponent },
-      })
-    );
-  };
-
-  const handleGroupAction = (action) => (event) => {
-    event.stopPropagation();
-    if (!panelId) return;
-    const registeredActions = window.__taliaPanelGroupActions || {};
-    const panelActions =
-      registeredActions[panelId] ||
-      (panelComponent ? registeredActions[panelComponent] : null);
-    if (panelActions) {
-      if (action === 'cycle') {
-        const nextDepth = panelActions.cycle?.();
-        const cycleState = panelActions.getCycleState?.();
-        if (typeof nextDepth === 'number') {
-          setGroupCycleDepth(nextDepth);
-        } else if (typeof cycleState?.depth === 'number') {
-          setGroupCycleDepth(cycleState.depth);
-        }
-        if (typeof cycleState?.maxDepth === 'number' && cycleState.maxDepth > 0) {
-          setGroupCycleMaxDepth(cycleState.maxDepth);
-        }
-      } else if (action === 'openAll') {
-        panelActions.openAll?.();
-      } else if (action === 'collapseAll') {
-        panelActions.collapseAll?.();
-      }
-      return;
-    }
-    const groupActionEvent = new CustomEvent(REPORT_GROUP_ACTION_EVENT, {
-      detail: { panelId, panelComponent, action },
-    });
-    window.dispatchEvent(groupActionEvent);
-    document.dispatchEvent(
-      new CustomEvent(REPORT_GROUP_ACTION_EVENT, {
-        detail: { panelId, panelComponent, action },
-      })
-    );
-  };
-
-  const cycleLabel = `Group view level ${groupCycleDepth} of ${groupCycleMaxDepth}`;
-  const cycleIcon = groupCycleDepth === 0
-    ? '⊟'
-    : groupCycleDepth >= groupCycleMaxDepth
-      ? '⊠'
-      : '⊞';
-
-  return (
-    <div className="talia-dv-tab">
-      <DockviewDefaultTab {...props} hideClose />
-      <div className="talia-dv-tab__actions">
-        {isRefreshableTab && (
-          <button
-            type="button"
-            className="talia-dv-tab__button talia-dv-tab__button--refresh"
-            title="Refresh panel"
-            aria-label="Refresh panel"
-            onClick={handleRefresh}
-          >
-            ↻
-          </button>
-        )}
-        {isReportTab && (
-          <button
-            type="button"
-            className="talia-dv-tab__button talia-dv-tab__button--details"
-            title="Toggle details"
-            aria-label="Toggle details"
-            onClick={handleToggleDetails}
-          >
-            ⓘ
-          </button>
-        )}
-        {hasGroupActions && (
-          <button
-            type="button"
-            className="talia-dv-tab__button talia-dv-tab__button--group"
-            title={`${cycleLabel} (click to cycle)`}
-            aria-label={`${cycleLabel}. Click to cycle group expansion.`}
-            onClick={handleGroupAction('cycle')}
-          >
-            {cycleIcon}
-          </button>
-        )}
-        <button
-          type="button"
-          className={layoutButtonClassName}
-          title={layoutTitle}
-          aria-label={layoutTitle}
-          onClick={handleLayoutToggle}
-          onDoubleClick={(event) => event.stopPropagation()}
-        >
-          {layoutGlyph}
-        </button>
-        <button
-          type="button"
-          className="talia-dv-tab__button talia-dv-tab__button--primary"
-          title="Close tab"
-          aria-label="Close tab"
-          onClick={handlePrimaryAction}
-          onDoubleClick={(event) => event.stopPropagation()}
-        >
-          X
-        </button>
-        {showCloseConfirm && (
-          <div className="talia-dv-tab__inline-confirm" role="group" aria-label="Confirm close panel">
-            <button
-              type="button"
-              className="talia-dv-tab__confirm-btn talia-dv-tab__confirm-btn--danger"
-              onClick={handleConfirmClose}
-            >
-              Yes
-            </button>
-            <button
-              type="button"
-              className="talia-dv-tab__confirm-btn"
-              onClick={handleCancelClose}
-            >
-              No
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
 };
 
 // IMPORTANT: DO NOT MESS WITH DOCKVIEW'S LAYOUT SYSTEM
@@ -1094,315 +660,6 @@ function InfoPanel(props) {
   );
 }
 
-// ---- VS Code-style Sidebar Component ----
-function Sidebar({ isCollapsed, onToggle, onAddPanel, globalFilters, onGlobalFiltersChange, currentFocus, onFocusChange, userRole, focusLoading, focusError, onSaveCurrentLayout }) {
-  const { fontFamily, setFontFamily, selectedFont, fontFamilies, fontSize, setFontSize } = useTheme();
-
-  const reportGroups = React.useMemo(() => {
-    const items = Object.values(reportRegistry)
-      .filter((report) => report.showInReports && report.panelId)
-      .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-    const grouped = {};
-    items.forEach((report) => {
-      const category = report.category || 'Other';
-      if (!grouped[category]) {
-        grouped[category] = [];
-      }
-      grouped[category].push(report);
-    });
-    return grouped;
-  }, []);
-
-  const [expandedSections, setExpandedSections] = React.useState({
-    focus: true,  // Only Focus Management open by default
-    user: false,
-    criteria: false,
-    reports: false,
-    appearance: false,
-    admin: false
-  });
-
-  const toggleSection = (section) => {
-    setExpandedSections(prev => {
-      // If clicking the same section, toggle it
-      // If clicking a different section, close all others and open only this one
-      const isCurrentlyOpen = prev[section];
-      
-      if (isCurrentlyOpen) {
-        // Close the section that's being clicked
-        return {
-          ...prev,
-          [section]: false
-        };
-      } else {
-        // Close all sections and open only the clicked one
-        return {
-          focus: false,
-          user: false,
-          criteria: false,
-          reports: false,
-          appearance: false,
-          admin: false,
-          [section]: true
-        };
-      }
-    });
-  };
-
-  if (isCollapsed) {
-    return (
-      <div className="dashboard-sidebar dashboard-sidebar--collapsed">
-        <div className="dashboard-sidebar__header">
-          <button
-            onClick={onToggle}
-            className="dashboard-sidebar__close-btn"
-          >
-            ☰
-          </button>
-        </div>
-        <div className="dashboard-sidebar__nav">
-          <button className="dashboard-sidebar__nav-btn" title="Default Criteria">📊</button>
-          <button className="dashboard-sidebar__nav-btn" title="Reports">📋</button>
-          <button className="dashboard-sidebar__nav-btn" title="Appearance">🎨</button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="dashboard-sidebar">
-      {/* Header */}
-      <div className="dashboard-explorer__header">
-        <span className="dashboard-explorer__title">Explorer</span>
-        <button
-          onClick={onToggle}
-          className="dashboard-sidebar__close-btn"
-        >
-          ◀
-        </button>
-      </div>
-
-      {/* Sections Container - Flex container for dynamic sizing */}
-      <div className="dashboard-explorer__content">
-        {/* Enhanced Focus Section with New Focus Management */}
-      <div className={`dashboard-section dashboard-section--focus ${expandedSections.focus ? 'dashboard-section--expanded' : 'dashboard-section--collapsed'}`}>
-        <div 
-          className="dashboard-section__header"
-          onClick={() => toggleSection('focus')}
-        >
-          <span className="dashboard-section__title">Focus Management</span>
-          <span className={`dashboard-section__icon ${expandedSections.focus ? 'dashboard-section__icon--expanded' : ''}`}>
-            ▶
-          </span>
-        </div>
-        <div className={`dashboard-section__content ${expandedSections.focus ? 'dashboard-section__content--expanded' : ''}`}>
-          {/* Show loading state */}
-          {focusLoading && (
-            <div className="dashboard-loading">
-              <div className="dashboard-loading__text">Loading focuses...</div>
-            </div>
-          )}
-          
-          {/* Show focus management error if any */}
-          {focusError && (
-            <div className="dashboard-error">
-              <div className="dashboard-error__title">Focus Error</div>
-              <div className="dashboard-error__message">{focusError}</div>
-            </div>
-          )}
-          
-          {/* Talia Focus Management System */}
-          {!focusLoading && !focusError && (
-            <FocusSelector 
-              onFocusChange={onFocusChange}
-              currentFocusId={currentFocus}
-              onSaveCurrentLayout={onSaveCurrentLayout}
-            />
-          )}
-          
-          {/* Fallback section removed - using Talia focus system */}
-          
-        </div>
-      </div>
-
-      {/* Default Criteria Section - Fixed Height */}
-      <div className="dashboard-section">
-        <div 
-          className="dashboard-section__header"
-          onClick={() => toggleSection('criteria')}
-        >
-          <span className="dashboard-section__title">Default Criteria</span>
-          <span className={`dashboard-section__icon ${expandedSections.criteria ? 'dashboard-section__icon--expanded' : ''}`}>
-            ▶
-          </span>
-        </div>
-        <div className={`dashboard-section__content ${expandedSections.criteria ? 'dashboard-section__content--expanded' : ''}`}>
-          <div className="dashboard-form-group">
-            <label className="dashboard-form-label">Ship Filter:</label>
-            <select 
-              className="dashboard-form-input"
-              value={globalFilters.ship || ''}
-              onChange={(e) => onGlobalFiltersChange({ ...globalFilters, ship: e.target.value })}
-            >
-              <option value="">All Ships</option>
-              <option value="Celestyal Discovery">Celestyal Discovery</option>
-              <option value="Celestyal Journey">Celestyal Journey</option>
-            </select>
-          </div>
-          <div className="dashboard-form-group">
-            <label className="dashboard-form-label">Date From:</label>
-            <input
-              type="date"
-              className="dashboard-form-input"
-              value={globalFilters.dateFrom || ''}
-              onChange={(e) => onGlobalFiltersChange({ ...globalFilters, dateFrom: e.target.value })}
-            />
-          </div>
-          <div className="dashboard-form-group">
-            <label className="dashboard-form-label">Date To:</label>
-            <input
-              type="date"
-              className="dashboard-form-input"
-              value={globalFilters.dateTo || ''}
-              onChange={(e) => onGlobalFiltersChange({ ...globalFilters, dateTo: e.target.value })}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Reports Section */}
-      <div className="dashboard-section">
-        <div 
-          className="dashboard-section__header"
-          onClick={() => toggleSection('reports')}
-        >
-          <span className="dashboard-section__title">Reports</span>
-          <span className={`dashboard-section__icon ${expandedSections.reports ? 'dashboard-section__icon--expanded' : ''}`}>
-            ▶
-          </span>
-        </div>
-        <div className={`dashboard-section__content ${expandedSections.reports ? 'dashboard-section__content--expanded' : ''}`}>
-          {Object.entries(reportGroups).sort(([a], [b]) => a.localeCompare(b)).map(([category, reports]) => (
-            <div key={category} className="dashboard-section__group">
-              <div className="dashboard-section__subtitle">{category}</div>
-              {reports.map((report) => {
-                const reportLabel = report.legacy ? `${report.title} (Legacy)` : report.title;
-                const reportDescription = report.legacy
-                  ? `${report.description || ''} Legacy component.`
-                  : report.description;
-                return (
-                  <button
-                    key={report.panelId}
-                    className="dashboard-btn"
-                    onClick={() => onAddPanel(report.panelId, reportLabel, { reportId: report.panelId })}
-                    title={reportDescription}
-                  >
-                    {reportLabel}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Appearance Section */}
-      <div className="dashboard-section">
-        <div 
-          className="dashboard-section__header"
-          onClick={() => toggleSection('appearance')}
-        >
-          <span className="dashboard-section__title">Appearance</span>
-          <span className={`dashboard-section__icon ${expandedSections.appearance ? 'dashboard-section__icon--expanded' : ''}`}>
-            ▶
-          </span>
-        </div>
-        <div className={`dashboard-section__content ${expandedSections.appearance ? 'dashboard-section__content--expanded' : ''}`}>
-          <div className="dashboard-form-group">
-            <label className="dashboard-form-label">Font Family:</label>
-            <select 
-              className="dashboard-form-input"
-              value={fontFamily}
-              onChange={(e) => setFontFamily(e.target.value)}
-            >
-              {Object.entries(fontFamilies).map(([key, font]) => (
-                <option key={key} value={key}>{font.name}</option>
-              ))}
-            </select>
-            <div className="dashboard-form-hint">
-              {selectedFont.description}
-            </div>
-          </div>
-          <div className="dashboard-form-group">
-            <label className="dashboard-form-label">Font Size: {fontSize}px</label>
-            <input
-              type="range"
-              min="9"
-              max="13"
-              step="0.5"
-              value={fontSize}
-              onChange={(e) => setFontSize(Number(e.target.value))}
-              className="dashboard-form-input dashboard-form-input--range"
-            />
-            <div className="dashboard-form-hint">
-              Compact range tuned for dense layouts.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Admin Section - Only visible to admins */}
-      {isAdmin(userRole) && (
-        <div className="dashboard-section">
-          <div
-            className="dashboard-section__header"
-            onClick={() => toggleSection('admin')}
-          >
-            <span className="dashboard-section__title">Admin Dashboard</span>
-            <span className={`dashboard-section__icon ${expandedSections.admin ? 'dashboard-section__icon--expanded' : ''}`}>
-              ▶
-            </span>
-          </div>
-          <div className={`dashboard-section__content ${expandedSections.admin ? 'dashboard-section__content--expanded' : ''}`}>
-            <button
-              className="dashboard-btn"
-              onClick={() => onAddPanel('admin-dashboard', '⚙️ Admin Dashboard')}
-            >
-              ⚙️ Open Admin Dashboard
-            </button>
-            <button
-              className="dashboard-btn"
-              onClick={() => onAddPanel('user-mapping-table', '🔗 User Mappings')}
-            >
-              🔗 User Mappings
-            </button>
-            <button
-              className="dashboard-btn"
-              onClick={() => onAddPanel('talia-user-table', '👥 Talia Users')}
-            >
-              👥 Talia Users
-            </button>
-            <div className="dashboard-form-hint dashboard-form-hint--admin">
-              💡 Admin tools for managing users and system configuration
-            </div>
-          </div>
-        </div>
-      )}
-
-      </div> {/* End Sections Container */}
-
-      {/* User Profile */}
-      <UserProfile isCollapsed={isCollapsed} onToggle={onToggle} />
-
-      {/* Footer */}
-      <div className="dashboard-user-info">
-        Dockview v4.6.2
-      </div>
-      
-    </div>
-  );
-}
-
 // ---- GraphQL Data Panel ----
 const GraphQLPanel = React.memo(function GraphQLPanel(props) {
   debugLog('GraphQLPanel render', { props });
@@ -1666,7 +923,6 @@ function Dashboard({ user }) {
   }, []);
 
   const apiRef = useRef(null);
-  const shellRef = useRef(null);
   const dockviewHostRef = useRef(null);
   const initializedRef = useRef(false); // guard for React 18 StrictMode
   const [isGroupMaximized, setIsGroupMaximized] = useState(false);
@@ -1693,21 +949,22 @@ function Dashboard({ user }) {
     []
   );
 
-  // Sidebar state
-  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
-  const [sidebarWidth, setSidebarWidth] = React.useState(280);
-  const [isResizing, setIsResizing] = React.useState(false);
+  const {
+    shellRef,
+    sidebarCollapsed,
+    setSidebarCollapsed,
+    sidebarWidth,
+    setSidebarWidth,
+    isResizing,
+    toggleSidebar,
+    handleMouseDown,
+  } = useDashboardSidebar();
+
   const [globalFilters, setGlobalFilters] = React.useState({
     ship: '',
     dateFrom: '',
     dateTo: ''
   });
-
-  useEffect(() => {
-    if (!shellRef.current) return;
-    const widthValue = sidebarCollapsed ? '48px' : `${sidebarWidth}px`;
-    shellRef.current.style.setProperty('--dashboard-sidebar-width', widthValue);
-  }, [sidebarCollapsed, sidebarWidth]);
 
   // Focus navigation state - now using database focus system
   const [currentFocus, setCurrentFocus] = useState(null);
@@ -1885,18 +1142,6 @@ function Dashboard({ user }) {
     initializedRef.current = false; 
   }, []);
 
-  const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((prev) => !prev);
-  }, []);
-
-  useEffect(() => {
-    const handleExternalSidebarToggle = () => {
-      toggleSidebar();
-    };
-    window.addEventListener(DASHBOARD_TOGGLE_SIDEBAR_EVENT, handleExternalSidebarToggle);
-    return () => window.removeEventListener(DASHBOARD_TOGGLE_SIDEBAR_EVENT, handleExternalSidebarToggle);
-  }, [toggleSidebar]);
-
   useEffect(() => {
     const handleCycleFocus = () => {
       cycleFocus();
@@ -1904,15 +1149,6 @@ function Dashboard({ user }) {
     window.addEventListener(DASHBOARD_CYCLE_FOCUS_EVENT, handleCycleFocus);
     return () => window.removeEventListener(DASHBOARD_CYCLE_FOCUS_EVENT, handleCycleFocus);
   }, [cycleFocus]);
-
-  useEffect(() => {
-    window.__taliaSidebarCollapsed = sidebarCollapsed;
-    window.dispatchEvent(
-      new CustomEvent(DASHBOARD_SIDEBAR_STATE_EVENT, {
-        detail: { collapsed: sidebarCollapsed },
-      })
-    );
-  }, [sidebarCollapsed]);
 
   const addNewPanel = (componentType, title, panelParams = {}) => {
     if (!apiRef.current) return;
@@ -1967,40 +1203,6 @@ function Dashboard({ user }) {
     // You can add logic here to apply filters to existing panels
     console.log('Global filters updated:', newFilters);
   };
-
-  const handleMouseDown = (e) => {
-    setIsResizing(true);
-    e.preventDefault();
-    e.stopPropagation();
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  };
-
-  const handleMouseMove = (e) => {
-    if (!isResizing) return;
-    const newWidth = e.clientX;
-    if (newWidth >= 200 && newWidth <= 500) {
-      setSidebarWidth(newWidth);
-      console.log('Resizing sidebar to:', newWidth);
-    }
-  };
-
-  const handleMouseUp = () => {
-    setIsResizing(false);
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-  };
-
-  React.useEffect(() => {
-    if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isResizing]);
 
   // REMOVED: Manual layout triggering - let Dockview handle sidebar changes naturally
 
@@ -2288,7 +1490,7 @@ function Dashboard({ user }) {
       ref={shellRef}
     >
       <div className="dashboard-layout">
-        <Sidebar
+        <DashboardSidebar
           isCollapsed={sidebarCollapsed}
           onToggle={toggleSidebar}
           onAddPanel={addNewPanel}

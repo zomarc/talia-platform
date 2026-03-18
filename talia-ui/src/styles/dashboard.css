@@ -199,6 +199,23 @@
   align-items: center;
   justify-content: center;
   font-size: 11px;
+  box-shadow: none;
+}
+
+.dashboard-dockview .talia-dv-tab__button--layout:focus,
+.dashboard-dockview .talia-dv-tab__button--layout:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.dashboard-dockview .talia-dv-tab__button--layout-side-active {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.45);
+}
+
+.dashboard-dockview .talia-dv-tab__button--layout-restore {
+  border-color: #eab308;
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.45);
 }
 
 .dashboard-dockview .talia-dv-tab__button--details {

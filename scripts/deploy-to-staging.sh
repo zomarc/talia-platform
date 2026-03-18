@@ -1,6 +1,7 @@
 #!/bin/bash
-# Deploy Talia Platform from local to staging environment
-# Default mode is local sync (no git push/pull).
+# Deploy Talia Platform from local to staging environment.
+# Policy: staging deploys default to direct local -> staging LAN sync.
+# Git-based sync is intentionally guarded and requires explicit typed confirmation.
 # Usage: ./scripts/deploy-to-staging.sh [--code-only|--full|--dry-run|--git-sync]
 
 set -euo pipefail
@@ -63,6 +64,8 @@ echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  Deploy to Staging (${STAGING_HOST})${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
+echo -e "${BLUE}Policy:${NC} default staging deploy is direct local -> staging LAN sync."
+echo ""
 echo -e "Mode: ${YELLOW}${DEPLOY_MODE}${NC}"
 echo -e "Sync: ${YELLOW}${SYNC_MODE}${NC} (default: local)"
 if [ "$DRY_RUN" = true ]; then
@@ -77,6 +80,23 @@ if [ ! -f "package.json" ] || [ ! -d "talia-ui" ] || [ ! -d "talia-server" ]; th
 fi
 
 if [ "$SYNC_MODE" = "git" ]; then
+  echo -e "${YELLOW}⚠️  You selected --git-sync.${NC}"
+  echo -e "${YELLOW}⚠️  Default/approved method is direct local -> staging LAN deployment.${NC}"
+  echo -e "${YELLOW}⚠️  Use git-sync only with explicit approval for this run.${NC}"
+  echo ""
+  if [ "$DRY_RUN" = false ]; then
+    if [ ! -t 0 ]; then
+      echo -e "${RED}Error: --git-sync requires an interactive terminal confirmation.${NC}"
+      echo -e "${RED}Run again interactively or use default local sync.${NC}"
+      exit 1
+    fi
+    read -r -p "Type APPROVE_GIT_SYNC to continue with git-based deployment: " GIT_SYNC_APPROVAL
+    if [ "$GIT_SYNC_APPROVAL" != "APPROVE_GIT_SYNC" ]; then
+      echo -e "${RED}Aborted: git-sync not approved. Use default local sync deployment.${NC}"
+      exit 1
+    fi
+  fi
+
   echo -e "${BLUE}📋 Checking git status...${NC}"
   if [ -n "$(git status --porcelain)" ]; then
     echo -e "${YELLOW}⚠️  You have uncommitted changes${NC}"

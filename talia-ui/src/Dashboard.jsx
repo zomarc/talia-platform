@@ -37,6 +37,7 @@ const DOCKVIEW_MAXIMIZE_STATE_EVENT = 'talia:dockview.maximizeStateChanged';
 const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
 const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';
 const DASHBOARD_CYCLE_FOCUS_EVENT = 'talia:dashboard.cycleFocus';
+const SIDE_EXPAND_DECISION_TIMEOUT_MS = 3000;
 
 const toggleDockviewPanelLayout = (panelApi, dockviewApi) => {
   if (!panelApi) return;
@@ -50,6 +51,42 @@ const toggleDockviewPanelLayout = (panelApi, dockviewApi) => {
     dockviewApi?.exitMaximizedGroup?.();
   }
   panelApi?.maximize?.();
+};
+
+const getGroupIdsInSameVisualSide = (dockviewApi, targetGroupId) => {
+  const groups = Array.isArray(dockviewApi?.groups) ? dockviewApi.groups : [];
+  const visibleGroups = groups.filter((group) => !!group?.api?.isVisible && !!group?.element);
+  if (!targetGroupId || visibleGroups.length < 2) return null;
+
+  const targetGroup = visibleGroups.find((group) => group.id === targetGroupId);
+  if (!targetGroup) return null;
+
+  const withCenters = visibleGroups
+    .map((group) => {
+      const rect = group.element.getBoundingClientRect();
+      const hasArea = rect.width > 0 && rect.height > 0;
+      if (!hasArea) return null;
+      return {
+        id: group.id,
+        centerX: rect.left + rect.width / 2,
+      };
+    })
+    .filter(Boolean);
+
+  if (withCenters.length < 2) return null;
+
+  const minX = Math.min(...withCenters.map((entry) => entry.centerX));
+  const maxX = Math.max(...withCenters.map((entry) => entry.centerX));
+  const sideDivider = minX + (maxX - minX) / 2;
+  const targetEntry = withCenters.find((entry) => entry.id === targetGroupId);
+  if (!targetEntry) return null;
+
+  const targetIsLeft = targetEntry.centerX <= sideDivider;
+  return new Set(
+    withCenters
+      .filter((entry) => (targetIsLeft ? entry.centerX <= sideDivider : entry.centerX > sideDivider))
+      .map((entry) => entry.id)
+  );
 };
 
 const deriveReportSources = (report) => {
@@ -97,14 +134,34 @@ const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, groupActi
   const isRefreshableTab = !!panelComponent && refreshableReportPanelIds?.has?.(panelComponent);
   const hasGroupActions = !!panelComponent && groupActionPanelIds?.has?.(panelComponent);
   const [isMaximized, setIsMaximized] = React.useState(() => panelApi?.isMaximized?.() ?? false);
+  const [layoutCycleState, setLayoutCycleState] = React.useState(0); // 0: original, 1: side-expand window, 2: full-expand, 3: side-expand restore
+  const layoutCycleRef = React.useRef({
+    originalVisibility: null,
+    panelId: null,
+  });
+  const sideExpandTimerRef = React.useRef(null);
   const [groupCycleDepth, setGroupCycleDepth] = React.useState(0);
   const [groupCycleMaxDepth, setGroupCycleMaxDepth] = React.useState(2);
-  const layoutGlyph = isMaximized ? "↙" : "↗";
-  const layoutTitle = isMaximized ? "Return to layout" : "Expand panel";
+  const layoutGlyph = layoutCycleState === 0 ? "↑" : layoutCycleState === 1 ? "↔" : "↓";
+  const layoutTitle =
+    layoutCycleState === 0
+      ? "Expand panel in current side"
+      : layoutCycleState === 1
+        ? "Expand panel to full width (or wait to restore)"
+        : "Collapse to original layout";
+  const layoutButtonClassName = [
+    "talia-dv-tab__button",
+    "talia-dv-tab__button--layout",
+    layoutCycleState === 1 ? "talia-dv-tab__button--layout-side-active" : "",
+    layoutCycleState === 2 || layoutCycleState === 3 ? "talia-dv-tab__button--layout-restore" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const [showCloseConfirm, setShowCloseConfirm] = React.useState(false);
 
   const syncMaximizedState = React.useCallback(() => {
-    setIsMaximized(panelApi?.isMaximized?.() ?? false);
+    const currentlyMaximized = panelApi?.isMaximized?.() ?? false;
+    setIsMaximized(currentlyMaximized);
   }, [panelApi]);
 
   // Keep tab icon/tooltip synced with Dockview maximize state.
@@ -128,6 +185,15 @@ const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, groupActi
     window.addEventListener('keydown', handleEscape);
     return () => {
       window.removeEventListener('keydown', handleEscape);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (sideExpandTimerRef.current) {
+        window.clearTimeout(sideExpandTimerRef.current);
+        sideExpandTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -165,8 +231,98 @@ const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, groupActi
   const handleLayoutToggle = (event) => {
     event.stopPropagation();
     setShowCloseConfirm(false);
-    toggleDockviewPanelLayout(panelApi, window.dockviewApi);
-    setIsMaximized(panelApi?.isMaximized?.() ?? false);
+
+    const dockviewApi = window.dockviewApi;
+    const activePanelId = panelApi?.id || layoutCycleRef.current.panelId;
+    const currentPanelApi = activePanelId
+      ? dockviewApi?.getPanel?.(activePanelId)?.api || panelApi
+      : panelApi;
+    const currentGroupId = currentPanelApi?.group?.id;
+
+    if (layoutCycleState === 0) {
+      if (sideExpandTimerRef.current) {
+        window.clearTimeout(sideExpandTimerRef.current);
+        sideExpandTimerRef.current = null;
+      }
+      const sideGroupIds = getGroupIdsInSameVisualSide(dockviewApi, currentGroupId);
+      let appliedSideIsolation = false;
+      if (sideGroupIds && sideGroupIds.size > 0 && activePanelId) {
+        const visibilitySnapshot = {};
+        (dockviewApi?.groups || []).forEach((group) => {
+          visibilitySnapshot[group.id] = !!group?.api?.isVisible;
+        });
+        layoutCycleRef.current.originalVisibility = visibilitySnapshot;
+        layoutCycleRef.current.panelId = activePanelId;
+        (dockviewApi?.groups || []).forEach((group) => {
+          if (sideGroupIds.has(group.id)) {
+            // First step: isolate selected panel within its current left/right side container.
+            group?.api?.setVisible?.(group.id === currentGroupId);
+            return;
+          }
+          // Keep the opposite side unchanged.
+          const originalVisible = visibilitySnapshot[group.id];
+          group?.api?.setVisible?.(typeof originalVisible === 'boolean' ? originalVisible : true);
+        });
+        currentPanelApi?.setActive?.();
+        appliedSideIsolation = true;
+      } else {
+        // Never full-maximize on first click.
+        // If side isolation can't be resolved for this layout, keep current layout unchanged.
+        layoutCycleRef.current.originalVisibility = null;
+        layoutCycleRef.current.panelId = null;
+      }
+      if (appliedSideIsolation) {
+        setLayoutCycleState(1);
+        sideExpandTimerRef.current = window.setTimeout(() => {
+          setLayoutCycleState((previous) => (previous === 1 ? 3 : previous));
+          sideExpandTimerRef.current = null;
+        }, SIDE_EXPAND_DECISION_TIMEOUT_MS);
+      } else {
+        setLayoutCycleState(0);
+      }
+    } else if (layoutCycleState === 1) {
+      if (sideExpandTimerRef.current) {
+        window.clearTimeout(sideExpandTimerRef.current);
+        sideExpandTimerRef.current = null;
+      }
+      const targetPanelApi =
+        (layoutCycleRef.current.panelId ? dockviewApi?.getPanel?.(layoutCycleRef.current.panelId)?.api : null) ||
+        currentPanelApi;
+      if (dockviewApi?.hasMaximizedGroup?.() && !targetPanelApi?.isMaximized?.()) {
+        dockviewApi?.exitMaximizedGroup?.();
+      }
+      if (!targetPanelApi?.isMaximized?.()) {
+        targetPanelApi?.maximize?.();
+      }
+      setLayoutCycleState(2);
+    } else {
+      if (sideExpandTimerRef.current) {
+        window.clearTimeout(sideExpandTimerRef.current);
+        sideExpandTimerRef.current = null;
+      }
+      if (currentPanelApi?.isMaximized?.()) {
+        currentPanelApi?.exitMaximized?.();
+      }
+      if (dockviewApi?.hasMaximizedGroup?.()) {
+        dockviewApi?.exitMaximizedGroup?.();
+      }
+      const originalVisibility = layoutCycleRef.current.originalVisibility;
+      if (originalVisibility && typeof originalVisibility === 'object') {
+        (dockviewApi?.groups || []).forEach((group) => {
+          const previousValue = originalVisibility[group.id];
+          group?.api?.setVisible?.(typeof previousValue === 'boolean' ? previousValue : true);
+        });
+      }
+      const cyclePanelId = layoutCycleRef.current.panelId;
+      const restoredPanel = cyclePanelId ? dockviewApi?.getPanel?.(cyclePanelId)?.api : null;
+      restoredPanel?.setActive?.();
+
+      layoutCycleRef.current.originalVisibility = null;
+      layoutCycleRef.current.panelId = null;
+      setLayoutCycleState(0);
+    }
+
+    setIsMaximized(currentPanelApi?.isMaximized?.() ?? false);
     window.dispatchEvent(new CustomEvent(DOCKVIEW_MAXIMIZE_STATE_EVENT));
     window.requestAnimationFrame(syncMaximizedState);
   };
@@ -286,7 +442,7 @@ const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, groupActi
         )}
         <button
           type="button"
-          className="talia-dv-tab__button talia-dv-tab__button--layout"
+          className={layoutButtonClassName}
           title={layoutTitle}
           aria-label={layoutTitle}
           onClick={handleLayoutToggle}

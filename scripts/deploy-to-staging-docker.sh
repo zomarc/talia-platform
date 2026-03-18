@@ -1,5 +1,6 @@
 #!/bin/bash
-# Deploy Docker images from local to staging environment
+# Deploy Docker images from local to staging environment.
+# This follows the default direct local -> staging LAN deployment policy.
 # Usage: ./scripts/deploy-to-staging-docker.sh
 
 set -euo pipefail

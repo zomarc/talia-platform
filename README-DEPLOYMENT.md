@@ -2,6 +2,11 @@
 
 ## Quick Reference
 
+### Deployment Policy (Default)
+- **Default and expected**: direct local -> staging deployment on LAN.
+- **When user says "deploy to staging"**: use local direct method, not GitHub/git-sync.
+- **Any non-default method**: stop and get explicit confirmation first.
+
 ### Deploy Code to Staging
 ```bash
 ./scripts/deploy-to-staging.sh --code-only
@@ -12,8 +17,8 @@
 ./scripts/deploy-to-staging.sh --full
 ```
 
-### Direct Deploy (No Git Push)
-Use this when GitHub auth is blocked or staging cannot pull.
+### Alternate Direct Bundle Method (Manual)
+Use only when explicitly requested.
 ```bash
 # 1) Create a bundle from local main
 git bundle create /tmp/talia-platform.bundle main
@@ -47,6 +52,8 @@ Deploys code changes to staging server.
 - Tests critical endpoints after deployment
 - Verifies Data Mode functionality
 - Fails if critical services don't work
+- Defaults to local LAN sync (no git push/pull)
+- `--git-sync` requires explicit typed confirmation
 
 **Usage:**
 ```bash
@@ -55,17 +62,18 @@ Deploys code changes to staging server.
 
 # Full deployment with Docker rebuild
 ./scripts/deploy-to-staging.sh --full
+
+# Git sync (guarded, only by explicit approval)
+./scripts/deploy-to-staging.sh --git-sync --code-only
 ```
 
 **What it does:**
-1. Checks for uncommitted changes (prompts to commit)
-2. Pushes code to git
-3. SSH to staging and pulls latest code
-4. Restarts services in dependency order:
+1. Packages local code and copies directly to staging over SSH/SCP
+2. Extracts on staging and restarts services in dependency order:
    - Supabase services (db, rest, kong)
    - GraphQL server
    - UI
-5. Verifies:
+3. Verifies:
    - GraphQL server responds
    - Supabase connection is online
    - `databaseTables` query works

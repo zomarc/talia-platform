@@ -10,13 +10,46 @@
  */
 
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import theme from '../config/themes';
 import { initChartDefaults } from '../lib/chartConfig';
+import { trackedFetchGraphql } from '../services/data/trackedGraphql';
 
 const ThemeContext = createContext();
-const APPEARANCE_PROFILES_KEY = 'taliaAppearanceProfiles';
-const ACTIVE_APPEARANCE_PROFILE_KEY = 'taliaActiveAppearanceProfileId';
+const APPEARANCE_SETTINGS_QUERY = `
+  query AppearanceSettings {
+    appearanceSettings {
+      settings
+      profiles {
+        id
+        name
+        settings
+        updatedAt
+      }
+      activeProfileId
+    }
+  }
+`;
+
+const SAVE_APPEARANCE_SETTINGS_MUTATION = `
+  mutation SaveAppearanceSettings($settings: JSON!, $activeProfileId: String) {
+    saveAppearanceSettings(settings: $settings, activeProfileId: $activeProfileId) {
+      settings
+      activeProfileId
+    }
+  }
+`;
+
+const SAVE_APPEARANCE_PROFILES_MUTATION = `
+  mutation SaveAppearanceProfiles($profiles: JSON!) {
+    saveAppearanceProfiles(profiles: $profiles) {
+      id
+      name
+      settings
+      updatedAt
+    }
+  }
+`;
 
 const hexToRgb = (hex) => {
   if (typeof hex !== 'string') return null;
@@ -115,335 +148,57 @@ export const useTheme = () => {
  * Provides theme values and font settings to the application
  */
 export const ThemeProvider = ({ children }) => {
-  // Font size setting (user-adjustable)
-  const [fontSize, setFontSize] = useState(() => {
-    let initialFontSize = 10;
+  // Read localStorage once for instant rendering before DB loads.
+  // DB settings override these on load; if DB is empty we migrate these up.
+  const _localFS = (() => {
     try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initialFontSize = parsed.fontSettings?.fontSize ?? 10;
-      }
-    } catch {
-      // Use default
-    }
-    return initialFontSize;
-  });
+      const raw = localStorage.getItem('taliaLayout');
+      return raw ? JSON.parse(raw).fontSettings || {} : {};
+    } catch { return {}; }
+  })();
 
-  // Font family setting (user-adjustable)
-  const [fontFamily, setFontFamily] = useState(() => {
-    let initialFontFamily = 'Inter';
+  const _localProfiles = (() => {
     try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initialFontFamily = parsed.fontSettings?.fontFamily || 'Inter';
-      }
-    } catch {
-      // Use default
-    }
-    return initialFontFamily;
-  });
+      const raw = localStorage.getItem('taliaAppearanceProfiles');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((e) => e?.id && e?.name && e?.settings) : [];
+    } catch { return []; }
+  })();
 
-  // Global text intensity (0-100, default 45)
-  const [textIntensity, setTextIntensity] = useState(() => {
-    let initial = 45;
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.textIntensity ?? 45;
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
+  const _localActiveProfile = (() => {
+    try { return localStorage.getItem('taliaActiveAppearanceProfileId') || ''; } catch { return ''; }
+  })();
 
-  // Group color intensity (0-100, default 60)
-  const [groupColorIntensity, setGroupColorIntensity] = useState(() => {
-    let initial = 60;
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.groupColorIntensity ?? 60;
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
+  const [fontSize, setFontSize] = useState(_localFS.fontSize ?? 10);
+  const [fontFamily, setFontFamily] = useState(_localFS.fontFamily || 'Inter');
+  const [textIntensity, setTextIntensity] = useState(_localFS.textIntensity ?? 45);
+  const [groupColorIntensity, setGroupColorIntensity] = useState(_localFS.groupColorIntensity ?? 60);
+  const [rowColorIntensity, setRowColorIntensity] = useState(_localFS.rowColorIntensity ?? 40);
+  const [oddRowIntensity, setOddRowIntensity] = useState(_localFS.oddRowIntensity ?? 40);
+  const [cardColorIntensity, setCardColorIntensity] = useState(_localFS.cardColorIntensity ?? 40);
+  const [evenRowIntensity, setEvenRowIntensity] = useState(_localFS.evenRowIntensity ?? 20);
+  const [componentPadding, setComponentPadding] = useState(_localFS.componentPadding ?? 50);
+  const [accentColor, setAccentColor] = useState(_localFS.accentColor ?? 'blue');
+  const [rowAccentColor, setRowAccentColor] = useState(_localFS.rowAccentColor ?? 'slate');
+  const [cardAccentColor, setCardAccentColor] = useState(_localFS.cardAccentColor ?? 'slate');
+  const [groupColorHex, setGroupColorHex] = useState(_localFS.groupColorHex ?? '#385c94');
+  const [rowHoverColorHex, setRowHoverColorHex] = useState(_localFS.rowHoverColorHex ?? '#7890a8');
+  const [oddRowColorHex, setOddRowColorHex] = useState(_localFS.oddRowColorHex ?? '#c8cdd7');
+  const [evenRowColorHex, setEvenRowColorHex] = useState(_localFS.evenRowColorHex ?? '#ffffff');
+  const [cardColorHex, setCardColorHex] = useState(_localFS.cardColorHex ?? '#252a37');
 
-  // Row hover color intensity (0-100, default 40)
-  const [rowColorIntensity, setRowColorIntensity] = useState(() => {
-    let initial = 40;
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.rowColorIntensity ?? 40;
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
+  const [appearanceProfiles, setAppearanceProfiles] = useState(_localProfiles);
+  const [activeAppearanceProfileId, setActiveAppearanceProfileId] = useState(_localActiveProfile);
+  const [appearanceDbLoaded, setAppearanceDbLoaded] = useState(false);
+  const saveSettingsTimerRef = useRef(null);
+  const saveProfilesTimerRef = useRef(null);
 
-  // Odd-row striping intensity (0-100, default 40)
-  const [oddRowIntensity, setOddRowIntensity] = useState(() => {
-    let initial = 40;
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.oddRowIntensity ?? 40;
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
-
-  // Card/elevated surface intensity (0-100, default 40)
-  const [cardColorIntensity, setCardColorIntensity] = useState(() => {
-    let initial = 40;
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.cardColorIntensity ?? 40;
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
-
-  // Even-row striping intensity (0-100, default 20)
-  const [evenRowIntensity, setEvenRowIntensity] = useState(() => {
-    let initial = 20;
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.evenRowIntensity ?? 20;
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
-
-  // Global component/card padding scale (0-100, default 50)
-  const [componentPadding, setComponentPadding] = useState(() => {
-    let initial = 50;
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.componentPadding ?? 50;
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
-
-  // Accent color preset for group rows
-  const [accentColor, setAccentColor] = useState(() => {
-    let initial = 'blue';
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.accentColor ?? 'blue';
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
-
-  // Accent color preset for row shading
-  const [rowAccentColor, setRowAccentColor] = useState(() => {
-    let initial = 'slate';
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.rowAccentColor ?? 'slate';
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
-
-  // Accent color preset for card/elevated surfaces
-  const [cardAccentColor, setCardAccentColor] = useState(() => {
-    let initial = 'slate';
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.cardAccentColor ?? 'slate';
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
-
-  // Direct color overrides (hex values) to allow any user-selected color
-  const [groupColorHex, setGroupColorHex] = useState(() => {
-    let initial = '#385c94';
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.groupColorHex ?? '#385c94';
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
-
-  const [rowHoverColorHex, setRowHoverColorHex] = useState(() => {
-    let initial = '#7890a8';
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.rowHoverColorHex ?? '#7890a8';
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
-
-  const [oddRowColorHex, setOddRowColorHex] = useState(() => {
-    let initial = '#c8cdd7';
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.oddRowColorHex ?? '#c8cdd7';
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
-
-  const [evenRowColorHex, setEvenRowColorHex] = useState(() => {
-    let initial = '#ffffff';
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.evenRowColorHex ?? '#ffffff';
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
-
-  const [cardColorHex, setCardColorHex] = useState(() => {
-    let initial = '#252a37';
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.cardColorHex ?? '#252a37';
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
-
-  const [appearanceProfiles, setAppearanceProfiles] = useState(() => {
-    try {
-      const saved = localStorage.getItem(APPEARANCE_PROFILES_KEY);
-      if (!saved) return [];
-      const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) ? parsed.filter((entry) => entry?.id && entry?.name && entry?.settings) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const [activeAppearanceProfileId, setActiveAppearanceProfileId] = useState(() => {
-    try {
-      return localStorage.getItem(ACTIVE_APPEARANCE_PROFILE_KEY) || '';
-    } catch {
-      return '';
-    }
-  });
-
-  // Global background color preset
-  const [bgColor, setBgColor] = useState(() => {
-    let initial = 'midnight';
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        initial = parsed.fontSettings?.bgColor ?? 'midnight';
-      }
-    } catch {
-      // Use default
-    }
-    return initial;
-  });
+  const [bgColor, setBgColor] = useState(_localFS.bgColor ?? 'midnight');
 
   const selectedFont = FONT_FAMILIES[fontFamily] || FONT_FAMILIES['Inter'];
 
-  // Auto-persist appearance settings to localStorage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("taliaLayout");
-      const parsed = saved ? JSON.parse(saved) : {};
-      parsed.fontSettings = {
-        ...(parsed.fontSettings || {}),
-        fontSize,
-        fontFamily,
-        textIntensity,
-        groupColorIntensity,
-        rowColorIntensity,
-        oddRowIntensity,
-        cardColorIntensity,
-        evenRowIntensity,
-        componentPadding,
-        accentColor,
-        rowAccentColor,
-        cardAccentColor,
-        groupColorHex,
-        rowHoverColorHex,
-        oddRowColorHex,
-        evenRowColorHex,
-        cardColorHex,
-        bgColor,
-      };
-      localStorage.setItem("taliaLayout", JSON.stringify(parsed));
-    } catch {
-      // Best-effort persistence
-    }
-  }, [fontSize, fontFamily, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, cardColorHex, bgColor]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(APPEARANCE_PROFILES_KEY, JSON.stringify(appearanceProfiles));
-      localStorage.setItem(ACTIVE_APPEARANCE_PROFILE_KEY, activeAppearanceProfileId || '');
-    } catch {
-      // Best-effort persistence
-    }
-  }, [appearanceProfiles, activeAppearanceProfileId]);
-
-  const buildCurrentAppearanceSettings = () => ({
+  const buildCurrentAppearanceSettings = useCallback(() => ({
     fontFamily,
     fontSize,
     textIntensity,
@@ -459,7 +214,7 @@ export const ThemeProvider = ({ children }) => {
     oddRowColorHex,
     evenRowColorHex,
     cardColorHex,
-  });
+  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, cardColorHex]);
 
   const applyAppearanceSettings = (settings) => {
     if (!settings || typeof settings !== 'object') return false;
@@ -514,6 +269,135 @@ export const ThemeProvider = ({ children }) => {
     setActiveAppearanceProfileId(profileId);
     return profileId;
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadAppearanceSettings = async () => {
+      try {
+        const data = await trackedFetchGraphql({
+          query: APPEARANCE_SETTINGS_QUERY,
+          variables: {},
+          component: 'ThemeContext',
+          purpose: 'Load appearance settings from database',
+          tableName: 'config_setting'
+        });
+        if (cancelled) return;
+        const payload = data?.appearanceSettings;
+        const dbHasSettings = payload?.settings && typeof payload.settings === 'object'
+          && Object.keys(payload.settings).length > 0;
+
+        if (dbHasSettings) {
+          applyAppearanceSettings(payload.settings);
+        }
+        if (Array.isArray(payload?.profiles) && payload.profiles.length > 0) {
+          setAppearanceProfiles(
+            payload.profiles
+              .filter((entry) => entry?.id && entry?.name)
+              .map((entry) => ({
+                id: entry.id,
+                name: entry.name,
+                settings: entry.settings || {},
+                updatedAt: entry.updatedAt || new Date().toISOString()
+              }))
+          );
+        }
+        if (typeof payload?.activeProfileId === 'string' && payload.activeProfileId) {
+          setActiveAppearanceProfileId(payload.activeProfileId);
+        }
+
+        // Migrate: if DB was empty, push current localStorage-derived settings up
+        if (!dbHasSettings) {
+          console.log('[ThemeContext] DB empty — migrating localStorage appearance to database');
+        }
+      } catch (error) {
+        console.warn('[ThemeContext] Failed to load appearance settings from DB:', error);
+      } finally {
+        if (!cancelled) {
+          setAppearanceDbLoaded(true);
+        }
+      }
+    };
+    loadAppearanceSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!appearanceDbLoaded) return undefined;
+    if (saveSettingsTimerRef.current) {
+      clearTimeout(saveSettingsTimerRef.current);
+    }
+    saveSettingsTimerRef.current = setTimeout(async () => {
+      try {
+        await trackedFetchGraphql({
+          query: SAVE_APPEARANCE_SETTINGS_MUTATION,
+          variables: {
+            settings: buildCurrentAppearanceSettings(),
+            activeProfileId: activeAppearanceProfileId || null
+          },
+          component: 'ThemeContext',
+          purpose: 'Persist appearance settings to database',
+          tableName: 'config_setting'
+        });
+      } catch (error) {
+        console.warn('[ThemeContext] Failed to save appearance settings:', error);
+      }
+    }, 450);
+    return () => {
+      if (saveSettingsTimerRef.current) {
+        clearTimeout(saveSettingsTimerRef.current);
+      }
+    };
+  }, [appearanceDbLoaded, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, cardColorHex, activeAppearanceProfileId]);
+
+  useEffect(() => {
+    if (!appearanceDbLoaded) return undefined;
+    if (saveProfilesTimerRef.current) {
+      clearTimeout(saveProfilesTimerRef.current);
+    }
+    saveProfilesTimerRef.current = setTimeout(async () => {
+      try {
+        await trackedFetchGraphql({
+          query: SAVE_APPEARANCE_PROFILES_MUTATION,
+          variables: {
+            profiles: appearanceProfiles
+          },
+          component: 'ThemeContext',
+          purpose: 'Persist appearance profiles to database',
+          tableName: 'config_setting'
+        });
+      } catch (error) {
+        console.warn('[ThemeContext] Failed to save appearance profiles:', error);
+      }
+    }, 450);
+    return () => {
+      if (saveProfilesTimerRef.current) {
+        clearTimeout(saveProfilesTimerRef.current);
+      }
+    };
+  }, [appearanceDbLoaded, appearanceProfiles]);
+
+  // Write-through localStorage cache for instant load before DB responds
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('taliaLayout');
+      const parsed = saved ? JSON.parse(saved) : {};
+      parsed.fontSettings = {
+        ...(parsed.fontSettings || {}),
+        fontSize, fontFamily, textIntensity, groupColorIntensity,
+        rowColorIntensity, oddRowIntensity, cardColorIntensity,
+        evenRowIntensity, componentPadding, accentColor, rowAccentColor,
+        cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex,
+        evenRowColorHex, cardColorHex, bgColor,
+      };
+      localStorage.setItem('taliaLayout', JSON.stringify(parsed));
+    } catch { /* best-effort */ }
+    try {
+      localStorage.setItem('taliaAppearanceProfiles', JSON.stringify(appearanceProfiles));
+      localStorage.setItem('taliaActiveAppearanceProfileId', activeAppearanceProfileId || '');
+    } catch { /* best-effort */ }
+  }, [fontSize, fontFamily, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, cardColorHex, bgColor, appearanceProfiles, activeAppearanceProfileId]);
 
   // Update CSS variables when font/appearance settings change
   useEffect(() => {

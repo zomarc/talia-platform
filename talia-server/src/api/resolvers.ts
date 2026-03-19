@@ -564,6 +564,29 @@ const mapGraphQLFocusToDb = (input: any, createdBy?: string) => {
   };
 };
 
+const APPEARANCE_SETTINGS_CATEGORY = 'ui_appearance';
+const APPEARANCE_SETTINGS_KEY = 'current_settings';
+const APPEARANCE_PROFILES_KEY = 'profiles';
+const APPEARANCE_ACTIVE_PROFILE_KEY = 'active_profile_id';
+
+const normalizeAppearanceProfiles = (raw: any): Array<{ id: string; name: string; settings: any; updatedAt: string }> => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry: any) => ({
+      id: String(entry?.id || '').trim(),
+      name: String(entry?.name || '').trim(),
+      settings: entry?.settings || {},
+      updatedAt: entry?.updatedAt || new Date().toISOString()
+    }))
+    .filter((entry) => entry.id && entry.name);
+};
+
+const mapAppearanceSettingsPayload = (settings: any, profiles: any, activeProfileId: any) => ({
+  settings: settings && typeof settings === 'object' ? settings : {},
+  profiles: normalizeAppearanceProfiles(profiles),
+  activeProfileId: typeof activeProfileId === 'string' ? activeProfileId : null
+});
+
 export const resolvers = {
   Query: {
     // User Management
@@ -2185,6 +2208,24 @@ export const resolvers = {
       }
     },
 
+    appearanceSettings: async () => {
+      try {
+        const [settings, profiles, activeProfileId] = await Promise.all([
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, APPEARANCE_SETTINGS_KEY),
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, APPEARANCE_PROFILES_KEY),
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, APPEARANCE_ACTIVE_PROFILE_KEY)
+        ]);
+        return mapAppearanceSettingsPayload(settings, profiles, activeProfileId);
+      } catch (error: any) {
+        console.error('Error getting appearance settings:', error);
+        return {
+          settings: {},
+          profiles: [],
+          activeProfileId: null
+        };
+      }
+    },
+
     integrationDateRanges: async () => {
       try {
         const ranges = await configService.getIntegrationDateRanges();
@@ -3216,6 +3257,61 @@ export const resolvers = {
       } catch (error: any) {
         console.error('Error setting default date range:', error);
         throw new Error(`Failed to set default date range: ${error.message}`);
+      }
+    },
+
+    saveAppearanceSettings: async (parent: any, args: any) => {
+      const { settings, activeProfileId } = args;
+      try {
+        await configService.upsertSetting(
+          APPEARANCE_SETTINGS_CATEGORY,
+          APPEARANCE_SETTINGS_KEY,
+          settings || {},
+          {
+            displayName: 'UI Appearance Settings',
+            description: 'Current appearance settings applied in Talia UI'
+          }
+        );
+        if (activeProfileId !== undefined) {
+          await configService.upsertSetting(
+            APPEARANCE_SETTINGS_CATEGORY,
+            APPEARANCE_ACTIVE_PROFILE_KEY,
+            activeProfileId || null,
+            {
+              displayName: 'Active Appearance Profile',
+              description: 'Currently selected named appearance profile'
+            }
+          );
+        }
+        const [savedSettings, savedProfiles, savedActiveProfile] = await Promise.all([
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, APPEARANCE_SETTINGS_KEY),
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, APPEARANCE_PROFILES_KEY),
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, APPEARANCE_ACTIVE_PROFILE_KEY)
+        ]);
+        return mapAppearanceSettingsPayload(savedSettings, savedProfiles, savedActiveProfile);
+      } catch (error: any) {
+        console.error('Error saving appearance settings:', error);
+        throw new Error(`Failed to save appearance settings: ${error.message}`);
+      }
+    },
+
+    saveAppearanceProfiles: async (parent: any, args: any) => {
+      const { profiles } = args;
+      try {
+        const normalized = normalizeAppearanceProfiles(profiles);
+        await configService.upsertSetting(
+          APPEARANCE_SETTINGS_CATEGORY,
+          APPEARANCE_PROFILES_KEY,
+          normalized,
+          {
+            displayName: 'Appearance Profiles',
+            description: 'Named appearance presets for Talia UI'
+          }
+        );
+        return normalized;
+      } catch (error: any) {
+        console.error('Error saving appearance profiles:', error);
+        throw new Error(`Failed to save appearance profiles: ${error.message}`);
       }
     },
 

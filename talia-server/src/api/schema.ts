@@ -58,6 +58,19 @@ export const typeDefs = `#graphql
     selectedSailCode: String
   }
 
+  type AppearanceProfile {
+    id: ID!
+    name: String!
+    settings: JSON
+    updatedAt: String
+  }
+
+  type AppearanceSettings {
+    settings: JSON
+    profiles: [AppearanceProfile!]!
+    activeProfileId: String
+  }
+
   # Focus Management Types
   type Focus {
     id: ID!
@@ -957,6 +970,7 @@ export const typeDefs = `#graphql
     
     # Talia Configuration (database-backed)
     taliaConfig: TaliaConfigSummary!
+    appearanceSettings: AppearanceSettings!
     integrationDateRanges: [IntegrationDateRange!]!
     integrationDateRange(id: Int!): IntegrationDateRange
     dataSources: [DataSource!]!
@@ -993,6 +1007,8 @@ export const typeDefs = `#graphql
     updateIntegrationDateRange(id: Int!, input: IntegrationDateRangeInput!): IntegrationDateRange!
     createIntegrationDateRange(input: IntegrationDateRangeInput!): IntegrationDateRange!
     setDefaultDateRange(id: Int!): IntegrationDateRange!
+    saveAppearanceSettings(settings: JSON!, activeProfileId: String): AppearanceSettings!
+    saveAppearanceProfiles(profiles: JSON!): [AppearanceProfile!]!
     
     # Target Profiles
     createTargetProfile(input: TargetProfileInput!): TargetProfile!

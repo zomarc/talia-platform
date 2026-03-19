@@ -284,6 +284,33 @@ class ConfigService {
   }
 
   /**
+   * Upsert a setting (create if missing, otherwise update)
+   */
+  async upsertSetting(category, settingKey, value, metadata = {}) {
+    const { data, error } = await supabase
+      .from(this.tables.setting)
+      .upsert({
+        category,
+        setting_key: settingKey,
+        setting_value: value,
+        display_name: metadata.displayName || null,
+        description: metadata.description || null,
+        is_editable: metadata.isEditable !== false
+      }, {
+        onConflict: 'category,setting_key'
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error upserting setting:', error);
+      throw new Error(`Failed to upsert setting: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  /**
    * Get complete configuration summary for UI
    */
   async getConfigSummary() {

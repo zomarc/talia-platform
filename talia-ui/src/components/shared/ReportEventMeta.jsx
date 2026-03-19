@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import queryTracker from '../../services/data/queryTracker';
-import { REPORT_REFRESH_EVENT } from '../dockview/eventConstants';
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
 
 const formatList = (items = []) => {
@@ -272,7 +271,7 @@ const formatPerformanceText = (rows = [], phases = { networkMs: 0, loadingMs: 0,
   ].join('\n');
 };
 
-const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [], panelInstanceId = null, panelComponentId = null }) => {
+const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
   const emitList = formatList(emits);
   const respondList = formatList(respondsTo);
   const sourceList = formatList(sources);
@@ -415,20 +414,6 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [], panelInsta
     window.setTimeout(() => setCopyStatus(''), 1500);
   };
 
-  const handleRefreshPanel = () => {
-    const targetId = panelComponentId || panelInstanceId;
-    if (!targetId) return;
-    window.dispatchEvent(new CustomEvent(REPORT_REFRESH_EVENT, {
-      detail: {
-        panelId: targetId,
-        panelInstanceId: panelInstanceId || null,
-        panelComponent: panelComponentId || null,
-      }
-    }));
-    setCopyStatus('Refreshing');
-    window.setTimeout(() => setCopyStatus(''), 1200);
-  };
-
   return (
     <div className="talia-event-meta" role="note" aria-label="Report event contract">
       <div className="talia-event-meta__summary-line">
@@ -522,13 +507,6 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [], panelInsta
             <span className="talia-event-meta__perf-label">{Math.round(totalPerformanceMs)}ms</span>
           </button>
         </div>
-        {(panelComponentId || panelInstanceId) && (
-          <div className="talia-event-meta__actions talia-event-meta__actions--inline">
-            <button type="button" className="talia-event-meta__copy-btn" onClick={handleRefreshPanel}>
-              Refresh
-            </button>
-          </div>
-        )}
       </div>
       {hasSelection && (
       <div className="talia-event-meta__popover" role="dialog" aria-label={`Event payload ${popoverName}`}>

@@ -233,8 +233,7 @@ const ShipTrackerMapPresenter = ({
   portNewsLoading,
   autoRefreshEnabled,
   onToggleAutoRefresh,
-  livePositionsError,
-  onRefresh
+  livePositionsError
 }) => {
   const { expandedKey: viewMode, setExpandedKey: setViewMode } = useSubpanelExpansion(null);
   const [selectedShipCode, setSelectedShipCode] = useState(SHIP_FILTER_OUR);
@@ -477,9 +476,6 @@ const ShipTrackerMapPresenter = ({
               </optgroup>
             )}
           </select>
-          <button className="talia-btn talia-btn--small" onClick={onRefresh}>
-            ↻ Refresh
-          </button>
           <button className="talia-btn talia-btn--small" onClick={onToggleAutoRefresh}>
             {autoRefreshEnabled ? 'Auto: ON' : 'Auto: OFF'}
           </button>

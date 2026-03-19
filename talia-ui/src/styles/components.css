@@ -38,7 +38,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 10px;
+  padding: var(--theme-component-padding-xs) var(--theme-component-padding-md);
   background: var(--theme-header-bg);
   border-bottom: 1px solid var(--theme-header-border);
   flex-shrink: 0;
@@ -48,7 +48,7 @@
 .talia-report__header-left {
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: var(--theme-component-gap-md);
 }
 
 .talia-report__title {
@@ -68,7 +68,7 @@
 
 .talia-report__actions {
   display: flex;
-  gap: 6px;
+  gap: var(--theme-component-gap-sm);
   align-items: center;
 }
 
@@ -141,8 +141,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 2px 6px;
+  gap: var(--theme-component-gap-xs);
+  padding: var(--theme-component-padding-xs) var(--theme-component-padding-sm);
   font-family: var(--theme-font-family);
   font-size: var(--theme-font-size-sm);
   font-weight: 500;
@@ -201,7 +201,7 @@
 }
 
 .talia-btn--small {
-  padding: 1px 5px;
+  padding: max(1px, calc(var(--theme-component-padding-xs) - 1px)) max(3px, calc(var(--theme-component-padding-sm) - 1px));
   font-size: var(--theme-font-size-xs);
 }
 
@@ -610,8 +610,8 @@
 .refresh-status {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
+  gap: var(--theme-component-gap-md);
+  padding: var(--theme-component-padding-sm) var(--theme-component-padding-lg);
   background-color: var(--theme-bg-elevated);
   border-radius: 6px;
   border: 1px solid var(--theme-border);
@@ -648,7 +648,7 @@
 }
 
 .refresh-status__button {
-  padding: 6px 12px;
+  padding: var(--theme-component-padding-sm) var(--theme-component-padding-lg);
   font-size: 12px;
   font-weight: 500;
   background-color: var(--theme-accent);
@@ -723,7 +723,7 @@
   background: var(--theme-card-bg);
   border: 1px solid var(--theme-border);
   border-radius: var(--theme-radius-md);
-  padding: var(--theme-padding-md);
+  padding: var(--theme-card-padding);
 }
 
 .talia-card--expandable {
@@ -880,7 +880,7 @@
 
 .talia-meta--stacked span {
   display: flex;
-  gap: 6px;
+  gap: var(--theme-component-gap-sm);
   align-items: baseline;
 }
 
@@ -1015,7 +1015,7 @@
 
 .talia-event-meta {
   display: block;
-  padding: 4px 10px;
+  padding: var(--theme-component-padding-xs) var(--theme-component-padding-md);
   border-top: 1px solid var(--theme-border-light);
   background: var(--theme-glass);
   font-size: 9px;
@@ -1033,7 +1033,7 @@
 .talia-event-meta__actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--theme-component-gap-sm);
 }
 
 .talia-event-meta__copy-btn {
@@ -1058,7 +1058,7 @@
 .talia-event-meta__group {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: var(--theme-component-gap-sm);
 }
 
 .talia-event-meta__group--full {
@@ -1083,7 +1083,7 @@
 .talia-event-meta__chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--theme-component-gap-xs);
 }
 
 .talia-event-meta__chip {

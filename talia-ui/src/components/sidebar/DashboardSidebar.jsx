@@ -16,7 +16,50 @@ function DashboardSidebar({
   focusError,
   onSaveCurrentLayout,
 }) {
-  const { fontFamily, setFontFamily, selectedFont, fontFamilies, fontSize, setFontSize, groupColorIntensity, setGroupColorIntensity, rowColorIntensity, setRowColorIntensity, accentColor, setAccentColor, rowAccentColor, setRowAccentColor, bgColor, setBgColor } = useTheme();
+  const {
+    fontFamily,
+    setFontFamily,
+    selectedFont,
+    fontFamilies,
+    fontSize,
+    setFontSize,
+    textIntensity,
+    setTextIntensity,
+    groupColorIntensity,
+    setGroupColorIntensity,
+    rowColorIntensity,
+    setRowColorIntensity,
+    oddRowIntensity,
+    setOddRowIntensity,
+    cardColorIntensity,
+    setCardColorIntensity,
+    evenRowIntensity,
+    setEvenRowIntensity,
+    componentPadding,
+    setComponentPadding,
+    groupColorHex,
+    setGroupColorHex,
+    rowHoverColorHex,
+    setRowHoverColorHex,
+    oddRowColorHex,
+    setOddRowColorHex,
+    evenRowColorHex,
+    setEvenRowColorHex,
+    cardColorHex,
+    setCardColorHex,
+    appearanceProfiles,
+    activeAppearanceProfileId,
+    applyAppearanceProfile,
+    saveAppearanceProfile,
+    bgColor,
+    setBgColor
+  } = useTheme();
+  const [appearanceProfileName, setAppearanceProfileName] = React.useState('');
+
+  React.useEffect(() => {
+    const activeProfile = appearanceProfiles.find((entry) => entry.id === activeAppearanceProfileId);
+    setAppearanceProfileName(activeProfile?.name || '');
+  }, [appearanceProfiles, activeAppearanceProfileId]);
 
   const reportGroups = React.useMemo(() => {
     const items = Object.values(reportRegistry)
@@ -179,94 +222,149 @@ function DashboardSidebar({
               <div className="dashboard-form-hint">Compact range tuned for dense layouts.</div>
             </div>
             <div className="dashboard-form-group">
-              <label className="dashboard-form-label">Group Row Intensity: {groupColorIntensity}%</label>
+              <label className="dashboard-form-label">Text Intensity: {textIntensity}%</label>
               <input
                 type="range"
                 min="0"
                 max="100"
                 step="5"
-                value={groupColorIntensity}
-                onChange={(event) => setGroupColorIntensity(Number(event.target.value))}
+                value={textIntensity}
+                onChange={(event) => setTextIntensity(Number(event.target.value))}
                 className="dashboard-form-input dashboard-form-input--range"
               />
+              <div className="dashboard-form-hint">Controls global text brightness across panels, components, and tables.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Group Row Intensity: {groupColorIntensity}%</label>
+              <div className="dashboard-form-control-row">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={groupColorIntensity}
+                  onChange={(event) => setGroupColorIntensity(Number(event.target.value))}
+                  className="dashboard-form-input dashboard-form-input--range dashboard-form-input--range-inline"
+                />
+                <input
+                  type="color"
+                  className="dashboard-form-color-input"
+                  value={groupColorHex}
+                  onChange={(event) => setGroupColorHex(event.target.value)}
+                  title="Select group row color"
+                  aria-label="Group row color"
+                />
+              </div>
               <div className="dashboard-form-hint">Controls how visible grouped table row shading appears.</div>
             </div>
             <div className="dashboard-form-group">
-              <label className="dashboard-form-label">Row &amp; Card Intensity: {rowColorIntensity}%</label>
+              <label className="dashboard-form-label">Row Hover Intensity: {rowColorIntensity}%</label>
+              <div className="dashboard-form-control-row">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={rowColorIntensity}
+                  onChange={(event) => setRowColorIntensity(Number(event.target.value))}
+                  className="dashboard-form-input dashboard-form-input--range dashboard-form-input--range-inline"
+                />
+                <input
+                  type="color"
+                  className="dashboard-form-color-input"
+                  value={rowHoverColorHex}
+                  onChange={(event) => setRowHoverColorHex(event.target.value)}
+                  title="Select row hover color"
+                  aria-label="Row hover color"
+                />
+              </div>
+              <div className="dashboard-form-hint">Controls data-row hover highlight intensity.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Odd Row Intensity: {oddRowIntensity}%</label>
+              <div className="dashboard-form-control-row">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={oddRowIntensity}
+                  onChange={(event) => setOddRowIntensity(Number(event.target.value))}
+                  className="dashboard-form-input dashboard-form-input--range dashboard-form-input--range-inline"
+                />
+                <input
+                  type="color"
+                  className="dashboard-form-color-input"
+                  value={oddRowColorHex}
+                  onChange={(event) => setOddRowColorHex(event.target.value)}
+                  title="Select odd row color"
+                  aria-label="Odd row color"
+                />
+              </div>
+              <div className="dashboard-form-hint">Controls odd-row striping intensity in data tables.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Even Row Intensity: {evenRowIntensity}%</label>
+              <div className="dashboard-form-control-row">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={evenRowIntensity}
+                  onChange={(event) => setEvenRowIntensity(Number(event.target.value))}
+                  className="dashboard-form-input dashboard-form-input--range dashboard-form-input--range-inline"
+                />
+                <input
+                  type="color"
+                  className="dashboard-form-color-input"
+                  value={evenRowColorHex}
+                  onChange={(event) => setEvenRowColorHex(event.target.value)}
+                  title="Select even row color"
+                  aria-label="Even row color"
+                />
+              </div>
+              <div className="dashboard-form-hint">Controls even-row striping intensity in data tables.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Card Intensity: {cardColorIntensity}%</label>
+              <div className="dashboard-form-control-row">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={cardColorIntensity}
+                  onChange={(event) => setCardColorIntensity(Number(event.target.value))}
+                  className="dashboard-form-input dashboard-form-input--range dashboard-form-input--range-inline"
+                />
+                <input
+                  type="color"
+                  className="dashboard-form-color-input"
+                  value={cardColorHex}
+                  onChange={(event) => setCardColorHex(event.target.value)}
+                  title="Select card color"
+                  aria-label="Card color"
+                />
+              </div>
+              <div className="dashboard-form-hint">Controls card and elevated panel background intensity.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Component &amp; Card Padding: {componentPadding}%</label>
               <input
                 type="range"
                 min="0"
                 max="100"
                 step="5"
-                value={rowColorIntensity}
-                onChange={(event) => setRowColorIntensity(Number(event.target.value))}
+                value={componentPadding}
+                onChange={(event) => setComponentPadding(Number(event.target.value))}
                 className="dashboard-form-input dashboard-form-input--range"
               />
-              <div className="dashboard-form-hint">Controls odd-row striping, hover highlights, and card backgrounds.</div>
-            </div>
-            <div className="dashboard-form-group">
-              <label className="dashboard-form-label">Group Color</label>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
-                {[
-                  { key: 'blue',   label: 'Blue',   swatch: '#385c94' },
-                  { key: 'teal',   label: 'Teal',   swatch: '#247878' },
-                  { key: 'purple', label: 'Purple', swatch: '#583894' },
-                  { key: 'slate',  label: 'Slate',  swatch: '#3e485c' },
-                  { key: 'amber',  label: 'Amber',  swatch: '#947024' },
-                  { key: 'rose',   label: 'Rose',   swatch: '#943848' },
-                ].map((c) => (
-                  <button
-                    key={c.key}
-                    title={c.label}
-                    onClick={() => setAccentColor(c.key)}
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 6,
-                      border: accentColor === c.key ? '2px solid rgba(255,255,255,0.85)' : '2px solid rgba(255,255,255,0.15)',
-                      background: c.swatch,
-                      cursor: 'pointer',
-                      boxShadow: accentColor === c.key ? '0 0 0 1px rgba(255,255,255,0.3)' : 'none',
-                      transition: 'border-color 0.15s, box-shadow 0.15s',
-                    }}
-                  />
-                ))}
-              </div>
-              <div className="dashboard-form-hint">Base color for group row headers.</div>
-            </div>
-            <div className="dashboard-form-group">
-              <label className="dashboard-form-label">Row &amp; Card Color</label>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
-                {[
-                  { key: 'blue',   label: 'Blue',   swatch: '#26324e' },
-                  { key: 'teal',   label: 'Teal',   swatch: '#1e3737' },
-                  { key: 'purple', label: 'Purple', swatch: '#302648' },
-                  { key: 'slate',  label: 'Slate',  swatch: '#252a37' },
-                  { key: 'amber',  label: 'Amber',  swatch: '#3a3020' },
-                  { key: 'rose',   label: 'Rose',   swatch: '#3a232a' },
-                ].map((c) => (
-                  <button
-                    key={c.key}
-                    title={c.label}
-                    onClick={() => setRowAccentColor(c.key)}
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 6,
-                      border: rowAccentColor === c.key ? '2px solid rgba(255,255,255,0.85)' : '2px solid rgba(255,255,255,0.15)',
-                      background: c.swatch,
-                      cursor: 'pointer',
-                      boxShadow: rowAccentColor === c.key ? '0 0 0 1px rgba(255,255,255,0.3)' : 'none',
-                      transition: 'border-color 0.15s, box-shadow 0.15s',
-                    }}
-                  />
-                ))}
-              </div>
-              <div className="dashboard-form-hint">Base color for row striping and card backgrounds.</div>
+              <div className="dashboard-form-hint">Scales spacing for shared component elements and cards across reports.</div>
             </div>
             <div className="dashboard-form-group">
               <label className="dashboard-form-label">Background</label>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+              <div style={{ display: 'flex', gap: 'var(--theme-component-gap-sm)', flexWrap: 'wrap', marginTop: 'var(--theme-component-gap-xs)' }}>
                 {[
                   { key: 'midnight',  label: 'Midnight',  swatch: '#1a1d33' },
                   { key: 'charcoal',  label: 'Charcoal',  swatch: '#1e1e22' },
@@ -294,6 +392,64 @@ function DashboardSidebar({
               </div>
               <div className="dashboard-form-hint">Global background color theme.</div>
             </div>
+            {isAdmin(userRole) && (
+              <div className="dashboard-form-group">
+                <label className="dashboard-form-label">Appearance Profile (Admin)</label>
+                <select
+                  className="dashboard-form-input"
+                  value={activeAppearanceProfileId || ''}
+                  onChange={(event) => {
+                    const nextId = event.target.value;
+                    if (!nextId) return;
+                    applyAppearanceProfile(nextId);
+                  }}
+                >
+                  <option value="">Select profile...</option>
+                  {appearanceProfiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="dashboard-form-control-row" style={{ marginTop: 'var(--theme-component-gap-xs)' }}>
+                  <input
+                    type="text"
+                    className="dashboard-form-input"
+                    placeholder="Profile name"
+                    value={appearanceProfileName}
+                    onChange={(event) => setAppearanceProfileName(event.target.value)}
+                  />
+                </div>
+                <div className="dashboard-btn-group">
+                  <button
+                    type="button"
+                    className="dashboard-btn dashboard-btn--small"
+                    disabled={!appearanceProfileName.trim()}
+                    onClick={() => {
+                      const savedId = saveAppearanceProfile(appearanceProfileName);
+                      if (savedId) {
+                        const saved = appearanceProfiles.find((entry) => entry.id === savedId);
+                        setAppearanceProfileName(saved?.name || appearanceProfileName.trim());
+                      }
+                    }}
+                  >
+                    Save As New
+                  </button>
+                  <button
+                    type="button"
+                    className="dashboard-btn dashboard-btn--small"
+                    disabled={!activeAppearanceProfileId || !appearanceProfileName.trim()}
+                    onClick={() => {
+                      if (!activeAppearanceProfileId) return;
+                      saveAppearanceProfile(appearanceProfileName, { profileId: activeAppearanceProfileId });
+                    }}
+                  >
+                    Update Selected
+                  </button>
+                </div>
+                <div className="dashboard-form-hint">Admins can save/update named appearance profiles. Selecting a profile applies it globally.</div>
+              </div>
+            )}
           </div>
         </div>
 

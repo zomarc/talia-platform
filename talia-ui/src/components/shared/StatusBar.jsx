@@ -9,14 +9,18 @@
  * - Clickable to view details
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ModeSelector from '../ModeSelector';
 import { canUseAdvancedHeader } from '../../utils/roleUtils';
+import { REPORT_REFRESH_EVENT } from '../dockview/eventConstants';
+import { useTheme } from '../../contexts/ThemeContext';
 // CSS imported globally in main.jsx
 const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
 const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';
 const DASHBOARD_FILTER_VISIBILITY_EVENT = 'talia:dashboard.filterVisibility';
 const DASHBOARD_CYCLE_FOCUS_EVENT = 'talia:dashboard.cycleFocus';
+const DASHBOARD_SELECT_FOCUS_EVENT = 'talia:dashboard.selectFocus';
+const DASHBOARD_FOCUS_STATE_EVENT = 'talia:dashboard.focusState';
 const DASHBOARD_VIEW_SCOPE_EVENT = 'talia:dashboard.viewScope';
 const DASHBOARD_DETAILS_VISIBILITY_EVENT = 'talia:dashboard.detailsVisibility';
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
@@ -70,6 +74,85 @@ const resolveDateRange = (rangeKey) => {
   };
 };
 
+const HeaderCriteriaMenuSelect = ({
+  id,
+  options,
+  value,
+  onChange,
+  ariaLabel,
+  wide = false,
+}) => {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const selected = options.find((option) => option.key === value) || options[0] || null;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleOutsideClick = (event) => {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [open]);
+
+  const handleOptionSelect = (nextValue) => {
+    setOpen(false);
+    if (nextValue === value) return;
+    onChange(nextValue);
+  };
+
+  return (
+    <div
+      id={id}
+      ref={rootRef}
+      className={`status-bar__menu-select ${wide ? 'status-bar__menu-select--wide' : ''}`}
+    >
+      <button
+        type="button"
+        className="status-bar__menu-select-trigger"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+      >
+        <span className="status-bar__menu-select-value">{selected?.label || '—'}</span>
+        <span className="status-bar__menu-select-caret" aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div className="status-bar__menu-select-menu" role="menu" aria-label={ariaLabel}>
+          {options.map((option) => {
+            const isSelected = option.key === value;
+            return (
+              <button
+                type="button"
+                key={option.key}
+                role="menuitemradio"
+                aria-checked={isSelected}
+                className={`status-bar__menu-select-option ${isSelected ? 'status-bar__menu-select-option--active' : ''}`}
+                onClick={() => handleOptionSelect(option.key)}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const StatusBar = ({
   statusMessage,
   currentEvent,
@@ -80,10 +163,17 @@ const StatusBar = ({
   userRole,
   canUseAdvancedControls
 }) => {
+  const {
+    appearanceProfiles,
+    activeAppearanceProfileId,
+    applyAppearanceProfile,
+  } = useTheme();
   const [showDetails, setShowDetails] = useState(false);
   const [displayMessage, setDisplayMessage] = useState(statusMessage);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => !!window.__taliaSidebarCollapsed);
   const [filtersVisible, setFiltersVisible] = useState(() => window.__taliaFiltersVisible === true);
+  const [eventsVisible, setEventsVisible] = useState(() => window.__taliaEventsVisible === true);
+  const [criteriaVisible, setCriteriaVisible] = useState(() => window.__taliaCriteriaVisible === true);
   const [viewScope, setViewScope] = useState(() => window.__taliaViewScope === 'wide' ? 'wide' : 'local');
   const [globalDateRange, setGlobalDateRange] = useState(() => {
     const saved = window.__taliaGlobalCriteria?.rangeKey;
@@ -93,7 +183,23 @@ const StatusBar = ({
     const saved = window.__taliaGlobalCriteria?.durationKey;
     return GLOBAL_DURATION_OPTIONS.some((option) => option.key === saved) ? saved : 'all';
   });
-  const [includeNonRealSailings, setIncludeNonRealSailings] = useState(() => window.__taliaGlobalCriteria?.includeNonRealSailings === true);
+  const [focusOptions, setFocusOptions] = useState(() => {
+    const options = window.__taliaFocusState?.focuses;
+    return Array.isArray(options) ? options.filter((focus) => focus?.id) : [];
+  });
+  const [selectedFocusId, setSelectedFocusId] = useState(() => window.__taliaFocusState?.currentFocusId || '');
+  const [activeOnly, setActiveOnly] = useState(() => {
+    const saved = window.__taliaGlobalCriteria;
+    if (saved && Object.prototype.hasOwnProperty.call(saved, 'activeOnly')) {
+      return saved.activeOnly !== false;
+    }
+    if (saved && Object.prototype.hasOwnProperty.call(saved, 'includeNonRealSailings')) {
+      return saved.includeNonRealSailings !== true;
+    }
+    return true;
+  });
+  const [refreshPhase, setRefreshPhase] = useState('active'); // active -> all -> cooldown
+  const refreshPhaseTimerRef = useRef(null);
   const appVersion = import.meta.env.VITE_APP_VERSION || '0.1.5';
   const hasAdvancedControls = typeof canUseAdvancedControls === 'boolean'
     ? canUseAdvancedControls
@@ -134,20 +240,45 @@ const StatusBar = ({
     window.dispatchEvent(new CustomEvent(DASHBOARD_CYCLE_FOCUS_EVENT));
   };
 
+  const handleQuickFocusChange = (nextValue) => {
+    const focusId = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value || '';
+    setSelectedFocusId(focusId);
+    if (!focusId) return;
+    window.dispatchEvent(
+      new CustomEvent(DASHBOARD_SELECT_FOCUS_EVENT, {
+        detail: { focusId },
+      })
+    );
+  };
+
   const handleViewScopeToggle = () => {
     setViewScope((prev) => (prev === 'wide' ? 'local' : 'wide'));
   };
 
-  const handleGlobalDateRangeChange = (event) => {
-    const next = event?.target?.value;
+  const handleEventsToggle = () => {
+    setEventsVisible((prev) => !prev);
+  };
+
+  const handleCriteriaToggle = () => {
+    setCriteriaVisible((prev) => !prev);
+  };
+
+  const handleGlobalDateRangeChange = (nextValue) => {
+    const next = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value;
     if (!GLOBAL_DATE_RANGE_OPTIONS.some((option) => option.key === next)) return;
     setGlobalDateRange(next);
   };
 
-  const handleGlobalDurationChange = (event) => {
-    const next = event?.target?.value;
+  const handleGlobalDurationChange = (nextValue) => {
+    const next = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value;
     if (!GLOBAL_DURATION_OPTIONS.some((option) => option.key === next)) return;
     setGlobalDuration(next);
+  };
+
+  const handleAppearanceProfileChange = (nextValue) => {
+    const next = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value;
+    if (!next) return;
+    applyAppearanceProfile(next);
   };
 
   const getActivePanelTarget = () => {
@@ -190,6 +321,51 @@ const StatusBar = ({
     );
   };
 
+  const clearRefreshTimer = () => {
+    if (refreshPhaseTimerRef.current) {
+      window.clearTimeout(refreshPhaseTimerRef.current);
+      refreshPhaseTimerRef.current = null;
+    }
+  };
+
+  const startRefreshWindow = (nextPhase) => {
+    clearRefreshTimer();
+    setRefreshPhase(nextPhase);
+    refreshPhaseTimerRef.current = window.setTimeout(() => {
+      setRefreshPhase('active');
+      refreshPhaseTimerRef.current = null;
+    }, 5000);
+  };
+
+  const dispatchReportRefresh = (detail = {}) => {
+    window.dispatchEvent(
+      new CustomEvent(REPORT_REFRESH_EVENT, {
+        detail,
+      })
+    );
+  };
+
+  const handleGlobalRefreshCycle = () => {
+    const { panelId, panelComponent } = getActivePanelTarget();
+    if (refreshPhase === 'active') {
+      if (!panelId && !panelComponent) return;
+      dispatchReportRefresh({
+        panelId: panelComponent || panelId,
+        panelInstanceId: panelId || null,
+        panelComponent: panelComponent || null,
+        scope: 'active',
+      });
+      startRefreshWindow('all');
+      return;
+    }
+
+    if (refreshPhase === 'all') {
+      dispatchReportRefresh({ scope: 'all' });
+      startRefreshWindow('cooldown');
+      return;
+    }
+  };
+
   useEffect(() => {
     window.__taliaFiltersVisible = filtersVisible;
     const root = document.documentElement;
@@ -215,10 +391,39 @@ const StatusBar = ({
   }, [viewScope]);
 
   useEffect(() => {
+    window.__taliaEventsVisible = eventsVisible;
+  }, [eventsVisible]);
+
+  useEffect(() => {
+    window.__taliaCriteriaVisible = criteriaVisible;
+  }, [criteriaVisible]);
+
+  useEffect(() => {
+    return () => {
+      clearRefreshTimer();
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleFocusState = (event) => {
+      const options = event?.detail?.focuses;
+      const currentFocusId = event?.detail?.currentFocusId;
+      if (Array.isArray(options)) {
+        setFocusOptions(options.filter((focus) => focus?.id));
+      }
+      setSelectedFocusId(currentFocusId || '');
+    };
+    window.addEventListener(DASHBOARD_FOCUS_STATE_EVENT, handleFocusState);
+    return () => window.removeEventListener(DASHBOARD_FOCUS_STATE_EVENT, handleFocusState);
+  }, []);
+
+  useEffect(() => {
     const range = resolveDateRange(globalDateRange);
+    const includeNonRealSailings = !activeOnly;
     const criteria = {
       rangeKey: globalDateRange,
       durationKey: globalDuration,
+      activeOnly,
       includeNonRealSailings,
       ...range
     };
@@ -228,7 +433,7 @@ const StatusBar = ({
         detail: criteria,
       })
     );
-  }, [globalDateRange, globalDuration, includeNonRealSailings]);
+  }, [globalDateRange, globalDuration, activeOnly]);
 
   // Get event summary
   const getEventSummary = (event) => {
@@ -275,11 +480,157 @@ const StatusBar = ({
   const dataLastSyncText = dataStatus?.lastSync
     ? new Date(dataStatus.lastSync).toLocaleString()
     : 'N/A';
+  const refreshButtonLabel = refreshPhase === 'active' ? '↻' : (refreshPhase === 'all' ? '↻↻' : '✓');
+  const refreshButtonTitle = refreshPhase === 'active'
+    ? 'Refresh active panel (click again within 5s for all panels)'
+    : refreshPhase === 'all'
+      ? 'Refresh all panels'
+      : 'Refresh completed (resets in 5s)';
 
   // Always render - mode selector should always be visible
   return (
     <div className="status-bar">
       <div className="status-bar__container">
+        <div className="status-bar__leading">
+          {currentMode === 'app' && (
+            <>
+              <button
+                type="button"
+                className="status-bar__header-btn status-bar__sidebar-toggle"
+                onClick={handleSidebarToggle}
+                title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+                aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+              >
+                {sidebarCollapsed ? '☰' : '◧'}
+              </button>
+              <span className="status-bar__leading-separator" aria-hidden="true" />
+              <div className="status-bar__quick-actions">
+                <button
+                  type="button"
+                  className={`status-bar__header-btn ${filtersVisible ? 'status-bar__header-btn--active' : ''}`}
+                  onClick={handleFiltersToggle}
+                  title={filtersVisible ? 'Hide filters on all reports' : 'Show filters on all reports'}
+                  aria-label={filtersVisible ? 'Hide filters on all reports' : 'Show filters on all reports'}
+                >
+                  ▾
+                </button>
+                <button
+                  type="button"
+                  className={`status-bar__header-btn ${viewScope === 'wide' ? 'status-bar__header-btn--active' : ''}`}
+                  onClick={handleViewScopeToggle}
+                  title={viewScope === 'wide' ? 'Wide view active (click for local view)' : 'Local view active (click for wide view)'}
+                  aria-label={viewScope === 'wide' ? 'Switch to local view' : 'Switch to wide view'}
+                >
+                  {viewScope === 'wide' ? 'W' : 'L'}
+                </button>
+                <button
+                  type="button"
+                  className="status-bar__header-btn"
+                  onClick={handleDetailsToggle}
+                  title="Show/hide details on active panel"
+                  aria-label="Show or hide details on active panel"
+                >
+                  ≣
+                </button>
+                <button
+                  type="button"
+                  className={`status-bar__header-btn ${refreshPhase !== 'active' ? 'status-bar__header-btn--active' : ''}`}
+                  onClick={handleGlobalRefreshCycle}
+                  title={refreshButtonTitle}
+                  aria-label={refreshButtonTitle}
+                  disabled={refreshPhase === 'cooldown'}
+                >
+                  {refreshButtonLabel}
+                </button>
+                {hasAdvancedControls && (
+                  <button
+                    type="button"
+                    className="status-bar__header-btn status-bar__header-btn--focus"
+                    onClick={handleCycleFocus}
+                    title="Cycle focus"
+                    aria-label="Cycle focus"
+                  >
+                    ⟳
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={`status-bar__header-btn status-bar__header-btn--criteria ${criteriaVisible ? 'status-bar__header-btn--active' : ''}`}
+                  onClick={handleCriteriaToggle}
+                  title={criteriaVisible ? 'Hide global criteria controls' : 'Show global criteria controls'}
+                  aria-label={criteriaVisible ? 'Hide global criteria controls' : 'Show global criteria controls'}
+                >
+                  <span className="status-bar__icon-search" aria-hidden="true">🔍</span>
+                </button>
+              </div>
+              {criteriaVisible && (
+                <>
+                  <span className="status-bar__leading-separator" aria-hidden="true" />
+                  <div className="status-bar__criteria">
+                    {focusOptions.length > 0 && (
+                      <label className="status-bar__header-range" title="Quick focus selector">
+                        <span className="status-bar__header-range-label">Focus</span>
+                        <HeaderCriteriaMenuSelect
+                          id="status-bar-quick-focus"
+                          wide
+                          options={focusOptions.map((focus) => ({ key: focus.id, label: focus.name || focus.id }))}
+                          value={selectedFocusId}
+                          onChange={handleQuickFocusChange}
+                          aria-label="Quick focus selector"
+                        />
+                      </label>
+                    )}
+                    {appearanceProfiles.length > 0 && (
+                      <label className="status-bar__header-range" title="Apply a saved appearance profile">
+                        <span className="status-bar__header-range-label">Style</span>
+                        <HeaderCriteriaMenuSelect
+                          id="status-bar-appearance-profile"
+                          wide
+                          options={appearanceProfiles.map((profile) => ({ key: profile.id, label: profile.name }))}
+                          value={activeAppearanceProfileId}
+                          onChange={handleAppearanceProfileChange}
+                          aria-label="Appearance profile selector"
+                        />
+                      </label>
+                    )}
+                    <label className="status-bar__header-range" title="Global date range applied across reports">
+                      <span className="status-bar__header-range-label">Date</span>
+                      <HeaderCriteriaMenuSelect
+                        id="status-bar-global-date-range"
+                        options={GLOBAL_DATE_RANGE_OPTIONS}
+                        value={globalDateRange}
+                        onChange={handleGlobalDateRangeChange}
+                        aria-label="Global date range"
+                      />
+                    </label>
+                    <label className="status-bar__header-range" title="Global duration criteria applied across reports">
+                      <span className="status-bar__header-range-label">Dur</span>
+                      <HeaderCriteriaMenuSelect
+                        id="status-bar-global-duration"
+                        options={GLOBAL_DURATION_OPTIONS}
+                        value={globalDuration}
+                        onChange={handleGlobalDurationChange}
+                        aria-label="Global duration criteria"
+                      />
+                    </label>
+                    <label className="status-bar__header-toggle" htmlFor="status-bar-active-only" title="Show active sailings only">
+                      <input
+                        id="status-bar-active-only"
+                        type="checkbox"
+                        className="status-bar__header-checkbox"
+                        checked={activeOnly}
+                        onChange={(event) => setActiveOnly(event.target.checked)}
+                        aria-label="Active sailings only"
+                      />
+                      <span className="status-bar__header-range-label">Active</span>
+                    </label>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
+
         {/* Left side: Status messages and events */}
         <div className="status-bar__left">
           {/* Status Message (temporary) */}
@@ -287,39 +638,6 @@ const StatusBar = ({
             <div className="status-bar__message status-bar__message--success">
               <span className="status-bar__icon">✓</span>
               <span className="status-bar__text">{displayMessage}</span>
-            </div>
-          )}
-
-          {/* Current Event */}
-          {hasAdvancedControls && currentEventSummary && (
-            <div 
-              className="status-bar__item status-bar__item--clickable"
-              onClick={() => setShowDetails(!showDetails)}
-              title="Click to view details"
-            >
-              <span className="status-bar__label">Current Event:</span>
-              <span className="status-bar__value">
-                {currentEventSummary.source}
-                {currentEventSummary.identifier && ` - ${currentEventSummary.identifier}`}
-              </span>
-              <span className="status-bar__timestamp">{currentEventSummary.timestamp}</span>
-              <span className="status-bar__expand">{showDetails ? '▲' : '▼'}</span>
-            </div>
-          )}
-
-          {/* Persisted Event */}
-          {hasAdvancedControls && persistedEventSummary && (
-            <div 
-              className="status-bar__item status-bar__item--clickable"
-              onClick={() => setShowDetails(!showDetails)}
-              title="Click to view details"
-            >
-              <span className="status-bar__label">Persisted:</span>
-              <span className="status-bar__value">
-                {persistedEventSummary.source}
-                {persistedEventSummary.identifier && ` - ${persistedEventSummary.identifier}`}
-              </span>
-              <span className="status-bar__timestamp">{persistedEventSummary.timestamp}</span>
             </div>
           )}
 
@@ -332,110 +650,64 @@ const StatusBar = ({
           )}
         </div>
 
-        {currentMode === 'app' && (
-          <div className="status-bar__header">
-            <button
-              type="button"
-              className="status-bar__header-btn"
-              onClick={handleSidebarToggle}
-              title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-              aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-            >
-              {sidebarCollapsed ? '☰' : '◧'}
-            </button>
-            <button
-              type="button"
-              className={`status-bar__header-btn ${filtersVisible ? 'status-bar__header-btn--active' : ''}`}
-              onClick={handleFiltersToggle}
-              title={filtersVisible ? 'Hide filters on all reports' : 'Show filters on all reports'}
-              aria-label={filtersVisible ? 'Hide filters on all reports' : 'Show filters on all reports'}
-            >
-              ▾
-            </button>
-            <label className="status-bar__header-range" htmlFor="status-bar-global-date-range" title="Global date range applied across reports">
-              <span className="status-bar__header-range-label">Date</span>
-              <select
-                id="status-bar-global-date-range"
-                className="status-bar__header-range-select"
-                value={globalDateRange}
-                onChange={handleGlobalDateRangeChange}
-                aria-label="Global date range"
-              >
-                {GLOBAL_DATE_RANGE_OPTIONS.map((option) => (
-                  <option key={option.key} value={option.key}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="status-bar__header-range" htmlFor="status-bar-global-duration" title="Global duration criteria applied across reports">
-              <span className="status-bar__header-range-label">Dur</span>
-              <select
-                id="status-bar-global-duration"
-                className="status-bar__header-range-select"
-                value={globalDuration}
-                onChange={handleGlobalDurationChange}
-                aria-label="Global duration criteria"
-              >
-                {GLOBAL_DURATION_OPTIONS.map((option) => (
-                  <option key={option.key} value={option.key}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="status-bar__header-toggle" htmlFor="status-bar-include-non-real" title="Include non-real sailings (active='N' or fake='Y')">
-              <input
-                id="status-bar-include-non-real"
-                type="checkbox"
-                className="status-bar__header-checkbox"
-                checked={includeNonRealSailings}
-                onChange={(event) => setIncludeNonRealSailings(event.target.checked)}
-                aria-label="Include non-real sailings"
-              />
-              <span className="status-bar__header-range-label">Show non-real</span>
-            </label>
-            <button
-              type="button"
-              className={`status-bar__header-btn ${viewScope === 'wide' ? 'status-bar__header-btn--active' : ''}`}
-              onClick={handleViewScopeToggle}
-              title={viewScope === 'wide' ? 'Wide view active (click for local view)' : 'Local view active (click for wide view)'}
-              aria-label={viewScope === 'wide' ? 'Switch to local view' : 'Switch to wide view'}
-            >
-              {viewScope === 'wide' ? 'W' : 'L'}
-            </button>
-            <button
-              type="button"
-              className="status-bar__header-btn"
-              onClick={handleDetailsToggle}
-              title="Show/hide details on active panel"
-              aria-label="Show or hide details on active panel"
-            >
-              ≣
-            </button>
-            {hasAdvancedControls && (
-              <>
-                <button
-                  type="button"
-                  className="status-bar__header-btn status-bar__header-btn--focus"
-                  onClick={handleCycleFocus}
-                  title="Cycle focus"
-                  aria-label="Cycle focus"
-                >
-                  ⟳
-                </button>
-              </>
-            )}
-            <span className="status-bar__header-title">{`Dockview Dashboard - Talia Professional v${appVersion}-dev`}</span>
-          </div>
-        )}
+        <div className="status-bar__right">
+          {eventsVisible && (
+            <div className="status-bar__advanced">
+              {currentMode === 'app' && hasAdvancedControls && (
+                <div className="status-bar__events">
+                  {currentEventSummary && (
+                    <div
+                      className="status-bar__item status-bar__item--clickable"
+                      onClick={() => setShowDetails(!showDetails)}
+                      title="Click to view details"
+                    >
+                      <span className="status-bar__label">Current Event:</span>
+                      <span className="status-bar__value">
+                        {currentEventSummary.source}
+                        {currentEventSummary.identifier && ` - ${currentEventSummary.identifier}`}
+                      </span>
+                      <span className="status-bar__timestamp">{currentEventSummary.timestamp}</span>
+                      <span className="status-bar__expand">{showDetails ? '▲' : '▼'}</span>
+                    </div>
+                  )}
+                  {persistedEventSummary && (
+                    <div
+                      className="status-bar__item status-bar__item--clickable"
+                      onClick={() => setShowDetails(!showDetails)}
+                      title="Click to view details"
+                    >
+                      <span className="status-bar__label">Persisted:</span>
+                      <span className="status-bar__value">
+                        {persistedEventSummary.source}
+                        {persistedEventSummary.identifier && ` - ${persistedEventSummary.identifier}`}
+                      </span>
+                      <span className="status-bar__timestamp">{persistedEventSummary.timestamp}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {currentMode && onModeChange && (
+                <div className="status-bar__mode">
+                  <ModeSelector currentMode={currentMode} onModeChange={onModeChange} />
+                </div>
+              )}
+            </div>
+          )}
+          <button
+            type="button"
+            className={`status-bar__header-btn ${eventsVisible ? 'status-bar__header-btn--active' : ''}`}
+            onClick={handleEventsToggle}
+            title={eventsVisible ? 'Hide advanced header controls' : 'Show advanced header controls'}
+            aria-label={eventsVisible ? 'Hide advanced header controls' : 'Show advanced header controls'}
+          >
+            <span className="status-bar__icon-graph" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+          </button>
+        </div>
 
-        {/* Right side: Mode selector (always visible) */}
-        {currentMode && onModeChange && (
-          <div className="status-bar__right">
-            <ModeSelector currentMode={currentMode} onModeChange={onModeChange} />
-          </div>
-        )}
       </div>
 
       {/* Details Panel */}

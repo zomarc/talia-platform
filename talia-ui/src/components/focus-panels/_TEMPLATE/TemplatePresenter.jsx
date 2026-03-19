@@ -28,7 +28,7 @@ import { initTabulator } from '../../../lib/tabulatorConfig';
 /**
  * Presentational component template
  */
-const TemplatePresenter = ({ data, onRefresh, panelInstanceId, panelComponentId }) => {
+const TemplatePresenter = ({ data, panelInstanceId, panelComponentId }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const [tableInitialized, setTableInitialized] = useState(false);
@@ -183,16 +183,6 @@ const TemplatePresenter = ({ data, onRefresh, panelInstanceId, panelComponentId 
 
   return (
     <div className="focus-panel">
-      {onRefresh && (
-        <div className="focus-panel__overlay focus-panel__overlay--right">
-          <button
-            onClick={onRefresh}
-            className="talia-btn talia-btn--small"
-          >
-            ↻ Refresh
-          </button>
-        </div>
-      )}
       <div 
         ref={tableRef} 
         className="focus-panel__table"

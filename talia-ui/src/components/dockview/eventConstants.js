@@ -5,3 +5,5 @@ export const DOCKVIEW_MAXIMIZE_STATE_EVENT = 'talia:dockview.maximizeStateChange
 export const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
 export const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';
 export const DASHBOARD_CYCLE_FOCUS_EVENT = 'talia:dashboard.cycleFocus';
+export const DASHBOARD_SELECT_FOCUS_EVENT = 'talia:dashboard.selectFocus';
+export const DASHBOARD_FOCUS_STATE_EVENT = 'talia:dashboard.focusState';

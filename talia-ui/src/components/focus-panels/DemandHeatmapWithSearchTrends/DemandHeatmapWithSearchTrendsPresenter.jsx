@@ -41,7 +41,6 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
   searchTrends, 
   combinedData,
   containsMockData,
-  onRefresh 
 }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
@@ -230,14 +229,6 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
           >
             {showTrends ? '📊 Hide Trends' : '📊 Show Trends'}
           </button>
-          {onRefresh && (
-            <button
-              onClick={onRefresh}
-              className="demand-heatmap__refresh"
-            >
-              Refresh
-            </button>
-          )}
         </div>
       </div>
 

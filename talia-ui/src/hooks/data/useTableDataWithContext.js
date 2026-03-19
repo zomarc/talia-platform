@@ -668,13 +668,15 @@ export const useTableDataWithContext = ({
       const targetPanel = event?.detail?.panelId;
       const targetInstance = event?.detail?.panelInstanceId;
       const targetComponent = event?.detail?.panelComponent;
+      const scope = event?.detail?.scope;
       const thisInstance = panelInstanceIdRef.current;
       const thisComponent = panelComponentIdRef.current;
+      const isGlobal = scope === 'all' || (!targetPanel && !targetInstance && !targetComponent);
       const isMatch = (
         (thisComponent && (targetPanel === thisComponent || targetComponent === thisComponent)) ||
         (thisInstance && targetInstance === thisInstance)
       );
-      if (!isMatch) return;
+      if (!isGlobal && !isMatch) return;
       const currentFilters = context ? extractFiltersRef.current(context) : null;
       lastFiltersRef.current = null;
       fetchDataRef.current(currentFilters, { force: true, bypassCache: true });

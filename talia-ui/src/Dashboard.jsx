@@ -19,6 +19,8 @@ import DashboardSidebar from "./components/sidebar/DashboardSidebar.jsx";
 import {
   DOCKVIEW_MAXIMIZE_STATE_EVENT,
   DASHBOARD_CYCLE_FOCUS_EVENT,
+  DASHBOARD_SELECT_FOCUS_EVENT,
+  DASHBOARD_FOCUS_STATE_EVENT,
 } from "./components/dockview/eventConstants";
 // Dev Role Selector is now integrated into ModeSelector dropdown
 // Theme System - using centralized theme context
@@ -912,15 +914,6 @@ function Dashboard({ user }) {
     () => new Set(Object.values(reportRegistry).map((report) => report.panelId).filter(Boolean)),
     []
   );
-  const refreshableReportPanelIds = React.useMemo(
-    () =>
-      new Set(
-        Object.values(reportRegistry)
-          .filter((report) => report.panelId && report.supportsRefresh)
-          .map((report) => report.panelId)
-      ),
-    []
-  );
   const groupActionPanelIds = React.useMemo(
     () =>
       new Set(
@@ -1065,6 +1058,23 @@ function Dashboard({ user }) {
     setStatusMessage(`Focus switched to "${nextFocus.name || nextFocus.id}"`);
   }, [currentFocus, handleFocusChange, taliaFocuses]);
 
+  useEffect(() => {
+    const focusState = {
+      focuses: Array.isArray(taliaFocuses)
+        ? taliaFocuses
+            .filter((focus) => focus?.id)
+            .map((focus) => ({ id: focus.id, name: focus.name || focus.id }))
+        : [],
+      currentFocusId: currentFocus || null,
+    };
+    window.__taliaFocusState = focusState;
+    window.dispatchEvent(
+      new CustomEvent(DASHBOARD_FOCUS_STATE_EVENT, {
+        detail: focusState,
+      })
+    );
+  }, [taliaFocuses, currentFocus]);
+
   // Save current layout to focus
   const handleSaveCurrentLayoutToFocus = useCallback(async (focusId) => {
     if (!apiRef.current) {
@@ -1128,9 +1138,18 @@ function Dashboard({ user }) {
     const handleCycleFocus = () => {
       cycleFocus();
     };
+    const handleSelectFocus = (event) => {
+      const focusId = event?.detail?.focusId;
+      if (!focusId) return;
+      handleFocusChange(focusId);
+    };
     window.addEventListener(DASHBOARD_CYCLE_FOCUS_EVENT, handleCycleFocus);
-    return () => window.removeEventListener(DASHBOARD_CYCLE_FOCUS_EVENT, handleCycleFocus);
-  }, [cycleFocus]);
+    window.addEventListener(DASHBOARD_SELECT_FOCUS_EVENT, handleSelectFocus);
+    return () => {
+      window.removeEventListener(DASHBOARD_CYCLE_FOCUS_EVENT, handleCycleFocus);
+      window.removeEventListener(DASHBOARD_SELECT_FOCUS_EVENT, handleSelectFocus);
+    };
+  }, [cycleFocus, handleFocusChange]);
 
   const addNewPanel = (componentType, title, panelParams = {}) => {
     if (!apiRef.current) return;
@@ -1215,12 +1234,11 @@ function Dashboard({ user }) {
       <TaliaDockviewTab
         {...props}
         reportPanelIds={reportPanelIds}
-        refreshableReportPanelIds={refreshableReportPanelIds}
         groupActionPanelIds={groupActionPanelIds}
         maximizeStateToken={isGroupMaximized}
       />
     ),
-    [reportPanelIds, refreshableReportPanelIds, groupActionPanelIds, isGroupMaximized]
+    [reportPanelIds, groupActionPanelIds, isGroupMaximized]
   );
 
   const onReady = useCallback((event) => {
@@ -1444,17 +1462,19 @@ function Dashboard({ user }) {
       ref={shellRef}
     >
       <div className="dashboard-layout">
-        <DashboardSidebar
-          isCollapsed={sidebarCollapsed}
-          onToggle={toggleSidebar}
-          onAddPanel={addNewPanel}
-          currentFocus={currentFocus}
-          onFocusChange={handleFocusChange}
-          userRole={userRole}
-          focusLoading={focusLoading}
-          focusError={focusError}
-          onSaveCurrentLayout={handleSaveCurrentLayoutToFocus}
-        />
+        {!sidebarCollapsed && (
+          <DashboardSidebar
+            isCollapsed={sidebarCollapsed}
+            onToggle={toggleSidebar}
+            onAddPanel={addNewPanel}
+            currentFocus={currentFocus}
+            onFocusChange={handleFocusChange}
+            userRole={userRole}
+            focusLoading={focusLoading}
+            focusError={focusError}
+            onSaveCurrentLayout={handleSaveCurrentLayoutToFocus}
+          />
+        )}
         
         {/* Resize Handle - positioned between sidebar and main content */}
         {!sidebarCollapsed && (

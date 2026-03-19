@@ -33,7 +33,7 @@
 .focus-panel__table {
   height: 100%;
   width: 100%;
-  padding: 8px;
+  padding: var(--theme-component-padding-sm);
   overflow: auto;
   min-height: 0;
 }
@@ -69,13 +69,13 @@
 }
 
 .published-rates-grid__header {
-  padding: 10px 12px;
+  padding: var(--theme-component-padding-md) var(--theme-component-padding-lg);
   border-bottom: 1px solid var(--theme-border);
   background: var(--theme-glass);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
+  gap: var(--theme-component-gap-md);
   flex-wrap: wrap;
 }
 
@@ -93,7 +93,7 @@
 
 .published-rates-grid__controls {
   display: flex;
-  gap: 10px;
+  gap: var(--theme-component-gap-md);
   align-items: flex-end;
   flex-wrap: wrap;
   padding: 0;
@@ -113,7 +113,7 @@
 }
 
 .published-rates-grid__button {
-  padding: 4px 10px;
+  padding: var(--theme-component-padding-xs) var(--theme-component-padding-md);
   font-size: var(--theme-font-size-sm);
   border-radius: 4px;
   border: 1px solid var(--theme-border);
@@ -129,11 +129,11 @@
 }
 
 .published-rates-grid__details {
-  padding: 8px 12px;
+  padding: var(--theme-component-padding-sm) var(--theme-component-padding-lg);
   border-bottom: 1px solid var(--theme-border);
   background: var(--theme-bg-elevated);
   display: flex;
-  gap: 12px;
+  gap: var(--theme-component-gap-md);
   flex-wrap: wrap;
   font-size: var(--theme-font-size-sm);
 }
@@ -151,10 +151,10 @@
 
 .published-rates-grid__current,
 .published-rates-grid__history {
-  padding: 12px;
+  padding: var(--theme-card-padding);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--theme-component-gap-md);
 }
 
 .published-rates-grid__history {
@@ -166,7 +166,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: var(--theme-component-gap-md);
   flex-wrap: wrap;
 }
 
@@ -185,17 +185,17 @@
 .published-rates-grid__current-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 8px;
+  gap: var(--theme-component-gap-sm);
 }
 
 .published-rates-grid__current-card {
-  padding: 10px;
+  padding: var(--theme-card-padding);
   border-radius: 8px;
   border: 1px solid var(--theme-border);
   background: var(--theme-bg-elevated);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--theme-component-gap-xs);
   cursor: pointer;
   text-align: left;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -244,7 +244,7 @@
 
 .published-rates-grid__th,
 .published-rates-grid__cell {
-  padding: 6px 8px;
+  padding: var(--theme-component-padding-sm) var(--theme-component-padding-md);
   border-bottom: 1px solid var(--theme-border);
   text-align: right;
   white-space: nowrap;
@@ -1390,9 +1390,9 @@
 
 .competitor-filters {
   display: flex;
-  gap: 10px;
+  gap: var(--theme-component-gap-md);
   flex-wrap: wrap;
-  padding: 8px 10px;
+  padding: var(--theme-component-padding-sm) var(--theme-component-padding-md);
   background: var(--theme-bg-elevated);
   border-bottom: 1px solid var(--theme-border);
   align-items: flex-end;
@@ -1401,9 +1401,9 @@
 /* Shared report filter layout (adopted from competitor pricing) */
 .talia-report-filters {
   display: flex;
-  gap: 10px;
+  gap: var(--theme-component-gap-md);
   flex-wrap: wrap;
-  padding: 8px 10px;
+  padding: var(--theme-component-padding-sm) var(--theme-component-padding-md);
   background: var(--theme-bg-elevated);
   border-bottom: 1px solid var(--theme-border);
   align-items: flex-end;
@@ -1414,7 +1414,7 @@
   flex-direction: column;
   width: max-content;
   max-width: 100%;
-  gap: 4px;
+  gap: var(--theme-component-gap-xs);
 }
 
 .talia-report-filters__label {
@@ -1425,8 +1425,8 @@
 }
 
 .talia-report-filters__input {
-  height: 28px;
-  padding: 4px 8px;
+  height: var(--theme-component-control-height);
+  padding: var(--theme-component-padding-xs) var(--theme-component-padding-sm);
   border: 1px solid var(--theme-border);
   border-radius: 4px;
   font-size: var(--theme-font-size-sm);
@@ -1453,19 +1453,19 @@
   font-size: var(--theme-font-size-sm);
   font-weight: 600;
   color: var(--theme-text-secondary);
-  margin-bottom: 4px;
+  margin-bottom: var(--theme-component-gap-xs);
   display: block;
 }
 
 .competitor-filters__label--inline {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--theme-component-gap-sm);
   margin-bottom: 0;
 }
 
 .competitor-filters__input {
-  padding: 4px 8px;
+  padding: var(--theme-component-padding-xs) var(--theme-component-padding-sm);
   border: 1px solid var(--theme-border);
   border-radius: 4px;
   font-size: var(--theme-font-size-sm);
@@ -1479,11 +1479,11 @@
 
 .competitor-filters__input--multi {
   min-height: 54px;
-  padding: 2px 6px;
+  padding: max(1px, calc(var(--theme-component-padding-xs) - 1px)) var(--theme-component-padding-sm);
 }
 
 .competitor-filters__checkbox {
-  margin-right: 6px;
+  margin-right: var(--theme-component-gap-sm);
 }
 
 .competitor-filters__table-toggle {
@@ -1491,8 +1491,8 @@
   background: var(--theme-bg-solid);
   color: var(--theme-fg);
   border-radius: 4px;
-  width: 28px;
-  height: 28px;
+  width: var(--theme-component-control-height);
+  height: var(--theme-component-control-height);
   line-height: 1;
   font-size: var(--theme-font-size);
   cursor: pointer;
@@ -1504,7 +1504,7 @@
 }
 
 .competitor-table {
-  padding: 8px;
+  padding: var(--theme-component-padding-sm);
   background: transparent;
   flex: 1 1 auto;
   min-height: 0;
@@ -2791,8 +2791,8 @@
 .sailing-overview__layout {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  padding: 10px;
+  gap: var(--theme-component-gap-md);
+  padding: var(--theme-card-padding);
   height: 100%;
   min-height: 0;
 }
@@ -2860,9 +2860,9 @@
 
 .data-match__filters {
   display: flex;
-  gap: 10px;
+  gap: var(--theme-component-gap-md);
   flex-wrap: wrap;
-  padding: 8px 10px;
+  padding: var(--theme-component-padding-sm) var(--theme-component-padding-md);
   border-bottom: 1px solid var(--theme-border);
   align-items: flex-end;
 }
@@ -2872,7 +2872,7 @@
   flex-direction: column;
   width: max-content;
   max-width: 100%;
-  gap: 4px;
+  gap: var(--theme-component-gap-xs);
 }
 
 .data-match__label span {
@@ -2882,8 +2882,8 @@
 }
 
 .data-match__input {
-  height: 28px;
-  padding: 4px 8px;
+  height: var(--theme-component-control-height);
+  padding: var(--theme-component-padding-xs) var(--theme-component-padding-sm);
   border: 1px solid var(--theme-border);
   border-radius: 4px;
   background: var(--theme-bg-solid);
@@ -2921,7 +2921,7 @@
   width: 100%;
   text-align: center;
   font-weight: 500;
-  padding: 2px 6px;
+  padding: max(1px, calc(var(--theme-component-padding-xs) - 1px)) var(--theme-component-padding-sm);
   border-radius: 3px;
 }
 
@@ -2952,8 +2952,8 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: auto auto;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: var(--theme-component-gap-sm);
+  padding: var(--theme-component-padding-sm) var(--theme-component-padding-md);
   background: transparent;
   flex: 0 0 auto;
   min-width: 0;
@@ -2967,7 +2967,7 @@
   background: var(--theme-card-bg);
   border-radius: 8px;
   border: 1px solid var(--theme-border);
-  padding: 6px;
+  padding: var(--theme-component-padding-sm);
 }
 
 .competitor-scatter-grid__chart canvas {
@@ -2978,8 +2978,8 @@
 
 .competitor-scatter-grid__expand-btn {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: var(--theme-component-padding-sm);
+  right: var(--theme-component-padding-sm);
   z-index: 2;
   border: 1px solid var(--theme-border);
   background: var(--theme-bg-elevated);

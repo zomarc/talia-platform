@@ -3,7 +3,6 @@ import { DockviewDefaultTab } from "dockview";
 import {
   DOCKVIEW_MAXIMIZE_STATE_EVENT,
   REPORT_GROUP_ACTION_EVENT,
-  REPORT_REFRESH_EVENT,
   REPORT_TOGGLE_DETAILS_EVENT,
 } from "./eventConstants";
 
@@ -45,12 +44,11 @@ const getGroupIdsInSameVisualSide = (dockviewApi, targetGroupId) => {
   );
 };
 
-const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, groupActionPanelIds, maximizeStateToken, ...props }) => {
+const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateToken, ...props }) => {
   const panelApi = props?.api;
   const panelId = panelApi?.id;
   const panelComponent = panelApi?.component;
   const isReportTab = !!panelComponent && reportPanelIds?.has?.(panelComponent);
-  const isRefreshableTab = !!panelComponent && refreshableReportPanelIds?.has?.(panelComponent);
   const hasGroupActions = !!panelComponent && groupActionPanelIds?.has?.(panelComponent);
   const [isMaximized, setIsMaximized] = React.useState(() => panelApi?.isMaximized?.() ?? false);
   const [layoutCycleState, setLayoutCycleState] = React.useState(0); // 0: original, 1: side-expand window, 2: full-expand, 3: side-expand restore
@@ -267,17 +265,6 @@ const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, groupActi
     );
   };
 
-  const handleRefresh = (event) => {
-    event.stopPropagation();
-    const refreshPanelId = panelComponent;
-    if (!refreshPanelId) return;
-    window.dispatchEvent(
-      new CustomEvent(REPORT_REFRESH_EVENT, {
-        detail: { panelId: refreshPanelId, panelInstanceId: panelId, panelComponent: panelComponent },
-      })
-    );
-  };
-
   const handleGroupAction = (action) => (event) => {
     event.stopPropagation();
     if (!panelId) return;
@@ -326,17 +313,6 @@ const TaliaDockviewTab = ({ reportPanelIds, refreshableReportPanelIds, groupActi
     <div className="talia-dv-tab">
       <DockviewDefaultTab {...props} hideClose />
       <div className="talia-dv-tab__actions">
-        {isRefreshableTab && (
-          <button
-            type="button"
-            className="talia-dv-tab__button talia-dv-tab__button--refresh"
-            title="Refresh panel"
-            aria-label="Refresh panel"
-            onClick={handleRefresh}
-          >
-            ↻
-          </button>
-        )}
         {isReportTab && (
           <button
             type="button"

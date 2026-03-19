@@ -54,22 +54,24 @@ const RefreshStatus = ({
         )}
       </div>
       
-      <button
-        onClick={onRefresh}
-        disabled={isLoading}
-        className="refresh-status__button"
-      >
-        {isLoading ? (
-          <>
-            <span className="refresh-status__button-spinner" />
-            Refreshing...
-          </>
-        ) : (
-          <>
-            🔄 Refresh {dataSource}
-          </>
-        )}
-      </button>
+      {typeof onRefresh === 'function' && (
+        <button
+          onClick={onRefresh}
+          disabled={isLoading}
+          className="refresh-status__button"
+        >
+          {isLoading ? (
+            <>
+              <span className="refresh-status__button-spinner" />
+              Refreshing...
+            </>
+          ) : (
+            <>
+              🔄 Refresh {dataSource}
+            </>
+          )}
+        </button>
+      )}
     </div>
   );
 };

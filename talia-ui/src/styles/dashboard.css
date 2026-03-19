@@ -608,6 +608,27 @@
   accent-color: var(--theme-accent);
 }
 
+.dashboard-form-control-row {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-component-gap-sm);
+}
+
+.dashboard-form-input--range-inline {
+  flex: 1;
+}
+
+.dashboard-form-color-input {
+  width: 28px;
+  min-width: 28px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-solid);
+  cursor: pointer;
+}
+
 .dashboard-form-input:focus {
   outline: none;
   border-color: var(--theme-accent);

@@ -12,7 +12,7 @@
  * Copy this as a template for new report components.
  */
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import {
   createPerformanceFormatter,
@@ -144,7 +144,7 @@ const columns = [
 // Component
 // ============================================================================
 
-const VoyageReportPresenter = ({ data, onRefresh }) => {
+const VoyageReportPresenter = ({ data }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const [initialized, setInitialized] = useState(false);
@@ -234,38 +234,17 @@ const VoyageReportPresenter = ({ data, onRefresh }) => {
     }
   }, [data, initialized]);
 
-  // Handle keyboard refresh
-  const handleKeyDown = useCallback((e) => {
-    if ((e.key === 'r' || e.key === 'R') && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      onRefresh?.();
-    }
-  }, [onRefresh]);
-
   return (
     <div 
       className="talia-report"
       role="region"
       aria-label="Voyage Report"
-      onKeyDown={handleKeyDown}
     >
       {/* Minimal Header */}
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Voyage Report</h2>
           <span className="talia-report__subtitle">Performance by voyage</span>
-        </div>
-        <div className="talia-report__actions">
-          {onRefresh && (
-            <button
-              className="talia-btn talia-btn--ghost"
-              onClick={onRefresh}
-              aria-label="Refresh data"
-              title="Refresh (Ctrl+R)"
-            >
-              ↻
-            </button>
-          )}
         </div>
       </header>
 

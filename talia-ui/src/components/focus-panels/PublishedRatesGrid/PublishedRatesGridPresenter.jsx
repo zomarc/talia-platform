@@ -43,7 +43,6 @@ const getRateTypeClass = (rateType) => RATE_TYPE_CLASS[rateType] || 'published-r
 const PublishedRatesGridPresenter = ({
   data,
   selectedSailCode,
-  onRefresh,
   panelInstanceId,
   panelComponentId,
 }) => {
@@ -345,11 +344,6 @@ const PublishedRatesGridPresenter = ({
               ))}
             </select>
           </label>
-          {onRefresh && (
-            <button className="published-rates-grid__button published-rates-grid__button--primary" onClick={onRefresh}>
-              Refresh
-            </button>
-          )}
         </div>
       </header>
 

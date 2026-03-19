@@ -12,7 +12,7 @@ import { useTheme } from '../../../contexts/ThemeContext';
 // Register Chart.js components
 Chart.register(...registerables);
 
-const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuildCurves = false }) => {
+const BookingProfilePresenter = ({ data, sailCode, theme, includeBuildCurves = false }) => {
   const { fontSize, fontFamily } = useTheme();
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
@@ -175,12 +175,6 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuil
             )}
           </p>
         </div>
-        <button
-          onClick={onRefresh}
-          className="booking-profile__refresh"
-        >
-          Refresh
-        </button>
       </div>
 
       {/* KPI Cards */}

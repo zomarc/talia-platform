@@ -24,7 +24,7 @@ const getHeatmapLevel = (value, maxValue) => {
 /**
  * Presentational component for demand heatmap table
  */
-const DemandHeatmapPresenter = ({ data, months, onRefresh }) => {
+const DemandHeatmapPresenter = ({ data, months }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const initializedRef = useRef(false);
@@ -178,15 +178,6 @@ const DemandHeatmapPresenter = ({ data, months, onRefresh }) => {
         <h3 className="demand-heatmap__title">
           Viewing Demand Across Itineraries by Departure Month
         </h3>
-        
-        {onRefresh && (
-          <button
-            onClick={onRefresh}
-            className="demand-heatmap__refresh"
-          >
-            Refresh
-          </button>
-        )}
       </div>
 
       {/* Table Container */}

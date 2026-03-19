@@ -148,6 +148,15 @@
   --theme-padding-md: 10px;
   --theme-padding-lg: 14px;
   --theme-padding-xl: 20px;
+  --theme-component-padding-xs: 4px;
+  --theme-component-padding-sm: 6px;
+  --theme-component-padding-md: 10px;
+  --theme-component-padding-lg: 12px;
+  --theme-component-gap-xs: 4px;
+  --theme-component-gap-sm: 6px;
+  --theme-component-gap-md: 10px;
+  --theme-card-padding: 10px;
+  --theme-component-control-height: 28px;
   
   /* Border radius */
   --theme-radius-sm: 4px;

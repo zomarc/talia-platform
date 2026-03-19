@@ -55,7 +55,7 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
     if (!showDevDropdown) return;
 
     const handleClickOutside = (event) => {
-      if (!event.target.closest('.mode-selector__app-wrapper')) {
+      if (!event.target.closest('.mode-selector__dev-area')) {
         setShowDevDropdown(false);
       }
     };
@@ -87,36 +87,6 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
             >
               <span className="mode-selector__icon">🚀</span>
             </button>
-            
-            {/* Dev Tools Toggle Button (only in dev mode) */}
-            {isDevMode && currentMode === 'app' && (
-              <button
-                className={`mode-selector__dev-toggle ${showDevDropdown ? 'mode-selector__dev-toggle--open' : ''}`}
-                onClick={handleDevDropdownToggle}
-                title={showDevDropdown ? "Hide Development Tools" : "Show Development Tools"}
-              >
-                <span className="mode-selector__dev-toggle-icon">🔧</span>
-              </button>
-            )}
-            
-            {/* Dev Role Selector Dropdown */}
-            {isDevMode && showDevDropdown && currentMode === 'app' && (
-              <div className="mode-selector__dev-dropdown">
-                <div className="mode-selector__dev-header">
-                  <span className="mode-selector__dev-title">Development Tools</span>
-                  <button
-                    className="mode-selector__dev-close"
-                    onClick={() => setShowDevDropdown(false)}
-                    title="Close"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="mode-selector__dev-content">
-                  <DevRoleSelector inDropdown={true} />
-                </div>
-              </div>
-            )}
           </div>
           
           <button
@@ -142,6 +112,38 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
             <span className="mode-selector__version-value">{versionLabel}</span>
           </div>
         </div>
+
+        {/* Dev Tools Toggle Button (only in dev mode) */}
+        {isDevMode && currentMode === 'app' && (
+          <div className="mode-selector__dev-area">
+            <button
+              className={`mode-selector__dev-toggle ${showDevDropdown ? 'mode-selector__dev-toggle--open' : ''}`}
+              onClick={handleDevDropdownToggle}
+              title={showDevDropdown ? "Hide Development Tools" : "Show Development Tools"}
+            >
+              <span className="mode-selector__dev-toggle-icon">🔧</span>
+            </button>
+
+            {/* Dev Role Selector Dropdown */}
+            {showDevDropdown && (
+              <div className="mode-selector__dev-dropdown">
+                <div className="mode-selector__dev-header">
+                  <span className="mode-selector__dev-title">Development Tools</span>
+                  <button
+                    className="mode-selector__dev-close"
+                    onClick={() => setShowDevDropdown(false)}
+                    title="Close"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="mode-selector__dev-content">
+                  <DevRoleSelector inDropdown={true} />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

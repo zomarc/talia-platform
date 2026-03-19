@@ -13,7 +13,6 @@ import { formatDayMon } from '../../../lib/dateFormat';
 
 const DirectSourceRequestPresenter = ({ 
   data, 
-  onRefresh, 
   loading,
   queryInfo,
   // Test mode props
@@ -371,13 +370,6 @@ const DirectSourceRequestPresenter = ({
             title="Show/hide query details"
           >
             {showQueryDetails ? '▼' : '▶'} Query
-          </button>
-          <button
-            onClick={onRefresh}
-            className="direct-source__button direct-source__button--primary"
-            disabled={loading}
-          >
-            {loading ? '...' : '↻'} Refresh
           </button>
         </div>
       </div>

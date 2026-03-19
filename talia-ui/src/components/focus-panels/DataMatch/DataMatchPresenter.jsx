@@ -21,7 +21,7 @@ const GROUP_HEADERS = [
   (value, count) => `<span class="data-match-group data-match-group--month">${value} (${count})</span>`,
 ];
 
-const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh, panelInstanceId, panelComponentId }) => {
+const DataMatchPresenter = ({ data, filters, onFiltersChange, panelInstanceId, panelComponentId }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const tableBuiltRef = useRef(false);
@@ -472,14 +472,6 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh, panelIn
             className="data-match__input data-match__input--date talia-report-filters__input"
           />
         </label>
-        {onRefresh && (
-          <button
-            onClick={onRefresh}
-            className="talia-btn talia-btn--small data-match__refresh"
-          >
-            ↻ Refresh
-          </button>
-        )}
       </div>
 
       {/* Table */}

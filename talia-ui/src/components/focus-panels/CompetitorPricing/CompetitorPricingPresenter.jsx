@@ -15,7 +15,6 @@ const CompetitorPricingPresenter = ({
   filters,
   onFiltersChange,
   theme,
-  onRefresh,
   panelInstanceId,
   panelComponentId,
 }) => {
@@ -35,18 +34,6 @@ const CompetitorPricingPresenter = ({
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Competitor Pricing</h2>
           <span className="talia-report__subtitle">Latest prices by cabin type</span>
-        </div>
-        <div className="talia-report__actions">
-          {onRefresh && (
-            <button
-              className="talia-btn talia-btn--ghost talia-btn--small"
-              onClick={onRefresh}
-              aria-label="Refresh competitor pricing"
-              title="Refresh competitor pricing"
-            >
-              Refresh
-            </button>
-          )}
         </div>
       </header>
 

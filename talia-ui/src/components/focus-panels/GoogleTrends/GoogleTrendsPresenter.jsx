@@ -16,7 +16,6 @@ const GoogleTrendsPresenter = ({
   error,
   refreshMetadata,
   refreshing,
-  onRefresh,
   onSelectedQueriesChange,
   onDateRangeChange,
   onBackfill 
@@ -273,7 +272,6 @@ const GoogleTrendsPresenter = ({
               lastRefreshTime={refreshMetadata?.lastRefreshedAt}
               isLoading={refreshing || loading}
               error={refreshMetadata?.refreshStatus === 'error' ? refreshMetadata?.refreshError : null}
-              onRefresh={onRefresh}
               dataSource="Google Trends"
             />
           </div>

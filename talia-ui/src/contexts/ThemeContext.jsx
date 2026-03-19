@@ -15,6 +15,28 @@ import theme from '../config/themes';
 import { initChartDefaults } from '../lib/chartConfig';
 
 const ThemeContext = createContext();
+const APPEARANCE_PROFILES_KEY = 'taliaAppearanceProfiles';
+const ACTIVE_APPEARANCE_PROFILE_KEY = 'taliaActiveAppearanceProfileId';
+
+const hexToRgb = (hex) => {
+  if (typeof hex !== 'string') return null;
+  const value = hex.trim().replace('#', '');
+  const normalized = value.length === 3
+    ? value.split('').map((c) => `${c}${c}`).join('')
+    : value;
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return null;
+  return [
+    parseInt(normalized.slice(0, 2), 16),
+    parseInt(normalized.slice(2, 4), 16),
+    parseInt(normalized.slice(4, 6), 16),
+  ];
+};
+
+const mixRgb = (fromRgb, toRgb, t) => ([
+  Math.round(fromRgb[0] + (toRgb[0] - fromRgb[0]) * t),
+  Math.round(fromRgb[1] + (toRgb[1] - fromRgb[1]) * t),
+  Math.round(fromRgb[2] + (toRgb[2] - fromRgb[2]) * t),
+]);
 
 /**
  * Font families available in the application
@@ -59,6 +81,21 @@ const FONT_FAMILIES = {
     name: 'Georgia',
     value: 'Georgia, "Times New Roman", serif',
     description: 'Elegant serif, print-friendly'
+  },
+  'Pacifico (Script)': {
+    name: 'Pacifico (Script)',
+    value: '"Pacifico", "Brush Script MT", "Segoe Script", cursive',
+    description: 'Flowing script style with playful personality'
+  },
+  'Bangers (Funny)': {
+    name: 'Bangers (Funny)',
+    value: '"Bangers", "Comic Sans MS", "Marker Felt", cursive',
+    description: 'Bold comic-style lettering for fun presentations'
+  },
+  'Press Start 2P (Retro)': {
+    name: 'Press Start 2P (Retro)',
+    value: '"Press Start 2P", "Courier New", monospace',
+    description: 'Classic pixel arcade look with retro vibes'
   }
 };
 
@@ -108,6 +145,21 @@ export const ThemeProvider = ({ children }) => {
     return initialFontFamily;
   });
 
+  // Global text intensity (0-100, default 45)
+  const [textIntensity, setTextIntensity] = useState(() => {
+    let initial = 45;
+    try {
+      const saved = localStorage.getItem("taliaLayout");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        initial = parsed.fontSettings?.textIntensity ?? 45;
+      }
+    } catch {
+      // Use default
+    }
+    return initial;
+  });
+
   // Group color intensity (0-100, default 60)
   const [groupColorIntensity, setGroupColorIntensity] = useState(() => {
     let initial = 60;
@@ -123,7 +175,7 @@ export const ThemeProvider = ({ children }) => {
     return initial;
   });
 
-  // Row/card color intensity (0-100, default 40)
+  // Row hover color intensity (0-100, default 40)
   const [rowColorIntensity, setRowColorIntensity] = useState(() => {
     let initial = 40;
     try {
@@ -131,6 +183,66 @@ export const ThemeProvider = ({ children }) => {
       if (saved) {
         const parsed = JSON.parse(saved);
         initial = parsed.fontSettings?.rowColorIntensity ?? 40;
+      }
+    } catch {
+      // Use default
+    }
+    return initial;
+  });
+
+  // Odd-row striping intensity (0-100, default 40)
+  const [oddRowIntensity, setOddRowIntensity] = useState(() => {
+    let initial = 40;
+    try {
+      const saved = localStorage.getItem("taliaLayout");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        initial = parsed.fontSettings?.oddRowIntensity ?? 40;
+      }
+    } catch {
+      // Use default
+    }
+    return initial;
+  });
+
+  // Card/elevated surface intensity (0-100, default 40)
+  const [cardColorIntensity, setCardColorIntensity] = useState(() => {
+    let initial = 40;
+    try {
+      const saved = localStorage.getItem("taliaLayout");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        initial = parsed.fontSettings?.cardColorIntensity ?? 40;
+      }
+    } catch {
+      // Use default
+    }
+    return initial;
+  });
+
+  // Even-row striping intensity (0-100, default 20)
+  const [evenRowIntensity, setEvenRowIntensity] = useState(() => {
+    let initial = 20;
+    try {
+      const saved = localStorage.getItem("taliaLayout");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        initial = parsed.fontSettings?.evenRowIntensity ?? 20;
+      }
+    } catch {
+      // Use default
+    }
+    return initial;
+  });
+
+  // Global component/card padding scale (0-100, default 50)
+  const [componentPadding, setComponentPadding] = useState(() => {
+    let initial = 50;
+    try {
+      const saved = localStorage.getItem("taliaLayout");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        initial = parsed.fontSettings?.componentPadding ?? 50;
       }
     } catch {
       // Use default
@@ -153,7 +265,7 @@ export const ThemeProvider = ({ children }) => {
     return initial;
   });
 
-  // Accent color preset for row/card shading
+  // Accent color preset for row shading
   const [rowAccentColor, setRowAccentColor] = useState(() => {
     let initial = 'slate';
     try {
@@ -166,6 +278,111 @@ export const ThemeProvider = ({ children }) => {
       // Use default
     }
     return initial;
+  });
+
+  // Accent color preset for card/elevated surfaces
+  const [cardAccentColor, setCardAccentColor] = useState(() => {
+    let initial = 'slate';
+    try {
+      const saved = localStorage.getItem("taliaLayout");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        initial = parsed.fontSettings?.cardAccentColor ?? 'slate';
+      }
+    } catch {
+      // Use default
+    }
+    return initial;
+  });
+
+  // Direct color overrides (hex values) to allow any user-selected color
+  const [groupColorHex, setGroupColorHex] = useState(() => {
+    let initial = '#385c94';
+    try {
+      const saved = localStorage.getItem("taliaLayout");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        initial = parsed.fontSettings?.groupColorHex ?? '#385c94';
+      }
+    } catch {
+      // Use default
+    }
+    return initial;
+  });
+
+  const [rowHoverColorHex, setRowHoverColorHex] = useState(() => {
+    let initial = '#7890a8';
+    try {
+      const saved = localStorage.getItem("taliaLayout");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        initial = parsed.fontSettings?.rowHoverColorHex ?? '#7890a8';
+      }
+    } catch {
+      // Use default
+    }
+    return initial;
+  });
+
+  const [oddRowColorHex, setOddRowColorHex] = useState(() => {
+    let initial = '#c8cdd7';
+    try {
+      const saved = localStorage.getItem("taliaLayout");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        initial = parsed.fontSettings?.oddRowColorHex ?? '#c8cdd7';
+      }
+    } catch {
+      // Use default
+    }
+    return initial;
+  });
+
+  const [evenRowColorHex, setEvenRowColorHex] = useState(() => {
+    let initial = '#ffffff';
+    try {
+      const saved = localStorage.getItem("taliaLayout");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        initial = parsed.fontSettings?.evenRowColorHex ?? '#ffffff';
+      }
+    } catch {
+      // Use default
+    }
+    return initial;
+  });
+
+  const [cardColorHex, setCardColorHex] = useState(() => {
+    let initial = '#252a37';
+    try {
+      const saved = localStorage.getItem("taliaLayout");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        initial = parsed.fontSettings?.cardColorHex ?? '#252a37';
+      }
+    } catch {
+      // Use default
+    }
+    return initial;
+  });
+
+  const [appearanceProfiles, setAppearanceProfiles] = useState(() => {
+    try {
+      const saved = localStorage.getItem(APPEARANCE_PROFILES_KEY);
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed.filter((entry) => entry?.id && entry?.name && entry?.settings) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [activeAppearanceProfileId, setActiveAppearanceProfileId] = useState(() => {
+    try {
+      return localStorage.getItem(ACTIVE_APPEARANCE_PROFILE_KEY) || '';
+    } catch {
+      return '';
+    }
   });
 
   // Global background color preset
@@ -194,17 +411,109 @@ export const ThemeProvider = ({ children }) => {
         ...(parsed.fontSettings || {}),
         fontSize,
         fontFamily,
+        textIntensity,
         groupColorIntensity,
         rowColorIntensity,
+        oddRowIntensity,
+        cardColorIntensity,
+        evenRowIntensity,
+        componentPadding,
         accentColor,
         rowAccentColor,
+        cardAccentColor,
+        groupColorHex,
+        rowHoverColorHex,
+        oddRowColorHex,
+        evenRowColorHex,
+        cardColorHex,
         bgColor,
       };
       localStorage.setItem("taliaLayout", JSON.stringify(parsed));
     } catch {
       // Best-effort persistence
     }
-  }, [fontSize, fontFamily, groupColorIntensity, rowColorIntensity, accentColor, rowAccentColor, bgColor]);
+  }, [fontSize, fontFamily, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, cardColorHex, bgColor]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(APPEARANCE_PROFILES_KEY, JSON.stringify(appearanceProfiles));
+      localStorage.setItem(ACTIVE_APPEARANCE_PROFILE_KEY, activeAppearanceProfileId || '');
+    } catch {
+      // Best-effort persistence
+    }
+  }, [appearanceProfiles, activeAppearanceProfileId]);
+
+  const buildCurrentAppearanceSettings = () => ({
+    fontFamily,
+    fontSize,
+    textIntensity,
+    groupColorIntensity,
+    rowColorIntensity,
+    oddRowIntensity,
+    evenRowIntensity,
+    cardColorIntensity,
+    componentPadding,
+    bgColor,
+    groupColorHex,
+    rowHoverColorHex,
+    oddRowColorHex,
+    evenRowColorHex,
+    cardColorHex,
+  });
+
+  const applyAppearanceSettings = (settings) => {
+    if (!settings || typeof settings !== 'object') return false;
+    if (settings.fontFamily) setFontFamily(settings.fontFamily);
+    if (Number.isFinite(settings.fontSize)) setFontSize(settings.fontSize);
+    if (Number.isFinite(settings.textIntensity)) setTextIntensity(settings.textIntensity);
+    if (Number.isFinite(settings.groupColorIntensity)) setGroupColorIntensity(settings.groupColorIntensity);
+    if (Number.isFinite(settings.rowColorIntensity)) setRowColorIntensity(settings.rowColorIntensity);
+    if (Number.isFinite(settings.oddRowIntensity)) setOddRowIntensity(settings.oddRowIntensity);
+    if (Number.isFinite(settings.evenRowIntensity)) setEvenRowIntensity(settings.evenRowIntensity);
+    if (Number.isFinite(settings.cardColorIntensity)) setCardColorIntensity(settings.cardColorIntensity);
+    if (Number.isFinite(settings.componentPadding)) setComponentPadding(settings.componentPadding);
+    if (settings.bgColor) setBgColor(settings.bgColor);
+    if (settings.groupColorHex) setGroupColorHex(settings.groupColorHex);
+    if (settings.rowHoverColorHex) setRowHoverColorHex(settings.rowHoverColorHex);
+    if (settings.oddRowColorHex) setOddRowColorHex(settings.oddRowColorHex);
+    if (settings.evenRowColorHex) setEvenRowColorHex(settings.evenRowColorHex);
+    if (settings.cardColorHex) setCardColorHex(settings.cardColorHex);
+    return true;
+  };
+
+  const applyAppearanceProfile = (profileId) => {
+    const profile = appearanceProfiles.find((entry) => entry.id === profileId);
+    if (!profile?.settings) return false;
+    const applied = applyAppearanceSettings(profile.settings);
+    if (!applied) return false;
+    setActiveAppearanceProfileId(profile.id);
+    return true;
+  };
+
+  const saveAppearanceProfile = (name, options = {}) => {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return null;
+    const targetId = options.profileId && appearanceProfiles.some((entry) => entry.id === options.profileId)
+      ? options.profileId
+      : null;
+    const settings = buildCurrentAppearanceSettings();
+    const now = new Date().toISOString();
+    if (targetId) {
+      setAppearanceProfiles((prev) =>
+        prev.map((entry) =>
+          entry.id === targetId
+            ? { ...entry, name: trimmed, settings, updatedAt: now }
+            : entry
+        )
+      );
+      setActiveAppearanceProfileId(targetId);
+      return targetId;
+    }
+    const profileId = `ap-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setAppearanceProfiles((prev) => [...prev, { id: profileId, name: trimmed, settings, updatedAt: now }]);
+    setActiveAppearanceProfileId(profileId);
+    return profileId;
+  };
 
   // Update CSS variables when font/appearance settings change
   useEffect(() => {
@@ -236,6 +545,40 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-table-cell-padding-x', `${cellPadX}px`);
     root.style.setProperty('--theme-table-filter-height', `${filterHeight}px`);
 
+    // Shared interpolation helpers
+    const lerp = (lo, hi, t) => (lo + (hi - lo) * t).toFixed(2);
+    const lerpInt = (lo, hi, t) => Math.round(lo + (hi - lo) * t);
+
+    // Global component/card padding density
+    const tp = componentPadding / 100;
+    const paddingScale = 0.6 + (tp * 1.0); // 0.6x .. 1.6x
+    const scaledPx = (base, min = 1) => `${Math.max(min, Math.round(base * paddingScale))}px`;
+    root.style.setProperty('--theme-padding-xs', scaledPx(3));
+    root.style.setProperty('--theme-padding-sm', scaledPx(6));
+    root.style.setProperty('--theme-padding-md', scaledPx(10));
+    root.style.setProperty('--theme-padding-lg', scaledPx(14));
+    root.style.setProperty('--theme-padding-xl', scaledPx(20));
+    root.style.setProperty('--theme-component-padding-xs', scaledPx(4));
+    root.style.setProperty('--theme-component-padding-sm', scaledPx(6));
+    root.style.setProperty('--theme-component-padding-md', scaledPx(10));
+    root.style.setProperty('--theme-component-padding-lg', scaledPx(12));
+    root.style.setProperty('--theme-component-gap-xs', scaledPx(4));
+    root.style.setProperty('--theme-component-gap-sm', scaledPx(6));
+    root.style.setProperty('--theme-component-gap-md', scaledPx(10));
+    root.style.setProperty('--theme-card-padding', scaledPx(10));
+    root.style.setProperty('--theme-component-control-height', scaledPx(28, 20));
+
+    // Global text intensity across app/panels/tables
+    const tt = textIntensity / 100;
+    const fgR = lerpInt(150, 236, tt);
+    const fgG = lerpInt(160, 244, tt);
+    const fgB = lerpInt(178, 252, tt);
+    const fgA = lerp(0.72, 0.98, tt);
+    root.style.setProperty('--theme-fg', `rgba(${fgR}, ${fgG}, ${fgB}, ${fgA})`);
+    root.style.setProperty('--theme-text-secondary', `rgba(${fgR}, ${fgG}, ${fgB}, ${lerp(0.58, 0.90, tt)})`);
+    root.style.setProperty('--theme-text-muted', `rgba(${fgR}, ${fgG}, ${fgB}, ${lerp(0.42, 0.76, tt)})`);
+    root.style.setProperty('--theme-tabulator-header-text', `rgba(${lerpInt(164, 246, tt)}, ${lerpInt(174, 250, tt)}, ${lerpInt(194, 255, tt)}, ${lerp(0.70, 0.98, tt)})`);
+
     // Global background presets: solid + gradient endpoints
     const BG_PRESETS = {
       midnight:  { solid: [26, 29, 51],  g1: [17, 19, 37],  g2: [32, 36, 59]  },
@@ -250,26 +593,20 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-bg-solid', `rgb(${s.join(',')})`);
     root.style.setProperty('--theme-bg', `linear-gradient(135deg, rgb(${g1.join(',')}) 0%, rgb(${s.join(',')}) 50%, rgb(${g2.join(',')}) 100%)`);
 
-    // Accent color presets: [level0 R,G,B], [level1 R,G,B], [border R,G,B]
-    const ACCENT_PRESETS = {
-      blue:   { l0: [56, 92, 148],  l1: [118, 140, 176], br0: [138, 176, 230], br1: [178, 198, 230] },
-      teal:   { l0: [36, 120, 120], l1: [80, 150, 150],  br0: [110, 200, 200], br1: [150, 210, 210] },
-      purple: { l0: [88, 56, 148],  l1: [140, 118, 176], br0: [176, 138, 230], br1: [198, 178, 230] },
-      slate:  { l0: [62, 72, 92],   l1: [90, 100, 118],  br0: [130, 142, 160], br1: [158, 168, 182] },
-      amber:  { l0: [148, 112, 36], l1: [176, 152, 90],  br0: [220, 190, 120], br1: [230, 210, 160] },
-      rose:   { l0: [148, 56, 72],  l1: [176, 100, 118], br0: [230, 150, 170], br1: [230, 180, 198] },
-    };
-    const accent = ACCENT_PRESETS[accentColor] || ACCENT_PRESETS.blue;
+    // Group row color can be any color selected via color input
+    const fallbackAccent = [56, 92, 148];
+    const accent = hexToRgb(groupColorHex) || fallbackAccent;
+    const accentL1 = mixRgb(accent, [255, 255, 255], 0.28);
+    const borderL0 = mixRgb(accent, [255, 255, 255], 0.52);
+    const borderL1 = mixRgb(accent, [255, 255, 255], 0.66);
 
     // Group row colors - linear interpolation between min and max alpha
     const tg = groupColorIntensity / 100;
-    const lerp = (lo, hi, t) => (lo + (hi - lo) * t).toFixed(2);
-    const lerpInt = (lo, hi, t) => Math.round(lo + (hi - lo) * t);
 
-    root.style.setProperty('--theme-group-level-0-bg', `rgba(${accent.l0.join(',')}, ${lerp(0.04, 0.82, tg)})`);
-    root.style.setProperty('--theme-group-level-0-border', `rgba(${accent.br0.join(',')}, ${lerp(0.02, 0.45, tg)})`);
-    root.style.setProperty('--theme-group-level-1-bg', `rgba(${accent.l1.join(',')}, ${lerp(0.03, 0.68, tg)})`);
-    root.style.setProperty('--theme-group-level-1-border', `rgba(${accent.br1.join(',')}, ${lerp(0.02, 0.38, tg)})`);
+    root.style.setProperty('--theme-group-level-0-bg', `rgba(${accent.join(',')}, ${lerp(0.04, 0.82, tg)})`);
+    root.style.setProperty('--theme-group-level-0-border', `rgba(${borderL0.join(',')}, ${lerp(0.02, 0.45, tg)})`);
+    root.style.setProperty('--theme-group-level-1-bg', `rgba(${accentL1.join(',')}, ${lerp(0.03, 0.68, tg)})`);
+    root.style.setProperty('--theme-group-level-1-border', `rgba(${borderL1.join(',')}, ${lerp(0.02, 0.38, tg)})`);
 
     // Text: inversely proportional -- brighter when background is darker
     const textR0 = lerpInt(180, 255, tg);
@@ -284,27 +621,24 @@ export const ThemeProvider = ({ children }) => {
     const textA1 = lerp(0.55, 1.00, tg);
     root.style.setProperty('--theme-group-level-1-text', `rgba(${textR1}, ${textG1}, ${textB1}, ${textA1})`);
 
-    // Row/card accent color presets
-    const ROW_ACCENT_PRESETS = {
-      blue:   { odd: [180, 200, 230], hover: [91, 155, 213],  card: [37, 50, 78]  },
-      teal:   { odd: [170, 220, 215], hover: [60, 175, 165],  card: [30, 55, 55]  },
-      purple: { odd: [200, 185, 230], hover: [140, 95, 210],  card: [48, 38, 72]  },
-      slate:  { odd: [200, 205, 215], hover: [120, 135, 160], card: [37, 42, 55]  },
-      amber:  { odd: [230, 215, 180], hover: [200, 165, 80],  card: [58, 48, 32]  },
-      rose:   { odd: [230, 190, 200], hover: [210, 100, 130], card: [58, 35, 42]  },
-    };
-    const rowAcc = ROW_ACCENT_PRESETS[rowAccentColor] || ROW_ACCENT_PRESETS.slate;
-
-    // Row striping, card, and elevated surface intensity
+    // Row striping/hover and card/elevated surface intensity
     const tr = rowColorIntensity / 100;
-    root.style.setProperty('--theme-table-row-odd', `rgba(${rowAcc.odd.join(',')}, ${lerp(0.00, 0.12, tr)})`);
-    root.style.setProperty('--theme-table-row-hover', `rgba(${rowAcc.hover.join(',')}, ${lerp(0.04, 0.35, tr)})`);
-    root.style.setProperty('--theme-card-bg', `rgba(${rowAcc.card.join(',')}, ${lerp(0.40, 1.00, tr)})`);
+    const to = oddRowIntensity / 100;
+    const tc = cardColorIntensity / 100;
+    const te = evenRowIntensity / 100;
+    const rowHoverRgb = hexToRgb(rowHoverColorHex) || [120, 135, 160];
+    const oddRowRgb = hexToRgb(oddRowColorHex) || [200, 205, 215];
+    const evenRowRgb = hexToRgb(evenRowColorHex) || [255, 255, 255];
+    const cardRgb = hexToRgb(cardColorHex) || [37, 42, 55];
+    root.style.setProperty('--theme-table-row-even', `rgba(${evenRowRgb.join(',')}, ${lerp(0.00, 0.16, te)})`);
+    root.style.setProperty('--theme-table-row-odd', `rgba(${oddRowRgb.join(',')}, ${lerp(0.00, 0.22, to)})`);
+    root.style.setProperty('--theme-table-row-hover', `rgba(${rowHoverRgb.join(',')}, ${lerp(0.04, 0.35, tr)})`);
+    root.style.setProperty('--theme-card-bg', `rgba(${cardRgb.join(',')}, ${lerp(0.40, 1.00, tc)})`);
 
-    // Elevated surfaces blend background base with row accent tint
-    const elR = lerpInt(g2[0], rowAcc.card[0], tr);
-    const elG = lerpInt(g2[1], rowAcc.card[1], tr);
-    const elB = lerpInt(g2[2], rowAcc.card[2], tr);
+    // Elevated surfaces blend background base with card accent tint
+    const elR = lerpInt(g2[0], cardRgb[0], tc);
+    const elG = lerpInt(g2[1], cardRgb[1], tc);
+    const elB = lerpInt(g2[2], cardRgb[2], tc);
     root.style.setProperty('--theme-bg-elevated', `rgb(${elR}, ${elG}, ${elB})`);
 
     // Panel background derives from the global bg
@@ -313,7 +647,7 @@ export const ThemeProvider = ({ children }) => {
     // Re-sync Chart.js globals with current CSS variables
     initChartDefaults();
 
-  }, [fontSize, selectedFont, groupColorIntensity, rowColorIntensity, accentColor, rowAccentColor, bgColor]);
+  }, [fontSize, selectedFont, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, cardColorHex, bgColor]);
 
   // Context value - provide theme and font settings
   const value = {
@@ -331,6 +665,8 @@ export const ThemeProvider = ({ children }) => {
     setFontSize,
     fontFamily,
     setFontFamily,
+    textIntensity,
+    setTextIntensity,
     selectedFont,
     fontFamilies: FONT_FAMILIES,
 
@@ -341,12 +677,39 @@ export const ThemeProvider = ({ children }) => {
     // Row/card color settings
     rowColorIntensity,
     setRowColorIntensity,
+    oddRowIntensity,
+    setOddRowIntensity,
+    cardColorIntensity,
+    setCardColorIntensity,
+    evenRowIntensity,
+    setEvenRowIntensity,
+    componentPadding,
+    setComponentPadding,
 
     // Accent color presets
     accentColor,
     setAccentColor,
     rowAccentColor,
     setRowAccentColor,
+    cardAccentColor,
+    setCardAccentColor,
+    groupColorHex,
+    setGroupColorHex,
+    rowHoverColorHex,
+    setRowHoverColorHex,
+    oddRowColorHex,
+    setOddRowColorHex,
+    evenRowColorHex,
+    setEvenRowColorHex,
+    cardColorHex,
+    setCardColorHex,
+
+    // Appearance profiles
+    appearanceProfiles,
+    activeAppearanceProfileId,
+    setActiveAppearanceProfileId,
+    saveAppearanceProfile,
+    applyAppearanceProfile,
 
     // Background color
     bgColor,

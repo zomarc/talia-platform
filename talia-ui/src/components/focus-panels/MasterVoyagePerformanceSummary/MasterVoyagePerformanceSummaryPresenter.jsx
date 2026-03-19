@@ -73,7 +73,7 @@ const GROUP_HEADERS = [
 /**
  * Presentational component for Master Voyage Performance Summary
  */
-const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh, panelInstanceId, panelComponentId }) => {
+const MasterVoyagePerformanceSummaryPresenter = ({ data, panelInstanceId, panelComponentId }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const tableBuiltRef = useRef(false);
@@ -817,13 +817,6 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh, panelInstanc
 
   return (
     <div className="focus-panel master-voyage-performance-summary-panel">
-      {onRefresh && (
-        <div className="focus-panel__overlay focus-panel__overlay--right">
-          <button onClick={onRefresh} className="talia-btn talia-btn--small">
-            ↻ Refresh
-          </button>
-        </div>
-      )}
       <div className="master-voyage-performance-summary-table-wrap">
         <div
           ref={tableRef}

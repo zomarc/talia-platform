@@ -52,7 +52,7 @@ const aggregateSailingData = (rawData) => {
   return aggregatedData;
 };
 
-const SailingSummaryPresenter = ({ data, onRefresh }) => {
+const SailingSummaryPresenter = ({ data }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const [tableInitialized, setTableInitialized] = useState(false);
@@ -301,16 +301,6 @@ const SailingSummaryPresenter = ({ data, onRefresh }) => {
 
   return (
     <div className="focus-panel">
-      {onRefresh && (
-        <div className="focus-panel__overlay focus-panel__overlay--right">
-          <button
-            onClick={onRefresh}
-            className="talia-btn talia-btn--small"
-          >
-            ↻ Refresh
-          </button>
-        </div>
-      )}
       <div 
         ref={tableRef} 
         className="focus-panel__table"

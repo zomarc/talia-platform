@@ -16,7 +16,7 @@ import { formatDayMon } from '../../../lib/dateFormat';
 /**
  * Presentational component for reservation current state
  */
-const ReservationCurrentStatePresenter = ({ data, onRefresh }) => {
+const ReservationCurrentStatePresenter = ({ data }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
 
@@ -242,16 +242,6 @@ const ReservationCurrentStatePresenter = ({ data, onRefresh }) => {
 
   return (
     <div className="focus-panel">
-      {onRefresh && (
-        <div className="focus-panel__overlay focus-panel__overlay--right">
-          <button
-            onClick={onRefresh}
-            className="talia-btn talia-btn--small"
-          >
-            ↻ Refresh
-          </button>
-        </div>
-      )}
       <div 
         ref={tableRef} 
         className="focus-panel__table"

@@ -35,6 +35,78 @@
   min-height: 32px;
 }
 
+.status-bar__leading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--theme-padding-xs);
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.status-bar__leading-separator {
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: color-mix(in srgb, var(--theme-warning) 24%, var(--theme-border));
+  flex-shrink: 0;
+}
+
+.status-bar__sidebar-toggle {
+  flex-shrink: 0;
+}
+
+.status-bar__events {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--theme-padding-xs);
+  min-width: 0;
+}
+
+.status-bar__mode {
+  display: inline-flex;
+  align-items: center;
+}
+
+.status-bar__quick-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--theme-padding-xs);
+}
+
+.status-bar__criteria {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--theme-padding-xs);
+}
+
+.status-bar__icon-graph {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1px;
+  width: 12px;
+  height: 12px;
+}
+
+.status-bar__icon-graph > span {
+  width: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.95;
+}
+
+.status-bar__icon-graph > span:nth-child(1) {
+  height: 4px;
+}
+
+.status-bar__icon-graph > span:nth-child(2) {
+  height: 7px;
+}
+
+.status-bar__icon-graph > span:nth-child(3) {
+  height: 10px;
+}
+
 .status-bar__left {
   display: flex;
   align-items: center;
@@ -46,8 +118,15 @@
 .status-bar__right {
   display: flex;
   align-items: center;
+  gap: var(--theme-padding-xs);
   flex-shrink: 0;
   margin-left: auto;
+}
+
+.status-bar__advanced {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--theme-padding-xs);
 }
 
 .status-bar__header {
@@ -61,35 +140,49 @@
 .status-bar__header-btn {
   width: 24px;
   height: 24px;
-  border: 1px solid var(--theme-border);
+  border: 1px solid color-mix(in srgb, var(--theme-warning) 28%, var(--theme-border-strong));
   border-radius: var(--theme-radius-sm);
-  background: var(--theme-glass);
-  color: var(--theme-fg);
+  background: color-mix(in srgb, var(--theme-warning) 12%, var(--theme-glass));
+  color: color-mix(in srgb, var(--theme-fg) 92%, var(--theme-text-secondary));
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-warning) 8%, transparent);
+}
+
+.status-bar__header-btn--criteria {
+  width: 48px;
+  min-width: 48px;
+  justify-content: center;
+}
+
+.status-bar__icon-search {
+  font-size: 12px;
   line-height: 1;
 }
 
 .status-bar__header-btn:not(.status-bar__header-btn--active) {
-  color: var(--theme-text-muted);
-  border-color: var(--theme-border-light);
-  opacity: 0.82;
+  color: color-mix(in srgb, var(--theme-fg) 76%, var(--theme-text-muted));
+  border-color: color-mix(in srgb, var(--theme-warning) 16%, var(--theme-border));
+  opacity: 0.9;
 }
 
 .status-bar__header-btn:hover {
-  background: var(--theme-glass-hover);
-  border-color: var(--theme-border-strong);
+  background: color-mix(in srgb, var(--theme-warning) 20%, var(--theme-glass-hover));
+  border-color: color-mix(in srgb, var(--theme-warning) 40%, var(--theme-border-strong));
   opacity: 1;
 }
 
 .status-bar__header-btn--active {
-  border-color: var(--theme-accent);
-  color: var(--theme-accent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-accent) 35%, transparent);
+  border-color: color-mix(in srgb, var(--theme-warning) 52%, var(--theme-accent));
+  color: var(--theme-header-text);
+  background: color-mix(in srgb, var(--theme-warning) 32%, var(--theme-bg-solid));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-warning) 35%, transparent);
 }
 
 .status-bar__header-btn--focus {
@@ -138,6 +231,92 @@
   color: var(--theme-fg);
   font-size: var(--theme-font-size-sm);
   padding: 0 6px;
+}
+
+.status-bar__header-range-select--focus {
+  min-width: 140px;
+  max-width: 220px;
+}
+
+.status-bar__menu-select {
+  position: relative;
+  display: inline-flex;
+  min-width: 56px;
+}
+
+.status-bar__menu-select--wide {
+  min-width: 140px;
+  max-width: 220px;
+}
+
+.status-bar__menu-select-trigger {
+  height: 24px;
+  width: 100%;
+  min-width: inherit;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  background: var(--theme-glass);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size-sm);
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.status-bar__menu-select-trigger:hover {
+  border-color: var(--theme-border-strong);
+  background: var(--theme-glass-hover);
+}
+
+.status-bar__menu-select-value {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.status-bar__menu-select-caret {
+  color: var(--theme-text-muted);
+  font-size: 10px;
+}
+
+.status-bar__menu-select-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 100%;
+  max-width: 260px;
+  z-index: 10020;
+  border: 1px solid var(--theme-border-strong);
+  border-radius: var(--theme-radius-sm);
+  background: var(--theme-bg-elevated);
+  box-shadow: var(--theme-shadow-md);
+  padding: 4px;
+  display: grid;
+  gap: 2px;
+}
+
+.status-bar__menu-select-option {
+  height: 24px;
+  border: 0;
+  border-radius: var(--theme-radius-sm);
+  background: transparent;
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size-sm);
+  text-align: left;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.status-bar__menu-select-option:hover {
+  background: color-mix(in srgb, var(--theme-warning) 18%, transparent);
+}
+
+.status-bar__menu-select-option--active {
+  background: color-mix(in srgb, var(--theme-warning) 30%, transparent);
+  color: var(--theme-header-text);
 }
 
 .status-bar__header-checkbox {
@@ -372,6 +551,21 @@
   .status-bar__container {
     flex-wrap: wrap;
     gap: var(--theme-padding-xs);
+  }
+
+  .status-bar__leading {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .status-bar__events {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .status-bar__criteria {
+    width: 100%;
+    flex-wrap: wrap;
   }
 
   .status-bar__item {

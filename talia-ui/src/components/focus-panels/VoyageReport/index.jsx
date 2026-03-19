@@ -17,11 +17,13 @@ import VoyageReportPresenter from './VoyageReportPresenter';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import { transformVoyageData } from '../MasterVoyagePerformanceSummary/utils/dataTransformation';
 
-const VoyageReportContainer = () => {
+const VoyageReportContainer = ({ panelInstanceId, panelComponentId }) => {
   // Fetch data
   const { data, loading, error, refetch } = useTableDataWithContext({
     tableName: 'master_sail',
     eventName: null,
+    panelInstanceId,
+    panelComponentId,
     contextMapper: () => null,
     limit: 1000
   });

@@ -18,11 +18,14 @@
 
 .talia-report {
   height: 100%;
+  max-height: 100%;
   width: 100%;
   min-width: 0;
+  min-height: 0;
   position: relative;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: var(--theme-bg-solid);
   color: var(--theme-fg);
   font-family: var(--theme-font-family);
@@ -36,8 +39,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 4px 10px;
-  background: var(--theme-glass);
-  border-bottom: 1px solid var(--theme-border-light);
+  background: var(--theme-header-bg);
+  border-bottom: 1px solid var(--theme-header-border);
   flex-shrink: 0;
   min-height: 28px;
 }
@@ -50,9 +53,9 @@
 
 .talia-report__title {
   margin: 0;
-  font-size: var(--theme-font-size-lg);
-  font-weight: 600;
-  color: var(--theme-fg);
+  font-size: var(--theme-header-font-size);
+  font-weight: var(--theme-header-font-weight);
+  color: var(--theme-header-text);
   letter-spacing: 0.3px;
 }
 
@@ -72,6 +75,8 @@
 /* Content area - minimal padding, let table breathe */
 .talia-report__content {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -80,18 +85,7 @@
 
 /* Minimal footer - subtle, informational */
 .talia-report__footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 3px 10px;
-  background: var(--theme-glass);
-  border-top: 1px solid var(--theme-border-light);
-  font-size: var(--theme-font-size-xs);
-  color: var(--theme-text-muted);
-  flex-shrink: 0;
-  min-height: 20px;
-  font-family: var(--theme-font-family-monospace);
-  letter-spacing: 0.3px;
+  display: none;
 }
 
 .talia-report__footer span {
@@ -368,11 +362,19 @@
    ============================================================================ */
 
 .talia-app-shell {
+  box-sizing: border-box;
   padding-top: 38px;
   transition: padding-top 0.3s ease;
-  min-height: calc(100vh - 38px);
-  height: calc(100vh - 38px);
+  min-height: 100dvh;
+  height: 100dvh;
   overflow: hidden;
+}
+
+@supports not (height: 100dvh) {
+  .talia-app-shell {
+    min-height: 100vh;
+    height: 100vh;
+  }
 }
 
 .talia-unavailable {
@@ -724,6 +726,47 @@
   padding: var(--theme-padding-md);
 }
 
+.talia-card--expandable {
+  position: relative;
+}
+
+.talia-card--expandable.talia-card--expanded {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.talia-card--expandable.talia-card--expanded > :last-child {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.talia-card--expandable .talia-card__header {
+  padding-right: 28px;
+}
+
+.talia-card__expand-toggle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  line-height: 1;
+  border-radius: 4px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size-sm);
+}
+
+.talia-card--expandable.talia-card--expanded .talia-card__expand-toggle {
+  border-color: rgba(234, 179, 8, 0.65);
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.45);
+}
+
 .talia-card--elevated {
   box-shadow: var(--theme-shadow-md);
 }
@@ -919,23 +962,24 @@
 .dockview-theme-default .dv-tab,
 .dockview-theme-dark .dv-tab,
 .dockview-theme-light .dv-tab {
-  font-size: var(--theme-font-size-sm);
+  font-size: var(--theme-tab-header-font-size);
   font-family: var(--theme-font-family);
+  font-weight: var(--theme-tab-header-font-weight);
 }
 
 .dockview-theme-talia,
 .dockview-theme-default,
 .dockview-theme-dark,
 .dockview-theme-light {
-  --dv-tab-font-size: var(--theme-font-size-sm) !important;
-  --dv-tabs-and-actions-container-font-size: var(--theme-font-size-sm) !important;
+  --dv-tab-font-size: var(--theme-tab-header-font-size) !important;
+  --dv-tabs-and-actions-container-font-size: var(--theme-tab-header-font-size) !important;
 }
 
 .dockview-theme-talia .dv-tabs-and-actions-container,
 .dockview-theme-default .dv-tabs-and-actions-container,
 .dockview-theme-dark .dv-tabs-and-actions-container,
 .dockview-theme-light .dv-tabs-and-actions-container {
-  font-size: var(--theme-font-size-sm) !important;
+  font-size: var(--theme-tab-header-font-size) !important;
   font-family: var(--theme-font-family) !important;
 }
 
@@ -943,8 +987,9 @@
 .dockview-theme-default .dv-tab,
 .dockview-theme-dark .dv-tab,
 .dockview-theme-light .dv-tab {
-  font-size: var(--theme-font-size-sm) !important;
+  font-size: var(--theme-tab-header-font-size) !important;
   font-family: var(--theme-font-family) !important;
+  font-weight: var(--theme-tab-header-font-weight) !important;
 }
 
 .dockview-theme-talia .dv-default-tab-content,
@@ -959,7 +1004,7 @@
 .dockview-theme-default .dv-tabs-overflow-dropdown-default,
 .dockview-theme-dark .dv-tabs-overflow-dropdown-default,
 .dockview-theme-light .dv-tabs-overflow-dropdown-default {
-  font-size: var(--theme-font-size-sm) !important;
+  font-size: var(--theme-tab-header-font-size) !important;
   font-family: var(--theme-font-family) !important;
 }
 
@@ -972,14 +1017,20 @@
 }
 
 .talia-event-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--theme-padding-sm);
+  display: block;
   padding: 4px 10px;
   border-top: 1px solid var(--theme-border-light);
   background: var(--theme-glass);
   font-size: 9px;
   color: var(--theme-text-muted);
+}
+
+.talia-event-meta__summary-line {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--theme-padding-sm);
+  overflow-x: auto;
 }
 
 .talia-event-meta__actions {
@@ -1013,6 +1064,18 @@
   gap: 6px;
 }
 
+.talia-event-meta__group--full {
+  width: 100%;
+  align-items: center;
+}
+
+.talia-event-meta__group--performance {
+  margin-left: auto;
+  align-items: center;
+  flex: 0 0 260px;
+  min-width: 180px;
+}
+
 .talia-event-meta__label {
   font-weight: 600;
   text-transform: uppercase;
@@ -1031,6 +1094,8 @@
   border-radius: 10px;
   background: var(--theme-border-light);
   color: var(--theme-fg);
+  border: 1px solid transparent;
+  cursor: pointer;
 }
 
 .talia-event-meta__chip--secondary {
@@ -1041,6 +1106,245 @@
 .talia-event-meta__chip--source {
   background: color-mix(in srgb, var(--theme-success) 14%, transparent);
   color: var(--theme-success);
+  min-width: 20px;
+  height: 18px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+
+.talia-event-meta__source-icon {
+  font-size: 8px;
+  letter-spacing: 0.2px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.talia-event-meta__chip--selected {
+  border-color: color-mix(in srgb, var(--theme-accent) 58%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-accent) 24%, transparent);
+}
+
+.talia-event-meta__perf-bar {
+  position: relative;
+  display: flex;
+  width: 260px;
+  max-width: 300px;
+  min-height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 80%, transparent);
+  background: color-mix(in srgb, var(--theme-bg-solid) 80%, var(--theme-glass));
+  cursor: pointer;
+  padding: 0;
+}
+
+.talia-event-meta__perf-bar--selected {
+  border-color: color-mix(in srgb, var(--theme-accent) 60%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-accent) 20%, transparent);
+}
+
+.talia-event-meta__perf-segment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 10px;
+  min-width: 0;
+}
+
+.talia-event-meta__perf-segment--network {
+  background: color-mix(in srgb, var(--theme-accent) 42%, transparent);
+}
+
+.talia-event-meta__perf-segment--loading {
+  background: color-mix(in srgb, var(--theme-warning) 36%, transparent);
+}
+
+.talia-event-meta__perf-segment--display {
+  background: color-mix(in srgb, var(--theme-success) 30%, transparent);
+}
+
+.talia-event-meta__perf-segment-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 7px;
+  line-height: 1;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--theme-fg) 82%, transparent);
+  user-select: none;
+  pointer-events: none;
+}
+
+.talia-event-meta__perf-label {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 8px;
+  color: var(--theme-fg);
+  background: color-mix(in srgb, var(--theme-bg-solid) 82%, transparent);
+  padding: 0 3px;
+  border-radius: 8px;
+}
+
+@media (max-width: 980px) {
+  .talia-event-meta__summary-line {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .talia-event-meta__group--performance {
+    width: 100%;
+    margin-left: 0;
+    flex: 1 1 100%;
+  }
+
+  .talia-event-meta__perf-bar {
+    max-width: none;
+  }
+}
+
+.talia-event-meta__actions--inline {
+  margin-left: 0;
+}
+
+.talia-event-meta__popover {
+  margin-top: 8px;
+  flex: 0 0 100%;
+  padding: 8px;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  background: var(--theme-bg-elevated);
+  width: 100%;
+  min-width: 0;
+}
+
+.talia-event-meta__popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.talia-event-meta__popover-event {
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-header-text);
+  margin-bottom: 6px;
+}
+
+.talia-event-meta__popover-body {
+  margin: 0;
+  width: 100%;
+  padding: 8px;
+  border-radius: var(--theme-radius-sm);
+  border: 1px solid var(--theme-border-light);
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size-xs);
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.talia-event-meta__perf-detail {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.95fr) minmax(260px, 1.05fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.talia-event-meta__perf-chart {
+  border: 1px solid var(--theme-border-light);
+  border-radius: var(--theme-radius-sm);
+  background: color-mix(in srgb, var(--theme-bg-solid) 88%, transparent);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.talia-event-meta__perf-chart-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.talia-event-meta__perf-phase-row {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.talia-event-meta__perf-phase-label {
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--theme-text-secondary);
+  text-align: center;
+}
+
+.talia-event-meta__perf-phase-track {
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-bg) 60%, var(--theme-glass));
+  overflow: hidden;
+}
+
+.talia-event-meta__perf-phase-fill {
+  display: block;
+  height: 100%;
+}
+
+.talia-event-meta__perf-phase-fill--network {
+  background: color-mix(in srgb, var(--theme-accent) 42%, transparent);
+}
+
+.talia-event-meta__perf-phase-fill--loading {
+  background: color-mix(in srgb, var(--theme-warning) 36%, transparent);
+}
+
+.talia-event-meta__perf-phase-fill--display {
+  background: color-mix(in srgb, var(--theme-success) 30%, transparent);
+}
+
+.talia-event-meta__perf-phase-ms {
+  font-size: 8px;
+  color: var(--theme-text-muted);
+}
+
+.talia-event-meta__perf-timeline {
+  display: flex;
+  align-items: end;
+  gap: 2px;
+  min-height: 54px;
+  padding: 4px 4px 2px;
+  border-top: 1px solid var(--theme-border-light);
+}
+
+.talia-event-meta__perf-point {
+  width: 7px;
+  border-radius: 2px 2px 0 0;
+  background: color-mix(in srgb, var(--theme-accent) 34%, var(--theme-success) 18%);
+}
+
+.talia-event-meta__perf-empty {
+  font-size: 8px;
+  color: var(--theme-text-muted);
+}
+
+.talia-event-meta__popover-body--perf {
+  max-height: 220px;
+}
+
+@media (max-width: 900px) {
+  .talia-event-meta__perf-detail {
+    grid-template-columns: 1fr;
+  }
 }
 /* ============================================================================
    Grid Layout

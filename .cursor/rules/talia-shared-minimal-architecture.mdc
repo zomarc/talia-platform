@@ -1,0 +1,27 @@
+---
+description: Enforce minimal components and shared GraphQL/data paths
+alwaysApply: true
+---
+
+# Talia Shared Minimal Architecture
+
+- Keep components minimal:
+  - Container = data fetch/mapping/state
+  - Presenter = UI rendering only
+  - Shared behavior = hooks/utilities/shared components
+- Do not duplicate refresh/event/performance logic in individual panels when shared hooks/components exist.
+- Prefer existing libraries and framework APIs directly (Dockview, Tabulator, Chart.js, React Leaflet, Apollo).
+
+## GraphQL/Data Access Directive
+
+- Use `useTableDataWithContext` whenever table/context pattern fits.
+- For non-table GraphQL operations, use shared helpers from `talia-ui/src/services/data/trackedGraphql.js`:
+  - `trackedFetchGraphql(...)`
+  - `trackedApolloQuery(...)`
+  - `trackedApolloMutate(...)`
+- Do not introduce raw `fetch('/api/graphql')` or direct `apolloClient.query/mutate` in feature code without tracked wrappers.
+
+## Panel Scope Directive
+
+- Pass `panelInstanceId` and `panelComponentId` into panel containers/hooks that fetch data.
+- Refresh/event responses must remain panel-scoped and generic.

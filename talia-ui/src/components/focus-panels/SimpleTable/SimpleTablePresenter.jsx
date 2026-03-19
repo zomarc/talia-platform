@@ -184,10 +184,6 @@ const SimpleTablePresenter = ({ data }) => {
       <main className="talia-report__content">
         <div ref={tableRef} className="talia-table" role="grid" aria-rowcount={recordCount} />
       </main>
-      <footer className="talia-report__footer">
-        <span>{recordCount.toLocaleString()} records</span>
-        <span>Updated {new Date().toLocaleDateString()}</span>
-      </footer>
     </div>
   );
 };

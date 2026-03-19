@@ -56,10 +56,12 @@ import YourReportPresenter from './YourReportPresenter';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import PanelDataState from '../../shared/PanelDataState';
 
-const YourReportContainer = () => {
+const YourReportContainer = ({ panelInstanceId, panelComponentId }) => {
   const { data, loading, error, refetch } = useTableDataWithContext({
     tableName: 'your_table',
     eventName: null,
+    panelInstanceId,
+    panelComponentId,
     contextMapper: () => null,
     limit: 1000
   });
@@ -327,6 +329,17 @@ const chart = new Chart(ctx, {
 - Duplicate formatter logic
 - Mix data fetching with UI rendering
 - Skip accessibility attributes
+- Add new raw `fetch('/api/graphql')` or direct `apolloClient.query/mutate` calls in feature components/services without `trackedGraphql` wrappers
+
+## GraphQL Tracking Standard
+
+For any new GraphQL data access path that cannot use `useTableDataWithContext`, use:
+
+- `services/data/trackedGraphql.js`
+  - `trackedFetchGraphql(...)` for HTTP GraphQL
+  - `trackedApolloQuery(...)` / `trackedApolloMutate(...)` for Apollo
+
+This keeps observability and performance metadata consistent across all reports.
 
 ## Example Components
 

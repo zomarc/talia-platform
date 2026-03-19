@@ -9,13 +9,15 @@ import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithCon
 import SailingSummaryPresenter from './SailingSummaryPresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
-const SailingSummaryContainer = () => {
+const SailingSummaryContainer = ({ panelInstanceId, panelComponentId }) => {
 
   // Use reusable hook for context-based data fetching
   // Note: SailingSummary shows all data (no filtering), but listens to events for selection
   const { data, loading, error, refetch } = useTableDataWithContext({
     tableName: 'sail_by_cabin_occupancy',
     eventName: null, // Don't filter - show all sail data
+    panelInstanceId,
+    panelComponentId,
     contextMapper: () => null, // No filtering
     limit: 10000 // Need more data for aggregation
   });

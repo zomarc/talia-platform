@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import ReportEventMeta from "../shared/ReportEventMeta";
 import { REPORT_TOGGLE_DETAILS_EVENT } from "./eventConstants";
+const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
 
 const deriveReportSources = (report) => {
   if (Array.isArray(report?.dataSources) && report.dataSources.length) {
@@ -14,7 +15,7 @@ const deriveReportSources = (report) => {
 
 const ReportShell = ({ report, panelInstanceId, children }) => {
   const emits = report?.events?.emits || [];
-  const respondsTo = report?.events?.respondsTo || [];
+  const respondsTo = Array.from(new Set([...(report?.events?.respondsTo || []), DASHBOARD_GLOBAL_CRITERIA_EVENT]));
   const sources = deriveReportSources(report);
   const [showDetails, setShowDetails] = useState(false);
 
@@ -32,7 +33,13 @@ const ReportShell = ({ report, panelInstanceId, children }) => {
   return (
     <div className="talia-report-shell">
       {showDetails && (
-        <ReportEventMeta emits={emits} respondsTo={respondsTo} sources={sources} />
+        <ReportEventMeta
+          emits={emits}
+          respondsTo={respondsTo}
+          sources={sources}
+          panelInstanceId={panelInstanceId}
+          panelComponentId={report?.panelId}
+        />
       )}
       <div className="talia-report-shell__content">{children}</div>
     </div>

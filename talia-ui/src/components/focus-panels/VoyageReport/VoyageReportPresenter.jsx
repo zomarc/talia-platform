@@ -280,11 +280,6 @@ const VoyageReportPresenter = ({ data, onRefresh }) => {
         />
       </main>
 
-      {/* Footer */}
-      <footer className="talia-report__footer">
-        <span>{recordCount.toLocaleString()} rows</span>
-        <span>Updated weekly</span>
-      </footer>
     </div>
   );
 };

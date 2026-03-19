@@ -940,7 +940,7 @@ function Dashboard({ user }) {
     isResizing,
     toggleSidebar,
     handleMouseDown,
-  } = useDashboardSidebar();
+  } = useDashboardSidebar({ initialCollapsed: true });
 
   const [globalFilters, setGlobalFilters] = React.useState({
     ship: '',
@@ -1180,12 +1180,6 @@ function Dashboard({ user }) {
     });
   };
 
-  const handleGlobalFiltersChange = (newFilters) => {
-    setGlobalFilters(newFilters);
-    // You can add logic here to apply filters to existing panels
-    console.log('Global filters updated:', newFilters);
-  };
-
   // REMOVED: Manual layout triggering - let Dockview handle sidebar changes naturally
 
   const toggleActivePanelMaximize = useCallback(() => {
@@ -1261,14 +1255,14 @@ function Dashboard({ user }) {
           // Restore font settings FIRST to prevent component recreation
           if (parsed.fontSettings) {
             setCurrentTheme(parsed.fontSettings.theme || DEFAULT_THEME);
-            setFontSize(parsed.fontSettings.fontSize || 12);
+            setFontSize(parsed.fontSettings.fontSize ?? 10);
             setFontFamily(parsed.fontSettings.fontFamily || 'Inter');
             setSpacingMode(parsed.fontSettings.spacingMode || 'default');
           }
           
           // Restore sidebar state
           if (parsed.sidebar) {
-            setSidebarCollapsed(parsed.sidebar.collapsed || false);
+            setSidebarCollapsed(parsed.sidebar.collapsed ?? true);
             setSidebarWidth(parsed.sidebar.width || 280);
           }
           
@@ -1454,8 +1448,6 @@ function Dashboard({ user }) {
           isCollapsed={sidebarCollapsed}
           onToggle={toggleSidebar}
           onAddPanel={addNewPanel}
-          globalFilters={globalFilters}
-          onGlobalFiltersChange={handleGlobalFiltersChange}
           currentFocus={currentFocus}
           onFocusChange={handleFocusChange}
           userRole={userRole}

@@ -10,11 +10,13 @@ import PublishedRatesPresenter from './PublishedRatesPresenter';
 import PanelDataState from '../../shared/PanelDataState';
 import { extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
-const PublishedRatesContainer = () => {
+const PublishedRatesContainer = ({ panelInstanceId, panelComponentId }) => {
   // Use reusable hook for context-based data fetching with server-side filtering
   const { data, loading, error, refetch, context } = useTableDataWithContext({
     tableName: 'published_rates_current_state',
     eventName: SAIL_SELECT_EVENT,
+    panelInstanceId,
+    panelComponentId,
     contextMapper: (detail) => {
       const sailCode = extractSailCodeFromEvent(detail);
       return sailCode ? { sail_code: sailCode } : null;
@@ -24,18 +26,6 @@ const PublishedRatesContainer = () => {
   });
 
   const selectedSailCode = context?.sail_code || context?.row_data?.sail_code || (typeof context === 'string' ? context : null);
-
-  React.useEffect(() => {
-    const handleRefresh = (event) => {
-      if (event?.detail?.panelId === 'published-rates') {
-        refetch();
-      }
-    };
-    window.addEventListener('talia:report.refresh', handleRefresh);
-    return () => {
-      window.removeEventListener('talia:report.refresh', handleRefresh);
-    };
-  }, [refetch]);
 
   // Transform data to match expected format (uppercase field names) if needed
   const transformedData = data && data.length > 0 ? data.map(row => ({

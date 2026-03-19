@@ -77,6 +77,7 @@ return <div className="my-component">Content</div>;
 
 - For focus panel reports, prefer `useTableDataWithContext` and container/presenter separation.
 - Standardize loading/error/empty handling via shared wrappers (for example `PanelDataState`) where possible.
+- Pass `panelInstanceId` and `panelComponentId` through containers/hooks so panel-scoped refresh/diagnostics remain generic.
 
 ### Apollo Client (GraphQL, When Needed)
 
@@ -84,6 +85,11 @@ return <div className="my-component">Content</div>;
 - Import from `lib/apolloClient.js`
 - Use hooks from `hooks/data/` for data fetching when available
 - Keep query/mutation usage localized and documented in the owning feature module
+- Route GraphQL calls through shared tracked helpers in `services/data/trackedGraphql.js`:
+  - `trackedFetchGraphql(...)`
+  - `trackedApolloQuery(...)`
+  - `trackedApolloMutate(...)`
+- Do not add new raw `fetch('/api/graphql')` or direct `apolloClient.query/mutate` calls in feature code.
 
 **Example:**
 ```jsx
@@ -115,6 +121,8 @@ const MyComponent = () => {
   - `useEffect` - Side effects and lifecycle
   - `useCallback` - Memoized callbacks
   - `useRef` - Refs for DOM access or stable values
+  - `usePanelDetailsVisibility` - Shared panel details visibility behavior
+  - `useSubpanelExpansion` - Shared sub-panel expand/collapse behavior
 
 ### Context for Shared State
 
@@ -233,6 +241,22 @@ const MyChart = ({ data }) => {
 - Use existing queries/mutations when available
 - Add new queries to `lib/apolloClient.js` if needed
 
+### Maps: React Leaflet
+
+- Use React Leaflet directly for map rendering (`MapContainer`, `TileLayer`, overlays).
+- Use shared map defaults from `components/shared/maps/LeafletMapDefaults.jsx` for:
+  - English-friendly basemap tile URL/attribution
+  - Container resize synchronization (`LeafletResizeObserver`)
+- Use shared port coordinate lookup from `components/shared/maps/portCoordinates.js` (do not define per-component coordinate maps).
+- Keep map tile configuration consistent across panels; do not define ad hoc tile providers per component unless required by product requirements.
+- Do not dispatch manual `window.resize` events or timer-based map resize hacks from Dockview/layout handlers.
+
+### Reusable Panel Behaviors
+
+- For panel-level details visibility wiring, use `hooks/usePanelDetailsVisibility.js`.
+- For sub-panel expand/collapse inside a report, use `hooks/useSubpanelExpansion.js`.
+- Do not duplicate these patterns per component.
+
 ## No Overrides Policy
 
 ### Framework Usage
@@ -254,6 +278,7 @@ const MyChart = ({ data }) => {
 - ✅ Follow framework documentation patterns
 - ✅ Use framework features as intended
 - ✅ Create utility functions only for data transformation, not framework wrapping
+- ✅ Keep components minimal: containers fetch/map state, presenters render UI, shared behavior lives in hooks/utilities
 
 ## Component Template
 
@@ -286,6 +311,7 @@ Before committing a new component, ensure:
 - [ ] Uses CSS variables from theme system (no hardcoded colors)
 - [ ] `npm run check:standards` reports no new inline-style violations
 - [ ] Uses project data hooks (or Apollo Client when hooks are not applicable)
+- [ ] GraphQL fetch/query/mutate paths use `trackedGraphql` shared helpers
 - [ ] Uses Tabulator for tables (if applicable)
 - [ ] Uses Chart.js for charts (if applicable)
 - [ ] Uses Dockview for layout (if applicable)

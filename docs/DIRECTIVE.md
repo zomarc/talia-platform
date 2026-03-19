@@ -12,6 +12,7 @@ This is the canonical directive for development standards in `talia`.
 6. Do not dispatch manual `window.resize` events to force component redraws.
 7. Do not call component-specific resize APIs (for example `chart.resize()` or Tabulator redraw calls) from Dockview layout events.
 8. Dockview owns layout/resize; Chart.js and Tabulator own their own responsive behavior.
+9. For Leaflet maps, use shared defaults from `talia-ui/src/components/shared/maps/LeafletMapDefaults.jsx` to keep basemap language/style and resize behavior consistent across all map panels.
 
 ## UI and Styling Rules
 

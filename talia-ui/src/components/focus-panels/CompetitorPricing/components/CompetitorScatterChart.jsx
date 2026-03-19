@@ -5,6 +5,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import { Chart, registerables } from 'chart.js';
+import SubpanelExpandButton from '../../../shared/SubpanelExpandButton';
 
 // Register Chart.js components
 Chart.register(...registerables);
@@ -336,15 +337,12 @@ const CompetitorScatterChart = ({
     >
       {activeCabinTypes.map(cabinType => (
         <div key={cabinType} className="competitor-scatter-grid__chart">
-          <button
-            type="button"
-            className="competitor-scatter-grid__expand-btn"
-            aria-label={expandedCabinType ? `Collapse ${cabinType} chart` : `Expand ${cabinType} chart`}
-            title={expandedCabinType ? 'Return to panel layout' : 'Expand chart'}
-            onClick={() => onToggleExpand?.(expandedCabinType ? null : cabinType)}
-          >
-            {expandedCabinType ? '↙' : '↗'}
-          </button>
+          <SubpanelExpandButton
+            className="talia-card__expand-toggle competitor-scatter-grid__expand-btn"
+            expanded={Boolean(expandedCabinType)}
+            onToggle={() => onToggleExpand?.(expandedCabinType ? null : cabinType)}
+            label={`${cabinType} chart`}
+          />
           <canvas ref={chartRefs[cabinType]} />
         </div>
       ))}

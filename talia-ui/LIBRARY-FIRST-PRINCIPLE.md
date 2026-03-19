@@ -167,6 +167,16 @@ column.headerFilterParams = {
 - ~~Duplicate fetch logic~~
 - ~~Custom error handling UI~~
 
+### React Leaflet
+
+#### ✅ Use These
+- Shared map defaults (`LeafletMapDefaults.jsx`) for consistent basemap and resize handling
+- Native Leaflet/React Leaflet APIs (`MapContainer`, `TileLayer`, `invalidateSize` via observer)
+
+#### ❌ Don't Do These
+- ~~Per-component ad hoc tile providers for standard panels~~
+- ~~Manual `window.resize` dispatches or timer hacks to force map redraw~~
+
 ---
 
 ## Red Flags to Watch For

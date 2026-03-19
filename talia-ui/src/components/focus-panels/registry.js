@@ -76,6 +76,7 @@ export const componentRegistry = {
       emits: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT],
       respondsTo: []
     },
+    supportsRefresh: true,
     supportsGroupActions: true,
     showInReports: true,
     filePath: 'src/components/focus-panels/MasterSailing/index.jsx'

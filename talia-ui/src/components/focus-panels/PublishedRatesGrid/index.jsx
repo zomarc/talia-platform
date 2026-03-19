@@ -13,6 +13,8 @@ const PublishedRatesGridContainer = ({ panelInstanceId, panelComponentId }) => {
   const { data, loading, error, refetch, context } = useTableDataWithContext({
     tableName: 'published_rates_changes',
     eventName: SAIL_SELECT_EVENT,
+    panelInstanceId,
+    panelComponentId,
     contextMapper: (detail) => {
       const sailCode = extractSailCodeFromEvent(detail);
       return sailCode ? { sail_code: sailCode } : null;
@@ -22,18 +24,6 @@ const PublishedRatesGridContainer = ({ panelInstanceId, panelComponentId }) => {
   });
 
   const selectedSailCode = context?.sail_code || context?.row_data?.sail_code || (typeof context === 'string' ? context : null);
-
-  React.useEffect(() => {
-    const handleRefresh = (event) => {
-      if (event?.detail?.panelId === 'published-rates-grid') {
-        refetch();
-      }
-    };
-    window.addEventListener('talia:report.refresh', handleRefresh);
-    return () => {
-      window.removeEventListener('talia:report.refresh', handleRefresh);
-    };
-  }, [refetch]);
 
   const normalizedData = React.useMemo(() => {
     if (!selectedSailCode) return [];

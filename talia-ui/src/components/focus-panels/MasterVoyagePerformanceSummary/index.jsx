@@ -18,6 +18,8 @@ const MasterVoyagePerformanceSummaryContainer = ({ panelInstanceId, panelCompone
   const { data, loading, error, refetch } = useTableDataWithContext({
     tableName: 'master_sail',
     eventName: null, // Don't filter - show all sail data
+    panelInstanceId,
+    panelComponentId,
     contextMapper: () => null, // No filtering
     limit: 1000
   });

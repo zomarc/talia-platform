@@ -4,10 +4,12 @@ import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithCon
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 
-const SimpleTable = () => {
+const SimpleTable = ({ panelInstanceId, panelComponentId }) => {
   const { data, loading, error } = useTableDataWithContext({
     tableName: 'master_sail',
     eventName: null,
+    panelInstanceId,
+    panelComponentId,
     contextMapper: () => null,
     limit: 1000
   });

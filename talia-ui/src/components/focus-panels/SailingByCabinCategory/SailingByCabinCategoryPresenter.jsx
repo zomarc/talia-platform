@@ -78,10 +78,6 @@ const SailingByCabinCategoryPresenter = ({ data, context }) => {
       <main className="talia-report__content">
         <div ref={tableRef} className="talia-table" role="grid" aria-rowcount={recordCount} />
       </main>
-      <footer className="talia-report__footer">
-        <span>{recordCount.toLocaleString()} records</span>
-        <span>{contextLabel ? `Filtered by ${contextLabel}` : 'No selection'}</span>
-      </footer>
     </div>
   );
 };

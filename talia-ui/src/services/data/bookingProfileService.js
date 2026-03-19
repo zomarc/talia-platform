@@ -5,6 +5,7 @@
 
 import { apolloClient } from '../../lib/apolloClient';
 import { gql } from '@apollo/client';
+import { trackedApolloQuery } from './trackedGraphql';
 
 // GraphQL query for booking profile
 const GET_BOOKING_PROFILE = gql`
@@ -130,10 +131,14 @@ class BookingProfileService {
     }
 
     try {
-      const { data } = await apolloClient.query({
+      const { data } = await trackedApolloQuery({
+        client: apolloClient,
         query: GET_BOOKING_PROFILE,
         variables: { sailCode },
-        fetchPolicy: 'network-only' // Always fetch fresh data
+        component: 'Booking Profile',
+        purpose: 'Fetch booking profile from talia graphql',
+        tableName: 'booking_profile',
+        options: { fetchPolicy: 'network-only' }
       });
 
       if (!data || !data.bookingProfile) {
@@ -159,10 +164,14 @@ class BookingProfileService {
     }
 
     try {
-      const { data } = await apolloClient.query({
+      const { data } = await trackedApolloQuery({
+        client: apolloClient,
         query: GET_BOOKING_PROFILE_YOY,
         variables: { sailCode, previousYearSailCode },
-        fetchPolicy: 'network-only'
+        component: 'Booking Profile',
+        purpose: 'Fetch booking profile year-over-year from talia graphql',
+        tableName: 'booking_profile_yoy',
+        options: { fetchPolicy: 'network-only' }
       });
 
       return data.bookingProfileYearOverYear;
@@ -183,10 +192,14 @@ class BookingProfileService {
     }
 
     try {
-      const { data } = await apolloClient.query({
+      const { data } = await trackedApolloQuery({
+        client: apolloClient,
         query: GET_BOOKING_PROFILE_WITH_CURVES,
         variables: { sailCode },
-        fetchPolicy: 'network-only'
+        component: 'Booking Profile',
+        purpose: 'Fetch booking profile build curves from talia graphql',
+        tableName: 'booking_profile_with_curves',
+        options: { fetchPolicy: 'network-only' }
       });
 
       if (!data || !data.bookingProfileWithCurves) {

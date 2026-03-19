@@ -54,10 +54,6 @@ const ItineraryListPresenter = ({ data }) => {
           ))}
         </div>
       </main>
-      <footer className="talia-report__footer">
-        <span>{data.length} itineraries</span>
-        <span>Updated {new Date().toLocaleDateString()}</span>
-      </footer>
     </div>
   );
 };

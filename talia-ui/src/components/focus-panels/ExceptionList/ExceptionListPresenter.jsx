@@ -62,10 +62,6 @@ const ExceptionListPresenter = ({ data }) => {
           ))}
         </div>
       </main>
-      <footer className="talia-report__footer">
-        <span>{data.length} exceptions</span>
-        <span>Last update {new Date().toLocaleDateString()}</span>
-      </footer>
     </div>
   );
 };

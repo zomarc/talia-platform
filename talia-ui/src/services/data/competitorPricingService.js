@@ -5,6 +5,7 @@
 
 import { apolloClient } from '../../lib/apolloClient';
 import { gql } from '@apollo/client';
+import { trackedApolloQuery } from './trackedGraphql';
 
 const GET_COMPETITOR_PRICING = gql`
   query GetCompetitorPricing($filters: CompetitorPricingFilters) {
@@ -70,11 +71,17 @@ class CompetitorPricingService {
       // Only include filters in variables if there are actual filter values
       const variables = Object.keys(cleanFilters).length > 0 ? { filters: cleanFilters } : {};
       
-      const { data, errors } = await apolloClient.query({
+      const { data, errors } = await trackedApolloQuery({
+        client: apolloClient,
         query: GET_COMPETITOR_PRICING,
         variables,
-        fetchPolicy: 'network-only',
-        errorPolicy: 'all' // Return both data and errors
+        component: 'Competitor Pricing',
+        purpose: 'Fetch competitor_pricing from talia graphql',
+        tableName: 'competitor_pricing',
+        options: {
+          fetchPolicy: 'network-only',
+          errorPolicy: 'all' // Return both data and errors
+        }
       });
       
       if (errors && errors.length > 0) {

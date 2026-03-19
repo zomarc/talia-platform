@@ -19,6 +19,11 @@ const ThemeContext = createContext();
  * Font families available in the application
  */
 const FONT_FAMILIES = {
+  Inter: {
+    name: 'Inter',
+    value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    description: 'Modern, clean, highly readable'
+  },
   'IBM Plex Sans': {
     name: 'IBM Plex Sans',
     value: '"IBM Plex Sans", "Source Sans 3", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -28,11 +33,6 @@ const FONT_FAMILIES = {
     name: 'Source Sans 3',
     value: '"Source Sans 3", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     description: 'Clean, modern, and compact'
-  },
-  'Inter': {
-    name: 'Inter',
-    value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    description: 'Modern, clean, highly readable'
   },
   'Roboto': {
     name: 'Roboto',
@@ -79,12 +79,12 @@ export const useTheme = () => {
 export const ThemeProvider = ({ children }) => {
   // Font size setting (user-adjustable)
   const [fontSize, setFontSize] = useState(() => {
-    let initialFontSize = 11;
+    let initialFontSize = 10;
     try {
       const saved = localStorage.getItem("taliaLayout");
       if (saved) {
         const parsed = JSON.parse(saved);
-        initialFontSize = parsed.fontSettings?.fontSize || 12;
+        initialFontSize = parsed.fontSettings?.fontSize ?? 10;
       }
     } catch {
       // Use default
@@ -94,12 +94,12 @@ export const ThemeProvider = ({ children }) => {
 
   // Font family setting (user-adjustable)
   const [fontFamily, setFontFamily] = useState(() => {
-    let initialFontFamily = 'IBM Plex Sans';
+    let initialFontFamily = 'Inter';
     try {
       const saved = localStorage.getItem("taliaLayout");
       if (saved) {
         const parsed = JSON.parse(saved);
-        initialFontFamily = parsed.fontSettings?.fontFamily || 'IBM Plex Sans';
+        initialFontFamily = parsed.fontSettings?.fontFamily || 'Inter';
       }
     } catch {
       // Use default

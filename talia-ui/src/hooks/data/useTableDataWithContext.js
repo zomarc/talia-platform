@@ -19,9 +19,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import queryTracker from '../../services/data/queryTracker';
 import { SAIL_SELECT_EVENT } from '../../lib/eventBus';
+import { REPORT_REFRESH_EVENT } from '../../components/dockview/eventConstants';
 
 const GRAPHQL_URL = '/api/graphql';
 const DEFAULT_CACHE_TTL_MS = 15000;
+const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
 const inflightRequestCache = new Map();
 const responseCache = new Map();
 
@@ -41,10 +43,180 @@ const buildRequestKey = (tableName, limit, filters) => (
   `${tableName || ''}|${String(limit || '')}|${stableStringify(filters || null)}`
 );
 
+const getGlobalDateFilters = () => {
+  const criteria = window.__taliaGlobalCriteria || null;
+  if (!criteria || typeof criteria !== 'object') return null;
+  const dateFrom = typeof criteria.dateFrom === 'string' ? criteria.dateFrom : null;
+  const dateTo = typeof criteria.dateTo === 'string' ? criteria.dateTo : null;
+  if (!dateFrom && !dateTo) return null;
+  return {
+    ...(dateFrom ? { dateFrom } : {}),
+    ...(dateTo ? { dateTo } : {})
+  };
+};
+
+const getServerGlobalFilters = () => {
+  const criteria = window.__taliaGlobalCriteria || null;
+  if (!criteria || typeof criteria !== 'object') {
+    return { include_non_real_sailings: false };
+  }
+  return {
+    include_non_real_sailings: criteria.includeNonRealSailings === true
+  };
+};
+
+const DATE_FIELD_CANDIDATES = [
+  'sail_date_from',
+  'sail_date',
+  'departure_date',
+  'start_date',
+  'from_date',
+  'vacation_date',
+  'master_voyage_departure_date'
+];
+const DURATION_FIELD_CANDIDATES = [
+  'sail_days',
+  'sail_itinerary_night',
+  'duration',
+  'duration_days',
+  'duration_nights',
+  'nights',
+  'night_count',
+  'cruise_nights',
+  'itinerary_duration',
+  'itinerary_duration_nights',
+  'sail_duration',
+  'sail_duration_nights',
+  'Duration',
+  'sailing',
+  'itinerary',
+  'package_name'
+];
+
+const getRowDateValue = (row) => {
+  if (!row || typeof row !== 'object') return null;
+  for (const field of DATE_FIELD_CANDIDATES) {
+    const value = row[field];
+    if (!value) continue;
+    const parsed = Date.parse(String(value));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+};
+
+const getDurationSet = (durationKey) => {
+  switch (durationKey) {
+    case '7':
+      return new Set([7]);
+    case '14':
+      return new Set([14]);
+    case '7-14':
+      return new Set([7, 14]);
+    case '3':
+      return new Set([3]);
+    case '4':
+      return new Set([4]);
+    case '3-4':
+      return new Set([3, 4]);
+    default:
+      return null;
+  }
+};
+
+const getRowDurationValue = (row) => {
+  if (!row || typeof row !== 'object') return null;
+  for (const field of DURATION_FIELD_CANDIDATES) {
+    const value = row[field];
+    if (value == null || value === '') continue;
+    const text = String(value);
+    const explicitNightMatch = text.match(/(\d{1,2})\s*(n|night|nights)\b/i);
+    const match = explicitNightMatch || text.match(/\d+/);
+    const parsed = Number.parseInt(match?.[0] || '', 10);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+};
+
+const applyGlobalDateCriteria = (rows) => {
+  const globalDateFilters = getGlobalDateFilters();
+  if (!globalDateFilters) return rows;
+
+  const minTs = globalDateFilters.dateFrom ? Date.parse(`${globalDateFilters.dateFrom}T00:00:00Z`) : null;
+  const maxTs = globalDateFilters.dateTo ? Date.parse(`${globalDateFilters.dateTo}T23:59:59Z`) : null;
+  const hasMin = Number.isFinite(minTs);
+  const hasMax = Number.isFinite(maxTs);
+  if (!hasMin && !hasMax) return rows;
+
+  return (rows || []).filter((row) => {
+    const rowTs = getRowDateValue(row);
+    // Keep rows with no recognized date field to avoid over-filtering non-date datasets.
+    if (!Number.isFinite(rowTs)) return true;
+    if (hasMin && rowTs < minTs) return false;
+    if (hasMax && rowTs > maxTs) return false;
+    return true;
+  });
+};
+
+const applyGlobalDurationCriteria = (rows) => {
+  const criteria = window.__taliaGlobalCriteria || null;
+  const durationKey = typeof criteria?.durationKey === 'string' ? criteria.durationKey : 'all';
+  const allowedDurations = getDurationSet(durationKey);
+  if (!allowedDurations) return rows;
+
+  return (rows || []).filter((row) => {
+    const rowDuration = getRowDurationValue(row);
+    // Keep rows with no recognized duration field to avoid over-filtering unrelated datasets.
+    if (!Number.isFinite(rowDuration)) return true;
+    return allowedDurations.has(rowDuration);
+  });
+};
+
+const ACTIVE_FIELD_CANDIDATES = ['active', 'is_active', 'ACTIVE'];
+const FAKE_FIELD_CANDIDATES = ['fake', 'is_fake', 'FAKE'];
+
+const isExplicitNo = (value) => {
+  if (value == null) return false;
+  const normalized = String(value).trim().toUpperCase();
+  return normalized === 'N' || normalized === 'NO' || normalized === 'FALSE' || normalized === '0';
+};
+
+const isExplicitYes = (value) => {
+  if (value == null) return false;
+  const normalized = String(value).trim().toUpperCase();
+  return normalized === 'Y' || normalized === 'YES' || normalized === 'TRUE' || normalized === '1';
+};
+
+const getFieldValueFromCandidates = (row, candidates) => {
+  if (!row || typeof row !== 'object') return undefined;
+  for (const key of candidates) {
+    if (Object.prototype.hasOwnProperty.call(row, key)) {
+      return row[key];
+    }
+  }
+  return undefined;
+};
+
+const applyRealSailingCriteria = (rows) => {
+  const criteria = window.__taliaGlobalCriteria || null;
+  if (criteria?.includeNonRealSailings === true) return rows;
+
+  return (rows || []).filter((row) => {
+    const activeValue = getFieldValueFromCandidates(row, ACTIVE_FIELD_CANDIDATES);
+    const fakeValue = getFieldValueFromCandidates(row, FAKE_FIELD_CANDIDATES);
+    if (isExplicitNo(activeValue)) return false;
+    if (isExplicitYes(fakeValue)) return false;
+    return true;
+  });
+};
+
+const applyGlobalCriteria = (rows) => applyRealSailingCriteria(applyGlobalDurationCriteria(applyGlobalDateCriteria(rows)));
+
 export const useTableDataWithContext = ({
   tableName,
   eventName,
   contextMapper,
+  panelInstanceId = null,
+  panelComponentId = null,
   limit = 1000,
   enabled = true,
   fetchWithoutContext = true,
@@ -54,19 +226,23 @@ export const useTableDataWithContext = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [context, setContext] = useState(null);
+  const rawDataRef = useRef([]);
   
   // Use refs to prevent infinite loops and store latest values
   const fetchingRef = useRef(false);
   const lastFiltersRef = useRef(null);
-  const pendingRef = useRef({ hasPending: false, filters: null });
+  const pendingRef = useRef({ hasPending: false, filters: null, options: null });
   const contextMapperRef = useRef(contextMapper);
   const tableNameRef = useRef(tableName);
   const limitRef = useRef(limit);
   const enabledRef = useRef(enabled);
   const eventNameRef = useRef(eventName);
+  const panelInstanceIdRef = useRef(panelInstanceId);
+  const panelComponentIdRef = useRef(panelComponentId);
   const fetchWithoutContextRef = useRef(fetchWithoutContext);
   const cacheTtlMsRef = useRef(cacheTtlMs);
   const hasCheckedContextRef = useRef(false);
+  const lastIncludeNonRealRef = useRef(window.__taliaGlobalCriteria?.includeNonRealSailings === true);
   
   // Keep refs up to date
   useEffect(() => {
@@ -75,9 +251,11 @@ export const useTableDataWithContext = ({
     limitRef.current = limit;
     enabledRef.current = enabled;
     eventNameRef.current = eventName;
+    panelInstanceIdRef.current = panelInstanceId;
+    panelComponentIdRef.current = panelComponentId;
     fetchWithoutContextRef.current = fetchWithoutContext;
     cacheTtlMsRef.current = cacheTtlMs;
-  }, [contextMapper, tableName, limit, enabled, eventName, fetchWithoutContext, cacheTtlMs]);
+  }, [contextMapper, tableName, limit, enabled, eventName, panelInstanceId, panelComponentId, fetchWithoutContext, cacheTtlMs]);
 
   // Extract context from event and map to GraphQL filters - store in ref
   const extractFiltersRef = useRef(null);
@@ -103,16 +281,23 @@ export const useTableDataWithContext = ({
 
   // Fetch data from GraphQL
   const fetchDataRef = useRef(null);
-  fetchDataRef.current = async (currentFilters = null) => {
+  fetchDataRef.current = async (currentFilters = null, options = {}) => {
+    const forceFetch = options?.force === true;
+    const bypassCache = options?.bypassCache === true;
+    const effectiveFilters = {
+      ...(currentFilters || {}),
+      ...getServerGlobalFilters()
+    };
+
     // Prevent concurrent fetches
     if (fetchingRef.current) {
-      pendingRef.current = { hasPending: true, filters: currentFilters };
+      pendingRef.current = { hasPending: true, filters: currentFilters, options };
       return;
     }
 
     // Check if filters actually changed - this is the key fix!
-    const filtersKey = currentFilters ? JSON.stringify(currentFilters) : 'null';
-    if (lastFiltersRef.current === filtersKey) {
+    const filtersKey = effectiveFilters ? JSON.stringify(effectiveFilters) : 'null';
+    if (!forceFetch && lastFiltersRef.current === filtersKey) {
       // Filters haven't changed, skip fetch
       return;
     }
@@ -127,13 +312,14 @@ export const useTableDataWithContext = ({
     setLoading(true);
     setError(null);
 
-    const requestKey = buildRequestKey(tableNameRef.current, limitRef.current, currentFilters || null);
+    const requestKey = buildRequestKey(tableNameRef.current, limitRef.current, effectiveFilters || null);
     const now = Date.now();
     const ttl = Number(cacheTtlMsRef.current || 0);
-    if (ttl > 0) {
+    if (!bypassCache && ttl > 0) {
       const cached = responseCache.get(requestKey);
       if (cached && cached.expiresAt > now) {
-        setData(cached.data || []);
+        rawDataRef.current = cached.data || [];
+        setData(applyGlobalCriteria(rawDataRef.current));
         setLoading(false);
         setError(null);
         fetchingRef.current = false;
@@ -155,10 +341,13 @@ export const useTableDataWithContext = ({
           const variables = {
             tableName: tableNameRef.current,
             limit: limitRef.current,
-            filters: currentFilters || undefined
+            filters: effectiveFilters || undefined
           };
 
-          console.log(`[useTableDataWithContext] Fetching ${tableNameRef.current}`, currentFilters ? `with filters: ${JSON.stringify(currentFilters)}` : 'without filters');
+          console.log(
+            `[useTableDataWithContext] Fetching ${tableNameRef.current}`,
+            effectiveFilters ? `with filters: ${JSON.stringify(effectiveFilters)}` : 'without filters'
+          );
 
           // Track query for InformationPanel
           trackQueryFn = queryTracker.trackQuery({
@@ -212,20 +401,22 @@ export const useTableDataWithContext = ({
 
       const loadedData = await requestPromise;
       console.log(`[useTableDataWithContext] Loaded ${loadedData.length} records from ${tableNameRef.current}`);
-
-      setData(loadedData);
+      rawDataRef.current = loadedData || [];
+      setData(applyGlobalCriteria(rawDataRef.current));
     } catch (err) {
       console.error('[useTableDataWithContext] Error:', err);
       setError(err);
+      rawDataRef.current = [];
       setData([]);
     } finally {
       setLoading(false);
       fetchingRef.current = false;
       if (pendingRef.current.hasPending) {
         const nextFilters = pendingRef.current.filters;
-        pendingRef.current = { hasPending: false, filters: null };
+        const nextOptions = pendingRef.current.options || null;
+        pendingRef.current = { hasPending: false, filters: null, options: null };
         // Trigger the latest pending fetch (if any)
-        fetchDataRef.current(nextFilters);
+        fetchDataRef.current(nextFilters, nextOptions);
       }
     }
   };
@@ -451,9 +642,51 @@ export const useTableDataWithContext = ({
     };
   }, [eventName, enabled, fetchWithoutContext]); // Only re-run if eventName/enabled behavior changes
 
+  // Global criteria handling:
+  // - Date/duration apply immediately client-side on current dataset.
+  // - includeNonRealSailings triggers server re-fetch because it's enforced in GraphQL.
+  useEffect(() => {
+    const handleGlobalCriteriaChange = (event) => {
+      setData(applyGlobalCriteria(rawDataRef.current));
+
+      const includeNonRealNext = event?.detail?.includeNonRealSailings === true;
+      if (includeNonRealNext === lastIncludeNonRealRef.current) {
+        return;
+      }
+      lastIncludeNonRealRef.current = includeNonRealNext;
+      // Force a refetch so the backend non-real filter is applied/removed.
+      lastFiltersRef.current = null;
+      const currentFilters = context ? extractFiltersRef.current(context) : null;
+      fetchDataRef.current(currentFilters);
+    };
+    window.addEventListener(DASHBOARD_GLOBAL_CRITERIA_EVENT, handleGlobalCriteriaChange);
+    return () => window.removeEventListener(DASHBOARD_GLOBAL_CRITERIA_EVENT, handleGlobalCriteriaChange);
+  }, [context]);
+
+  useEffect(() => {
+    const handlePanelRefresh = (event) => {
+      const targetPanel = event?.detail?.panelId;
+      const targetInstance = event?.detail?.panelInstanceId;
+      const targetComponent = event?.detail?.panelComponent;
+      const thisInstance = panelInstanceIdRef.current;
+      const thisComponent = panelComponentIdRef.current;
+      const isMatch = (
+        (thisComponent && (targetPanel === thisComponent || targetComponent === thisComponent)) ||
+        (thisInstance && targetInstance === thisInstance)
+      );
+      if (!isMatch) return;
+      const currentFilters = context ? extractFiltersRef.current(context) : null;
+      lastFiltersRef.current = null;
+      fetchDataRef.current(currentFilters, { force: true, bypassCache: true });
+    };
+    window.addEventListener(REPORT_REFRESH_EVENT, handlePanelRefresh);
+    return () => window.removeEventListener(REPORT_REFRESH_EVENT, handlePanelRefresh);
+  }, [context]);
+
   const refetch = useCallback(() => {
     const currentFilters = context ? extractFiltersRef.current(context) : null;
-    fetchDataRef.current(currentFilters);
+    lastFiltersRef.current = null;
+    fetchDataRef.current(currentFilters, { force: true, bypassCache: true });
   }, [context]);
 
   return {

@@ -13,6 +13,8 @@ const MasterSailingContainer = ({ panelInstanceId, panelComponentId }) => {
   } = useTableDataWithContext({
     tableName: 'master_sail',
     eventName: null,
+    panelInstanceId,
+    panelComponentId,
     contextMapper: () => null,
     limit: 2000,
   });
@@ -25,6 +27,8 @@ const MasterSailingContainer = ({ panelInstanceId, panelComponentId }) => {
   } = useTableDataWithContext({
     tableName: 'inventory_item',
     eventName: null,
+    panelInstanceId,
+    panelComponentId,
     contextMapper: () => null,
     limit: 4000,
   });
@@ -53,6 +57,7 @@ const MasterSailingContainer = ({ panelInstanceId, panelComponentId }) => {
     >
       <MasterSailingPresenter
         data={mergedRows}
+        onRefresh={handleRefresh}
         panelInstanceId={panelInstanceId}
         panelComponentId={panelComponentId}
       />

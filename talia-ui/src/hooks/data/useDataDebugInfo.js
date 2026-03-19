@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { trackedFetchGraphql } from '../../services/data/trackedGraphql';
 
 const GRAPHQL_URL = '/api/graphql';
 
@@ -59,31 +60,20 @@ export const useDataDebugInfo = () => {
         }
       `;
 
-      const response = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query }),
+      const payload = await trackedFetchGraphql({
+        url: GRAPHQL_URL,
+        query,
+        variables: {},
+        tableName: 'data_debug_info',
+        component: 'Data Debug Info',
+        purpose: 'Fetch data debug info from talia graphql'
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      
-      if (result.errors) {
-        const errorMessage = result.errors[0]?.message || JSON.stringify(result.errors);
-        console.error('[useDataDebugInfo] GraphQL errors:', result.errors);
-        throw new Error(`GraphQL error: ${errorMessage}`);
-      }
-
-      if (!result.data?.dataDebugInfo) {
+      if (!payload?.dataDebugInfo) {
         throw new Error('No data returned from dataDebugInfo query');
       }
 
-      setData(result.data.dataDebugInfo);
+      setData(payload.dataDebugInfo);
     } catch (err) {
       console.error('[useDataDebugInfo] Error:', err);
       setError(err);

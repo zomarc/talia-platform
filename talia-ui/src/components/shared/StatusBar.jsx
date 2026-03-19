@@ -19,6 +19,56 @@ const DASHBOARD_FILTER_VISIBILITY_EVENT = 'talia:dashboard.filterVisibility';
 const DASHBOARD_CYCLE_FOCUS_EVENT = 'talia:dashboard.cycleFocus';
 const DASHBOARD_VIEW_SCOPE_EVENT = 'talia:dashboard.viewScope';
 const DASHBOARD_DETAILS_VISIBILITY_EVENT = 'talia:dashboard.detailsVisibility';
+const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
+
+const GLOBAL_DATE_RANGE_OPTIONS = [
+  { key: 'all', label: 'All' },
+  { key: '30d', label: '30d' },
+  { key: '60d', label: '60d' },
+  { key: '120d', label: '120d' },
+  { key: '6m', label: '6m' }
+];
+const GLOBAL_DURATION_OPTIONS = [
+  { key: 'all', label: 'All' },
+  { key: '7', label: '7' },
+  { key: '14', label: '14' },
+  { key: '7-14', label: '7 & 14' },
+  { key: '3', label: '3' },
+  { key: '4', label: '4' },
+  { key: '3-4', label: '3 & 4' }
+];
+
+const toIsoDate = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+};
+
+const resolveDateRange = (rangeKey) => {
+  if (rangeKey === 'all') {
+    return {
+      dateFrom: '',
+      dateTo: ''
+    };
+  }
+
+  const now = new Date();
+  const end = new Date(now);
+  let start = new Date(now);
+
+  if (rangeKey === '6m') {
+    start.setMonth(start.getMonth() - 6);
+  } else {
+    const days = Number.parseInt(String(rangeKey || '').replace('d', ''), 10);
+    const safeDays = Number.isFinite(days) && days > 0 ? days : 30;
+    start.setDate(start.getDate() - safeDays);
+  }
+
+  return {
+    dateFrom: toIsoDate(start),
+    dateTo: toIsoDate(end)
+  };
+};
 
 const StatusBar = ({
   statusMessage,
@@ -33,9 +83,18 @@ const StatusBar = ({
   const [showDetails, setShowDetails] = useState(false);
   const [displayMessage, setDisplayMessage] = useState(statusMessage);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => !!window.__taliaSidebarCollapsed);
-  const [filtersVisible, setFiltersVisible] = useState(() => window.__taliaFiltersVisible !== false);
+  const [filtersVisible, setFiltersVisible] = useState(() => window.__taliaFiltersVisible === true);
   const [viewScope, setViewScope] = useState(() => window.__taliaViewScope === 'wide' ? 'wide' : 'local');
-  const appVersion = import.meta.env.VITE_APP_VERSION || '0.1.4';
+  const [globalDateRange, setGlobalDateRange] = useState(() => {
+    const saved = window.__taliaGlobalCriteria?.rangeKey;
+    return GLOBAL_DATE_RANGE_OPTIONS.some((option) => option.key === saved) ? saved : '30d';
+  });
+  const [globalDuration, setGlobalDuration] = useState(() => {
+    const saved = window.__taliaGlobalCriteria?.durationKey;
+    return GLOBAL_DURATION_OPTIONS.some((option) => option.key === saved) ? saved : 'all';
+  });
+  const [includeNonRealSailings, setIncludeNonRealSailings] = useState(() => window.__taliaGlobalCriteria?.includeNonRealSailings === true);
+  const appVersion = import.meta.env.VITE_APP_VERSION || '0.1.5';
   const hasAdvancedControls = typeof canUseAdvancedControls === 'boolean'
     ? canUseAdvancedControls
     : canUseAdvancedHeader(userRole);
@@ -77,6 +136,18 @@ const StatusBar = ({
 
   const handleViewScopeToggle = () => {
     setViewScope((prev) => (prev === 'wide' ? 'local' : 'wide'));
+  };
+
+  const handleGlobalDateRangeChange = (event) => {
+    const next = event?.target?.value;
+    if (!GLOBAL_DATE_RANGE_OPTIONS.some((option) => option.key === next)) return;
+    setGlobalDateRange(next);
+  };
+
+  const handleGlobalDurationChange = (event) => {
+    const next = event?.target?.value;
+    if (!GLOBAL_DURATION_OPTIONS.some((option) => option.key === next)) return;
+    setGlobalDuration(next);
   };
 
   const getActivePanelTarget = () => {
@@ -142,6 +213,22 @@ const StatusBar = ({
       })
     );
   }, [viewScope]);
+
+  useEffect(() => {
+    const range = resolveDateRange(globalDateRange);
+    const criteria = {
+      rangeKey: globalDateRange,
+      durationKey: globalDuration,
+      includeNonRealSailings,
+      ...range
+    };
+    window.__taliaGlobalCriteria = criteria;
+    window.dispatchEvent(
+      new CustomEvent(DASHBOARD_GLOBAL_CRITERIA_EVENT, {
+        detail: criteria,
+      })
+    );
+  }, [globalDateRange, globalDuration, includeNonRealSailings]);
 
   // Get event summary
   const getEventSummary = (event) => {
@@ -265,6 +352,49 @@ const StatusBar = ({
             >
               ▾
             </button>
+            <label className="status-bar__header-range" htmlFor="status-bar-global-date-range" title="Global date range applied across reports">
+              <span className="status-bar__header-range-label">Date</span>
+              <select
+                id="status-bar-global-date-range"
+                className="status-bar__header-range-select"
+                value={globalDateRange}
+                onChange={handleGlobalDateRangeChange}
+                aria-label="Global date range"
+              >
+                {GLOBAL_DATE_RANGE_OPTIONS.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="status-bar__header-range" htmlFor="status-bar-global-duration" title="Global duration criteria applied across reports">
+              <span className="status-bar__header-range-label">Dur</span>
+              <select
+                id="status-bar-global-duration"
+                className="status-bar__header-range-select"
+                value={globalDuration}
+                onChange={handleGlobalDurationChange}
+                aria-label="Global duration criteria"
+              >
+                {GLOBAL_DURATION_OPTIONS.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="status-bar__header-toggle" htmlFor="status-bar-include-non-real" title="Include non-real sailings (active='N' or fake='Y')">
+              <input
+                id="status-bar-include-non-real"
+                type="checkbox"
+                className="status-bar__header-checkbox"
+                checked={includeNonRealSailings}
+                onChange={(event) => setIncludeNonRealSailings(event.target.checked)}
+                aria-label="Include non-real sailings"
+              />
+              <span className="status-bar__header-range-label">Show non-real</span>
+            </label>
             <button
               type="button"
               className={`status-bar__header-btn ${viewScope === 'wide' ? 'status-bar__header-btn--active' : ''}`}

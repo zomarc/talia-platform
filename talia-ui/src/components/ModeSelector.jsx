@@ -12,7 +12,7 @@ import '../styles/mode-selector.css';
 const ModeSelector = ({ currentMode, onModeChange }) => {
   const [showDevDropdown, setShowDevDropdown] = useState(false);
   const [source, setSource] = useState('local');
-  const [version, setVersion] = useState('0.1.4');
+  const [version, setVersion] = useState('0.1.5');
 
   // Determine source from environment
   useEffect(() => {
@@ -23,7 +23,7 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
 
   // Get version from package.json (would need to be injected at build time)
   useEffect(() => {
-    const envVersion = import.meta.env.VITE_APP_VERSION || '0.1.4';
+    const envVersion = import.meta.env.VITE_APP_VERSION || '0.1.5';
     setVersion(envVersion);
   }, []);
   const versionLabel = `${version}-dev`;

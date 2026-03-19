@@ -7,19 +7,8 @@ import React from 'react';
 import CompetitorPricingFilters from './components/CompetitorPricingFilters';
 import CompetitorScatterChart from './components/CompetitorScatterChart';
 import CompetitorPricingTable from './components/CompetitorPricingTable';
-
-const DASHBOARD_DETAILS_VISIBILITY_EVENT = 'talia:dashboard.detailsVisibility';
-
-const getDetailsStoreValue = ({ panelInstanceId, panelComponentId, fallback = true }) => {
-  const store = window.__taliaPanelDetailsVisibility || {};
-  if (panelInstanceId && Object.prototype.hasOwnProperty.call(store, panelInstanceId)) {
-    return store[panelInstanceId] !== false;
-  }
-  if (panelComponentId && Object.prototype.hasOwnProperty.call(store, panelComponentId)) {
-    return store[panelComponentId] !== false;
-  }
-  return fallback;
-};
+import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
 
 const CompetitorPricingPresenter = ({
   data,
@@ -30,30 +19,15 @@ const CompetitorPricingPresenter = ({
   panelInstanceId,
   panelComponentId,
 }) => {
-  const [expandedCabinType, setExpandedCabinType] = React.useState(null);
-  const [showTable, setShowTable] = React.useState(() => getDetailsStoreValue({
+  const { expandedKey: expandedCabinType, setExpandedKey: setExpandedCabinType } = useSubpanelExpansion();
+  const [showTable] = usePanelDetailsVisibility({
     panelInstanceId,
     panelComponentId: panelComponentId || 'competitor-pricing',
-  }));
+  });
   const [chartOptions, setChartOptions] = React.useState({
     pppdScaleMode: 'AUTO',
     pppdMax: 200
   });
-  React.useEffect(() => {
-    const handleDetailsVisibility = (event) => {
-      const detail = event?.detail || {};
-      const targetPanelInstance = detail.panelId;
-      const targetPanelComponent = detail.panelComponent;
-      const thisComponent = panelComponentId || 'competitor-pricing';
-      const targetsThisPanel = targetPanelInstance
-        ? (targetPanelInstance === panelInstanceId || targetPanelComponent === thisComponent)
-        : targetPanelComponent === thisComponent;
-      if (!targetsThisPanel) return;
-      setShowTable(detail.visible !== false);
-    };
-    window.addEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibility);
-    return () => window.removeEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibility);
-  }, [panelComponentId, panelInstanceId]);
 
   return (
     <div className="talia-report competitor-pricing" role="region" aria-label="Competitor pricing report">
@@ -97,10 +71,6 @@ const CompetitorPricingPresenter = ({
         {!expandedCabinType && showTable && <CompetitorPricingTable data={data} />}
       </main>
 
-      <footer className="talia-report__footer">
-        <span>{(data || []).length.toLocaleString()} records</span>
-        <span>Competitor current state</span>
-      </footer>
     </div>
   );
 };

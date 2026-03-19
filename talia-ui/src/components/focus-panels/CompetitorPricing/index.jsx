@@ -8,6 +8,7 @@ import { useCompetitorPricing } from '../../../hooks/data/useCompetitorPricing';
 import CompetitorPricingPresenter from './CompetitorPricingPresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
+import queryTracker from '../../../services/data/queryTracker';
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
 const DOT_SAIL_SELECT_EVENT = 'talia.sail.select';
@@ -115,18 +116,33 @@ const fetchInventoryItems = async ({ sailCode, referenceSailCode, shipCode }) =>
   for (const filters of attempts) {
     const hasFilter = Object.values(filters).some((value) => value !== undefined);
     if (!hasFilter) continue;
-    const response = await fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, variables: { filters } })
+    const completeQuery = queryTracker.trackQuery({
+      query,
+      variables: {
+        tableName: 'inventory_item',
+        filters
+      },
+      component: 'Competitor Pricing',
+      purpose: 'Resolve inventory_item context from talia graphql'
     });
-    const payload = await response.json();
-    if (!response.ok || payload?.errors?.length) {
-      throw new Error(payload?.errors?.[0]?.message || `HTTP ${response.status}`);
-    }
-    const rows = payload?.data?.inventoryItems || [];
-    if (rows.length > 0) {
-      return rows;
+    try {
+      const response = await fetch(GRAPHQL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, variables: { filters } })
+      });
+      const payload = await response.json();
+      if (!response.ok || payload?.errors?.length) {
+        throw new Error(payload?.errors?.[0]?.message || `HTTP ${response.status}`);
+      }
+      const rows = payload?.data?.inventoryItems || [];
+      completeQuery({ data: rows });
+      if (rows.length > 0) {
+        return rows;
+      }
+    } catch (error) {
+      completeQuery({ error });
+      throw error;
     }
   }
 

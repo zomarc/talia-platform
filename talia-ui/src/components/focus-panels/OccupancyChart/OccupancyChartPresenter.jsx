@@ -99,10 +99,6 @@ const OccupancyChartPresenter = ({ data }) => {
           <canvas ref={canvasRef} className="talia-chart__canvas" />
         </div>
       </main>
-      <footer className="talia-report__footer">
-        <span>{data.length} days</span>
-        <span>Last 7 days</span>
-      </footer>
     </div>
   );
 };

@@ -49,7 +49,7 @@ const GROUP_BY = [
 ];
 const GROUP_MAX_DEPTH = GROUP_BY.length;
 
-const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => {
+const MasterSailingPresenter = ({ data, onRefresh, panelInstanceId, panelComponentId }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const didApplyInitialGroupOpenRef = useRef(false);
@@ -379,6 +379,19 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
             </select>
           </label>
         ))}
+        {onRefresh && (
+          <div className="master-sailing-panel__actions">
+            <button
+              type="button"
+              className="published-rates-grid__button published-rates-grid__button--primary"
+              onClick={onRefresh}
+              aria-label="Refresh master sailing"
+              title="Refresh master sailing"
+            >
+              Refresh
+            </button>
+          </div>
+        )}
       </div>
       <div ref={tableRef} className="focus-panel__table master-sailing-table" />
     </div>

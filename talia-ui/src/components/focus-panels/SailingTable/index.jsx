@@ -8,12 +8,14 @@ import React from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import SailingTablePresenter from './SailingTablePresenter';
 import PanelDataState from '../../shared/PanelDataState';
-const SailingTableContainer = () => {
+const SailingTableContainer = ({ panelInstanceId, panelComponentId }) => {
   // Use reusable hook for context-based data fetching
   // Note: SailingTable shows all data (no filtering), but emits events when rows are selected
   const { data, loading, error, refetch } = useTableDataWithContext({
     tableName: 'master_sail',
     eventName: null, // Don't filter - show all sail data
+    panelInstanceId,
+    panelComponentId,
     contextMapper: () => null, // No filtering
     limit: 1000
   });

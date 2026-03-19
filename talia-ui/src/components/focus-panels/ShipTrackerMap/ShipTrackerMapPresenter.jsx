@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import { CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, Tooltip, useMap, ZoomControl } from 'react-leaflet';
+import {
+  LEAFLET_ENGLISH_TILE_ATTRIBUTION,
+  LEAFLET_ENGLISH_TILE_URL,
+  LeafletResizeObserver,
+} from '../../shared/maps/LeafletMapDefaults';
+import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
 
 const DEFAULT_CENTER = [36.8, 25.9];
 const SHIP_COLORS = ['#0d47a1', '#b71c1c'];
@@ -187,17 +193,6 @@ const FitMapToShips = ({ points }) => {
   return null;
 };
 
-const MapResizeOnLayout = ({ expanded }) => {
-  const map = useMap();
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      map.invalidateSize();
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [map, expanded]);
-  return null;
-};
-
 const getRouteEndpoints = (route) => {
   const from = route?.from || route?.fromCoord || null;
   const to = route?.to || route?.toCoord || null;
@@ -246,7 +241,7 @@ const ShipTrackerMapPresenter = ({
   livePositionsError,
   onRefresh
 }) => {
-  const [viewMode, setViewMode] = useState('default');
+  const { expandedKey: viewMode, setExpandedKey: setViewMode } = useSubpanelExpansion(null);
   const [selectedShipCode, setSelectedShipCode] = useState(SHIP_FILTER_OUR);
   const [pastWindow, setPastWindow] = useState(3);
   const [futureWindow, setFutureWindow] = useState(3);
@@ -403,9 +398,9 @@ const ShipTrackerMapPresenter = ({
           setSections(preExpandedSectionsRef.current);
           preExpandedSectionsRef.current = null;
         }
-        return 'default';
+        return null;
       }
-      if (prevMode === 'default') {
+      if (!prevMode) {
         preExpandedSectionsRef.current = sections;
       }
       setSections((current) => ({ ...current, map: true, news: false, details: false }));
@@ -415,7 +410,7 @@ const ShipTrackerMapPresenter = ({
 
   const isExpanded = viewMode === 'full';
   const isNewsView = viewMode === 'news';
-  const isMapFocusedView = isExpanded || isNewsView;
+  const isMapFocusedView = Boolean(viewMode);
 
   const renderNewsContent = (compact = false) => (
     portNewsLoading ? (
@@ -609,12 +604,12 @@ const ShipTrackerMapPresenter = ({
           </div>
 
           <MapContainer center={mapCenter} zoom={5} className="ship-tracker-map__leaflet" zoomControl={false}>
-            <MapResizeOnLayout expanded={isMapFocusedView} />
+            <LeafletResizeObserver />
             <FitMapToShips points={mapPoints} />
             <ZoomControl position="bottomright" />
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; CARTO'
-              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+              attribution={LEAFLET_ENGLISH_TILE_ATTRIBUTION}
+              url={LEAFLET_ENGLISH_TILE_URL}
             />
 
           {visibleShips.map((ship, shipIndex) => {

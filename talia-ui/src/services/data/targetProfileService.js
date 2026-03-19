@@ -5,6 +5,7 @@
 
 import { apolloClient } from '../../lib/apolloClient';
 import { gql } from '@apollo/client';
+import { trackedApolloMutate, trackedApolloQuery } from './trackedGraphql';
 
 // GraphQL query for fetching all target profiles
 const GET_TARGET_PROFILES = gql`
@@ -129,10 +130,14 @@ class TargetProfileService {
    */
   async fetchAll(filters = {}) {
     try {
-      const { data } = await apolloClient.query({
+      const { data } = await trackedApolloQuery({
+        client: apolloClient,
         query: GET_TARGET_PROFILES,
         variables: { filters },
-        fetchPolicy: 'cache-and-network'
+        component: 'Target Profiles',
+        purpose: 'Fetch target profiles from talia graphql',
+        tableName: 'target_profiles',
+        options: { fetchPolicy: 'cache-and-network' }
       });
 
       return data.targetProfiles || [];
@@ -153,10 +158,14 @@ class TargetProfileService {
     }
 
     try {
-      const { data } = await apolloClient.query({
+      const { data } = await trackedApolloQuery({
+        client: apolloClient,
         query: GET_TARGET_PROFILE,
         variables: { id },
-        fetchPolicy: 'cache-and-network'
+        component: 'Target Profiles',
+        purpose: 'Fetch target profile by id from talia graphql',
+        tableName: 'target_profile',
+        options: { fetchPolicy: 'cache-and-network' }
       });
 
       if (!data || !data.targetProfile) {
@@ -177,12 +186,17 @@ class TargetProfileService {
    */
   async create(input) {
     try {
-      const { data } = await apolloClient.mutate({
+      const { data } = await trackedApolloMutate({
+        client: apolloClient,
         mutation: CREATE_TARGET_PROFILE,
         variables: { input },
-        refetchQueries: [{ query: GET_TARGET_PROFILES }]
+        component: 'Target Profiles',
+        purpose: 'Create target profile via talia graphql',
+        tableName: 'target_profile',
+        options: {
+          refetchQueries: [{ query: GET_TARGET_PROFILES }]
+        }
       });
-
       return data.createTargetProfile;
     } catch (error) {
       console.error('[TargetProfileService] Error creating target profile:', error);
@@ -202,15 +216,20 @@ class TargetProfileService {
     }
 
     try {
-      const { data } = await apolloClient.mutate({
+      const { data } = await trackedApolloMutate({
+        client: apolloClient,
         mutation: UPDATE_TARGET_PROFILE,
         variables: { id, input },
-        refetchQueries: [
-          { query: GET_TARGET_PROFILES },
-          { query: GET_TARGET_PROFILE, variables: { id } }
-        ]
+        component: 'Target Profiles',
+        purpose: 'Update target profile via talia graphql',
+        tableName: 'target_profile',
+        options: {
+          refetchQueries: [
+            { query: GET_TARGET_PROFILES },
+            { query: GET_TARGET_PROFILE, variables: { id } }
+          ]
+        }
       });
-
       return data.updateTargetProfile;
     } catch (error) {
       console.error('[TargetProfileService] Error updating target profile:', error);
@@ -229,12 +248,17 @@ class TargetProfileService {
     }
 
     try {
-      const { data } = await apolloClient.mutate({
+      const { data } = await trackedApolloMutate({
+        client: apolloClient,
         mutation: DELETE_TARGET_PROFILE,
         variables: { id },
-        refetchQueries: [{ query: GET_TARGET_PROFILES }]
+        component: 'Target Profiles',
+        purpose: 'Delete target profile via talia graphql',
+        tableName: 'target_profile',
+        options: {
+          refetchQueries: [{ query: GET_TARGET_PROFILES }]
+        }
       });
-
       return data.deleteTargetProfile;
     } catch (error) {
       console.error('[TargetProfileService] Error deleting target profile:', error);

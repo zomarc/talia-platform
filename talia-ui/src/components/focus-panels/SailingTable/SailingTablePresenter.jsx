@@ -13,8 +13,9 @@ import React, { useRef, useEffect } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
 import { emitSailClear, emitSailSelect } from '../../../lib/eventBus';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
-import { apolloClient } from '../../../lib/apolloClient';
 import { gql } from '@apollo/client';
+import { trackedApolloMutate } from '../../../services/data/trackedGraphql';
+import { apolloClient } from '../../../lib/apolloClient';
 
 const UPDATE_USER_PREFERENCES = gql`
   mutation UpdateUserPreferences($input: UserPreferencesInput!) {
@@ -52,13 +53,17 @@ const SailingTablePresenter = ({ data }) => {
     }
     
     try {
-      await apolloClient.mutate({
+      await trackedApolloMutate({
+        client: apolloClient,
         mutation: UPDATE_USER_PREFERENCES,
         variables: {
           input: {
             selectedSailCode: sailCode || null
           }
-        }
+        },
+        component: 'Sailing Table',
+        purpose: 'Persist selected sail code via talia graphql',
+        tableName: 'user_preferences'
       });
       console.log('[SailingTable] Saved selected sail to user preferences:', sailCode);
     } catch (error) {

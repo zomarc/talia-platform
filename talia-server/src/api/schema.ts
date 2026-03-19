@@ -336,6 +336,22 @@ export const typeDefs = `#graphql
     port: String!
   }
 
+  type PublicItineraryCatalogItem {
+    url: String!
+    title: String!
+    description: String
+    image: String!
+    durationNights: Int
+    slug: String
+  }
+
+  type PublicImagePoolItem {
+    sourcePage: String!
+    sourceLabel: String!
+    imageUrl: String!
+    title: String
+  }
+
   type WeatherPoint {
     label: String!
     code: Int
@@ -534,6 +550,7 @@ export const typeDefs = `#graphql
     package_name: String
     package_type: String
     geog_area_code: String
+    include_non_real_sailings: Boolean
     # Add other common filters as needed
   }
 
@@ -878,6 +895,8 @@ export const typeDefs = `#graphql
     reservations(filters: ReservationFilters): [Reservation!]!
     inventoryItems(filters: InventoryItemFilters): [InventoryItem!]!
     inventoryMemos(inventoryItemId: ID!): [InventoryMemo!]!
+    publicItineraryCatalog(limit: Int): [PublicItineraryCatalogItem!]!
+    publicImagePool(limit: Int): [PublicImagePoolItem!]!
     portNews(port: String!, limit: Int): [PortNewsItem!]!
     weatherAt(latitude: Float!, longitude: Float!, date: String): WeatherPoint
     kpis(userRole: UserRole): [KPI!]!

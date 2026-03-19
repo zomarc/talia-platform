@@ -1,22 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import SailingOverviewPresenter from './SailingOverviewPresenter';
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { getFieldValue, pickFirst } from '../../shared/utils/dataAccess';
 
 const GRAPHQL_URL = '/api/graphql';
 const PUBLISHED_RATES_TABLE = 'published_rates_current_state';
 const PUBLISHED_RATES_LIMIT = 500;
-
-const pickFirst = (...values) => values.find((value) => value !== null && value !== undefined && value !== '');
-
-const getFieldValue = (record, key) => {
-  if (!record) return null;
-  if (record[key] !== undefined && record[key] !== null && record[key] !== '') return record[key];
-  const upperKey = key.toUpperCase();
-  if (record[upperKey] !== undefined && record[upperKey] !== null && record[upperKey] !== '') return record[upperKey];
-  const camelKey = key.replace(/_([a-z])/g, (_, char) => char.toUpperCase());
-  if (record[camelKey] !== undefined && record[camelKey] !== null && record[camelKey] !== '') return record[camelKey];
-  return null;
-};
 
 const getSailCode = (sailing) => pickFirst(
   getFieldValue(sailing, 'sail_code'),
@@ -65,7 +54,7 @@ const fetchPublishedRates = async (sailCode) => {
 
 const extractPriceSummary = (rows) => {
   if (!rows || rows.length === 0) {
-    return { value: null, currency: null, source: null };
+    return { value: null, currency: null, source: null, lookedUpAt: null, rowsCount: 0 };
   }
 
   const values = rows
@@ -83,18 +72,32 @@ const extractPriceSummary = (rows) => {
     .filter((value) => value !== null);
 
   if (values.length === 0) {
-    return { value: null, currency: null, source: null };
+    return { value: null, currency: null, source: null, lookedUpAt: null, rowsCount: rows.length };
   }
 
   const currency = pickFirst(
     getFieldValue(rows[0], 'currency_code'),
     getFieldValue(rows[0], 'currency')
   );
+  const lookups = rows
+    .map((row) => pickFirst(
+      getFieldValue(row, 'updated_at'),
+      getFieldValue(row, 'last_updated'),
+      getFieldValue(row, 'modified_at'),
+      getFieldValue(row, 'effective_date')
+    ))
+    .map((value) => {
+      const timestamp = Date.parse(String(value || ''));
+      return Number.isFinite(timestamp) ? timestamp : null;
+    })
+    .filter((value) => value !== null);
 
   return {
     value: Math.min(...values),
     currency: currency || null,
-    source: 'published rates'
+    source: 'published rates',
+    lookedUpAt: lookups.length ? new Date(Math.max(...lookups)).toISOString() : null,
+    rowsCount: rows.length
   };
 };
 
@@ -105,7 +108,9 @@ const SailingOverviewContainer = () => {
     error: null,
     value: null,
     currency: null,
-    source: null
+    source: null,
+    lookedUpAt: null,
+    rowsCount: 0
   });
   const activeFetchRef = useRef(0);
 
@@ -145,7 +150,9 @@ const SailingOverviewContainer = () => {
         error: null,
         value: null,
         currency: null,
-        source: null
+        source: null,
+        lookedUpAt: null,
+        rowsCount: 0
       });
       return () => {
         cancelled = true;
@@ -171,7 +178,9 @@ const SailingOverviewContainer = () => {
           error,
           value: null,
           currency: null,
-          source: null
+          source: null,
+          lookedUpAt: null,
+          rowsCount: 0
         });
       }
     };

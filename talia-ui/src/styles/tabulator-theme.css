@@ -136,19 +136,37 @@
 }
 
 .tabulator .tabulator-row.tabulator-group {
-  background: var(--theme-bg-elevated) !important;
-  color: color-mix(in srgb, var(--theme-fg) 84%, var(--theme-text-muted)) !important;
+  background: color-mix(in srgb, var(--theme-header-bg) 72%, var(--theme-bg-elevated)) !important;
+  color: var(--theme-header-text) !important;
   border-top: 0 !important;
   border-bottom: 0 !important;
-  font-weight: 600;
+  font-size: var(--theme-group-label-font-size) !important;
+  font-weight: var(--theme-group-label-font-weight) !important;
 }
 
 .tabulator .tabulator-row.tabulator-group .tabulator-cell {
-  border-bottom: 1px solid color-mix(in srgb, var(--theme-border-light) 52%, transparent) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-header-border) 58%, transparent) !important;
 }
 
 .tabulator .tabulator-row.tabulator-group.tabulator-group-visible {
-  background: var(--theme-glass) !important;
+  background: color-mix(in srgb, var(--theme-header-bg) 92%, var(--theme-bg-elevated)) !important;
+}
+
+.tabulator .tabulator-row.tabulator-group .tabulator-group-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--theme-font-family) !important;
+  font-size: var(--theme-group-label-font-size) !important;
+  font-weight: var(--theme-group-label-font-weight) !important;
+  color: var(--theme-header-text) !important;
+  letter-spacing: 0.3px;
+  line-height: 1.2;
+}
+
+.tabulator .tabulator-row.tabulator-group .tabulator-arrow {
+  color: color-mix(in srgb, var(--theme-header-text) 86%, var(--theme-text-muted)) !important;
+  font-size: var(--theme-font-size-sm) !important;
 }
 
 /* Master Sailing hierarchy readability */
@@ -172,8 +190,8 @@
   padding-top: 3px !important;
   padding-bottom: 3px !important;
   border-right: 0 !important;
-  font-size: 12px !important;
-  font-weight: 600 !important;
+  font-size: var(--theme-group-label-font-size) !important;
+  font-weight: var(--theme-group-label-font-weight) !important;
 }
 
 .master-sailing-table .tabulator-row.tabulator-group .tabulator-group-header {
@@ -195,7 +213,7 @@
 
 .master-sailing-table .tabulator-row.tabulator-group .tabulator-arrow {
   color: rgba(222, 232, 248, 0.95) !important;
-  font-size: 11px !important;
+  font-size: var(--theme-font-size-sm) !important;
 }
 
 .master-sailing-table .tabulator-row:not(.tabulator-group) .tabulator-cell:first-child {
@@ -213,7 +231,7 @@
   border-radius: 999px;
   font-weight: 700;
   letter-spacing: 0.01em;
-  font-size: 11px;
+  font-size: var(--theme-group-label-font-size);
   line-height: 1.15;
 }
 
@@ -301,7 +319,7 @@
   border: 1px solid rgba(167, 179, 204, 0.55);
   background: #1b2034;
   color: #e6ebff;
-  font-size: 12px;
+  font-size: var(--theme-font-size-sm);
   cursor: pointer;
 }
 
@@ -353,7 +371,7 @@
   align-items: center;
   padding: 3px 9px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--theme-group-label-font-size);
   font-weight: 700;
   line-height: 1.15;
 }
@@ -413,7 +431,7 @@
   align-items: center;
   padding: 3px 9px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--theme-group-label-font-size);
   font-weight: 700;
   line-height: 1.15;
 }

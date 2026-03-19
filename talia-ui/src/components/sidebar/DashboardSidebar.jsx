@@ -9,8 +9,6 @@ function DashboardSidebar({
   isCollapsed,
   onToggle,
   onAddPanel,
-  globalFilters,
-  onGlobalFiltersChange,
   currentFocus,
   onFocusChange,
   userRole,
@@ -38,7 +36,6 @@ function DashboardSidebar({
   const [expandedSections, setExpandedSections] = React.useState({
     focus: true, // Only Focus Management open by default
     user: false,
-    criteria: false,
     reports: false,
     appearance: false,
     admin: false,
@@ -58,7 +55,6 @@ function DashboardSidebar({
       return {
         focus: false,
         user: false,
-        criteria: false,
         reports: false,
         appearance: false,
         admin: false,
@@ -76,7 +72,6 @@ function DashboardSidebar({
           </button>
         </div>
         <div className="dashboard-sidebar__nav">
-          <button className="dashboard-sidebar__nav-btn" title="Default Criteria">📊</button>
           <button className="dashboard-sidebar__nav-btn" title="Reports">📋</button>
           <button className="dashboard-sidebar__nav-btn" title="Appearance">🎨</button>
         </div>
@@ -118,47 +113,6 @@ function DashboardSidebar({
             {!focusLoading && !focusError && (
               <FocusSelector onFocusChange={onFocusChange} currentFocusId={currentFocus} onSaveCurrentLayout={onSaveCurrentLayout} />
             )}
-          </div>
-        </div>
-
-        <div className="dashboard-section">
-          <div className="dashboard-section__header" onClick={() => toggleSection('criteria')}>
-            <span className="dashboard-section__title">Default Criteria</span>
-            <span className={`dashboard-section__icon ${expandedSections.criteria ? 'dashboard-section__icon--expanded' : ''}`}>
-              ▶
-            </span>
-          </div>
-          <div className={`dashboard-section__content ${expandedSections.criteria ? 'dashboard-section__content--expanded' : ''}`}>
-            <div className="dashboard-form-group">
-              <label className="dashboard-form-label">Ship Filter:</label>
-              <select
-                className="dashboard-form-input"
-                value={globalFilters.ship || ''}
-                onChange={(event) => onGlobalFiltersChange({ ...globalFilters, ship: event.target.value })}
-              >
-                <option value="">All Ships</option>
-                <option value="Celestyal Discovery">Celestyal Discovery</option>
-                <option value="Celestyal Journey">Celestyal Journey</option>
-              </select>
-            </div>
-            <div className="dashboard-form-group">
-              <label className="dashboard-form-label">Date From:</label>
-              <input
-                type="date"
-                className="dashboard-form-input"
-                value={globalFilters.dateFrom || ''}
-                onChange={(event) => onGlobalFiltersChange({ ...globalFilters, dateFrom: event.target.value })}
-              />
-            </div>
-            <div className="dashboard-form-group">
-              <label className="dashboard-form-label">Date To:</label>
-              <input
-                type="date"
-                className="dashboard-form-input"
-                value={globalFilters.dateTo || ''}
-                onChange={(event) => onGlobalFiltersChange({ ...globalFilters, dateTo: event.target.value })}
-              />
-            </div>
           </div>
         </div>
 

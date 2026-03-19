@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
+import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 import PanelDataState from '../../shared/PanelDataState';
 import ItineraryExtractPresenter from './ItineraryExtractPresenter';
+import { PORT_COORDINATES, resolvePortCoordinate } from '../../shared/maps/portCoordinates';
 import {
   extractSailCodeFromEvent,
   SAIL_CLEAR_EVENT,
@@ -9,78 +11,16 @@ import {
 } from '../../../lib/eventBus';
 
 const REFERENCE_SOURCE_URL = 'https://celestyal.com/gb/search';
-const PUBLIC_CATALOG_ENDPOINT = '/api/public-itinerary-catalog?limit=120';
-const PUBLIC_IMAGE_POOL_ENDPOINT = '/api/public-image-pool?limit=20';
 const DASHBOARD_VIEW_SCOPE_EVENT = 'talia:dashboard.viewScope';
 const DOT_SAIL_SELECT_EVENT = 'talia.sail.select';
 const DEFAULT_REFERENCE_IMAGE = null;
-
-const PORT_COORDINATES = {
-  // Common port codes from internal data
-  pir: { lat: 37.942, lon: 23.646, label: 'PIR' },
-  kus: { lat: 37.8619, lon: 27.2578, label: 'KUS' },
-  lav: { lat: 37.715, lon: 24.056, label: 'LAV' },
-  the: { lat: 37.4467, lon: 25.3289, label: 'THE' },
-  abd: { lat: 24.4539, lon: 54.3773, label: 'ABD' },
-  doh: { lat: 25.2854, lon: 51.531, label: 'DOH' },
-  shr: { lat: 27.9158, lon: 34.33, label: 'SHR' },
-  jed: { lat: 21.4858, lon: 39.1925, label: 'JED' },
-  saf: { lat: 26.7498, lon: 33.9389, label: 'SAF' },
-  mrm: { lat: 36.855, lon: 28.274, label: 'MRM' },
-  ani: { lat: 36.4709, lon: 25.3769, label: 'ANI' },
-  lms: { lat: 34.675, lon: 33.033, label: 'LMS' },
-  sga: { lat: 29.9668, lon: 32.5498, label: 'SGA' },
-  dub: { lat: 25.276987, lon: 55.296249, label: 'DUB' },
-  dxb: { lat: 25.2048, lon: 55.2708, label: 'DXB' },
-  her: { lat: 35.3387, lon: 25.1442, label: 'HER' },
-
-  athens: { lat: 37.9838, lon: 23.7275, label: 'Athens' },
-  piraeus: { lat: 37.942, lon: 23.646, label: 'Piraeus' },
-  mykonos: { lat: 37.4467, lon: 25.3289, label: 'Mykonos' },
-  kusadasi: { lat: 37.8619, lon: 27.2578, label: 'Kusadasi' },
-  patmos: { lat: 37.3084, lon: 26.5473, label: 'Patmos' },
-  thessaloniki: { lat: 40.6401, lon: 22.9444, label: 'Thessaloniki' },
-  crete: { lat: 35.3387, lon: 25.1442, label: 'Crete' },
-  santorini: { lat: 36.3932, lon: 25.4615, label: 'Santorini' },
-  milos: { lat: 36.6956, lon: 24.4823, label: 'Milos' },
-  kotor: { lat: 42.4247, lon: 18.7712, label: 'Kotor' },
-  split: { lat: 43.5081, lon: 16.4402, label: 'Split' },
-  venice: { lat: 45.4408, lon: 12.3155, label: 'Venice' },
-  katakolo: { lat: 37.6488, lon: 21.3185, label: 'Katakolo' },
-  kefalonia: { lat: 38.1754, lon: 20.5694, label: 'Kefalonia' },
-  rhodes: { lat: 36.4341, lon: 28.2176, label: 'Rhodes' },
-  portsaid: { lat: 31.2653, lon: 32.3019, label: 'Port Said' },
-  ashdod: { lat: 31.8014, lon: 34.6435, label: 'Ashdod' },
-  haifa: { lat: 32.794, lon: 34.9896, label: 'Haifa' },
-  limassol: { lat: 34.7071, lon: 33.0226, label: 'Limassol' },
-};
-
-const toPortKey = (value) => String(value || '')
-  .toLowerCase()
-  .replace(/\(.*?\)/g, '')
-  .replace(/[^a-z0-9]/g, '');
-
-const resolvePortCoordinate = (portName) => {
-  const key = toPortKey(portName);
-  if (PORT_COORDINATES[key]) return PORT_COORDINATES[key];
-
-  // Fallback aliases for common internal values.
-  const aliases = {
-    ath: 'athens',
-    piraeusport: 'piraeus',
-    kusadasiport: 'kusadasi',
-    thessalonikiport: 'thessaloniki',
-  };
-  const aliasKey = aliases[key];
-  return aliasKey ? PORT_COORDINATES[aliasKey] || null : null;
-};
 
 const buildRoutePoints = (row) => {
   const points = [row.departurePort, ...row.stops]
     .map((name) => {
       const resolved = resolvePortCoordinate(name);
       if (!resolved) return null;
-      return { ...resolved, name };
+      return { ...resolved, name: resolved.displayName || resolved.label || name };
     })
     .filter(Boolean);
   if (points.length > 0) return points;
@@ -325,11 +265,26 @@ const ItineraryExtractContainer = ({ panelInstanceId, panelComponentId }) => {
     let active = true;
     const loadPublicCatalog = async () => {
       try {
-        const response = await fetch(PUBLIC_CATALOG_ENDPOINT);
-        if (!response.ok) return;
-        const payload = await response.json();
+        const payload = await trackedFetchGraphql({
+          query: `
+            query GetPublicItineraryCatalog($limit: Int) {
+              publicItineraryCatalog(limit: $limit) {
+                url
+                title
+                description
+                image
+                durationNights
+                slug
+              }
+            }
+          `,
+          variables: { limit: 120 },
+          tableName: 'public_itinerary_catalog',
+          component: 'Itinerary Extract',
+          purpose: 'Fetch public itinerary catalog via talia graphql'
+        });
         if (!active) return;
-        const items = Array.isArray(payload?.items) ? payload.items : [];
+        const items = Array.isArray(payload?.publicItineraryCatalog) ? payload.publicItineraryCatalog : [];
         const normalized = items.map((entry) => ({
           url: String(entry?.url || '').trim(),
           title: String(entry?.title || '').trim(),
@@ -353,11 +308,24 @@ const ItineraryExtractContainer = ({ panelInstanceId, panelComponentId }) => {
     let active = true;
     const loadImagePool = async () => {
       try {
-        const response = await fetch(PUBLIC_IMAGE_POOL_ENDPOINT);
-        if (!response.ok) return;
-        const payload = await response.json();
+        const payload = await trackedFetchGraphql({
+          query: `
+            query GetPublicImagePool($limit: Int) {
+              publicImagePool(limit: $limit) {
+                sourcePage
+                sourceLabel
+                imageUrl
+                title
+              }
+            }
+          `,
+          variables: { limit: 20 },
+          tableName: 'public_image_pool',
+          component: 'Itinerary Extract',
+          purpose: 'Fetch public image pool via talia graphql'
+        });
         if (!active) return;
-        const items = Array.isArray(payload?.items) ? payload.items : [];
+        const items = Array.isArray(payload?.publicImagePool) ? payload.publicImagePool : [];
         const normalized = items
           .map((entry) => ({
             sourcePage: String(entry?.sourcePage || '').trim(),
@@ -384,6 +352,8 @@ const ItineraryExtractContainer = ({ panelInstanceId, panelComponentId }) => {
   } = useTableDataWithContext({
     tableName: 'inventory_item',
     eventName: null,
+    panelInstanceId,
+    panelComponentId,
     contextMapper: null,
     limit: 2500,
   });
@@ -396,6 +366,8 @@ const ItineraryExtractContainer = ({ panelInstanceId, panelComponentId }) => {
   } = useTableDataWithContext({
     tableName: 'master_sail',
     eventName: null,
+    panelInstanceId,
+    panelComponentId,
     contextMapper: null,
     limit: 5000,
   });

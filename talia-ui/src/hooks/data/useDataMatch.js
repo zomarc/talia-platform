@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { trackedFetchGraphql } from '../../services/data/trackedGraphql';
 
 const GRAPHQL_URL = '/api/graphql';
 
@@ -14,7 +15,6 @@ export const useDataMatch = (filters = {}) => {
   const fetchData = async () => {
     setLoading(true);
     setError(null);
-
     try {
       const query = `
         query GetDataMatch($filters: DataMatchFilters) {
@@ -37,24 +37,15 @@ export const useDataMatch = (filters = {}) => {
       const variables = {
         filters: Object.keys(filters).length > 0 ? filters : undefined
       };
-
-      const response = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, variables })
+      const payload = await trackedFetchGraphql({
+        url: GRAPHQL_URL,
+        query,
+        variables,
+        tableName: 'data_match',
+        component: 'Data Match',
+        purpose: 'Fetch data match from talia graphql'
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (result.errors) {
-        throw new Error(result.errors[0].message);
-      }
-
-      setData(result.data?.dataMatch || null);
+      setData(payload?.dataMatch || null);
     } catch (err) {
       console.error('[useDataMatch] Error:', err);
       setError(err);

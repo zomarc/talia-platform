@@ -124,6 +124,169 @@ const fetchPortNewsItems = async (port: string, limit = 5) => {
   }
 };
 
+const PUBLIC_ITINERARY_CATALOG_TTL_MS = 12 * 60 * 60 * 1000;
+let publicItineraryCatalogCache: {
+  expiresAt: number;
+  items: Array<{
+    url: string;
+    title: string;
+    description: string;
+    image: string;
+    durationNights: number | null;
+    slug: string;
+  }>;
+} | null = null;
+
+const getPublicMeta = (html: string, key: string, attr: 'property' | 'name') => {
+  const pattern = new RegExp(`<meta[^>]+${attr}=["']${key}["'][^>]+content=["']([^"']+)["']`, 'i');
+  const match = html.match(pattern);
+  return match?.[1]
+    ? match[1]
+      .replace(/&amp;/g, '&')
+      .replace(/&#x26;/gi, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, '\'')
+      .trim()
+    : '';
+};
+
+const getDurationNights = (value: string) => {
+  const match = value.match(/(\d{1,2})\s*night/i);
+  return match ? Number(match[1]) : null;
+};
+
+const getUrlSlug = (urlValue: string) => {
+  try {
+    const pathname = new URL(urlValue).pathname;
+    const parts = pathname.split('/').filter(Boolean);
+    return parts[parts.length - 1] || '';
+  } catch {
+    return '';
+  }
+};
+
+const normalizeImageUrl = (value: string) => {
+  const raw = (value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith('//')) return `https:${raw}`;
+  return '';
+};
+
+const isUsefulImage = (value: string) => {
+  const v = value.toLowerCase();
+  return v.includes('.jpg') || v.includes('.jpeg') || v.includes('.png') || v.includes('.webp');
+};
+
+const fetchPublicItineraryCatalog = async (limit = 120) => {
+  const now = Date.now();
+  if (publicItineraryCatalogCache && publicItineraryCatalogCache.expiresAt > now) {
+    return publicItineraryCatalogCache.items;
+  }
+
+  const maxPages = Math.max(10, Math.min(200, Number(limit || 120)));
+  const sitemapResponse = await fetch('https://celestyal.com/sitemap.xml', {
+    headers: { 'User-Agent': 'Talia-Public-Itinerary-Catalog/1.0' },
+  });
+  if (!sitemapResponse.ok) {
+    throw new Error(`Failed to fetch sitemap: ${sitemapResponse.status}`);
+  }
+
+  const sitemapXml = await sitemapResponse.text();
+  const locMatches = Array.from(sitemapXml.matchAll(/<loc>(.*?)<\/loc>/g)).map((match) => match[1]);
+  const itineraryUrls = Array.from(new Set(
+    locMatches
+      .map((urlValue) => (urlValue || '').trim())
+      .filter((urlValue) =>
+        /https:\/\/celestyal\.com\/gb\/our-cruises\/[^/?#]+$/i.test(urlValue)
+      )
+  )).slice(0, maxPages);
+
+  const items: Array<{
+    url: string;
+    title: string;
+    description: string;
+    image: string;
+    durationNights: number | null;
+    slug: string;
+  }> = [];
+
+  for (const urlValue of itineraryUrls) {
+    try {
+      const pageResponse = await fetch(urlValue, {
+        headers: { 'User-Agent': 'Talia-Public-Itinerary-Catalog/1.0' },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!pageResponse.ok) continue;
+      const pageHtml = await pageResponse.text();
+      const title = getPublicMeta(pageHtml, 'og:title', 'property');
+      const description = getPublicMeta(pageHtml, 'og:description', 'property')
+        || getPublicMeta(pageHtml, 'description', 'name');
+      const image = getPublicMeta(pageHtml, 'og:image', 'property')
+        || getPublicMeta(pageHtml, 'twitter:image', 'name');
+      if (!title || !image) continue;
+
+      items.push({
+        url: urlValue,
+        title,
+        description,
+        image,
+        durationNights: getDurationNights(title),
+        slug: getUrlSlug(urlValue),
+      });
+    } catch {
+      // skip pages that timeout/fail
+    }
+  }
+
+  publicItineraryCatalogCache = {
+    expiresAt: now + PUBLIC_ITINERARY_CATALOG_TTL_MS,
+    items,
+  };
+  return items;
+};
+
+const fetchPublicImagePool = async (limit = 20) => {
+  const maxPages = Math.max(3, Math.min(40, Number(limit || 20)));
+  const sources = [
+    { page: 'https://www.tui.co.uk/cruise/deals/next-summer', label: 'TUI Cruise Deals' },
+    { page: 'https://www.virginvoyages.com/cruise-deals', label: 'Virgin Voyages Deals' },
+    { page: 'https://www.royalcaribbean.com/gbr/en/cruise-deals', label: 'Royal Caribbean Deals' },
+    { page: 'https://www.celebritycruises.com/cruise-deals', label: 'Celebrity Cruises Deals' },
+  ];
+
+  const items: Array<{ sourcePage: string; sourceLabel: string; imageUrl: string; title: string }> = [];
+  for (const source of sources.slice(0, maxPages)) {
+    try {
+      const pageResponse = await fetch(source.page, {
+        headers: { 'User-Agent': 'Talia-Public-Image-Pool/1.0' },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!pageResponse.ok) continue;
+      const html = await pageResponse.text();
+
+      const ogImage = normalizeImageUrl(getPublicMeta(html, 'og:image', 'property'));
+      const twitterImage = normalizeImageUrl(getPublicMeta(html, 'twitter:image', 'name'));
+      const title = getPublicMeta(html, 'og:title', 'property') || source.label;
+      const candidates = Array.from(new Set([ogImage, twitterImage].filter(Boolean)));
+
+      candidates.forEach((imageUrl) => {
+        if (!isUsefulImage(imageUrl)) return;
+        items.push({
+          sourcePage: source.page,
+          sourceLabel: source.label,
+          imageUrl,
+          title,
+        });
+      });
+    } catch {
+      // best effort only
+    }
+  }
+
+  return Array.from(new Map(items.map((item) => [item.imageUrl, item])).values());
+};
+
 const weatherCodeLabel = (code: number | null | undefined) => {
   const weatherMap: Record<number, string> = {
     0: 'Clear',
@@ -707,6 +870,26 @@ export const resolvers = {
         return rows.map(mapDbInventoryMemoToGraphQL);
       } catch (error) {
         console.error('Error fetching inventory memos:', error);
+        return [];
+      }
+    },
+
+    publicItineraryCatalog: async (parent: any, args: any) => {
+      try {
+        const limit = Number.isFinite(Number(args?.limit)) ? Number(args.limit) : 120;
+        return await fetchPublicItineraryCatalog(limit);
+      } catch (error) {
+        console.error('Error fetching public itinerary catalog:', error);
+        return [];
+      }
+    },
+
+    publicImagePool: async (parent: any, args: any) => {
+      try {
+        const limit = Number.isFinite(Number(args?.limit)) ? Number(args.limit) : 20;
+        return await fetchPublicImagePool(limit);
+      } catch (error) {
+        console.error('Error fetching public image pool:', error);
         return [];
       }
     },
@@ -1706,6 +1889,10 @@ export const resolvers = {
     tableData: async (parent: any, args: any) => {
       const { tableName, limit = 100, filters } = args;
       try {
+        const includeNonRealSailings = filters?.include_non_real_sailings === true;
+        const baseLimit = Number.isFinite(Number(limit)) ? Number(limit) : 100;
+        const expandedLimit = includeNonRealSailings ? baseLimit : Math.min(Math.max(baseLimit * 3, baseLimit), 5000);
+
         // Fetch table data from Supabase via backend (for review functionality)
         let query = supabaseDataService.client
           .from(tableName)
@@ -1741,21 +1928,65 @@ export const resolvers = {
             query = query.eq('geog_area_code', filters.geog_area_code);
             console.log(`[tableData] Applied filter: geog_area_code = ${filters.geog_area_code}`);
           }
+          // Apply non-real sailing exclusion directly for master_sail at query level.
+          if (!includeNonRealSailings && tableName === 'master_sail') {
+            query = query.neq('is_active', 'N').neq('is_fake', 'Y');
+            console.log('[tableData] Applied default real-sailing filter for master_sail (exclude is_active=N, is_fake=Y)');
+          }
         }
         
-        query = query.limit(limit);
+        query = query.limit(expandedLimit);
         
-        const { data, error } = await query;
+        let { data, error } = await query;
         
         if (error) {
           console.error(`Error fetching table data for ${tableName}:`, error);
           throw new Error(`Failed to fetch data from ${tableName}: ${error.message}`);
         }
+
+        // For non-master tables, enforce the same real-sailing rule by referencing master_sail.
+        if (!includeNonRealSailings && tableName !== 'master_sail' && Array.isArray(data) && data.length > 0) {
+          const rowSailCodes = Array.from(
+            new Set(
+              data
+                .map((row: any) => row?.sail_code)
+                .filter((value: any) => typeof value === 'string' && value.trim().length > 0)
+            )
+          );
+
+          if (rowSailCodes.length > 0) {
+            const { data: nonRealRows, error: nonRealError } = await supabaseDataService.client
+              .from('master_sail')
+              .select('sail_code')
+              .in('sail_code', rowSailCodes)
+              .or('is_active.eq.N,is_fake.eq.Y');
+
+            if (nonRealError) {
+              console.warn(`[tableData] Could not resolve non-real sailings from master_sail for ${tableName}:`, nonRealError.message);
+            } else {
+              const excludedSailCodes = new Set(
+                (nonRealRows || [])
+                  .map((row: any) => row?.sail_code)
+                  .filter((value: any) => typeof value === 'string' && value.length > 0)
+              );
+
+              if (excludedSailCodes.size > 0) {
+                data = data.filter((row: any) => {
+                  const sailCode = row?.sail_code;
+                  if (typeof sailCode !== 'string' || sailCode.length === 0) return true;
+                  return !excludedSailCodes.has(sailCode);
+                });
+                console.log(`[tableData] Excluded ${excludedSailCodes.size} non-real sail_code values via master_sail reference for ${tableName}`);
+              }
+            }
+          }
+        }
         
-        console.log(`[tableData] Fetched ${data?.length || 0} records from ${tableName}${filters ? ' with filters' : ''}`);
+        const limitedData = Array.isArray(data) ? data.slice(0, baseLimit) : [];
+        console.log(`[tableData] Fetched ${limitedData.length} records from ${tableName}${filters ? ' with filters' : ''}`);
         
         // Return data as JSON array (GraphQL JSON scalar)
-        return data || [];
+        return limitedData;
       } catch (error: any) {
         console.error(`Error in tableData resolver for ${tableName}:`, error);
         throw error;

@@ -156,7 +156,7 @@ function ThemeProvider({ children }) {
       const saved = localStorage.getItem("taliaLayout");
       if (saved) {
         const parsed = JSON.parse(saved);
-        return parsed.fontSettings?.fontSize || 12;
+        return parsed.fontSettings?.fontSize ?? 10;
       }
     } catch (e) {
       console.warn('Failed to load fontSize from localStorage:', e);
@@ -1600,7 +1600,7 @@ function App() {
   const appShellRef = useRef(null);
 
   // Sidebar state
-  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(true);
   const [sidebarWidth, setSidebarWidth] = React.useState(280);
   const [isResizing, setIsResizing] = React.useState(false);
   const [globalFilters, setGlobalFilters] = React.useState({
@@ -1775,7 +1775,7 @@ function App() {
           
           // Restore sidebar state
           if (parsed.sidebar) {
-            setSidebarCollapsed(parsed.sidebar.collapsed || false);
+            setSidebarCollapsed(parsed.sidebar.collapsed ?? true);
             setSidebarWidth(parsed.sidebar.width || 280);
             console.log('Sidebar state restored:', parsed.sidebar);
           }
@@ -1789,7 +1789,7 @@ function App() {
           // Restore font settings
           if (parsed.fontSettings) {
             setCurrentTheme(parsed.fontSettings.theme || 'default');
-            setFontSize(parsed.fontSettings.fontSize || 12);
+            setFontSize(parsed.fontSettings.fontSize ?? 10);
             setFontFamily(parsed.fontSettings.fontFamily || 'Inter');
             setSpacingMode(parsed.fontSettings.spacingMode || 'default');
             console.log('Font settings restored:', parsed.fontSettings);
@@ -2003,14 +2003,14 @@ function App() {
           // Restore font settings FIRST to prevent component recreation
           if (parsed.fontSettings) {
             setCurrentTheme(parsed.fontSettings.theme || 'default');
-            setFontSize(parsed.fontSettings.fontSize || 12);
+            setFontSize(parsed.fontSettings.fontSize ?? 10);
             setFontFamily(parsed.fontSettings.fontFamily || 'Inter');
             setSpacingMode(parsed.fontSettings.spacingMode || 'default');
           }
           
           // Restore sidebar state
           if (parsed.sidebar) {
-            setSidebarCollapsed(parsed.sidebar.collapsed || false);
+            setSidebarCollapsed(parsed.sidebar.collapsed ?? true);
             setSidebarWidth(parsed.sidebar.width || 280);
           }
           

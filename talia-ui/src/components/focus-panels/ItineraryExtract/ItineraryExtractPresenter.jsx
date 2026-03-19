@@ -1,18 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet';
-
-const DASHBOARD_DETAILS_VISIBILITY_EVENT = 'talia:dashboard.detailsVisibility';
-
-const getDetailsStoreValue = ({ panelInstanceId, panelComponentId, fallback = true }) => {
-  const store = window.__taliaPanelDetailsVisibility || {};
-  if (panelInstanceId && Object.prototype.hasOwnProperty.call(store, panelInstanceId)) {
-    return store[panelInstanceId] !== false;
-  }
-  if (panelComponentId && Object.prototype.hasOwnProperty.call(store, panelComponentId)) {
-    return store[panelComponentId] !== false;
-  }
-  return fallback;
-};
+import {
+  LEAFLET_ENGLISH_TILE_ATTRIBUTION,
+  LEAFLET_ENGLISH_TILE_URL,
+  LeafletResizeObserver,
+} from '../../shared/maps/LeafletMapDefaults';
+import SubpanelExpandButton from '../../shared/SubpanelExpandButton';
+import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
 
 const formatDate = (value) => {
   if (!value) return 'N/A';
@@ -49,28 +44,13 @@ const ItineraryExtractPresenter = ({
   panelInstanceId,
   panelComponentId,
 }) => {
+  const { expandedKey, toggleExpandedKey } = useSubpanelExpansion(null);
   const [selectedId, setSelectedId] = useState(data?.[0]?.id || null);
   const [failedImageIds, setFailedImageIds] = useState(() => new Set());
-  const [detailsVisible, setDetailsVisible] = useState(() => getDetailsStoreValue({
+  const [detailsVisible] = usePanelDetailsVisibility({
     panelInstanceId,
     panelComponentId: panelComponentId || 'itinerary-extract',
-  }));
-
-  useEffect(() => {
-    const handleDetailsVisibility = (event) => {
-      const detail = event?.detail || {};
-      const targetPanelInstance = detail.panelId;
-      const targetPanelComponent = detail.panelComponent;
-      const thisComponent = panelComponentId || 'itinerary-extract';
-      const targetsThisPanel = targetPanelInstance
-        ? (targetPanelInstance === panelInstanceId || targetPanelComponent === thisComponent)
-        : targetPanelComponent === thisComponent;
-      if (!targetsThisPanel) return;
-      setDetailsVisible(detail.visible !== false);
-    };
-    window.addEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibility);
-    return () => window.removeEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibility);
-  }, [panelComponentId, panelInstanceId]);
+  });
 
   useEffect(() => {
     if (!data || data.length === 0) return;
@@ -98,6 +78,7 @@ const ItineraryExtractPresenter = ({
 
   const selectedPoints = selectedItinerary?.routePoints || [];
   const polylinePoints = selectedPoints.map((point) => [point.lat, point.lon]);
+  const isSectionVisible = (sectionKey) => !expandedKey || expandedKey === sectionKey;
 
   return (
     <div className="talia-report" role="region" aria-label="Itinerary extract">
@@ -143,8 +124,19 @@ const ItineraryExtractPresenter = ({
       </div>
 
       <main className="talia-report__content">
-        <div className="itinerary-extract__layout">
-          <div className="talia-list itinerary-extract__list" role="list">
+        <div className={`itinerary-extract__layout ${expandedKey ? 'itinerary-extract__layout--focused' : ''}`}>
+          {isSectionVisible('list') && (
+          <section className={`itinerary-extract__list-panel talia-card--expandable ${expandedKey === 'list' ? 'talia-card--expanded' : ''}`}>
+            <SubpanelExpandButton
+              className="talia-card__expand-toggle"
+              expanded={expandedKey === 'list'}
+              onToggle={() => toggleExpandedKey('list')}
+              label="itinerary list"
+            />
+            <div className="itinerary-extract__panel-header">
+              <h3 className="itinerary-extract__panel-title">Itineraries</h3>
+            </div>
+            <div className="talia-list itinerary-extract__list" role="list">
           {data.map((item) => (
             <article
               className={`talia-card talia-list__item itinerary-extract__item ${item.id === selectedItinerary?.id ? 'itinerary-extract__item--active' : ''}`}
@@ -205,10 +197,21 @@ const ItineraryExtractPresenter = ({
               )}
             </article>
           ))}
-          </div>
+            </div>
+          </section>
+          )}
 
-          {detailsVisible && (
-            <section className="itinerary-extract__map-card" aria-label="Itinerary route map">
+          {isSectionVisible('map') && (
+          <section
+            className={`itinerary-extract__map-card talia-card--expandable ${expandedKey === 'map' ? 'talia-card--expanded' : ''}`}
+            aria-label="Itinerary route map"
+          >
+            <SubpanelExpandButton
+              className="talia-card__expand-toggle"
+              expanded={expandedKey === 'map'}
+              onToggle={() => toggleExpandedKey('map')}
+              label="itinerary map"
+            />
             <div className="itinerary-extract__map-header">
               <h3 className="itinerary-extract__map-title">
                 {selectedItinerary ? `${selectedItinerary.ship} - ${selectedItinerary.itineraryName}` : 'Route map'}
@@ -224,9 +227,10 @@ const ItineraryExtractPresenter = ({
             </div>
             <div className="itinerary-extract__map-wrap">
               <MapContainer center={[37.9838, 23.7275]} zoom={4} className="itinerary-extract__leaflet" zoomControl>
+                <LeafletResizeObserver />
                 <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution={LEAFLET_ENGLISH_TILE_ATTRIBUTION}
+                  url={LEAFLET_ENGLISH_TILE_URL}
                 />
                 <MapFitBounds points={selectedPoints} />
                 {polylinePoints.length > 1 && (
@@ -255,15 +259,11 @@ const ItineraryExtractPresenter = ({
                 ))}
               </MapContainer>
             </div>
-            </section>
+          </section>
           )}
         </div>
       </main>
 
-      <footer className="talia-report__footer">
-        <span>{`${data.length} mapped itineraries`}</span>
-        <span>Primary data: inventory_item/master_sail | External links: Celestyal public pages</span>
-      </footer>
     </div>
   );
 };

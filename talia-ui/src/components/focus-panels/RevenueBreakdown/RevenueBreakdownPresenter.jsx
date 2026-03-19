@@ -71,10 +71,6 @@ const RevenueBreakdownPresenter = ({ data }) => {
           <canvas ref={canvasRef} className="talia-chart__canvas" />
         </div>
       </main>
-      <footer className="talia-report__footer">
-        <span>Total revenue</span>
-        <span>€{totalRevenue.toLocaleString()}</span>
-      </footer>
     </div>
   );
 };

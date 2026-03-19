@@ -2,30 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import PanelDataState from '../../shared/PanelDataState';
 import ShipTrackerMapPresenter from './ShipTrackerMapPresenter';
-
-const DEFAULT_PORT_COORDINATES = {
-  piraeus: { lat: 37.942, lon: 23.646, label: 'Piraeus' },
-  athens: { lat: 37.9838, lon: 23.7275, label: 'Athens' },
-  santorini: { lat: 36.3932, lon: 25.4615, label: 'Santorini' },
-  mykonos: { lat: 37.4467, lon: 25.3289, label: 'Mykonos' },
-  kusadasi: { lat: 37.8619, lon: 27.2578, label: 'Kusadasi' },
-  patmos: { lat: 37.3084, lon: 26.5473, label: 'Patmos' },
-  rhodes: { lat: 36.4341, lon: 28.2176, label: 'Rhodes' },
-  heraklion: { lat: 35.3387, lon: 25.1442, label: 'Heraklion' },
-  thessaloniki: { lat: 40.6401, lon: 22.9444, label: 'Thessaloniki' },
-  izmir: { lat: 38.4237, lon: 27.1428, label: 'Izmir' },
-  istanbul: { lat: 41.0082, lon: 28.9784, label: 'Istanbul' },
-  limassol: { lat: 34.7071, lon: 33.0226, label: 'Limassol' },
-  alexandria: { lat: 31.2001, lon: 29.9187, label: 'Alexandria' },
-  // Common 3-letter itinerary codes seen in sail data
-  dub: { lat: 25.2048, lon: 55.2708, label: 'Dubai' },
-  abd: { lat: 24.4539, lon: 54.3773, label: 'Abu Dhabi' },
-  doh: { lat: 25.2854, lon: 51.531, label: 'Doha' }
-};
+import { PORT_COORDINATES, resolvePortCoordinate } from '../../shared/maps/portCoordinates';
 
 const SHIP_HOME_PORT = {
-  DIS: DEFAULT_PORT_COORDINATES.piraeus,
-  JRN: DEFAULT_PORT_COORDINATES.piraeus
+  DIS: PORT_COORDINATES.piraeus,
+  JRN: PORT_COORDINATES.piraeus
 };
 
 const PREFERRED_SHIP_ORDER = ['DIS', 'JRN'];
@@ -75,22 +56,8 @@ const toDateOnly = (value) => {
   return date.toISOString().slice(0, 10);
 };
 
-const toLookupTokens = (value) => {
-  const normalized = normalizeText(value);
-  if (!normalized) return [];
-  const collapsed = normalized.replace(/\s+/g, ' ');
-  const compact = collapsed.replace(/[^a-z0-9]/g, '');
-  return compact ? [collapsed, compact] : [collapsed];
-};
-
 const resolvePortCoordinates = (portValue) => {
-  const tokens = toLookupTokens(portValue);
-  for (const token of tokens) {
-    if (DEFAULT_PORT_COORDINATES[token]) {
-      return DEFAULT_PORT_COORDINATES[token];
-    }
-  }
-  return null;
+  return resolvePortCoordinate(portValue);
 };
 
 const shipKeyForRow = (row) => {
@@ -512,7 +479,7 @@ const computeShipSummaries = (masterSailRows, occupancyRows, inventoryItems = []
             label: catalogShip?.home_port_label || `${catalogShip?.ship_name || shipCode} (catalog)`
           }
         : null;
-    const fallbackPort = catalogHome || SHIP_HOME_PORT[shipCode] || DEFAULT_PORT_COORDINATES.piraeus;
+    const fallbackPort = catalogHome || SHIP_HOME_PORT[shipCode] || PORT_COORDINATES.piraeus;
     const scheduleLocation = activeRoute
       ? interpolatePoint(activeRoute.fromCoord || fallbackPort, activeRoute.toCoord || fallbackPort, activeRoute.startDate, activeRoute.endDate, now)
       : nextRoute?.fromCoord || previousRoute?.toCoord || fallbackPort;
@@ -558,10 +525,12 @@ const computeShipSummaries = (masterSailRows, occupancyRows, inventoryItems = []
   });
 };
 
-const ShipTrackerMapContainer = () => {
+const ShipTrackerMapContainer = ({ panelInstanceId, panelComponentId }) => {
   const { data: sailings, loading: sailingsLoading, error: sailingsError, refetch: refetchSailings } = useTableDataWithContext({
     tableName: 'master_sail',
     eventName: null,
+    panelInstanceId,
+    panelComponentId,
     contextMapper: () => null,
     limit: 5000
   });
@@ -569,6 +538,8 @@ const ShipTrackerMapContainer = () => {
   const { data: occupancyRows, loading: occupancyLoading, error: occupancyError, refetch: refetchOccupancy } = useTableDataWithContext({
     tableName: 'sail_by_cabin_occupancy',
     eventName: null,
+    panelInstanceId,
+    panelComponentId,
     contextMapper: () => null,
     limit: 12000
   });
@@ -581,6 +552,8 @@ const ShipTrackerMapContainer = () => {
   } = useTableDataWithContext({
     tableName: 'inventory_item',
     eventName: null,
+    panelInstanceId,
+    panelComponentId,
     contextMapper: () => null,
     limit: 12000
   });
@@ -593,6 +566,8 @@ const ShipTrackerMapContainer = () => {
   } = useTableDataWithContext({
     tableName: 'ship_tracking_target',
     eventName: null,
+    panelInstanceId,
+    panelComponentId,
     contextMapper: () => null,
     limit: 500
   });

@@ -6,10 +6,12 @@ import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 import { extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
-const SailingByCabinCategory = () => {
+const SailingByCabinCategory = ({ panelInstanceId, panelComponentId }) => {
   const { data, loading, error, context } = useTableDataWithContext({
     tableName: 'sail_by_cabin_occupancy',
     eventName: SAIL_SELECT_EVENT,
+    panelInstanceId,
+    panelComponentId,
     contextMapper: (detail) => {
       const sailCode = extractSailCodeFromEvent(detail);
       return sailCode ? { sail_code: sailCode } : null;

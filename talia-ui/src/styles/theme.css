@@ -20,15 +20,26 @@
      ============================================================================ */
   
   /* Background colors */
-  --theme-bg: linear-gradient(135deg, #0a0a1a 0%, #151528 50%, #1a1a2e 100%);
-  --theme-bg-solid: #151528;
-  --theme-bg-elevated: #1a1a2e;
-  --theme-panel-bg: #20203b;
+  --theme-bg: linear-gradient(135deg, #111325 0%, #1a1d33 50%, #20243b 100%);
+  --theme-bg-solid: #1a1d33;
+  --theme-bg-elevated: #20243b;
+  --theme-panel-bg: #252a44;
   
   /* Foreground/text colors */
-  --theme-fg: #d9e2ef;
-  --theme-text-secondary: rgba(217, 226, 239, 0.84);
-  --theme-text-muted: rgba(217, 226, 239, 0.66);
+  --theme-fg: #bcc9db;
+  --theme-text-secondary: rgba(188, 201, 219, 0.78);
+  --theme-text-muted: rgba(188, 201, 219, 0.6);
+
+  /* Shared header semantics (panel headers + grouped labels) */
+  --theme-header-bg: var(--theme-glass);
+  --theme-header-border: var(--theme-border-light);
+  --theme-header-text: color-mix(in srgb, var(--theme-fg) 92%, var(--theme-text-secondary));
+  --theme-header-font-size: var(--theme-font-size-lg);
+  --theme-header-font-weight: 600;
+  --theme-tab-header-font-size: clamp(8px, calc(var(--theme-font-size) + 0px), 12px);
+  --theme-tab-header-font-weight: 700;
+  --theme-group-label-font-size: var(--theme-header-font-size);
+  --theme-group-label-font-weight: var(--theme-header-font-weight);
   
   /* Accent color (blue) */
   --theme-accent: #5b9bd5;
@@ -93,20 +104,20 @@
      ============================================================================ */
   
   /* Font families */
-  --theme-font-family: "IBM Plex Sans", "Source Sans 3", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --theme-font-family: Inter, "Source Sans 3", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --theme-font-family-monospace: "JetBrains Mono", "SF Mono", "Monaco", "Consolas", monospace;
   
   /* Base font sizes - compact and readable */
-  --theme-font-size: 12px;
-  --theme-font-size-sm: 11px;
-  --theme-font-size-xs: 10px;
-  --theme-font-size-lg: 13px;
-  --theme-font-size-xl: 14px;
+  --theme-font-size: 10px;
+  --theme-font-size-sm: 9px;
+  --theme-font-size-xs: 8px;
+  --theme-font-size-lg: 11px;
+  --theme-font-size-xl: 12px;
   
   /* Table-specific typography - optimized for data density */
-  --theme-table-font-size: 11px;
+  --theme-table-font-size: 10px;
   --theme-table-font-family: var(--theme-font-family);
-  --theme-table-header-font-size: 11px;
+  --theme-table-header-font-size: 10px;
   --theme-table-header-font-weight: 600;
   
   /* ============================================================================
@@ -162,6 +173,12 @@
 /* ============================================================================
    Base Element Styles
    ============================================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
 html {
   font-size: var(--theme-font-size);

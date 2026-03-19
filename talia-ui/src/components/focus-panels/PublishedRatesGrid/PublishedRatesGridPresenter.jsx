@@ -4,22 +4,13 @@
  */
 
 import React from 'react';
+import SubpanelExpandButton from '../../shared/SubpanelExpandButton';
+import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
 
 const ALL_PROMOS = 'All Promos';
 const ALL_RATE_TYPES = 'All Rate Types';
 const ALL_CURRENCIES = 'All Currencies';
-const DASHBOARD_DETAILS_VISIBILITY_EVENT = 'talia:dashboard.detailsVisibility';
-
-const getDetailsStoreValue = ({ panelInstanceId, panelComponentId, fallback = true }) => {
-  const store = window.__taliaPanelDetailsVisibility || {};
-  if (panelInstanceId && Object.prototype.hasOwnProperty.call(store, panelInstanceId)) {
-    return store[panelInstanceId] !== false;
-  }
-  if (panelComponentId && Object.prototype.hasOwnProperty.call(store, panelComponentId)) {
-    return store[panelComponentId] !== false;
-  }
-  return fallback;
-};
 
 const formatDateLabel = (value) => {
   if (!value) return 'N/A';
@@ -57,32 +48,19 @@ const PublishedRatesGridPresenter = ({
   panelInstanceId,
   panelComponentId,
 }) => {
+  const { expandedKey, toggleExpandedKey } = useSubpanelExpansion(null);
   const [selectedPromo, setSelectedPromo] = React.useState(ALL_PROMOS);
   const [selectedRateType, setSelectedRateType] = React.useState(ALL_RATE_TYPES);
   const [selectedCurrency, setSelectedCurrency] = React.useState(ALL_CURRENCIES);
-  const [showDetails, setShowDetails] = React.useState(() => getDetailsStoreValue({
+  const [showDetails, setShowDetails] = usePanelDetailsVisibility({
     panelInstanceId,
     panelComponentId: panelComponentId || 'published-rates-grid',
-  }));
+  });
   const [selectedCabin, setSelectedCabin] = React.useState(null);
 
   React.useEffect(() => {
-    const handleDetailsVisibility = (event) => {
-      const detail = event?.detail || {};
-      const targetPanelInstance = detail.panelId;
-      const targetPanelComponent = detail.panelComponent;
-      const thisComponent = panelComponentId || 'published-rates-grid';
-      const targetsThisPanel = targetPanelInstance
-        ? (targetPanelInstance === panelInstanceId || targetPanelComponent === thisComponent)
-        : targetPanelComponent === thisComponent;
-      if (!targetsThisPanel) return;
-      const nextVisible = detail.visible !== false;
-      setShowDetails(nextVisible);
-      if (!nextVisible) setSelectedCabin(null);
-    };
-    window.addEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibility);
-    return () => window.removeEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibility);
-  }, [panelComponentId, panelInstanceId]);
+    if (!showDetails) setSelectedCabin(null);
+  }, [showDetails]);
 
   const promoOptions = React.useMemo(() => {
     const promos = new Set();
@@ -311,9 +289,10 @@ const PublishedRatesGridPresenter = ({
         return bTime - aTime;
       });
   }, [filteredData, selectedCabin]);
+  const isSectionVisible = (sectionKey) => !expandedKey || expandedKey === sectionKey;
 
   return (
-    <div className="published-rates-grid">
+    <div className={`published-rates-grid ${expandedKey ? 'published-rates-grid--focused' : ''}`}>
       <header className="published-rates-grid__header">
         <div>
           <h2 className="published-rates-grid__title">Published Rates Grid</h2>
@@ -400,7 +379,14 @@ const PublishedRatesGridPresenter = ({
         </section>
       )}
 
-      <section className="published-rates-grid__current">
+      {isSectionVisible('latest-prices') && (
+      <section className={`published-rates-grid__current talia-card--expandable ${expandedKey === 'latest-prices' ? 'talia-card--expanded' : ''}`}>
+        <SubpanelExpandButton
+          className="talia-card__expand-toggle"
+          expanded={expandedKey === 'latest-prices'}
+          onToggle={() => toggleExpandedKey('latest-prices')}
+          label="latest prices"
+        />
         <div className="published-rates-grid__section-header">
           <div>
             <h3 className="published-rates-grid__section-title">Latest Prices</h3>
@@ -450,9 +436,16 @@ const PublishedRatesGridPresenter = ({
           })}
         </div>
       </section>
+      )}
 
-      {showDetails && selectedCabin && (
-        <section className="published-rates-grid__details-panel">
+      {showDetails && selectedCabin && isSectionVisible('cabin-details') && (
+        <section className={`published-rates-grid__details-panel talia-card--expandable ${expandedKey === 'cabin-details' ? 'talia-card--expanded' : ''}`}>
+          <SubpanelExpandButton
+            className="talia-card__expand-toggle"
+            expanded={expandedKey === 'cabin-details'}
+            onToggle={() => toggleExpandedKey('cabin-details')}
+            label="cabin details"
+          />
           <div className="published-rates-grid__details-header">
             <div>
               <h3 className="published-rates-grid__details-title">
@@ -503,8 +496,14 @@ const PublishedRatesGridPresenter = ({
         </section>
       )}
 
-      {showDetails && (
-        <section className="published-rates-grid__history">
+      {showDetails && isSectionVisible('price-history') && (
+        <section className={`published-rates-grid__history talia-card--expandable ${expandedKey === 'price-history' ? 'talia-card--expanded' : ''}`}>
+          <SubpanelExpandButton
+            className="talia-card__expand-toggle"
+            expanded={expandedKey === 'price-history'}
+            onToggle={() => toggleExpandedKey('price-history')}
+            label="price history"
+          />
           <div className="published-rates-grid__section-header">
             <div>
               <h3 className="published-rates-grid__section-title">Price History</h3>

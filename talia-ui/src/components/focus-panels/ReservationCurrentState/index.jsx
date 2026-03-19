@@ -11,7 +11,7 @@ import PanelDataState from '../../shared/PanelDataState';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
-const ReservationCurrentStateContainer = () => {
+const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId }) => {
   const { theme } = useTheme();
   
   console.log('[ReservationCurrentStateContainer] Component rendering');
@@ -20,6 +20,8 @@ const ReservationCurrentStateContainer = () => {
   const { data, loading, error, refetch, context } = useTableDataWithContext({
     tableName: 'reservation_current_state',
     eventName: SAIL_SELECT_EVENT,
+    panelInstanceId,
+    panelComponentId,
     contextMapper: (detail) => {
       const sailCode = extractSailCodeFromEvent(detail);
       console.log('[ReservationCurrentStateContainer] Mapped context to filters:', { sail_code: sailCode });

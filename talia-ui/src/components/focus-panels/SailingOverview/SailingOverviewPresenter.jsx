@@ -1,23 +1,46 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
+import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet';
 import LoadingSpinner from '../../shared/LoadingSpinner';
-
-const pickFirst = (...values) => values.find((value) => value !== null && value !== undefined && value !== '');
-
-const getFieldValue = (record, key) => {
-  if (!record) return null;
-  if (record[key] !== undefined && record[key] !== null && record[key] !== '') return record[key];
-  const upperKey = key.toUpperCase();
-  if (record[upperKey] !== undefined && record[upperKey] !== null && record[upperKey] !== '') return record[upperKey];
-  const camelKey = key.replace(/_([a-z])/g, (_, char) => char.toUpperCase());
-  if (record[camelKey] !== undefined && record[camelKey] !== null && record[camelKey] !== '') return record[camelKey];
-  return null;
-};
+import SubpanelExpandButton from '../../shared/SubpanelExpandButton';
+import { getFieldValue, pickFirst } from '../../shared/utils/dataAccess';
+import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
+import {
+  LEAFLET_ENGLISH_TILE_ATTRIBUTION,
+  LEAFLET_ENGLISH_TILE_URL,
+  LeafletResizeObserver,
+} from '../../shared/maps/LeafletMapDefaults';
+import { PORT_COORDINATES, resolvePortCoordinate } from '../../shared/maps/portCoordinates';
 
 const formatDate = (value) => {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleDateString();
+};
+
+const parseStops = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  return String(value)
+    .split(/[>,|/;,]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
+const MapFitBounds = ({ points }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || !Array.isArray(points) || points.length === 0) return;
+    const bounds = points.map((point) => [point.lat, point.lon]);
+    if (bounds.length === 1) {
+      map.setView(bounds[0], 5, { animate: false });
+      return;
+    }
+    map.fitBounds(bounds, { padding: [24, 24], maxZoom: 6, animate: false });
+  }, [map, points]);
+
+  return null;
 };
 
 const formatDateRange = (startDateValue, sailDays) => {
@@ -118,6 +141,7 @@ const extractCompetitorInfo = (sailing) => {
 };
 
 const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
+  const { expandedKey, toggleExpandedKey } = useSubpanelExpansion(null);
   const sailCode = pickFirst(
     getFieldValue(sailing, 'sail_code'),
     getFieldValue(eventDetail, 'sail_code')
@@ -146,6 +170,26 @@ const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
 
   const fallbackPrice = useMemo(() => extractSailingPrice(sailing), [sailing]);
   const competitorInfo = useMemo(() => extractCompetitorInfo(sailing), [sailing]);
+  const stopCandidates = parseStops(
+    pickFirst(
+      getFieldValue(sailing, 'itinerary_stops'),
+      getFieldValue(sailing, 'stops'),
+      getFieldValue(sailing, 'ports')
+    )
+  );
+  const routePoints = useMemo(() => {
+    const candidateNames = [portFrom, ...stopCandidates, portTo].filter(Boolean);
+    const points = candidateNames
+      .map((name) => {
+        const resolved = resolvePortCoordinate(name);
+        if (!resolved) return null;
+        return { ...resolved, name: resolved.displayName || resolved.label };
+      })
+      .filter(Boolean);
+    if (points.length > 0) return points;
+    return [{ ...PORT_COORDINATES.athens, name: 'Athens' }];
+  }, [portFrom, portTo, stopCandidates]);
+  const polylinePoints = routePoints.map((point) => [point.lat, point.lon]);
 
   const resolvedPriceValue = priceInfo?.value ?? fallbackPrice.value;
   const resolvedPriceCurrency = priceInfo?.currency ?? fallbackPrice.currency;
@@ -154,6 +198,9 @@ const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
     : fallbackPrice.value
       ? fallbackPrice.source
       : null;
+  const priceRowsLabel = priceInfo?.rowsCount ? `${priceInfo.rowsCount} rates checked` : null;
+  const priceUpdatedLabel = priceInfo?.lookedUpAt ? formatDate(priceInfo.lookedUpAt) : null;
+  const isSectionVisible = (sectionKey) => !expandedKey || expandedKey === sectionKey;
 
   return (
     <div className="talia-report sailing-overview" role="region" aria-label="Sailing overview">
@@ -180,8 +227,15 @@ const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
             <p className="talia-empty__message">Select a sailing to see the overview panel.</p>
           </div>
         ) : (
-          <div className="talia-grid talia-grid--2">
-            <div className="talia-card">
+          <div className={`sailing-overview__layout ${expandedKey ? 'sailing-overview__layout--focused' : ''}`}>
+            {isSectionVisible('details') && (
+            <div className={`talia-card talia-card--expandable ${expandedKey === 'details' ? 'talia-card--expanded' : ''}`}>
+              <SubpanelExpandButton
+                className="talia-card__expand-toggle"
+                expanded={expandedKey === 'details'}
+                onToggle={() => toggleExpandedKey('details')}
+                label="sailing details"
+              />
               <div className="talia-card__header">
                 <h3 className="talia-card__title">Sailing Details</h3>
               </div>
@@ -197,8 +251,16 @@ const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
                 <span><strong>Related Sailing:</strong> {relatedSailing || 'Not available'}</span>
               </div>
             </div>
+            )}
 
-            <div className="talia-card">
+            {isSectionVisible('pricing') && (
+            <div className={`talia-card talia-card--expandable ${expandedKey === 'pricing' ? 'talia-card--expanded' : ''}`}>
+              <SubpanelExpandButton
+                className="talia-card__expand-toggle"
+                expanded={expandedKey === 'pricing'}
+                onToggle={() => toggleExpandedKey('pricing')}
+                label="pricing and competition"
+              />
               <div className="talia-card__header">
                 <h3 className="talia-card__title">Pricing and Competition</h3>
               </div>
@@ -213,6 +275,10 @@ const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
                   </span>
                   <span className="talia-metric__change">
                     {resolvedPriceSource ? `Source: ${resolvedPriceSource}` : 'Source: Not available'}
+                  </span>
+                  <span className="talia-metric__change">
+                    {priceRowsLabel || 'Rates checked: none'}
+                    {priceUpdatedLabel ? ` | Updated: ${priceUpdatedLabel}` : ''}
                   </span>
                 </div>
               )}
@@ -243,14 +309,58 @@ const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
                 </div>
               )}
             </div>
+            )}
+
+            {isSectionVisible('map') && (
+            <div className={`talia-card talia-card--expandable sailing-overview__map-card ${expandedKey === 'map' ? 'talia-card--expanded' : ''}`}>
+              <SubpanelExpandButton
+                className="talia-card__expand-toggle"
+                expanded={expandedKey === 'map'}
+                onToggle={() => toggleExpandedKey('map')}
+                label="itinerary map"
+              />
+              <div className="talia-card__header">
+                <h3 className="talia-card__title">Itinerary Map</h3>
+              </div>
+              <div className="sailing-overview__map-wrap">
+                <MapContainer center={[37.9838, 23.7275]} zoom={4} className="sailing-overview__leaflet" zoomControl>
+                  <LeafletResizeObserver />
+                  <TileLayer
+                    attribution={LEAFLET_ENGLISH_TILE_ATTRIBUTION}
+                    url={LEAFLET_ENGLISH_TILE_URL}
+                  />
+                  <MapFitBounds points={routePoints} />
+                  {polylinePoints.length > 1 && (
+                    <Polyline positions={polylinePoints} color="#4da3ff" weight={3} opacity={0.85} />
+                  )}
+                  {routePoints.map((point, index) => (
+                    <CircleMarker
+                      key={`${point.label}-${index}`}
+                      center={[point.lat, point.lon]}
+                      radius={index === 0 ? 7 : 6}
+                      pathOptions={{
+                        color: index === 0 ? '#4caf50' : '#9ec6ff',
+                        fillColor: index === 0 ? '#4caf50' : '#9ec6ff',
+                        fillOpacity: 0.9,
+                        weight: 1,
+                      }}
+                    >
+                      <Tooltip>{`${index + 1}. ${point.name}`}</Tooltip>
+                      <Popup>
+                        <div>
+                          <strong>{point.name}</strong>
+                        </div>
+                      </Popup>
+                    </CircleMarker>
+                  ))}
+                </MapContainer>
+              </div>
+            </div>
+            )}
           </div>
         )}
       </main>
 
-      <footer className="talia-report__footer">
-        <span>{sailCode ? `Sail ${sailCode}` : 'Waiting for selection'}</span>
-        <span>{lastUpdated ? `Updated ${lastUpdated}` : 'No event timestamp'}</span>
-      </footer>
     </div>
   );
 };

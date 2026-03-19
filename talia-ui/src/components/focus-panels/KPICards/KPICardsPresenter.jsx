@@ -39,10 +39,6 @@ const KPICardsPresenter = ({ data }) => {
           })}
         </div>
       </main>
-      <footer className="talia-report__footer">
-        <span>{data.length} metrics</span>
-        <span>Updated {new Date().toLocaleDateString()}</span>
-      </footer>
     </div>
   );
 };

@@ -79,7 +79,7 @@ const TemplatePresenter = ({ data, onRefresh, panelInstanceId, panelComponentId 
         instanceRef.current = new Tabulator(tableRef.current, {
           data: data,
           columns: columns,
-          layout: "fitColumns", // or "fitData" depending on your needs
+          layout: "fitDataFill",
           initialSort: [
             { column: "id", dir: "desc" } // TODO: Update to your primary sort column
           ],

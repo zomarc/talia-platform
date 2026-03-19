@@ -241,7 +241,7 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh, panelIn
         instanceRef.current = new Tabulator(tableRef.current, {
           data: transformedData,
           columns: columns,
-          layout: 'fitDataTable',
+          layout: 'fitDataFill',
           height: '100%',
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,

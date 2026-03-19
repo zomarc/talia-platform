@@ -720,7 +720,7 @@
    ============================================================================ */
 
 .talia-card {
-  background: var(--theme-panel-bg, var(--theme-bg-elevated));
+  background: var(--theme-card-bg);
   border: 1px solid var(--theme-border);
   border-radius: var(--theme-radius-md);
   padding: var(--theme-padding-md);
@@ -894,10 +894,7 @@
   overflow: auto;
 }
 
-.sailing-overview .talia-card {
-  background: var(--theme-bg-elevated);
-  border-color: var(--theme-border-strong);
-}
+/* Removed: .sailing-overview .talia-card override -- inherits from generic .talia-card */
 
 .sailing-overview__metric {
   margin-bottom: var(--theme-padding-sm);

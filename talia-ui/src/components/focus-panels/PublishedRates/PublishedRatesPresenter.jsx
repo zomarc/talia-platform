@@ -198,7 +198,7 @@ const PublishedRatesPresenter = ({ data, selectedSailCode }) => {
         instanceRef.current = new Tabulator(tableRef.current, {
           data: data,
           columns: columns,
-          layout: "fitColumns",
+          layout: "fitDataFill",
           initialSort: [
             { column: "SNAPSHOT_DATE", dir: "desc" },
             { column: "DEPARTURE_DATE", dir: "asc" }

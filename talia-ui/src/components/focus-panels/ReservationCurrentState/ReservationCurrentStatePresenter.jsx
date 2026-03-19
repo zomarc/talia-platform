@@ -169,7 +169,7 @@ const ReservationCurrentStatePresenter = ({ data, onRefresh }) => {
         instanceRef.current = new Tabulator(tableRef.current, {
           data: data,
           columns: columns,
-          layout: "fitData",
+          layout: "fitDataFill",
           initialSort: [
             { column: "sail_from_date", dir: "desc" }
           ],

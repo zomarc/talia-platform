@@ -34,7 +34,7 @@ export const getTabulatorOptions = (options = {}) => {
  * Default Tabulator options
  */
 export const DEFAULT_TABULATOR_OPTIONS = {
-  layout: 'fitColumns',
+  layout: 'fitDataFill',
   reactiveData: false,
   height: '100%',
   selectableRows: 1,

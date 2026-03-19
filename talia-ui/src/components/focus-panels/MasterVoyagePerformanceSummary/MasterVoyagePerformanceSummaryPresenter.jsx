@@ -664,7 +664,7 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, onRefresh, panelInstanc
         instanceRef.current = new Tabulator(tableRef.current, {
           data: data,
           columns: columns,
-          layout: "fitDataTable",
+          layout: "fitDataFill",
           initialSort: [
             { column: "accMonth", dir: "asc" },
             { column: "voyageCode", dir: "asc" }

@@ -155,7 +155,7 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
         instanceRef.current = new TabGlobal(tableRef.current, {
           data: combinedData || heatmapData,
           columns: columns,
-          layout: 'fitDataStretch',
+          layout: 'fitDataFill',
           reactiveData: false,
           height: '100%',
           headerFilterLiveFilter: true,

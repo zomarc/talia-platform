@@ -85,12 +85,15 @@
      Table/Data Grid Colors
      ============================================================================ */
   
-  /* Row colors */
+  /* Row colors (configurable via appearance panel) */
   --theme-table-row-even: transparent;
-  --theme-table-row-odd: rgba(255, 255, 255, 0.02);
-  --theme-table-row-hover: rgba(91, 155, 213, 0.25);
+  --theme-table-row-odd: rgba(255, 255, 255, 0.04);
+  --theme-table-row-hover: rgba(91, 155, 213, 0.18);
   --theme-table-row-selected: rgba(91, 155, 213, 0.35);
   --theme-table-row-selected-hover: rgba(91, 155, 213, 0.45);
+
+  /* Card/panel accent shading (linked to row intensity) */
+  --theme-card-bg: var(--theme-panel-bg, #252a44);
   
   /* Tabulator-specific */
   --theme-tabulator-header-bg: rgba(255, 255, 255, 0.12);
@@ -98,6 +101,14 @@
   --theme-tabulator-filter-bg: #10101f;
   --theme-tabulator-filter-border: rgba(255, 255, 255, 0.2);
   --theme-tabulator-sort-active: #7db3ea;
+
+  /* Group row colors (configurable via appearance panel) */
+  --theme-group-level-0-bg: rgba(56, 92, 148, 0.51);
+  --theme-group-level-0-border: rgba(138, 176, 230, 0.28);
+  --theme-group-level-0-text: rgba(225, 229, 235, 0.82);
+  --theme-group-level-1-bg: rgba(118, 140, 176, 0.42);
+  --theme-group-level-1-border: rgba(178, 198, 230, 0.24);
+  --theme-group-level-1-text: rgba(236, 242, 250, 0.96);
   
   /* ============================================================================
      Typography

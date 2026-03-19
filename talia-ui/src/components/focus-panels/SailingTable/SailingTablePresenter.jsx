@@ -74,7 +74,7 @@ const SailingTablePresenter = ({ data }) => {
 
   // Column definitions using Tabulator's native features
   // NOTE: Using valuesLookup:true lets Tabulator automatically generate filter options
-  // NOTE: Using Tabulator's layout:"fitData" handles all column sizing automatically!
+  // NOTE: Using Tabulator's layout:"fitDataFill" handles all column sizing automatically!
   const columns = [
     { 
       field: "sail_id", 
@@ -199,7 +199,7 @@ const SailingTablePresenter = ({ data }) => {
         instanceRef.current = new Tabulator(tableRef.current, {
           data: data,
           columns: columns,
-          layout: "fitData",
+          layout: "fitDataFill",
           initialSort: [
             { column: "sail_date_from", dir: "desc" }
           ],

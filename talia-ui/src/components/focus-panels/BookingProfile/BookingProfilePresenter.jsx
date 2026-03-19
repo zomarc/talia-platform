@@ -7,11 +7,13 @@ import React, { useRef, useEffect } from 'react';
 import { Chart, registerables } from 'chart.js';
 import BuildCurveChart from './BuildCurveChart';
 import { formatDayMon } from '../../../lib/dateFormat';
+import { useTheme } from '../../../contexts/ThemeContext';
 
 // Register Chart.js components
 Chart.register(...registerables);
 
 const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuildCurves = false }) => {
+  const { fontSize, fontFamily } = useTheme();
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
 
@@ -96,16 +98,10 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuil
         plugins: {
           legend: {
             position: 'top',
-            labels: {
-              color: theme?.colors?.foreground || '#2b2b2b',
-              usePointStyle: true
-            }
           },
           title: {
             display: true,
             text: `Booking Profile: ${sailCode}`,
-            color: theme?.colors?.foreground || '#2b2b2b',
-            font: { size: 16, weight: 'bold' }
           },
           tooltip: {
             mode: 'index',
@@ -114,11 +110,7 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuil
         },
         scales: {
           x: {
-            grid: {
-              color: theme?.colors?.border || 'rgba(0,0,0,0.1)'
-            },
             ticks: {
-              color: theme?.colors?.textSecondary || '#666',
               maxRotation: 45,
               minRotation: 45
             }
@@ -130,14 +122,7 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuil
             title: {
               display: true,
               text: 'Bookings',
-              color: theme?.colors?.textSecondary || '#666'
             },
-            grid: {
-              color: theme?.colors?.border || 'rgba(0,0,0,0.1)'
-            },
-            ticks: {
-              color: theme?.colors?.textSecondary || '#666'
-            }
           },
           y1: {
             type: 'linear',
@@ -146,14 +131,10 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuil
             title: {
               display: true,
               text: 'Guests',
-              color: theme?.colors?.textSecondary || '#666'
             },
             grid: {
               drawOnChartArea: false
             },
-            ticks: {
-              color: theme?.colors?.textSecondary || '#666'
-            }
           }
         },
         interaction: {
@@ -174,7 +155,9 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuil
     previousYear?.bookingDataPoints?.length,
     sailCode,
     theme?.colors?.accent,
-    theme?.colors?.foreground
+    theme?.colors?.foreground,
+    fontSize,
+    fontFamily,
   ]);
 
   return (

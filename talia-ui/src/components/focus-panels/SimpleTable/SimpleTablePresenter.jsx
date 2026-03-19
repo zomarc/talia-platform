@@ -133,7 +133,7 @@ const SimpleTablePresenter = ({ data }) => {
       instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
         data: data || [],
         columns,
-        layout: 'fitData',
+        layout: 'fitDataFill',
         initialSort: [{ column: 'sail_date_from', dir: 'desc' }],
         pagination: false,
         rowClick: (event, row) => {

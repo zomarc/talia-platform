@@ -117,7 +117,7 @@ const DemandHeatmapPresenter = ({ data, months, onRefresh }) => {
         instanceRef.current = new TabGlobal(tableRef.current, {
           data: data,
           columns: columns,
-          layout: 'fitDataStretch',
+          layout: 'fitDataFill',
           reactiveData: false,
           height: '100%',
           headerFilterLiveFilter: true,

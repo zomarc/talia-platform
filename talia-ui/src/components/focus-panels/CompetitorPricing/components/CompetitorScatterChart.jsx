@@ -7,6 +7,7 @@ import React, { useRef, useEffect } from 'react';
 import { Chart, registerables } from 'chart.js';
 import SubpanelExpandButton from '../../../shared/SubpanelExpandButton';
 import { formatDayMon, formatMonYear } from '../../../../lib/dateFormat';
+import { useTheme } from '../../../../contexts/ThemeContext';
 
 // Register Chart.js components
 Chart.register(...registerables);
@@ -83,6 +84,7 @@ const CompetitorScatterChart = ({
   tableVisible = true,
   chartOptions = { pppdScaleMode: 'AUTO', pppdMax: 200 }
 }) => {
+  const { fontSize, fontFamily } = useTheme();
   const filteredCabinTypes = (filters?.cabinType && filters.cabinType !== 'ALL')
     ? [filters.cabinType]
     : ALL_CABIN_TYPES;
@@ -166,8 +168,6 @@ const CompetitorScatterChart = ({
               title: {
                 display: true,
                 text: `${cabinType} (PPPD/Departure Date)`,
-                color: theme?.colors?.foreground || '#2b2b2b',
-                font: { size: 12, weight: '600' }
               }
             },
             scales: {
@@ -175,12 +175,7 @@ const CompetitorScatterChart = ({
                 beginAtZero: false,
                 min: effectiveYMin,
                 max: effectiveYMax,
-                grid: {
-                  color: theme?.colors?.border || 'rgba(0,0,0,0.1)'
-                },
                 ticks: {
-                  color: theme?.colors?.textSecondary || '#666',
-                  font: { size: 9 },
                   callback: function(value) {
                     return Math.round(value);
                   }
@@ -188,12 +183,7 @@ const CompetitorScatterChart = ({
               },
               x: {
                 type: 'linear',
-                grid: {
-                  color: theme?.colors?.border || 'rgba(0,0,0,0.1)'
-                },
                 ticks: {
-                  color: theme?.colors?.textSecondary || '#666',
-                  font: { size: 9 },
                   callback: function(value) {
                     return formatMonYear(value, '');
                   }
@@ -243,16 +233,9 @@ const CompetitorScatterChart = ({
             title: {
               display: true,
               text: `${cabinType} (PPPD/Departure Date)`,
-              color: theme?.colors?.foreground || '#2b2b2b',
-              font: { size: 10, weight: '600' }
             },
             legend: {
-              display: false, // Hide legend in individual charts (will show in main legend)
-              position: 'top',
-              labels: {
-                color: theme?.colors?.foreground || '#2b2b2b',
-                usePointStyle: true
-              }
+              display: false,
             },
             tooltip: {
               callbacks: {
@@ -277,12 +260,7 @@ const CompetitorScatterChart = ({
           scales: {
             x: {
               type: 'linear',
-              grid: {
-                color: theme?.colors?.border || 'rgba(0,0,0,0.1)'
-              },
               ticks: {
-                color: theme?.colors?.textSecondary || '#666',
-                font: { size: 9 },
                 callback: function(value) {
                   return formatMonYear(value, '');
                 }
@@ -292,16 +270,10 @@ const CompetitorScatterChart = ({
               beginAtZero: false,
               min: effectiveYMin,
               max: effectiveYMax,
-              grid: {
-                color: theme?.colors?.border || 'rgba(0,0,0,0.1)'
-              },
               ticks: {
-                color: theme?.colors?.textSecondary || '#666',
-                font: { size: 9 },
                 callback: function(value) {
                   return Math.round(value);
                 },
-                // Calculate step size to get approximately 8-12 ticks
                 stepSize: Math.max(1, Math.ceil((effectiveYMax - effectiveYMin) / 12))
               }
             }
@@ -321,7 +293,7 @@ const CompetitorScatterChart = ({
         }
       });
     };
-  }, [data, theme, activeCabinTypes, primaryCruiseLine, secondaryCruiseLine, chartOptions?.pppdScaleMode, chartOptions?.pppdMax]);
+  }, [data, theme, activeCabinTypes, primaryCruiseLine, secondaryCruiseLine, chartOptions?.pppdScaleMode, chartOptions?.pppdMax, fontSize, fontFamily]);
 
   return (
     <div

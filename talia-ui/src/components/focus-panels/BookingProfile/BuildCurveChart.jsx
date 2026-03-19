@@ -5,11 +5,13 @@
 
 import React, { useRef, useEffect } from 'react';
 import { Chart, registerables } from 'chart.js';
+import { useTheme } from '../../../contexts/ThemeContext';
 
 // Register Chart.js components
 Chart.register(...registerables);
 
 const BuildCurveChart = ({ buildCurves, targetCurves = null, previousYearCurves = null, theme, sailCode }) => {
+  const { fontSize, fontFamily } = useTheme();
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
 
@@ -82,16 +84,10 @@ const BuildCurveChart = ({ buildCurves, targetCurves = null, previousYearCurves 
         plugins: {
           legend: {
             position: 'top',
-            labels: {
-              color: theme?.colors?.foreground || '#2b2b2b',
-              usePointStyle: true
-            }
           },
           title: {
             display: true,
             text: `Build Curves: ${sailCode || 'Sailing'}`,
-            color: theme?.colors?.foreground || '#2b2b2b',
-            font: { size: 16, weight: 'bold' }
           },
           tooltip: {
             mode: 'index',
@@ -106,26 +102,14 @@ const BuildCurveChart = ({ buildCurves, targetCurves = null, previousYearCurves 
           }
         },
         scales: {
-          x: {
-            grid: {
-              color: theme?.colors?.border || 'rgba(0,0,0,0.1)'
-            },
-            ticks: {
-              color: theme?.colors?.textSecondary || '#666'
-            }
-          },
+          x: {},
           y: {
             beginAtZero: true,
             title: {
               display: true,
               text: 'Bookings',
-              color: theme?.colors?.textSecondary || '#666'
-            },
-            grid: {
-              color: theme?.colors?.border || 'rgba(0,0,0,0.1)'
             },
             ticks: {
-              color: theme?.colors?.textSecondary || '#666',
               callback: function(value) {
                 return value.toLocaleString();
               }
@@ -151,7 +135,9 @@ const BuildCurveChart = ({ buildCurves, targetCurves = null, previousYearCurves 
     previousYearCurves?.length,
     sailCode,
     theme?.colors?.accent,
-    theme?.colors?.foreground
+    theme?.colors?.foreground,
+    fontSize,
+    fontFamily,
   ]);
 
   if (!buildCurves || buildCurves.length === 0) {

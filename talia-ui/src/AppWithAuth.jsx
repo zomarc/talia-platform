@@ -3,7 +3,6 @@ import LandingPage from './components/LandingPage';
 import Dashboard from './Dashboard';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useSupabaseAuth } from './contexts/SupabaseAuthContext';
-import { ThemeProvider } from './contexts/ThemeContext';
 
 // Main app component that handles authentication routing
 const AppContent = () => {
@@ -64,9 +63,7 @@ const AppContent = () => {
   }
 
   return (
-    <ThemeProvider>
-      <Dashboard user={user} mode={window.__taliaMode} onModeChange={window.__taliaModeChange} />
-    </ThemeProvider>
+    <Dashboard user={user} mode={window.__taliaMode} onModeChange={window.__taliaModeChange} />
   );
 };
 

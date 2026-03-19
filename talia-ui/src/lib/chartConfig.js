@@ -64,42 +64,59 @@ export const getSeriesColors = () => [
 ];
 
 /**
- * Initialize Chart.js with theme defaults
- * Call this once at application startup
+ * Read numeric font size from CSS variable (e.g. "10px" -> 10)
+ */
+const getCSSFontSize = (varName, fallback) => {
+  const raw = getCSSVar(varName, '');
+  const num = parseFloat(raw);
+  return Number.isFinite(num) ? num : fallback;
+};
+
+/**
+ * Initialize Chart.js with theme defaults.
+ * Safe to call multiple times -- updates Chart.js globals with current
+ * CSS variable values, so charts pick up font/color changes.
  */
 export const initChartDefaults = () => {
   const colors = getChartColors();
-  
+  const baseFontSize = getCSSFontSize('--theme-font-size', 10);
+  const fontFamily = getCSSVar('--theme-font-family', 'Inter, sans-serif');
+
   // Global defaults
   defaults.color = colors.text;
   defaults.borderColor = colors.border;
   defaults.backgroundColor = colors.backgroundLight;
   
-  // Font defaults
-  defaults.font.family = getCSSVar('--theme-font-family', 'Inter, sans-serif');
-  defaults.font.size = 12;
+  // Font defaults -- derived from appearance settings
+  defaults.font.family = fontFamily;
+  defaults.font.size = baseFontSize;
   
   // Plugin defaults
   defaults.plugins.legend.labels.color = colors.text;
   defaults.plugins.legend.labels.usePointStyle = true;
-  defaults.plugins.legend.labels.padding = 16;
+  defaults.plugins.legend.labels.padding = Math.round(baseFontSize * 1.4);
+  defaults.plugins.legend.labels.font = { size: baseFontSize, family: fontFamily };
   
   defaults.plugins.title.color = colors.text;
-  defaults.plugins.title.font = { size: 14, weight: '600' };
+  defaults.plugins.title.font = { size: Math.round(baseFontSize * 1.2), weight: '600', family: fontFamily };
   
   defaults.plugins.tooltip.backgroundColor = colors.background;
   defaults.plugins.tooltip.titleColor = colors.text;
   defaults.plugins.tooltip.bodyColor = colors.textSecondary;
   defaults.plugins.tooltip.borderColor = colors.border;
   defaults.plugins.tooltip.borderWidth = 1;
-  defaults.plugins.tooltip.padding = 12;
+  defaults.plugins.tooltip.padding = Math.round(baseFontSize * 1.1);
   defaults.plugins.tooltip.cornerRadius = 4;
+  defaults.plugins.tooltip.titleFont = { size: baseFontSize, family: fontFamily };
+  defaults.plugins.tooltip.bodyFont = { size: baseFontSize, family: fontFamily };
   
   // Scale defaults
   defaults.scale.grid.color = colors.grid;
   defaults.scale.grid.lineWidth = 1;
   defaults.scale.ticks.color = colors.textMuted;
+  defaults.scale.ticks.font = { size: Math.max(8, baseFontSize - 1), family: fontFamily };
   defaults.scale.title.color = colors.textSecondary;
+  defaults.scale.title.font = { size: baseFontSize, weight: '600', family: fontFamily };
   
   // Disable animations for better performance
   defaults.animation = false;
@@ -112,8 +129,6 @@ export const initChartDefaults = () => {
   defaults.elements.point.hoverRadius = 4;
   defaults.elements.bar.borderRadius = 4;
   defaults.elements.arc.borderWidth = 0;
-  
-  console.log('[ChartConfig] Chart.js defaults initialized');
 };
 
 /**

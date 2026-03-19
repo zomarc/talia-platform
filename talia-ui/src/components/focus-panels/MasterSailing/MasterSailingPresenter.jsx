@@ -30,12 +30,13 @@ const FILTER_FIELDS = [
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-const estimateColumnWidth = (rows, field, title, min = 96, max = 280) => {
-  const maxDataLength = rows.reduce((largest, row) => {
+const estimateColumnWidth = (rows, field, title, min = 72, max = 260) => {
+  const sample = rows.slice(0, 30);
+  const maxDataLength = sample.reduce((largest, row) => {
     const value = row?.[field];
     return Math.max(largest, String(value ?? '').length);
   }, 0);
-  const estimated = Math.max(title.length, maxDataLength) * 8 + 28;
+  const estimated = Math.max(title.length, maxDataLength) * 7 + 18;
   return clamp(estimated, min, max);
 };
 
@@ -81,13 +82,13 @@ const MasterSailingPresenter = ({ data, onRefresh, panelInstanceId, panelCompone
     {
       field: 'sail_code',
       title: 'Sail Code',
-      width: estimateColumnWidth(data || [], 'sail_code', 'Sail Code', 168, 260),
+      width: estimateColumnWidth(data || [], 'sail_code', 'Sail Code', 110, 220),
       headerSort: false,
     },
     {
       field: 'sail_date_from',
       title: 'Departure',
-      width: estimateColumnWidth(data || [], 'sail_date_from', 'Departure', 118, 160),
+      width: estimateColumnWidth(data || [], 'sail_date_from', 'Departure', 80, 120),
       formatter: (cell) => {
         const value = cell.getValue();
         return formatDayMon(value, '');
@@ -98,31 +99,31 @@ const MasterSailingPresenter = ({ data, onRefresh, panelInstanceId, panelCompone
       field: 'sail_days',
       title: 'Duration',
       hozAlign: 'center',
-      width: estimateColumnWidth(data || [], 'sail_days', 'Duration', 92, 130),
+      width: estimateColumnWidth(data || [], 'sail_days', 'Duration', 68, 100),
       headerSort: false,
     },
     {
       field: 'package_name',
       title: 'Package',
-      width: estimateColumnWidth(data || [], 'package_name', 'Package', 160, 360),
+      width: estimateColumnWidth(data || [], 'package_name', 'Package', 100, 300),
       headerSort: false,
     },
     {
       field: 'package_type',
       title: 'Type',
-      width: estimateColumnWidth(data || [], 'package_type', 'Type', 130, 260),
+      width: estimateColumnWidth(data || [], 'package_type', 'Type', 72, 200),
       headerSort: false,
     },
     {
       field: 'port_from',
       title: 'From',
-      width: estimateColumnWidth(data || [], 'port_from', 'From', 112, 210),
+      width: estimateColumnWidth(data || [], 'port_from', 'From', 72, 180),
       headerSort: false,
     },
     {
       field: 'port_to',
       title: 'To',
-      width: estimateColumnWidth(data || [], 'port_to', 'To', 112, 210),
+      width: estimateColumnWidth(data || [], 'port_to', 'To', 72, 180),
       headerSort: false,
     }
   ]), [data]);
@@ -212,7 +213,7 @@ const MasterSailingPresenter = ({ data, onRefresh, panelInstanceId, panelCompone
         instanceRef.current = new Tabulator(tableRef.current, {
           data,
           columns,
-          layout: 'fitDataTable',
+          layout: 'fitDataFill',
           initialSort: [{ column: 'sail_date_from', dir: 'asc' }],
           height: '100%',
           selectableRows: 1,

@@ -308,7 +308,7 @@ const TablePanel = React.memo(function TablePanel() {
         instanceRef.current = new TabCtor(tableRef.current, {
           data,
           columns,
-          layout: "fitColumns",
+          layout: "fitDataFill",
           reactiveData: false,
           height: "100%",
           selectableRows: 1,            // single-select only

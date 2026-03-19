@@ -145,7 +145,7 @@ const CompetitorPricingTable = ({ data }) => {
         instanceRef.current = new Tabulator(tableRef.current, {
           data: clonedData,
           columns,
-          layout: 'fitColumns',
+          layout: 'fitDataFill',
           pagination: true,
           paginationSize: 50,
           paginationSizeSelector: [25, 50, 100, 200],

@@ -1505,7 +1505,7 @@
 
 .competitor-table {
   padding: 8px;
-  background: var(--theme-bg-elevated);
+  background: transparent;
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
@@ -2954,7 +2954,7 @@
   grid-template-rows: auto auto;
   gap: 8px;
   padding: 6px 8px;
-  background: var(--theme-bg-elevated);
+  background: transparent;
   flex: 0 0 auto;
   min-width: 0;
 }
@@ -2964,7 +2964,7 @@
   height: 140px;
   min-width: 0;
   min-height: 0;
-  background: var(--theme-bg-solid);
+  background: var(--theme-card-bg);
   border-radius: 8px;
   border: 1px solid var(--theme-border);
   padding: 6px;

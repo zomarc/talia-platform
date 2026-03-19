@@ -539,7 +539,7 @@ const TablePanel = React.memo(function TablePanel() {
         instanceRef.current = new TabCtor(tableRef.current, {
           data,
           columns,
-          layout: "fitColumns",
+          layout: "fitDataFill",
           reactiveData: false,
           height: "100%",
           selectableRows: 1,            // single-select only
@@ -1734,7 +1734,12 @@ function App() {
         theme: currentTheme,
         fontSize: fontSize,
         fontFamily: fontFamily,
-        spacingMode: spacingMode
+        spacingMode: spacingMode,
+        groupColorIntensity: (() => { try { const s = localStorage.getItem("taliaLayout"); return s ? JSON.parse(s).fontSettings?.groupColorIntensity ?? 60 : 60; } catch { return 60; } })(),
+        rowColorIntensity: (() => { try { const s = localStorage.getItem("taliaLayout"); return s ? JSON.parse(s).fontSettings?.rowColorIntensity ?? 40 : 40; } catch { return 40; } })(),
+        accentColor: (() => { try { const s = localStorage.getItem("taliaLayout"); return s ? JSON.parse(s).fontSettings?.accentColor ?? 'blue' : 'blue'; } catch { return 'blue'; } })(),
+        rowAccentColor: (() => { try { const s = localStorage.getItem("taliaLayout"); return s ? JSON.parse(s).fontSettings?.rowAccentColor ?? 'slate' : 'slate'; } catch { return 'slate'; } })(),
+        bgColor: (() => { try { const s = localStorage.getItem("taliaLayout"); return s ? JSON.parse(s).fontSettings?.bgColor ?? 'midnight' : 'midnight'; } catch { return 'midnight'; } })()
       }
     };
     localStorage.setItem(LAYOUT_KEY, JSON.stringify(payload));

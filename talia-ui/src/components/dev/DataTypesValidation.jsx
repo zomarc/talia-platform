@@ -213,7 +213,7 @@ const DataTypesValidation = () => {
         instanceRef.current = new Tabulator(tableRef.current, {
           data: testData,
           columns: columns,
-          layout: 'fitColumns',
+          layout: 'fitDataFill',
           initialSort: [{ column: 'id', dir: 'asc' }],
           height: '100%',
           resizableColumns: true,

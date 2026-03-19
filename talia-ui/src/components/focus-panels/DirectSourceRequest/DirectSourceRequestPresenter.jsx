@@ -239,7 +239,7 @@ const DirectSourceRequestPresenter = ({
         instanceRef.current = new Tabulator(tableRef.current, {
           data: data,
           columns: columns,
-          layout: "fitColumns",
+          layout: "fitDataFill",
           height: "100%",
           selectableRows: 1,
           headerFilterLiveFilter: true,

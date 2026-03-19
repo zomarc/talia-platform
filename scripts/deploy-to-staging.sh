@@ -2,7 +2,7 @@
 # Deploy Talia Platform from local to staging environment.
 # Policy: staging deploys default to direct local -> staging LAN sync.
 # Git-based sync is intentionally guarded and requires explicit typed confirmation.
-# Usage: ./scripts/deploy-to-staging.sh [--code-only|--full|--dry-run|--git-sync]
+# Usage: ./scripts/deploy-to-staging.sh [--ui-only|--full|--dry-run|--git-sync]
 
 set -euo pipefail
 
@@ -30,14 +30,14 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Parse arguments
-DEPLOY_MODE="code-only"
+DEPLOY_MODE=""
 DRY_RUN=false
 SYNC_MODE="local"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --code-only)
-      DEPLOY_MODE="code-only"
+    --ui-only|--code-only)
+      DEPLOY_MODE="ui-only"
       shift
       ;;
     --full)
@@ -54,7 +54,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo -e "${RED}Unknown option: $1${NC}"
-      echo "Usage: $0 [--code-only|--full|--dry-run|--git-sync]"
+      echo "Usage: $0 [--ui-only|--full|--dry-run|--git-sync]"
       exit 1
       ;;
   esac
@@ -66,6 +66,52 @@ echo -e "${BLUE}========================================${NC}"
 echo ""
 echo -e "${BLUE}Policy:${NC} default staging deploy is direct local -> staging LAN sync."
 echo ""
+if [ -z "$DEPLOY_MODE" ]; then
+  DEPLOY_MODE="ui-only"
+fi
+
+if [ "$DRY_RUN" = false ]; then
+  if [ ! -t 0 ]; then
+    echo -e "${RED}Error: staging deploy requires interactive confirmation.${NC}"
+    echo -e "${RED}Deployment scope must be selected explicitly (UI-only or Full stack).${NC}"
+    exit 1
+  fi
+
+  echo -e "${BLUE}Select deployment scope:${NC}"
+  echo "  1) UI-only  (default, recommended) - rebuild/restart UI only"
+  echo "  2) Full stack - rebuild UI + GraphQL and run schema guard"
+  echo ""
+
+  default_scope="1"
+  if [ "$DEPLOY_MODE" = "full" ]; then
+    default_scope="2"
+  fi
+
+  read -r -p "Choose scope [1/2] (default: ${default_scope}): " SCOPE_CHOICE
+  SCOPE_CHOICE="${SCOPE_CHOICE:-$default_scope}"
+
+  case "$SCOPE_CHOICE" in
+    1)
+      DEPLOY_MODE="ui-only"
+      CONFIRM_TOKEN="DEPLOY_UI_ONLY"
+      ;;
+    2)
+      DEPLOY_MODE="full"
+      CONFIRM_TOKEN="DEPLOY_FULL_STACK"
+      ;;
+    *)
+      echo -e "${RED}Invalid selection. Aborting.${NC}"
+      exit 1
+      ;;
+  esac
+
+  read -r -p "Type ${CONFIRM_TOKEN} to continue: " DEPLOY_CONFIRM
+  if [ "$DEPLOY_CONFIRM" != "$CONFIRM_TOKEN" ]; then
+    echo -e "${RED}Aborted: deployment not confirmed.${NC}"
+    exit 1
+  fi
+fi
+
 echo -e "Mode: ${YELLOW}${DEPLOY_MODE}${NC}"
 echo -e "Sync: ${YELLOW}${SYNC_MODE}${NC} (default: local)"
 if [ "$DRY_RUN" = true ]; then
@@ -181,19 +227,16 @@ if [ \"$DEPLOY_MODE\" = \"full\" ]; then
   docker compose -f docker-compose.staging.yml build --no-cache ui graphql-server
   docker compose -f docker-compose.staging.yml up -d
 else
-  echo '🔄 Restarting base services (code-only)...'
-  docker compose -f docker-compose.staging.yml restart supabase-db supabase-rest supabase-kong
-  sleep 3
-  # Rebuild GraphQL server and UI so staging gets latest schema and frontend
-  echo '🔨 Rebuilding GraphQL server with latest schema...'
-  docker compose -f docker-compose.staging.yml build graphql-server
+  echo '🎯 UI-only deployment (backend/data services untouched)...'
   echo '🔨 Rebuilding UI container with latest code...'
   docker compose -f docker-compose.staging.yml build ui
-  docker compose -f docker-compose.staging.yml up -d graphql-server ui
+  docker compose -f docker-compose.staging.yml up -d --no-deps ui
 fi
 
-echo '🗄️ Running schema guard (apply + verify required tables)...'
-bash ./scripts/staging-db-guard.sh
+if [ \"$DEPLOY_MODE\" = \"full\" ]; then
+  echo '🗄️ Running schema guard (apply + verify required tables)...'
+  bash ./scripts/staging-db-guard.sh
+fi
 
 echo '⏳ Waiting for services to be healthy...'
 sleep 10
@@ -208,59 +251,61 @@ echo '🧪 Testing critical endpoints...'
 max_attempts=30
 attempt=0
 
-# Test GraphQL server
-echo -n '  Testing GraphQL server... '
-while [ \$attempt -lt \$max_attempts ]; do
-  if curl -sS -f -X POST http://localhost:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ __typename }\"}' > /dev/null 2>&1; then
-    echo '✅ OK'
-    break
+if [ \"$DEPLOY_MODE\" = \"full\" ]; then
+  # Test GraphQL server
+  echo -n '  Testing GraphQL server... '
+  while [ \$attempt -lt \$max_attempts ]; do
+    if curl -sS -f -X POST http://localhost:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ __typename }\"}' > /dev/null 2>&1; then
+      echo '✅ OK'
+      break
+    fi
+    attempt=\$((attempt + 1))
+    sleep 2
+  done
+  if [ \$attempt -eq \$max_attempts ]; then
+    echo '❌ FAILED - GraphQL server not responding'
+    exit 1
   fi
-  attempt=\$((attempt + 1))
-  sleep 2
-done
-if [ \$attempt -eq \$max_attempts ]; then
-  echo '❌ FAILED - GraphQL server not responding'
-  exit 1
-fi
 
-# Test Supabase connection via GraphQL
-echo -n '  Testing Supabase connection... '
-supabase_online=\$(curl -sS -f -X POST http://localhost:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ supabaseConnectionStatus { online } }\"}' 2>/dev/null | grep -o '\"online\":true' || echo '')
-if [ -n \"\$supabase_online\" ]; then
-  echo '✅ OK'
-else
-  echo '⚠️  WARNING - Supabase connection may be offline'
-fi
+  # Test Supabase connection via GraphQL
+  echo -n '  Testing Supabase connection... '
+  supabase_online=\$(curl -sS -f -X POST http://localhost:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ supabaseConnectionStatus { online } }\"}' 2>/dev/null | grep -o '\"online\":true' || echo '')
+  if [ -n \"\$supabase_online\" ]; then
+    echo '✅ OK'
+  else
+    echo '⚠️  WARNING - Supabase connection may be offline'
+  fi
 
-# Test databaseTables query (critical for Data Mode)
-echo -n '  Testing databaseTables query... '
-table_count=\$(curl -sS -X POST http://localhost:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ databaseTables { tableName } }\"}' 2>/dev/null | grep -o '\"tableName\"' | wc -l || echo '0')
-if [ \"\$table_count\" -gt \"0\" ]; then
-  echo \"✅ OK (\$table_count tables)\"
-else
-  echo '❌ FAILED - No tables returned'
-  exit 1
-fi
+  # Test databaseTables query (critical for Data Mode)
+  echo -n '  Testing databaseTables query... '
+  table_count=\$(curl -sS -X POST http://localhost:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ databaseTables { tableName } }\"}' 2>/dev/null | grep -o '\"tableName\"' | wc -l || echo '0')
+  if [ \"\$table_count\" -gt \"0\" ]; then
+    echo \"✅ OK (\$table_count tables)\"
+  else
+    echo '❌ FAILED - No tables returned'
+    exit 1
+  fi
 
-# Test required schema tables for ship tracker/inventory memo features
-echo -n '  Testing required tables (inventory_item, inventory_item_memo)... '
-required_tables_check=\$(docker compose -f docker-compose.staging.yml exec -T supabase-db psql -U postgres -d postgres -tAc \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('inventory_item','inventory_item_memo');\" | tr -d '[:space:]')
-if [ \"\$required_tables_check\" = \"2\" ]; then
-  echo '✅ OK'
-else
-  echo \"❌ FAILED - Required tables missing (found \$required_tables_check/2)\"
-  exit 1
-fi
+  # Test required schema tables for ship tracker/inventory memo features
+  echo -n '  Testing required tables (inventory_item, inventory_item_memo)... '
+  required_tables_check=\$(docker compose -f docker-compose.staging.yml exec -T supabase-db psql -U postgres -d postgres -tAc \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('inventory_item','inventory_item_memo');\" | tr -d '[:space:]')
+  if [ \"\$required_tables_check\" = \"2\" ]; then
+    echo '✅ OK'
+  else
+    echo \"❌ FAILED - Required tables missing (found \$required_tables_check/2)\"
+    exit 1
+  fi
 
-# Test schema compatibility for Admin Lite metadata fields
-echo -n '  Testing Admin Lite metadata fields... '
-schema_check=\$(curl -sS -X POST http://localhost:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ databaseTables { tableName actualDataRange { min max } lastError } }\"}' 2>/dev/null)
-if echo \"\$schema_check\" | grep -q '\"errors\"'; then
-  echo '❌ FAILED - Admin Lite schema mismatch'
-  echo \"\$schema_check\"
-  exit 1
-else
-  echo '✅ OK'
+  # Test schema compatibility for Admin Lite metadata fields
+  echo -n '  Testing Admin Lite metadata fields... '
+  schema_check=\$(curl -sS -X POST http://localhost:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ databaseTables { tableName actualDataRange { min max } lastError } }\"}' 2>/dev/null)
+  if echo \"\$schema_check\" | grep -q '\"errors\"'; then
+    echo '❌ FAILED - Admin Lite schema mismatch'
+    echo \"\$schema_check\"
+    exit 1
+  else
+    echo '✅ OK'
+  fi
 fi
 
 # Test UI GraphQL proxy

@@ -7,6 +7,7 @@ import {
   LeafletResizeObserver,
 } from '../../shared/maps/LeafletMapDefaults';
 import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
+import { formatDateTime as formatDateTimeValue, formatDayMon } from '../../../lib/dateFormat';
 
 const DEFAULT_CENTER = [36.8, 25.9];
 const SHIP_COLORS = ['#0d47a1', '#b71c1c'];
@@ -23,17 +24,11 @@ const PORT_DISPLAY_NAMES = {
 };
 
 const formatDate = (value) => {
-  if (!value) return 'N/A';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'N/A';
-  return date.toLocaleDateString();
+  return formatDayMon(value, 'N/A');
 };
 
 const formatDateTime = (value) => {
-  if (!value) return 'N/A';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'N/A';
-  return date.toLocaleString();
+  return formatDateTimeValue(value, 'N/A');
 };
 
 const formatDayYearShort = (value) => {

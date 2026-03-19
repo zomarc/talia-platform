@@ -9,6 +9,7 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
+import { formatDayMon } from '../../../lib/dateFormat';
 
 const DirectSourceRequestPresenter = ({ 
   data, 
@@ -55,9 +56,7 @@ const DirectSourceRequestPresenter = ({
       formatter: (cell) => {
         const value = cell.getValue();
         if (!value) return 'N/A';
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return 'N/A';
-        return date.toLocaleDateString();
+        return formatDayMon(value, 'N/A');
       }
     },
     { 
@@ -321,8 +320,7 @@ const DirectSourceRequestPresenter = ({
 
   const formatDateLabel = (value) => {
     if (!value) return '—';
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+    return formatDayMon(value, '—');
   };
 
   const formatNumber = (value) => {
@@ -344,8 +342,7 @@ const DirectSourceRequestPresenter = ({
     }
     
     if (ctx.sailDate) {
-      const date = new Date(ctx.sailDate);
-      return `From Sail: ${date.toLocaleDateString()}`;
+      return `From Sail: ${formatDayMon(ctx.sailDate, '—')}`;
     }
     
     if (ctx.source === 'persisted-event') {

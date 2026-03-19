@@ -9,6 +9,7 @@
 import React, { useState } from 'react';
 import { useDataDebugInfo } from '../../hooks/data/useDataDebugInfo';
 import { LoadingSpinner } from '../shared';
+import { formatDayMon } from '../../lib/dateFormat';
 
 const DataDebugView = () => {
   const { data, loading, error, refetch } = useDataDebugInfo();
@@ -228,7 +229,7 @@ const DataDebugView = () => {
                   <td className="data-debug__td">{table.rowCount.toLocaleString()}</td>
                   <td className="data-debug__td">
                     {table.lastSnapshotDate 
-                      ? new Date(table.lastSnapshotDate).toLocaleDateString()
+                      ? formatDayMon(table.lastSnapshotDate, 'N/A')
                       : 'N/A'}
                   </td>
                   <td className="data-debug__td">

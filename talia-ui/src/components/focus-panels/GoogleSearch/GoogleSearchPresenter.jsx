@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { formatDayMon } from '../../../lib/dateFormat';
 
 const GoogleSearchPresenter = ({ results, query, loading, onSearch }) => {
   const handleSearchSubmit = (e) => {
@@ -27,7 +28,7 @@ const GoogleSearchPresenter = ({ results, query, loading, onSearch }) => {
   const formatDate = (dateString) => {
     if (!dateString) return '';
     try {
-      return new Date(dateString).toLocaleDateString();
+      return formatDayMon(dateString, '');
     } catch {
       return '';
     }

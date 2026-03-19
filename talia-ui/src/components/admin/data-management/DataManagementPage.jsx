@@ -20,6 +20,7 @@ import ServerStatusPanel from './ServerStatusPanel.jsx';
 import TableRow from './TableRow.jsx';
 import TableHeader from './TableHeader.jsx';
 import { createTableActions } from './tableActions.js';
+import { formatDayMon } from '../../../lib/dateFormat';
 import '../../../themes/dataMode.css';
 import './dataManagement.css';
 
@@ -359,8 +360,7 @@ The backup will be saved to: talia-server/backups/`;
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return formatDayMon(dateString, String(dateString));
     } catch {
       return dateString;
     }
@@ -371,14 +371,14 @@ The backup will be saved to: talia-server/backups/`;
     if (!dateString) return 'N/A';
     try {
       const date = new Date(dateString);
-      return date.toLocaleString('en-US', { 
-        month: 'short', 
-        day: 'numeric', 
-        year: 'numeric',
+      if (Number.isNaN(date.getTime())) return String(dateString);
+      const dateLabel = formatDayMon(date, String(dateString));
+      const timeLabel = date.toLocaleTimeString('en-US', {
         hour: 'numeric',
         minute: '2-digit',
         hour12: true
       });
+      return `${dateLabel} ${timeLabel}`;
     } catch {
       return dateString;
     }

@@ -4,13 +4,13 @@
  */
 
 import React, { useMemo } from 'react';
+import { formatDayMon } from '../../../lib/dateFormat';
 
 const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, backfillResult, onQuerySelect, onBackfill }) => {
   const formatDate = (dateString) => {
     if (!dateString) return '';
     try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return formatDayMon(dateString, dateString);
     } catch {
       return dateString;
     }

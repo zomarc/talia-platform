@@ -4,6 +4,7 @@ import LoadingSpinner from '../../shared/LoadingSpinner';
 import SubpanelExpandButton from '../../shared/SubpanelExpandButton';
 import { getFieldValue, pickFirst } from '../../shared/utils/dataAccess';
 import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
+import { formatDayMon } from '../../../lib/dateFormat';
 import {
   LEAFLET_ENGLISH_TILE_ATTRIBUTION,
   LEAFLET_ENGLISH_TILE_URL,
@@ -13,9 +14,7 @@ import { PORT_COORDINATES, resolvePortCoordinate } from '../../shared/maps/portC
 
 const formatDate = (value) => {
   if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString();
+  return formatDayMon(value, null);
 };
 
 const parseStops = (value) => {
@@ -52,7 +51,7 @@ const formatDateRange = (startDateValue, sailDays) => {
   }
   const startDate = new Date(startDateValue);
   const endDate = new Date(startDate.getTime() + days * 24 * 60 * 60 * 1000);
-  const end = endDate.toLocaleDateString();
+  const end = formatDayMon(endDate, null);
   return `${start} - ${end}`;
 };
 

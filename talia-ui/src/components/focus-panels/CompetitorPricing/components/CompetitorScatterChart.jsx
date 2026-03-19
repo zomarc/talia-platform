@@ -6,6 +6,7 @@
 import React, { useRef, useEffect } from 'react';
 import { Chart, registerables } from 'chart.js';
 import SubpanelExpandButton from '../../../shared/SubpanelExpandButton';
+import { formatDayMon, formatMonYear } from '../../../../lib/dateFormat';
 
 // Register Chart.js components
 Chart.register(...registerables);
@@ -194,9 +195,7 @@ const CompetitorScatterChart = ({
                   color: theme?.colors?.textSecondary || '#666',
                   font: { size: 9 },
                   callback: function(value) {
-                    const date = new Date(value);
-                    const monthYear = date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
-                    return monthYear.replace(' ', '/');
+                    return formatMonYear(value, '');
                   }
                 }
               }
@@ -259,12 +258,7 @@ const CompetitorScatterChart = ({
               callbacks: {
                 title: function(context) {
                   const point = context[0];
-                  const date = new Date(point.raw.x);
-                  return date.toLocaleDateString('en-US', { 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: 'numeric' 
-                  });
+                  return formatDayMon(point.raw.x, '');
                 },
                 label: function(context) {
                   const dataset = context.dataset;
@@ -274,7 +268,7 @@ const CompetitorScatterChart = ({
                     `Cruise Line: ${dataset.label}`,
                     `Cabin Type: ${cabin}`,
                     `PPPD: ${point.y.toFixed(2)}`,
-                    `Date: ${new Date(point.x).toLocaleDateString()}`
+                    `Date: ${formatDayMon(point.x, '')}`
                   ];
                 }
               }
@@ -290,9 +284,7 @@ const CompetitorScatterChart = ({
                 color: theme?.colors?.textSecondary || '#666',
                 font: { size: 9 },
                 callback: function(value) {
-                  const date = new Date(value);
-                  const monthYear = date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
-                  return monthYear.replace(' ', '/');
+                  return formatMonYear(value, '');
                 }
               }
             },

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { emitSailClear, emitSailSelect } from '../../../lib/eventBus';
+import { formatDayMon } from '../../../lib/dateFormat';
 
 const columns = [
   {
@@ -68,7 +69,7 @@ const columns = [
     title: 'Sail Date',
     formatter: (cell) => {
       const value = cell.getValue();
-      return value ? new Date(value).toLocaleDateString() : '';
+      return formatDayMon(value, '');
     },
     headerFilter: 'input'
   },

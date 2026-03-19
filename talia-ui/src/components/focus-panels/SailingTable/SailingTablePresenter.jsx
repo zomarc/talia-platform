@@ -16,6 +16,7 @@ import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { gql } from '@apollo/client';
 import { trackedApolloMutate } from '../../../services/data/trackedGraphql';
 import { apolloClient } from '../../../lib/apolloClient';
+import { formatDayMon } from '../../../lib/dateFormat';
 
 const UPDATE_USER_PREFERENCES = gql`
   mutation UpdateUserPreferences($input: UserPreferencesInput!) {
@@ -139,8 +140,7 @@ const SailingTablePresenter = ({ data }) => {
       field: "sail_date_from", 
       title: "Sail Date",
       formatter: (cell) => {
-        const date = new Date(cell.getValue());
-        return date.toLocaleDateString();
+        return formatDayMon(cell.getValue(), '');
       },
       headerFilter: "input"
     },

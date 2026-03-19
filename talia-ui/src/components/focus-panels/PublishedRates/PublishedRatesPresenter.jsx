@@ -11,6 +11,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
+import { formatDayMon } from '../../../lib/dateFormat';
 
 // Event names for row selection
 const SELECT_EVENT = 'talia:publishedRates.select';
@@ -34,8 +35,7 @@ const PublishedRatesPresenter = ({ data, selectedSailCode }) => {
       formatter: (cell) => {
         const value = cell.getValue();
         if (!value) return '';
-        const date = new Date(value);
-        return date.toLocaleDateString();
+        return formatDayMon(value, '');
       }
     },
     { 
@@ -100,8 +100,7 @@ const PublishedRatesPresenter = ({ data, selectedSailCode }) => {
       formatter: (cell) => {
         const value = cell.getValue();
         if (!value) return '';
-        const date = new Date(value);
-        return date.toLocaleDateString();
+        return formatDayMon(value, '');
       }
     },
     { 

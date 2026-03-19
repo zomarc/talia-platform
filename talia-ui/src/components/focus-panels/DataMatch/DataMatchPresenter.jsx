@@ -7,6 +7,7 @@
 import React, { useRef, useEffect, useMemo, useCallback } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
 import { emitSailClear, emitSailSelect, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { formatDayMon, formatMonYear } from '../../../lib/dateFormat';
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 
 const GROUP_BY = [
@@ -39,7 +40,7 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh, panelIn
       const month = date.getMonth() + 1; // 1-12
       const year = date.getFullYear();
       const monthYear = `${year}-${String(month).padStart(2, '0')}`;
-      const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      const monthName = formatMonYear(row.departure_date, 'Unknown Month');
 
       const rowData = {
         ship_code: row.ship_code,
@@ -100,8 +101,7 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, onRefresh, panelIn
         formatter: (cell) => {
           const value = cell.getValue();
           if (!value) return '';
-          const date = new Date(value);
-          return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+          return formatDayMon(value, '');
         },
         frozen: true
       },

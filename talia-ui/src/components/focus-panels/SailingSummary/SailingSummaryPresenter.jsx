@@ -7,6 +7,7 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { formatDayMon } from '../../../lib/dateFormat';
 
 // Function to aggregate sailing data at sail level
 const aggregateSailingData = (rawData) => {
@@ -121,8 +122,7 @@ const SailingSummaryPresenter = ({ data, onRefresh }) => {
             formatter: (cell) => {
               const value = cell.getValue();
               if (!value) return '';
-              const date = new Date(value);
-              return date.toLocaleDateString();
+              return formatDayMon(value, '');
             }
           },
           { 

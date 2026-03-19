@@ -7,6 +7,7 @@
 
 // Import Tabulator from npm package
 import { TabulatorFull as Tabulator } from 'tabulator-tables';
+import { formatDayMon } from './dateFormat';
 
 // Import Tabulator midnight theme CSS
 import 'tabulator-tables/dist/css/tabulator_midnight.min.css';
@@ -74,8 +75,7 @@ export const COMMON_COLUMN_TYPES = {
     formatter: (cell) => {
       const value = cell.getValue();
       if (!value) return '';
-      const date = new Date(value);
-      return date.toLocaleDateString(config.locale || 'en-US');
+      return formatDayMon(value, '');
     },
     ...config
   }),

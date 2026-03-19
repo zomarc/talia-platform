@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import taliaUserService from '../../../services/TaliaUserService';
+import { formatDayMon } from '../../../lib/dateFormat';
 import '../admin.css';
 
 const TaliaUserTable = () => {
@@ -130,7 +131,7 @@ const TaliaUserTable = () => {
                   </span>
                 </td>
                 <td className="admin-table-cell">
-                  {new Date(user.createdAt).toLocaleDateString()}
+                  {formatDayMon(user.createdAt, 'N/A')}
                 </td>
                 <td className="admin-table-cell">
                   {editingUser === user.taliaUserId ? (

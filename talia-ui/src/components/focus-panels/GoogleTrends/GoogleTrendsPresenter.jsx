@@ -6,6 +6,7 @@
 
 import React, { useMemo, useState } from 'react';
 import RefreshStatus from '../../common/RefreshStatus';
+import { formatDayMon } from '../../../lib/dateFormat';
 
 const GoogleTrendsPresenter = ({ 
   trends, 
@@ -79,8 +80,7 @@ const GoogleTrendsPresenter = ({
     if (!dateString) return '';
     if (dateCache.has(dateString)) return dateCache.get(dateString);
     try {
-      const date = new Date(dateString);
-      const formatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const formatted = formatDayMon(dateString, dateString);
       dateCache.set(dateString, formatted);
       return formatted;
     } catch {

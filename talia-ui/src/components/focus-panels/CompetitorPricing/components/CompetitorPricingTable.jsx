@@ -5,6 +5,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import { initTabulator } from '../../../../lib/tabulatorConfig';
+import { formatDayMon } from '../../../../lib/dateFormat';
 
 const CompetitorPricingTable = ({ data }) => {
   const tableRef = useRef(null);
@@ -82,11 +83,7 @@ const CompetitorPricingTable = ({ data }) => {
             formatter: (cell) => {
               const date = cell.getValue();
               if (!date) return '';
-              return new Date(date).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-              });
+              return formatDayMon(date, '');
             }
           },
           {

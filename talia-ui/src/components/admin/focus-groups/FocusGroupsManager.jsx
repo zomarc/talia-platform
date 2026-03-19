@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTaliaFocusManagement } from '../../../hooks/useTaliaFocusManagement';
+import { formatDayMon } from '../../../lib/dateFormat';
 import '../admin.css';
 
 const FocusGroupsManager = () => {
@@ -211,9 +212,9 @@ const FocusGroupsManager = () => {
                     </p>
                   )}
                   <div className="admin-card-meta">
-                    Created: {new Date(group.createdAt).toLocaleDateString()}
+                    Created: {formatDayMon(group.createdAt, 'N/A')}
                     {group.updatedAt !== group.createdAt && (
-                      <span> • Updated: {new Date(group.updatedAt).toLocaleDateString()}</span>
+                      <span> • Updated: {formatDayMon(group.updatedAt, 'N/A')}</span>
                     )}
                   </div>
                 </div>

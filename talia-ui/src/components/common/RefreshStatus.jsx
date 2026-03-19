@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { formatDayMon } from '../../lib/dateFormat';
 
 const RefreshStatus = ({
   lastRefreshTime,
@@ -29,7 +30,7 @@ const RefreshStatus = ({
       if (diffHours < 24) return `${diffHours}h ago`;
       if (diffDays < 7) return `${diffDays}d ago`;
       
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return formatDayMon(date, 'Unknown');
     } catch {
       return 'Unknown';
     }

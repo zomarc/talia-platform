@@ -8,12 +8,11 @@ import {
 import SubpanelExpandButton from '../../shared/SubpanelExpandButton';
 import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
 import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
+import { formatDayMon } from '../../../lib/dateFormat';
 
 const formatDate = (value) => {
   if (!value) return 'N/A';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString();
+  return formatDayMon(value, value);
 };
 
 const MapFitBounds = ({ points }) => {

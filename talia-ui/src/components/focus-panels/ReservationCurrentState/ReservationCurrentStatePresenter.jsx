@@ -11,6 +11,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
+import { formatDayMon } from '../../../lib/dateFormat';
 
 /**
  * Presentational component for reservation current state
@@ -60,7 +61,7 @@ const ReservationCurrentStatePresenter = ({ data, onRefresh }) => {
       headerFilter: "input",
       formatter: (cell) => {
         const date = cell.getValue();
-        return date ? new Date(date).toLocaleDateString() : '';
+        return formatDayMon(date, '');
       }
     },
     { 
@@ -69,7 +70,7 @@ const ReservationCurrentStatePresenter = ({ data, onRefresh }) => {
       headerFilter: "input",
       formatter: (cell) => {
         const date = cell.getValue();
-        return date ? new Date(date).toLocaleDateString() : '';
+        return formatDayMon(date, '');
       }
     },
     { 

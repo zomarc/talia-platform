@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
 import { emitSailClear, emitSailSelect } from '../../../lib/eventBus';
+import { formatDayMon, formatMonYear } from '../../../lib/dateFormat';
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 
 const buildSelectValues = (rows, field) => {
@@ -39,12 +40,19 @@ const estimateColumnWidth = (rows, field, title, min = 96, max = 280) => {
 };
 
 const groupHeaders = [
-  (value, count) => `<span class="master-sailing-group master-sailing-group--month" style="background:rgba(102,154,242,0.24);border:1px solid rgba(102,154,242,0.55);color:#d9e9ff;padding:2px 8px;border-radius:999px;font-weight:700;">${value} (${count})</span>`,
-  (value, count) => `<span class="master-sailing-group master-sailing-group--ship" style="background:rgba(178,192,214,0.22);border:1px solid rgba(178,192,214,0.45);color:#e8edf7;padding:2px 8px;border-radius:999px;font-weight:700;">${value} (${count})</span>`,
+  (value, count) => `<span class="master-sailing-group master-sailing-group--month">${value} (${count})</span>`,
+  (value, count) => `<span class="master-sailing-group master-sailing-group--ship">${value} (${count})</span>`,
 ];
 
 const GROUP_BY = [
-  (rowData) => rowData?.departure_month_label || 'Unknown month',
+  (rowData) => {
+    const dateValue = rowData?.sail_date_from;
+    if (dateValue) {
+      const formatted = formatMonYear(dateValue, '');
+      if (formatted) return formatted;
+    }
+    return rowData?.departure_month_label || 'Unknown month';
+  },
   (rowData) => rowData?.ship_group_label || 'Unknown ship'
 ];
 const GROUP_MAX_DEPTH = GROUP_BY.length;
@@ -73,7 +81,7 @@ const MasterSailingPresenter = ({ data, onRefresh, panelInstanceId, panelCompone
     {
       field: 'sail_code',
       title: 'Sail Code',
-      width: estimateColumnWidth(data || [], 'sail_code', 'Sail Code', 122, 220),
+      width: estimateColumnWidth(data || [], 'sail_code', 'Sail Code', 168, 260),
       headerSort: false,
     },
     {
@@ -82,9 +90,7 @@ const MasterSailingPresenter = ({ data, onRefresh, panelInstanceId, panelCompone
       width: estimateColumnWidth(data || [], 'sail_date_from', 'Departure', 118, 160),
       formatter: (cell) => {
         const value = cell.getValue();
-        if (!value) return '';
-        const date = new Date(value);
-        return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString();
+        return formatDayMon(value, '');
       },
       headerSort: false,
     },

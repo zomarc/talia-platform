@@ -7,6 +7,7 @@ import React from 'react';
 import SubpanelExpandButton from '../../shared/SubpanelExpandButton';
 import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
 import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
+import { formatDayMon } from '../../../lib/dateFormat';
 
 const ALL_PROMOS = 'All Promos';
 const ALL_RATE_TYPES = 'All Rate Types';
@@ -14,9 +15,7 @@ const ALL_CURRENCIES = 'All Currencies';
 
 const formatDateLabel = (value) => {
   if (!value) return 'N/A';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString();
+  return formatDayMon(value, String(value));
 };
 
 const formatCurrency = (value, currency) => {

@@ -6,6 +6,7 @@
 import React, { useRef, useEffect } from 'react';
 import { Chart, registerables } from 'chart.js';
 import BuildCurveChart from './BuildCurveChart';
+import { formatDayMon } from '../../../lib/dateFormat';
 
 // Register Chart.js components
 Chart.register(...registerables);
@@ -34,8 +35,7 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuil
 
     // Prepare datasets
     const labels = currentYear.bookingDataPoints.map(dp => {
-      const date = new Date(dp.date);
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return formatDayMon(dp.date, '');
     });
 
     const datasets = [
@@ -186,7 +186,7 @@ const BookingProfilePresenter = ({ data, sailCode, theme, onRefresh, includeBuil
             Booking Profile: {sailCode}
           </h2>
           <p className="booking-profile__subtitle">
-            {currentYear.shipName} • Sailing: {new Date(currentYear.sailDate).toLocaleDateString()}
+            {currentYear.shipName} • Sailing: {formatDayMon(currentYear.sailDate, '')}
             {currentYear.daysUntilSailing !== null && (
               <span> • {currentYear.daysUntilSailing} days until sailing</span>
             )}

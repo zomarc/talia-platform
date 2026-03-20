@@ -27,6 +27,7 @@ import { statusQueryResolvers } from './resolver-modules/statusResolvers.js';
 import { refreshQueryResolvers } from './resolver-modules/refreshResolvers.js';
 import { metadataQueryResolvers } from './resolver-modules/metadataResolvers.js';
 import { buildTableCatalogQueryResolvers } from './resolver-modules/tableCatalogResolvers.js';
+import { buildTableDataQueryResolvers } from './resolver-modules/tableDataResolvers.js';
 
 // Helper function to check user permissions
 const hasPermission = (userRole: string, requiredRole: string): boolean => {
@@ -601,6 +602,10 @@ const tableCatalogQueryResolvers = buildTableCatalogQueryResolvers({
   fetchLatestAvailableData,
   getOperationMetadataKeysForTable,
   getSyncTypeForTable
+});
+
+const tableDataQueryResolvers = buildTableDataQueryResolvers({
+  supabaseDataService
 });
 
 export const resolvers = {
@@ -1542,113 +1547,7 @@ export const resolvers = {
     ...statusQueryResolvers,
     ...metadataQueryResolvers,
     ...tableCatalogQueryResolvers,
-
-    tableData: async (parent: any, args: any) => {
-      const { tableName, limit = 100, filters } = args;
-      try {
-        const includeNonRealSailings = filters?.include_non_real_sailings === true;
-        const baseLimit = Number.isFinite(Number(limit)) ? Number(limit) : 100;
-        const expandedLimit = includeNonRealSailings ? baseLimit : Math.min(Math.max(baseLimit * 3, baseLimit), 5000);
-
-        // Fetch table data from Supabase via backend (for review functionality)
-        let query = supabaseDataService.client
-          .from(tableName)
-          .select('*');
-        
-        // Apply filters if provided
-        if (filters) {
-          if (filters.sail_code) {
-            query = query.eq('sail_code', filters.sail_code);
-            console.log(`[tableData] Applied filter: sail_code = ${filters.sail_code}`);
-          }
-          if (filters.ship_code) {
-            query = query.eq('ship_code', filters.ship_code);
-            console.log(`[tableData] Applied filter: ship_code = ${filters.ship_code}`);
-          }
-          if (filters.cabin_category) {
-            query = query.eq('cabin_category', filters.cabin_category);
-            console.log(`[tableData] Applied filter: cabin_category = ${filters.cabin_category}`);
-          }
-          if (filters.ship_name) {
-            query = query.eq('ship_name', filters.ship_name);
-            console.log(`[tableData] Applied filter: ship_name = ${filters.ship_name}`);
-          }
-          if (filters.package_name) {
-            query = query.eq('package_name', filters.package_name);
-            console.log(`[tableData] Applied filter: package_name = ${filters.package_name}`);
-          }
-          if (filters.package_type) {
-            query = query.eq('package_type', filters.package_type);
-            console.log(`[tableData] Applied filter: package_type = ${filters.package_type}`);
-          }
-          if (filters.geog_area_code) {
-            query = query.eq('geog_area_code', filters.geog_area_code);
-            console.log(`[tableData] Applied filter: geog_area_code = ${filters.geog_area_code}`);
-          }
-          // Apply non-real sailing exclusion directly for master_sail at query level.
-          if (!includeNonRealSailings && tableName === 'master_sail') {
-            query = query.neq('is_active', 'N').neq('is_fake', 'Y');
-            console.log('[tableData] Applied default real-sailing filter for master_sail (exclude is_active=N, is_fake=Y)');
-          }
-        }
-        
-        query = query.limit(expandedLimit);
-        
-        let { data, error } = await query;
-        
-        if (error) {
-          console.error(`Error fetching table data for ${tableName}:`, error);
-          throw new Error(`Failed to fetch data from ${tableName}: ${error.message}`);
-        }
-
-        // For non-master tables, enforce the same real-sailing rule by referencing master_sail.
-        if (!includeNonRealSailings && tableName !== 'master_sail' && Array.isArray(data) && data.length > 0) {
-          const rowSailCodes = Array.from(
-            new Set(
-              data
-                .map((row: any) => row?.sail_code)
-                .filter((value: any) => typeof value === 'string' && value.trim().length > 0)
-            )
-          );
-
-          if (rowSailCodes.length > 0) {
-            const { data: nonRealRows, error: nonRealError } = await supabaseDataService.client
-              .from('master_sail')
-              .select('sail_code')
-              .in('sail_code', rowSailCodes)
-              .or('is_active.eq.N,is_fake.eq.Y');
-
-            if (nonRealError) {
-              console.warn(`[tableData] Could not resolve non-real sailings from master_sail for ${tableName}:`, nonRealError.message);
-            } else {
-              const excludedSailCodes = new Set(
-                (nonRealRows || [])
-                  .map((row: any) => row?.sail_code)
-                  .filter((value: any) => typeof value === 'string' && value.length > 0)
-              );
-
-              if (excludedSailCodes.size > 0) {
-                data = data.filter((row: any) => {
-                  const sailCode = row?.sail_code;
-                  if (typeof sailCode !== 'string' || sailCode.length === 0) return true;
-                  return !excludedSailCodes.has(sailCode);
-                });
-                console.log(`[tableData] Excluded ${excludedSailCodes.size} non-real sail_code values via master_sail reference for ${tableName}`);
-              }
-            }
-          }
-        }
-        
-        const limitedData = Array.isArray(data) ? data.slice(0, baseLimit) : [];
-        console.log(`[tableData] Fetched ${limitedData.length} records from ${tableName}${filters ? ' with filters' : ''}`);
-        
-        // Return data as JSON array (GraphQL JSON scalar)
-        return limitedData;
-      } catch (error: any) {
-        console.error(`Error in tableData resolver for ${tableName}:`, error);
-        throw error;
-      }
-    },
+    ...tableDataQueryResolvers,
 
     dataMatch: async (parent: any, args: any) => {
       const { filters = {} } = args;

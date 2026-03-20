@@ -21,6 +21,9 @@ import {
   getSyncTypeForTable,
   hasSyncConfigForTable,
 } from '../config/table-mappings.js';
+import { uiActivityMutationResolvers, uiActivityQueryResolvers } from './resolver-modules/uiActivityResolvers.js';
+import { userMutationResolvers, userQueryResolvers } from './resolver-modules/userResolvers.js';
+import { statusQueryResolvers } from './resolver-modules/statusResolvers.js';
 
 // Helper function to check user permissions
 const hasPermission = (userRole: string, requiredRole: string): boolean => {
@@ -591,81 +594,8 @@ const mapAppearanceSettingsPayload = (settings: any, profiles: any, activeProfil
 export const resolvers = {
   Query: {
     // User Management
-    me: () => {
-      // In a real app, this would get the current user from the context
-      return sampleData.users[0]; // Return admin user for demo
-    },
-    
-    users: () => {
-      return sampleData.users;
-    },
-
-    taliaUser: async (parent: any, args: any) => {
-      const { email } = args;
-      try {
-        const taliaUser = await supabaseDataService.getTaliaUserByEmail(email);
-        if (!taliaUser) return null;
-        
-        return {
-          id: taliaUser.id,
-          taliaUserId: taliaUser.talia_user_id,
-          email: taliaUser.email,
-          createdAt: taliaUser.created_at,
-          updatedAt: taliaUser.updated_at,
-          lastLoginAt: taliaUser.last_login_at
-        };
-      } catch (error) {
-        console.error('Error fetching talia user:', error);
-        throw new Error(`Failed to fetch talia user: ${error.message}`);
-      }
-    },
-
-    taliaUsers: async () => {
-      try {
-        const rows = await supabaseDataService.getAllTaliaUsers();
-        return (rows || []).map((row: any) => ({
-          id: row.id,
-          taliaUserId: row.talia_user_id,
-          email: row.email,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at || row.created_at,
-          lastLoginAt: row.last_login_at || null
-        }));
-      } catch (error) {
-        console.error('Error fetching talia users:', error);
-        return [];
-      }
-    },
-
-    uiActivityEvents: async (_parent: any, args: any) => {
-      try {
-        const rows = await supabaseDataService.getUiActivityEvents({
-          sinceMinutes: args?.sinceMinutes,
-          limit: args?.limit,
-          userId: args?.userId,
-          userEmail: args?.userEmail
-        });
-        return (rows || []).map((row: any) => ({
-          id: row.id,
-          at: row.at,
-          userId: row.user_id,
-          userEmail: row.user_email,
-          userRole: row.user_role,
-          kind: row.kind,
-          report: row.report,
-          panelComponent: row.panel_component,
-          purpose: row.purpose,
-          status: row.status,
-          performanceMs: row.performance_ms,
-          queryCount: row.query_count,
-          sourceQueryId: row.source_query_id,
-          criteria: row.criteria || {}
-        }));
-      } catch (error) {
-        console.error('Error fetching UI activity events:', error);
-        return [];
-      }
-    },
+    ...userQueryResolvers,
+    ...uiActivityQueryResolvers,
 
     // Focus Management
     focuses: async (parent: any, args: any, context: any) => {
@@ -1632,79 +1562,7 @@ export const resolvers = {
       }
     },
 
-    syncStatus: async (parent: any, args: any) => {
-      const { tableName } = args;
-      const status = synapseSyncService.getSyncStatus(tableName);
-      
-      if (!status) {
-        return null; // No active sync
-      }
-      
-      return {
-        tableName: status.tableName,
-        status: status.status,
-        startTime: status.startTime,
-        duration: status.duration,
-        logs: status.logs,
-        structuredLogs: status.structuredLogs.map(log => ({
-          level: log.level,
-          message: log.message,
-          timestamp: log.timestamp.toISOString()
-        }))
-      };
-    },
-
-    synapseConnectionStatus: async () => {
-      try {
-        const result = await synapseSyncService.testConnectionDetailed();
-        return {
-          online: result.online,
-          server: synapseSyncService.synapseConfig.server,
-          database: synapseSyncService.synapseConfig.database,
-          lastChecked: new Date().toISOString(),
-          error: result.error || null
-        };
-      } catch (error: any) {
-        return {
-          online: false,
-          server: synapseSyncService.synapseConfig.server,
-          database: synapseSyncService.synapseConfig.database,
-          lastChecked: new Date().toISOString(),
-          error: error.message || 'Unknown error'
-        };
-      }
-    },
-
-    supabaseConnectionStatus: async () => {
-      try {
-        // Test Supabase connection by querying a simple table
-        const { data, error } = await supabaseDataService.client
-          .from('operation_metadata')
-          .select('operation_name')
-          .limit(1);
-        
-        const isOnline = !error;
-        // Use environment variable for Supabase URL, fallback to localhost
-        const supabaseUrl = process.env.SUPABASE_URL || 'http://127.0.0.1:54321';
-        
-        return {
-          online: isOnline,
-          server: supabaseUrl,
-          database: 'postgres',
-          lastChecked: new Date().toISOString(),
-          error: error ? error.message : null
-        };
-      } catch (error: any) {
-        const supabaseUrl = process.env.SUPABASE_URL || 'http://127.0.0.1:54321';
-        return {
-          online: false,
-          server: supabaseUrl,
-          database: 'postgres',
-          lastChecked: new Date().toISOString(),
-          error: error.message || 'Unknown error'
-        };
-      }
-    },
+    ...statusQueryResolvers,
 
     syncMetadata: async () => {
       try {
@@ -2905,36 +2763,8 @@ export const resolvers = {
     },
 
     // User Management
-    updateUserPreferences: (parent: any, args: any) => {
-      const { input } = args;
-      const userIndex = 0; // In real app, get current user index
-      
-      sampleData.users[userIndex].preferences = {
-        ...sampleData.users[userIndex].preferences,
-        ...input
-      };
-      sampleData.users[userIndex].updatedAt = new Date().toISOString();
-      
-      return sampleData.users[userIndex];
-    },
-
-    logUiActivityEvent: async (_parent: any, args: any) => {
-      try {
-        return await supabaseDataService.logUiActivityEvent(args?.input || {});
-      } catch (error) {
-        console.error('Error logging UI activity event:', error);
-        return false;
-      }
-    },
-
-    purgeUiActivityEvents: async (_parent: any, args: any) => {
-      try {
-        return await supabaseDataService.purgeUiActivityEvents(args?.olderThanHours);
-      } catch (error) {
-        console.error('Error purging UI activity events:', error);
-        return 0;
-      }
-    },
+    ...userMutationResolvers,
+    ...uiActivityMutationResolvers,
 
     // Focus Preferences
     updateFocusPreference: async (parent: any, args: any, context: any) => {

@@ -87,10 +87,10 @@
 .admin-access-denied {
   padding: 60px 20px;
   text-align: center;
-  background: #f8d7da;
-  border-radius: 8px;
-  border: 1px solid #f5c6cb;
-  color: #721c24;
+  background: color-mix(in srgb, var(--theme-error) 10%, transparent);
+  border-radius: var(--theme-radius-md);
+  border: 1px solid color-mix(in srgb, var(--theme-error) 35%, transparent);
+  color: var(--theme-error);
 }
 
 .admin-section {
@@ -100,15 +100,15 @@
 }
 
 .admin-title {
-  font-size: 24px;
-  font-weight: bold;
-  color: #2E86AB;
+  font-size: var(--theme-font-size-lg);
+  font-weight: 600;
+  color: var(--theme-text-primary);
   margin-bottom: 8px;
 }
 
 .admin-subtitle {
-  font-size: 14px;
-  color: #6C757D;
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-secondary);
   margin-bottom: 20px;
   line-height: 1.6;
 }
@@ -116,38 +116,38 @@
 .admin-loading {
   padding: 20px;
   text-align: center;
-  color: #6C757D;
+  color: var(--theme-text-secondary);
 }
 
 .admin-error {
   padding: 20px;
-  background: #f8d7da;
-  color: #721c24;
+  background: color-mix(in srgb, var(--theme-error) 10%, transparent);
+  color: var(--theme-error);
   border-radius: 4px;
-  border: 1px solid #f5c6cb;
+  border: 1px solid color-mix(in srgb, var(--theme-error) 35%, transparent);
 }
 
 .admin-empty {
   padding: 40px;
   text-align: center;
-  color: #6C757D;
-  background: #f8f9fa;
+  color: var(--theme-text-secondary);
+  background: color-mix(in srgb, var(--theme-panel-bg) 86%, transparent);
   border-radius: 4px;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--theme-border);
 }
 
 .admin-table {
   width: 100%;
   border-collapse: collapse;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  background: var(--theme-panel-bg);
+  box-shadow: 0 1px 3px color-mix(in srgb, #000 16%, transparent);
   border-radius: 4px;
   overflow: hidden;
 }
 
 .admin-table-header-row {
-  background: #2E86AB;
-  color: #ffffff;
+  background: color-mix(in srgb, var(--theme-accent) 75%, transparent);
+  color: var(--theme-text-primary);
 }
 
 .admin-table-header-cell {
@@ -158,17 +158,17 @@
 }
 
 .admin-table-row {
-  border-bottom: 1px solid #dee2e6;
+  border-bottom: 1px solid var(--theme-border-light);
 }
 
 .admin-table-row:hover {
-  background: #f8f9fa;
+  background: color-mix(in srgb, var(--theme-row-hover-bg) 80%, transparent);
 }
 
 .admin-table-cell {
   padding: 12px;
   font-size: 14px;
-  color: #212529;
+  color: var(--theme-text-primary);
 }
 
 .admin-mono {
@@ -178,15 +178,15 @@
 .admin-info {
   margin-top: 30px;
   padding: 20px;
-  background: #e7f3ff;
+  background: color-mix(in srgb, var(--theme-accent) 12%, transparent);
   border-radius: 4px;
-  border: 1px solid #b3d9ff;
+  border: 1px solid color-mix(in srgb, var(--theme-accent) 28%, transparent);
 }
 
 .admin-info-title {
   font-size: 18px;
   font-weight: bold;
-  color: #2E86AB;
+  color: var(--theme-accent);
   margin-bottom: 12px;
 }
 
@@ -205,52 +205,60 @@
 }
 
 .admin-badge-active {
-  background: #d4edda;
-  color: #155724;
+  background: color-mix(in srgb, #22c55e 22%, transparent);
+  color: color-mix(in srgb, #22c55e 72%, var(--theme-text-primary));
 }
 
 .admin-badge-inactive {
-  background: #f8d7da;
-  color: #721c24;
+  background: color-mix(in srgb, var(--theme-error) 16%, transparent);
+  color: var(--theme-error);
 }
 
 .admin-btn {
   padding: 6px 12px;
-  border: none;
+  border: 1px solid var(--theme-border-light);
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
-  font-weight: bold;
+  font-weight: 600;
+  color: var(--theme-text-secondary);
+  background: transparent;
 }
 
 .admin-btn-primary {
-  background: #2E86AB;
-  color: #ffffff;
+  background: var(--theme-accent);
+  border-color: var(--theme-accent);
+  color: #fff;
 }
 
 .admin-btn-success {
-  background: #28a745;
-  color: #ffffff;
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
 }
 
 .admin-btn-muted {
-  background: #6c757d;
-  color: #ffffff;
+  background: color-mix(in srgb, var(--theme-text-secondary) 66%, transparent);
+  border-color: color-mix(in srgb, var(--theme-text-secondary) 66%, transparent);
+  color: #fff;
 }
 
 .admin-btn-accent {
-  background: #b08d57;
-  color: #ffffff;
+  background: var(--theme-accent);
+  border-color: var(--theme-accent);
+  color: #fff;
 }
 
 .admin-btn-light {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: color-mix(in srgb, var(--theme-accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--theme-accent) 24%, transparent);
+  color: var(--theme-accent);
 }
 
 .admin-btn-danger {
-  background: #ffebee;
-  color: #c2185b;
+  background: color-mix(in srgb, var(--theme-error) 12%, transparent);
+  border-color: color-mix(in srgb, var(--theme-error) 24%, transparent);
+  color: var(--theme-error);
 }
 
 .admin-actions {

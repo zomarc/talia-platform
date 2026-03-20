@@ -88,6 +88,37 @@ export const typeDefs = `#graphql
     activeProfileId: String
   }
 
+  type BreakoutScore {
+    userId: String!
+    highScore: Int!
+    lastScore: Int!
+    updatedAt: String
+  }
+
+  type BreakoutLeaderboard {
+    top: [BreakoutScore!]!
+    recent: [BreakoutScore!]!
+  }
+
+  type GameScore {
+    gameId: String!
+    userId: String!
+    highScore: Int!
+    lastScore: Int!
+    updatedAt: String
+  }
+
+  type GameLeaderboard {
+    gameId: String!
+    top: [GameScore!]!
+    recent: [GameScore!]!
+  }
+
+  type GameScoreBoard {
+    top: [GameScore!]!
+    recent: [GameScore!]!
+  }
+
   # Focus Management Types
   type Focus {
     id: ID!
@@ -1016,6 +1047,11 @@ export const typeDefs = `#graphql
     # Talia Configuration (database-backed)
     taliaConfig: TaliaConfigSummary!
     appearanceSettings(userId: String): AppearanceSettings!
+    gameScore(gameId: String!, userId: String): GameScore!
+    gameLeaderboard(gameId: String!, limitTop: Int, limitRecent: Int): GameLeaderboard!
+    gameScoreBoard(gameId: String, limitTop: Int, limitRecent: Int): GameScoreBoard!
+    breakoutScore(userId: String): BreakoutScore!
+    breakoutLeaderboard(limitTop: Int, limitRecent: Int): BreakoutLeaderboard!
     integrationDateRanges: [IntegrationDateRange!]!
     integrationDateRange(id: Int!): IntegrationDateRange
     dataSources: [DataSource!]!
@@ -1056,6 +1092,8 @@ export const typeDefs = `#graphql
     setDefaultDateRange(id: Int!): IntegrationDateRange!
     saveAppearanceSettings(settings: JSON!, activeProfileId: String, userId: String): AppearanceSettings!
     saveAppearanceProfiles(profiles: JSON!, userId: String): [AppearanceProfile!]!
+    saveGameScore(gameId: String!, score: Int!, userId: String): GameScore!
+    saveBreakoutScore(score: Int!, userId: String): BreakoutScore!
     
     # Target Profiles
     createTargetProfile(input: TargetProfileInput!): TargetProfile!

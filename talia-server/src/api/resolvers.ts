@@ -572,9 +572,202 @@ const mapGraphQLFocusToDb = (input: any, createdBy?: string) => {
 };
 
 const APPEARANCE_SETTINGS_CATEGORY = 'ui_appearance';
+const GAME_SETTINGS_CATEGORY = 'ui_game';
+const DEFAULT_GAME_ID = 'breakout';
 
 const appearanceKey = (base: string, userId?: string | null) =>
   userId ? `${base}:${userId}` : base;
+
+const gameSettingKey = (base: string, userId?: string | null) =>
+  userId ? `${base}:${userId}` : base;
+
+const normalizeGameId = (value: any) => String(value || DEFAULT_GAME_ID).trim().toLowerCase();
+const normalizeUserId = (value: any) => String(value || 'dev-user-1').trim();
+
+const gameScoreKey = (gameId: string, userId: string) => `score:${normalizeGameId(gameId)}:${normalizeUserId(userId)}`;
+
+const mapBreakoutScorePayload = (raw: any, userId: string) => {
+  const normalized = raw && typeof raw === 'object' ? raw : {};
+  const highScore = Number.isFinite(Number(normalized.highScore)) ? Number(normalized.highScore) : 0;
+  const lastScore = Number.isFinite(Number(normalized.lastScore)) ? Number(normalized.lastScore) : 0;
+  return {
+    userId,
+    highScore: Math.max(0, Math.floor(highScore)),
+    lastScore: Math.max(0, Math.floor(lastScore)),
+    updatedAt: typeof normalized.updatedAt === 'string' ? normalized.updatedAt : null
+  };
+};
+
+const mapGameScorePayload = (raw: any, gameId: string, userId: string) => {
+  const normalized = raw && typeof raw === 'object' ? raw : {};
+  const highScore = Number.isFinite(Number(normalized.highScore)) ? Number(normalized.highScore) : 0;
+  const lastScore = Number.isFinite(Number(normalized.lastScore)) ? Number(normalized.lastScore) : 0;
+  return {
+    gameId: normalizeGameId(normalized.gameId || gameId),
+    userId: normalizeUserId(normalized.userId || userId),
+    highScore: Math.max(0, Math.floor(highScore)),
+    lastScore: Math.max(0, Math.floor(lastScore)),
+    updatedAt: typeof normalized.updatedAt === 'string' ? normalized.updatedAt : null
+  };
+};
+
+const toBreakoutScorePayload = (gameScore: any) => ({
+  userId: normalizeUserId(gameScore?.userId),
+  highScore: Math.max(0, Math.floor(Number(gameScore?.highScore || 0))),
+  lastScore: Math.max(0, Math.floor(Number(gameScore?.lastScore || 0))),
+  updatedAt: typeof gameScore?.updatedAt === 'string' ? gameScore.updatedAt : null
+});
+
+const extractBreakoutLeaderboardRows = (settingsRows: any[]) => {
+  const rows = Array.isArray(settingsRows) ? settingsRows : [];
+  return rows
+    .filter((row) => String(row?.setting_key || '').startsWith('breakout_score'))
+    .map((row) => {
+      const settingKey = String(row?.setting_key || '');
+      const inferredUserId = settingKey.includes(':')
+        ? settingKey.slice(settingKey.indexOf(':') + 1).trim()
+        : 'dev-user-1';
+      const mapped = mapBreakoutScorePayload(row?.setting_value, inferredUserId);
+      return mapped;
+    })
+    .filter((entry) => entry.userId);
+};
+
+const extractGameLeaderboardRows = (settingsRows: any[], gameId: string) => {
+  const normalizedGameId = normalizeGameId(gameId);
+  const rows = Array.isArray(settingsRows) ? settingsRows : [];
+  const keyPrefix = `score:${normalizedGameId}:`;
+  const genericRows = rows
+    .filter((row) => String(row?.setting_key || '').startsWith(keyPrefix))
+    .map((row) => {
+      const settingKey = String(row?.setting_key || '');
+      const inferredUserId = settingKey.slice(keyPrefix.length).trim() || 'dev-user-1';
+      return mapGameScorePayload(row?.setting_value, normalizedGameId, inferredUserId);
+    });
+
+  if (normalizedGameId !== DEFAULT_GAME_ID) {
+    return genericRows.filter((entry) => entry.userId);
+  }
+
+  const legacyRows = rows
+    .filter((row) => String(row?.setting_key || '').startsWith('breakout_score:'))
+    .map((row) => {
+      const settingKey = String(row?.setting_key || '');
+      const inferredUserId = settingKey.slice('breakout_score:'.length).trim() || 'dev-user-1';
+      return mapGameScorePayload(row?.setting_value, DEFAULT_GAME_ID, inferredUserId);
+    });
+
+  const deduped = new Map<string, any>();
+  [...genericRows, ...legacyRows].forEach((entry) => {
+    const existing = deduped.get(entry.userId);
+    if (!existing) {
+      deduped.set(entry.userId, entry);
+      return;
+    }
+    const existingTime = Date.parse(existing.updatedAt || '') || 0;
+    const currentTime = Date.parse(entry.updatedAt || '') || 0;
+    if (currentTime >= existingTime) {
+      deduped.set(entry.userId, entry);
+    }
+  });
+  return Array.from(deduped.values()).filter((entry) => entry.userId);
+};
+
+const extractAllGameRows = (settingsRows: any[], gameId?: string | null) => {
+  const rows = Array.isArray(settingsRows) ? settingsRows : [];
+  const gameFilter = gameId ? normalizeGameId(gameId) : null;
+  const genericRows = rows
+    .filter((row) => String(row?.setting_key || '').startsWith('score:'))
+    .map((row) => {
+      const key = String(row?.setting_key || '');
+      const parts = key.split(':');
+      if (parts.length < 3) return null;
+      const parsedGameId = normalizeGameId(parts[1] || DEFAULT_GAME_ID);
+      const parsedUserId = normalizeUserId(parts.slice(2).join(':'));
+      return mapGameScorePayload(row?.setting_value, parsedGameId, parsedUserId);
+    })
+    .filter(Boolean)
+    .filter((entry: any) => !gameFilter || entry.gameId === gameFilter);
+
+  const legacyRows = rows
+    .filter((row) => String(row?.setting_key || '').startsWith('breakout_score:'))
+    .map((row) => {
+      const settingKey = String(row?.setting_key || '');
+      const inferredUserId = settingKey.slice('breakout_score:'.length).trim() || 'dev-user-1';
+      return mapGameScorePayload(row?.setting_value, DEFAULT_GAME_ID, inferredUserId);
+    })
+    .filter((entry: any) => !gameFilter || entry.gameId === gameFilter);
+
+  const deduped = new Map<string, any>();
+  [...genericRows, ...legacyRows].forEach((entry: any) => {
+    const dedupeKey = `${entry.gameId}:${entry.userId}`;
+    const existing = deduped.get(dedupeKey);
+    if (!existing) {
+      deduped.set(dedupeKey, entry);
+      return;
+    }
+    const existingTime = Date.parse(existing.updatedAt || '') || 0;
+    const currentTime = Date.parse(entry.updatedAt || '') || 0;
+    if (currentTime >= existingTime) {
+      deduped.set(dedupeKey, entry);
+    }
+  });
+
+  return Array.from(deduped.values())
+    .filter((entry) => entry.userId && entry.gameId);
+};
+
+const getStoredGameScore = async (gameId: string, userId: string) => {
+  const normalizedGameId = normalizeGameId(gameId);
+  const normalizedUserId = normalizeUserId(userId);
+  const primary = await configService.getSetting(
+    GAME_SETTINGS_CATEGORY,
+    gameScoreKey(normalizedGameId, normalizedUserId)
+  );
+  if (primary) {
+    return mapGameScorePayload(primary, normalizedGameId, normalizedUserId);
+  }
+  if (normalizedGameId === DEFAULT_GAME_ID) {
+    const legacy = await configService.getSetting(
+      GAME_SETTINGS_CATEGORY,
+      gameSettingKey('breakout_score', normalizedUserId)
+    );
+    if (legacy) {
+      return mapGameScorePayload(legacy, normalizedGameId, normalizedUserId);
+    }
+  }
+  return {
+    gameId: normalizedGameId,
+    userId: normalizedUserId,
+    highScore: 0,
+    lastScore: 0,
+    updatedAt: null
+  };
+};
+
+const saveStoredGameScore = async (gameId: string, userId: string, score: number) => {
+  const normalizedGameId = normalizeGameId(gameId);
+  const normalizedUserId = normalizeUserId(userId);
+  const nextScore = Math.max(0, Math.floor(Number(score) || 0));
+  const existingPayload = await getStoredGameScore(normalizedGameId, normalizedUserId);
+  const payload = {
+    gameId: normalizedGameId,
+    userId: normalizedUserId,
+    highScore: Math.max(existingPayload.highScore, nextScore),
+    lastScore: nextScore,
+    updatedAt: new Date().toISOString()
+  };
+  await configService.upsertSetting(
+    GAME_SETTINGS_CATEGORY,
+    gameScoreKey(normalizedGameId, normalizedUserId),
+    payload,
+    {
+      displayName: `Game Score (${normalizedGameId}/${normalizedUserId})`,
+      description: 'Per-user game high and last scores'
+    }
+  );
+  return payload;
+};
 
 
 const normalizeAppearanceProfiles = (raw: any): Array<{ id: string; name: string; settings: any; updatedAt: string }> => {
@@ -1760,6 +1953,135 @@ export const resolvers = {
       }
     },
 
+    breakoutScore: async (parent: any, args: any) => {
+      const uid = normalizeUserId(args.userId);
+      try {
+        const payload = await getStoredGameScore(DEFAULT_GAME_ID, uid);
+        return toBreakoutScorePayload(payload);
+      } catch (error: any) {
+        console.error('Error getting breakout score:', error);
+        return {
+          userId: uid,
+          highScore: 0,
+          lastScore: 0,
+          updatedAt: null
+        };
+      }
+    },
+
+    gameScore: async (parent: any, args: any) => {
+      const gameId = normalizeGameId(args.gameId);
+      const userId = normalizeUserId(args.userId);
+      try {
+        return await getStoredGameScore(gameId, userId);
+      } catch (error: any) {
+        console.error('Error getting game score:', error);
+        return {
+          gameId,
+          userId,
+          highScore: 0,
+          lastScore: 0,
+          updatedAt: null
+        };
+      }
+    },
+
+    breakoutLeaderboard: async (parent: any, args: any) => {
+      const limitTop = Math.max(1, Math.min(20, Number(args?.limitTop || 5)));
+      const limitRecent = Math.max(1, Math.min(20, Number(args?.limitRecent || 5)));
+      try {
+        const rows = await configService.getSettings(GAME_SETTINGS_CATEGORY);
+        const entries = extractBreakoutLeaderboardRows(rows);
+        const top = [...entries]
+          .sort((left, right) => {
+            if (right.highScore !== left.highScore) return right.highScore - left.highScore;
+            const leftTime = Date.parse(left.updatedAt || '') || 0;
+            const rightTime = Date.parse(right.updatedAt || '') || 0;
+            return rightTime - leftTime;
+          })
+          .slice(0, limitTop);
+        const recent = [...entries]
+          .sort((left, right) => {
+            const leftTime = Date.parse(left.updatedAt || '') || 0;
+            const rightTime = Date.parse(right.updatedAt || '') || 0;
+            return rightTime - leftTime;
+          })
+          .slice(0, limitRecent);
+        return { top, recent };
+      } catch (error: any) {
+        console.error('Error getting breakout leaderboard:', error);
+        return {
+          top: [],
+          recent: []
+        };
+      }
+    },
+
+    gameLeaderboard: async (parent: any, args: any) => {
+      const gameId = normalizeGameId(args?.gameId);
+      const limitTop = Math.max(1, Math.min(20, Number(args?.limitTop || 5)));
+      const limitRecent = Math.max(1, Math.min(20, Number(args?.limitRecent || 5)));
+      try {
+        const rows = await configService.getSettings(GAME_SETTINGS_CATEGORY);
+        const entries = extractGameLeaderboardRows(rows, gameId);
+        const top = [...entries]
+          .sort((left, right) => {
+            if (right.highScore !== left.highScore) return right.highScore - left.highScore;
+            const leftTime = Date.parse(left.updatedAt || '') || 0;
+            const rightTime = Date.parse(right.updatedAt || '') || 0;
+            return rightTime - leftTime;
+          })
+          .slice(0, limitTop);
+        const recent = [...entries]
+          .sort((left, right) => {
+            const leftTime = Date.parse(left.updatedAt || '') || 0;
+            const rightTime = Date.parse(right.updatedAt || '') || 0;
+            return rightTime - leftTime;
+          })
+          .slice(0, limitRecent);
+        return { gameId, top, recent };
+      } catch (error: any) {
+        console.error('Error getting game leaderboard:', error);
+        return {
+          gameId,
+          top: [],
+          recent: []
+        };
+      }
+    },
+
+    gameScoreBoard: async (parent: any, args: any) => {
+      const gameId = args?.gameId ? normalizeGameId(args.gameId) : null;
+      const limitTop = Math.max(1, Math.min(20, Number(args?.limitTop || 5)));
+      const limitRecent = Math.max(1, Math.min(20, Number(args?.limitRecent || 5)));
+      try {
+        const rows = await configService.getSettings(GAME_SETTINGS_CATEGORY);
+        const entries = extractAllGameRows(rows, gameId);
+        const top = [...entries]
+          .sort((left, right) => {
+            if (right.highScore !== left.highScore) return right.highScore - left.highScore;
+            const leftTime = Date.parse(left.updatedAt || '') || 0;
+            const rightTime = Date.parse(right.updatedAt || '') || 0;
+            return rightTime - leftTime;
+          })
+          .slice(0, limitTop);
+        const recent = [...entries]
+          .sort((left, right) => {
+            const leftTime = Date.parse(left.updatedAt || '') || 0;
+            const rightTime = Date.parse(right.updatedAt || '') || 0;
+            return rightTime - leftTime;
+          })
+          .slice(0, limitRecent);
+        return { top, recent };
+      } catch (error: any) {
+        console.error('Error getting game score board:', error);
+        return {
+          top: [],
+          recent: []
+        };
+      }
+    },
+
     integrationDateRanges: async () => {
       try {
         const ranges = await configService.getIntegrationDateRanges();
@@ -2841,6 +3163,30 @@ export const resolvers = {
       } catch (error: any) {
         console.error('Error saving appearance profiles:', error);
         throw new Error(`Failed to save appearance profiles: ${error.message}`);
+      }
+    },
+
+    saveBreakoutScore: async (parent: any, args: any) => {
+      const uid = normalizeUserId(args.userId);
+      const nextScore = Math.max(0, Math.floor(Number(args.score) || 0));
+      try {
+        const payload = await saveStoredGameScore(DEFAULT_GAME_ID, uid, nextScore);
+        return toBreakoutScorePayload(payload);
+      } catch (error: any) {
+        console.error('Error saving breakout score:', error);
+        throw new Error(`Failed to save breakout score: ${error.message}`);
+      }
+    },
+
+    saveGameScore: async (parent: any, args: any) => {
+      const gameId = normalizeGameId(args.gameId);
+      const userId = normalizeUserId(args.userId);
+      const nextScore = Math.max(0, Math.floor(Number(args.score) || 0));
+      try {
+        return await saveStoredGameScore(gameId, userId, nextScore);
+      } catch (error: any) {
+        console.error('Error saving game score:', error);
+        throw new Error(`Failed to save game score: ${error.message}`);
       }
     },
 

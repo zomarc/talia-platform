@@ -24,6 +24,8 @@ import GoogleSearchContainer from './GoogleSearch';
 import SearchTrendsContainer from './SearchTrends';
 import GoogleTrendsContainer from './GoogleTrends';
 import DataMatch from './DataMatch';
+import BreakoutGame from './BreakoutGame';
+import SpaceInvaders from './SpaceInvaders';
 import BtopTerminal from './BtopTerminal';
 import MasterVoyagePerformanceSummaryContainer from './MasterVoyagePerformanceSummary';
 import VoyageReportContainer from './VoyageReport';
@@ -462,6 +464,32 @@ export const componentRegistry = {
     supportsGroupActions: true,
     showInReports: true,
     filePath: 'src/components/focus-panels/DataMatch/index.jsx'
+  },
+  BreakoutGame: {
+    component: BreakoutGame,
+    panelId: 'breakout-game',
+    category: 'Fun',
+    title: 'Breakout',
+    description: 'Arcade breakout mini-game with per-user high score tracking',
+    usesMockData: false,
+    props: {},
+    dataRequirements: 'Stores score per user via talia GraphQL config_setting',
+    events: { emits: [], respondsTo: [] },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/BreakoutGame/index.jsx'
+  },
+  SpaceInvaders: {
+    component: SpaceInvaders,
+    panelId: 'space-invaders',
+    category: 'Fun',
+    title: 'Space Invaders',
+    description: 'Arcade space shooter with shared game score tracking',
+    usesMockData: false,
+    props: {},
+    dataRequirements: 'Stores score per user via generic game score GraphQL service',
+    events: { emits: [], respondsTo: [] },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/SpaceInvaders/index.jsx'
   },
   MasterVoyagePerformanceSummary: {
     component: MasterVoyagePerformanceSummaryContainer,

@@ -24,6 +24,8 @@ import {
 import { uiActivityMutationResolvers, uiActivityQueryResolvers } from './resolver-modules/uiActivityResolvers.js';
 import { userMutationResolvers, userQueryResolvers } from './resolver-modules/userResolvers.js';
 import { statusQueryResolvers } from './resolver-modules/statusResolvers.js';
+import { refreshQueryResolvers } from './resolver-modules/refreshResolvers.js';
+import { metadataQueryResolvers } from './resolver-modules/metadataResolvers.js';
 
 // Helper function to check user permissions
 const hasPermission = (userRole: string, requiredRole: string): boolean => {
@@ -1434,42 +1436,7 @@ export const resolvers = {
       }
     },
 
-    refreshMetadata: async (parent: any, args: any) => {
-      const { dataSource } = args;
-      try {
-        const metadata = await supabaseDataService.getRefreshMetadata(dataSource);
-        if (!metadata) {
-          // Return default metadata if not found (table may not exist yet)
-          return {
-            dataSource,
-            lastRefreshedAt: null,
-            refreshStatus: 'idle',
-            refreshError: null,
-            recordsUpdated: 0,
-            metadata: {}
-          };
-        }
-        return {
-          dataSource: metadata.data_source || metadata.operation_name,
-          lastRefreshedAt: metadata.last_refreshed_at || metadata.last_run_at,
-          refreshStatus: metadata.refresh_status || metadata.status || 'idle',
-          refreshError: metadata.refresh_error || metadata.error,
-          recordsUpdated: metadata.records_updated || 0,
-          metadata: metadata.metadata || {}
-        };
-      } catch (error: any) {
-        // Don't throw - return default metadata instead
-        console.warn('Error fetching refresh metadata (table may not exist yet):', error.message);
-        return {
-          dataSource,
-          lastRefreshedAt: null,
-          refreshStatus: 'idle',
-          refreshError: null,
-          recordsUpdated: 0,
-          metadata: {}
-        };
-      }
-    },
+    ...refreshQueryResolvers,
 
     // Demand Heatmap
     demandHeatmapData: async (parent: any, args: any) => {
@@ -1563,35 +1530,7 @@ export const resolvers = {
     },
 
     ...statusQueryResolvers,
-
-    syncMetadata: async () => {
-      try {
-        // Get all sync operations from unified table
-        const { data, error } = await supabaseDataService.client
-          .from('operation_metadata')
-          .select('*')
-          .eq('operation_type', 'sync');
-        
-        if (error) {
-          console.error('Error fetching sync metadata:', error);
-          return [];
-        }
-        
-        // Map unified schema to legacy format for backward compatibility
-        return (data || []).map(record => ({
-          sync_type: record.operation_name,
-          last_sync_at: record.last_run_at,
-          duration_ms: record.duration_ms,
-          records_processed: record.records_processed,
-          changes_detected: record.changes_detected,
-          status: record.status,
-          error: record.error
-        }));
-      } catch (error: any) {
-        console.error('Error in syncMetadata resolver:', error);
-        return [];
-      }
-    },
+    ...metadataQueryResolvers,
 
     databaseTables: async () => {
       try {

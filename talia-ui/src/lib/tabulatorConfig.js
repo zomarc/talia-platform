@@ -20,6 +20,12 @@ const tableInstances = new Set();
 let hasBoundLayoutListener = false;
 const tableMeta = new WeakMap();
 let wrappedTabulatorClass = null;
+const dragTracker = {
+  active: false,
+  moved: false,
+  startX: 0,
+  startY: 0,
+};
 
 const isBrowser = () => typeof window !== 'undefined';
 
@@ -142,6 +148,28 @@ const ensureLayoutListenerBound = () => {
   window.addEventListener('resize', () => {
     reflowAllTables();
   });
+  // Re-apply layout after drag-resize gestures only (not regular clicks).
+  window.addEventListener('mousedown', (event) => {
+    dragTracker.active = true;
+    dragTracker.moved = false;
+    dragTracker.startX = Number(event?.clientX || 0);
+    dragTracker.startY = Number(event?.clientY || 0);
+  });
+  window.addEventListener('mousemove', (event) => {
+    if (!dragTracker.active) return;
+    const x = Number(event?.clientX || 0);
+    const y = Number(event?.clientY || 0);
+    if (Math.abs(x - dragTracker.startX) > 6 || Math.abs(y - dragTracker.startY) > 6) {
+      dragTracker.moved = true;
+    }
+  });
+  window.addEventListener('mouseup', () => {
+    if (dragTracker.active && dragTracker.moved) {
+      reflowAllTables();
+    }
+    dragTracker.active = false;
+    dragTracker.moved = false;
+  });
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
       requestAnimationFrame(() => {
@@ -183,6 +211,8 @@ export const initTabulator = async () => {
       super(element, processed);
 
       registerTableInstance(this, baseColumns);
+      // Apply layout mode immediately so newly opened reports honor global mode.
+      applyLayoutModeToTable(this);
 
       this.on?.('tableBuilt', () => {
         applyLayoutModeToTable(this);

@@ -49,6 +49,7 @@ const formatCriteria = (criteria) => {
 const AdminLogsPanel = () => {
   const [windowKey, setWindowKey] = useState('1h');
   const [kindFilter, setKindFilter] = useState('all');
+  const [userFilter, setUserFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -122,10 +123,16 @@ const AdminLogsPanel = () => {
   }, [selectedWindowMinutes]);
 
   const filteredRows = useMemo(() => rows.filter((row) => {
+    if (userFilter !== 'all' && row.user !== userFilter) return false;
     if (kindFilter !== 'all' && row.kind !== kindFilter) return false;
     if (statusFilter !== 'all' && row.status !== statusFilter) return false;
     return true;
-  }), [rows, kindFilter, statusFilter]);
+  }), [rows, kindFilter, statusFilter, userFilter]);
+
+  const userOptions = useMemo(
+    () => [...new Set(rows.map((row) => row.user).filter(Boolean))].sort(),
+    [rows]
+  );
 
   const kindOptions = useMemo(
     () => [...new Set(rows.map((row) => row.kind).filter(Boolean))].sort(),
@@ -204,6 +211,15 @@ const AdminLogsPanel = () => {
           <select className="admin-access__select" value={windowKey} onChange={(event) => setWindowKey(event.target.value)}>
             {WINDOW_OPTIONS.map((option) => (
               <option key={option.key} value={option.key}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="admin-access__control">
+          <span>User</span>
+          <select className="admin-access__select" value={userFilter} onChange={(event) => setUserFilter(event.target.value)}>
+            <option value="all">All</option>
+            {userOptions.map((user) => (
+              <option key={user} value={user}>{user}</option>
             ))}
           </select>
         </label>

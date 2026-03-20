@@ -174,6 +174,7 @@ const StatusBar = ({
   } = useTheme();
   const [showDetails, setShowDetails] = useState(false);
   const [displayMessage, setDisplayMessage] = useState(statusMessage);
+  const [isMessageFading, setIsMessageFading] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => !!window.__taliaSidebarCollapsed);
   const [filtersVisible, setFiltersVisible] = useState(() => window.__taliaFiltersVisible === true);
   const [eventsVisible, setEventsVisible] = useState(() => window.__taliaEventsVisible === true);
@@ -211,6 +212,8 @@ const StatusBar = ({
     return saved === 'data' ? 'data' : 'width';
   });
   const refreshPhaseTimerRef = useRef(null);
+  const messageFadeTimerRef = useRef(null);
+  const messageHideTimerRef = useRef(null);
   const appVersion = import.meta.env.VITE_APP_VERSION || '0.1.6';
   const hasAdvancedControls = typeof canUseAdvancedControls === 'boolean'
     ? canUseAdvancedControls
@@ -218,14 +221,39 @@ const StatusBar = ({
 
   // Update display message when statusMessage changes
   useEffect(() => {
+    if (messageFadeTimerRef.current) {
+      window.clearTimeout(messageFadeTimerRef.current);
+      messageFadeTimerRef.current = null;
+    }
+    if (messageHideTimerRef.current) {
+      window.clearTimeout(messageHideTimerRef.current);
+      messageHideTimerRef.current = null;
+    }
     if (statusMessage) {
       setDisplayMessage(statusMessage);
-      // Auto-hide after 5 seconds
-      const timer = setTimeout(() => {
+      setIsMessageFading(false);
+      // Standard status-message lifecycle: visible for 9s, fade, then hide at 10s.
+      messageFadeTimerRef.current = window.setTimeout(() => {
+        setIsMessageFading(true);
+      }, 9000);
+      messageHideTimerRef.current = window.setTimeout(() => {
         setDisplayMessage(null);
-      }, 5000);
-      return () => clearTimeout(timer);
+        setIsMessageFading(false);
+      }, 10000);
+    } else {
+      setDisplayMessage(null);
+      setIsMessageFading(false);
     }
+    return () => {
+      if (messageFadeTimerRef.current) {
+        window.clearTimeout(messageFadeTimerRef.current);
+        messageFadeTimerRef.current = null;
+      }
+      if (messageHideTimerRef.current) {
+        window.clearTimeout(messageHideTimerRef.current);
+        messageHideTimerRef.current = null;
+      }
+    };
   }, [statusMessage]);
 
   useEffect(() => {
@@ -474,6 +502,12 @@ const StatusBar = ({
   useEffect(() => {
     return () => {
       clearRefreshTimer();
+      if (messageFadeTimerRef.current) {
+        window.clearTimeout(messageFadeTimerRef.current);
+      }
+      if (messageHideTimerRef.current) {
+        window.clearTimeout(messageHideTimerRef.current);
+      }
     };
   }, []);
 
@@ -751,7 +785,7 @@ const StatusBar = ({
         <div className="status-bar__left">
           {/* Status Message (temporary) */}
           {displayMessage && (
-            <div className="status-bar__message status-bar__message--success">
+            <div className={`status-bar__message status-bar__message--success ${isMessageFading ? 'status-bar__message--fading' : ''}`}>
               <span className="status-bar__icon">✓</span>
               <span className="status-bar__text">{displayMessage}</span>
             </div>

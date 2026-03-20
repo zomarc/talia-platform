@@ -26,7 +26,7 @@ import { initChartDefaults } from './lib/chartConfig.js';
 import { GraphQLUtils } from './lib/apolloClient.js';
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from './lib/eventBus.js';
 import { normalizeRole, canUseAdvancedHeader, canAccessPrivilegedPanels } from './utils/roleUtils.js';
-import { initUserActivityTracking } from './services/userActivityTracker.js';
+import userActivityTracker, { initUserActivityTracking } from './services/userActivityTracker.js';
 
 // Apollo Client temporarily disabled during database restoration
 // TODO: Re-enable when database is restored
@@ -71,20 +71,26 @@ const globalStatusState = {
   currentEvent: null,
   persistedEvent: null,
   dataStatus: null,
+  statusTimer: null,
   listeners: new Set()
 };
 
 // Global status API
 window.__taliaStatus = {
   setStatusMessage: (message) => {
+    if (globalStatusState.statusTimer) {
+      clearTimeout(globalStatusState.statusTimer);
+      globalStatusState.statusTimer = null;
+    }
     globalStatusState.statusMessage = message;
     globalStatusState.listeners.forEach(listener => listener());
-    // Auto-clear after 5 seconds
+    // Standard message lifecycle: clear after 10 seconds.
     if (message) {
-      setTimeout(() => {
+      globalStatusState.statusTimer = setTimeout(() => {
         globalStatusState.statusMessage = null;
+        globalStatusState.statusTimer = null;
         globalStatusState.listeners.forEach(listener => listener());
-      }, 5000);
+      }, 10000);
     }
   },
   setDataStatus: (dataStatus) => {
@@ -189,6 +195,7 @@ const DevSwitcher = () => {
         } else if (event.type.includes('.clear')) {
           globalStatusState.currentEvent = null;
         }
+        userActivityTracker.recordBusinessEvent(event.type, event.detail || {});
         
         // Notify listeners
         globalStatusState.listeners.forEach(listener => listener());

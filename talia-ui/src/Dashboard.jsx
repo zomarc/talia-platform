@@ -1108,6 +1108,11 @@ function Dashboard({ user }) {
       });
 
       if (success) {
+        const savedAt = new Date();
+        const savedAtLabel = savedAt.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
         try {
           window.localStorage?.setItem?.(SAVED_FOCUS_KEY, focusId);
         } catch {
@@ -1119,7 +1124,7 @@ function Dashboard({ user }) {
           panelComponent: 'status-bar',
           report: focusName,
         });
-        setStatusMessage(`Layout saved to "${focusName}" successfully`);
+        setStatusMessage(`Layout saved to "${focusName}" at ${savedAtLabel}`);
         return true;
       } else {
         userActivityTracker.recordFocusAction('focus-save', {
@@ -1343,7 +1348,8 @@ function Dashboard({ user }) {
           
           // Restore sidebar state
           if (parsed.sidebar) {
-            setSidebarCollapsed(parsed.sidebar.collapsed ?? true);
+            // Always default closed on refresh/startup.
+            setSidebarCollapsed(true);
             setSidebarWidth(parsed.sidebar.width || 280);
           }
           

@@ -203,6 +203,23 @@ class UserActivityTracker {
     });
   }
 
+  recordBusinessEvent(eventName, detail = {}, metadata = {}) {
+    const payload = detail && typeof detail === 'object' ? detail : {};
+    const extra = metadata && typeof metadata === 'object' ? metadata : {};
+    const source = String(eventName || 'event').replace('talia:', '').replace('.select', '').replace('.clear', '');
+    const primary = payload?.sail_code || payload?.ship_code || payload?.id || '';
+    return this.record({
+      kind: 'event',
+      report: source || 'Business Bus',
+      panelComponent: 'business-bus',
+      purpose: String(eventName || 'event'),
+      status: primary ? String(primary) : '',
+      performanceMs: null,
+      queryCount: null,
+      ...extra
+    });
+  }
+
   getEvents() {
     return [...this.sharedEvents, ...this.events];
   }

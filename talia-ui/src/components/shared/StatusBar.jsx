@@ -14,6 +14,7 @@ import ModeSelector from '../ModeSelector';
 import { canUseAdvancedHeader } from '../../utils/roleUtils';
 import { REPORT_REFRESH_EVENT } from '../dockview/eventConstants';
 import { useTheme } from '../../contexts/ThemeContext';
+import userActivityTracker from '../../services/userActivityTracker';
 // CSS imported globally in main.jsx
 const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
 const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';
@@ -24,6 +25,8 @@ const DASHBOARD_FOCUS_STATE_EVENT = 'talia:dashboard.focusState';
 const DASHBOARD_VIEW_SCOPE_EVENT = 'talia:dashboard.viewScope';
 const DASHBOARD_DETAILS_VISIBILITY_EVENT = 'talia:dashboard.detailsVisibility';
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
+const DASHBOARD_TABLE_LAYOUT_EVENT = 'talia:dashboard.tableLayout';
+const TABLE_LAYOUT_STORAGE_KEY = 'taliaTableLayoutMode';
 
 const GLOBAL_DATE_RANGE_OPTIONS = [
   { key: 'all', label: 'All' },
@@ -199,8 +202,14 @@ const StatusBar = ({
     return true;
   });
   const [refreshPhase, setRefreshPhase] = useState('active'); // active -> all -> cooldown
+  const [tableLayoutMode, setTableLayoutMode] = useState(() => {
+    const inMemory = window.__taliaTableLayoutMode;
+    if (inMemory === 'data' || inMemory === 'width') return inMemory;
+    const saved = window.localStorage?.getItem?.(TABLE_LAYOUT_STORAGE_KEY);
+    return saved === 'data' ? 'data' : 'width';
+  });
   const refreshPhaseTimerRef = useRef(null);
-  const appVersion = import.meta.env.VITE_APP_VERSION || '0.1.5';
+  const appVersion = import.meta.env.VITE_APP_VERSION || '0.1.6';
   const hasAdvancedControls = typeof canUseAdvancedControls === 'boolean'
     ? canUseAdvancedControls
     : canUseAdvancedHeader(userRole);
@@ -229,14 +238,18 @@ const StatusBar = ({
   }, []);
 
   const handleSidebarToggle = () => {
+    userActivityTracker.recordHeaderAction('sidebar-toggle', { status: sidebarCollapsed ? 'open' : 'close' });
     window.dispatchEvent(new CustomEvent(DASHBOARD_TOGGLE_SIDEBAR_EVENT));
   };
 
   const handleFiltersToggle = () => {
-    setFiltersVisible((prev) => !prev);
+    const nextVisible = !filtersVisible;
+    userActivityTracker.recordHeaderAction('filters-toggle', { status: nextVisible ? 'show' : 'hide' });
+    setFiltersVisible(nextVisible);
   };
 
   const handleCycleFocus = () => {
+    userActivityTracker.recordHeaderAction('focus-cycle');
     window.dispatchEvent(new CustomEvent(DASHBOARD_CYCLE_FOCUS_EVENT));
   };
 
@@ -244,6 +257,7 @@ const StatusBar = ({
     const focusId = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value || '';
     setSelectedFocusId(focusId);
     if (!focusId) return;
+    userActivityTracker.recordHeaderAction('focus-select', { status: focusId });
     window.dispatchEvent(
       new CustomEvent(DASHBOARD_SELECT_FOCUS_EVENT, {
         detail: { focusId },
@@ -252,32 +266,58 @@ const StatusBar = ({
   };
 
   const handleViewScopeToggle = () => {
-    setViewScope((prev) => (prev === 'wide' ? 'local' : 'wide'));
+    const next = viewScope === 'wide' ? 'local' : 'wide';
+    userActivityTracker.recordHeaderAction('view-scope-toggle', { status: next });
+    setViewScope(next);
+  };
+
+  const handleTableLayoutToggle = () => {
+    const next = tableLayoutMode === 'width' ? 'data' : 'width';
+    setTableLayoutMode(next);
+    window.__taliaTableLayoutMode = next;
+    try {
+      window.localStorage?.setItem?.(TABLE_LAYOUT_STORAGE_KEY, next);
+    } catch {
+      // no-op
+    }
+    window.dispatchEvent(
+      new CustomEvent(DASHBOARD_TABLE_LAYOUT_EVENT, {
+        detail: { mode: next },
+      })
+    );
+    userActivityTracker.recordHeaderAction('table-layout-toggle', { status: next });
   };
 
   const handleEventsToggle = () => {
-    setEventsVisible((prev) => !prev);
+    const nextVisible = !eventsVisible;
+    userActivityTracker.recordHeaderAction('advanced-controls-toggle', { status: nextVisible ? 'show' : 'hide' });
+    setEventsVisible(nextVisible);
   };
 
   const handleCriteriaToggle = () => {
-    setCriteriaVisible((prev) => !prev);
+    const nextVisible = !criteriaVisible;
+    userActivityTracker.recordHeaderAction('criteria-toggle', { status: nextVisible ? 'show' : 'hide' });
+    setCriteriaVisible(nextVisible);
   };
 
   const handleGlobalDateRangeChange = (nextValue) => {
     const next = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value;
     if (!GLOBAL_DATE_RANGE_OPTIONS.some((option) => option.key === next)) return;
+    userActivityTracker.recordHeaderAction('global-date-range', { status: next });
     setGlobalDateRange(next);
   };
 
   const handleGlobalDurationChange = (nextValue) => {
     const next = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value;
     if (!GLOBAL_DURATION_OPTIONS.some((option) => option.key === next)) return;
+    userActivityTracker.recordHeaderAction('global-duration', { status: next });
     setGlobalDuration(next);
   };
 
   const handleAppearanceProfileChange = (nextValue) => {
     const next = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value;
     if (!next) return;
+    userActivityTracker.recordHeaderAction('appearance-profile', { status: next });
     applyAppearanceProfile(next);
   };
 
@@ -309,6 +349,7 @@ const StatusBar = ({
       ...(panelId ? { [panelId]: nextVisible } : {}),
       ...(panelComponent ? { [panelComponent]: nextVisible } : {}),
     };
+    userActivityTracker.recordHeaderAction('details-toggle', { status: nextVisible ? 'show' : 'hide' });
     window.dispatchEvent(
       new CustomEvent(DASHBOARD_DETAILS_VISIBILITY_EVENT, {
         detail: {
@@ -355,15 +396,22 @@ const StatusBar = ({
         panelComponent: panelComponent || null,
         scope: 'active',
       });
+      userActivityTracker.recordHeaderAction('refresh', { status: 'active-panel' });
       startRefreshWindow('all');
       return;
     }
 
     if (refreshPhase === 'all') {
       dispatchReportRefresh({ scope: 'all' });
+      userActivityTracker.recordHeaderAction('refresh', { status: 'all-panels' });
       startRefreshWindow('cooldown');
       return;
     }
+  };
+
+  const handleActiveOnlyChange = (checked) => {
+    userActivityTracker.recordHeaderAction('active-only-toggle', { status: checked ? 'active-only' : 'include-non-real' });
+    setActiveOnly(checked);
   };
 
   useEffect(() => {
@@ -525,6 +573,15 @@ const StatusBar = ({
                 </button>
                 <button
                   type="button"
+                  className={`status-bar__header-btn ${tableLayoutMode === 'width' ? 'status-bar__header-btn--active' : ''}`}
+                  onClick={handleTableLayoutToggle}
+                  title={tableLayoutMode === 'width' ? 'Tables: fill to width (click for fit to data)' : 'Tables: fit to data (click for fill to width)'}
+                  aria-label={tableLayoutMode === 'width' ? 'Switch tables to fit data' : 'Switch tables to fill width'}
+                >
+                  {tableLayoutMode === 'width' ? '↔' : '⇵'}
+                </button>
+                <button
+                  type="button"
                   className="status-bar__header-btn"
                   onClick={handleDetailsToggle}
                   title="Show/hide details on active panel"
@@ -619,7 +676,7 @@ const StatusBar = ({
                         type="checkbox"
                         className="status-bar__header-checkbox"
                         checked={activeOnly}
-                        onChange={(event) => setActiveOnly(event.target.checked)}
+                        onChange={(event) => handleActiveOnlyChange(event.target.checked)}
                         aria-label="Active sailings only"
                       />
                       <span className="status-bar__header-range-label">Active</span>

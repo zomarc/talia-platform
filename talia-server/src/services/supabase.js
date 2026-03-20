@@ -559,6 +559,33 @@ export class SupabaseDataService {
     }
   }
 
+  async purgeUiActivityEvents(olderThanHours = 24) {
+    try {
+      const safeHours = Math.max(1, Number.parseInt(String(olderThanHours || 24), 10) || 24);
+      const cutoff = new Date(Date.now() - (safeHours * 60 * 60 * 1000)).toISOString();
+
+      const { count, error: countError } = await this.client
+        .from('ui_activity_events')
+        .select('id', { count: 'exact', head: true })
+        .lt('at', cutoff);
+
+      if (countError) throw countError;
+      const total = Number(count || 0);
+      if (total <= 0) return 0;
+
+      const { error } = await this.client
+        .from('ui_activity_events')
+        .delete()
+        .lt('at', cutoff);
+      if (error) throw error;
+
+      return total;
+    } catch (error) {
+      console.error('Error purging UI activity events:', error);
+      return 0;
+    }
+  }
+
   // Get or create Talia user
   async getOrCreateTaliaUser(supabaseUserId, email) {
     try {

@@ -509,6 +509,7 @@ prompt_service_group() {
 check_local_services() {
   local local_ui_health_url="${LOCAL_UI_URL%/}/"
   local local_graphql_health_url="${LOCAL_GRAPHQL_URL%/}"
+  local local_ui_graphql_url="${LOCAL_UI_URL%/}/api/graphql"
   echo -e "${BOLD}Local Services:${NC}"
   echo -n "  UI (localhost:5173): "
   local ui
@@ -519,6 +520,28 @@ check_local_services() {
   local gql
   gql=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$local_graphql_health_url" 2>/dev/null || echo "000")
   [[ "$gql" == "200" || "$gql" == "400" ]] && echo -e "${GREEN}UP${NC} (HTTP $gql)" || echo -e "${YELLOW}DOWN${NC} (HTTP $gql)"
+
+  echo -n "  UI->GraphQL dataflow (master_sail): "
+  local master_payload master_ok
+  master_payload=$(curl -sS --max-time 10 -X POST "$local_ui_graphql_url" \
+    -H 'Content-Type: application/json' \
+    -d '{"query":"query V($tableName:String!,$limit:Int,$filters:TableDataFilters){ tableData(tableName:$tableName, limit:$limit, filters:$filters) }","variables":{"tableName":"master_sail","limit":5,"filters":{"include_non_real_sailings":false}}}' 2>/dev/null || true)
+  master_ok=0
+  if [[ -n "$master_payload" && "$master_payload" == *'"tableData"'* && "$master_payload" != *'"errors"'* ]]; then
+    master_ok=1
+  fi
+  [[ "$master_ok" -eq 1 ]] && echo -e "${GREEN}OK${NC}" || echo -e "${YELLOW}FAIL${NC} (UI data query failed)"
+
+  echo -n "  UI->GraphQL dataflow (competitorPricing): "
+  local comp_payload comp_ok
+  comp_payload=$(curl -sS --max-time 15 -X POST "$local_ui_graphql_url" \
+    -H 'Content-Type: application/json' \
+    -d '{"query":"query C($filters: CompetitorPricingFilters){ competitorPricing(filters:$filters){ id shipCode departureDate } }","variables":{"filters":{"currency":"EUR","isLatest":true}}}' 2>/dev/null || true)
+  comp_ok=0
+  if [[ -n "$comp_payload" && "$comp_payload" == *'"competitorPricing"'* && "$comp_payload" != *'"errors"'* ]]; then
+    comp_ok=1
+  fi
+  [[ "$comp_ok" -eq 1 ]] && echo -e "${GREEN}OK${NC}" || echo -e "${YELLOW}FAIL${NC} (competitor query failed)"
 
   echo -n "  ngrok (local): "
   if [[ "$(get_target_external_state local)" == "active" ]]; then

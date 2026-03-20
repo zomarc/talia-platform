@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import UserMappingTable from '../users/UserMappingTable';
 import TaliaUserTable from '../users/TaliaUserTable';
 import AdminAccessManager from './AdminAccessManager';
+import AdminLogsPanel from '../logs/AdminLogsPanel';
 import { useTaliaFocusManagement } from '../../../hooks/useTaliaFocusManagement';
 import '../admin.css';
 
@@ -47,12 +48,16 @@ const AdminDashboard = ({ skipAuth = false }) => {
         <button className={`admin-tab ${activeTab === 'mapping' ? 'admin-tab-active' : ''}`} onClick={() => setActiveTab('mapping')}>
           User Mappings
         </button>
+        <button className={`admin-tab ${activeTab === 'logs' ? 'admin-tab-active' : ''}`} onClick={() => setActiveTab('logs')}>
+          Logs
+        </button>
       </div>
 
       <main className="talia-report__content admin-dashboard-panel__content">
         {activeTab === 'access' && <AdminAccessManager />}
         {activeTab === 'users' && <TaliaUserTable />}
         {activeTab === 'mapping' && <UserMappingTable />}
+        {activeTab === 'logs' && <AdminLogsPanel />}
       </main>
     </div>
   );

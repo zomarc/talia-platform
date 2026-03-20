@@ -2927,6 +2927,15 @@ export const resolvers = {
       }
     },
 
+    purgeUiActivityEvents: async (_parent: any, args: any) => {
+      try {
+        return await supabaseDataService.purgeUiActivityEvents(args?.olderThanHours);
+      } catch (error) {
+        console.error('Error purging UI activity events:', error);
+        return 0;
+      }
+    },
+
     // Focus Preferences
     updateFocusPreference: async (parent: any, args: any, context: any) => {
       try {

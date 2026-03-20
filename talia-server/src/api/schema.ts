@@ -1035,6 +1035,7 @@ export const typeDefs = `#graphql
     # User Management
     updateUserPreferences(input: UserPreferencesInput!): User!
     logUiActivityEvent(input: UiActivityEventInput!): Boolean!
+    purgeUiActivityEvents(olderThanHours: Int!): Int!
     
     # Focus Preferences
     updateFocusPreference(focusId: ID!, preferences: FocusPreferenceInput!): FocusPreference!

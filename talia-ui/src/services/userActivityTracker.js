@@ -175,6 +175,20 @@ class UserActivityTracker {
     });
   }
 
+  recordHeaderAction(action, metadata = {}) {
+    const detail = metadata && typeof metadata === 'object' ? metadata : {};
+    return this.record({
+      kind: 'header',
+      report: 'Header Tools',
+      panelComponent: 'status-bar',
+      purpose: String(action || 'header-action'),
+      status: detail.status || '',
+      performanceMs: null,
+      queryCount: null,
+      ...detail
+    });
+  }
+
   getEvents() {
     return [...this.sharedEvents, ...this.events];
   }

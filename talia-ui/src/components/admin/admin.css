@@ -590,6 +590,15 @@
   height: 100%;
 }
 
+.admin-logs {
+  height: 100%;
+  min-height: 0;
+}
+
+.admin-logs__table {
+  min-height: 360px;
+}
+
 .admin-access__form {
   padding: var(--theme-component-padding-sm);
   display: grid;

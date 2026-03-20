@@ -12,57 +12,220 @@ import { formatDayMon } from './dateFormat';
 // Import Tabulator midnight theme CSS
 import 'tabulator-tables/dist/css/tabulator_midnight.min.css';
 
+const DASHBOARD_TABLE_LAYOUT_EVENT = 'talia:dashboard.tableLayout';
+const TABLE_LAYOUT_STORAGE_KEY = 'taliaTableLayoutMode';
+const TABLE_LAYOUT_WIDTH = 'width';
+const TABLE_LAYOUT_DATA = 'data';
+const tableInstances = new Set();
+let hasBoundLayoutListener = false;
+const tableMeta = new WeakMap();
+let wrappedTabulatorClass = null;
+
+const isBrowser = () => typeof window !== 'undefined';
+
+const getGlobalTableLayoutMode = () => {
+  if (!isBrowser()) return TABLE_LAYOUT_WIDTH;
+  const inMemory = window.__taliaTableLayoutMode;
+  if (inMemory === TABLE_LAYOUT_DATA || inMemory === TABLE_LAYOUT_WIDTH) return inMemory;
+  const saved = window.localStorage?.getItem?.(TABLE_LAYOUT_STORAGE_KEY);
+  return saved === TABLE_LAYOUT_DATA ? TABLE_LAYOUT_DATA : TABLE_LAYOUT_WIDTH;
+};
+
+const setGlobalTableLayoutMode = (mode) => {
+  if (!isBrowser()) return;
+  const next = mode === TABLE_LAYOUT_DATA ? TABLE_LAYOUT_DATA : TABLE_LAYOUT_WIDTH;
+  window.__taliaTableLayoutMode = next;
+  try {
+    window.localStorage?.setItem?.(TABLE_LAYOUT_STORAGE_KEY, next);
+  } catch {
+    // no-op
+  }
+};
+
+const cloneColumnDefs = (columns) => {
+  if (!Array.isArray(columns)) return [];
+  return columns.map((column) => ({
+    ...column,
+    ...(Array.isArray(column?.columns) ? { columns: cloneColumnDefs(column.columns) } : {})
+  }));
+};
+
+const applyLastColumnGrow = (columns) => {
+  if (!Array.isArray(columns) || !columns.length) return columns;
+  const next = cloneColumnDefs(columns);
+  const lastIndex = next.length - 1;
+  const lastColumn = next[lastIndex] || {};
+  next[lastIndex] = {
+    ...lastColumn,
+    widthGrow: lastColumn.widthGrow ?? 1
+  };
+  return next;
+};
+
+const stripFixedWidths = (columns) => {
+  if (!Array.isArray(columns)) return [];
+  return columns.map((column) => {
+    const { width, widthGrow, ...rest } = column || {};
+    return {
+      ...rest,
+      ...(Array.isArray(column?.columns) ? { columns: stripFixedWidths(column.columns) } : {})
+    };
+  });
+};
+
+const fitLastColumn = (table) => {
+  try {
+    if (!table?.getColumns) return;
+    const columns = table.getColumns().filter((column) => column?.isVisible?.() !== false);
+    if (!columns || columns.length < 2) return;
+
+    const tableElement = table.element;
+    const holder = tableElement?.querySelector?.('.tabulator-tableholder');
+    const availableWidth = holder?.clientWidth || tableElement?.clientWidth || 0;
+    if (!availableWidth) return;
+
+    const headColumns = columns.slice(0, -1);
+    const lastColumn = columns[columns.length - 1];
+    const usedWidth = headColumns.reduce((acc, column) => acc + (column.getWidth?.() || 0), 0);
+    const nextWidth = Math.max(120, Math.floor(availableWidth - usedWidth - 2));
+
+    if (Math.abs((lastColumn.getWidth?.() || 0) - nextWidth) > 2) {
+      lastColumn.setWidth(nextWidth);
+    }
+  } catch {
+    // no-op
+  }
+};
+
+const applyLayoutModeToTable = (table) => {
+  if (!table) return;
+  const mode = getGlobalTableLayoutMode();
+  const nextLayout = mode === TABLE_LAYOUT_DATA ? 'fitDataTable' : 'fitDataStretch';
+  try {
+    const meta = tableMeta.get(table);
+    const shouldRebuildColumns = meta?.lastAppliedMode !== mode;
+    if (meta) {
+      meta.lastAppliedMode = mode;
+    }
+    if (shouldRebuildColumns && meta?.baseColumns?.length && typeof table.setColumns === 'function') {
+      const nextColumns = mode === TABLE_LAYOUT_DATA
+        ? stripFixedWidths(meta.baseColumns)
+        : applyLastColumnGrow(meta.baseColumns);
+      table.setColumns(nextColumns);
+    }
+    if (typeof table.setOption === 'function') {
+      table.setOption('layout', nextLayout);
+    } else if (table.options) {
+      table.options.layout = nextLayout;
+    }
+    table.layoutRefresh?.(true);
+    table.redraw?.(true);
+    if (mode !== TABLE_LAYOUT_DATA) {
+      fitLastColumn(table);
+    }
+  } catch {
+    // no-op
+  }
+};
+
+const ensureLayoutListenerBound = () => {
+  if (!isBrowser() || hasBoundLayoutListener) return;
+  hasBoundLayoutListener = true;
+  const reflowAllTables = () => {
+    tableInstances.forEach((table) => applyLayoutModeToTable(table));
+  };
+  window.addEventListener(DASHBOARD_TABLE_LAYOUT_EVENT, (event) => {
+    const mode = event?.detail?.mode;
+    setGlobalTableLayoutMode(mode);
+    reflowAllTables();
+  });
+  window.addEventListener('resize', () => {
+    reflowAllTables();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      requestAnimationFrame(() => {
+        reflowAllTables();
+      });
+    }
+  });
+};
+
+const registerTableInstance = (table, baseColumns = null) => {
+  if (!table) return;
+  if (!tableMeta.has(table)) {
+    tableMeta.set(table, {
+      baseColumns: Array.isArray(baseColumns) ? cloneColumnDefs(baseColumns) : null,
+      lastAppliedMode: null
+    });
+  }
+  tableInstances.add(table);
+};
+
 /**
  * Initialize Tabulator
  * Returns the Tabulator constructor (already loaded via npm)
  */
 export const initTabulator = async () => {
-  return Tabulator;
+  ensureLayoutListenerBound();
+  if (wrappedTabulatorClass) return wrappedTabulatorClass;
+
+  class TaliaTabulator extends Tabulator {
+    constructor(element, options = {}) {
+      const incomingOptions = options && typeof options === 'object' ? options : {};
+      const alreadyProcessed = incomingOptions.__taliaProcessedOptions === true;
+      const processed = alreadyProcessed
+        ? { ...incomingOptions }
+        : getTabulatorOptions(incomingOptions);
+      const baseColumns = processed.__taliaBaseColumns || incomingOptions.columns || null;
+      delete processed.__taliaProcessedOptions;
+      delete processed.__taliaBaseColumns;
+      super(element, processed);
+
+      registerTableInstance(this, baseColumns);
+
+      this.on?.('tableBuilt', () => {
+        applyLayoutModeToTable(this);
+      });
+      this.on?.('tableDestroyed', () => {
+        tableInstances.delete(this);
+      });
+    }
+  }
+
+  wrappedTabulatorClass = TaliaTabulator;
+  return wrappedTabulatorClass;
 };
 
 /**
  * Get Tabulator options with defaults
  */
 export const getTabulatorOptions = (options = {}) => {
-  const fitLastColumn = (table) => {
-    try {
-      if (!table?.getColumns) return;
-      const columns = table.getColumns().filter((column) => column?.isVisible?.() !== false);
-      if (!columns || columns.length < 2) return;
+  ensureLayoutListenerBound();
 
-      const tableElement = table.element;
-      const holder = tableElement?.querySelector?.('.tabulator-tableholder');
-      const availableWidth = holder?.clientWidth || tableElement?.clientWidth || 0;
-      if (!availableWidth) return;
-
-      const headColumns = columns.slice(0, -1);
-      const lastColumn = columns[columns.length - 1];
-      const usedWidth = headColumns.reduce((acc, column) => acc + (column.getWidth?.() || 0), 0);
-      const nextWidth = Math.max(120, Math.floor(availableWidth - usedWidth - 2));
-
-      if (Math.abs((lastColumn.getWidth?.() || 0) - nextWidth) > 2) {
-        lastColumn.setWidth(nextWidth);
-      }
-    } catch {
-      // no-op
-    }
-  };
-
-  const effectiveLayout = options.layout === 'fitDataFill' ? 'fitDataStretch' : options.layout;
-  const processedColumns = Array.isArray(options.columns) ? options.columns.map((col) => ({ ...col })) : null;
-  if (processedColumns && processedColumns.length > 0 && options.disableLastColumnGrow !== true) {
-    const lastIndex = processedColumns.length - 1;
-    const lastColumn = processedColumns[lastIndex] || {};
-    processedColumns[lastIndex] = {
-      ...lastColumn,
-      // Keep explicit width behavior if set, but allow remaining space to be consumed.
-      widthGrow: lastColumn.widthGrow ?? 1
-    };
+  const requestedLayout = options.layout === 'fitDataFill' ? 'fitDataStretch' : options.layout;
+  const globalMode = options.enforceGlobalLayout === false ? null : getGlobalTableLayoutMode();
+  const effectiveLayout = globalMode === TABLE_LAYOUT_DATA
+    ? 'fitDataTable'
+    : (requestedLayout || 'fitDataStretch');
+  const sourceColumns = Array.isArray(options.columns) ? cloneColumnDefs(options.columns) : null;
+  let processedColumns = sourceColumns ? cloneColumnDefs(sourceColumns) : null;
+  if (
+    processedColumns
+    && processedColumns.length > 0
+    && options.disableLastColumnGrow !== true
+    && globalMode !== TABLE_LAYOUT_DATA
+  ) {
+    processedColumns = applyLastColumnGrow(processedColumns);
+  }
+  if (processedColumns && globalMode === TABLE_LAYOUT_DATA) {
+    processedColumns = stripFixedWidths(processedColumns);
   }
 
   const {
     disableLastColumnGrow,
     disableLastColumnFill,
+    enforceGlobalLayout,
     layout,
     tableBuilt,
     dataLoaded,
@@ -71,8 +234,13 @@ export const getTabulatorOptions = (options = {}) => {
   } = options;
 
   const withLastColumnFit = (userCallback) => function (...args) {
-    if (disableLastColumnFill !== true) {
+    registerTableInstance(this, sourceColumns);
+    const mode = getGlobalTableLayoutMode();
+    const shouldFillLastColumn = disableLastColumnFill !== true && mode !== TABLE_LAYOUT_DATA;
+    if (shouldFillLastColumn) {
       fitLastColumn(this);
+    } else {
+      this?.redraw?.(true);
     }
     if (typeof userCallback === 'function') {
       userCallback.apply(this, args);
@@ -84,6 +252,8 @@ export const getTabulatorOptions = (options = {}) => {
     ...restOptions,
     ...(effectiveLayout ? { layout: effectiveLayout } : {}),
     ...(processedColumns ? { columns: processedColumns } : {}),
+    __taliaProcessedOptions: true,
+    __taliaBaseColumns: sourceColumns ? cloneColumnDefs(sourceColumns) : null,
     tableBuilt: withLastColumnFit(tableBuilt),
     dataLoaded: withLastColumnFit(dataLoaded),
     dataChanged: withLastColumnFit(dataChanged)

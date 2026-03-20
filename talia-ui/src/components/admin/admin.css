@@ -268,10 +268,10 @@
 
 .admin-form-card {
   padding: 20px;
-  background: #f9f9f9;
+  background: color-mix(in srgb, var(--theme-panel-bg) 88%, transparent);
   border-radius: 8px;
   margin-bottom: 24px;
-  border: 1px solid #e8dfd0;
+  border: 1px solid var(--theme-border);
 }
 
 .admin-form-row {
@@ -291,9 +291,11 @@
 .admin-select {
   width: 100%;
   padding: 8px;
-  border: 1px solid #e8dfd0;
+  border: 1px solid var(--theme-border-light);
   border-radius: 4px;
-  font-size: 14px;
+  font-size: var(--theme-font-size-sm);
+  background: transparent;
+  color: var(--theme-text-primary);
 }
 
 .admin-textarea {
@@ -314,9 +316,9 @@
 
 .admin-card-row {
   padding: 16px;
-  background: #ffffff;
+  background: var(--theme-panel-bg);
   border-radius: 8px;
-  border: 1px solid #e8dfd0;
+  border: 1px solid var(--theme-border);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -325,7 +327,7 @@
 .admin-card-meta {
   margin-top: 8px;
   font-size: 12px;
-  color: #999999;
+  color: var(--theme-text-muted);
 }
 
 .admin-card-title {
@@ -335,8 +337,8 @@
 
 .admin-card-subtitle {
   margin: 4px 0;
-  color: #666666;
-  font-size: 14px;
+  color: var(--theme-text-secondary);
+  font-size: var(--theme-font-size-sm);
 }
 
 /* ============================================================================
@@ -344,7 +346,7 @@
    ============================================================================ */
 
 .admin-section--denied {
-  color: #c2185b;
+  color: var(--theme-error);
 }
 
 .admin-page-header--row {
@@ -355,7 +357,7 @@
 }
 
 .admin-page-title--compact {
-  font-size: 24px;
+  font-size: var(--theme-font-size-lg);
   margin: 0;
 }
 
@@ -404,14 +406,14 @@
    ============================================================================ */
 
 .admin-mono--accent {
-  color: #2e86ab;
+  color: var(--theme-accent);
   font-size: 16px;
 }
 
 .admin-code-pill {
   font-size: 12px;
-  color: #6c757d;
-  background: #f8f9fa;
+  color: var(--theme-text-secondary);
+  background: color-mix(in srgb, var(--theme-panel-bg) 84%, transparent);
   padding: 2px 6px;
   border-radius: 3px;
 }
@@ -425,24 +427,24 @@
 }
 
 .admin-role-badge--admin {
-  background: #dc3545;
-  color: #ffffff;
+  background: color-mix(in srgb, var(--theme-error) 80%, transparent);
+  color: #fff;
 }
 
 .admin-role-badge--manager {
-  background: #ffc107;
-  color: #212529;
+  background: color-mix(in srgb, #f59e0b 72%, transparent);
+  color: #111827;
 }
 
 .admin-role-badge--user {
-  background: #28a745;
-  color: #ffffff;
+  background: color-mix(in srgb, #16a34a 82%, transparent);
+  color: #fff;
 }
 
 .admin-role-badge--guest,
 .admin-role-badge--default {
-  background: #6c757d;
-  color: #ffffff;
+  background: color-mix(in srgb, var(--theme-text-secondary) 68%, transparent);
+  color: #fff;
 }
 
 /* ============================================================================
@@ -676,7 +678,7 @@
 }
 
 .admin-access__error {
-  color: #f08ca4;
+  color: var(--theme-error);
 }
 
 @media (max-width: 1200px) {

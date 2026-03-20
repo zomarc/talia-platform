@@ -26,6 +26,7 @@ import { userMutationResolvers, userQueryResolvers } from './resolver-modules/us
 import { statusQueryResolvers } from './resolver-modules/statusResolvers.js';
 import { refreshQueryResolvers } from './resolver-modules/refreshResolvers.js';
 import { metadataQueryResolvers } from './resolver-modules/metadataResolvers.js';
+import { buildTableCatalogQueryResolvers } from './resolver-modules/tableCatalogResolvers.js';
 
 // Helper function to check user permissions
 const hasPermission = (userRole: string, requiredRole: string): boolean => {
@@ -591,6 +592,15 @@ const mapAppearanceSettingsPayload = (settings: any, profiles: any, activeProfil
   settings: settings && typeof settings === 'object' ? settings : {},
   profiles: normalizeAppearanceProfiles(profiles),
   activeProfileId: typeof activeProfileId === 'string' ? activeProfileId : null
+});
+
+const tableCatalogQueryResolvers = buildTableCatalogQueryResolvers({
+  supabaseDataService,
+  configService,
+  fetchActualDataRange,
+  fetchLatestAvailableData,
+  getOperationMetadataKeysForTable,
+  getSyncTypeForTable
 });
 
 export const resolvers = {
@@ -1531,220 +1541,7 @@ export const resolvers = {
 
     ...statusQueryResolvers,
     ...metadataQueryResolvers,
-
-    databaseTables: async () => {
-      try {
-        // Get the active/default date range from configuration
-        const activeDateRange = await configService.getActiveDateRange('synapse_default');
-        const configuredDateRange = activeDateRange ? {
-          min: activeDateRange.date_from,
-          max: activeDateRange.date_to
-        } : { min: null, max: null };
-
-        // Get list of known tables to check
-        const knownTables = [
-          'ship', 'cabin_availability', 'reservation', 'master_sail',
-          'sail_by_cabin_occupancy', 'reservation_changes', 'reservation_current_state',
-          'reservation_promotion', 'published_rates', 'published_rates_changes',
-          'published_rates_current_state', 'competitor', 'competitor_current_state',
-          'cabin_allocation', 'itinerary', 'gql_cabin_availability', 'sail_header',
-          'ship_cabin', 'sync_metadata', 'focuses', 'google_trends_data',
-          'google_trends_search_terms', 'data_refresh_metadata'
-        ];
-
-        // Get sync metadata from unified table
-        const { data: syncData } = await supabaseDataService.client
-          .from('operation_metadata')
-          .select('*')
-          .eq('operation_type', 'sync');
-        
-        const syncMetadataMap = {};
-        if (syncData) {
-          syncData.forEach(record => {
-            const key = record.operation_name;
-            const existing = syncMetadataMap[key];
-            const recordTime = record.last_run_at ? Date.parse(record.last_run_at) : 0;
-            const existingTime = existing?.last_sync_at ? Date.parse(existing.last_sync_at) : 0;
-            if (!existing || recordTime > existingTime) {
-              // Map to legacy format for compatibility (latest record wins)
-              syncMetadataMap[key] = {
-                sync_type: record.operation_name,
-                last_sync_at: record.last_run_at,
-                duration_ms: record.duration_ms,
-                records_processed: record.records_processed,
-                changes_detected: record.changes_detected,
-                status: record.status,
-                error: record.error,
-                last_processed_date: record.last_processed_date,
-                // Get latest snapshot date from metadata JSONB field
-                latest_available_snapshot_date: record.metadata?.latest_available_snapshot_date || null
-              };
-            }
-          });
-        }
-
-        // Check which tables exist and get their metadata
-        const tablePromises = knownTables.map(async (tableName) => {
-          try {
-            // Check if table exists by trying to get count
-            const { count, error: countError } = await supabaseDataService.client
-              .from(tableName)
-              .select('*', { count: 'exact', head: true })
-              .limit(0);
-            
-            if (countError) {
-              // Table doesn't exist or error
-              return null;
-            }
-
-            const rowCount = count || 0;
-
-            const actualDataRange = await fetchActualDataRange(tableName, rowCount);
-            const latestAvailableData = await fetchLatestAvailableData(tableName, rowCount);
-
-            // Configured date range (what should be synced)
-            const dateRange = configuredDateRange;
-
-            // Resolve operation_name using config-format keys first, then legacy fallbacks.
-            const operationKeys = getOperationMetadataKeysForTable(tableName);
-            const syncRecord = operationKeys
-              .map((key) => syncMetadataMap[key])
-              .find(Boolean);
-            
-            // Get latest snapshot date from sync metadata (most accurate)
-            // Fall back to last_processed_date if latest_available_snapshot_date is not available
-            let latestSnapshotDate = null;
-            if (syncRecord) {
-              latestSnapshotDate = syncRecord.latest_available_snapshot_date || 
-                                   (syncRecord.last_processed_date ? new Date(syncRecord.last_processed_date).toISOString() : null);
-            }
-            
-            // Format lastSync - use last_sync_at from syncRecord (which is mapped from last_run_at)
-            const lastSync = syncRecord?.last_sync_at || null;
-            
-            return {
-              tableName,
-              source: null, // Frontend will get from tableSources config
-              type: null, // Frontend will get from tableSources config
-              loadMethod: null, // Frontend calculates from tableSources config
-              rowCount,
-              dateRange, // Configured sync range
-              actualDataRange, // Actual data in table (may be {min: null, max: null} if no date columns found)
-              latestSnapshotDate,
-              latestAvailableData,
-              lastSync,
-              syncDuration: syncRecord?.duration_ms || null,
-              recordsProcessed: syncRecord?.records_processed || null,
-              changesDetected: syncRecord?.changes_detected || null,
-              lastError: syncRecord?.error || null,
-              syncStatus: syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced',
-              dataStatus: rowCount === 0 ? 'Empty' : 'Has Data',
-              status: `${syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced'} • ${rowCount === 0 ? 'Empty' : 'Has Data'}`,
-              syncType: getSyncTypeForTable(tableName)
-            };
-          } catch (err) {
-            // Table doesn't exist or error
-            return null;
-          }
-        });
-
-        const results = await Promise.all(tablePromises);
-        return results.filter(Boolean);
-      } catch (error: any) {
-        console.error('Error in databaseTables resolver:', error);
-        return [];
-      }
-    },
-
-    tableMetadata: async (parent: any, args: any) => {
-      const { tableName } = args;
-      try {
-        // Get row count
-        const { count, error: countError } = await supabaseDataService.client
-          .from(tableName)
-          .select('*', { count: 'exact', head: true });
-        
-        if (countError) {
-          throw new Error(`Table ${tableName} not found or error: ${countError.message}`);
-        }
-
-        const rowCount = count || 0;
-
-        // Configured date range
-        const activeDateRange = await configService.getActiveDateRange('synapse_default');
-        const dateRange = activeDateRange ? {
-          min: activeDateRange.date_from,
-          max: activeDateRange.date_to
-        } : { min: null, max: null };
-
-        const actualDataRange = await fetchActualDataRange(tableName, rowCount);
-        const latestAvailableData = await fetchLatestAvailableData(tableName, rowCount);
-
-        // Get sync metadata from unified table
-        const operationKeys = getOperationMetadataKeysForTable(tableName);
-        const { data: syncData } = await supabaseDataService.client
-          .from('operation_metadata')
-          .select('*')
-          .eq('operation_type', 'sync')
-          .in('operation_name', operationKeys)
-          .order('last_run_at', { ascending: false, nullsFirst: false });
-
-        const toTimestamp = (value: any) => {
-          if (!value) return 0;
-          const parsed = new Date(value).getTime();
-          return Number.isFinite(parsed) ? parsed : 0;
-        };
-
-        // Multiple operation names can exist for one table (config-format + legacy).
-        // Pick the single most recent metadata row across all matches.
-        const syncRecord = (syncData || []).reduce((latest: any, current: any) => {
-          if (!latest) return current;
-          const latestTs = Math.max(
-            toTimestamp(latest.last_run_at),
-            toTimestamp(latest.updated_at),
-            toTimestamp(latest.created_at)
-          );
-          const currentTs = Math.max(
-            toTimestamp(current.last_run_at),
-            toTimestamp(current.updated_at),
-            toTimestamp(current.created_at)
-          );
-          return currentTs > latestTs ? current : latest;
-        }, null);
-
-        let latestSnapshotDate = null;
-        if (syncRecord) {
-          latestSnapshotDate = syncRecord.metadata?.latest_available_snapshot_date || 
-                               (syncRecord.last_processed_date ? new Date(syncRecord.last_processed_date).toISOString() : null);
-        }
-
-        const lastSync = syncRecord?.last_run_at || null;
-
-        return {
-          tableName,
-          source: null, // Frontend will get from tableSources config
-          type: null, // Frontend will get from tableSources config
-          loadMethod: null, // Frontend calculates from tableSources config
-          rowCount,
-          dateRange,
-          actualDataRange,
-          latestSnapshotDate,
-          latestAvailableData,
-          lastSync,
-          syncDuration: syncRecord?.duration_ms || null,
-          recordsProcessed: syncRecord?.records_processed || null,
-          changesDetected: syncRecord?.changes_detected || null,
-          lastError: syncRecord?.error || null,
-          syncStatus: syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced',
-          dataStatus: rowCount === 0 ? 'Empty' : 'Has Data',
-          status: `${syncRecord ? (lastSync ? 'Synced' : 'Never Synced') : 'Not Synced'} • ${rowCount === 0 ? 'Empty' : 'Has Data'}`,
-          syncType: getSyncTypeForTable(tableName)
-        };
-      } catch (error: any) {
-        console.error(`Error in tableMetadata resolver for ${tableName}:`, error);
-        throw error;
-      }
-    },
+    ...tableCatalogQueryResolvers,
 
     tableData: async (parent: any, args: any) => {
       const { tableName, limit = 100, filters } = args;

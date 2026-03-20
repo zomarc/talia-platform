@@ -1,17 +1,16 @@
-/**
- * User Mapping Table Component
- * Displays the mapping between Supabase auth IDs and Talia user IDs
- * This is purely informational - business logic doesn't depend on it
- */
-
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../../../lib/supabase';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
+import taliaUserService from '../../../services/TaliaUserService';
+import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import '../admin.css';
 
 const UserMappingTable = () => {
+  const { devUsers = [] } = useSupabaseAuth();
   const [mappings, setMappings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const tableElRef = useRef(null);
+  const tableRef = useRef(null);
 
   useEffect(() => {
     loadMappings();
@@ -21,97 +20,101 @@ const UserMappingTable = () => {
     try {
       setIsLoading(true);
       setError(null);
-
-      const { data, error: fetchError } = await supabase
-        .from('talia_users')
-        .select('id, talia_user_id, email')
-        .order('talia_user_id', { ascending: true });
-
-      if (fetchError) {
-        throw fetchError;
-      }
-
-      const mappedData = (data || []).map(user => ({
-        taliaUserId: user.talia_user_id,
+      const users = await taliaUserService.getAllTaliaUsers();
+      const mappedData = (users || []).map(user => ({
+        taliaUserId: user.taliaUserId,
         supabaseAuthId: user.id,
         email: user.email
       }));
 
+      if (mappedData.length === 0 && devUsers.length > 0) {
+        setMappings(
+          devUsers.map((devUser) => ({
+            taliaUserId: devUser.talia_user_id,
+            supabaseAuthId: devUser.id,
+            email: devUser.email
+          }))
+        );
+        return;
+      }
+
       setMappings(mappedData);
     } catch (err) {
       console.error('Error loading user mappings:', err);
-      setError(err.message);
+      setError(err?.message || String(err));
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="admin-section">
-        <h2 className="admin-title">User Mapping Table</h2>
-        <div className="admin-loading">Loading mappings...</div>
-      </div>
-    );
-  }
+  const rows = useMemo(
+    () =>
+      (mappings || []).map((mapping) => ({
+        taliaUserId: mapping.taliaUserId,
+        supabaseAuthId: mapping.supabaseAuthId,
+        email: mapping.email
+      })),
+    [mappings]
+  );
 
-  if (error) {
-    return (
-      <div className="admin-section">
-        <h2 className="admin-title">User Mapping Table</h2>
-        <div className="admin-error">Error: {error}</div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    let cancelled = false;
+    const init = async () => {
+      if (!tableElRef.current || tableRef.current) return;
+      const Tabulator = await initTabulator();
+      if (!Tabulator || cancelled || !tableElRef.current) return;
+      tableRef.current = new Tabulator(tableElRef.current, {
+        ...getTabulatorOptions({
+          layout: 'fitDataFill',
+          selectableRows: false,
+          height: '100%',
+          data: [],
+          columns: [
+          { title: 'Talia User ID', field: 'taliaUserId', width: 120, hozAlign: 'center' },
+          { title: 'Supabase Auth ID', field: 'supabaseAuthId', headerFilter: 'input' },
+          { title: 'Email', field: 'email', headerFilter: 'input' }
+          ]
+        })
+      });
+    };
+    init();
+    return () => {
+      cancelled = true;
+      if (tableRef.current) {
+        try {
+          tableRef.current.destroy();
+        } catch {
+          // noop
+        }
+        tableRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!tableRef.current) return;
+    tableRef.current.setData(rows || []);
+  }, [rows]);
 
   return (
-    <div className="admin-section">
-      <h2 className="admin-title">User Mapping Table</h2>
-      <p className="admin-subtitle">
-        Simple mapping: Supabase Auth ID → Talia User ID
-        <br />
-        <em>Maps Supabase authentication users to Talia internal user IDs</em>
-      </p>
-
-      {mappings.length === 0 ? (
-        <div className="admin-empty">No user mappings yet. Sign in to create the first mapping.</div>
-      ) : (
-        <table className="admin-table">
-          <thead>
-            <tr className="admin-table-header-row">
-              <th className="admin-table-header-cell">Talia User ID</th>
-              <th className="admin-table-header-cell">Supabase Auth ID</th>
-              <th className="admin-table-header-cell">Email</th>
-            </tr>
-          </thead>
-          <tbody>
-            {mappings.map((mapping, index) => (
-              <tr key={index} className="admin-table-row">
-                <td className="admin-table-cell">
-                  <strong className="admin-mono admin-mono--accent">
-                    {mapping.taliaUserId}
-                  </strong>
-                </td>
-                <td className="admin-table-cell">
-                  <code className="admin-mono admin-code-pill">
-                    {mapping.supabaseAuthId}
-                  </code>
-                </td>
-                <td className="admin-table-cell">{mapping.email}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      <div className="admin-info">
-        <h3 className="admin-info-title">User Mapping</h3>
-        <ul className="admin-info-list">
-          <li><strong>supabaseAuthId:</strong> From Supabase Auth (unique UUID)</li>
-          <li><strong>taliaUserId:</strong> Talia's internal ID (unique, 1000+)</li>
-          <li><strong>Purpose:</strong> Map logged-in user to Talia user ID</li>
-          <li><strong>Storage:</strong> Stored in talia_users table in Supabase</li>
-        </ul>
+    <div className="talia-report" role="region" aria-label="Legacy user mappings">
+      <header className="talia-report__header">
+        <div className="talia-report__header-left">
+          <h2 className="talia-report__title">User Mappings (Legacy)</h2>
+          <p className="talia-report__subtitle">External auth to internal Talia user mapping reference</p>
+        </div>
+        <div className="talia-report__header-right">
+          <button className="talia-btn talia-btn--primary" type="button" onClick={loadMappings} disabled={isLoading}>
+            {isLoading ? 'Loading...' : 'Refresh'}
+          </button>
+        </div>
+      </header>
+      <main className="talia-report__content">
+        {error ? <div className="admin-access__error">Error: {error}</div> : null}
+        <div className="admin-access__table" ref={tableElRef} />
+      </main>
+      <div className="admin-access__loading">
+        Total mappings: {rows.length}
       </div>
     </div>
   );

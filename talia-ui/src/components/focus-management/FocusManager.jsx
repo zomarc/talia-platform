@@ -10,7 +10,7 @@ import { isAdmin } from '../../utils/roleUtils';
 import './focus-management.css';
 
 const FocusManager = () => {
-  const { user } = useSupabaseAuth();
+  const { user, devUsers = [] } = useSupabaseAuth();
   const {
     focuses,
     loading,
@@ -27,8 +27,10 @@ const FocusManager = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    type: 'standard',
-    role: 'user',
+    type: 'STANDARD',
+    role: 'USER',
+    assignedRoles: ['ADMIN', 'MANAGER', 'USER', 'GUEST'],
+    assignedUserId: '',
     isDefault: false,
     isPublic: false
   });
@@ -47,14 +49,24 @@ const FocusManager = () => {
 
   const handleCreateFocus = async (e) => {
     e.preventDefault();
+    if (formData.type === 'ROLE' && (!formData.assignedRoles || formData.assignedRoles.length === 0)) {
+      window.alert('Select at least one role for a role-assigned focus.');
+      return;
+    }
+    if (formData.type === 'USER' && !formData.assignedUserId) {
+      window.alert('Select a user for a user-assigned focus.');
+      return;
+    }
     const success = await createFocus(formData);
     if (success) {
       setShowCreateForm(false);
       setFormData({
         name: '',
         description: '',
-        type: 'standard',
-        role: 'user',
+        type: 'STANDARD',
+        role: 'USER',
+        assignedRoles: ['ADMIN', 'MANAGER', 'USER', 'GUEST'],
+        assignedUserId: '',
         isDefault: false,
         isPublic: false
       });
@@ -65,9 +77,11 @@ const FocusManager = () => {
     setEditingFocus(focus);
     setFormData({
       name: focus.name,
-      description: focus.description,
-      type: focus.type,
-      role: focus.role,
+      description: focus.description || '',
+      type: (focus.type || 'STANDARD').toUpperCase(),
+      role: (focus.role || 'USER').toUpperCase(),
+      assignedRoles: focus.assignedRoles || ['ADMIN', 'MANAGER', 'USER', 'GUEST'],
+      assignedUserId: focus.assignedUserId || '',
       isDefault: focus.isDefault,
       isPublic: focus.isPublic
     });
@@ -77,6 +91,14 @@ const FocusManager = () => {
   const handleUpdateFocus = async (e) => {
     e.preventDefault();
     if (editingFocus) {
+      if (formData.type === 'ROLE' && (!formData.assignedRoles || formData.assignedRoles.length === 0)) {
+        window.alert('Select at least one role for a role-assigned focus.');
+        return;
+      }
+      if (formData.type === 'USER' && !formData.assignedUserId) {
+        window.alert('Select a user for a user-assigned focus.');
+        return;
+      }
       const success = await updateFocus(editingFocus.id, formData);
       if (success) {
         setShowCreateForm(false);
@@ -84,8 +106,10 @@ const FocusManager = () => {
         setFormData({
           name: '',
           description: '',
-          type: 'standard',
-          role: 'user',
+          type: 'STANDARD',
+          role: 'USER',
+          assignedRoles: ['ADMIN', 'MANAGER', 'USER', 'GUEST'],
+          assignedUserId: '',
           isDefault: false,
           isPublic: false
         });
@@ -107,10 +131,44 @@ const FocusManager = () => {
 
   const handleFormChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+    setFormData(prev => {
+      if (name === 'type') {
+        const nextType = String(value).toUpperCase();
+        if (nextType === 'STANDARD') {
+          return {
+            ...prev,
+            type: nextType,
+            assignedRoles: ['ADMIN', 'MANAGER', 'USER', 'GUEST'],
+            assignedUserId: ''
+          };
+        }
+        if (nextType === 'ROLE') {
+          return {
+            ...prev,
+            type: nextType,
+            assignedRoles: prev.assignedRoles?.length ? prev.assignedRoles : ['USER'],
+            assignedUserId: ''
+          };
+        }
+        if (nextType === 'USER') {
+          return {
+            ...prev,
+            type: nextType,
+            assignedRoles: [],
+            assignedUserId: prev.assignedUserId || ''
+          };
+        }
+      }
+
+      if (name === 'role') {
+        return { ...prev, role: String(value).toUpperCase() };
+      }
+
+      return {
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
+      };
+    });
   };
 
   if (loading) {
@@ -159,8 +217,10 @@ const FocusManager = () => {
                   setFormData({
                     name: '',
                     description: '',
-                    type: 'standard',
-                    role: 'user',
+                    type: 'STANDARD',
+                    role: 'USER',
+                    assignedRoles: ['ADMIN', 'MANAGER', 'USER', 'GUEST'],
+                    assignedUserId: '',
                     isDefault: false,
                     isPublic: false
                   });
@@ -202,24 +262,71 @@ const FocusManager = () => {
                   value={formData.type}
                   onChange={handleFormChange}
                 >
-                  <option value="standard">Standard</option>
-                  <option value="template">Template</option>
-                  <option value="shared">Shared</option>
+                  <option value="STANDARD">Standard (all roles)</option>
+                  <option value="ROLE">Role-assigned</option>
+                  <option value="USER">User-assigned</option>
+                  <option value="TEMPLATE">Template</option>
+                  <option value="SHARED">Shared</option>
                 </select>
               </div>
-              
+
+              {formData.type === 'ROLE' && (
+                <div className="form-group">
+                  <label>Assigned Roles</label>
+                  <div className="checkbox-group">
+                    {['ADMIN', 'MANAGER', 'USER', 'GUEST'].map(r => (
+                      <label key={r} className="checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={(formData.assignedRoles || []).includes(r)}
+                          onChange={(e) => {
+                            const roles = formData.assignedRoles || [];
+                            setFormData(prev => ({
+                              ...prev,
+                              assignedRoles: e.target.checked
+                                ? [...roles, r]
+                                : roles.filter(x => x !== r)
+                            }));
+                          }}
+                        />
+                        {r}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {formData.type === 'USER' && (
+                <div className="form-group">
+                  <label htmlFor="assignedUserId">Assigned User ID</label>
+                  <select
+                    id="assignedUserId"
+                    name="assignedUserId"
+                    value={formData.assignedUserId}
+                    onChange={handleFormChange}
+                  >
+                    <option value="">Select user...</option>
+                    {devUsers.map((devUser) => (
+                      <option key={devUser.id} value={devUser.id}>
+                        {devUser.name} ({devUser.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="form-group">
-                <label htmlFor="role">Required Role</label>
+                <label htmlFor="role">Primary Role</label>
                 <select
                   id="role"
                   name="role"
                   value={formData.role}
                   onChange={handleFormChange}
                 >
-                  <option value="guest">Guest</option>
-                  <option value="user">User</option>
-                  <option value="manager">Manager</option>
-                  <option value="admin">Admin</option>
+                  <option value="GUEST">Guest</option>
+                  <option value="USER">User</option>
+                  <option value="MANAGER">Manager</option>
+                  <option value="ADMIN">Admin</option>
                 </select>
               </div>
               
@@ -259,8 +366,10 @@ const FocusManager = () => {
                     setFormData({
                       name: '',
                       description: '',
-                      type: 'standard',
-                      role: 'user',
+                      type: 'STANDARD',
+                      role: 'USER',
+                      assignedRoles: ['ADMIN', 'MANAGER', 'USER', 'GUEST'],
+                      assignedUserId: '',
                       isDefault: false,
                       isPublic: false
                     });
@@ -291,7 +400,12 @@ const FocusManager = () => {
                 </div>
                 <p className="focus-description">{focus.description}</p>
                 <div className="focus-meta">
-                  <span className="focus-role">Role: {focus.role}</span>
+                  <span className="focus-role">
+                    {(focus.type || 'STANDARD').toUpperCase() === 'STANDARD' && 'All roles'}
+                    {(focus.type || '').toUpperCase() === 'ROLE' && `Roles: ${(focus.assignedRoles || []).join(', ')}`}
+                    {(focus.type || '').toUpperCase() === 'USER' && `User: ${focus.assignedUserId || '—'}`}
+                    {!['STANDARD','ROLE','USER'].includes((focus.type || 'STANDARD').toUpperCase()) && `Role: ${focus.role}`}
+                  </span>
                   {focus.isDefault && <span className="focus-default">Default</span>}
                   {focus.isPublic && <span className="focus-public">Public</span>}
                 </div>

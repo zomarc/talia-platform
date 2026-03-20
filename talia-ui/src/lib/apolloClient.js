@@ -300,6 +300,8 @@ export const FOCUS_MUTATIONS = {
         description
         type
         role
+        assignedRoles
+        assignedUserId
         components {
           id
           type
@@ -329,6 +331,8 @@ export const FOCUS_MUTATIONS = {
         description
         type
         role
+        assignedRoles
+        assignedUserId
         components {
           id
           type

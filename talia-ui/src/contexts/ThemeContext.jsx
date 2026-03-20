@@ -17,8 +17,8 @@ import { trackedFetchGraphql } from '../services/data/trackedGraphql';
 
 const ThemeContext = createContext();
 const APPEARANCE_SETTINGS_QUERY = `
-  query AppearanceSettings {
-    appearanceSettings {
+  query AppearanceSettings($userId: String) {
+    appearanceSettings(userId: $userId) {
       settings
       profiles {
         id
@@ -32,8 +32,8 @@ const APPEARANCE_SETTINGS_QUERY = `
 `;
 
 const SAVE_APPEARANCE_SETTINGS_MUTATION = `
-  mutation SaveAppearanceSettings($settings: JSON!, $activeProfileId: String) {
-    saveAppearanceSettings(settings: $settings, activeProfileId: $activeProfileId) {
+  mutation SaveAppearanceSettings($settings: JSON!, $activeProfileId: String, $userId: String) {
+    saveAppearanceSettings(settings: $settings, activeProfileId: $activeProfileId, userId: $userId) {
       settings
       activeProfileId
     }
@@ -41,8 +41,8 @@ const SAVE_APPEARANCE_SETTINGS_MUTATION = `
 `;
 
 const SAVE_APPEARANCE_PROFILES_MUTATION = `
-  mutation SaveAppearanceProfiles($profiles: JSON!) {
-    saveAppearanceProfiles(profiles: $profiles) {
+  mutation SaveAppearanceProfiles($profiles: JSON!, $userId: String) {
+    saveAppearanceProfiles(profiles: $profiles, userId: $userId) {
       id
       name
       settings
@@ -50,6 +50,10 @@ const SAVE_APPEARANCE_PROFILES_MUTATION = `
     }
   }
 `;
+
+const getCurrentDevUserId = () => {
+  try { return localStorage.getItem('devUserId') || 'dev-user-1'; } catch { return 'dev-user-1'; }
+};
 
 const hexToRgb = (hex) => {
   if (typeof hex !== 'string') return null;
@@ -273,12 +277,13 @@ export const ThemeProvider = ({ children }) => {
   useEffect(() => {
     let cancelled = false;
     const loadAppearanceSettings = async () => {
+      const userId = getCurrentDevUserId();
       try {
         const data = await trackedFetchGraphql({
           query: APPEARANCE_SETTINGS_QUERY,
-          variables: {},
+          variables: { userId },
           component: 'ThemeContext',
-          purpose: 'Load appearance settings from database',
+          purpose: `Load appearance settings for ${userId}`,
           tableName: 'config_setting'
         });
         if (cancelled) return;
@@ -305,9 +310,8 @@ export const ThemeProvider = ({ children }) => {
           setActiveAppearanceProfileId(payload.activeProfileId);
         }
 
-        // Migrate: if DB was empty, push current localStorage-derived settings up
         if (!dbHasSettings) {
-          console.log('[ThemeContext] DB empty — migrating localStorage appearance to database');
+          console.log(`[ThemeContext] DB empty for ${userId} — migrating localStorage appearance to database`);
         }
       } catch (error) {
         console.warn('[ThemeContext] Failed to load appearance settings from DB:', error);
@@ -329,15 +333,17 @@ export const ThemeProvider = ({ children }) => {
       clearTimeout(saveSettingsTimerRef.current);
     }
     saveSettingsTimerRef.current = setTimeout(async () => {
+      const userId = getCurrentDevUserId();
       try {
         await trackedFetchGraphql({
           query: SAVE_APPEARANCE_SETTINGS_MUTATION,
           variables: {
             settings: buildCurrentAppearanceSettings(),
-            activeProfileId: activeAppearanceProfileId || null
+            activeProfileId: activeAppearanceProfileId || null,
+            userId
           },
           component: 'ThemeContext',
-          purpose: 'Persist appearance settings to database',
+          purpose: `Persist appearance settings for ${userId}`,
           tableName: 'config_setting'
         });
       } catch (error) {
@@ -357,11 +363,13 @@ export const ThemeProvider = ({ children }) => {
       clearTimeout(saveProfilesTimerRef.current);
     }
     saveProfilesTimerRef.current = setTimeout(async () => {
+      const userId = getCurrentDevUserId();
       try {
         await trackedFetchGraphql({
           query: SAVE_APPEARANCE_PROFILES_MUTATION,
           variables: {
-            profiles: appearanceProfiles
+            profiles: appearanceProfiles,
+            userId
           },
           component: 'ThemeContext',
           purpose: 'Persist appearance profiles to database',

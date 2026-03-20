@@ -52,6 +52,32 @@ start_server() {
             npm install
         fi
         
+        if command_exists lsof && lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+            local existing_pids
+            existing_pids=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ' | xargs || true)
+            local bad_owner=0
+            local pid
+            for pid in $existing_pids; do
+                local cwd cmd
+                cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
+                cmd=$(ps -p "$pid" -o command= 2>/dev/null || true)
+                if [[ -n "$cwd" && "$cwd" == "$project_path"* ]]; then
+                    continue
+                fi
+                echo -e "${RED}❌ Port $port is occupied by a non-${project_name} process${NC}"
+                echo -e "${YELLOW}   PID:${NC} ${pid}"
+                echo -e "${YELLOW}   CWD:${NC} ${cwd:-unknown}"
+                echo -e "${YELLOW}   CMD:${NC} ${cmd:-unknown}"
+                bad_owner=1
+            done
+            if [[ "$bad_owner" -eq 1 ]]; then
+                echo -e "${RED}❌ Refusing to start $project_name. Free port $port first.${NC}"
+                return 1
+            fi
+            echo -e "${GREEN}✅ $project_name already running on port $port (not starting another instance)${NC}"
+            return 0
+        fi
+
         echo -e "${GREEN}✅ Starting $project_name on port $port${NC}"
         echo -e "${BLUE}📍 Project path: $project_path${NC}"
         echo -e "${BLUE}🚀 Command: $start_command${NC}"

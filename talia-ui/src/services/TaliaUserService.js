@@ -4,6 +4,34 @@
  */
 
 import { supabase } from '../lib/supabase';
+import { apolloClient } from '../lib/apolloClient';
+import { gql } from '@apollo/client';
+
+const GET_TALIA_USERS_QUERY = gql`
+  query GetTaliaUsers {
+    taliaUsers {
+      id
+      taliaUserId
+      email
+      createdAt
+      updatedAt
+      lastLoginAt
+    }
+  }
+`;
+
+const GET_TALIA_USER_BY_EMAIL_QUERY = gql`
+  query GetTaliaUserByEmail($email: String!) {
+    taliaUser(email: $email) {
+      id
+      taliaUserId
+      email
+      createdAt
+      updatedAt
+      lastLoginAt
+    }
+  }
+`;
 
 class TaliaUserService {
   constructor() {
@@ -18,80 +46,122 @@ class TaliaUserService {
    */
   isLocalUser(user) {
     if (!user) return false;
-    return user.id === 'dev-user-1' || user.id?.startsWith('dev-user-') || user.email === 'dev@talia.local';
+    return user.id?.startsWith('dev-user-') || (typeof user.email === 'string' && user.email.endsWith('@talia.local'));
   }
   
   /**
-   * Get local mock user data
+   * Get the currently selected local mock user
    * @returns {Object} - Mock user object
    */
   getLocalUser() {
+    const savedId = localStorage.getItem('devUserId') || 'dev-user-1';
     const savedRole = localStorage.getItem('devUserRole') || 'ADMIN';
+    const DEV_USERS = [
+      { id: 'dev-user-1', email: 'dev@talia.local',    name: 'Dev Admin',    talia_user_id: 1000, role: 'ADMIN'   },
+      { id: 'dev-user-2', email: 'russell@talia.local', name: 'Russell',      talia_user_id: 1001, role: 'ADMIN'   },
+      { id: 'dev-user-3', email: 'andy@talia.local',    name: 'Andy',         talia_user_id: 1002, role: 'MANAGER' },
+      { id: 'dev-user-4', email: 'analyst@talia.local', name: 'Analyst',      talia_user_id: 1003, role: 'USER'    },
+      { id: 'dev-user-5', email: 'guest@talia.local',   name: 'Guest Viewer', talia_user_id: 1004, role: 'GUEST'   },
+    ];
+    const entry = DEV_USERS.find((u) => u.id === savedId) || DEV_USERS[0];
     return {
-      id: 'dev-user-1',
-      taliaUserId: 1000,
-      email: 'dev@talia.local',
-      name: 'Dev User',
-      taliaRole: savedRole.toLowerCase(),
+      id: entry.id,
+      taliaUserId: entry.talia_user_id,
+      email: entry.email,
+      name: entry.name,
+      taliaRole: (savedRole || entry.role).toLowerCase(),
       isActive: true,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString()
     };
   }
 
   async getAllTaliaUsers() {
     try {
-      // In dev mode, include local user if using mock authentication
-      const localUser = this.isDevMode ? this.getLocalUser() : null;
-      const users = localUser ? [localUser] : [];
-      
-      console.log('🔍 Fetching Talia users from Supabase...');
-      
-      const { data, error } = await supabase
-        .from('talia_users')
-        .select('*')
-        .order('talia_user_id', { ascending: true });
+      // Primary path: backend GraphQL (server-side Supabase access)
+      const { data } = await apolloClient.query({
+        query: GET_TALIA_USERS_QUERY,
+        fetchPolicy: 'network-only',
+        errorPolicy: 'all'
+      });
 
-      if (error) {
-        console.error('❌ Error fetching Talia users:', error);
-        // In dev mode, return local user even if database query fails
-        if (this.isDevMode && localUser) {
-          console.log('🔧 Dev mode: Returning local user due to database error');
-          return users;
-        }
-        return [];
-      }
-
-      console.log(`✅ Found ${data?.length || 0} Talia users`);
-      
-      // Map Supabase data to expected format
-      const dbUsers = (data || []).map(user => ({
-        taliaUserId: user.talia_user_id,
+      const dbUsers = (data?.taliaUsers || []).map((user) => ({
+        taliaUserId: user.taliaUserId,
         email: user.email,
         name: user.email?.split('@')[0] || 'Unknown',
         taliaRole: this.determineRoleFromEmail(user.email),
         isActive: true,
-        createdAt: user.created_at || user.last_login_at,
+        createdAt: user.createdAt || user.lastLoginAt,
+        lastLoginAt: user.lastLoginAt || null,
         id: user.id
       }));
-      
-      // Combine local user with database users (avoid duplicates)
-      const allUsers = [...users];
-      for (const dbUser of dbUsers) {
-        if (!this.isLocalUser(dbUser)) {
-          allUsers.push(dbUser);
-        }
-      }
-      
-      return allUsers;
+
+      return dbUsers;
     } catch (error) {
-      console.error('❌ Error in getAllTaliaUsers:', error);
-      // In dev mode, return local user even if there's an error
-      if (this.isDevMode) {
-        const localUser = this.getLocalUser();
-        console.log('🔧 Dev mode: Returning local user due to error');
-        return [localUser];
+      console.error('❌ Error in getAllTaliaUsers (GraphQL path):', error);
+
+      // Fallback 1: resolve users from known dev identities via existing taliaUser(email) query
+      try {
+        const devEmails = [
+          'dev@talia.local',
+          'russell@talia.local',
+          'andy@talia.local',
+          'analyst@talia.local',
+          'guest@talia.local',
+          'admin@talia.dev'
+        ];
+        const resolved = [];
+        for (const email of devEmails) {
+          const response = await apolloClient.query({
+            query: GET_TALIA_USER_BY_EMAIL_QUERY,
+            variables: { email },
+            fetchPolicy: 'network-only',
+            errorPolicy: 'all'
+          });
+          const user = response?.data?.taliaUser;
+          if (user) {
+            resolved.push({
+              taliaUserId: user.taliaUserId,
+              email: user.email,
+              name: user.email?.split('@')[0] || 'Unknown',
+              taliaRole: this.determineRoleFromEmail(user.email),
+              isActive: true,
+              createdAt: user.createdAt || user.lastLoginAt,
+              lastLoginAt: user.lastLoginAt || null,
+              id: user.id
+            });
+          }
+        }
+        if (resolved.length > 0) return resolved;
+      } catch (legacyQueryError) {
+        console.error('❌ Fallback taliaUser(email) lookup failed:', legacyQueryError);
       }
-      return [];
+
+      // Fallback 2: legacy direct DB in browser
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('talia_users')
+          .select('*')
+          .order('talia_user_id', { ascending: true });
+
+        if (fetchError) throw fetchError;
+
+        const dbUsers = (data || []).map((user) => ({
+          taliaUserId: user.talia_user_id,
+          email: user.email,
+          name: user.email?.split('@')[0] || 'Unknown',
+          taliaRole: this.determineRoleFromEmail(user.email),
+          isActive: true,
+          createdAt: user.created_at || user.last_login_at,
+          lastLoginAt: user.last_login_at || null,
+          id: user.id
+        }));
+
+        return dbUsers;
+      } catch (fallbackError) {
+        console.error('❌ Fallback direct user query failed:', fallbackError);
+        return [];
+      }
     }
   }
 

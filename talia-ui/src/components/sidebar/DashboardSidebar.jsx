@@ -81,7 +81,6 @@ function DashboardSidebar({
     user: false,
     reports: false,
     appearance: false,
-    admin: false,
   });
 
   const toggleSection = (section) => {
@@ -100,7 +99,6 @@ function DashboardSidebar({
         user: false,
         reports: false,
         appearance: false,
-        admin: false,
         [section]: true,
       };
     });
@@ -453,30 +451,6 @@ function DashboardSidebar({
           </div>
         </div>
 
-        {isAdmin(userRole) && (
-          <div className="dashboard-section">
-            <div className="dashboard-section__header" onClick={() => toggleSection('admin')}>
-              <span className="dashboard-section__title">Admin Dashboard</span>
-              <span className={`dashboard-section__icon ${expandedSections.admin ? 'dashboard-section__icon--expanded' : ''}`}>
-                ▶
-              </span>
-            </div>
-            <div className={`dashboard-section__content ${expandedSections.admin ? 'dashboard-section__content--expanded' : ''}`}>
-              <button className="dashboard-btn" onClick={() => onAddPanel('admin-dashboard', '⚙️ Admin Dashboard')}>
-                ⚙️ Open Admin Dashboard
-              </button>
-              <button className="dashboard-btn" onClick={() => onAddPanel('user-mapping-table', '🔗 User Mappings')}>
-                🔗 User Mappings
-              </button>
-              <button className="dashboard-btn" onClick={() => onAddPanel('talia-user-table', '👥 Talia Users')}>
-                👥 Talia Users
-              </button>
-              <div className="dashboard-form-hint dashboard-form-hint--admin">
-                💡 Admin tools for managing users and system configuration
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       <UserProfile isCollapsed={isCollapsed} onToggle={onToggle} />

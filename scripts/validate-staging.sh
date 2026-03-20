@@ -276,8 +276,8 @@ check_local_environment() {
   if [[ "$ui_code" == "200" ]]; then
     check_status "UI (localhost:5173)" "OK" "HTTP ${ui_code}"
   else
-    check_status "UI (localhost:5173)" "WARN" "HTTP ${ui_code} - run: cd talia-ui && npm run dev" || ((local_issues++))
-    add_recommendation "Start UI: cd talia-ui && npm run dev"
+    check_status "UI (localhost:5173)" "WARN" "HTTP ${ui_code} - run: cd talia-ui && npm run dev (strict 5173)" || ((local_issues++))
+    add_recommendation "Start UI on fixed port: cd talia-ui && npm run dev"
   fi
   
   # Supabase Kong
@@ -334,10 +334,10 @@ check_local_code_origin() {
   if declare -f collect_ui_port_pids >/dev/null 2>&1; then
     ui_pids=$(collect_ui_port_pids)
   else
-    ui_pids=$({ lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null; } | tr '\n' ' ' | xargs || true)
+    ui_pids=$(lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ' | xargs || true)
   fi
   if [[ -z "$ui_pids" ]]; then
-    check_status "UI process" "WARN" "no process on 5173/5174/5175"
+    check_status "UI process" "WARN" "no process on 5173"
   else
     local pid
     for pid in $ui_pids; do
@@ -355,6 +355,16 @@ check_local_code_origin() {
         ((issues++)) || true
       fi
     done
+  fi
+
+  local fallback_pids
+  fallback_pids=$({ lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null; } | tr '\n' ' ' | xargs || true)
+  if [[ -n "$fallback_pids" ]]; then
+    check_status "UI fallback ports" "WARN" "forbidden listeners on 5174/5175: ${fallback_pids}"
+    add_recommendation "Stop fallback listeners: lsof -ti:5174,5175 | xargs kill -9"
+    ((issues++)) || true
+  else
+    check_status "UI fallback ports" "OK" "no listeners on 5174/5175"
   fi
 
   local api_pids

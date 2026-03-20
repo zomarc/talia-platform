@@ -7,3 +7,4 @@ export const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';
 export const DASHBOARD_CYCLE_FOCUS_EVENT = 'talia:dashboard.cycleFocus';
 export const DASHBOARD_SELECT_FOCUS_EVENT = 'talia:dashboard.selectFocus';
 export const DASHBOARD_FOCUS_STATE_EVENT = 'talia:dashboard.focusState';
+export const DASHBOARD_OPEN_PANEL_EVENT = 'talia:dashboard.openPanel';

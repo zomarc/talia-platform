@@ -120,13 +120,22 @@ http_check_auth() {
   echo "$code"
 }
 
-# Collect listening PIDs for common local UI ports (5173-5175)
+# Collect listening PIDs for local UI port (hard rule: 5173 only)
 collect_ui_port_pids() {
   if ! command -v lsof >/dev/null 2>&1; then
     echo ""
     return 0
   fi
-  { lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null; } | tr '\n' ' ' | xargs || true
+  lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ' | xargs || true
+}
+
+# Collect listening PIDs for forbidden fallback UI ports.
+collect_ui_fallback_port_pids() {
+  if ! command -v lsof >/dev/null 2>&1; then
+    echo ""
+    return 0
+  fi
+  { lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null; } | tr '\n' ' ' | xargs || true
 }
 
 # Resolve current working directory for a process PID

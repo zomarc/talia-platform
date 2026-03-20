@@ -5,6 +5,14 @@ import { GraphQLUtils } from '../lib/apolloClient';
 
 const SupabaseAuthContext = createContext();
 
+const DEV_USERS = [
+  { id: 'dev-user-1', email: 'dev@talia.local',      name: 'Dev Admin',       talia_user_id: 1000, role: 'ADMIN'   },
+  { id: 'dev-user-2', email: 'russell@talia.local',   name: 'Russell',         talia_user_id: 1001, role: 'ADMIN'   },
+  { id: 'dev-user-3', email: 'andy@talia.local',      name: 'Andy',            talia_user_id: 1002, role: 'MANAGER' },
+  { id: 'dev-user-4', email: 'analyst@talia.local',   name: 'Analyst',         talia_user_id: 1003, role: 'USER'    },
+  { id: 'dev-user-5', email: 'guest@talia.local',     name: 'Guest Viewer',    talia_user_id: 1004, role: 'GUEST'   },
+];
+
 export const useSupabaseAuth = () => {
   const context = useContext(SupabaseAuthContext);
   if (!context) {
@@ -24,23 +32,25 @@ export const SupabaseAuthProvider = ({ children }) => {
   
   // Create mock user for development
   const createMockUser = () => {
-    // Get role from localStorage or default to ADMIN
-    const savedRole = localStorage.getItem('devUserRole') || 'ADMIN';
+    const savedUserId = localStorage.getItem('devUserId') || 'dev-user-1';
+    const savedRole = localStorage.getItem('devUserRole') || null;
+    const devEntry = DEV_USERS.find((u) => u.id === savedUserId) || DEV_USERS[0];
+    const role = savedRole || devEntry.role;
     const mockUser = {
-      id: 'dev-user-1',
-      email: 'dev@talia.local',
-      talia_user_id: 1000,
-      role: savedRole,
+      id: devEntry.id,
+      email: devEntry.email,
+      name: devEntry.name,
+      talia_user_id: devEntry.talia_user_id,
+      role,
       taliaUser: {
-        id: 'dev-user-1',
-        talia_user_id: 1000,
-        email: 'dev@talia.local'
+        id: devEntry.id,
+        talia_user_id: devEntry.talia_user_id,
+        email: devEntry.email
       }
     };
     
-    // Set GraphQL context
     GraphQLUtils.setUserContext({
-      role: savedRole,
+      role,
       email: mockUser.email,
       id: mockUser.id
     });
@@ -48,6 +58,36 @@ export const SupabaseAuthProvider = ({ children }) => {
     return mockUser;
   };
   
+  // Switch to a different dev user by id
+  const switchDevUser = (devUserId) => {
+    if (!isDevMode) {
+      console.warn('switchDevUser only works in development mode');
+      return;
+    }
+    const target = DEV_USERS.find((u) => u.id === devUserId);
+    if (!target) return;
+    localStorage.setItem('devUserId', target.id);
+    localStorage.setItem('devUserRole', target.role);
+    const mockUser = {
+      id: target.id,
+      email: target.email,
+      name: target.name,
+      talia_user_id: target.talia_user_id,
+      role: target.role,
+      taliaUser: {
+        id: target.id,
+        talia_user_id: target.talia_user_id,
+        email: target.email
+      }
+    };
+    setUser(mockUser);
+    GraphQLUtils.setUserContext({
+      role: target.role,
+      email: target.email,
+      id: target.id
+    });
+  };
+
   // Update user role (for dev role selector)
   const updateUserRole = (newRole) => {
     if (!isDevMode) {
@@ -57,15 +97,13 @@ export const SupabaseAuthProvider = ({ children }) => {
     
     localStorage.setItem('devUserRole', newRole);
     
-    if (user && user.id === 'dev-user-1') {
-      // Update mock user role
+    if (user && user.id?.startsWith('dev-user-')) {
       const updatedUser = {
         ...user,
         role: newRole
       };
       setUser(updatedUser);
       
-      // Update GraphQL context
       GraphQLUtils.setUserContext({
         role: newRole,
         email: updatedUser.email,
@@ -395,9 +433,10 @@ export const SupabaseAuthProvider = ({ children }) => {
     signInWithEmail,
     signInWithPassword,
     signOut,
-    updateUserRole, // Add role update function for dev mode
-    isDevMode, // Expose dev mode flag
-    // Add other Supabase auth methods as needed (e.g., signUp, resetPassword)
+    updateUserRole,
+    isDevMode,
+    devUsers: DEV_USERS,
+    switchDevUser,
   };
 
   return (

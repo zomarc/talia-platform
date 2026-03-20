@@ -6,13 +6,13 @@
 import React, { useState } from 'react';
 import UserMappingTable from '../users/UserMappingTable';
 import TaliaUserTable from '../users/TaliaUserTable';
-import FocusManager from '../../focus-management/FocusManager';
+import AdminAccessManager from './AdminAccessManager';
 import { useTaliaFocusManagement } from '../../../hooks/useTaliaFocusManagement';
 import '../admin.css';
 
 const AdminDashboard = ({ skipAuth = false }) => {
   const { taliaUser, isAdmin } = useTaliaFocusManagement();
-  const [activeTab, setActiveTab] = useState('mapping');
+  const [activeTab, setActiveTab] = useState('access');
 
   if (!skipAuth && !isAdmin) {
     return (
@@ -26,40 +26,34 @@ const AdminDashboard = ({ skipAuth = false }) => {
   }
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
-        <h1 className="admin-page-title">Talia Administration</h1>
-        <div className="admin-page-subtitle">
-          Logged in as: <strong>{taliaUser?.email}</strong> (Talia User ID: <strong>{taliaUser?.taliaUserId}</strong>)
+    <div className="talia-report admin-dashboard-panel" role="region" aria-label="Admin dashboard">
+      <header className="talia-report__header">
+        <div className="talia-report__header-left">
+          <h2 className="talia-report__title">Admin Dashboard</h2>
+          <p className="talia-report__subtitle">Focus access, users, and mappings</p>
         </div>
-      </div>
+        <div className="talia-report__header-right admin-dashboard-panel__identity">
+          <span>{taliaUser?.email || 'Unknown user'}</span>
+        </div>
+      </header>
 
-      <div className="admin-tabs">
-        <button
-          className={`admin-tab ${activeTab === 'mapping' ? 'admin-tab-active' : ''}`}
-          onClick={() => setActiveTab('mapping')}
-        >
-          User Mappings
+      <div className="admin-tabs admin-dashboard-panel__tabs">
+        <button className={`admin-tab ${activeTab === 'access' ? 'admin-tab-active' : ''}`} onClick={() => setActiveTab('access')}>
+          Focus Access
         </button>
-        <button
-          className={`admin-tab ${activeTab === 'users' ? 'admin-tab-active' : ''}`}
-          onClick={() => setActiveTab('users')}
-        >
+        <button className={`admin-tab ${activeTab === 'users' ? 'admin-tab-active' : ''}`} onClick={() => setActiveTab('users')}>
           Talia Users
         </button>
-        <button
-          className={`admin-tab ${activeTab === 'focus' ? 'admin-tab-active' : ''}`}
-          onClick={() => setActiveTab('focus')}
-        >
-          Focus Management
+        <button className={`admin-tab ${activeTab === 'mapping' ? 'admin-tab-active' : ''}`} onClick={() => setActiveTab('mapping')}>
+          User Mappings
         </button>
       </div>
 
-      <div className="admin-content">
-        {activeTab === 'mapping' && <UserMappingTable />}
+      <main className="talia-report__content admin-dashboard-panel__content">
+        {activeTab === 'access' && <AdminAccessManager />}
         {activeTab === 'users' && <TaliaUserTable />}
-        {activeTab === 'focus' && <FocusManager />}
-      </div>
+        {activeTab === 'mapping' && <UserMappingTable />}
+      </main>
     </div>
   );
 };

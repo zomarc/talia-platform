@@ -5,7 +5,7 @@
   "description": "Talia Platform - Frontend UI (Alpha)",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --port 5173 --strictPort",
     "build": "vite build",
     "lint": "eslint .",
     "check:standards": "node ./scripts/check-component-standards.mjs && node ./scripts/check-data-boundary.mjs",

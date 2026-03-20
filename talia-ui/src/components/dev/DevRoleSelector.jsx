@@ -10,11 +10,10 @@ import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import '../../styles/dev-components.css';
 
 const DevRoleSelector = ({ inDropdown = false }) => {
-  const { user, updateUserRole, isDevMode } = useSupabaseAuth();
+  const { user, updateUserRole, isDevMode, devUsers, switchDevUser } = useSupabaseAuth();
   const [currentRole, setCurrentRole] = useState(user?.role || 'ADMIN');
-  const [isCollapsed, setIsCollapsed] = useState(true); // Closed by default
+  const [isCollapsed, setIsCollapsed] = useState(true);
 
-  // Update current role when user changes (dev mode only)
   useEffect(() => {
     if (!isDevMode) return;
     if (user?.role) {
@@ -22,7 +21,6 @@ const DevRoleSelector = ({ inDropdown = false }) => {
     }
   }, [isDevMode, user?.role]);
 
-  // Only show in dev mode
   if (!isDevMode) {
     return null;
   }
@@ -33,26 +31,48 @@ const DevRoleSelector = ({ inDropdown = false }) => {
     setCurrentRole(newRole);
     if (updateUserRole) {
       updateUserRole(newRole);
-      // Force page refresh to update all components
       window.location.reload();
     }
   };
 
-  // When in dropdown, always show expanded (no collapsed state)
+  const handleUserSwitch = (devUserId) => {
+    if (switchDevUser) {
+      switchDevUser(devUserId);
+      window.location.reload();
+    }
+  };
+
+  const userSwitcherBlock = (
+    <>
+      <div className="dev-role-selector__section-label">Switch User</div>
+      <div className="dev-role-selector__users">
+        {(devUsers || []).map((devUser) => (
+          <button
+            key={devUser.id}
+            onClick={() => handleUserSwitch(devUser.id)}
+            className={`dev-role-selector__user-btn ${user?.id === devUser.id ? 'dev-role-selector__user-btn--active' : ''}`}
+            title={`${devUser.email} (${devUser.role})`}
+          >
+            <span className="dev-role-selector__user-name">{devUser.name}</span>
+            <span className="dev-role-selector__user-role">{devUser.role}</span>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+
   if (inDropdown) {
     return (
       <div className="dev-role-selector">
         <div className="dev-role-selector__info">
           <div className="dev-role-selector__info-text">
-            Current Role: <strong>{currentRole}</strong>
+            User: <strong>{user?.name || user?.email}</strong> &middot; Role: <strong>{currentRole}</strong>
           </div>
-          {user?.email && (
-            <div className="dev-role-selector__info-text">
-              User: {user.email}
-            </div>
-          )}
         </div>
 
+        {userSwitcherBlock}
+
+        <div className="dev-role-selector__section-label">Override Role</div>
         <div className="dev-role-selector__roles">
           {roles.map((role) => (
             <button
@@ -68,19 +88,18 @@ const DevRoleSelector = ({ inDropdown = false }) => {
     );
   }
 
-  // Standalone mode (not in dropdown) - can be collapsed
   if (isCollapsed) {
     return (
       <div
         className="dev-role-selector dev-role-selector--collapsed"
         onClick={() => setIsCollapsed(false)}
-        title="Click to expand dev role selector"
+        title="Click to expand dev tools"
       >
         <div className="dev-role-selector__collapsed-label">
           🔧 DEV
         </div>
         <div className="dev-role-selector__collapsed-role">
-          {currentRole}
+          {user?.name || currentRole}
         </div>
       </div>
     );
@@ -90,7 +109,7 @@ const DevRoleSelector = ({ inDropdown = false }) => {
     <div className="dev-role-selector">
       <div className="dev-role-selector__header">
         <div className="dev-role-selector__title">
-          🔧 Dev Role Selector
+          🔧 Dev Tools
         </div>
         <button
           onClick={() => setIsCollapsed(true)}
@@ -103,15 +122,13 @@ const DevRoleSelector = ({ inDropdown = false }) => {
       
       <div className="dev-role-selector__info">
         <div className="dev-role-selector__info-text">
-          Current Role: <strong>{currentRole}</strong>
+          User: <strong>{user?.name || user?.email}</strong> &middot; Role: <strong>{currentRole}</strong>
         </div>
-        {user?.email && (
-          <div className="dev-role-selector__info-text">
-            User: {user.email}
-          </div>
-        )}
       </div>
 
+      {userSwitcherBlock}
+
+      <div className="dev-role-selector__section-label">Override Role</div>
       <div className="dev-role-selector__roles">
         {roles.map((role) => (
           <button

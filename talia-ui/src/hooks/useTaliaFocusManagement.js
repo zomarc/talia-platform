@@ -30,7 +30,7 @@ export const useTaliaFocusManagement = () => {
     setError(null);
 
     try {
-      const focuses = await graphQLFocusService.getFocusesForRole(userRole);
+      const focuses = await graphQLFocusService.getFocusesForRole(userRole, user?.id);
       setTaliaFocuses(focuses || []);
 
       // Set default focus if none selected
@@ -45,7 +45,7 @@ export const useTaliaFocusManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [userRole, currentTaliaFocus]);
+  }, [userRole, user?.id, currentTaliaFocus]);
 
   useEffect(() => {
     loadTaliaFocuses();
@@ -76,7 +76,8 @@ export const useTaliaFocusManagement = () => {
         const mappedFocus = {
           ...newFocus,
           isStandard: newFocus.isPublic || false,
-          assignedRoles: newFocus.role ? [newFocus.role] : [],
+          assignedRoles: newFocus.assignedRoles || (newFocus.role ? [newFocus.role] : []),
+          assignedUserId: newFocus.assignedUserId || null,
           layoutData: newFocus.layoutData || { components: [] }
         };
         console.log('✅ Focus created successfully:', mappedFocus.id, mappedFocus.name);
@@ -110,7 +111,8 @@ export const useTaliaFocusManagement = () => {
         const mappedFocus = {
           ...updatedFocus,
           isStandard: updatedFocus.isPublic || false,
-          assignedRoles: updatedFocus.role ? [updatedFocus.role] : [],
+          assignedRoles: updatedFocus.assignedRoles || (updatedFocus.role ? [updatedFocus.role] : []),
+          assignedUserId: updatedFocus.assignedUserId || null,
           layoutData: updatedFocus.layoutData || { components: updatedFocus.components || [] }
         };
         console.log('✅ Focus updated successfully:', mappedFocus.id, mappedFocus.name);

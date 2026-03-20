@@ -103,7 +103,15 @@ collect_ui_port_pids() {
     echo ""
     return 0
   fi
-  { lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null; } | tr '\n' ' ' | xargs || true
+  lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ' | xargs || true
+}
+
+collect_ui_fallback_port_pids() {
+  if ! command -v lsof >/dev/null 2>&1; then
+    echo ""
+    return 0
+  fi
+  { lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null; lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null; } | tr '\n' ' ' | xargs || true
 }
 
 get_pid_cwd() {
@@ -122,6 +130,39 @@ stop_port_processes() {
   else
     echo -e "  ${DIM}No processes for ${description}${NC}"
   fi
+}
+
+verify_ui_port_owner() {
+  if ! command -v lsof >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local ui_dir="${ROOT_DIR}/talia-ui"
+  local pids
+  pids=$(lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ' | xargs || true)
+  [[ -z "$pids" ]] && return 0
+
+  local invalid=0
+  local pid
+  for pid in $pids; do
+    local cwd cmd
+    cwd=$(get_pid_cwd "$pid")
+    cmd=$(ps -p "$pid" -o command= 2>/dev/null || true)
+    if [[ -n "$cwd" && "$cwd" == "$ui_dir"* ]]; then
+      continue
+    fi
+    echo -e "  ${RED}✗ Port 5173 is occupied by non-Talia process${NC}"
+    echo -e "  ${YELLOW}  PID:${NC} ${pid}"
+    echo -e "  ${YELLOW}  CWD:${NC} ${cwd:-unknown}"
+    echo -e "  ${YELLOW}  CMD:${NC} ${cmd:-unknown}"
+    invalid=1
+  done
+
+  if [[ "$invalid" -eq 1 ]]; then
+    echo -e "  ${RED}Refusing to start local UI. Port 5173 must be owned by talia-ui only.${NC}"
+    return 1
+  fi
+  return 0
 }
 
 get_local_source_version() {
@@ -508,6 +549,10 @@ start_local_services() {
 
   if [[ ! -d "${ROOT_DIR}/talia-ui" ]] || [[ ! -d "${ROOT_DIR}/talia-server" ]]; then
     echo -e "  ${RED}Local project directories not found under ${ROOT_DIR}${NC}"
+    return 1
+  fi
+
+  if ! verify_ui_port_owner; then
     return 1
   fi
 
@@ -952,22 +997,29 @@ check_duplicate_dev_servers() {
   done
 
   # Check for processes on dev server ports
-  local port_5173 port_5174 port_5175 total_ports
+  local port_5173 port_5174 port_5175
   port_5173=$(lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null | wc -l | tr -d ' ')
   port_5174=$(lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null | wc -l | tr -d ' ')
   port_5175=$(lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null | wc -l | tr -d ' ')
-  total_ports=$((port_5173 + port_5174 + port_5175))
+  local fallback_ports=$((port_5174 + port_5175))
 
   local has_duplicates=false
   local vite_ui_count
   vite_ui_count=$(echo "$vite_ui_pids" | wc -w | tr -d ' ')
   [[ "$vite_ui_count" -gt 1 ]] && has_duplicates=true
-  [[ "$total_ports" -gt 1 ]] && has_duplicates=true
+  [[ "$port_5173" -gt 1 ]] && has_duplicates=true
+  [[ "$fallback_ports" -gt 0 ]] && has_duplicates=true
 
   if $has_duplicates && [[ "$auto_fix" == "true" ]]; then
-    echo -e "  ${YELLOW}⚠️  Duplicate dev servers detected. Stopping all UI instances...${NC}"
-    local port_pids
+    echo -e "  ${YELLOW}⚠️  Duplicate/forbidden UI servers detected. Enforcing single-server rule on 5173...${NC}"
+    local port_pids fallback_pids
     port_pids=$(collect_ui_port_pids)
+    fallback_pids=$(collect_ui_fallback_port_pids)
+    if [[ -n "$fallback_pids" ]]; then
+      kill $fallback_pids 2>/dev/null || true
+      sleep 1
+      kill -9 $fallback_pids 2>/dev/null || true
+    fi
     if [[ -n "$port_pids" ]]; then
       kill $port_pids 2>/dev/null || true
       sleep 1
@@ -993,8 +1045,9 @@ check_duplicate_dev_servers() {
     echo -e "  ${YELLOW}⚠️  No Vite processes found${NC}"
   fi
 
-  if [[ "$total_ports" -gt 1 ]]; then
-    echo -e "  ${RED}⚠️  Multiple processes on dev ports (5173/5174/5175): ${total_ports}${NC}"
+  if [[ "$port_5173" -gt 1 || "$fallback_ports" -gt 0 ]]; then
+    echo -e "  ${RED}⚠️  UI port rule violation: only one server on 5173 is allowed${NC}"
+    echo -e "  ${YELLOW}   Port 5173 listeners: ${port_5173}${NC}"
     if [[ "$port_5173" -gt 0 ]]; then
       local pids_5173
       pids_5173=$(lsof -ti:5173 2>/dev/null | tr '\n' ' ' | xargs)
@@ -1003,23 +1056,19 @@ check_duplicate_dev_servers() {
     if [[ "$port_5174" -gt 0 ]]; then
       local pids_5174
       pids_5174=$(lsof -ti:5174 2>/dev/null | tr '\n' ' ' | xargs)
-      echo -e "  ${YELLOW}   Port 5174: ${port_5174} process(es) - PIDs: ${pids_5174}${NC}"
+      echo -e "  ${YELLOW}   Port 5174 (forbidden): ${port_5174} process(es) - PIDs: ${pids_5174}${NC}"
     fi
     if [[ "$port_5175" -gt 0 ]]; then
       local pids_5175
       pids_5175=$(lsof -ti:5175 2>/dev/null | tr '\n' ' ' | xargs)
-      echo -e "  ${YELLOW}   Port 5175: ${port_5175} process(es) - PIDs: ${pids_5175}${NC}"
+      echo -e "  ${YELLOW}   Port 5175 (forbidden): ${port_5175} process(es) - PIDs: ${pids_5175}${NC}"
     fi
-    echo -e "  ${DIM}   Run: lsof -ti:5173,5174,5175 | xargs kill -9${NC}"
+    echo -e "  ${DIM}   Run: lsof -ti:5174,5175 | xargs kill -9${NC}"
     return 1
-  elif [[ "$total_ports" -eq 1 ]]; then
-    local active_port=""
-    [[ "$port_5173" -eq 1 ]] && active_port="5173"
-    [[ "$port_5174" -eq 1 ]] && active_port="5174"
-    [[ "$port_5175" -eq 1 ]] && active_port="5175"
-    echo -e "  ${GREEN}✓${NC} Dev server ports: 1 process on port ${active_port} (OK)"
+  elif [[ "$port_5173" -eq 1 ]]; then
+    echo -e "  ${GREEN}✓${NC} Dev server ports: single process on port 5173 (OK)"
   else
-    echo -e "  ${YELLOW}⚠️  No processes on dev server ports${NC}"
+    echo -e "  ${YELLOW}⚠️  No process on UI port 5173${NC}"
   fi
 
   return 0
@@ -1041,7 +1090,7 @@ check_local_code_origin() {
   local ui_pids
   ui_pids=$(collect_ui_port_pids)
   if [[ -z "$ui_pids" ]]; then
-    echo -e "  ${YELLOW}⚠️  No UI process detected on ports 5173/5174/5175${NC}"
+    echo -e "  ${YELLOW}⚠️  No UI process detected on port 5173${NC}"
   else
     local pid
     for pid in $ui_pids; do
@@ -1059,6 +1108,19 @@ check_local_code_origin() {
         fi
       fi
     done
+  fi
+
+  local fallback_pids
+  fallback_pids=$(collect_ui_fallback_port_pids)
+  if [[ -n "$fallback_pids" ]]; then
+    echo -e "  ${RED}⚠️  Forbidden fallback UI port process detected (5174/5175): ${fallback_pids}${NC}"
+    ((issues++)) || true
+    if [[ "$auto_fix" == "true" ]]; then
+      kill $fallback_pids 2>/dev/null || true
+      sleep 1
+      kill -9 $fallback_pids 2>/dev/null || true
+      echo -e "  ${GREEN}✓${NC} Stopped fallback-port UI process(es)"
+    fi
   fi
 
   local api_pids

@@ -487,6 +487,6 @@ export const TestWorkbenchPanelCore = ({ embedded = false }) => {
   );
 };
 
-const TestPage = () => <TestWorkbenchPanelCore embedded={false} />;
+const TestPage = ({ embedded = false }) => <TestWorkbenchPanelCore embedded={embedded} />;
 
 export default TestPage;

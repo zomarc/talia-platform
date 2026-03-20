@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { GraphQLUtils } from '../../../lib/apolloClient';
 import { canAccessPrivilegedPanels, normalizeRole } from '../../../utils/roleUtils';
-import { TestWorkbenchPanelCore } from '../../TestPage';
+
+const TestPage = React.lazy(() => import('../../TestPage'));
 
 const TestWorkbenchPanel = ({ skipAuth = false }) => {
   const { user } = useSupabaseAuth();
@@ -17,7 +18,11 @@ const TestWorkbenchPanel = ({ skipAuth = false }) => {
     );
   }
 
-  return <TestWorkbenchPanelCore embedded={true} />;
+  return (
+    <Suspense fallback={<div className="talia-unavailable">Loading Test Workbench...</div>}>
+      <TestPage embedded={true} />
+    </Suspense>
+  );
 };
 
 export default TestWorkbenchPanel;

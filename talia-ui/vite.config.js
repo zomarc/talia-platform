@@ -30,6 +30,8 @@ export default defineConfig({
     // Dev mode (npm run dev) does NOT minify
   },
   server: {
+    port: 5173,
+    strictPort: true,
     host: true, // Allow external connections
     allowedHosts: [
       'proud-books-brake.loca.lt',

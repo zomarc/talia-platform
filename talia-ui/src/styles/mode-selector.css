@@ -91,6 +91,12 @@ body > .mode-selector .mode-selector__container,
   transform: none;
 }
 
+.mode-selector__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .mode-selector__btn--active {
   background: color-mix(in srgb, var(--theme-warning) 38%, var(--theme-bg-solid));
   border-color: color-mix(in srgb, var(--theme-warning) 56%, var(--theme-accent));
@@ -195,11 +201,12 @@ body > .mode-selector .mode-selector__container,
 
 .mode-selector__dev-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   padding: var(--theme-padding-sm) var(--theme-padding-md);
   border-bottom: 1px solid var(--theme-border);
   background: var(--theme-glass);
+  gap: var(--theme-padding-xs);
 }
 
 .mode-selector__dev-title {
@@ -222,6 +229,23 @@ body > .mode-selector .mode-selector__container,
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-left: auto;
+}
+
+.mode-selector__dev-open-admin {
+  border: 1px solid var(--theme-border-light);
+  background: var(--theme-glass);
+  color: var(--theme-text-primary);
+  border-radius: var(--theme-radius-sm);
+  padding: 2px 8px;
+  font: inherit;
+  font-size: var(--theme-font-size-xs);
+  cursor: pointer;
+}
+
+.mode-selector__dev-open-admin:hover {
+  background: var(--theme-glass-hover);
+  border-color: var(--theme-border-strong);
 }
 
 .mode-selector__dev-close:hover {
@@ -266,6 +290,30 @@ body > .mode-selector .mode-selector__container,
   display: flex;
   flex-direction: column;
   gap: var(--theme-padding-xs);
+}
+
+.mode-selector__dev-shortcuts {
+  margin-top: var(--theme-padding-sm);
+  padding-top: var(--theme-padding-sm);
+  border-top: 1px solid var(--theme-border-light);
+}
+
+.mode-selector__dev-shortcut-btn {
+  width: 100%;
+  border: 1px solid var(--theme-border-light);
+  background: var(--theme-glass);
+  color: var(--theme-text-primary);
+  border-radius: var(--theme-radius-sm);
+  padding: var(--theme-padding-xs) var(--theme-padding-sm);
+  font: inherit;
+  font-size: var(--theme-font-size-xs);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.mode-selector__dev-shortcut-btn:hover {
+  background: var(--theme-glass-hover);
+  border-color: var(--theme-border-strong);
 }
 
 /* ============================================================================

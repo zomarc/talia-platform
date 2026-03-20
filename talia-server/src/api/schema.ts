@@ -21,6 +21,23 @@ export const typeDefs = `#graphql
     lastLoginAt: String
   }
 
+  type UiActivityEvent {
+    id: ID!
+    at: String!
+    userId: String
+    userEmail: String
+    userRole: String
+    kind: String
+    report: String
+    panelComponent: String
+    purpose: String
+    status: String
+    performanceMs: Int
+    queryCount: Int
+    sourceQueryId: String
+    criteria: JSON
+  }
+
   type FocusPreference {
     id: ID!
     userId: ID!
@@ -78,6 +95,8 @@ export const typeDefs = `#graphql
     description: String
     type: FocusType!
     role: UserRole!
+    assignedRoles: [String!]!
+    assignedUserId: String
     components: [FocusComponent!]!
     layoutData: JSON
     createdBy: ID!
@@ -89,6 +108,7 @@ export const typeDefs = `#graphql
   enum FocusType {
     STANDARD
     USER
+    ROLE
     TEMPLATE
     SHARED
   }
@@ -845,6 +865,8 @@ export const typeDefs = `#graphql
     description: String
     type: FocusType!
     role: UserRole!
+    assignedRoles: [String!]
+    assignedUserId: String
     components: [FocusComponentInput!]!
     isPublic: Boolean
   }
@@ -884,16 +906,39 @@ export const typeDefs = `#graphql
     isActive: Boolean
   }
 
+  input UiActivityEventInput {
+    at: String
+    userId: String
+    userEmail: String
+    userRole: String
+    kind: String
+    report: String
+    panelComponent: String
+    purpose: String
+    status: String
+    performanceMs: Int
+    queryCount: Int
+    sourceQueryId: String
+    criteria: JSON
+  }
+
   # Queries
   type Query {
     # User Management
     me: User
     users: [User!]!
     taliaUser(email: String!): TaliaUser
+    taliaUsers: [TaliaUser!]!
+    uiActivityEvents(
+      sinceMinutes: Int
+      limit: Int
+      userId: String
+      userEmail: String
+    ): [UiActivityEvent!]!
     
     # Focus Management
     focuses(filters: FocusFilters): [Focus!]!
-    focusesByRole(role: String!): [Focus!]!
+    focusesByRole(role: String!, userId: String): [Focus!]!
     focus(id: ID!): Focus
     myFocuses: [Focus!]!
     myFocusPreferences: [FocusPreference!]!
@@ -970,7 +1015,7 @@ export const typeDefs = `#graphql
     
     # Talia Configuration (database-backed)
     taliaConfig: TaliaConfigSummary!
-    appearanceSettings: AppearanceSettings!
+    appearanceSettings(userId: String): AppearanceSettings!
     integrationDateRanges: [IntegrationDateRange!]!
     integrationDateRange(id: Int!): IntegrationDateRange
     dataSources: [DataSource!]!
@@ -989,6 +1034,7 @@ export const typeDefs = `#graphql
     
     # User Management
     updateUserPreferences(input: UserPreferencesInput!): User!
+    logUiActivityEvent(input: UiActivityEventInput!): Boolean!
     
     # Focus Preferences
     updateFocusPreference(focusId: ID!, preferences: FocusPreferenceInput!): FocusPreference!
@@ -1007,8 +1053,8 @@ export const typeDefs = `#graphql
     updateIntegrationDateRange(id: Int!, input: IntegrationDateRangeInput!): IntegrationDateRange!
     createIntegrationDateRange(input: IntegrationDateRangeInput!): IntegrationDateRange!
     setDefaultDateRange(id: Int!): IntegrationDateRange!
-    saveAppearanceSettings(settings: JSON!, activeProfileId: String): AppearanceSettings!
-    saveAppearanceProfiles(profiles: JSON!): [AppearanceProfile!]!
+    saveAppearanceSettings(settings: JSON!, activeProfileId: String, userId: String): AppearanceSettings!
+    saveAppearanceProfiles(profiles: JSON!, userId: String): [AppearanceProfile!]!
     
     # Target Profiles
     createTargetProfile(input: TargetProfileInput!): TargetProfile!

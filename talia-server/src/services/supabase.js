@@ -371,6 +371,7 @@ export class SupabaseDataService {
         type: focusData.type,
         is_standard: focusData.isStandard || false,
         assigned_roles: focusData.assignedRoles || [],
+        assigned_user_id: focusData.assignedUserId || null,
         is_default: focusData.isDefault || false,
         is_active: focusData.isActive !== undefined ? focusData.isActive : true,
         layout_data: focusData.layoutData || null
@@ -414,6 +415,7 @@ export class SupabaseDataService {
       if (updateData.type !== undefined) updatePayload.type = updateData.type;
       if (updateData.isStandard !== undefined) updatePayload.is_standard = updateData.isStandard;
       if (updateData.assignedRoles !== undefined) updatePayload.assigned_roles = updateData.assignedRoles;
+      if (updateData.assignedUserId !== undefined) updatePayload.assigned_user_id = updateData.assignedUserId;
       if (updateData.isDefault !== undefined) updatePayload.is_default = updateData.isDefault;
       if (updateData.isActive !== undefined) updatePayload.is_active = updateData.isActive;
       if (updateData.layoutData !== undefined) updatePayload.layout_data = updateData.layoutData;
@@ -479,6 +481,81 @@ export class SupabaseDataService {
     } catch (error) {
       console.error('Error querying talia_user:', error);
       throw error;
+    }
+  }
+
+  // Get all Talia users
+  async getAllTaliaUsers() {
+    try {
+      const { data, error } = await this.client
+        .from('talia_users')
+        .select('*')
+        .order('last_login_at', { ascending: false, nullsFirst: false })
+        .order('talia_user_id', { ascending: true });
+
+      if (error) {
+        console.error('Supabase query error for talia_users:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error querying talia_users:', error);
+      throw error;
+    }
+  }
+
+  async logUiActivityEvent(input) {
+    try {
+      const payload = {
+        at: input.at || new Date().toISOString(),
+        user_id: input.userId || null,
+        user_email: input.userEmail || null,
+        user_role: input.userRole || null,
+        kind: input.kind || null,
+        report: input.report || null,
+        panel_component: input.panelComponent || null,
+        purpose: input.purpose || null,
+        status: input.status || null,
+        performance_ms: Number.isFinite(input.performanceMs) ? input.performanceMs : null,
+        query_count: Number.isFinite(input.queryCount) ? input.queryCount : null,
+        source_query_id: input.sourceQueryId || null,
+        criteria: input.criteria && typeof input.criteria === 'object' ? input.criteria : {}
+      };
+
+      const { error } = await this.client
+        .from('ui_activity_events')
+        .insert(payload);
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error logging UI activity event:', error);
+      return false;
+    }
+  }
+
+  async getUiActivityEvents({ sinceMinutes = null, limit = 2000, userId = null, userEmail = null } = {}) {
+    try {
+      let query = this.client
+        .from('ui_activity_events')
+        .select('*')
+        .order('at', { ascending: false })
+        .limit(Math.max(1, Math.min(limit || 2000, 10000)));
+
+      if (Number.isFinite(sinceMinutes) && sinceMinutes > 0) {
+        const cutoff = new Date(Date.now() - (sinceMinutes * 60 * 1000)).toISOString();
+        query = query.gte('at', cutoff);
+      }
+      if (userId) query = query.eq('user_id', userId);
+      if (userEmail) query = query.ilike('user_email', userEmail);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching UI activity events:', error);
+      return [];
     }
   }
 

@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { StrictMode, useState, useEffect, Suspense, lazy } from 'react'
+import { StrictMode, useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 
 // Core styles - order matters
@@ -17,15 +17,16 @@ import './styles/status-bar.css'     // Status bar styles
 
 import AppWithAuth from './AppWithAuth.jsx'
 import TestPage from './components/TestPage.jsx'
+import DataManagementPage from './components/admin/data-management/DataManagementPage.jsx'
 import StatusBar from './components/shared/StatusBar.jsx'
-import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
 import { applyTheme, DEFAULT_THEME } from './config/themes.js';
 import { initChartDefaults } from './lib/chartConfig.js';
 import { GraphQLUtils } from './lib/apolloClient.js';
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from './lib/eventBus.js';
-import { normalizeRole, canUseAdvancedHeader } from './utils/roleUtils.js';
+import { normalizeRole, canUseAdvancedHeader, canAccessPrivilegedPanels } from './utils/roleUtils.js';
+import { initUserActivityTracking } from './services/userActivityTracker.js';
 
 // Apollo Client temporarily disabled during database restoration
 // TODO: Re-enable when database is restored
@@ -44,6 +45,8 @@ try {
   
   // Initialize Chart.js with theme defaults
   initChartDefaults();
+  // Initialize lightweight user activity tracking for admin telemetry.
+  initUserActivityTracking();
   
   console.log('[main.jsx] Theme and Chart.js initialized');
 } catch (e) {
@@ -57,29 +60,10 @@ console.log('🎯 Root element:', document.getElementById('root'));
 console.log('🌐 Window object:', typeof window);
 console.log('📱 Document ready state:', document.readyState);
 
-// Global status and event state (shared across all modes)
-const DataManagementUnavailable = () => (
+const PrivilegedModeDenied = ({ title }) => (
   <div className="talia-unavailable">
-    Data Management is currently unavailable.
+    {title} is restricted to ADMIN and SUPER_USER.
   </div>
-);
-
-const AdminLiteUnavailable = () => (
-  <div className="talia-unavailable">
-    Admin Lite is currently unavailable.
-  </div>
-);
-
-const DataManagementPage = lazy(() =>
-  import('./components/admin/data-management/DataManagementPage.jsx').catch(() => ({
-    default: DataManagementUnavailable
-  }))
-);
-
-const AdminLite = lazy(() =>
-  import('./components/admin/admin-lite/AdminLite.jsx').catch(() => ({
-    default: AdminLiteUnavailable
-  }))
 );
 
 const globalStatusState = {
@@ -129,7 +113,6 @@ const DevSwitcher = () => {
     persistedEvent: null,
     dataStatus: null
   });
-  const isAdminLite = window.location.pathname === '/admin-lite';
   
   // Check localStorage for saved preference on mount
   useEffect(() => {
@@ -251,42 +234,23 @@ const DevSwitcher = () => {
 
   const renderContent = () => {
     console.log('🎯 renderContent called with mode:', mode);
+    const canAccessPrivileged = canAccessPrivilegedPanels(userRole);
     switch (mode) {
       case 'test':
         console.log('📋 Rendering TestPage');
-        return <TestPage />;
+        return canAccessPrivileged ? <TestPage /> : <PrivilegedModeDenied title="Test Workbench" />;
       case 'data':
         console.log('📋 Rendering DataManagementPage');
-        return (
-          <ErrorBoundary fallback={<DataManagementUnavailable />}>
-            <Suspense fallback={<DataManagementUnavailable />}>
-              <DataManagementPage />
-            </Suspense>
-          </ErrorBoundary>
-        );
+        if (!canAccessPrivileged) {
+          return <PrivilegedModeDenied title="Data Management" />;
+        }
+        return <DataManagementPage />;
       case 'app':
       default:
         console.log('📋 Rendering AppWithAuth');
         return <AppWithAuth />;
     }
   };
-
-  if (isAdminLite) {
-    try {
-      document.title = 'Talia - DEV Admin';
-    } catch (e) {
-      console.warn('[DevSwitcher] Failed to set title:', e);
-    }
-    return (
-      <StrictMode>
-        <ErrorBoundary fallback={<AdminLiteUnavailable />}>
-          <Suspense fallback={<AdminLiteUnavailable />}>
-            <AdminLite />
-          </Suspense>
-        </ErrorBoundary>
-      </StrictMode>
-    );
-  }
 
   return (
     <StrictMode>

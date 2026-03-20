@@ -300,6 +300,31 @@
   --text-muted: var(--theme-text-muted);
 }
 
+.data-management-root--panel {
+  padding: var(--theme-component-padding-sm);
+  min-height: 100%;
+  height: 100%;
+  background: transparent;
+}
+
+.data-management-root--panel .dm-bottom-panels {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  height: 200px;
+  padding: 0;
+  margin-top: var(--theme-component-gap-sm);
+}
+
+.data-management-root--panel .dm-bottom-spacer {
+  height: 0;
+}
+
+.data-management-root--panel .dm-overlay {
+  position: absolute;
+}
+
 .dm-container {
   max-width: 100%;
   margin: 0 auto;

@@ -523,8 +523,10 @@ const mapDbFocusToGraphQL = (dbFocus: any) => {
     id: dbFocus.id,
     name: dbFocus.name,
     description: dbFocus.description || null,
-    type: dbFocus.type ? dbFocus.type.toUpperCase() : 'USER',
+    type: dbFocus.type ? dbFocus.type.toUpperCase() : 'STANDARD',
     role: primaryRole,
+    assignedRoles: (dbFocus.assigned_roles || []).map((r: string) => String(r).toUpperCase()),
+    assignedUserId: dbFocus.assigned_user_id || null,
     components: components.map((comp: any, index: number) => ({
       id: comp.id || `comp-${index}`,
       type: comp.type || 'TABLE',
@@ -532,7 +534,6 @@ const mapDbFocusToGraphQL = (dbFocus: any) => {
       settings: comp.settings || null,
       dataSource: comp.dataSource || null
     })),
-    // Include full layoutData as JSON for dockviewLayout preservation
     layoutData: layoutData,
     createdBy: dbFocus.created_by || '',
     createdAt: dbFocus.created_at || new Date().toISOString(),
@@ -543,20 +544,19 @@ const mapDbFocusToGraphQL = (dbFocus: any) => {
 
 // Helper function to map GraphQL FocusInput to database format
 const mapGraphQLFocusToDb = (input: any, createdBy?: string) => {
-  // Extract components and store in layout_data
   const layoutData = {
     components: input.components || []
   };
   
-  // Convert single role to array if needed
   const assignedRoles = input.assignedRoles || (input.role ? [input.role] : []);
   
   return {
     name: input.name,
     description: input.description || null,
-    type: input.type ? input.type.toLowerCase() : 'user',
+    type: input.type ? input.type.toLowerCase() : 'standard',
     isStandard: input.isPublic !== undefined ? input.isPublic : (input.isStandard || false),
     assignedRoles: assignedRoles.map((r: string) => r.toUpperCase()),
+    assignedUserId: input.assignedUserId || null,
     isDefault: input.isDefault || false,
     isActive: input.isActive !== undefined ? input.isActive : true,
     createdBy: createdBy,
@@ -565,9 +565,10 @@ const mapGraphQLFocusToDb = (input: any, createdBy?: string) => {
 };
 
 const APPEARANCE_SETTINGS_CATEGORY = 'ui_appearance';
-const APPEARANCE_SETTINGS_KEY = 'current_settings';
-const APPEARANCE_PROFILES_KEY = 'profiles';
-const APPEARANCE_ACTIVE_PROFILE_KEY = 'active_profile_id';
+
+const appearanceKey = (base: string, userId?: string | null) =>
+  userId ? `${base}:${userId}` : base;
+
 
 const normalizeAppearanceProfiles = (raw: any): Array<{ id: string; name: string; settings: any; updatedAt: string }> => {
   if (!Array.isArray(raw)) return [];
@@ -619,6 +620,53 @@ export const resolvers = {
       }
     },
 
+    taliaUsers: async () => {
+      try {
+        const rows = await supabaseDataService.getAllTaliaUsers();
+        return (rows || []).map((row: any) => ({
+          id: row.id,
+          taliaUserId: row.talia_user_id,
+          email: row.email,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at || row.created_at,
+          lastLoginAt: row.last_login_at || null
+        }));
+      } catch (error) {
+        console.error('Error fetching talia users:', error);
+        return [];
+      }
+    },
+
+    uiActivityEvents: async (_parent: any, args: any) => {
+      try {
+        const rows = await supabaseDataService.getUiActivityEvents({
+          sinceMinutes: args?.sinceMinutes,
+          limit: args?.limit,
+          userId: args?.userId,
+          userEmail: args?.userEmail
+        });
+        return (rows || []).map((row: any) => ({
+          id: row.id,
+          at: row.at,
+          userId: row.user_id,
+          userEmail: row.user_email,
+          userRole: row.user_role,
+          kind: row.kind,
+          report: row.report,
+          panelComponent: row.panel_component,
+          purpose: row.purpose,
+          status: row.status,
+          performanceMs: row.performance_ms,
+          queryCount: row.query_count,
+          sourceQueryId: row.source_query_id,
+          criteria: row.criteria || {}
+        }));
+      } catch (error) {
+        console.error('Error fetching UI activity events:', error);
+        return [];
+      }
+    },
+
     // Focus Management
     focuses: async (parent: any, args: any, context: any) => {
       const { filters } = args;
@@ -664,56 +712,48 @@ export const resolvers = {
     },
 
     focusesByRole: async (parent: any, args: any) => {
-      const { role } = args;
+      const { role, userId } = args;
       try {
         const normalizedRole = role?.toUpperCase() || 'USER';
-        console.log(`[focusesByRole] Called with role: ${normalizedRole}`);
-        
-        // Get all active focuses from Supabase
+        const roleLevel = (r: string) =>
+          ({ GUEST: 0, USER: 1, MANAGER: 2, ADMIN: 3 } as Record<string,number>)[String(r).toUpperCase()] ?? 1;
+        const userLevel = roleLevel(normalizedRole);
+
         const allFocuses = await supabaseDataService.getFocuses();
-        console.log(`[focusesByRole] Got ${allFocuses.length} focuses from getFocuses()`);
-        
-        if (allFocuses.length === 0) {
-          console.log(`[focusesByRole] No focuses returned, returning empty array`);
-          return [];
-        }
-        
-        console.log(`[focusesByRole] First focus:`, {
-          name: allFocuses[0].name,
-          assigned_roles: allFocuses[0].assigned_roles,
-          is_active: allFocuses[0].is_active
-        });
-        
-        // Filter focuses where assigned_roles array contains the requested role
+        if (allFocuses.length === 0) return [];
+
         const filteredFocuses = allFocuses.filter(focus => {
-          // Skip inactive focuses (though getFocuses already filters these)
-          if (focus.is_active === false) {
-            return false;
+          if (focus.is_active === false) return false;
+
+          const focusType = (focus.type || 'standard').toUpperCase();
+
+          // STANDARD / TEMPLATE / SHARED — visible to all roles
+          if (focusType === 'STANDARD' || focusType === 'TEMPLATE' || focusType === 'SHARED') {
+            return true;
           }
-          
-          // Must have assigned_roles array
-          if (!focus.assigned_roles || !Array.isArray(focus.assigned_roles)) {
-            return false;
+
+          // ROLE — visible if user's role level >= minimum role in assigned_roles
+          if (focusType === 'ROLE') {
+            const roles = focus.assigned_roles;
+            if (!roles || !Array.isArray(roles) || roles.length === 0) return true;
+            const minLevel = Math.min(...roles.map(roleLevel));
+            return userLevel >= minLevel;
           }
-          
-          // Check if any assigned role matches (case-insensitive)
-          const matches = focus.assigned_roles.some(assignedRole => 
-            String(assignedRole).toUpperCase() === normalizedRole
-          );
-          
-          return matches;
+
+          // USER — visible only to the assigned user
+          if (focusType === 'USER') {
+            if (normalizedRole === 'ADMIN') return true;
+            if (!focus.assigned_user_id) return true;
+            return userId ? focus.assigned_user_id === userId : false;
+          }
+
+          return true;
         });
-        
-        console.log(`[focusesByRole] Filtered to ${filteredFocuses.length} focuses`);
-        
-        // Map to GraphQL format
+
         const mapped = filteredFocuses.map(mapDbFocusToGraphQL).filter(Boolean);
-        console.log(`[focusesByRole] Mapped to ${mapped.length} GraphQL focuses`);
-        
         return mapped;
       } catch (error) {
         console.error('[focusesByRole] Error:', error);
-        console.error('[focusesByRole] Error stack:', error.stack);
         throw error;
       }
     },
@@ -2208,12 +2248,13 @@ export const resolvers = {
       }
     },
 
-    appearanceSettings: async () => {
+    appearanceSettings: async (parent: any, args: any) => {
+      const uid = args.userId || null;
       try {
         const [settings, profiles, activeProfileId] = await Promise.all([
-          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, APPEARANCE_SETTINGS_KEY),
-          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, APPEARANCE_PROFILES_KEY),
-          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, APPEARANCE_ACTIVE_PROFILE_KEY)
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('current_settings', uid)),
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('profiles', uid)),
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('active_profile_id', uid))
         ]);
         return mapAppearanceSettingsPayload(settings, profiles, activeProfileId);
       } catch (error: any) {
@@ -2763,6 +2804,9 @@ export const resolvers = {
         } else if (input.role !== undefined) {
           updateData.assignedRoles = [input.role.toUpperCase()];
         }
+        if (input.assignedUserId !== undefined) {
+          updateData.assignedUserId = input.assignedUserId || null;
+        }
         if (input.components !== undefined) {
           // Preserve existing layoutData completely
           const existingLayoutData = currentFocus?.layout_data || {};
@@ -2872,6 +2916,15 @@ export const resolvers = {
       sampleData.users[userIndex].updatedAt = new Date().toISOString();
       
       return sampleData.users[userIndex];
+    },
+
+    logUiActivityEvent: async (_parent: any, args: any) => {
+      try {
+        return await supabaseDataService.logUiActivityEvent(args?.input || {});
+      } catch (error) {
+        console.error('Error logging UI activity event:', error);
+        return false;
+      }
     },
 
     // Focus Preferences
@@ -3261,32 +3314,33 @@ export const resolvers = {
     },
 
     saveAppearanceSettings: async (parent: any, args: any) => {
-      const { settings, activeProfileId } = args;
+      const { settings, activeProfileId, userId } = args;
+      const uid = userId || null;
       try {
         await configService.upsertSetting(
           APPEARANCE_SETTINGS_CATEGORY,
-          APPEARANCE_SETTINGS_KEY,
+          appearanceKey('current_settings', uid),
           settings || {},
           {
-            displayName: 'UI Appearance Settings',
+            displayName: `UI Appearance Settings${uid ? ` (${uid})` : ''}`,
             description: 'Current appearance settings applied in Talia UI'
           }
         );
         if (activeProfileId !== undefined) {
           await configService.upsertSetting(
             APPEARANCE_SETTINGS_CATEGORY,
-            APPEARANCE_ACTIVE_PROFILE_KEY,
+            appearanceKey('active_profile_id', uid),
             activeProfileId || null,
             {
-              displayName: 'Active Appearance Profile',
+              displayName: `Active Appearance Profile${uid ? ` (${uid})` : ''}`,
               description: 'Currently selected named appearance profile'
             }
           );
         }
         const [savedSettings, savedProfiles, savedActiveProfile] = await Promise.all([
-          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, APPEARANCE_SETTINGS_KEY),
-          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, APPEARANCE_PROFILES_KEY),
-          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, APPEARANCE_ACTIVE_PROFILE_KEY)
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('current_settings', uid)),
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('profiles', uid)),
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('active_profile_id', uid))
         ]);
         return mapAppearanceSettingsPayload(savedSettings, savedProfiles, savedActiveProfile);
       } catch (error: any) {
@@ -3296,15 +3350,16 @@ export const resolvers = {
     },
 
     saveAppearanceProfiles: async (parent: any, args: any) => {
-      const { profiles } = args;
+      const { profiles, userId } = args;
+      const uid = userId || null;
       try {
         const normalized = normalizeAppearanceProfiles(profiles);
         await configService.upsertSetting(
           APPEARANCE_SETTINGS_CATEGORY,
-          APPEARANCE_PROFILES_KEY,
+          appearanceKey('profiles', uid),
           normalized,
           {
-            displayName: 'Appearance Profiles',
+            displayName: `Appearance Profiles${uid ? ` (${uid})` : ''}`,
             description: 'Named appearance presets for Talia UI'
           }
         );

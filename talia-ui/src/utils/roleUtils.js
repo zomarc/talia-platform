@@ -41,6 +41,16 @@ export const canUseAdvancedHeader = (role) => {
 };
 
 /**
+ * Gate for privileged internal panels (Test/Data Management).
+ * Centralized so all entry points share identical role behavior.
+ * @param {string} role - User role
+ * @returns {boolean} - True if role may access privileged panels
+ */
+export const canAccessPrivilegedPanels = (role) => {
+  return isAdmin(role) || isSuperUser(role);
+};
+
+/**
  * Check if user has required role or higher
  * @param {string} userRole - User's role
  * @param {string} requiredRole - Required role

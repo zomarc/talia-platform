@@ -16,7 +16,7 @@ import { getThemeForMode } from '../themes/modeThemes';
 import '../themes/dataMode.css';
 import './TestPage/test-page.css';
 
-const TestPage = () => {
+export const TestWorkbenchPanelCore = ({ embedded = false }) => {
   // Component selection
   const [selectedComponent, setSelectedComponent] = useState('SailingTable');
   const [activeTab, setActiveTab] = useState('component');
@@ -218,7 +218,7 @@ const TestPage = () => {
   }, []);
 
   return (
-    <div className="test-page">
+    <div className={`test-page ${embedded ? 'test-page--panel' : ''}`.trim()}>
       <div className="test-page__container">
         {/* Compact Header */}
         <div className="test-page__glass-card test-page__header">
@@ -486,5 +486,7 @@ const TestPage = () => {
     </div>
   );
 };
+
+const TestPage = () => <TestWorkbenchPanelCore embedded={false} />;
 
 export default TestPage;

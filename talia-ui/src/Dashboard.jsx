@@ -11,6 +11,7 @@ import graphQLFocusService from "./services/GraphQLFocusService";
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT, emitSailClear, emitSailSelect } from "./lib/eventBus";
 // Admin Components
 import { AdminDashboard, UserMappingTable, TaliaUserTable } from "./components/admin";
+import userActivityTracker from "./services/userActivityTracker";
 // Context Row Monitor (Admin only)
 import ContextRowMonitor from "./components/focus-panels/ContextRowMonitor/index.jsx";
 import TaliaDockviewTab from "./components/dockview/TaliaDockviewTab.jsx";
@@ -21,6 +22,7 @@ import {
   DASHBOARD_CYCLE_FOCUS_EVENT,
   DASHBOARD_SELECT_FOCUS_EVENT,
   DASHBOARD_FOCUS_STATE_EVENT,
+  DASHBOARD_OPEN_PANEL_EVENT,
 } from "./components/dockview/eventConstants";
 // Dev Role Selector is now integrated into ModeSelector dropdown
 // Theme System - using centralized theme context
@@ -1143,17 +1145,31 @@ function Dashboard({ user }) {
       if (!focusId) return;
       handleFocusChange(focusId);
     };
+    const handleOpenPanel = (event) => {
+      const componentType = event?.detail?.componentType;
+      if (!componentType) return;
+      const title = event?.detail?.title || "New Panel";
+      const panelParams = event?.detail?.panelParams || {};
+      addNewPanel(componentType, title, panelParams);
+    };
     window.addEventListener(DASHBOARD_CYCLE_FOCUS_EVENT, handleCycleFocus);
     window.addEventListener(DASHBOARD_SELECT_FOCUS_EVENT, handleSelectFocus);
+    window.addEventListener(DASHBOARD_OPEN_PANEL_EVENT, handleOpenPanel);
     return () => {
       window.removeEventListener(DASHBOARD_CYCLE_FOCUS_EVENT, handleCycleFocus);
       window.removeEventListener(DASHBOARD_SELECT_FOCUS_EVENT, handleSelectFocus);
+      window.removeEventListener(DASHBOARD_OPEN_PANEL_EVENT, handleOpenPanel);
     };
   }, [cycleFocus, handleFocusChange]);
 
   const addNewPanel = (componentType, title, panelParams = {}) => {
     if (!apiRef.current) return;
     const id = "win-" + Date.now();
+    try {
+      userActivityTracker.recordPanelAccess(componentType, title || componentType);
+    } catch {
+      // no-op
+    }
     
     // Get existing panels using toJSON method
     let position = null;

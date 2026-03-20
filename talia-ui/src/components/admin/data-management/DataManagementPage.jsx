@@ -24,7 +24,7 @@ import { formatDayMon } from '../../../lib/dateFormat';
 import '../../../themes/dataMode.css';
 import './dataManagement.css';
 
-const DataManagementPage = () => {
+export const DataManagementPanelCore = ({ embedded = false }) => {
   const { tables, loading, error, refetch, updateTable } = useDatabaseTables();
   const [sortColumn, setSortColumn] = useState('rowCount');
   const [sortDirection, setSortDirection] = useState('desc');
@@ -1467,7 +1467,7 @@ The backup will be saved to: talia-server/backups/`;
   };
 
   return (
-    <div className="data-management-root">
+    <div className={`data-management-root ${embedded ? 'data-management-root--panel' : ''}`.trim()}>
       <div className="dm-container">
         {/* Header */}
         <div className="dm-header">
@@ -1684,6 +1684,8 @@ The backup will be saved to: talia-server/backups/`;
     </div>
   );
 };
+
+const DataManagementPage = () => <DataManagementPanelCore embedded={false} />;
 
 export default DataManagementPage;
 

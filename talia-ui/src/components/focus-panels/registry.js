@@ -29,6 +29,8 @@ import MasterVoyagePerformanceSummaryContainer from './MasterVoyagePerformanceSu
 import VoyageReportContainer from './VoyageReport';
 import DirectSourceRequestContainer from './DirectSourceRequest';
 import ContextRowMonitor from './ContextRowMonitor';
+import DataManagementPanel from './DataManagement';
+import TestWorkbenchPanel from './TestWorkbench';
 import DataDebugView from '../TestPage/DataDebugView';
 import DataTypesValidation from '../dev/DataTypesValidation';
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../lib/eventBus';
@@ -517,6 +519,30 @@ export const componentRegistry = {
     },
     showInReports: true,
     filePath: 'src/components/focus-panels/DirectSourceRequest/index.jsx'
+  },
+  DataManagementPanel: {
+    component: DataManagementPanel,
+    panelId: 'data-management-panel',
+    category: 'Admin',
+    title: 'Data Management',
+    description: 'Operational data sync and table management tooling',
+    props: {},
+    dataRequirements: 'Requires GraphQL backend access; ADMIN/SUPER_USER only',
+    events: { emits: [], respondsTo: [] },
+    showInReports: false,
+    filePath: 'src/components/focus-panels/DataManagement/index.jsx'
+  },
+  TestWorkbenchPanel: {
+    component: TestWorkbenchPanel,
+    panelId: 'test-workbench-panel',
+    category: 'Debugging',
+    title: 'Test Workbench',
+    description: 'Component test harness with event and query monitoring',
+    props: {},
+    dataRequirements: 'Development testing surface; ADMIN/SUPER_USER only',
+    events: { emits: [], respondsTo: [] },
+    showInReports: false,
+    filePath: 'src/components/focus-panels/TestWorkbench/index.jsx'
   },
   BtopTerminal: {
     component: BtopTerminal,

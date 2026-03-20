@@ -22,6 +22,7 @@ const DASHBOARD_FILTER_VISIBILITY_EVENT = 'talia:dashboard.filterVisibility';
 const DASHBOARD_CYCLE_FOCUS_EVENT = 'talia:dashboard.cycleFocus';
 const DASHBOARD_SELECT_FOCUS_EVENT = 'talia:dashboard.selectFocus';
 const DASHBOARD_FOCUS_STATE_EVENT = 'talia:dashboard.focusState';
+const DASHBOARD_SAVE_CURRENT_FOCUS_EVENT = 'talia:dashboard.saveCurrentFocus';
 const DASHBOARD_VIEW_SCOPE_EVENT = 'talia:dashboard.viewScope';
 const DASHBOARD_DETAILS_VISIBILITY_EVENT = 'talia:dashboard.detailsVisibility';
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
@@ -191,6 +192,7 @@ const StatusBar = ({
     return Array.isArray(options) ? options.filter((focus) => focus?.id) : [];
   });
   const [selectedFocusId, setSelectedFocusId] = useState(() => window.__taliaFocusState?.currentFocusId || '');
+  const [showSaveFocusConfirm, setShowSaveFocusConfirm] = useState(false);
   const [activeOnly, setActiveOnly] = useState(() => {
     const saved = window.__taliaGlobalCriteria;
     if (saved && Object.prototype.hasOwnProperty.call(saved, 'activeOnly')) {
@@ -256,6 +258,7 @@ const StatusBar = ({
   const handleQuickFocusChange = (nextValue) => {
     const focusId = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value || '';
     setSelectedFocusId(focusId);
+    setShowSaveFocusConfirm(false);
     if (!focusId) return;
     userActivityTracker.recordHeaderAction('focus-select', { status: focusId });
     window.dispatchEvent(
@@ -263,6 +266,28 @@ const StatusBar = ({
         detail: { focusId },
       })
     );
+  };
+
+  const handleSaveFocusAction = () => {
+    if (!selectedFocusId) return;
+    setShowSaveFocusConfirm((prev) => !prev);
+  };
+
+  const handleConfirmSaveFocus = () => {
+    if (!selectedFocusId) {
+      setShowSaveFocusConfirm(false);
+      return;
+    }
+    setShowSaveFocusConfirm(false);
+    window.dispatchEvent(
+      new CustomEvent(DASHBOARD_SAVE_CURRENT_FOCUS_EVENT, {
+        detail: { focusId: selectedFocusId },
+      })
+    );
+  };
+
+  const handleCancelSaveFocus = () => {
+    setShowSaveFocusConfirm(false);
   };
 
   const handleViewScopeToggle = () => {
@@ -460,6 +485,7 @@ const StatusBar = ({
         setFocusOptions(options.filter((focus) => focus?.id));
       }
       setSelectedFocusId(currentFocusId || '');
+      setShowSaveFocusConfirm(false);
     };
     window.addEventListener(DASHBOARD_FOCUS_STATE_EVENT, handleFocusState);
     return () => window.removeEventListener(DASHBOARD_FOCUS_STATE_EVENT, handleFocusState);
@@ -625,17 +651,50 @@ const StatusBar = ({
                   <span className="status-bar__leading-separator" aria-hidden="true" />
                   <div className="status-bar__criteria">
                     {focusOptions.length > 0 && (
-                      <label className="status-bar__header-range" title="Quick focus selector">
-                        <span className="status-bar__header-range-label">Focus</span>
-                        <HeaderCriteriaMenuSelect
-                          id="status-bar-quick-focus"
-                          wide
-                          options={focusOptions.map((focus) => ({ key: focus.id, label: focus.name || focus.id }))}
-                          value={selectedFocusId}
-                          onChange={handleQuickFocusChange}
-                          aria-label="Quick focus selector"
-                        />
-                      </label>
+                      <div className="status-bar__focus-control">
+                        <label className="status-bar__header-range" title="Quick focus selector">
+                          <span className="status-bar__header-range-label">Focus</span>
+                          <HeaderCriteriaMenuSelect
+                            id="status-bar-quick-focus"
+                            wide
+                            options={focusOptions.map((focus) => ({ key: focus.id, label: focus.name || focus.id }))}
+                            value={selectedFocusId}
+                            onChange={handleQuickFocusChange}
+                            aria-label="Quick focus selector"
+                          />
+                        </label>
+                        {hasAdvancedControls && selectedFocusId && (
+                          <div className="status-bar__focus-save">
+                            <button
+                              type="button"
+                              className="status-bar__header-btn status-bar__header-btn--focus-save"
+                              title="Save current focus"
+                              aria-label="Save current focus"
+                              onClick={handleSaveFocusAction}
+                            >
+                              💾
+                            </button>
+                            {showSaveFocusConfirm && (
+                              <div className="status-bar__inline-confirm" role="group" aria-label="Confirm save current focus">
+                                <button
+                                  type="button"
+                                  className="status-bar__confirm-btn status-bar__confirm-btn--ok"
+                                  onClick={handleConfirmSaveFocus}
+                                >
+                                  Yes
+                                </button>
+                                <button
+                                  type="button"
+                                  className="status-bar__confirm-btn"
+                                  onClick={handleCancelSaveFocus}
+                                >
+                                  No
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
                     {appearanceProfiles.length > 0 && (
                       <label className="status-bar__header-range" title="Apply a saved appearance profile">

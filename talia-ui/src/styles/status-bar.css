@@ -79,6 +79,61 @@
   gap: var(--theme-padding-xs);
 }
 
+.status-bar__focus-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-bar__focus-save {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.status-bar__header-btn--focus-save {
+  font-size: 11px;
+}
+
+.status-bar__inline-confirm {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 10030;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--theme-border-strong);
+  border-radius: var(--theme-radius-sm);
+  background: var(--theme-bg-elevated);
+  box-shadow: var(--theme-shadow-md);
+}
+
+.status-bar__confirm-btn {
+  height: 22px;
+  min-width: 34px;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-xs);
+  background: var(--theme-glass);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size-xs);
+  font-weight: 700;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.status-bar__confirm-btn:hover {
+  border-color: var(--theme-border-strong);
+  background: var(--theme-glass-hover);
+}
+
+.status-bar__confirm-btn--ok {
+  border-color: color-mix(in srgb, var(--theme-success) 48%, var(--theme-border));
+  background: color-mix(in srgb, var(--theme-success) 18%, transparent);
+  color: var(--theme-fg);
+}
+
 .status-bar__icon-graph {
   display: inline-flex;
   align-items: flex-end;
@@ -566,6 +621,11 @@
   .status-bar__criteria {
     width: 100%;
     flex-wrap: wrap;
+  }
+
+  .status-bar__inline-confirm {
+    left: auto;
+    right: 0;
   }
 
   .status-bar__item {

@@ -189,6 +189,20 @@ class UserActivityTracker {
     });
   }
 
+  recordFocusAction(action, metadata = {}) {
+    const detail = metadata && typeof metadata === 'object' ? metadata : {};
+    return this.record({
+      kind: 'focus',
+      report: 'Focus Management',
+      panelComponent: 'dashboard',
+      purpose: String(action || 'focus-action'),
+      status: detail.status || '',
+      performanceMs: null,
+      queryCount: null,
+      ...detail
+    });
+  }
+
   getEvents() {
     return [...this.sharedEvents, ...this.events];
   }

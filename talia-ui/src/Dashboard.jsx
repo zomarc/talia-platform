@@ -82,6 +82,8 @@ console.log('🔧 Dockview imported:', !!DockviewReact);
 // ----------------- Cross-panel event channel -----------------
 const SELECT_EVENT = SAIL_SELECT_EVENT;   // payload: one record
 const CLEAR_EVENT = SAIL_CLEAR_EVENT;     // clear selection
+const DASHBOARD_SAVE_CURRENT_FOCUS_EVENT = 'talia:dashboard.saveCurrentFocus';
+const SAVED_FOCUS_KEY = 'talia-current-focus';
 
 function emitSelect(record) {
   if (record) {
@@ -1079,9 +1081,13 @@ function Dashboard({ user }) {
 
   // Save current layout to focus
   const handleSaveCurrentLayoutToFocus = useCallback(async (focusId) => {
+    if (!focusId) {
+      setStatusMessage('No focus selected');
+      return false;
+    }
     if (!apiRef.current) {
       setStatusMessage('No layout to save');
-      return;
+      return false;
     }
 
     try {
@@ -1102,15 +1108,50 @@ function Dashboard({ user }) {
       });
 
       if (success) {
+        try {
+          window.localStorage?.setItem?.(SAVED_FOCUS_KEY, focusId);
+        } catch {
+          // no-op
+        }
+        userActivityTracker.recordFocusAction('focus-save', {
+          status: 'saved',
+          purpose: 'save-focus-layout',
+          panelComponent: 'status-bar',
+          report: focusName,
+        });
         setStatusMessage(`Layout saved to "${focusName}" successfully`);
+        return true;
       } else {
+        userActivityTracker.recordFocusAction('focus-save', {
+          status: 'failed',
+          purpose: 'save-focus-layout',
+          panelComponent: 'status-bar',
+          report: focusName,
+        });
         setStatusMessage('Failed to save layout to focus');
+        return false;
       }
     } catch (error) {
       console.error('Error saving layout to focus:', error);
+      userActivityTracker.recordFocusAction('focus-save', {
+        status: 'error',
+        purpose: 'save-focus-layout',
+        panelComponent: 'status-bar',
+        report: focusId,
+      });
       setStatusMessage('Error saving layout: ' + error.message);
+      return false;
     }
   }, [updateTaliaFocus, taliaFocuses]);
+
+  const handleSaveCurrentFocusSelection = useCallback(async (focusIdFromEvent) => {
+    const targetFocusId = focusIdFromEvent || currentFocus;
+    if (!targetFocusId) {
+      setStatusMessage('No current focus selected');
+      return;
+    }
+    await handleSaveCurrentLayoutToFocus(targetFocusId);
+  }, [currentFocus, handleSaveCurrentLayoutToFocus]);
 
   // Extract components from Dockview layout for focus storage
   const extractComponentsFromLayout = useCallback((layout) => {
@@ -1152,15 +1193,21 @@ function Dashboard({ user }) {
       const panelParams = event?.detail?.panelParams || {};
       addNewPanel(componentType, title, panelParams);
     };
+    const handleSaveCurrentFocus = (event) => {
+      const requestedFocusId = event?.detail?.focusId || null;
+      handleSaveCurrentFocusSelection(requestedFocusId);
+    };
     window.addEventListener(DASHBOARD_CYCLE_FOCUS_EVENT, handleCycleFocus);
     window.addEventListener(DASHBOARD_SELECT_FOCUS_EVENT, handleSelectFocus);
     window.addEventListener(DASHBOARD_OPEN_PANEL_EVENT, handleOpenPanel);
+    window.addEventListener(DASHBOARD_SAVE_CURRENT_FOCUS_EVENT, handleSaveCurrentFocus);
     return () => {
       window.removeEventListener(DASHBOARD_CYCLE_FOCUS_EVENT, handleCycleFocus);
       window.removeEventListener(DASHBOARD_SELECT_FOCUS_EVENT, handleSelectFocus);
       window.removeEventListener(DASHBOARD_OPEN_PANEL_EVENT, handleOpenPanel);
+      window.removeEventListener(DASHBOARD_SAVE_CURRENT_FOCUS_EVENT, handleSaveCurrentFocus);
     };
-  }, [cycleFocus, handleFocusChange]);
+  }, [cycleFocus, handleFocusChange, handleSaveCurrentFocusSelection]);
 
   const addNewPanel = (componentType, title, panelParams = {}) => {
     if (!apiRef.current) return;
@@ -1358,10 +1405,14 @@ function Dashboard({ user }) {
     try {
       const focuses = await graphQLFocusService.getFocusesForRole(normalizedUserRole || 'ADMIN');
       if (focuses && focuses.length > 0) {
-        // Try to find "Performance" focus by name, otherwise use first focus
-        const performanceFocus = focuses.find(f => f.name.toLowerCase().includes('performance')) || focuses[0];
-        console.log(`Loading default focus: ${performanceFocus.name} (ID: ${performanceFocus.id})`);
-        await loadFocusLayout(performanceFocus.id);
+        const savedFocusId = window.localStorage?.getItem?.(SAVED_FOCUS_KEY) || '';
+        const savedFocus = savedFocusId ? focuses.find((focus) => focus?.id === savedFocusId) : null;
+        // Saved focus (explicit user action) takes priority.
+        // Fallback remains: Performance focus, then first focus.
+        const defaultFocus = savedFocus || focuses.find((f) => f.name.toLowerCase().includes('performance')) || focuses[0];
+        console.log(`Loading default focus: ${defaultFocus.name} (ID: ${defaultFocus.id})`);
+        setCurrentFocus(defaultFocus.id);
+        await loadFocusLayout(defaultFocus.id);
       } else {
         console.warn('No focuses available, skipping default layout load');
       }

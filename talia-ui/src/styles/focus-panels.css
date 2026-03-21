@@ -3042,6 +3042,106 @@
   color: var(--theme-text-secondary);
 }
 
+.pacman-game__content,
+.asteroids-game__content,
+.pong-game__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-component-gap-sm);
+  padding: var(--theme-component-padding-sm);
+}
+
+.pacman-game__hud,
+.asteroids-game__hud,
+.pong-game__hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--theme-component-gap-xs);
+}
+
+.pacman-game__canvas-wrap,
+.asteroids-game__canvas-wrap,
+.pong-game__canvas-wrap {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  background: var(--theme-bg-elevated);
+  padding: var(--theme-component-padding-xs);
+  overflow: hidden;
+  position: relative;
+}
+
+.pacman-game__canvas,
+.asteroids-game__canvas,
+.pong-game__canvas {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  display: block;
+  outline: none;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-border) 60%, transparent);
+}
+
+.pacman-game__overlay,
+.asteroids-game__overlay,
+.pong-game__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--theme-bg-solid) 78%, transparent);
+  pointer-events: none;
+}
+
+.pacman-game__overlay-panel,
+.asteroids-game__overlay-panel,
+.pong-game__overlay-panel {
+  border: 2px solid color-mix(in srgb, var(--theme-accent) 55%, #ffffff);
+  background: color-mix(in srgb, var(--theme-bg-elevated) 88%, transparent);
+  border-radius: 10px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-accent) 22%, transparent), 0 10px 28px rgba(0, 0, 0, 0.35);
+  padding: 12px 16px;
+  min-width: 220px;
+  text-align: center;
+}
+
+.pacman-game__overlay-title,
+.asteroids-game__overlay-title,
+.pong-game__overlay-title {
+  font-size: calc(var(--theme-font-size-lg) + 2px);
+  font-weight: 700;
+  color: var(--theme-fg);
+}
+
+.pacman-game__overlay-subtitle,
+.asteroids-game__overlay-subtitle,
+.pong-game__overlay-subtitle {
+  font-size: var(--theme-font-size);
+  color: var(--theme-text-secondary);
+}
+
+.pacman-game__meta,
+.asteroids-game__meta,
+.pong-game__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--theme-component-gap-md);
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-secondary);
+}
+
+.talia-game-panel--inactive .talia-report__content {
+  opacity: 0.72;
+  transition: opacity 0.16s ease;
+}
+
 /* ============================================================================
    Sailing Overview
    ============================================================================ */

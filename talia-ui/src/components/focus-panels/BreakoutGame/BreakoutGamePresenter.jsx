@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import GameScorePopover from '../../shared/games/GameScorePopover';
+import usePanelTabActive from '../../../hooks/usePanelTabActive';
+import { isEditableTarget } from '../../shared/games/keyboardGuards';
 
 const GAME_WIDTH = 640;
 const GAME_HEIGHT = 420;
@@ -47,6 +49,7 @@ const createInitialModel = () => ({
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 const BreakoutGamePresenter = ({
+  panelInstanceId,
   loading,
   loadError,
   saveError,
@@ -60,10 +63,13 @@ const BreakoutGamePresenter = ({
   leaderboard,
   leaderboardLoading,
 }) => {
+  const isPanelActive = usePanelTabActive(panelInstanceId);
   const canvasRef = useRef(null);
   const canvasWrapRef = useRef(null);
   const rafRef = useRef(0);
   const pauseTimerRef = useRef(0);
+  const pausedByInactiveRef = useRef(false);
+  const inactiveResumeIntervalRef = useRef(0);
   const modelRef = useRef(createInitialModel());
   const audioContextRef = useRef(null);
   const audioMasterGainRef = useRef(null);
@@ -175,6 +181,14 @@ const BreakoutGamePresenter = ({
     gain.gain.exponentialRampToValueAtTime(0.0001, end);
     oscillator.start(start);
     oscillator.stop(end);
+  }, [ensureAudioContext, soundEnabled]);
+
+  const unlockAudio = useCallback(() => {
+    if (!soundEnabled) return;
+    const context = ensureAudioContext();
+    if (context?.state === 'suspended') {
+      context.resume().catch(() => {});
+    }
   }, [ensureAudioContext, soundEnabled]);
 
   const finishRound = useCallback(async () => {
@@ -356,6 +370,7 @@ const BreakoutGamePresenter = ({
   }, [draw, updateModel]);
 
   const startGame = useCallback(() => {
+    unlockAudio();
     if (pauseTimerRef.current) {
       window.clearTimeout(pauseTimerRef.current);
       pauseTimerRef.current = 0;
@@ -375,7 +390,7 @@ const BreakoutGamePresenter = ({
     }
     rafRef.current = window.requestAnimationFrame(loop);
     canvasRef.current?.focus();
-  }, [loop, syncUiFromModel]);
+  }, [loop, syncUiFromModel, unlockAudio]);
 
   const stopGame = useCallback(() => {
     modelRef.current.running = false;
@@ -386,6 +401,13 @@ const BreakoutGamePresenter = ({
     if (rafRef.current) {
       window.cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
+    }
+  }, []);
+
+  const clearInactiveResumeCountdown = useCallback(() => {
+    if (inactiveResumeIntervalRef.current) {
+      window.clearInterval(inactiveResumeIntervalRef.current);
+      inactiveResumeIntervalRef.current = 0;
     }
   }, []);
 
@@ -416,7 +438,16 @@ const BreakoutGamePresenter = ({
   }, [draw]);
 
   useEffect(() => {
+    const wrap = canvasWrapRef.current;
+    if (!wrap) return undefined;
+    const onUnlock = () => unlockAudio();
+    wrap.addEventListener('pointerdown', onUnlock);
+    return () => wrap.removeEventListener('pointerdown', onUnlock);
+  }, [unlockAudio]);
+
+  useEffect(() => {
     const handleKeyDown = (event) => {
+      if (!isPanelActive || isEditableTarget(event)) return;
       if (event.key === 'ArrowLeft') {
         modelRef.current.leftPressed = true;
         event.preventDefault();
@@ -430,6 +461,7 @@ const BreakoutGamePresenter = ({
     };
 
     const handleKeyUp = (event) => {
+      if (!isPanelActive || isEditableTarget(event)) return;
       if (event.key === 'ArrowLeft') {
         modelRef.current.leftPressed = false;
       } else if (event.key === 'ArrowRight') {
@@ -443,10 +475,11 @@ const BreakoutGamePresenter = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameState, startGame]);
+  }, [gameState, isPanelActive, startGame]);
 
   useEffect(() => () => {
     stopGame();
+    clearInactiveResumeCountdown();
     try {
       audioContextRef.current?.close?.();
     } catch {
@@ -454,7 +487,49 @@ const BreakoutGamePresenter = ({
     }
     audioContextRef.current = null;
     audioMasterGainRef.current = null;
-  }, [stopGame]);
+  }, [clearInactiveResumeCountdown, stopGame]);
+
+  useEffect(() => {
+    if (!isPanelActive) {
+      clearInactiveResumeCountdown();
+      if (!modelRef.current.running) return;
+      pausedByInactiveRef.current = true;
+      modelRef.current.running = false;
+      if (rafRef.current) {
+        window.cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+      setOverlay({
+        title: 'Paused',
+        subtitle: 'Panel is not active',
+      });
+      setStatusMessage('Paused while another tab is active.');
+      return;
+    }
+    if (!pausedByInactiveRef.current) return;
+    pausedByInactiveRef.current = false;
+    if (gameState !== 'playing') return;
+    if (modelRef.current.running) return;
+
+    let count = 5;
+    setOverlay({ title: 'Resuming', subtitle: `${count}` });
+    setStatusMessage(`Resuming in ${count}...`);
+    clearInactiveResumeCountdown();
+    inactiveResumeIntervalRef.current = window.setInterval(() => {
+      count -= 1;
+      if (count <= 0) {
+        clearInactiveResumeCountdown();
+        if (gameState !== 'playing' || !isPanelActive) return;
+        setOverlay((prev) => (prev?.title === 'Resuming' ? null : prev));
+        setStatusMessage('Resumed.');
+        modelRef.current.running = true;
+        rafRef.current = window.requestAnimationFrame(loop);
+        return;
+      }
+      setOverlay((prev) => (prev?.title === 'Resuming' ? { title: 'Resuming', subtitle: `${count}` } : prev));
+      setStatusMessage(`Resuming in ${count}...`);
+    }, 1000);
+  }, [clearInactiveResumeCountdown, gameState, isPanelActive, loop]);
 
   const handleCanvasMouseMove = (event) => {
     const canvas = canvasRef.current;
@@ -485,7 +560,11 @@ const BreakoutGamePresenter = ({
   const recentRows = Array.isArray(leaderboard?.recent) ? leaderboard.recent : [];
 
   return (
-    <div className="talia-report breakout-game" role="region" aria-label="Breakout game panel">
+    <div
+      className={`talia-report breakout-game ${isPanelActive ? '' : 'talia-game-panel--inactive'}`}
+      role="region"
+      aria-label="Breakout game panel"
+    >
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Breakout</h2>

@@ -108,6 +108,18 @@
   box-shadow: none !important;
 }
 
+.dashboard-dockview .talia-dv-tab__active-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  margin-top: 1px;
+  color: color-mix(in srgb, var(--theme-warning) 78%, #ffffff);
+  font-size: calc(var(--theme-tab-header-font-size) - 1px);
+  line-height: 1;
+  pointer-events: none;
+}
+
 .dashboard-dockview .dv-tab,
 .dashboard-dockview .dv-tab .dv-tab-content,
 .dashboard-dockview .dv-default-tab-content {

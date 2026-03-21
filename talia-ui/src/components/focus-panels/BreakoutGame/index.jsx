@@ -14,7 +14,7 @@ const getCurrentUserId = () => {
   }
 };
 
-const BreakoutGameContainer = () => {
+const BreakoutGameContainer = ({ panelInstanceId = null }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saveError, setSaveError] = useState(null);
@@ -111,6 +111,7 @@ const BreakoutGameContainer = () => {
 
   return (
     <BreakoutGamePresenter
+      panelInstanceId={panelInstanceId}
       loading={loading}
       loadError={error}
       saveError={saveError}

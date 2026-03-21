@@ -1,6 +1,7 @@
 export const REPORT_REFRESH_EVENT = 'talia:report.refresh';
 export const REPORT_TOGGLE_DETAILS_EVENT = 'talia:report.toggleDetails';
 export const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
+export const REPORT_ACTIVE_PANEL_EVENT = 'talia:report.activePanelChanged';
 export const DOCKVIEW_MAXIMIZE_STATE_EVENT = 'talia:dockview.maximizeStateChanged';
 export const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
 export const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';

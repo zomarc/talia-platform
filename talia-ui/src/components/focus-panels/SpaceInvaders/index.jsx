@@ -14,7 +14,7 @@ const getCurrentUserId = () => {
   }
 };
 
-const SpaceInvadersContainer = () => {
+const SpaceInvadersContainer = ({ panelInstanceId = null }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saveError, setSaveError] = useState(null);
@@ -108,6 +108,7 @@ const SpaceInvadersContainer = () => {
 
   return (
     <SpaceInvadersPresenter
+      panelInstanceId={panelInstanceId}
       loading={loading}
       loadError={error}
       saveError={saveError}

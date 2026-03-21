@@ -26,6 +26,9 @@ import GoogleTrendsContainer from './GoogleTrends';
 import DataMatch from './DataMatch';
 import BreakoutGame from './BreakoutGame';
 import SpaceInvaders from './SpaceInvaders';
+import PacMan from './PacMan';
+import Asteroids from './Asteroids';
+import Pong from './Pong';
 import BtopTerminal from './BtopTerminal';
 import MasterVoyagePerformanceSummaryContainer from './MasterVoyagePerformanceSummary';
 import VoyageReportContainer from './VoyageReport';
@@ -490,6 +493,45 @@ export const componentRegistry = {
     events: { emits: [], respondsTo: [] },
     showInReports: true,
     filePath: 'src/components/focus-panels/SpaceInvaders/index.jsx'
+  },
+  PacMan: {
+    component: PacMan,
+    panelId: 'pac-man',
+    category: 'Fun',
+    title: 'Pac-Man',
+    description: 'Maze arcade demo with shared game score tracking',
+    usesMockData: false,
+    props: {},
+    dataRequirements: 'Stores score per user via generic game score GraphQL service',
+    events: { emits: [], respondsTo: [] },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/PacMan/index.jsx'
+  },
+  Asteroids: {
+    component: Asteroids,
+    panelId: 'asteroids',
+    category: 'Fun',
+    title: 'Asteroids',
+    description: 'Space survival arcade demo with shared game score tracking',
+    usesMockData: false,
+    props: {},
+    dataRequirements: 'Stores score per user via generic game score GraphQL service',
+    events: { emits: [], respondsTo: [] },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/Asteroids/index.jsx'
+  },
+  Pong: {
+    component: Pong,
+    panelId: 'pong',
+    category: 'Fun',
+    title: 'Pong',
+    description: 'Arcade paddle demo with shared game score tracking',
+    usesMockData: false,
+    props: {},
+    dataRequirements: 'Stores score per user via generic game score GraphQL service',
+    events: { emits: [], respondsTo: [] },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/Pong/index.jsx'
   },
   MasterVoyagePerformanceSummary: {
     component: MasterVoyagePerformanceSummaryContainer,

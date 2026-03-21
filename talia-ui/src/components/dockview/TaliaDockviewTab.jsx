@@ -2,6 +2,7 @@ import React from "react";
 import { DockviewDefaultTab } from "dockview";
 import {
   DOCKVIEW_MAXIMIZE_STATE_EVENT,
+  REPORT_ACTIVE_PANEL_EVENT,
   REPORT_GROUP_ACTION_EVENT,
   REPORT_TOGGLE_DETAILS_EVENT,
 } from "./eventConstants";
@@ -75,6 +76,16 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
     .filter(Boolean)
     .join(" ");
   const [showCloseConfirm, setShowCloseConfirm] = React.useState(false);
+  const [isPrimaryActive, setIsPrimaryActive] = React.useState(false);
+
+  const syncPrimaryActiveState = React.useCallback(() => {
+    const activePanelId = window?.__taliaActivePanelId || window?.dockviewApi?.activePanel?.id || null;
+    if (activePanelId) {
+      setIsPrimaryActive(activePanelId === panelId);
+      return;
+    }
+    setIsPrimaryActive(Boolean(panelApi?.isActive?.() ?? false));
+  }, [panelApi, panelId]);
 
   const syncMaximizedState = React.useCallback(() => {
     const currentlyMaximized = panelApi?.isMaximized?.() ?? false;
@@ -93,6 +104,17 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
       window.removeEventListener(DOCKVIEW_MAXIMIZE_STATE_EVENT, handleMaximizeStateChanged);
     };
   }, [syncMaximizedState]);
+
+  React.useEffect(() => {
+    syncPrimaryActiveState();
+    const handleActivePanelChanged = () => syncPrimaryActiveState();
+    window.addEventListener(REPORT_ACTIVE_PANEL_EVENT, handleActivePanelChanged);
+    window.addEventListener("pointerup", handleActivePanelChanged);
+    return () => {
+      window.removeEventListener(REPORT_ACTIVE_PANEL_EVENT, handleActivePanelChanged);
+      window.removeEventListener("pointerup", handleActivePanelChanged);
+    };
+  }, [syncPrimaryActiveState]);
   React.useEffect(() => {
     const handleEscape = (event) => {
       if (event.key === 'Escape') {
@@ -310,8 +332,9 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
       : '⊞';
 
   return (
-    <div className="talia-dv-tab">
+    <div className={`talia-dv-tab ${isPrimaryActive ? "talia-dv-tab--primary-active" : ""}`}>
       <DockviewDefaultTab {...props} hideClose />
+      {isPrimaryActive && <span className="talia-dv-tab__active-indicator" aria-hidden="true">*</span>}
       <div className="talia-dv-tab__actions">
         {isReportTab && (
           <button

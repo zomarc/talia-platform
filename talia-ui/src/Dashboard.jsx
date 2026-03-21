@@ -19,6 +19,7 @@ import ReportShell from "./components/dockview/ReportShell.jsx";
 import DashboardSidebar from "./components/sidebar/DashboardSidebar.jsx";
 import {
   DOCKVIEW_MAXIMIZE_STATE_EVENT,
+  REPORT_ACTIVE_PANEL_EVENT,
   DASHBOARD_CYCLE_FOCUS_EVENT,
   DASHBOARD_SELECT_FOCUS_EVENT,
   DASHBOARD_FOCUS_STATE_EVENT,
@@ -812,10 +813,10 @@ function Dashboard({ user }) {
           panelInstanceId={props?.api?.id || props?.params?.panel?.id || report.panelId}
         >
           <Component
+            {...props}
             theme={theme}
             panelInstanceId={props?.api?.id || props?.params?.panel?.id || report.panelId}
             panelComponentId={report.panelId}
-            {...props}
           />
         </ReportShell>
       );
@@ -1321,6 +1322,14 @@ function Dashboard({ user }) {
     apiRef.current = api;
     window.dockviewApi = api; // Make API available globally for layout presets
 
+    const emitActivePanelState = () => {
+      const activePanelId = api?.activePanel?.id || null;
+      window.__taliaActivePanelId = activePanelId;
+      window.dispatchEvent(new CustomEvent(REPORT_ACTIVE_PANEL_EVENT, {
+        detail: { activePanelId }
+      }));
+    };
+
     debugLog("Dockview onReady - API initialized", api);
 
     // Load and restore settings BEFORE creating panels
@@ -1396,6 +1405,15 @@ function Dashboard({ user }) {
         window.dispatchEvent(new CustomEvent(DOCKVIEW_MAXIMIZE_STATE_EVENT));
       });
     }
+
+    if (typeof api.onDidActivePanelChange === 'function') {
+      api.onDidActivePanelChange(() => {
+        emitActivePanelState();
+      });
+    }
+
+    // Ensure initial state is available for late listeners.
+    emitActivePanelState();
 
     setIsGroupMaximized(typeof api.hasMaximizedGroup === 'function' ? api.hasMaximizedGroup() : false);
     window.dispatchEvent(new CustomEvent(DOCKVIEW_MAXIMIZE_STATE_EVENT));

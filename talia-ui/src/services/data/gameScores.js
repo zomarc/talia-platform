@@ -1,4 +1,5 @@
 import { trackedFetchGraphql } from './trackedGraphql';
+import { saveUserProfileState } from './userProfileState';
 
 const GAME_SCORE_QUERY = `
   query GameScore($gameId: String!, $userId: String) {
@@ -45,6 +46,25 @@ const GAME_SCORE_BOARD_QUERY = `
   }
 `;
 
+const buildCompactScoreSnapshot = ({ gameId, board }) => {
+  const safeBoard = board && typeof board === 'object' ? board : {};
+  const mapEntries = (rows) => (Array.isArray(rows) ? rows : [])
+    .slice(0, 5)
+    .map((row) => ({
+      gameId: row?.gameId || '',
+      userId: row?.userId || '',
+      highScore: Number(row?.highScore || 0),
+      lastScore: Number(row?.lastScore || 0),
+      updatedAt: row?.updatedAt || null,
+    }));
+  return {
+    gameId: gameId || null,
+    top: mapEntries(safeBoard.top),
+    recent: mapEntries(safeBoard.recent),
+    updatedAt: new Date().toISOString(),
+  };
+};
+
 export const loadGameScore = async ({ gameId, userId, component = 'Game' }) => {
   const data = await trackedFetchGraphql({
     query: GAME_SCORE_QUERY,
@@ -80,6 +100,15 @@ export const loadGameScoreBoard = async ({
     purpose: gameId ? `Load score board for ${gameId}` : 'Load score board for all games',
     tableName: 'config_setting',
   });
-  return data?.gameScoreBoard || { top: [], recent: [] };
+  const board = data?.gameScoreBoard || { top: [], recent: [] };
+  saveUserProfileState({
+    patch: {
+      lastHighScores: buildCompactScoreSnapshot({ gameId, board }),
+    },
+    component,
+  }).catch(() => {
+    // best effort only
+  });
+  return board;
 };
 

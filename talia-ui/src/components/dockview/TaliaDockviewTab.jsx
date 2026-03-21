@@ -4,6 +4,7 @@ import {
   DOCKVIEW_MAXIMIZE_STATE_EVENT,
   REPORT_ACTIVE_PANEL_EVENT,
   REPORT_GROUP_ACTION_EVENT,
+  REPORT_PANEL_PAUSE_EVENT,
   REPORT_TOGGLE_DETAILS_EVENT,
 } from "./eventConstants";
 
@@ -77,6 +78,7 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
     .join(" ");
   const [showCloseConfirm, setShowCloseConfirm] = React.useState(false);
   const [isPrimaryActive, setIsPrimaryActive] = React.useState(false);
+  const [isPaused, setIsPaused] = React.useState(false);
 
   const syncPrimaryActiveState = React.useCallback(() => {
     const activePanelId = window?.__taliaActivePanelId || window?.dockviewApi?.activePanel?.id || null;
@@ -91,6 +93,19 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
     const currentlyMaximized = panelApi?.isMaximized?.() ?? false;
     setIsMaximized(currentlyMaximized);
   }, [panelApi]);
+
+  const syncPausedState = React.useCallback(() => {
+    const state = window.__taliaPanelPauseState || {};
+    if (panelId && Object.prototype.hasOwnProperty.call(state, panelId)) {
+      setIsPaused(state[panelId] === true);
+      return;
+    }
+    if (panelComponent && Object.prototype.hasOwnProperty.call(state, panelComponent)) {
+      setIsPaused(state[panelComponent] === true);
+      return;
+    }
+    setIsPaused(false);
+  }, [panelId, panelComponent]);
 
   // Keep tab icon/tooltip synced with Dockview maximize state.
   React.useEffect(() => {
@@ -107,14 +122,18 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
 
   React.useEffect(() => {
     syncPrimaryActiveState();
+    syncPausedState();
     const handleActivePanelChanged = () => syncPrimaryActiveState();
+    const handlePauseStateChanged = () => syncPausedState();
     window.addEventListener(REPORT_ACTIVE_PANEL_EVENT, handleActivePanelChanged);
+    window.addEventListener(REPORT_PANEL_PAUSE_EVENT, handlePauseStateChanged);
     window.addEventListener("pointerup", handleActivePanelChanged);
     return () => {
       window.removeEventListener(REPORT_ACTIVE_PANEL_EVENT, handleActivePanelChanged);
+      window.removeEventListener(REPORT_PANEL_PAUSE_EVENT, handlePauseStateChanged);
       window.removeEventListener("pointerup", handleActivePanelChanged);
     };
-  }, [syncPrimaryActiveState]);
+  }, [syncPausedState, syncPrimaryActiveState]);
   React.useEffect(() => {
     const handleEscape = (event) => {
       if (event.key === 'Escape') {
@@ -330,11 +349,23 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
     : groupCycleDepth >= groupCycleMaxDepth
       ? '⊠'
       : '⊞';
+  const indicatorSymbol = isPaused ? '=' : (isPrimaryActive ? '*' : '0');
+  const indicatorTitle = isPaused
+    ? 'Panel paused (press P to resume)'
+    : (isPrimaryActive ? 'Active panel' : 'Available panel');
+  const indicatorClassName = [
+    'talia-dv-tab__active-indicator',
+    isPaused ? 'talia-dv-tab__active-indicator--paused' : '',
+    isPrimaryActive ? 'talia-dv-tab__active-indicator--active' : '',
+    !isPaused && !isPrimaryActive ? 'talia-dv-tab__active-indicator--available' : '',
+  ].filter(Boolean).join(' ');
 
   return (
     <div className={`talia-dv-tab ${isPrimaryActive ? "talia-dv-tab--primary-active" : ""}`}>
       <DockviewDefaultTab {...props} hideClose />
-      {isPrimaryActive && <span className="talia-dv-tab__active-indicator" aria-hidden="true">*</span>}
+      <span className={indicatorClassName} title={indicatorTitle} aria-label={indicatorTitle}>
+        {indicatorSymbol}
+      </span>
       <div className="talia-dv-tab__actions">
         {isReportTab && (
           <button

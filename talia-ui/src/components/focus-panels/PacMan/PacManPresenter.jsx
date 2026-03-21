@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import GameScorePopover from '../../shared/games/GameScorePopover';
 import usePanelTabActive from '../../../hooks/usePanelTabActive';
+import usePanelPaused from '../../../hooks/usePanelPaused';
 import { isEditableTarget } from '../../shared/games/keyboardGuards';
 
 const CELL = 24;
@@ -80,6 +81,8 @@ const PacManPresenter = ({
   leaderboardLoading,
 }) => {
   const isPanelActive = usePanelTabActive(panelInstanceId);
+  const isPanelPaused = usePanelPaused(panelInstanceId, 'pac-man');
+  const isPanelExecutionActive = isPanelActive && !isPanelPaused;
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const rafRef = useRef(0);
@@ -386,14 +389,14 @@ const PacManPresenter = ({
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      if (!isPanelActive || isEditableTarget(event)) return;
+      if (!isPanelExecutionActive || isEditableTarget(event)) return;
       if (!DIRS[event.key]) return;
       modelRef.current.player.nextDir = { ...DIRS[event.key] };
       event.preventDefault();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isPanelActive]);
+  }, [isPanelExecutionActive]);
 
   useEffect(() => () => {
     stopGame();
@@ -408,7 +411,7 @@ const PacManPresenter = ({
   }, [clearInactiveResumeCountdown, stopGame]);
 
   useEffect(() => {
-    if (!isPanelActive) {
+    if (!isPanelExecutionActive) {
       clearInactiveResumeCountdown();
       if (!modelRef.current.running) return;
       pausedByInactiveRef.current = true;
@@ -419,9 +422,9 @@ const PacManPresenter = ({
       }
       setOverlay({
         title: 'Paused',
-        subtitle: 'Panel is not active',
+        subtitle: isPanelPaused ? 'Paused by user (P)' : 'Panel is not active',
       });
-      setStatusMessage('Paused while another tab is active.');
+      setStatusMessage(isPanelPaused ? 'Paused. Press P to resume.' : 'Paused while another tab is active.');
       return;
     }
     if (!pausedByInactiveRef.current) return;
@@ -437,7 +440,7 @@ const PacManPresenter = ({
       count -= 1;
       if (count <= 0) {
         clearInactiveResumeCountdown();
-        if (gameState !== 'playing' || !isPanelActive) return;
+        if (gameState !== 'playing' || !isPanelExecutionActive) return;
         setOverlay((prev) => (prev?.title === 'Resuming' ? null : prev));
         setStatusMessage('Resumed.');
         modelRef.current.running = true;
@@ -447,7 +450,7 @@ const PacManPresenter = ({
       setOverlay((prev) => (prev?.title === 'Resuming' ? { title: 'Resuming', subtitle: `${count}` } : prev));
       setStatusMessage(`Resuming in ${count}...`);
     }, 1000);
-  }, [clearInactiveResumeCountdown, gameState, isPanelActive]);
+  }, [clearInactiveResumeCountdown, gameState, isPanelExecutionActive, isPanelPaused]);
 
   const topRows = Array.isArray(leaderboard?.top) ? leaderboard.top : [];
   const recentRows = Array.isArray(leaderboard?.recent) ? leaderboard.recent : [];
@@ -455,7 +458,7 @@ const PacManPresenter = ({
 
   return (
     <div
-      className={`talia-report pacman-game ${isPanelActive ? '' : 'talia-game-panel--inactive'}`}
+      className={`talia-report pacman-game ${isPanelExecutionActive ? '' : 'talia-game-panel--inactive'}`}
       role="region"
       aria-label="Pac-Man game panel"
     >

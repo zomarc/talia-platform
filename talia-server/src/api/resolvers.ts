@@ -572,6 +572,7 @@ const mapGraphQLFocusToDb = (input: any, createdBy?: string) => {
 };
 
 const APPEARANCE_SETTINGS_CATEGORY = 'ui_appearance';
+const USER_PROFILE_CATEGORY = 'ui_profile';
 const GAME_SETTINGS_CATEGORY = 'ui_game';
 const DEFAULT_GAME_ID = 'breakout';
 
@@ -583,6 +584,7 @@ const gameSettingKey = (base: string, userId?: string | null) =>
 
 const normalizeGameId = (value: any) => String(value || DEFAULT_GAME_ID).trim().toLowerCase();
 const normalizeUserId = (value: any) => String(value || 'dev-user-1').trim();
+const userProfileStateKey = (userId: string) => `state:${normalizeUserId(userId)}`;
 
 const gameScoreKey = (gameId: string, userId: string) => `score:${normalizeGameId(gameId)}:${normalizeUserId(userId)}`;
 
@@ -787,6 +789,11 @@ const mapAppearanceSettingsPayload = (settings: any, profiles: any, activeProfil
   profiles: normalizeAppearanceProfiles(profiles),
   activeProfileId: typeof activeProfileId === 'string' ? activeProfileId : null
 });
+
+const normalizeUserProfileState = (raw: any) => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return raw;
+};
 
 const tableCatalogQueryResolvers = buildTableCatalogQueryResolvers({
   supabaseDataService,
@@ -1950,6 +1957,20 @@ export const resolvers = {
           profiles: [],
           activeProfileId: null
         };
+      }
+    },
+
+    userProfileState: async (parent: any, args: any) => {
+      const uid = normalizeUserId(args?.userId);
+      try {
+        const state = await configService.getSetting(
+          USER_PROFILE_CATEGORY,
+          userProfileStateKey(uid)
+        );
+        return normalizeUserProfileState(state);
+      } catch (error: any) {
+        console.error('Error getting user profile state:', error);
+        return {};
       }
     },
 
@@ -3163,6 +3184,35 @@ export const resolvers = {
       } catch (error: any) {
         console.error('Error saving appearance profiles:', error);
         throw new Error(`Failed to save appearance profiles: ${error.message}`);
+      }
+    },
+
+    saveUserProfileState: async (parent: any, args: any) => {
+      const uid = normalizeUserId(args?.userId);
+      const patch = normalizeUserProfileState(args?.patch);
+      try {
+        const current = normalizeUserProfileState(
+          await configService.getSetting(USER_PROFILE_CATEGORY, userProfileStateKey(uid))
+        );
+        const merged = {
+          ...current,
+          ...patch,
+          userId: uid,
+          updatedAt: new Date().toISOString()
+        };
+        await configService.upsertSetting(
+          USER_PROFILE_CATEGORY,
+          userProfileStateKey(uid),
+          merged,
+          {
+            displayName: `UI User Profile State (${uid})`,
+            description: 'User-scoped UI state (focus, criteria, high-score snapshot)'
+          }
+        );
+        return merged;
+      } catch (error: any) {
+        console.error('Error saving user profile state:', error);
+        throw new Error(`Failed to save user profile state: ${error.message}`);
       }
     },
 

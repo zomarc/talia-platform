@@ -19,7 +19,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import queryTracker from '../../services/data/queryTracker';
 import { SAIL_SELECT_EVENT } from '../../lib/eventBus';
-import { REPORT_REFRESH_EVENT } from '../../components/dockview/eventConstants';
+import { REPORT_PANEL_PAUSE_EVENT, REPORT_REFRESH_EVENT } from '../../components/dockview/eventConstants';
 
 const GRAPHQL_URL = '/api/graphql';
 const DEFAULT_CACHE_TTL_MS = 15000;
@@ -211,6 +211,17 @@ const applyRealSailingCriteria = (rows) => {
 
 const applyGlobalCriteria = (rows) => applyRealSailingCriteria(applyGlobalDurationCriteria(applyGlobalDateCriteria(rows)));
 
+const isPanelPaused = (panelInstanceId, panelComponentId) => {
+  const state = window.__taliaPanelPauseState || {};
+  if (panelInstanceId && Object.prototype.hasOwnProperty.call(state, panelInstanceId)) {
+    return state[panelInstanceId] === true;
+  }
+  if (panelComponentId && Object.prototype.hasOwnProperty.call(state, panelComponentId)) {
+    return state[panelComponentId] === true;
+  }
+  return false;
+};
+
 export const useTableDataWithContext = ({
   tableName,
   eventName,
@@ -227,6 +238,7 @@ export const useTableDataWithContext = ({
   const [error, setError] = useState(null);
   const [context, setContext] = useState(null);
   const rawDataRef = useRef([]);
+  const contextRef = useRef(null);
   
   // Use refs to prevent infinite loops and store latest values
   const fetchingRef = useRef(false);
@@ -243,6 +255,8 @@ export const useTableDataWithContext = ({
   const cacheTtlMsRef = useRef(cacheTtlMs);
   const hasCheckedContextRef = useRef(false);
   const lastIncludeNonRealRef = useRef(window.__taliaGlobalCriteria?.includeNonRealSailings === true);
+  const pausedRef = useRef(isPanelPaused(panelInstanceId, panelComponentId));
+  const pendingRefreshOnResumeRef = useRef(false);
   
   // Keep refs up to date
   useEffect(() => {
@@ -256,6 +270,10 @@ export const useTableDataWithContext = ({
     fetchWithoutContextRef.current = fetchWithoutContext;
     cacheTtlMsRef.current = cacheTtlMs;
   }, [contextMapper, tableName, limit, enabled, eventName, panelInstanceId, panelComponentId, fetchWithoutContext, cacheTtlMs]);
+
+  useEffect(() => {
+    contextRef.current = context;
+  }, [context]);
 
   // Extract context from event and map to GraphQL filters - store in ref
   const extractFiltersRef = useRef(null);
@@ -282,6 +300,10 @@ export const useTableDataWithContext = ({
   // Fetch data from GraphQL
   const fetchDataRef = useRef(null);
   fetchDataRef.current = async (currentFilters = null, options = {}) => {
+    if (pausedRef.current) {
+      pendingRefreshOnResumeRef.current = true;
+      return;
+    }
     const forceFetch = options?.force === true;
     const bypassCache = options?.bypassCache === true;
     const effectiveFilters = {
@@ -401,6 +423,10 @@ export const useTableDataWithContext = ({
 
       const loadedData = await requestPromise;
       console.log(`[useTableDataWithContext] Loaded ${loadedData.length} records from ${tableNameRef.current}`);
+      if (pausedRef.current) {
+        pendingRefreshOnResumeRef.current = true;
+        return;
+      }
       rawDataRef.current = loadedData || [];
       setData(applyGlobalCriteria(rawDataRef.current));
     } catch (err) {
@@ -505,6 +531,10 @@ export const useTableDataWithContext = ({
 
     // Create handlers that use refs
     const handleEvent = (event) => {
+      if (pausedRef.current) {
+        pendingRefreshOnResumeRef.current = true;
+        return;
+      }
       const eventDetail = event.detail;
       console.log(`[useTableDataWithContext] Received event: ${event.type}`, eventDetail);
 
@@ -519,6 +549,10 @@ export const useTableDataWithContext = ({
     };
 
     const handleClearEvent = () => {
+      if (pausedRef.current) {
+        pendingRefreshOnResumeRef.current = true;
+        return;
+      }
       console.log(`[useTableDataWithContext] Received clear event`);
       setContext(null);
       lastFiltersRef.current = null; // Reset filters so we can fetch again
@@ -647,6 +681,10 @@ export const useTableDataWithContext = ({
   // - includeNonRealSailings triggers server re-fetch because it's enforced in GraphQL.
   useEffect(() => {
     const handleGlobalCriteriaChange = (event) => {
+      if (pausedRef.current) {
+        pendingRefreshOnResumeRef.current = true;
+        return;
+      }
       setData(applyGlobalCriteria(rawDataRef.current));
 
       const includeNonRealNext = event?.detail?.includeNonRealSailings === true;
@@ -665,6 +703,10 @@ export const useTableDataWithContext = ({
 
   useEffect(() => {
     const handlePanelRefresh = (event) => {
+      if (pausedRef.current) {
+        pendingRefreshOnResumeRef.current = true;
+        return;
+      }
       const targetPanel = event?.detail?.panelId;
       const targetInstance = event?.detail?.panelInstanceId;
       const targetComponent = event?.detail?.panelComponent;
@@ -685,7 +727,36 @@ export const useTableDataWithContext = ({
     return () => window.removeEventListener(REPORT_REFRESH_EVENT, handlePanelRefresh);
   }, [context]);
 
+  useEffect(() => {
+    const handlePauseChanged = (event) => {
+      const detail = event?.detail || {};
+      const targetPanelId = detail.panelId || null;
+      const targetPanelComponent = detail.panelComponent || null;
+      const thisInstance = panelInstanceIdRef.current;
+      const thisComponent = panelComponentIdRef.current;
+      const isMatch = (
+        (thisInstance && targetPanelId === thisInstance) ||
+        (thisComponent && targetPanelComponent === thisComponent)
+      );
+      if (!isMatch) return;
+      const nextPaused = detail.paused === true;
+      pausedRef.current = nextPaused;
+      if (!nextPaused && pendingRefreshOnResumeRef.current) {
+        pendingRefreshOnResumeRef.current = false;
+        lastFiltersRef.current = null;
+        const currentFilters = contextRef.current ? extractFiltersRef.current(contextRef.current) : null;
+        fetchDataRef.current(currentFilters, { force: true, bypassCache: true });
+      }
+    };
+    window.addEventListener(REPORT_PANEL_PAUSE_EVENT, handlePauseChanged);
+    return () => window.removeEventListener(REPORT_PANEL_PAUSE_EVENT, handlePauseChanged);
+  }, []);
+
   const refetch = useCallback(() => {
+    if (pausedRef.current) {
+      pendingRefreshOnResumeRef.current = true;
+      return;
+    }
     const currentFilters = context ? extractFiltersRef.current(context) : null;
     lastFiltersRef.current = null;
     fetchDataRef.current(currentFilters, { force: true, bypassCache: true });

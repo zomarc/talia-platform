@@ -15,6 +15,7 @@ import { canUseAdvancedHeader } from '../../utils/roleUtils';
 import { REPORT_REFRESH_EVENT } from '../dockview/eventConstants';
 import { useTheme } from '../../contexts/ThemeContext';
 import userActivityTracker from '../../services/userActivityTracker';
+import { loadUserProfileState, saveUserProfileState } from '../../services/data/userProfileState';
 // CSS imported globally in main.jsx
 const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
 const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';
@@ -212,8 +213,10 @@ const StatusBar = ({
     return saved === 'data' ? 'data' : 'width';
   });
   const refreshPhaseTimerRef = useRef(null);
+  const criteriaSaveTimerRef = useRef(null);
   const messageFadeTimerRef = useRef(null);
   const messageHideTimerRef = useRef(null);
+  const [profileCriteriaHydrated, setProfileCriteriaHydrated] = useState(false);
   const appVersion = import.meta.env.VITE_APP_VERSION || '0.1.6';
   const hasAdvancedControls = typeof canUseAdvancedControls === 'boolean'
     ? canUseAdvancedControls
@@ -526,6 +529,39 @@ const StatusBar = ({
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const profileState = await loadUserProfileState({ component: 'StatusBar' });
+        window.__taliaUserProfileState = profileState || {};
+        const criteria = profileState?.globalCriteria;
+        if (criteria && typeof criteria === 'object') {
+          const nextRange = typeof criteria.rangeKey === 'string' ? criteria.rangeKey : '';
+          const nextDuration = typeof criteria.durationKey === 'string' ? criteria.durationKey : '';
+          if (GLOBAL_DATE_RANGE_OPTIONS.some((option) => option.key === nextRange)) {
+            setGlobalDateRange(nextRange);
+          }
+          if (GLOBAL_DURATION_OPTIONS.some((option) => option.key === nextDuration)) {
+            setGlobalDuration(nextDuration);
+          }
+          if (Object.prototype.hasOwnProperty.call(criteria, 'activeOnly')) {
+            setActiveOnly(criteria.activeOnly !== false);
+          } else if (Object.prototype.hasOwnProperty.call(criteria, 'includeNonRealSailings')) {
+            setActiveOnly(criteria.includeNonRealSailings !== true);
+          }
+        }
+      } catch {
+        // local fallback remains in place
+      } finally {
+        if (!cancelled) setProfileCriteriaHydrated(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const range = resolveDateRange(globalDateRange);
     const includeNonRealSailings = !activeOnly;
     const criteria = {
@@ -542,6 +578,34 @@ const StatusBar = ({
       })
     );
   }, [globalDateRange, globalDuration, activeOnly]);
+
+  useEffect(() => {
+    if (!profileCriteriaHydrated) return undefined;
+    if (criteriaSaveTimerRef.current) {
+      window.clearTimeout(criteriaSaveTimerRef.current);
+      criteriaSaveTimerRef.current = null;
+    }
+    criteriaSaveTimerRef.current = window.setTimeout(() => {
+      const currentCriteria = window.__taliaGlobalCriteria || {
+        rangeKey: globalDateRange,
+        durationKey: globalDuration,
+        activeOnly,
+        includeNonRealSailings: !activeOnly,
+      };
+      saveUserProfileState({
+        patch: { globalCriteria: currentCriteria },
+        component: 'StatusBar',
+      }).catch(() => {
+        // best effort only
+      });
+    }, 250);
+    return () => {
+      if (criteriaSaveTimerRef.current) {
+        window.clearTimeout(criteriaSaveTimerRef.current);
+        criteriaSaveTimerRef.current = null;
+      }
+    };
+  }, [profileCriteriaHydrated, globalDateRange, globalDuration, activeOnly]);
 
   // Get event summary
   const getEventSummary = (event) => {

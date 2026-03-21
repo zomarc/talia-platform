@@ -118,6 +118,19 @@
   font-size: calc(var(--theme-tab-header-font-size) - 1px);
   line-height: 1;
   pointer-events: none;
+  min-width: 8px;
+}
+
+.dashboard-dockview .talia-dv-tab__active-indicator--active {
+  color: color-mix(in srgb, var(--theme-warning) 82%, #ffffff);
+}
+
+.dashboard-dockview .talia-dv-tab__active-indicator--paused {
+  color: color-mix(in srgb, var(--theme-danger) 76%, #ffffff);
+}
+
+.dashboard-dockview .talia-dv-tab__active-indicator--available {
+  color: color-mix(in srgb, var(--theme-text-muted) 85%, #ffffff);
 }
 
 .dashboard-dockview .dv-tab,
@@ -251,6 +264,39 @@
   line-height: 1;
   padding: 2px 6px;
   cursor: pointer;
+}
+
+.talia-report-shell {
+  position: relative;
+}
+
+.talia-report-shell--paused .talia-report-shell__content {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.talia-report-shell__pause-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--theme-bg-solid) 70%, transparent);
+  backdrop-filter: blur(1.5px);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.talia-report-shell__pause-title {
+  font-weight: 700;
+  color: var(--theme-warning);
+}
+
+.talia-report-shell__pause-subtitle {
+  font-size: calc(var(--theme-font-size) - 1px);
+  color: var(--theme-text-secondary);
 }
 
 .dashboard-dockview .dv-tab:not(.active):not(.dv-active-tab):not([aria-selected="true"]) .talia-dv-tab__button {

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import GameScorePopover from '../../shared/games/GameScorePopover';
 import usePanelTabActive from '../../../hooks/usePanelTabActive';
+import usePanelPaused from '../../../hooks/usePanelPaused';
 import { isEditableTarget } from '../../shared/games/keyboardGuards';
 
 const GAME_WIDTH = 640;
@@ -84,6 +85,8 @@ const SpaceInvadersPresenter = ({
   leaderboardLoading,
 }) => {
   const isPanelActive = usePanelTabActive(panelInstanceId);
+  const isPanelPaused = usePanelPaused(panelInstanceId, 'space-invaders');
+  const isPanelExecutionActive = isPanelActive && !isPanelPaused;
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const modelRef = useRef(createInitialModel());
@@ -454,7 +457,7 @@ const SpaceInvadersPresenter = ({
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      if (!isPanelActive || isEditableTarget(event)) return;
+      if (!isPanelExecutionActive || isEditableTarget(event)) return;
       if (event.key === 'ArrowLeft') {
         modelRef.current.leftPressed = true;
         event.preventDefault();
@@ -467,7 +470,7 @@ const SpaceInvadersPresenter = ({
       }
     };
     const onKeyUp = (event) => {
-      if (!isPanelActive || isEditableTarget(event)) return;
+      if (!isPanelExecutionActive || isEditableTarget(event)) return;
       if (event.key === 'ArrowLeft') modelRef.current.leftPressed = false;
       if (event.key === 'ArrowRight') modelRef.current.rightPressed = false;
     };
@@ -477,7 +480,7 @@ const SpaceInvadersPresenter = ({
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [fireBullet, gameState, isPanelActive]);
+  }, [fireBullet, gameState, isPanelExecutionActive]);
 
   useEffect(() => () => {
     stopGame();
@@ -496,7 +499,7 @@ const SpaceInvadersPresenter = ({
   }, [clearInactiveResumeCountdown, stopGame]);
 
   useEffect(() => {
-    if (!isPanelActive) {
+    if (!isPanelExecutionActive) {
       clearInactiveResumeCountdown();
       if (!modelRef.current.running) return;
       pausedByInactiveRef.current = true;
@@ -507,9 +510,9 @@ const SpaceInvadersPresenter = ({
       }
       setOverlay({
         title: 'Paused',
-        subtitle: 'Panel is not active',
+        subtitle: isPanelPaused ? 'Paused by user (P)' : 'Panel is not active',
       });
-      setStatusMessage('Paused while another tab is active.');
+      setStatusMessage(isPanelPaused ? 'Paused. Press P to resume.' : 'Paused while another tab is active.');
       return;
     }
     if (!pausedByInactiveRef.current) return;
@@ -525,7 +528,7 @@ const SpaceInvadersPresenter = ({
       count -= 1;
       if (count <= 0) {
         clearInactiveResumeCountdown();
-        if (gameState !== 'playing' || !isPanelActive) return;
+        if (gameState !== 'playing' || !isPanelExecutionActive) return;
         setOverlay((prev) => (prev?.title === 'Resuming' ? null : prev));
         setStatusMessage('Resumed.');
         modelRef.current.running = true;
@@ -535,7 +538,7 @@ const SpaceInvadersPresenter = ({
       setOverlay((prev) => (prev?.title === 'Resuming' ? { title: 'Resuming', subtitle: `${count}` } : prev));
       setStatusMessage(`Resuming in ${count}...`);
     }, 1000);
-  }, [clearInactiveResumeCountdown, gameState, isPanelActive, loop]);
+  }, [clearInactiveResumeCountdown, gameState, isPanelExecutionActive, isPanelPaused, loop]);
 
   const handlePointerMove = (event) => {
     if (gameState !== 'playing') return;
@@ -553,7 +556,7 @@ const SpaceInvadersPresenter = ({
 
   return (
     <div
-      className={`talia-report space-invaders ${isPanelActive ? '' : 'talia-game-panel--inactive'}`}
+      className={`talia-report space-invaders ${isPanelExecutionActive ? '' : 'talia-game-panel--inactive'}`}
       role="region"
       aria-label="Space Invaders panel"
     >

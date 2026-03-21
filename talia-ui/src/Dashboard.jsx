@@ -20,15 +20,18 @@ import DashboardSidebar from "./components/sidebar/DashboardSidebar.jsx";
 import {
   DOCKVIEW_MAXIMIZE_STATE_EVENT,
   REPORT_ACTIVE_PANEL_EVENT,
+  REPORT_PANEL_PAUSE_EVENT,
   DASHBOARD_CYCLE_FOCUS_EVENT,
   DASHBOARD_SELECT_FOCUS_EVENT,
   DASHBOARD_FOCUS_STATE_EVENT,
   DASHBOARD_OPEN_PANEL_EVENT,
 } from "./components/dockview/eventConstants";
+import { isEditableTarget } from "./components/shared/games/keyboardGuards";
 // Dev Role Selector is now integrated into ModeSelector dropdown
 // Theme System - using centralized theme context
 import { useTheme } from "./contexts/ThemeContext";
 import { DEFAULT_THEME } from "./config/themes.js";
+import { loadUserProfileState, saveUserProfileState } from "./services/data/userProfileState";
 // Tabulator - using npm package
 import Tabulator from "./lib/tabulatorConfig.js";
 // Chart.js - using npm package
@@ -984,7 +987,7 @@ function Dashboard({ user }) {
         const errorMsg = `Focus with ID/name "${focusId}" not found in database. Available focuses: ${refreshedFocuses.map(f => f.name).join(', ')}`;
         console.warn('⚠️', errorMsg);
         // Don't throw error - allow app to continue
-        return;
+        return null;
       }
       
       console.log('✅ Found focus:', focus.name, '(ID:', focusId + ')', 'Layout data:', focus.layoutData);
@@ -996,7 +999,7 @@ function Dashboard({ user }) {
         console.warn('⚠️ Full layoutData:', JSON.stringify(focus.layoutData, null, 2));
         // Don't show alert or throw error - just log and return
         // This allows the app to continue without blocking the UI
-        return;
+        return null;
       }
       
       console.log('📦 Loading saved Dockview layout from database');
@@ -1013,6 +1016,7 @@ function Dashboard({ user }) {
         // Load the saved Dockview layout directly
         apiRef.current.fromJSON(layoutData);
         console.log('✅ Successfully loaded saved layout from database');
+        return focus.id;
         
       } catch (e) {
         const errorMsg = `Failed to load saved layout for focus "${focus.name}": ${e.message}. The layout data may be corrupted. Please save a new layout.`;
@@ -1036,11 +1040,25 @@ function Dashboard({ user }) {
   // Focus change handler
   const handleFocusChange = useCallback(async (focusId) => {
     console.log('🔄 Focus changed to:', focusId);
-    setCurrentFocus(focusId);
-    
     try {
       // Load the focus-specific layout from database (will error if not found or invalid)
-      await loadFocusLayout(focusId);
+      const loadedFocusId = await loadFocusLayout(focusId);
+      if (!loadedFocusId) {
+        setStatusMessage(`Focus "${focusId}" has no saved layout`);
+        return;
+      }
+      setCurrentFocus(loadedFocusId);
+      try {
+        window.localStorage?.setItem?.(SAVED_FOCUS_KEY, loadedFocusId);
+      } catch {
+        // no-op
+      }
+      saveUserProfileState({
+        patch: { lastFocusId: loadedFocusId },
+        component: 'Dashboard'
+      }).catch(() => {
+        // best effort only
+      });
     } catch (error) {
       console.error('❌ Failed to load focus layout:', error);
       // Error is already shown to user in loadFocusLayout
@@ -1119,6 +1137,12 @@ function Dashboard({ user }) {
         } catch {
           // no-op
         }
+        saveUserProfileState({
+          patch: { lastFocusId: focusId },
+          component: 'Dashboard'
+        }).catch(() => {
+          // best effort only
+        });
         userActivityTracker.recordFocusAction('focus-save', {
           status: 'saved',
           purpose: 'save-focus-layout',
@@ -1281,6 +1305,49 @@ function Dashboard({ user }) {
     window.dispatchEvent(new CustomEvent(DOCKVIEW_MAXIMIZE_STATE_EVENT));
   }, []);
 
+  const toggleActivePanelPause = useCallback(() => {
+    const api = apiRef.current;
+    const activePanelId = api?.activePanel?.id || null;
+    const activePanelComponent = api?.activePanel?.component || null;
+    if (!activePanelId) return;
+    const current = window.__taliaPanelPauseState || {};
+    const isPaused = current[activePanelId] === true;
+    const nextPaused = !isPaused;
+    window.__taliaPanelPauseState = {
+      ...current,
+      [activePanelId]: nextPaused,
+    };
+    window.dispatchEvent(
+      new CustomEvent(REPORT_PANEL_PAUSE_EVENT, {
+        detail: {
+          panelId: activePanelId,
+          panelComponent: activePanelComponent,
+          paused: nextPaused,
+        },
+      })
+    );
+    userActivityTracker.recordHeaderAction('panel-pause-toggle', {
+      status: nextPaused ? 'paused' : 'resumed',
+      panelId: activePanelId,
+      panelComponent: activePanelComponent || undefined,
+    });
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalPauseKey = (event) => {
+      if (event.defaultPrevented) return;
+      if (event.repeat) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (isEditableTarget(event)) return;
+      const key = String(event.key || '').toLowerCase();
+      if (key !== 'p') return;
+      event.preventDefault();
+      toggleActivePanelPause();
+    };
+    window.addEventListener('keydown', handleGlobalPauseKey);
+    return () => window.removeEventListener('keydown', handleGlobalPauseKey);
+  }, [toggleActivePanelPause]);
+
   React.useEffect(() => {
     const host = dockviewHostRef.current;
     if (!host) return;
@@ -1333,6 +1400,26 @@ function Dashboard({ user }) {
     debugLog("Dockview onReady - API initialized", api);
 
     // Load and restore settings BEFORE creating panels
+    const savedFocusId = window.localStorage?.getItem?.(SAVED_FOCUS_KEY) || '';
+    if (savedFocusId) {
+      setCurrentFocus(savedFocusId);
+    }
+    loadUserProfileState({ component: 'Dashboard' })
+      .then((profileState) => {
+        const profileFocusId = typeof profileState?.lastFocusId === 'string'
+          ? profileState.lastFocusId
+          : '';
+        if (!profileFocusId) return;
+        setCurrentFocus(profileFocusId);
+        try {
+          window.localStorage?.setItem?.(SAVED_FOCUS_KEY, profileFocusId);
+        } catch {
+          // no-op
+        }
+      })
+      .catch(() => {
+        // best effort only
+      });
     const saved = localStorage.getItem(LAYOUT_KEY);
     if (saved) {
       try {
@@ -1429,14 +1516,28 @@ function Dashboard({ user }) {
     try {
       const focuses = await graphQLFocusService.getFocusesForRole(normalizedUserRole || 'ADMIN');
       if (focuses && focuses.length > 0) {
-        const savedFocusId = window.localStorage?.getItem?.(SAVED_FOCUS_KEY) || '';
+        let savedFocusId = '';
+        try {
+          const profileState = await loadUserProfileState({ component: 'Dashboard' });
+          const profileFocusId = typeof profileState?.lastFocusId === 'string'
+            ? profileState.lastFocusId
+            : '';
+          if (profileFocusId) {
+            savedFocusId = profileFocusId;
+            window.localStorage?.setItem?.(SAVED_FOCUS_KEY, profileFocusId);
+          }
+        } catch {
+          // fall back to local storage
+        }
+        if (!savedFocusId) {
+          savedFocusId = window.localStorage?.getItem?.(SAVED_FOCUS_KEY) || '';
+        }
         const savedFocus = savedFocusId ? focuses.find((focus) => focus?.id === savedFocusId) : null;
         // Saved focus (explicit user action) takes priority.
         // Fallback remains: Performance focus, then first focus.
         const defaultFocus = savedFocus || focuses.find((f) => f.name.toLowerCase().includes('performance')) || focuses[0];
         console.log(`Loading default focus: ${defaultFocus.name} (ID: ${defaultFocus.id})`);
-        setCurrentFocus(defaultFocus.id);
-        await loadFocusLayout(defaultFocus.id);
+        await handleFocusChange(defaultFocus.id);
       } else {
         console.warn('No focuses available, skipping default layout load');
       }
@@ -1447,7 +1548,7 @@ function Dashboard({ user }) {
     
     // Safety: in case Tabulator doesn't emit, show first sailing
     setTimeout(() => { emitSelect({ id:1, ship:"Celestyal Discovery", sailing:"7N Islands" }); }, 700);
-  }, [loadFocusLayout, normalizedUserRole]);
+  }, [handleFocusChange, normalizedUserRole]);
 
   // Load layout preset on startup
   const loadLayoutPreset = useCallback((api) => {

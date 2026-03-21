@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import GameScorePopover from '../../shared/games/GameScorePopover';
 import usePanelTabActive from '../../../hooks/usePanelTabActive';
+import usePanelPaused from '../../../hooks/usePanelPaused';
 import { isEditableTarget } from '../../shared/games/keyboardGuards';
 
 const GAME_WIDTH = 680;
@@ -37,6 +38,8 @@ const PongPresenter = ({
   leaderboardLoading,
 }) => {
   const isPanelActive = usePanelTabActive(panelInstanceId);
+  const isPanelPaused = usePanelPaused(panelInstanceId, 'pong');
+  const isPanelExecutionActive = isPanelActive && !isPanelPaused;
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const rafRef = useRef(0);
@@ -317,14 +320,14 @@ const PongPresenter = ({
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      if (!isPanelActive || isEditableTarget(event)) return;
+      if (!isPanelExecutionActive || isEditableTarget(event)) return;
       const m = modelRef.current;
       if (event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') m.upPressed = true;
       if (event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') m.downPressed = true;
       if (['ArrowUp', 'ArrowDown', 'w', 'W', 's', 'S'].includes(event.key)) event.preventDefault();
     };
     const onKeyUp = (event) => {
-      if (!isPanelActive || isEditableTarget(event)) return;
+      if (!isPanelExecutionActive || isEditableTarget(event)) return;
       const m = modelRef.current;
       if (event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') m.upPressed = false;
       if (event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') m.downPressed = false;
@@ -335,7 +338,7 @@ const PongPresenter = ({
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [isPanelActive]);
+  }, [isPanelExecutionActive]);
 
   useEffect(() => () => {
     stopGame();
@@ -350,7 +353,7 @@ const PongPresenter = ({
   }, [clearInactiveResumeCountdown, stopGame]);
 
   useEffect(() => {
-    if (!isPanelActive) {
+    if (!isPanelExecutionActive) {
       clearInactiveResumeCountdown();
       if (!modelRef.current.running) return;
       pausedByInactiveRef.current = true;
@@ -361,9 +364,9 @@ const PongPresenter = ({
       }
       setOverlay({
         title: 'Paused',
-        subtitle: 'Panel is not active',
+        subtitle: isPanelPaused ? 'Paused by user (P)' : 'Panel is not active',
       });
-      setStatusMessage('Paused while another tab is active.');
+      setStatusMessage(isPanelPaused ? 'Paused. Press P to resume.' : 'Paused while another tab is active.');
       return;
     }
     if (!pausedByInactiveRef.current) return;
@@ -379,7 +382,7 @@ const PongPresenter = ({
       count -= 1;
       if (count <= 0) {
         clearInactiveResumeCountdown();
-        if (gameState !== 'playing' || !isPanelActive) return;
+        if (gameState !== 'playing' || !isPanelExecutionActive) return;
         setOverlay((prev) => (prev?.title === 'Resuming' ? null : prev));
         setStatusMessage('Resumed.');
         modelRef.current.running = true;
@@ -389,7 +392,7 @@ const PongPresenter = ({
       setOverlay((prev) => (prev?.title === 'Resuming' ? { title: 'Resuming', subtitle: `${count}` } : prev));
       setStatusMessage(`Resuming in ${count}...`);
     }, 1000);
-  }, [clearInactiveResumeCountdown, gameState, isPanelActive, loop]);
+  }, [clearInactiveResumeCountdown, gameState, isPanelExecutionActive, isPanelPaused, loop]);
 
   const handleCanvasClick = () => {
     const m = modelRef.current;
@@ -416,7 +419,7 @@ const PongPresenter = ({
 
   return (
     <div
-      className={`talia-report pong-game ${isPanelActive ? '' : 'talia-game-panel--inactive'}`}
+      className={`talia-report pong-game ${isPanelExecutionActive ? '' : 'talia-game-panel--inactive'}`}
       role="region"
       aria-label="Pong game panel"
     >

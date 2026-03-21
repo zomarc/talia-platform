@@ -1047,6 +1047,7 @@ export const typeDefs = `#graphql
     # Talia Configuration (database-backed)
     taliaConfig: TaliaConfigSummary!
     appearanceSettings(userId: String): AppearanceSettings!
+    userProfileState(userId: String): JSON
     gameScore(gameId: String!, userId: String): GameScore!
     gameLeaderboard(gameId: String!, limitTop: Int, limitRecent: Int): GameLeaderboard!
     gameScoreBoard(gameId: String, limitTop: Int, limitRecent: Int): GameScoreBoard!
@@ -1092,6 +1093,7 @@ export const typeDefs = `#graphql
     setDefaultDateRange(id: Int!): IntegrationDateRange!
     saveAppearanceSettings(settings: JSON!, activeProfileId: String, userId: String): AppearanceSettings!
     saveAppearanceProfiles(profiles: JSON!, userId: String): [AppearanceProfile!]!
+    saveUserProfileState(patch: JSON!, userId: String): JSON
     saveGameScore(gameId: String!, score: Int!, userId: String): GameScore!
     saveBreakoutScore(score: Int!, userId: String): BreakoutScore!
     

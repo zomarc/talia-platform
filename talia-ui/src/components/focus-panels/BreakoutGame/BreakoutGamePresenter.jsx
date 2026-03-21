@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import GameScorePopover from '../../shared/games/GameScorePopover';
 import usePanelTabActive from '../../../hooks/usePanelTabActive';
+import usePanelPaused from '../../../hooks/usePanelPaused';
 import { isEditableTarget } from '../../shared/games/keyboardGuards';
 
 const GAME_WIDTH = 640;
@@ -64,6 +65,8 @@ const BreakoutGamePresenter = ({
   leaderboardLoading,
 }) => {
   const isPanelActive = usePanelTabActive(panelInstanceId);
+  const isPanelPaused = usePanelPaused(panelInstanceId, 'breakout-game');
+  const isPanelExecutionActive = isPanelActive && !isPanelPaused;
   const canvasRef = useRef(null);
   const canvasWrapRef = useRef(null);
   const rafRef = useRef(0);
@@ -447,7 +450,7 @@ const BreakoutGamePresenter = ({
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (!isPanelActive || isEditableTarget(event)) return;
+      if (!isPanelExecutionActive || isEditableTarget(event)) return;
       if (event.key === 'ArrowLeft') {
         modelRef.current.leftPressed = true;
         event.preventDefault();
@@ -461,7 +464,7 @@ const BreakoutGamePresenter = ({
     };
 
     const handleKeyUp = (event) => {
-      if (!isPanelActive || isEditableTarget(event)) return;
+      if (!isPanelExecutionActive || isEditableTarget(event)) return;
       if (event.key === 'ArrowLeft') {
         modelRef.current.leftPressed = false;
       } else if (event.key === 'ArrowRight') {
@@ -475,7 +478,7 @@ const BreakoutGamePresenter = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameState, isPanelActive, startGame]);
+  }, [gameState, isPanelExecutionActive, startGame]);
 
   useEffect(() => () => {
     stopGame();
@@ -490,7 +493,7 @@ const BreakoutGamePresenter = ({
   }, [clearInactiveResumeCountdown, stopGame]);
 
   useEffect(() => {
-    if (!isPanelActive) {
+    if (!isPanelExecutionActive) {
       clearInactiveResumeCountdown();
       if (!modelRef.current.running) return;
       pausedByInactiveRef.current = true;
@@ -501,9 +504,9 @@ const BreakoutGamePresenter = ({
       }
       setOverlay({
         title: 'Paused',
-        subtitle: 'Panel is not active',
+        subtitle: isPanelPaused ? 'Paused by user (P)' : 'Panel is not active',
       });
-      setStatusMessage('Paused while another tab is active.');
+      setStatusMessage(isPanelPaused ? 'Paused. Press P to resume.' : 'Paused while another tab is active.');
       return;
     }
     if (!pausedByInactiveRef.current) return;
@@ -519,7 +522,7 @@ const BreakoutGamePresenter = ({
       count -= 1;
       if (count <= 0) {
         clearInactiveResumeCountdown();
-        if (gameState !== 'playing' || !isPanelActive) return;
+        if (gameState !== 'playing' || !isPanelExecutionActive) return;
         setOverlay((prev) => (prev?.title === 'Resuming' ? null : prev));
         setStatusMessage('Resumed.');
         modelRef.current.running = true;
@@ -529,7 +532,7 @@ const BreakoutGamePresenter = ({
       setOverlay((prev) => (prev?.title === 'Resuming' ? { title: 'Resuming', subtitle: `${count}` } : prev));
       setStatusMessage(`Resuming in ${count}...`);
     }, 1000);
-  }, [clearInactiveResumeCountdown, gameState, isPanelActive, loop]);
+  }, [clearInactiveResumeCountdown, gameState, isPanelExecutionActive, isPanelPaused, loop]);
 
   const handleCanvasMouseMove = (event) => {
     const canvas = canvasRef.current;
@@ -561,7 +564,7 @@ const BreakoutGamePresenter = ({
 
   return (
     <div
-      className={`talia-report breakout-game ${isPanelActive ? '' : 'talia-game-panel--inactive'}`}
+      className={`talia-report breakout-game ${isPanelExecutionActive ? '' : 'talia-game-panel--inactive'}`}
       role="region"
       aria-label="Breakout game panel"
     >

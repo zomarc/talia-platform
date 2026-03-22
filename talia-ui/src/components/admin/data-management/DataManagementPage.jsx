@@ -48,6 +48,7 @@ export const DataManagementPanelCore = ({ embedded = false }) => {
   const [rangeError, setRangeError] = useState(null);
   const [bulkSyncing, setBulkSyncing] = useState(false);
   const [bulkMode, setBulkMode] = useState(null);
+  const [bulkSummary, setBulkSummary] = useState(null);
   const [backupStatus, setBackupStatus] = useState({ 
     lastBackup: null, 
     recentBackups: [], 
@@ -704,6 +705,7 @@ The backup will be saved to: talia-server/backups/`;
     if (bulkSyncing) return;
     const syncableTables = tables.filter(t => t.source !== 'N/A' && t.type !== 'unknown' && t.type !== 'system' && t.type !== 'application');
     if (syncableTables.length === 0) return;
+    setBulkSummary(null);
     setBulkSyncing(true);
     setBulkMode(forceFullSync ? 'full' : 'sync');
     addClientLog({
@@ -713,9 +715,58 @@ The backup will be saved to: talia-server/backups/`;
       message: `🔄 Starting ${forceFullSync ? 'full update' : 'sync'} for ${syncableTables.length} tables`,
       tableName: 'System'
     });
+    const startedAt = Date.now();
+    const results = [];
     for (const table of syncableTables) {
       // Sequential to avoid overlapping syncs
-      await handleSync(table.tableName, forceFullSync);
+      // Capture per-table result to produce an explicit integration summary.
+      // This keeps failures visible even when logs are noisy.
+      const result = await handleSync(table.tableName, forceFullSync);
+      results.push({
+        tableName: table.tableName,
+        ...(result || { success: false, error: 'No result returned by sync handler' })
+      });
+    }
+    const successCount = results.filter((entry) => entry.success).length;
+    const failed = results.filter((entry) => !entry.success);
+    const completedAt = Date.now();
+    const summary = {
+      mode: forceFullSync ? 'full' : 'sync',
+      startedAt,
+      completedAt,
+      durationMs: completedAt - startedAt,
+      total: results.length,
+      successCount,
+      failedCount: failed.length,
+      failed,
+      results
+    };
+    setBulkSummary(summary);
+    if (failed.length > 0) {
+      addClientLog({
+        id: `${Date.now()}-${++logIdCounterRef.current}`,
+        timestamp: new Date(),
+        type: 'error',
+        message: `❌ ${summary.mode === 'full' ? 'Full update' : 'Sync'} finished with ${failed.length}/${summary.total} table failures. See Integration Result for details.`,
+        tableName: 'System'
+      });
+      failed.forEach((entry) => {
+        addClientLog({
+          id: `${Date.now()}-${++logIdCounterRef.current}`,
+          timestamp: new Date(),
+          type: 'error',
+          message: `• ${entry.tableName}: ${entry.error || 'Unknown error'}`,
+          tableName: 'System'
+        });
+      });
+    } else {
+      addClientLog({
+        id: `${Date.now()}-${++logIdCounterRef.current}`,
+        timestamp: new Date(),
+        type: 'success',
+        message: `✅ ${summary.mode === 'full' ? 'Full update' : 'Sync'} completed for all ${summary.total} tables in ${formatDuration(summary.durationMs)}.`,
+        tableName: 'System'
+      });
     }
     setBulkSyncing(false);
     setBulkMode(null);
@@ -734,7 +785,10 @@ The backup will be saved to: talia-server/backups/`;
         message: `❌ ${errorMsg}`,
         tableName
       });
-      return;
+      return {
+        success: false,
+        error: errorMsg
+      };
     }
 
     // Check service connection status before starting sync (if service requires it)
@@ -1223,6 +1277,12 @@ The backup will be saved to: talia-server/backups/`;
             refetch();
           }
         }, 2000); // Wait 2 seconds for metadata to be committed
+        return {
+          success: true,
+          message: syncResult?.message || successMessage,
+          recordsProcessed: syncResult?.recordsProcessed ?? null,
+          duration: syncResult?.duration ?? null
+        };
       } else {
         // Sync failed on server side
         const syncResult = result.data?.syncTable;
@@ -1261,6 +1321,11 @@ The backup will be saved to: talia-server/backups/`;
           message: `❌ ${detailedError}${isConnectionError ? ' Check the Server Status panel for connection details.' : ' Check the activity log and server logs for more details.'}`,
           tableName
         });
+        return {
+          success: false,
+          error: detailedError,
+          rawError: errorMsg
+        };
       }
     } catch (err) {
       // Unexpected error
@@ -1276,6 +1341,10 @@ The backup will be saved to: talia-server/backups/`;
         message: `❌ Unexpected Error [${errorName}]: ${errorMessage}. Check the browser console and activity log for details.`,
         tableName
       });
+      return {
+        success: false,
+        error: `${errorName}: ${errorMessage}`
+      };
       } finally {
         // Close SSE connection if still open
         if (eventSource) {
@@ -1467,7 +1536,7 @@ The backup will be saved to: talia-server/backups/`;
   };
 
   return (
-    <div className={`data-management-root ${embedded ? 'data-management-root--panel' : ''}`.trim()}>
+    <div className={`talia-report data-management-root ${embedded ? 'data-management-root--panel' : ''}`.trim()} role="region" aria-label="Data integration management panel">
       <div className="dm-container">
         {/* Header */}
         <div className="dm-header">
@@ -1571,6 +1640,15 @@ The backup will be saved to: talia-server/backups/`;
             </div>
             {rangeError && (
               <div className="dm-range__error">{rangeError}</div>
+            )}
+            {bulkSummary && (
+              <div className={`dm-range__error ${bulkSummary.failedCount === 0 ? 'dm-range__summary--ok' : ''}`}>
+                Integration Result: {bulkSummary.successCount}/{bulkSummary.total} tables succeeded
+                ({bulkSummary.mode === 'full' ? 'full update' : 'sync'} in {formatDuration(bulkSummary.durationMs)})
+                {bulkSummary.failedCount > 0 && (
+                  <> | Failures: {bulkSummary.failed.map((entry) => `${entry.tableName}: ${entry.error || 'Unknown error'}`).join(' ; ')}</>
+                )}
+              </div>
             )}
           </div>
         </div>

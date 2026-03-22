@@ -752,7 +752,10 @@ start_ngrok_local() {
     echo -e "  ${YELLOW}ngrok already running for ${LOCAL_NGROK_DOMAIN}${NC}"
   else
     echo -e "  Starting ngrok (${LOCAL_NGROK_DOMAIN} -> ${LOCAL_UI_URL})..."
-    nohup ngrok "http" "--url=${LOCAL_NGROK_DOMAIN}" "${local_ui_port}" >/tmp/ngrok-taliahub.log 2>&1 &
+    nohup ngrok "http" \
+      "--url=${LOCAL_NGROK_DOMAIN}" \
+      "--basic-auth=${NGROK_BASIC_USER}:${NGROK_BASIC_PASS}" \
+      "${local_ui_port}" >/tmp/ngrok-taliahub.log 2>&1 &
     sleep 1
   fi
 

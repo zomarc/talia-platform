@@ -32,13 +32,23 @@ async function startServer() {
   graphqlApp.use(compression({ threshold: 1024 }));
   const graphqlJsonMiddleware = express.json({ limit: '10mb' });
   const graphqlHandler = expressMiddleware(server, {
-    context: async () => ({
-      user: {
-        id: '1',
-        role: 'ADMIN',
-        email: 'admin@celestyal.com'
-      }
-    })
+    context: async ({ req }: { req?: { headers?: Record<string, string | string[] | undefined> } }) => {
+      const headers = req?.headers || {};
+      const pick = (key: string) => {
+        const v = headers[key] ?? headers[key.toLowerCase()];
+        return Array.isArray(v) ? v[0] : v;
+      };
+      const role = String(pick('x-user-role') || 'GUEST').toUpperCase();
+      const id = String(pick('x-user-id') || 'anonymous');
+      const email = String(pick('x-user-email') || '');
+      return {
+        user: {
+          id,
+          role,
+          email
+        }
+      };
+    }
   });
   // Support both paths:
   // - /graphql for existing Vite proxy rewrite

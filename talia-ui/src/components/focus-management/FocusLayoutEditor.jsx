@@ -5,6 +5,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useFocusManagement } from '../../hooks/useFocusManagement';
+import reportRegistry, { canRoleAccessComponent } from '../focus-panels/registry';
+import { GraphQLUtils } from '../../lib/apolloClient';
+import { normalizeRole } from '../../utils/roleUtils';
 
 const FocusLayoutEditor = ({ focusId, onSave, onCancel }) => {
   const {
@@ -19,22 +22,29 @@ const FocusLayoutEditor = ({ focusId, onSave, onCancel }) => {
   const [draggedComponent, setDraggedComponent] = useState(null);
   const [gridSize, setGridSize] = useState({ columns: 12, rows: 12 });
 
-  // Available component types
-  const availableComponentTypes = [
-    { id: 'table', name: 'Data Table', icon: '📊' },
-    { id: 'chart', name: 'Chart', icon: '📈' },
-    { id: 'panel', name: 'Panel', icon: '📋' },
-    { id: 'kpi-cards', name: 'KPI Cards', icon: '📊' },
-    { id: 'occupancy-chart', name: 'Occupancy Chart', icon: '🚢' },
-    { id: 'revenue-breakdown', name: 'Revenue Breakdown', icon: '💰' },
-    { id: 'exception-list', name: 'Exception List', icon: '⚠️' },
-    { id: 'itinerary-list', name: 'Itinerary List', icon: '🗺️' },
-    { id: 'booking-profile', name: 'Booking Profile', icon: '📈' },
-    { id: 'target-profile-editor', name: 'Target Profile Editor', icon: '🎯' },
-    { id: 'competitor-pricing', name: 'Competitor Pricing', icon: '💰' },
-    { id: 'ship-tracker-map', name: 'Ship Tracker Map', icon: '🗺️' },
-    { id: 'inventory-memo', name: 'Inventory Memo', icon: '📝' }
-  ];
+  const availableComponentTypes = React.useMemo(() => {
+    const role = normalizeRole(GraphQLUtils.getUserRole() || 'USER');
+    const categoryIcons = {
+      Admin: '🛠️',
+      System: '🖥️',
+      Dashboards: '📊',
+      Tables: '📋',
+      Reports: '📈',
+      Debugging: '🧪',
+      Fun: '🎮',
+      External: '🌐',
+      Search: '🔎',
+      Editors: '✍️',
+    };
+    return Object.values(reportRegistry)
+      .filter((entry) => entry.panelId && entry.showInReports && canRoleAccessComponent(entry, role))
+      .map((entry) => ({
+        id: entry.panelId,
+        name: entry.title || entry.panelId,
+        icon: categoryIcons[entry.category] || '📦'
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, []);
 
   // Load focus when component mounts or focusId changes
   useEffect(() => {

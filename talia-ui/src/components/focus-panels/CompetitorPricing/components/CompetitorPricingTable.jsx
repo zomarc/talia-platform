@@ -4,7 +4,7 @@
  */
 
 import React, { useRef, useEffect } from 'react';
-import { initTabulator } from '../../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions } from '../../../../lib/tabulatorConfig';
 import { formatDayMon } from '../../../../lib/dateFormat';
 
 const CompetitorPricingTable = ({ data }) => {
@@ -141,21 +141,21 @@ const CompetitorPricingTable = ({ data }) => {
         // Clone data to avoid read-only property errors (GraphQL may return frozen objects)
         const clonedData = (initialDataRef.current || []).map(item => ({ ...item }));
 
-        // Initialize Tabulator
-        instanceRef.current = new Tabulator(tableRef.current, {
-          data: clonedData,
-          columns,
-          layout: 'fitDataFill',
-          pagination: true,
-          paginationSize: 50,
-          paginationSizeSelector: [25, 50, 100, 200],
-          movableColumns: true,
-          resizableColumns: true,
-          initialSort: [
-            { column: 'departureDate', dir: 'asc' }
-          ],
-          height: '100%'
-        });
+        instanceRef.current = new Tabulator(
+          tableRef.current,
+          getTabulatorOptions({
+            data: clonedData,
+            columns,
+            pagination: true,
+            paginationSize: 50,
+            paginationSizeSelector: [25, 50, 100, 200],
+            movableColumns: true,
+            resizableColumns: true,
+            initialSort: [{ column: 'departureDate', dir: 'asc' }],
+            height: '100%',
+            selectableRows: false,
+          })
+        );
       } catch (error) {
         console.error('[CompetitorPricingTable] Error initializing table:', error);
       }

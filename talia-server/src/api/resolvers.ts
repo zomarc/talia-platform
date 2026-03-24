@@ -28,6 +28,7 @@ import { refreshQueryResolvers } from './resolver-modules/refreshResolvers.js';
 import { metadataQueryResolvers } from './resolver-modules/metadataResolvers.js';
 import { buildTableCatalogQueryResolvers } from './resolver-modules/tableCatalogResolvers.js';
 import { buildTableDataQueryResolvers } from './resolver-modules/tableDataResolvers.js';
+import { TALIA_INTEL_PROFILE_SCOPE, TALIA_SYSTEM_OWNER_KEY } from '../constants/taliaIntel.js';
 
 // Helper function to check user permissions
 const hasPermission = (userRole: string, requiredRole: string): boolean => {
@@ -39,6 +40,25 @@ const hasPermission = (userRole: string, requiredRole: string): boolean => {
   };
   
   return roleHierarchy[userRole] >= roleHierarchy[requiredRole];
+};
+
+const normalizeUserRole = (role: any) => String(role || 'USER').toUpperCase();
+
+/** Mutate Talia-owned intelligence (curves, target_profiles): MANAGER+ (and SUPER_USER if used). */
+const canEditTaliaIntel = (context: any) => {
+  const r = normalizeUserRole(context?.user?.role);
+  if (r === 'SUPER_USER' || r === 'SUPERUSER') return true;
+  return hasPermission(r, 'MANAGER');
+};
+
+const currentUserKey = (context: any) =>
+  context?.user?.id != null && context.user.id !== '' ? String(context.user.id) : null;
+
+const intelAuditStamp = (context: any) => {
+  const id = currentUserKey(context);
+  const email = context?.user?.email ? String(context.user.email) : '';
+  if (id && email) return `${id} (${email})`;
+  return id || email || 'unknown';
 };
 
 // Helper function to filter data based on user role
@@ -76,6 +96,66 @@ const mapDbInventoryMemoToGraphQL = (row: any) => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at
 });
+
+const profileScopeToGraphQL = (raw: any) => {
+  const u = String(raw || 'SYSTEM').toUpperCase();
+  if (u === 'SYSTEM') return 'SYSTEM';
+  if (u === 'GLOBAL') return 'GLOBAL';
+  return 'USER';
+};
+
+const seriesIdentityKey = (s: { kind?: string; modelKey?: any; profileScope?: any; ownerKey?: any }) => {
+  const kind = String(s.kind || '').toUpperCase();
+  const modelKey = s.modelKey || '';
+  const ps = profileScopeToGraphQL(s.profileScope);
+  const ok = s.ownerKey != null && s.ownerKey !== '' ? String(s.ownerKey) : '';
+  return `${kind}::${modelKey}::${ps}::${ok}`;
+};
+
+const groupProfileSeriesRows = (inventoryItemId: number, rows: any[]) => {
+  const grouped = new Map<string, any>();
+  rows.forEach((row) => {
+    const kind = String(row.series_kind || '').toUpperCase();
+    const modelKey = row.model_key || null;
+    const profileScope = profileScopeToGraphQL(row.profile_scope);
+    const ownerKey = row.owner_key != null && row.owner_key !== '' ? String(row.owner_key) : null;
+    const key = seriesIdentityKey({ kind, modelKey, profileScope, ownerKey });
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        inventoryItemId,
+        kind,
+        modelKey,
+        modelLabel: row.model_label || null,
+        profileScope,
+        ownerKey,
+        lastEditedBy: row.last_edited_by || null,
+        points: []
+      });
+    } else if (row.last_edited_by) {
+      const g = grouped.get(key);
+      if (g && !g.lastEditedBy) g.lastEditedBy = row.last_edited_by;
+    }
+    grouped.get(key).points.push({
+      pointOrder: row.point_order ?? 0,
+      weekLabel: row.week_label,
+      weeksUntilSailing: row.weeks_until_sailing,
+      valueBookings: row.value_bookings != null ? Number(row.value_bookings) : null,
+      valueGuests: row.value_guests != null ? Number(row.value_guests) : null,
+      asOfDate: row.as_of_date || null,
+      source: row.source || null,
+      metadata: row.metadata || {}
+    });
+  });
+  return Array.from(grouped.values())
+    .map((series) => ({
+      ...series,
+      points: (series.points || []).sort((a: any, b: any) => (a.pointOrder || 0) - (b.pointOrder || 0))
+    }))
+    .sort((a, b) => {
+      if (a.kind === b.kind) return String(a.modelKey || '').localeCompare(String(b.modelKey || ''));
+      return String(a.kind).localeCompare(String(b.kind));
+    });
+};
 
 const decodeHtml = (value: string) => (
   String(value || '')
@@ -424,9 +504,50 @@ const getOperationMetadataKeysForTable = (tableName: string): string[] => {
   );
 };
 
+const fetchReservationLinkedDateRange = async () => {
+  const { data: minData, error: minError } = await supabaseDataService.client
+    .from('reservation')
+    .select('sail_from_date')
+    .not('sail_from_date', 'is', null)
+    .order('sail_from_date', { ascending: true })
+    .limit(1);
+  if (minError) {
+    return { min: null, max: null };
+  }
+
+  const { data: maxData, error: maxError } = await supabaseDataService.client
+    .from('reservation')
+    .select('sail_from_date')
+    .not('sail_from_date', 'is', null)
+    .order('sail_from_date', { ascending: false })
+    .limit(1);
+  if (maxError) {
+    return { min: null, max: null };
+  }
+
+  const minValue = minData?.[0]?.sail_from_date;
+  const maxValue = maxData?.[0]?.sail_from_date;
+  if (minValue != null && maxValue != null && minValue !== '' && maxValue !== '') {
+    return {
+      min: String(minValue),
+      max: String(maxValue)
+    };
+  }
+  return { min: null, max: null };
+};
+
 const fetchActualDataRange = async (tableName: string, rowCount: number) => {
   if (!rowCount || rowCount <= 0) {
     return { min: null, max: null };
+  }
+
+  // reservation_promotion has no intrinsic date columns; derive the practical loaded
+  // date range from linked reservations so Data Quality reflects real availability.
+  if (tableName === 'reservation_promotion') {
+    const linkedRange = await fetchReservationLinkedDateRange();
+    if (linkedRange.min && linkedRange.max) {
+      return linkedRange;
+    }
   }
 
   const dateColumns = getDateColumnsForTable(tableName);
@@ -471,6 +592,13 @@ const fetchActualDataRange = async (tableName: string, rowCount: number) => {
 const fetchLatestAvailableData = async (tableName: string, rowCount: number) => {
   if (!rowCount || rowCount <= 0) {
     return null;
+  }
+
+  if (tableName === 'reservation_promotion') {
+    const linkedRange = await fetchReservationLinkedDateRange();
+    if (linkedRange.max) {
+      return linkedRange.max;
+    }
   }
 
   const dateColumns = getDateColumnsForTable(tableName);
@@ -801,7 +929,8 @@ const tableCatalogQueryResolvers = buildTableCatalogQueryResolvers({
   fetchActualDataRange,
   fetchLatestAvailableData,
   getOperationMetadataKeysForTable,
-  getSyncTypeForTable
+  getSyncTypeForTable,
+  hasSyncConfigForTable
 });
 
 const tableDataQueryResolvers = buildTableDataQueryResolvers({
@@ -1080,6 +1209,209 @@ export const resolvers = {
         return rows.map(mapDbInventoryMemoToGraphQL);
       } catch (error) {
         console.error('Error fetching inventory memos:', error);
+        return [];
+      }
+    },
+
+    inventoryItemProfileSeries: async (parent: any, args: any, context: any) => {
+      try {
+        const inventoryItemId = Number(args?.inventoryItemId);
+        if (!Number.isFinite(inventoryItemId)) {
+          throw new Error('inventoryItemId is required');
+        }
+
+        const inventoryItems = await supabaseDataService.getInventoryItems({ id: inventoryItemId, limit: 1 });
+        const item = inventoryItems?.[0];
+        if (!item) return [];
+
+        const sailCode = item.sail_code || item.reference_sail_code || null;
+        const series: any[] = [];
+
+        // REAL from raw booking data, grouped into week buckets from departure.
+        let realPointsForOverlay: any[] = [];
+        if (sailCode) {
+          try {
+            const profile = await supabaseDataService.getBookingProfile(sailCode);
+            const sailDateTs = Date.parse(String(profile?.sailDate || ''));
+            const profileDate = profile?.bookingDataPoints?.length
+              ? profile.bookingDataPoints[profile.bookingDataPoints.length - 1]?.date
+              : null;
+            const weeklyByKey = new Map<string, any>();
+            (profile?.bookingDataPoints || []).forEach((point: any) => {
+              const pointTs = Date.parse(String(point?.date || ''));
+              if (!Number.isFinite(sailDateTs) || !Number.isFinite(pointTs)) return;
+              const diffDays = Math.max(0, Math.ceil((sailDateTs - pointTs) / (1000 * 60 * 60 * 24)));
+              const weeksUntilSailing = Math.max(0, Math.ceil(diffDays / 7));
+              const weekLabel = weeksUntilSailing === 0 ? 'Sail' : `W-${weeksUntilSailing}`;
+              const key = `${weekLabel}::${weeksUntilSailing}`;
+              const existing = weeklyByKey.get(key);
+              const candidate = {
+                pointOrder: 0,
+                weekLabel,
+                weeksUntilSailing,
+                valueBookings: Math.max(0, Number(point?.bookings || 0)),
+                valueGuests: Math.max(0, Number(point?.guests || 0)),
+                asOfDate: point?.date || profileDate || null,
+                source: 'booking_profile_raw',
+                metadata: {}
+              };
+              if (!existing || String(candidate.asOfDate || '') > String(existing.asOfDate || '')) {
+                weeklyByKey.set(key, candidate);
+              }
+            });
+            const points = Array.from(weeklyByKey.values())
+              .sort((a: any, b: any) => {
+                if (a.weekLabel === 'Sail') return 1;
+                if (b.weekLabel === 'Sail') return -1;
+                return (b.weeksUntilSailing || 0) - (a.weeksUntilSailing || 0);
+              })
+              .map((point: any, idx: number) => ({ ...point, pointOrder: idx }));
+            realPointsForOverlay = points;
+            if (points.length) {
+              series.push({
+                inventoryItemId,
+                kind: 'REAL',
+                modelKey: null,
+                modelLabel: null,
+                profileScope: 'SYSTEM',
+                ownerKey: TALIA_SYSTEM_OWNER_KEY,
+                lastEditedBy: null,
+                points
+              });
+            }
+          } catch (error) {
+            console.warn('[inventoryItemProfileSeries] REAL series unavailable:', error);
+          }
+
+          // TARGET from business-supplied CSV import
+          try {
+            const supplied = await supabaseDataService.getBookingTargetsSupplied(sailCode);
+            const points = (supplied || []).map((row: any, idx: number) => ({
+              pointOrder: idx,
+              weekLabel: row.weekLabel,
+              weeksUntilSailing: row.weeksUntilSailing,
+              valueBookings: row.targetBookings ?? null,
+              valueGuests: row.targetGuests ?? null,
+              asOfDate: row.importedAt || null,
+              source: 'booking_targets_supplied',
+              metadata: { importBatchId: row.importBatchId }
+            }));
+            if (points.length) {
+              series.push({
+                inventoryItemId,
+                kind: 'TARGET',
+                modelKey: null,
+                modelLabel: null,
+                profileScope: 'SYSTEM',
+                ownerKey: TALIA_SYSTEM_OWNER_KEY,
+                lastEditedBy: null,
+                points
+              });
+            }
+          } catch (error) {
+            console.warn('[inventoryItemProfileSeries] TARGET series unavailable:', error);
+          }
+
+          // BUDGET (best-effort): aggregate budget table by mapped voyage/sail
+          try {
+            const { data: budgetRows } = await supabaseDataService.client
+              .from('budget')
+              .select('passengers, master_voyage, active_record_flag')
+              .eq('master_voyage', sailCode)
+              .limit(100000);
+            const activeRows = (budgetRows || []).filter((row: any) => {
+              const flag = row?.active_record_flag;
+              return flag === 1 || flag === '1' || flag === true || flag === 'true';
+            });
+            const totalPassengers = activeRows.reduce((acc: number, row: any) => (
+              acc + (Number(row?.passengers) || 0)
+            ), 0);
+            if (totalPassengers > 0) {
+              const budgetPoints = realPointsForOverlay.length
+                ? realPointsForOverlay.map((point: any, idx: number) => ({
+                  pointOrder: idx,
+                  weekLabel: point.weekLabel,
+                  weeksUntilSailing: point.weeksUntilSailing,
+                  valueBookings: totalPassengers,
+                  valueGuests: totalPassengers,
+                  asOfDate: null,
+                  source: 'budget',
+                  metadata: { aggregation: 'flat_overlay_from_total_passengers' }
+                }))
+                : [{
+                  pointOrder: 0,
+                  weekLabel: 'Sail',
+                  weeksUntilSailing: 0,
+                  valueBookings: totalPassengers,
+                  valueGuests: totalPassengers,
+                  asOfDate: null,
+                  source: 'budget',
+                  metadata: { aggregation: 'sum(passengers) by master_voyage' }
+                }];
+              series.push({
+                inventoryItemId,
+                kind: 'BUDGET',
+                modelKey: null,
+                modelLabel: null,
+                profileScope: 'SYSTEM',
+                ownerKey: TALIA_SYSTEM_OWNER_KEY,
+                lastEditedBy: null,
+                points: budgetPoints
+              });
+            }
+          } catch (error) {
+            console.warn('[inventoryItemProfileSeries] BUDGET series unavailable:', error);
+          }
+
+          // MODEL from target profiles by mapped sail (supports many models)
+          try {
+            const models = await supabaseDataService.getTargetProfiles({ sailCode, isActive: true });
+            (models || []).forEach((model: any) => {
+              const points = (model.buildCurves || []).map((point: any, idx: number) => ({
+                pointOrder: idx,
+                weekLabel: point.weekLabel,
+                weeksUntilSailing: point.weeksUntilSailing,
+                valueBookings: point.targetBookings ?? null,
+                valueGuests: point.targetGuests ?? null,
+                asOfDate: model.updatedAt || null,
+                source: 'target_profiles',
+                metadata: { profileId: model.id }
+              }));
+              if (points.length) {
+                series.push({
+                  inventoryItemId,
+                  kind: 'MODEL',
+                  modelKey: String(model.id),
+                  modelLabel: model.name || null,
+                  profileScope: 'SYSTEM',
+                  ownerKey: TALIA_SYSTEM_OWNER_KEY,
+                  lastEditedBy: model.lastEditedBy || model.last_edited_by || null,
+                  points
+                });
+              }
+            });
+          } catch (error) {
+            console.warn('[inventoryItemProfileSeries] MODEL(target_profiles) series unavailable:', error);
+          }
+        }
+
+        // MODEL/BUDGET/TARGET/REAL points explicitly stored by inventory item
+        try {
+          const storedRowsRaw = await supabaseDataService.getInventoryProfileSeriesPoints(inventoryItemId);
+          const storedSeries = groupProfileSeriesRows(inventoryItemId, storedRowsRaw || []);
+          const storedKeys = new Set(storedSeries.map(seriesIdentityKey));
+          const merged = [
+            ...series.filter((s) => !storedKeys.has(seriesIdentityKey(s))),
+            ...storedSeries
+          ];
+          return merged;
+        } catch (error) {
+          console.warn('[inventoryItemProfileSeries] Stored series unavailable:', error);
+        }
+
+        return series;
+      } catch (error) {
+        console.error('Error fetching inventory item profile series:', error);
         return [];
       }
     },
@@ -2308,6 +2640,25 @@ export const resolvers = {
       }
     },
 
+    bookingTargetsSupplied: async (parent: any, args: any) => {
+      const { sailCode } = args || {};
+      try {
+        return await supabaseDataService.getBookingTargetsSupplied(sailCode || null);
+      } catch (error) {
+        console.error('Error fetching booking targets supplied:', error);
+        throw error;
+      }
+    },
+
+    targetMappingConfigs: async () => {
+      try {
+        return await supabaseDataService.getTargetMappingConfigs();
+      } catch (error) {
+        console.error('Error fetching target mapping configs:', error);
+        throw error;
+      }
+    },
+
     competitorPricing: async (parent: any, args: any) => {
       const { filters = {} } = args;
       try {
@@ -3243,9 +3594,10 @@ export const resolvers = {
     createTargetProfile: async (parent: any, args: any, context: any) => {
       const { input } = args;
       try {
-        // Get user ID from context (if available)
-        const userId = context?.user?.id || null;
-        const profile = await supabaseDataService.createTargetProfile(input, userId);
+        if (!canEditTaliaIntel(context)) {
+          throw new Error('Only MANAGER or ADMIN may create Talia-owned target profiles (viewers are read-only)');
+        }
+        const profile = await supabaseDataService.createTargetProfile(input, intelAuditStamp(context));
         return profile;
       } catch (error) {
         console.error('Error creating target profile:', error);
@@ -3253,10 +3605,17 @@ export const resolvers = {
       }
     },
 
-    updateTargetProfile: async (parent: any, args: any) => {
+    updateTargetProfile: async (parent: any, args: any, context: any) => {
       const { id, input } = args;
       try {
-        const profile = await supabaseDataService.updateTargetProfile(id, input);
+        if (!canEditTaliaIntel(context)) {
+          throw new Error('Only MANAGER or ADMIN may update Talia-owned target profiles');
+        }
+        const existing = await supabaseDataService.getTargetProfile(id);
+        if (!existing) {
+          throw new Error('Target profile not found');
+        }
+        const profile = await supabaseDataService.updateTargetProfile(id, input, intelAuditStamp(context));
         return profile;
       } catch (error) {
         console.error('Error updating target profile:', error);
@@ -3264,14 +3623,40 @@ export const resolvers = {
       }
     },
 
-    deleteTargetProfile: async (parent: any, args: any) => {
+    deleteTargetProfile: async (parent: any, args: any, context: any) => {
       const { id } = args;
       try {
+        if (!canEditTaliaIntel(context)) {
+          throw new Error('Only MANAGER or ADMIN may delete Talia-owned target profiles');
+        }
+        const existing = await supabaseDataService.getTargetProfile(id);
+        if (!existing) return false;
         const success = await supabaseDataService.deleteTargetProfile(id);
         return success;
       } catch (error) {
         console.error('Error deleting target profile:', error);
         throw error;
+      }
+    },
+
+    importTargetData: async (parent: any, args: any, context: any) => {
+      const { rows } = args;
+      const userId = context?.user?.id || null;
+      try {
+        const { rowsImported, batchId } = await supabaseDataService.importBookingTargetsSupplied(
+          rows,
+          null,
+          userId
+        );
+        return { success: true, rowsImported, batchId, errors: [] };
+      } catch (error: any) {
+        console.error('Error importing target data:', error);
+        return {
+          success: false,
+          rowsImported: 0,
+          batchId: '',
+          errors: [error?.message || 'Import failed'],
+        };
       }
     },
 
@@ -3295,6 +3680,61 @@ export const resolvers = {
         return mapDbInventoryItemToGraphQL(row);
       } catch (error) {
         console.error('Error upserting inventory item:', error);
+        throw error;
+      }
+    },
+
+    upsertInventoryProfileSeries: async (parent: any, args: any, context: any) => {
+      try {
+        if (!canEditTaliaIntel(context)) {
+          throw new Error(
+            'Only MANAGER or ADMIN may update Talia intelligence (REAL/TARGET/BUDGET/MODEL curves are system-owned)'
+          );
+        }
+        const input = args?.input || {};
+        const inventoryItemId = Number(input.inventoryItemId);
+        const kind = String(input.kind || '').toUpperCase();
+        const modelKey = input.modelKey || null;
+        const modelLabel = input.modelLabel || null;
+        const points = Array.isArray(input.points) ? input.points : [];
+        const rows = await supabaseDataService.upsertInventoryProfileSeries({
+          inventoryItemId,
+          kind,
+          modelKey,
+          modelLabel,
+          points,
+          profileScope: TALIA_INTEL_PROFILE_SCOPE,
+          ownerKey: TALIA_SYSTEM_OWNER_KEY,
+          lastEditedBy: intelAuditStamp(context)
+        });
+        const grouped = groupProfileSeriesRows(inventoryItemId, rows || []);
+        return grouped[0] || {
+          inventoryItemId,
+          kind,
+          modelKey,
+          modelLabel,
+          profileScope: 'SYSTEM',
+          ownerKey: TALIA_SYSTEM_OWNER_KEY,
+          lastEditedBy: intelAuditStamp(context),
+          points: []
+        };
+      } catch (error) {
+        console.error('Error upserting inventory profile series:', error);
+        throw error;
+      }
+    },
+
+    deleteInventoryProfileSeries: async (parent: any, args: any, context: any) => {
+      try {
+        if (!canEditTaliaIntel(context)) {
+          throw new Error('Only MANAGER or ADMIN may delete Talia intelligence curves');
+        }
+        const inventoryItemId = Number(args?.inventoryItemId);
+        const kind = String(args?.kind || '').toUpperCase();
+        const modelKey = args?.modelKey || null;
+        return await supabaseDataService.deleteInventoryProfileSeries(inventoryItemId, kind, modelKey);
+      } catch (error) {
+        console.error('Error deleting inventory profile series:', error);
         throw error;
       }
     },

@@ -370,7 +370,13 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
   }, [collapseAllGroups, cycleGroupState, openAllGroups, panelComponentId, panelInstanceId]);
 
   return (
-    <div className="focus-panel master-sailing-panel">
+    <div className="focus-panel talia-report master-sailing-panel">
+      <header className="talia-report__header">
+        <div className="talia-report__header-left">
+          <h2 className="talia-report__title">Master Sailing</h2>
+          <p className="talia-report__subtitle">{(data || []).length} sailings</p>
+        </div>
+      </header>
       <div className="master-sailing-panel__filters talia-report-filters">
         {FILTER_FIELDS.map(([field, label]) => (
           <label key={field} className="master-sailing-panel__filter talia-report-filters__group">

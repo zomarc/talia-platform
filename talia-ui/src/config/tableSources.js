@@ -151,6 +151,31 @@ export const tableSources = {
     type: 'system',
     dateColumns: ['last_refreshed_at', 'created_at', 'updated_at'],
     syncType: null
+  },
+  booking_targets_supplied: {
+    source: null, // CSV import via Data Management
+    type: 'application',
+    dateColumns: ['imported_at'],
+    syncType: null,
+    loadMethod: 'Import'
+  },
+  target_profiles: {
+    source: null, // Application table - Talia targets (user-edited)
+    type: 'application',
+    dateColumns: ['created_at', 'updated_at'],
+    syncType: null
+  },
+  target_mapping_config: {
+    source: null, // Application table - CSV column mappings
+    type: 'application',
+    dateColumns: ['created_at', 'updated_at'],
+    syncType: null
+  },
+  inventory_item_profile_curve_point: {
+    source: null, // Application table - unified REAL/TARGET/BUDGET/MODEL curve points
+    type: 'application',
+    dateColumns: ['as_of_date', 'created_at', 'updated_at'],
+    syncType: null
   }
 };
 

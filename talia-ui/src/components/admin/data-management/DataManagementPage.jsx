@@ -3,35 +3,48 @@
  * Displays database table information including sources, sync status, and data ranges
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useDatabaseTables } from '../../../hooks/useDatabaseTables';
 import { LoadingSpinner, ErrorMessage } from '../../../components/shared';
 // Supabase import removed - all database operations now route through GraphQL backend
 import { SERVER_SERVICES } from '../../../config/serverServices';
-import { getSyncFreshness } from '../../../utils/syncFreshness';
-import SummaryBar from './SummaryBar.jsx';
+import DataManagementActionHeader from './DataManagementActionHeader.jsx';
 import BackupStatusBar from './BackupStatusBar.jsx';
 import FiltersBar from './FiltersBar.jsx';
 import StatusModal from './StatusModal.jsx';
 import ReviewModal from './ReviewModal.jsx';
-import TablesSection from './TablesSection.jsx';
 import LogsPanel from './LogsPanel.jsx';
 import ServerStatusPanel from './ServerStatusPanel.jsx';
-import TableRow from './TableRow.jsx';
-import TableHeader from './TableHeader.jsx';
+import DataManagementTable from './DataManagementTable.jsx';
+import TargetImportSection from './TargetImportSection.jsx';
 import { createTableActions } from './tableActions.js';
 import { formatDayMon } from '../../../lib/dateFormat';
+import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
+import SubpanelExpandButton from '../../shared/SubpanelExpandButton.jsx';
+import {
+  DATA_MANAGEMENT_STATE_EVENT,
+  DATA_MANAGEMENT_SET_RANGE_EVENT,
+  DATA_MANAGEMENT_SYNC_ALL_EVENT,
+  DATA_MANAGEMENT_BACKUP_EVENT,
+  DATA_MANAGEMENT_REFRESH_EVENT,
+  DATA_MANAGEMENT_SELECT_TABLE_EVENT,
+  DATA_MANAGEMENT_TABLE_ACTION_EVENT,
+} from '../../dockview/eventConstants';
 import '../../../themes/dataMode.css';
+import '../admin.css';
 import './dataManagement.css';
 
-export const DataManagementPanelCore = ({ embedded = false }) => {
+export const DataManagementPanelCore = ({
+  embedded = false,
+  panelInstanceId = null,
+  panelComponentId = 'data-management-panel',
+}) => {
   const { tables, loading, error, refetch, updateTable } = useDatabaseTables();
-  const [sortColumn, setSortColumn] = useState('rowCount');
-  const [sortDirection, setSortDirection] = useState('desc');
   const [filterText, setFilterText] = useState('');
-  const [activeFilter, setActiveFilter] = useState(null); // 'no-data', 'synced', 'outdated', etc.
+  const [viewMode, setViewMode] = useState('all'); // 'all', 'top-five', 'no-data', 'has-data', 'synced', 'outdated'
   const [syncingTables, setSyncingTables] = useState(new Set());
   const [syncProgress, setSyncProgress] = useState({}); // { tableName: { current: 0, total: 0, percentage: 0 } }
+  const [syncBlock, setSyncBlock] = useState(null); // { tableName, message, timestamp }
   const [logs, setLogs] = useState([]);
   const [serverLogs, setServerLogs] = useState([]);
   const [allActivityLogs, setAllActivityLogs] = useState([]); // Unified activity log
@@ -39,8 +52,7 @@ export const DataManagementPanelCore = ({ embedded = false }) => {
   const [reviewData, setReviewData] = useState(null);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [statusTable, setStatusTable] = useState(null);
-  const [showBottomPanels, setShowBottomPanels] = useState(true);
-  const [showBackupBar, setShowBackupBar] = useState(true);
+  const [statusLoadingTable, setStatusLoadingTable] = useState(null);
   const [expandedPanel, setExpandedPanel] = useState(null);
   const [globalRange, setGlobalRange] = useState(null);
   const [rangeDraft, setRangeDraft] = useState({ from: '', to: '' });
@@ -62,6 +74,7 @@ export const DataManagementPanelCore = ({ embedded = false }) => {
   const serverLogEndRef = useRef(null);
   const allActivityLogEndRef = useRef(null);
   const logIdCounterRef = useRef(0); // Counter for unique log IDs
+  const tableActionsRef = useRef(null);
 
   // Helper function to add client log (also adds to unified activity log)
   const addClientLog = (logEntry) => {
@@ -103,6 +116,18 @@ export const DataManagementPanelCore = ({ embedded = false }) => {
   
   // Refresh status function
   const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
+  const rootRef = useRef(null);
+  const [activeSection, setActiveSection] = useState('table-integration');
+  const { expandedKey: expandedDataKey, toggleExpandedKey: toggleExpandedDataKey } = useSubpanelExpansion('tables');
+  const [opsPanelsOpen, setOpsPanelsOpen] = useState({
+    backup: true,
+    status: true,
+    'client-logs': true,
+    'server-logs': true,
+  });
+  const toggleOpsPanel = useCallback((panelKey) => {
+    setOpsPanelsOpen((prev) => ({ ...prev, [panelKey]: !prev[panelKey] }));
+  }, []);
 
   // Auto-scroll logs to bottom
   useEffect(() => {
@@ -420,92 +445,7 @@ The backup will be saved to: talia-server/backups/`;
     }
   };
 
-  // Get status badge variant
-  const getStatusVariant = (status) => {
-    if (status.includes('Synced') && status.includes('Has Data')) {
-      return 'synced';
-    }
-    if (status.includes('Outdated') || status.includes('Stale')) {
-      return 'outdated';
-    }
-    if (status.includes('Never Synced') || status.includes('Not Synced')) {
-      return 'never';
-    }
-    if (status.includes('Empty')) {
-      return 'empty';
-    }
-    return 'default';
-  };
-
-  // Sort tables
-  const sortedTables = [...tables].sort((a, b) => {
-    let aVal = a[sortColumn];
-    let bVal = b[sortColumn];
-
-    // Handle date ranges
-    if (sortColumn === 'dateRange') {
-      aVal = a.dateRange?.max || a.dateRange?.min || '';
-      bVal = b.dateRange?.max || b.dateRange?.min || '';
-    }
-
-    // Handle dates
-    if (sortColumn === 'lastSync') {
-      aVal = a.lastSync ? new Date(a.lastSync).getTime() : 0;
-      bVal = b.lastSync ? new Date(b.lastSync).getTime() : 0;
-    }
-
-    // Handle latest snapshot date
-    if (sortColumn === 'latestSnapshot') {
-      aVal = a.latestSnapshotDate ? new Date(a.latestSnapshotDate).getTime() : 0;
-      bVal = b.latestSnapshotDate ? new Date(b.latestSnapshotDate).getTime() : 0;
-    }
-
-    // Handle latest available data date
-    if (sortColumn === 'latestAvailableData') {
-      aVal = a.latestAvailableData ? new Date(a.latestAvailableData).getTime() : 0;
-      bVal = b.latestAvailableData ? new Date(b.latestAvailableData).getTime() : 0;
-    }
-
-    // Handle records processed
-    if (sortColumn === 'recordsProcessed') {
-      aVal = a.recordsProcessed !== null && a.recordsProcessed !== undefined ? a.recordsProcessed : -1;
-      bVal = b.recordsProcessed !== null && b.recordsProcessed !== undefined ? b.recordsProcessed : -1;
-    }
-
-    // Handle changes detected
-    if (sortColumn === 'changesDetected') {
-      aVal = a.changesDetected !== null && a.changesDetected !== undefined ? a.changesDetected : -1;
-      bVal = b.changesDetected !== null && b.changesDetected !== undefined ? b.changesDetected : -1;
-    }
-
-    // Handle duration
-    if (sortColumn === 'syncDuration') {
-      aVal = a.syncDuration !== null && a.syncDuration !== undefined ? a.syncDuration : -1;
-      bVal = b.syncDuration !== null && b.syncDuration !== undefined ? b.syncDuration : -1;
-    }
-
-    // Convert to strings for comparison
-    if (typeof aVal !== 'string') aVal = String(aVal || '');
-    if (typeof bVal !== 'string') bVal = String(bVal || '');
-
-    const comparison = aVal.localeCompare(bVal);
-    return sortDirection === 'asc' ? comparison : -comparison;
-  });
-
-  // Filter tables
-  const filteredTables = sortedTables.filter(table => {
-    // Apply active filter button
-    if (activeFilter === 'no-data') {
-      if (table.rowCount > 0) return false;
-    } else if (activeFilter === 'synced') {
-      if (table.syncStatus !== 'Synced') return false;
-    } else if (activeFilter === 'outdated') {
-      if (table.syncStatus !== 'Outdated') return false;
-    } else if (activeFilter === 'has-data') {
-      if (table.rowCount === 0) return false;
-    }
-
-    // Apply text filter
+  const searchFilteredTables = tables.filter((table) => {
     if (!filterText) return true;
     const searchText = filterText.toLowerCase();
     return (
@@ -515,28 +455,35 @@ The backup will be saved to: talia-server/backups/`;
     );
   });
 
-  // Split into top 5 (by row count) and rest
-  // Top 5 should always be sorted by row count descending, regardless of current sort
-  const sortedByRowCount = [...filteredTables].sort((a, b) => b.rowCount - a.rowCount);
-  const top5Tables = sortedByRowCount.slice(0, 5);
-  // Rest should use the current sort order, excluding top 5
-  const top5TableNames = new Set(top5Tables.map(t => t.tableName));
-  const restTables = filteredTables.filter(table => !top5TableNames.has(table.tableName));
-
-  // Handle column sort
-  const handleSort = (column) => {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
+  const displayedTables = React.useMemo(() => {
+    if (viewMode === 'no-data') {
+      return searchFilteredTables.filter((t) => t.rowCount === 0);
     }
-  };
+    if (viewMode === 'has-data') {
+      return searchFilteredTables.filter((t) => t.rowCount > 0);
+    }
+    if (viewMode === 'synced') {
+      return searchFilteredTables.filter((t) => t.syncStatus === 'Synced');
+    }
+    if (viewMode === 'outdated') {
+      return searchFilteredTables.filter((t) => t.syncStatus === 'Outdated');
+    }
+    if (viewMode === 'top-five') {
+      return [...searchFilteredTables]
+        .sort((a, b) => b.rowCount - a.rowCount)
+        .slice(0, 5);
+    }
+    return searchFilteredTables;
+  }, [searchFilteredTables, viewMode]);
 
-  const SortIcon = ({ column }) => {
-    if (sortColumn !== column) return null;
-    return sortDirection === 'asc' ? ' ↑' : ' ↓';
-  };
+  const tableCardTitle = React.useMemo(() => {
+    if (viewMode === 'top-five') return 'Top Five Tables';
+    if (viewMode === 'no-data') return 'No Data Tables';
+    if (viewMode === 'has-data') return 'Has Data Tables';
+    if (viewMode === 'synced') return 'Synced Tables';
+    if (viewMode === 'outdated') return 'Outdated Tables';
+    return 'All Tables';
+  }, [viewMode]);
 
   const runningSyncTables = Array.from(syncingTables);
   const runningSyncCount = runningSyncTables.length;
@@ -547,6 +494,30 @@ The backup will be saved to: talia-server/backups/`;
       }, 0) / runningSyncCount)
     : 0;
 
+  const syncableTableNames = React.useMemo(
+    () => tables.filter((t) => t?.hasSyncConfig === true).map((t) => t.tableName),
+    [tables]
+  );
+  const parseSyncBlockError = useCallback((message, fallbackTableName = null) => {
+    const text = String(message || '');
+    if (!/already in progress/i.test(text)) return null;
+    const matched = text.match(/already in progress for\s+([A-Za-z0-9_]+)/i);
+    return {
+      tableName: matched?.[1] || fallbackTableName || null,
+      message: text,
+      timestamp: new Date(),
+    };
+  }, []);
+  const lastActivityLog = React.useMemo(
+    () => (allActivityLogs.length > 0 ? allActivityLogs[allActivityLogs.length - 1] : null),
+    [allActivityLogs]
+  );
+  const selectableTableNames = React.useMemo(
+    () => displayedTables
+      .map((t) => t.tableName)
+      .sort((a, b) => String(a).localeCompare(String(b))),
+    [displayedTables]
+  );
 
   // Get GraphQL endpoint (same logic as Apollo client)
   // Use relative path - Vite proxy handles routing to localhost:4000
@@ -652,12 +623,12 @@ The backup will be saved to: talia-server/backups/`;
     }
   }, [configuredRange, globalActualRange, globalLastSync]);
 
-  const handleSaveRange = async () => {
-    if (!globalRange?.id) return;
+  const saveRangeValues = async ({ from, to }) => {
+    if (!globalRange?.id) return false;
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(rangeDraft.from) || !dateRegex.test(rangeDraft.to)) {
+    if (!dateRegex.test(from) || !dateRegex.test(to)) {
       setRangeError('Date range must be YYYY-MM-DD');
-      return;
+      return false;
     }
     setRangeSaving(true);
     setRangeError(null);
@@ -681,8 +652,8 @@ The backup will be saved to: talia-server/backups/`;
         integrationName: globalRange.integrationName,
         displayName: globalRange.displayName,
         description: globalRange.description,
-        dateFrom: rangeDraft.from,
-        dateTo: rangeDraft.to,
+        dateFrom: from,
+        dateTo: to,
         dateColumn: globalRange.dateColumn,
         isActive: globalRange.isActive !== false,
         isDefault: globalRange.isDefault !== false
@@ -693,17 +664,82 @@ The backup will be saved to: talia-server/backups/`;
         setGlobalRange(updated);
         setRangeDraft({ from: updated.dateFrom || '', to: updated.dateTo || '' });
         refetch();
+        return true;
       }
     } catch (err) {
       setRangeError(err.message || 'Failed to update range');
+      return false;
     } finally {
       setRangeSaving(false);
+    }
+    return false;
+  };
+
+  const handleOpenStatus = async (table) => {
+    if (!table?.tableName) return;
+    setStatusLoadingTable(table.tableName);
+    try {
+      const query = `
+        query GetTableMetadata($tableName: String!) {
+          tableMetadata(tableName: $tableName) {
+            tableName
+            source
+            type
+            loadMethod
+            rowCount
+            dateRange {
+              min
+              max
+            }
+            actualDataRange {
+              min
+              max
+            }
+            latestSnapshotDate
+            latestAvailableData
+            lastSync
+            syncDuration
+            recordsProcessed
+            changesDetected
+            lastError
+            syncStatus
+            dataStatus
+            status
+            syncType
+          }
+        }
+      `;
+      const data = await graphqlRequest(query, { tableName: table.tableName });
+      const freshStatus = data?.tableMetadata || null;
+      if (freshStatus) {
+        // Preserve UI-enriched display fields when backend returns null placeholders.
+        setStatusTable({
+          ...table,
+          ...freshStatus,
+          source: freshStatus.source || table.source,
+          type: freshStatus.type || table.type,
+          loadMethod: freshStatus.loadMethod || table.loadMethod
+        });
+        return;
+      }
+      setStatusTable(table);
+    } catch (err) {
+      addClientLog({
+        id: `${Date.now()}-${++logIdCounterRef.current}`,
+        timestamp: new Date(),
+        type: 'warning',
+        message: `⚠️ Could not load fresh status for ${table.tableName}: ${err.message || 'Unknown error'}`,
+        tableName: table.tableName
+      });
+      setStatusTable(table);
+    } finally {
+      setStatusLoadingTable(null);
     }
   };
 
   const handleSyncAll = async (forceFullSync) => {
     if (bulkSyncing) return;
-    const syncableTables = tables.filter(t => t.source !== 'N/A' && t.type !== 'unknown' && t.type !== 'system' && t.type !== 'application');
+    const syncableTables = tables.filter((t) => t?.hasSyncConfig === true);
     if (syncableTables.length === 0) return;
     setBulkSummary(null);
     setBulkSyncing(true);
@@ -772,12 +808,160 @@ The backup will be saved to: talia-server/backups/`;
     setBulkMode(null);
   };
 
+  useEffect(() => {
+    const syncableTableNames = tables
+      .filter((table) => table?.hasSyncConfig === true)
+      .map((table) => table.tableName);
+    window.dispatchEvent(new CustomEvent(DATA_MANAGEMENT_STATE_EVENT, {
+      detail: {
+        panelComponentId,
+        rangeDraft,
+        rangeSaving,
+        rangeError,
+        selectedTable: selectedTable || '',
+        syncableTableNames,
+        bulkSyncing,
+        bulkMode,
+        backupStatus: {
+          loading: backupStatus.loading,
+          lastBackup: backupStatus.lastBackup,
+          status: backupStatus.status,
+          error: backupStatus.error,
+        },
+      },
+    }));
+  }, [
+    panelComponentId,
+    rangeDraft,
+    rangeSaving,
+    rangeError,
+    selectedTable,
+    tables,
+    bulkSyncing,
+    bulkMode,
+    backupStatus.loading,
+    backupStatus.lastBackup,
+    backupStatus.status,
+    backupStatus.error,
+  ]);
+
+  useEffect(() => {
+    const handleSetRange = async (event) => {
+      const detail = event?.detail || {};
+      const targetComponent = detail.panelComponent || null;
+      if (targetComponent && targetComponent !== panelComponentId) return;
+      const nextFrom = typeof detail.from === 'string' ? detail.from : rangeDraft.from;
+      const nextTo = typeof detail.to === 'string' ? detail.to : rangeDraft.to;
+      setRangeDraft({ from: nextFrom, to: nextTo });
+      if (detail.save === true) {
+        await saveRangeValues({ from: nextFrom, to: nextTo });
+      }
+    };
+
+    const handleSyncAllEvent = (event) => {
+      const detail = event?.detail || {};
+      const targetComponent = detail.panelComponent || null;
+      if (targetComponent && targetComponent !== panelComponentId) return;
+      const mode = detail.mode === 'full' ? 'full' : 'sync';
+      handleSyncAll(mode === 'full');
+    };
+
+    const handleBackupEvent = (event) => {
+      const detail = event?.detail || {};
+      const targetComponent = detail.panelComponent || null;
+      if (targetComponent && targetComponent !== panelComponentId) return;
+      triggerBackup();
+    };
+
+    const handleRefreshEvent = (event) => {
+      const detail = event?.detail || {};
+      const targetComponent = detail.panelComponent || null;
+      if (targetComponent && targetComponent !== panelComponentId) return;
+      refetch();
+      fetchBackupStatus();
+      loadGlobalRange();
+    };
+
+    const handleSelectTableEvent = (event) => {
+      const detail = event?.detail || {};
+      const targetComponent = detail.panelComponent || null;
+      if (targetComponent && targetComponent !== panelComponentId) return;
+      const tableName = typeof detail.tableName === 'string' ? detail.tableName : '';
+      setSelectedTable(tableName || null);
+    };
+
+    const handleTableActionEvent = async (event) => {
+      const detail = event?.detail || {};
+      const targetComponent = detail.panelComponent || null;
+      if (targetComponent && targetComponent !== panelComponentId) return;
+      const tableName = typeof detail.tableName === 'string' ? detail.tableName : '';
+      const action = detail.action;
+      if (!tableName) return;
+      const table = tables.find((item) => item.tableName === tableName);
+      if (!table) {
+        addClientLog({
+          id: `${Date.now()}-${++logIdCounterRef.current}`,
+          timestamp: new Date(),
+          type: 'warning',
+          message: `⚠️ Table "${tableName}" is not available.`,
+          tableName,
+        });
+        return;
+      }
+      if (action === 'status') {
+        await handleOpenStatus(table);
+      } else if (action === 'review') {
+        await tableActionsRef.current?.handleReview?.(table);
+      } else if (action === 'sync') {
+        if (table.hasSyncConfig !== true) {
+          addClientLog({
+            id: `${Date.now()}-${++logIdCounterRef.current}`,
+            timestamp: new Date(),
+            type: 'warning',
+            message: `⚠️ Table "${tableName}" does not support sync.`,
+            tableName,
+          });
+          return;
+        }
+        await tableActionsRef.current?.handleIncrementalSync?.(table);
+      } else if (action === 'full') {
+        if (table.hasSyncConfig !== true) {
+          addClientLog({
+            id: `${Date.now()}-${++logIdCounterRef.current}`,
+            timestamp: new Date(),
+            type: 'warning',
+            message: `⚠️ Table "${tableName}" does not support full update.`,
+            tableName,
+          });
+          return;
+        }
+        await tableActionsRef.current?.handleFullSync?.(table);
+      }
+    };
+
+    window.addEventListener(DATA_MANAGEMENT_SET_RANGE_EVENT, handleSetRange);
+    window.addEventListener(DATA_MANAGEMENT_SYNC_ALL_EVENT, handleSyncAllEvent);
+    window.addEventListener(DATA_MANAGEMENT_BACKUP_EVENT, handleBackupEvent);
+    window.addEventListener(DATA_MANAGEMENT_REFRESH_EVENT, handleRefreshEvent);
+    window.addEventListener(DATA_MANAGEMENT_SELECT_TABLE_EVENT, handleSelectTableEvent);
+    window.addEventListener(DATA_MANAGEMENT_TABLE_ACTION_EVENT, handleTableActionEvent);
+    return () => {
+      window.removeEventListener(DATA_MANAGEMENT_SET_RANGE_EVENT, handleSetRange);
+      window.removeEventListener(DATA_MANAGEMENT_SYNC_ALL_EVENT, handleSyncAllEvent);
+      window.removeEventListener(DATA_MANAGEMENT_BACKUP_EVENT, handleBackupEvent);
+      window.removeEventListener(DATA_MANAGEMENT_REFRESH_EVENT, handleRefreshEvent);
+      window.removeEventListener(DATA_MANAGEMENT_SELECT_TABLE_EVENT, handleSelectTableEvent);
+      window.removeEventListener(DATA_MANAGEMENT_TABLE_ACTION_EVENT, handleTableActionEvent);
+    };
+  }, [panelComponentId, rangeDraft.from, rangeDraft.to, handleSyncAll, refetch, tables]);
+
   // Handle sync button click
   const handleSync = async (tableName, forceFullSync = false) => {
+    setSyncBlock(null);
     // Check if table has a sync configuration
     const table = tables.find(t => t.tableName === tableName);
-    if (!table || table.source === 'N/A' || table.type === 'unknown' || table.type === 'system' || table.type === 'application') {
-      const errorMsg = `Table "${tableName}" does not have a sync configuration. Source: ${table?.source || 'N/A'}, Type: ${table?.type || 'unknown'}`;
+    if (!table || table.hasSyncConfig !== true) {
+      const errorMsg = `Table "${tableName}" does not have a sync configuration.`;
       addClientLog({
         id: `${Date.now()}-${++logIdCounterRef.current}`,
         timestamp: new Date(),
@@ -1209,6 +1393,20 @@ The backup will be saved to: talia-server/backups/`;
             tableName
           });
         });
+        const blockingGraphQLError = result.errors.find((error) => /already in progress/i.test(error?.message || ''));
+        if (blockingGraphQLError) {
+          const block = parseSyncBlockError(blockingGraphQLError.message, tableName);
+          if (block) {
+            setSyncBlock(block);
+            addClientLog({
+              id: `${Date.now()}-${++logIdCounterRef.current}`,
+              timestamp: new Date(),
+              type: 'warning',
+              message: `⏳ Sync is blocked because "${block.tableName || tableName}" is already running on the server. Wait for it to finish, then retry.`,
+              tableName: block.tableName || tableName
+            });
+          }
+        }
         // Close SSE connection on error
         if (eventSource) {
           eventSource.close();
@@ -1291,14 +1489,27 @@ The backup will be saved to: talia-server/backups/`;
         // Trust the server's error classification - don't re-enhance
         // Server already handles connection error enhancement appropriately
         // Only add context if it's clearly a connection error from server
-        const isConnectionError = errorMsg.toLowerCase().includes('connection closed') ||
-                                  errorMsg.toLowerCase().includes('connection timeout') ||
-                                  errorMsg.toLowerCase().includes('connection refused') ||
-                                  errorMsg.toLowerCase().includes('cannot resolve server');
+        const errorMsgLower = errorMsg.toLowerCase();
+        const isConnectionError = errorMsgLower.includes('connection closed') ||
+                                  errorMsgLower.includes('connection timeout') ||
+                                  errorMsgLower.includes('connection refused') ||
+                                  errorMsgLower.includes('cannot resolve server');
+        const isUpstreamError = errorMsgLower.includes('invalid response was received from the upstream server') ||
+                                errorMsgLower.includes('upstream server') ||
+                                errorMsgLower.includes('bad gateway') ||
+                                errorMsgLower.includes('502') ||
+                                errorMsgLower.includes('503') ||
+                                errorMsgLower.includes('504');
         
         const detailedError = isConnectionError 
           ? `🔌 ${errorMsg}` 
-          : `Sync failed: ${errorMsg}`;
+          : isUpstreamError
+            ? `Upstream service error: ${errorMsg}`
+            : `Sync failed: ${errorMsg}`;
+        const block = parseSyncBlockError(errorMsg, tableName);
+        if (block) {
+          setSyncBlock(block);
+        }
         
         // Capture server detailed logs even on failure and add to unified activity log
         if (syncResult?.detailedLogs && syncResult.detailedLogs.length > 0) {
@@ -1318,7 +1529,11 @@ The backup will be saved to: talia-server/backups/`;
           id: `${Date.now()}-${++logIdCounterRef.current}`,
           timestamp: new Date(),
           type: 'error',
-          message: `❌ ${detailedError}${isConnectionError ? ' Check the Server Status panel for connection details.' : ' Check the activity log and server logs for more details.'}`,
+          message: block
+            ? `⏳ Sync blocked: "${block.tableName || tableName}" is already running on the server. This panel is not stuck; the backend lock is active.`
+            : isUpstreamError
+              ? `🌐 Upstream service returned an invalid response while syncing "${tableName}". This usually means a temporary gateway/service issue (not a client UI issue). Check Server Status and retry in 30-60 seconds.`
+            : `❌ ${detailedError}${isConnectionError ? ' Check the Server Status panel for connection details.' : ' Check the activity log and server logs for more details.'}`,
           tableName
         });
         return {
@@ -1429,14 +1644,6 @@ The backup will be saved to: talia-server/backups/`;
     }
   };
 
-  // Render table header
-  const renderTableHeader = () => (
-    <TableHeader
-      handleSort={handleSort}
-      SortIcon={SortIcon}
-    />
-  );
-
   const tableActions = createTableActions({
     setReviewLoading,
     setReviewData,
@@ -1444,29 +1651,7 @@ The backup will be saved to: talia-server/backups/`;
     handleSync,
     logIdCounterRef
   });
-
-  const renderTableRows = (tableList) => (
-    tableList.map((table, idx) => (
-      <TableRow
-        key={table.tableName}
-        table={table}
-        index={idx}
-        selectedTable={selectedTable}
-        setSelectedTable={setSelectedTable}
-        syncingTables={syncingTables}
-        syncProgress={syncProgress}
-        getStatusVariant={getStatusVariant}
-        getSyncFreshness={getSyncFreshness}
-        formatDateRange={formatDateRange}
-        formatDateTime={formatDateTime}
-        formatDate={formatDate}
-        formatDuration={formatDuration}
-        setStatusTable={setStatusTable}
-        reviewLoading={reviewLoading}
-        tableActions={tableActions}
-      />
-    ))
-  );
+  tableActionsRef.current = tableActions;
 
 
   const renderExpandedPanel = () => {
@@ -1536,218 +1721,325 @@ The backup will be saved to: talia-server/backups/`;
   };
 
   return (
-    <div className={`talia-report data-management-root ${embedded ? 'data-management-root--panel' : ''}`.trim()} role="region" aria-label="Data integration management panel">
+    <div
+      ref={rootRef}
+      className={`talia-report admin-dashboard-panel data-management-root ${embedded ? 'data-management-root--panel' : ''}`.trim()}
+      role="region"
+      aria-label="Data integration management panel"
+    >
       <div className="dm-container">
-        {/* Header */}
-        <div className="dm-header">
+        <header className="talia-report__header dm-header dm-header--primary">
           <div className="dm-header__row">
-            <h1 className="dm-header__title">
-              📊 Data Management
-            </h1>
-            <div className="dm-header__actions">
-              <button
-                onClick={() => setShowBottomPanels(prev => !prev)}
-                className="dm-btn dm-btn--toggle"
-                data-active={showBottomPanels}
-                title="Toggle activity panels"
-              >
-                {showBottomPanels ? 'Hide Panels' : 'Show Panels'}
-              </button>
-              <button
-                onClick={() => setShowBackupBar(prev => !prev)}
-                className="dm-btn dm-btn--toggle"
-                data-active={showBackupBar}
-                title="Toggle backup status bar"
-              >
-                {showBackupBar ? 'Hide Backup' : 'Show Backup'}
-              </button>
-              <button
-                onClick={refetch}
-                disabled={loading}
-                className="dm-btn dm-btn--accent"
-              >
-                {loading ? '⏳' : '↻'} Refresh
-              </button>
+            <div className="talia-report__header-left">
+              <h2 className="talia-report__title dm-header__title">Data Management</h2>
+              <span className="talia-report__subtitle dm-header__subtitle">
+                Standard integration component with shared framework controls
+              </span>
             </div>
           </div>
-          {runningSyncCount > 0 && (
-            <div className="dm-running-sync">
-              <span className="dm-running-sync__label">
-                Syncing {runningSyncCount} {runningSyncCount === 1 ? 'table' : 'tables'}
-              </span>
-              <progress
-                className="dm-running-sync__progress"
-                value={runningProgress}
-                max="100"
+        </header>
+
+        <div className="admin-tabs admin-dashboard-panel__tabs dm-dashboard-tabs">
+          <button className={`admin-tab ${activeSection === 'table-integration' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('table-integration')}>
+            Table Integration
+          </button>
+          <button className={`admin-tab ${activeSection === 'external-integration' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('external-integration')}>
+            External Integration
+          </button>
+          <button className={`admin-tab ${activeSection === 'backup-status' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('backup-status')}>
+            Backup and Status
+          </button>
+          <button className={`admin-tab ${activeSection === 'operations' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('operations')}>
+            Operations
+          </button>
+        </div>
+
+        <main className={`talia-report__content admin-dashboard-panel__content dm-dashboard-content ${activeSection === 'operations' ? 'dm-dashboard-content--operations' : ''}`.trim()}>
+          {activeSection === 'table-integration' && (
+            <section className="dm-table-integration">
+              <DataManagementActionHeader
+                panelComponentId={panelComponentId}
+                tables={tables}
+                selectedTable={selectedTable}
+                syncableTableNames={syncableTableNames}
+                bulkSyncing={bulkSyncing}
+                runningSyncCount={runningSyncCount}
+                runningProgress={runningProgress}
+                bulkSummary={bulkSummary}
+                backupStatus={backupStatus}
+                configuredRange={configuredRange}
+                globalActualRange={globalActualRange}
+                formatDateTime={formatDateTime}
+                formatDateRange={formatDateRange}
+                lastActivityLog={lastActivityLog}
+                syncBlock={syncBlock}
               />
-              <span className="dm-running-sync__percent">
-                {runningProgress}%
-              </span>
+
+              <FiltersBar
+                tables={tables}
+                selectedTable={selectedTable}
+                setSelectedTable={setSelectedTable}
+                tableNames={selectableTableNames}
+                syncableTableNames={syncableTableNames}
+                rangeDraft={rangeDraft}
+                setRangeDraft={setRangeDraft}
+                rangeSaving={rangeSaving}
+                rangeError={rangeError}
+                onSaveRange={() => saveRangeValues(rangeDraft)}
+                viewMode={viewMode}
+                setViewMode={setViewMode}
+                filterText={filterText}
+                setFilterText={setFilterText}
+              />
+
+              {!loading && !error && displayedTables.length > 0 && (
+                <div className={`talia-card talia-card--expandable dm-table-card dm-table-section--spaced ${expandedDataKey === 'tables' ? 'talia-card--expanded' : ''}`}>
+                  <SubpanelExpandButton
+                    className="talia-card__expand-toggle"
+                    expanded={expandedDataKey === 'tables'}
+                    onToggle={() => toggleExpandedDataKey('tables')}
+                    label="tables"
+                  />
+                  <div className="talia-card__header dm-table-card__header">
+                    <h3 className="talia-card__title">{tableCardTitle} ({displayedTables.length})</h3>
+                  </div>
+                  <div className="talia-card__content dm-table-card__body">
+                    <DataManagementTable
+                      tableId="dm-main-table"
+                      data={displayedTables}
+                      configuredRange={configuredRange}
+                      selectedTable={selectedTable}
+                      onSelectedTableChange={setSelectedTable}
+                      syncingTables={syncingTables}
+                      syncProgress={syncProgress}
+                      blockedTableName={syncBlock?.tableName || null}
+                      statusLoadingTable={statusLoadingTable}
+                      reviewLoading={reviewLoading}
+                      onOpenStatus={handleOpenStatus}
+                      tableActions={tableActions}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {loading && (
+                <div className="dm-card">
+                  <LoadingSpinner size="small" message="Loading table information..." />
+                </div>
+              )}
+
+              {error && (
+                <div className="dm-card dm-card--error">
+                  <ErrorMessage error={error} title="Error loading tables" onRetry={refetch} />
+                </div>
+              )}
+
+              {!loading && !error && displayedTables.length === 0 && (
+                <div className="dm-card dm-card--empty">
+                  {filterText || viewMode !== 'all' ? 'No tables match your selected view' : 'No tables found'}
+                </div>
+              )}
+            </section>
+          )}
+
+          {activeSection === 'external-integration' && (
+            <div className="dm-tab-stack">
+              <TargetImportSection
+                addClientLog={addClientLog}
+                logIdCounterRef={logIdCounterRef}
+                onImportComplete={() => updateTable('booking_targets_supplied')}
+              />
             </div>
           )}
-          <div className="dm-range">
-            <div className="dm-range__meta">
-              <span>
-                Global Range: <strong>{formatDateRange(configuredRange)}</strong>
-              </span>
-              <span>
-                Actual Data: <strong>{formatDateRange(globalActualRange)}</strong>
-              </span>
-              <span>
-                Last Sync: <strong>{formatDateTime(globalLastSync)}</strong>
-              </span>
-            </div>
-            <div className="dm-range__actions">
-              <input
-                type="date"
-                value={rangeDraft.from}
-                onChange={(e) => setRangeDraft(prev => ({ ...prev, from: e.target.value }))}
-                className="dm-range__input"
-                aria-label="Global range start"
-              />
-              <span className="dm-range__arrow">→</span>
-              <input
-                type="date"
-                value={rangeDraft.to}
-                onChange={(e) => setRangeDraft(prev => ({ ...prev, to: e.target.value }))}
-                className="dm-range__input"
-                aria-label="Global range end"
-              />
-              <button
-                onClick={handleSaveRange}
-                disabled={rangeSaving || !globalRange}
-                className="dm-btn dm-btn--accent"
-                title="Update global date range"
-              >
-                {rangeSaving ? 'Saving...' : 'Save Range'}
-              </button>
-              <button
-                onClick={() => handleSyncAll(false)}
-                disabled={bulkSyncing}
-                className="dm-btn dm-btn--accent"
-                title="Incremental sync for all tables"
-              >
-                {bulkSyncing && bulkMode === 'sync' ? 'Syncing...' : 'Sync All'}
-              </button>
-              <button
-                onClick={() => handleSyncAll(true)}
-                disabled={bulkSyncing}
-                className="dm-btn dm-btn--danger"
-                title="Full update for all tables"
-              >
-                {bulkSyncing && bulkMode === 'full' ? 'Updating...' : 'Full Update'}
-              </button>
-            </div>
-            {rangeError && (
-              <div className="dm-range__error">{rangeError}</div>
-            )}
-            {bulkSummary && (
-              <div className={`dm-range__error ${bulkSummary.failedCount === 0 ? 'dm-range__summary--ok' : ''}`}>
-                Integration Result: {bulkSummary.successCount}/{bulkSummary.total} tables succeeded
-                ({bulkSummary.mode === 'full' ? 'full update' : 'sync'} in {formatDuration(bulkSummary.durationMs)})
-                {bulkSummary.failedCount > 0 && (
-                  <> | Failures: {bulkSummary.failed.map((entry) => `${entry.tableName}: ${entry.error || 'Unknown error'}`).join(' ; ')}</>
-                )}
+
+          {activeSection === 'backup-status' && (
+            <div className="dm-bottom-panels dm-bottom-panels--collapsible">
+              <div className={`talia-card talia-card--expandable dm-panel-card ${opsPanelsOpen.backup ? 'talia-card--expanded' : ''}`}>
+                <SubpanelExpandButton
+                  className="talia-card__expand-toggle"
+                  expanded={opsPanelsOpen.backup}
+                  onToggle={() => toggleOpsPanel('backup')}
+                  label="backup"
+                />
+                <div className="talia-card__header">
+                  <h3 className="talia-card__title">💾 Backup</h3>
+                </div>
+                <div className="talia-card__content">
+                  <BackupStatusBar
+                    compact
+                    backupStatus={backupStatus}
+                    formatDateTime={formatDateTime}
+                    triggerBackup={triggerBackup}
+                    fetchBackupStatus={fetchBackupStatus}
+                  />
+                </div>
               </div>
-            )}
-          </div>
-        </div>
+              <div className={`talia-card talia-card--expandable dm-panel-card ${opsPanelsOpen.status ? 'talia-card--expanded' : ''}`}>
+                <SubpanelExpandButton
+                  className="talia-card__expand-toggle"
+                  expanded={opsPanelsOpen.status}
+                  onToggle={() => toggleOpsPanel('status')}
+                  label="server status"
+                />
+                <div className="talia-card__header">
+                  <h3 className="talia-card__title">
+                    🖥️ Server Status
+                    <span className="dm-status-count">
+                      ({SERVER_SERVICES.filter(s => serverStatus[s.id]?.online).length}/{SERVER_SERVICES.length} Online)
+                    </span>
+                  </h3>
+                </div>
+                <div className="talia-card__content">
+                  <ServerStatusPanel
+                    hideTitle
+                    embedded
+                    serverServices={SERVER_SERVICES}
+                    serverStatus={serverStatus}
+                    expandedServices={expandedServices}
+                    setExpandedServices={setExpandedServices}
+                    isRefreshingStatus={isRefreshingStatus}
+                    checkServerStatus={checkServerStatus}
+                    formatDateTime={formatDateTime}
+                    onRestartGraphQL={handleRestartGraphQL}
+                    onLogInfo={(message) => {
+                      const logId = `${Date.now()}-${++logIdCounterRef.current}`;
+                      setLogs(prev => [...prev, {
+                        id: logId,
+                        timestamp: new Date(),
+                        type: 'info',
+                        message,
+                        tableName: 'System'
+                      }]);
+                    }}
+                    onMaximize={() => setExpandedPanel('status')}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
-        <SummaryBar tables={tables} />
-
-        {showBackupBar && (
-          <BackupStatusBar
-            backupStatus={backupStatus}
-            formatDateTime={formatDateTime}
-            triggerBackup={triggerBackup}
-            fetchBackupStatus={fetchBackupStatus}
-          />
-        )}
-
-        <FiltersBar
-          tables={tables}
-          activeFilter={activeFilter}
-          setActiveFilter={setActiveFilter}
-          filterText={filterText}
-          setFilterText={setFilterText}
-        />
-
-        <TablesSection
-          loading={loading}
-          error={error}
-          top5Tables={top5Tables}
-          restTables={restTables}
-          renderTableHeader={renderTableHeader}
-          renderTableRows={renderTableRows}
-        />
-
-        {/* Loading/Error States */}
-        {loading && (
-          <div className="dm-card">
-            <LoadingSpinner size="small" message="Loading table information..." />
-          </div>
-        )}
-
-        {error && (
-          <div className="dm-card dm-card--error">
-            <ErrorMessage error={error} title="Error loading tables" onRetry={refetch} />
-          </div>
-        )}
-
-        {!loading && !error && filteredTables.length === 0 && (
-          <div className="dm-card dm-card--empty">
-            {filterText || activeFilter ? 'No tables match your filter' : 'No tables found'}
-          </div>
-        )}
+          {activeSection === 'operations' && (
+            <div className="dm-bottom-panels dm-bottom-panels--collapsible dm-operations-tab">
+              <div className={`talia-card talia-card--expandable dm-panel-card ${opsPanelsOpen['client-logs'] ? 'talia-card--expanded' : ''}`}>
+                <SubpanelExpandButton
+                  className="talia-card__expand-toggle"
+                  expanded={opsPanelsOpen['client-logs']}
+                  onToggle={() => toggleOpsPanel('client-logs')}
+                  label="client activity"
+                />
+                <div className="talia-card__header">
+                  <h3 className="talia-card__title">📋 Client Activity</h3>
+                </div>
+                <div className="talia-card__content">
+                  <LogsPanel
+                    title=""
+                    logs={logs}
+                    emptyMessage="No activity yet"
+                    onClear={() => setLogs([])}
+                    logRef={logEndRef}
+                    onMaximize={() => setExpandedPanel('client')}
+                    onMinimize={() => setExpandedPanel(null)}
+                    hideTitle
+                    embedded
+                  />
+                </div>
+              </div>
+              <div className={`talia-card talia-card--expandable dm-panel-card ${opsPanelsOpen['server-logs'] ? 'talia-card--expanded' : ''}`}>
+                <SubpanelExpandButton
+                  className="talia-card__expand-toggle"
+                  expanded={opsPanelsOpen['server-logs']}
+                  onToggle={() => toggleOpsPanel('server-logs')}
+                  label="server logs"
+                />
+                <div className="talia-card__header">
+                  <h3 className="talia-card__title">🔧 Server Logs</h3>
+                </div>
+                <div className="talia-card__content">
+                  <LogsPanel
+                    title=""
+                    logs={serverLogs}
+                    emptyMessage="No server logs yet"
+                    onClear={() => setServerLogs([])}
+                    logRef={serverLogEndRef}
+                    onMaximize={() => setExpandedPanel('server')}
+                    onMinimize={() => setExpandedPanel(null)}
+                    hideTitle
+                    embedded
+                  />
+                </div>
+              </div>
+              <div className={`talia-card talia-card--expandable dm-panel-card ${opsPanelsOpen.backup ? 'talia-card--expanded' : ''}`}>
+                <SubpanelExpandButton
+                  className="talia-card__expand-toggle"
+                  expanded={opsPanelsOpen.backup}
+                  onToggle={() => toggleOpsPanel('backup')}
+                  label="backup"
+                />
+                <div className="talia-card__header">
+                  <h3 className="talia-card__title">💾 Backup</h3>
+                </div>
+                <div className="talia-card__content">
+                  <BackupStatusBar
+                    compact
+                    backupStatus={backupStatus}
+                    formatDateTime={formatDateTime}
+                    triggerBackup={triggerBackup}
+                    fetchBackupStatus={fetchBackupStatus}
+                  />
+                </div>
+              </div>
+              <div className={`talia-card talia-card--expandable dm-panel-card ${opsPanelsOpen.status ? 'talia-card--expanded' : ''}`}>
+                <SubpanelExpandButton
+                  className="talia-card__expand-toggle"
+                  expanded={opsPanelsOpen.status}
+                  onToggle={() => toggleOpsPanel('status')}
+                  label="server status"
+                />
+                <div className="talia-card__header">
+                  <h3 className="talia-card__title">
+                    🖥️ Server Status
+                    <span className="dm-status-count">
+                      ({SERVER_SERVICES.filter(s => serverStatus[s.id]?.online).length}/{SERVER_SERVICES.length} Online)
+                    </span>
+                  </h3>
+                </div>
+                <div className="talia-card__content">
+                  <ServerStatusPanel
+                    hideTitle
+                    embedded
+                    serverServices={SERVER_SERVICES}
+                    serverStatus={serverStatus}
+                    expandedServices={expandedServices}
+                    setExpandedServices={setExpandedServices}
+                    isRefreshingStatus={isRefreshingStatus}
+                    checkServerStatus={checkServerStatus}
+                    formatDateTime={formatDateTime}
+                    onRestartGraphQL={handleRestartGraphQL}
+                    onLogInfo={(message) => {
+                      const logId = `${Date.now()}-${++logIdCounterRef.current}`;
+                      setLogs(prev => [...prev, {
+                        id: logId,
+                        timestamp: new Date(),
+                        type: 'info',
+                        message,
+                        tableName: 'System'
+                      }]);
+                    }}
+                    onMaximize={() => setExpandedPanel('status')}
+                    onMinimize={() => setExpandedPanel(null)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
       </div>
-
-      {/* Bottom Panel - Split into Client Activity Log, Server Logs, All Activity, and Server Status */}
-      {showBottomPanels && (
-        <div className="dm-bottom-panels">
-          <LogsPanel
-            title="📋 Client Activity"
-            logs={logs}
-            emptyMessage="No activity yet"
-            onClear={() => setLogs([])}
-            logRef={logEndRef}
-            onMaximize={() => setExpandedPanel('client')}
-          />
-          <LogsPanel
-            title="🔧 Server Logs"
-            logs={serverLogs}
-            emptyMessage="No server logs yet"
-            onClear={() => setServerLogs([])}
-            logRef={serverLogEndRef}
-            onMaximize={() => setExpandedPanel('server')}
-          />
-          <ServerStatusPanel
-            serverServices={SERVER_SERVICES}
-            serverStatus={serverStatus}
-            expandedServices={expandedServices}
-            setExpandedServices={setExpandedServices}
-            isRefreshingStatus={isRefreshingStatus}
-            checkServerStatus={checkServerStatus}
-            formatDateTime={formatDateTime}
-            onRestartGraphQL={handleRestartGraphQL}
-            onLogInfo={(message) => {
-              const logId = `${Date.now()}-${++logIdCounterRef.current}`;
-              setLogs(prev => [...prev, {
-                id: logId,
-                timestamp: new Date(),
-                type: 'info',
-                message,
-                tableName: 'System'
-              }]);
-            }}
-            onMaximize={() => setExpandedPanel('status')}
-          />
-        </div>
-      )}
 
       {renderExpandedPanel()}
 
       <StatusModal
         statusTable={statusTable}
+        configuredRange={configuredRange}
         onClose={() => setStatusTable(null)}
         formatDateRange={formatDateRange}
         formatDateTime={formatDateTime}
@@ -1757,13 +2049,13 @@ The backup will be saved to: talia-server/backups/`;
         reviewData={reviewData}
         onClose={() => setReviewData(null)}
       />
-
-      {showBottomPanels && <div className="dm-bottom-spacer" />} {/* Spacer for fixed log panel */}
     </div>
   );
 };
 
-const DataManagementPage = () => <DataManagementPanelCore embedded={false} />;
+const DataManagementPage = () => (
+  <DataManagementPanelCore embedded={false} panelComponentId="data-management-panel" />
+);
 
 export default DataManagementPage;
 

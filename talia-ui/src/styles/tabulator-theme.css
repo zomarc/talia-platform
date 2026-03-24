@@ -17,9 +17,9 @@
 }
 
 .tabulator .tabulator-header {
-  background: color-mix(in srgb, var(--theme-bg-elevated) 80%, var(--theme-bg-solid)) !important;
+  background: var(--theme-tabulator-header-bg) !important;
   color: color-mix(in srgb, var(--theme-tabulator-header-text) 86%, var(--theme-text-muted));
-  border-bottom: 1px solid color-mix(in srgb, var(--theme-border) 72%, transparent) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-tabulator-header-border) 70%, var(--theme-border)) !important;
   font-size: var(--theme-table-header-font-size) !important;
   font-family: var(--theme-table-font-family) !important;
   min-height: var(--theme-table-header-height);
@@ -27,11 +27,12 @@
 }
 
 .tabulator .tabulator-header .tabulator-col {
-  background: transparent;
-  border-right: 1px solid color-mix(in srgb, var(--theme-border-light) 42%, transparent) !important;
+  background: var(--theme-tabulator-header-bg) !important;
+  border-right: 1px solid color-mix(in srgb, var(--theme-tabulator-header-border) 45%, transparent) !important;
 }
 
 .tabulator .tabulator-header .tabulator-col .tabulator-col-content {
+  background: transparent;
   padding: var(--theme-table-cell-padding-y) var(--theme-table-cell-padding-x);
   font-size: var(--theme-table-header-font-size) !important;
   font-weight: var(--theme-table-header-font-weight);
@@ -254,9 +255,9 @@
   display: block !important;
   width: 100% !important;
   min-height: 24px;
-  background: #1b2034 !important;
-  border: 1px solid rgba(167, 179, 204, 0.55) !important;
-  color: #e6ebff !important;
+  background: var(--theme-tabulator-filter-bg) !important;
+  border: 1px solid var(--theme-tabulator-filter-border) !important;
+  color: var(--theme-text-secondary) !important;
   border-radius: 4px !important;
 }
 
@@ -365,9 +366,3 @@
   font-size: var(--theme-font-size-xs);
 }
 
-.talia-filters-hidden .tabulator .tabulator-header .tabulator-col .tabulator-header-filter {
-  display: none !important;
-  min-height: 0 !important;
-  height: 0 !important;
-  margin-top: 0 !important;
-}

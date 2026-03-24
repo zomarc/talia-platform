@@ -1,8 +1,8 @@
 import React from 'react';
 
-const BackupStatusBar = ({ backupStatus, formatDateTime, triggerBackup, fetchBackupStatus }) => {
+const BackupStatusBar = ({ backupStatus, formatDateTime, triggerBackup, fetchBackupStatus, compact = false }) => {
   return (
-    <div className="dm-backup-bar" data-has-backup={Boolean(backupStatus.lastBackup)}>
+    <div className={`dm-backup-bar ${compact ? 'dm-backup-bar--compact' : ''}`.trim()} data-has-backup={Boolean(backupStatus.lastBackup)}>
       <div className="dm-backup-meta">
         <span className="dm-backup-label">💾 Last Backup:</span>
         <span className="dm-backup-value" data-has-backup={Boolean(backupStatus.lastBackup)}>

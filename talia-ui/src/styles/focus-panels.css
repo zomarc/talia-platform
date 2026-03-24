@@ -13,6 +13,10 @@
   position: relative;
   background: var(--theme-bg-solid);
   color: var(--theme-fg);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
 }
 
 .focus-panel__overlay {
@@ -33,6 +37,7 @@
 .focus-panel__table {
   height: 100%;
   width: 100%;
+  flex: 1 1 auto;
   padding: var(--theme-component-padding-sm);
   overflow: auto;
   min-height: 0;
@@ -69,26 +74,22 @@
 }
 
 .published-rates-grid__header {
-  padding: var(--theme-component-padding-md) var(--theme-component-padding-lg);
-  border-bottom: 1px solid var(--theme-border);
-  background: var(--theme-glass);
+  padding: var(--theme-component-padding-xs) var(--theme-component-padding-md);
+  border-bottom: 1px solid var(--theme-header-border);
+  background: var(--theme-header-bg);
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--theme-component-gap-md);
   flex-wrap: wrap;
 }
 
 .published-rates-grid__title {
-  margin: 0 0 4px 0;
-  font-size: var(--theme-font-size-xl);
-  font-weight: 600;
+  margin: 0;
 }
 
 .published-rates-grid__subtitle {
   margin: 0;
-  font-size: var(--theme-font-size-sm);
-  color: var(--theme-text-secondary);
 }
 
 .published-rates-grid__controls {
@@ -99,6 +100,18 @@
   padding: 0;
   background: transparent;
   border: 0;
+}
+
+.published-rates-grid__filters {
+  padding: var(--theme-component-padding-xs) var(--theme-component-padding-md);
+  border-bottom: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated);
+}
+
+.published-rates-grid__callout {
+  margin: var(--theme-component-padding-xs) var(--theme-component-padding-md);
+  padding: var(--theme-component-padding-sm) var(--theme-component-padding-md);
+  font-size: var(--theme-font-size-sm);
 }
 
 .published-rates-grid__select-label {
@@ -1250,7 +1263,8 @@
   border-radius: 8px;
   border: 1px solid var(--theme-border);
   margin-bottom: 24px;
-  height: 400px;
+  height: var(--theme-chart-height);
+  min-height: var(--theme-chart-min-height);
 }
 
 .booking-profile__build-curves {
@@ -1360,7 +1374,472 @@
   padding: 20px;
   border-radius: 8px;
   border: 1px solid var(--theme-border);
-  height: 400px;
+  height: var(--theme-chart-height);
+  min-height: var(--theme-chart-min-height);
+}
+
+/* ============================================================================
+   Booking Target Chart
+   ============================================================================ */
+
+.booking-target-chart {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size);
+}
+
+.booking-target-chart__config {
+  flex-shrink: 0;
+  padding: var(--theme-component-padding-md);
+  background: var(--theme-glass);
+  border-bottom: 1px solid var(--theme-border);
+}
+
+.booking-target-chart__config-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--theme-component-gap-md);
+  align-items: flex-end;
+}
+
+.booking-target-chart__label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-secondary);
+}
+
+.booking-target-chart__select {
+  padding: 6px 10px;
+  min-width: 140px;
+  background: var(--theme-bg-solid);
+  border: 1px solid var(--theme-border);
+  border-radius: 4px;
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size);
+}
+
+.booking-target-chart__select:focus {
+  outline: none;
+  border-color: var(--theme-accent);
+}
+
+.booking-target-chart__sail-control {
+  display: flex;
+}
+
+.booking-target-chart__input {
+  padding: 6px 10px;
+  min-width: 140px;
+  background: var(--theme-bg-solid);
+  border: 1px solid var(--theme-border);
+  border-radius: 4px;
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size);
+}
+
+.booking-target-chart__input:focus {
+  outline: none;
+  border-color: var(--theme-accent);
+}
+
+.booking-target-chart__actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.booking-target-chart__errors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-warning);
+}
+
+.booking-target-chart__error {
+  display: block;
+}
+
+.booking-target-chart__chart-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--theme-component-padding-md);
+  position: relative;
+}
+
+.booking-target-chart__error-banner {
+  padding: 12px;
+  background: rgba(244, 67, 54, 0.15);
+  border: 1px solid var(--theme-error);
+  border-radius: 6px;
+  color: var(--theme-error);
+  margin-bottom: 12px;
+}
+
+.booking-target-chart__loading {
+  padding: 24px;
+  text-align: center;
+  color: var(--theme-text-muted);
+}
+
+.booking-target-chart__canvas {
+  height: 100%;
+  min-height: var(--theme-chart-min-height);
+}
+
+.booking-target-chart__summary {
+  flex-shrink: 0;
+  padding: 8px var(--theme-component-padding-md);
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-secondary);
+  border-top: 1px solid var(--theme-border);
+}
+
+.booking-target-chart__editor {
+  flex-shrink: 0;
+  border-top: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated);
+  padding: var(--theme-component-padding-md);
+}
+
+.booking-target-chart__editor-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.booking-target-chart__editor-title {
+  font-weight: 600;
+  color: var(--theme-fg);
+}
+
+.booking-target-chart__editor-subtitle {
+  color: var(--theme-text-secondary);
+  font-size: var(--theme-font-size-sm);
+}
+
+.booking-target-chart__editor-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.booking-target-chart__editor-table-wrap {
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  overflow: auto;
+  max-height: 220px;
+}
+
+.booking-target-chart__editor-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.booking-target-chart__editor-table th,
+.booking-target-chart__editor-table td {
+  border-bottom: 1px solid var(--theme-border);
+  padding: 6px 8px;
+  font-size: var(--theme-font-size-sm);
+  text-align: left;
+}
+
+.booking-target-chart__editor-number {
+  width: 120px;
+  padding: 4px 6px;
+  border: 1px solid var(--theme-border);
+  border-radius: 4px;
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+}
+
+/* ============================================================================
+   Booking Simple Smoke Panels
+   ============================================================================ */
+
+.booking-simple {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+}
+
+.booking-simple__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--theme-component-gap-sm);
+  padding: var(--theme-component-padding-sm) var(--theme-component-padding-md);
+  border-bottom: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated);
+}
+
+.booking-simple__input,
+.booking-simple__select {
+  min-width: 180px;
+  padding: 6px 10px;
+  border: 1px solid var(--theme-border);
+  border-radius: 4px;
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size-sm);
+}
+
+.booking-simple__meta {
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-secondary);
+}
+
+.booking-simple__meta-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-secondary);
+  padding: 6px var(--theme-component-padding-md);
+}
+
+.booking-simple__error {
+  margin: 10px var(--theme-component-padding-md);
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--theme-error);
+  background: rgba(244, 67, 54, 0.12);
+  color: var(--theme-error);
+  font-size: var(--theme-font-size-sm);
+}
+
+.booking-simple__chart {
+  flex: 1;
+  min-height: var(--theme-chart-min-height);
+  padding: var(--theme-component-padding-md);
+}
+
+.booking-profile-editor-simple__status {
+  margin: 10px var(--theme-component-padding-md) 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size-sm);
+}
+
+.booking-profile-editor-simple__hint {
+  margin: 8px var(--theme-component-padding-md) 0;
+  color: var(--theme-text-secondary);
+  font-size: var(--theme-font-size-sm);
+}
+
+.booking-profile-editor-simple__hint--drag {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.booking-profile-editor-simple__drag-metric {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: var(--theme-font-size-sm);
+}
+
+.booking-profile-editor-simple__drag-metric select {
+  min-width: 200px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+}
+
+.booking-profile-editor-simple__scope {
+  font-size: var(--theme-font-size-sm);
+  opacity: 0.9;
+}
+
+.booking-profile-editor-simple__table-section {
+  border-top: 1px solid var(--theme-border);
+  margin-top: 8px;
+}
+
+.booking-profile-editor-simple__table-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px var(--theme-component-padding-md);
+  border-bottom: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated);
+}
+
+.booking-profile-editor-simple__table-section-title {
+  margin: 0;
+  font-weight: 600;
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-fg);
+}
+
+.booking-profile-editor-simple__table-section-meta {
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-secondary);
+}
+
+.booking-profile-editor-simple__table-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px var(--theme-component-padding-md);
+  margin: 0;
+  border: none;
+  border-bottom: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated);
+  color: var(--theme-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.booking-profile-editor-simple__table-header:hover {
+  filter: brightness(1.05);
+}
+
+.booking-profile-editor-simple__table-header-title {
+  font-weight: 600;
+  font-size: var(--theme-font-size-sm);
+}
+
+.booking-profile-editor-simple__table-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-secondary);
+}
+
+.booking-profile-editor-simple__table-chevron {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+/* Chart area: fixed height when data table is open; flex-grow when table hidden (cf. competitor-scatter-grid--table-hidden) */
+.booking-profile-editor-simple__chart-host {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.booking-profile-editor-simple__chart-host--grow {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.booking-profile-editor-simple__chart {
+  position: relative;
+  flex: 1 1 auto;
+  height: var(--theme-chart-height);
+  min-height: var(--theme-chart-min-height);
+  padding: var(--theme-component-padding-md);
+  min-width: 0;
+}
+
+.booking-profile-editor-simple__chart-host--grow .booking-profile-editor-simple__chart {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: var(--theme-chart-min-height);
+  width: 100%;
+}
+
+.booking-profile-editor-simple__chart canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.booking-profile-editor-simple__table-wrap {
+  padding: 0 var(--theme-component-padding-md) var(--theme-component-padding-md);
+  overflow: auto;
+}
+
+.booking-profile-editor-simple__tabulator-host {
+  min-height: 0;
+  width: 100%;
+}
+
+.booking-profile-editor-simple__tabulator-el {
+  width: 100%;
+  min-height: var(--theme-table-min-height);
+}
+
+.booking-profile-editor-simple__table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-solid);
+}
+
+.booking-profile-editor-simple__table th,
+.booking-profile-editor-simple__table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--theme-border);
+  text-align: left;
+  font-size: var(--theme-font-size-sm);
+}
+
+/* Goal callouts — REAL vs TARGET vs MODEL */
+.booking-goal-callout {
+  margin: 10px var(--theme-component-padding-md) 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated);
+  color: var(--theme-fg);
+}
+
+.booking-goal-callout__tag {
+  display: inline-block;
+  font-size: var(--theme-font-size-sm);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--theme-accent, #b08d57);
+  margin-bottom: 6px;
+}
+
+.booking-goal-callout__body,
+.booking-goal-callout__extra {
+  margin: 0;
+  font-size: var(--theme-font-size-sm);
+  line-height: 1.45;
+  color: var(--theme-text-secondary);
+}
+
+.booking-goal-callout__extra {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--theme-border);
+}
+
+.booking-goal-callout__extra code {
+  font-size: 0.9em;
 }
 
 /* ============================================================================
@@ -1436,6 +1915,23 @@
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+/* User data “details” regions (tables, extra sections) — header ≣ + usePanelDetailsVisibility */
+.talia-report-details {
+  flex-shrink: 0;
+}
+
+/* Wrapper from ReportDataDetails.jsx — panels gate data tables/grids with this + hook */
+.talia-report-data-details {
+  flex-shrink: 0;
+  min-height: 0;
+}
+
+/* Dock tab ⓘ — ReportEventMeta technical strip */
+.talia-report-technical-meta {
+  flex-shrink: 0;
+  margin-bottom: var(--theme-component-gap-sm);
 }
 
 .competitor-filters__group {
@@ -1593,7 +2089,7 @@
 
 .search-trends__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(var(--theme-report-card-min-track), 1fr));
   gap: 16px;
   margin-bottom: 32px;
 }
@@ -1683,7 +2179,7 @@
 
 .search-trends__mini-chart {
   margin-top: 16px;
-  height: 80px;
+  height: var(--theme-chart-min-height);
   display: flex;
   align-items: flex-end;
   gap: 4px;
@@ -2384,7 +2880,7 @@
 
 .google-trends__series-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--theme-report-card-min-track), 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -2472,7 +2968,7 @@
 
 .google-trends__bars {
   margin-top: 16px;
-  height: 120px;
+  height: var(--theme-chart-min-height);
   display: flex;
   align-items: flex-end;
   gap: 1px;
@@ -3170,7 +3666,7 @@
 }
 
 .sailing-overview__map-wrap {
-  height: 220px;
+  height: var(--theme-map-height);
   min-height: 0;
   border: 1px solid var(--theme-border);
   border-radius: 6px;
@@ -3269,8 +3765,8 @@
 .data-match__table {
   height: 100%;
   width: 100%;
-  flex: 1;
-  min-height: 320px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -3319,7 +3815,7 @@
 
 .competitor-scatter-grid__chart {
   position: relative;
-  height: 140px;
+  height: var(--theme-chart-min-height);
   min-width: 0;
   min-height: 0;
   background: var(--theme-card-bg);
@@ -3361,7 +3857,7 @@
 }
 
 .competitor-scatter-grid--single .competitor-scatter-grid__chart {
-  height: 170px;
+  height: var(--theme-chart-height);
 }
 
 .competitor-scatter-grid--table-hidden {
@@ -3716,10 +4212,10 @@
   border-radius: 8px;
   overflow: hidden;
   background: #b9e1ff;
-  height: 320px;
+  height: var(--theme-map-height);
   position: relative;
   cursor: default;
-  min-height: 280px;
+  min-height: var(--theme-map-min-height);
 }
 
 .ship-tracker-map__map-layout {
@@ -3728,7 +4224,7 @@
 
 .ship-tracker-map__map-layout--news {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, var(--theme-side-panel-width));
   gap: 8px;
   align-items: stretch;
 }
@@ -3736,13 +4232,13 @@
 .ship-tracker-map__map-wrap--expanded {
   position: relative;
   z-index: 2;
-  height: min(78vh, 900px);
+  height: min(78vh, calc(var(--theme-map-height) * 2.6));
   border-width: 2px;
   cursor: default;
 }
 
 .ship-tracker-map__map-wrap--news {
-  height: min(72vh, 840px);
+  height: min(72vh, calc(var(--theme-map-height) * 2.4));
 }
 
 .ship-tracker-map__leaflet {

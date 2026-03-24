@@ -70,3 +70,15 @@ export const hasRole = (userRole, requiredRole) => {
   return userLevel >= requiredLevel;
 };
 
+/**
+ * Mutate Talia-owned intelligence (REAL/TARGET/BUDGET/MODEL curves, target_profiles).
+ * Mirrors server `canEditTaliaIntel`: Manager+ or Super User variants.
+ * @param {string} [role]
+ * @returns {boolean}
+ */
+export const canEditTaliaIntel = (role) => {
+  const r = normalizeRole(role);
+  if (r === 'SUPER_USER' || r === 'SUPERUSER') return true;
+  return hasRole(role, 'MANAGER');
+};
+

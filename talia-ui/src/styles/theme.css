@@ -97,6 +97,7 @@
   
   /* Tabulator-specific */
   --theme-tabulator-header-bg: rgba(255, 255, 255, 0.12);
+  --theme-tabulator-header-border: rgba(128, 156, 210, 0.52);
   --theme-tabulator-header-text: #dbe5f5;
   --theme-tabulator-filter-bg: #10101f;
   --theme-tabulator-filter-border: rgba(255, 255, 255, 0.2);

@@ -88,6 +88,7 @@ export const useDatabaseTables = () => {
         query {
           databaseTables {
             tableName
+            hasSyncConfig
             source
             type
             loadMethod
@@ -134,6 +135,7 @@ export const useDatabaseTables = () => {
         
         return {
           tableName: table.tableName,
+          hasSyncConfig: table.hasSyncConfig === true,
           source: tableConfig?.source || table.source || 'N/A',
           type: tableConfig?.type || table.type || 'direct',
           loadMethod, // Calculated from tableConfig, not from GraphQL
@@ -170,6 +172,7 @@ export const useDatabaseTables = () => {
         query GetTableMetadata($tableName: String!) {
           tableMetadata(tableName: $tableName) {
             tableName
+            hasSyncConfig
             source
             type
             loadMethod
@@ -215,6 +218,7 @@ export const useDatabaseTables = () => {
         t.tableName === tableName 
           ? {
               ...t,
+              hasSyncConfig: table.hasSyncConfig === true,
               loadMethod,
               rowCount: table.rowCount || 0,
               dateRange: table.dateRange || { min: null, max: null },

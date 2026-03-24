@@ -17,6 +17,11 @@ import ItineraryExtract from './ItineraryExtract';
 import ReservationCurrentStateContainer from './ReservationCurrentState';
 import BookingProfileContainer from './BookingProfile';
 import TargetProfileEditorContainer from './TargetProfileEditor';
+import BookingTargetChartContainer from './BookingTargetChart';
+import BookingCurrentDataSimple from './BookingCurrentDataSimple';
+import BookingTargetDataSimple from './BookingTargetDataSimple';
+import BookingCombinedDataSimple from './BookingCombinedDataSimple';
+import BookingTargetProfileEditorSimple from './BookingTargetProfileEditorSimple';
 import CompetitorPricingContainer from './CompetitorPricing';
 import DemandHeatmapContainer from './DemandHeatmap';
 import DemandHeatmapWithSearchTrendsContainer from './DemandHeatmapWithSearchTrends';
@@ -38,6 +43,7 @@ import DataManagementPanel from './DataManagement';
 import TestWorkbenchPanel from './TestWorkbench';
 import DataDebugView from '../TestPage/DataDebugView';
 import DataTypesValidation from '../dev/DataTypesValidation';
+import AdminDashboard from '../admin/dashboard/AdminDashboard';
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../lib/eventBus';
 
 const publishedRatesSelect = 'talia:publishedRates.select';
@@ -323,18 +329,19 @@ export const componentRegistry = {
   BookingProfile: {
     component: BookingProfileContainer,
     panelId: 'booking-profile',
-    category: 'Dashboards',
-    title: 'Booking Profile',
-    description: 'Booking profile showing trends, metrics, and build curves for a sailing',
+    category: 'Booking & profiles',
+    title: 'Real booking profile (+ YoY)',
+    description:
+      'Goal ①: REAL data — trends, KPIs, optional build curves. Pass includeComparison (or open Profile Tools shortcut) for year-over-year. Follows sail selection from the sailing table.',
     props: {
-      sailCode: { type: 'string', required: true, description: 'Sail code (e.g., "CJ07250901")' },
+      sailCode: { type: 'string', required: false, description: 'Sail code (optional if sail is selected in UI)' },
       includeComparison: { type: 'boolean', required: false, description: 'Include year-over-year comparison' },
       previousYearSailCode: { type: 'string', required: false, description: 'Previous year sail code for comparison' },
       includeBuildCurves: { type: 'boolean', required: false, description: 'Include incremental build curves' },
       theme: { type: 'object', required: false, description: 'Theme object for styling' }
     },
     dataRequirements: 'Requires GraphQL connection to bookingProfile endpoints',
-    events: { emits: [], respondsTo: [] },
+    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
     showInReports: true,
     filePath: 'src/components/focus-panels/BookingProfile/index.jsx'
   },
@@ -343,6 +350,7 @@ export const componentRegistry = {
     panelId: 'target-profile-editor',
     category: 'Editors',
     title: 'Target Profile Editor',
+    legacy: true,
     description: 'Create and edit target booking profiles with build curves',
     props: {
       targetProfileId: { type: 'string', required: false, description: 'Target profile ID for editing' },
@@ -353,8 +361,74 @@ export const componentRegistry = {
     },
     dataRequirements: 'Requires GraphQL connection to targetProfiles endpoints',
     events: { emits: [], respondsTo: [] },
-    showInReports: true,
+    showInReports: false,
     filePath: 'src/components/focus-panels/TargetProfileEditor/index.jsx'
+  },
+  BookingTargetChart: {
+    component: BookingTargetChartContainer,
+    panelId: 'booking-target-chart',
+    category: 'Booking & profiles',
+    title: 'Target vs booking (configurable)',
+    description:
+      'Exploratory chart: REAL build curves vs imported TARGET and legacy target profiles. For persisted MODEL editing on the graph, use “Booking Target Profile Editor (Simple)”.',
+    props: {
+      sailCode: { type: 'string', required: false, description: 'Initial sail code' },
+      targetProfileId: { type: 'string', required: false, description: 'Target profile ID from GraphQL (alternative to CSV)' },
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'CSV target data (BOOKINGTARGET_*.csv) or target profiles; GraphQL bookingProfileWithCurves',
+    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/BookingTargetChart/index.jsx'
+  },
+  BookingCurrentDataSimple: {
+    component: BookingCurrentDataSimple,
+    panelId: 'booking-current-data-simple',
+    category: 'Booking & profiles',
+    title: 'REAL only (weeks-to-sail)',
+    description: 'Goal ① diagnostic: single REAL curve from booking build data (isolated check).',
+    props: {},
+    dataRequirements: 'Requires GraphQL booking profile with build curves',
+    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/BookingCurrentDataSimple/index.jsx'
+  },
+  BookingTargetDataSimple: {
+    component: BookingTargetDataSimple,
+    panelId: 'booking-target-data-simple',
+    category: 'Booking & profiles',
+    title: 'TARGET only (imported)',
+    description: 'Goal ②: business TARGET curve from Data Management import (booking_targets_supplied), read-only display.',
+    props: {},
+    dataRequirements: 'Requires booking_targets_supplied data imported via Data Management',
+    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/BookingTargetDataSimple/index.jsx'
+  },
+  BookingCombinedDataSimple: {
+    component: BookingCombinedDataSimple,
+    panelId: 'booking-combined-data-simple',
+    category: 'Booking & profiles',
+    title: 'Overlay: REAL + TARGET + MODEL',
+    description: 'Combined overlay: REAL, imported TARGET, BUDGET, and inventory MODEL series on one chart.',
+    props: {},
+    dataRequirements: 'Requires booking profile, booking_targets_supplied, and optional target_profiles',
+    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/BookingCombinedDataSimple/index.jsx'
+  },
+  BookingTargetProfileEditorSimple: {
+    component: BookingTargetProfileEditorSimple,
+    panelId: 'booking-target-profile-editor-simple',
+    category: 'Booking & profiles',
+    title: 'MODEL profile editor (graph)',
+    description:
+      'Goal ③: Talia system owns curves (owner talia); viewers explore, Manager+ saves MODEL via upsertInventoryProfileSeries. Drag/table edit when permitted.',
+    props: {},
+    dataRequirements: 'Requires booking profile (REAL), supplied target optional, and target_profiles CRUD',
+    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/BookingTargetProfileEditorSimple/index.jsx'
   },
   CompetitorPricing: {
     component: CompetitorPricingContainer,
@@ -590,6 +664,19 @@ export const componentRegistry = {
     showInReports: true,
     filePath: 'src/components/focus-panels/DirectSourceRequest/index.jsx'
   },
+  AdminDashboard: {
+    component: AdminDashboard,
+    panelId: 'admin-dashboard',
+    category: 'Admin',
+    title: 'Admin Dashboard',
+    description: 'Role and focus administration panel',
+    props: {},
+    dataRequirements: 'ADMIN/SUPER_USER only',
+    events: { emits: [], respondsTo: [] },
+    allowedRoles: ['ADMIN', 'SUPER_USER'],
+    showInReports: true,
+    filePath: 'src/components/admin/dashboard/AdminDashboard.jsx'
+  },
   DataManagementPanel: {
     component: DataManagementPanel,
     panelId: 'data-management-panel',
@@ -599,7 +686,8 @@ export const componentRegistry = {
     props: {},
     dataRequirements: 'Requires GraphQL backend access; ADMIN/SUPER_USER only',
     events: { emits: [], respondsTo: [] },
-    showInReports: false,
+    allowedRoles: ['ADMIN', 'SUPER_USER'],
+    showInReports: true,
     filePath: 'src/components/focus-panels/DataManagement/index.jsx'
   },
   TestWorkbenchPanel: {
@@ -611,7 +699,8 @@ export const componentRegistry = {
     props: {},
     dataRequirements: 'Development testing surface; ADMIN/SUPER_USER only',
     events: { emits: [], respondsTo: [] },
-    showInReports: false,
+    allowedRoles: ['ADMIN', 'SUPER_USER'],
+    showInReports: true,
     filePath: 'src/components/focus-panels/TestWorkbench/index.jsx'
   },
   BtopTerminal: {
@@ -627,6 +716,7 @@ export const componentRegistry = {
     },
     dataRequirements: 'Requires SSE connection to /api/btop/stream endpoint',
     events: { emits: [], respondsTo: [] },
+    allowedRoles: ['ADMIN', 'SUPER_USER'],
     showInReports: true,
     filePath: 'src/components/focus-panels/BtopTerminal/index.jsx'
   },
@@ -693,6 +783,23 @@ export const getComponentsByCategory = () => {
     categories[category].push({ name, ...metadata });
   });
   return categories;
+};
+
+export const canRoleAccessComponent = (metadata, role = 'USER') => {
+  const allowed = metadata?.allowedRoles;
+  if (!Array.isArray(allowed) || allowed.length === 0) {
+    return true;
+  }
+  const normalizedRole = String(role || 'USER').toUpperCase();
+  const normalizedAllowed = allowed.map((entry) => String(entry || '').toUpperCase());
+  if (normalizedAllowed.includes(normalizedRole)) {
+    return true;
+  }
+  // SUPER_USER is treated as a superset of ADMIN access in panel gating.
+  if (normalizedRole === 'SUPER_USER' || normalizedRole === 'SUPERUSER') {
+    return normalizedAllowed.includes('ADMIN') || normalizedAllowed.includes('SUPER_USER') || normalizedAllowed.includes('SUPERUSER');
+  }
+  return false;
 };
 
 export const getComponentNames = () => Object.keys(componentRegistry);

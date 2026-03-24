@@ -253,15 +253,15 @@ const GoogleTrendsPresenter = ({
   }
 
   return (
-    <div className="google-trends">
+    <div className="google-trends talia-report">
       {/* Header */}
-      <div className="google-trends__header">
+      <div className="google-trends__header talia-report__header">
         <div className="google-trends__header-top">
           <div>
-            <h3 className="google-trends__title">
+            <h3 className="google-trends__title talia-report__title">
               Google Trends - What People Are Searching For
             </h3>
-            <p className="google-trends__subtitle">
+            <p className="google-trends__subtitle talia-report__subtitle">
               Historical search interest for cruise holiday terms
             </p>
           </div>
@@ -278,7 +278,7 @@ const GoogleTrendsPresenter = ({
           
           {/* Sort and Top X Controls */}
           {seriesWithData.length > 1 && (
-            <div className="google-trends__controls">
+            <div className="google-trends__controls talia-report__actions talia-report-filters">
               {/* Sort Controls */}
               <div className="google-trends__sort">
                 <label className="google-trends__label">Sort:</label>

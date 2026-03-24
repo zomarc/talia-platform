@@ -16,8 +16,6 @@ import './styles/mode-selector.css'  // Mode selector styles
 import './styles/status-bar.css'     // Status bar styles
 
 import AppWithAuth from './AppWithAuth.jsx'
-import TestPage from './components/TestPage.jsx'
-import DataManagementPage from './components/admin/data-management/DataManagementPage.jsx'
 import StatusBar from './components/shared/StatusBar.jsx'
 import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
@@ -25,7 +23,7 @@ import { applyTheme, DEFAULT_THEME } from './config/themes.js';
 import { initChartDefaults } from './lib/chartConfig.js';
 import { GraphQLUtils } from './lib/apolloClient.js';
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from './lib/eventBus.js';
-import { normalizeRole, canUseAdvancedHeader, canAccessPrivilegedPanels } from './utils/roleUtils.js';
+import { normalizeRole, canUseAdvancedHeader } from './utils/roleUtils.js';
 import userActivityTracker, { initUserActivityTracking } from './services/userActivityTracker.js';
 
 // Apollo Client temporarily disabled during database restoration
@@ -59,12 +57,6 @@ console.log('📦 React StrictMode:', !!StrictMode);
 console.log('🎯 Root element:', document.getElementById('root'));
 console.log('🌐 Window object:', typeof window);
 console.log('📱 Document ready state:', document.readyState);
-
-const PrivilegedModeDenied = ({ title }) => (
-  <div className="talia-unavailable">
-    {title} is restricted to ADMIN and SUPER_USER.
-  </div>
-);
 
 const globalStatusState = {
   statusMessage: null,
@@ -111,7 +103,7 @@ window.__taliaStatus = {
 
 // Dev Mode Switcher Component
 const DevSwitcher = () => {
-  const [mode, setMode] = useState('app'); // 'app', 'test', or 'data'
+  const [mode, setMode] = useState('app'); // single framework mode; test/data open as panels
   const [userRole, setUserRole] = useState(() => normalizeRole(GraphQLUtils.getUserRole()));
   const [statusState, setStatusState] = useState({
     statusMessage: null,
@@ -123,9 +115,10 @@ const DevSwitcher = () => {
   // Check localStorage for saved preference on mount
   useEffect(() => {
     const savedMode = localStorage.getItem('devMode');
-    if (savedMode && ['app', 'test', 'data'].includes(savedMode)) {
-      setMode(savedMode);
+    if (savedMode && savedMode !== 'app') {
+      localStorage.setItem('devMode', 'app');
     }
+    setMode('app');
   }, []);
 
   useEffect(() => {
@@ -149,8 +142,9 @@ const DevSwitcher = () => {
   }, []);
 
   const handleModeChange = (newMode) => {
-    setMode(newMode);
-    localStorage.setItem('devMode', newMode);
+    const normalized = newMode === 'app' ? 'app' : 'app';
+    setMode(normalized);
+    localStorage.setItem('devMode', normalized);
   };
 
   // Subscribe to global status updates
@@ -240,23 +234,8 @@ const DevSwitcher = () => {
   }, []);
 
   const renderContent = () => {
-    console.log('🎯 renderContent called with mode:', mode);
-    const canAccessPrivileged = canAccessPrivilegedPanels(userRole);
-    switch (mode) {
-      case 'test':
-        console.log('📋 Rendering TestPage');
-        return canAccessPrivileged ? <TestPage /> : <PrivilegedModeDenied title="Test Workbench" />;
-      case 'data':
-        console.log('📋 Rendering DataManagementPage');
-        if (!canAccessPrivileged) {
-          return <PrivilegedModeDenied title="Data Management" />;
-        }
-        return <DataManagementPage />;
-      case 'app':
-      default:
-        console.log('📋 Rendering AppWithAuth');
-        return <AppWithAuth />;
-    }
+    console.log('🎯 renderContent called with framework mode:', mode);
+    return <AppWithAuth />;
   };
 
   return (

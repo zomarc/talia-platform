@@ -209,19 +209,19 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
   }, [combinedData, heatmapData]);
 
   return (
-    <div className="demand-heatmap">
+    <div className="demand-heatmap talia-report">
       {/* Header */}
-      <div className="demand-heatmap__header">
+      <div className="demand-heatmap__header talia-report__header">
         <div>
-          <h3 className="demand-heatmap__title">
+          <h3 className="demand-heatmap__title talia-report__title">
             Demand Heatmap with Search Trends Correlation
           </h3>
-          <p className="demand-heatmap__subtitle">
+          <p className="demand-heatmap__subtitle talia-report__subtitle">
             Viewing demand across itineraries by departure month, enhanced with search trend indicators
           </p>
         </div>
         
-        <div className="demand-heatmap__controls">
+        <div className="demand-heatmap__controls talia-report__actions talia-report-filters">
           <button
             onClick={() => setShowTrends(!showTrends)}
             className="demand-heatmap__toggle"

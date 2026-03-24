@@ -4,7 +4,11 @@ import { GraphQLUtils } from '../../../lib/apolloClient';
 import { canAccessPrivilegedPanels, normalizeRole } from '../../../utils/roleUtils';
 import { DataManagementPanelCore } from '../../admin/data-management/DataManagementPage';
 
-const DataManagementPanel = ({ skipAuth = false }) => {
+const DataManagementPanel = ({
+  skipAuth = false,
+  panelInstanceId = null,
+  panelComponentId = 'data-management-panel',
+}) => {
   const { user } = useSupabaseAuth();
   const role = normalizeRole(user?.role || GraphQLUtils.getUserRole() || 'USER');
   const allowed = canAccessPrivilegedPanels(role);
@@ -17,7 +21,13 @@ const DataManagementPanel = ({ skipAuth = false }) => {
     );
   }
 
-  return <DataManagementPanelCore embedded={true} />;
+  return (
+    <DataManagementPanelCore
+      embedded={true}
+      panelInstanceId={panelInstanceId}
+      panelComponentId={panelComponentId}
+    />
+  );
 };
 
 export default DataManagementPanel;

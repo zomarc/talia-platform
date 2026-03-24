@@ -14,6 +14,8 @@ const targetToConfigMap = Object.entries(tableDefinitions).reduce((acc, [configN
 
 const tableAliasToConfigMap = {
   ...targetToConfigMap,
+  // Legacy/derived reporting table names should map to the same sync config.
+  published_rates: 'publishedRates',
   reservation_current_state: 'reservationChanges',
   published_rates_changes: 'publishedRates',
   published_rates_current_state: 'publishedRates',

@@ -5,6 +5,7 @@ type BuildTableCatalogResolversDeps = {
   fetchLatestAvailableData: (tableName: string, rowCount: number) => Promise<string | null>;
   getOperationMetadataKeysForTable: (tableName: string) => string[];
   getSyncTypeForTable: (tableName: string) => string;
+  hasSyncConfigForTable: (tableName: string) => boolean;
 };
 
 export const buildTableCatalogQueryResolvers = ({
@@ -13,7 +14,8 @@ export const buildTableCatalogQueryResolvers = ({
   fetchActualDataRange,
   fetchLatestAvailableData,
   getOperationMetadataKeysForTable,
-  getSyncTypeForTable
+  getSyncTypeForTable,
+  hasSyncConfigForTable
 }: BuildTableCatalogResolversDeps) => ({
   databaseTables: async () => {
     try {
@@ -30,7 +32,9 @@ export const buildTableCatalogQueryResolvers = ({
         'published_rates_current_state', 'competitor', 'competitor_current_state',
         'cabin_allocation', 'itinerary', 'gql_cabin_availability', 'sail_header',
         'ship_cabin', 'sync_metadata', 'focuses', 'google_trends_data',
-        'google_trends_search_terms', 'data_refresh_metadata'
+        'google_trends_search_terms', 'data_refresh_metadata',
+        'booking_targets_supplied', 'target_profiles', 'target_mapping_config',
+        'inventory_item_profile_curve_point'
       ];
 
       const { data: syncData } = await supabaseDataService.client
@@ -90,6 +94,7 @@ export const buildTableCatalogQueryResolvers = ({
 
           return {
             tableName,
+            hasSyncConfig: hasSyncConfigForTable(tableName),
             source: null,
             type: null,
             loadMethod: null,
@@ -181,6 +186,7 @@ export const buildTableCatalogQueryResolvers = ({
 
       return {
         tableName,
+        hasSyncConfig: hasSyncConfigForTable(tableName),
         source: null,
         type: null,
         loadMethod: null,

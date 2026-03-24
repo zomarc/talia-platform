@@ -352,7 +352,8 @@
   box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.45);
 }
 
-.dashboard-dockview .talia-dv-tab__button--details {
+.dashboard-dockview .talia-dv-tab__button--details,
+.dashboard-dockview .talia-dv-tab__button--technical {
   min-width: calc(var(--theme-tab-header-font-size) + 6px);
   width: calc(var(--theme-tab-header-font-size) + 6px);
   height: calc(var(--theme-tab-header-font-size) + 6px);
@@ -560,7 +561,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
   padding: var(--theme-padding-sm) var(--theme-padding-md);
+  border: 0;
+  background: transparent;
+  text-align: left;
   cursor: pointer;
   user-select: none;
   transition: background 0.2s;
@@ -697,6 +702,14 @@
   font-size: calc(var(--theme-font-size) - 2px);
   color: var(--theme-text-muted);
   margin-top: 2px;
+}
+
+.dashboard-form-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--theme-component-gap-xs);
+  color: var(--theme-text-secondary);
+  font-size: var(--theme-font-size-sm);
 }
 
 .dashboard-form-hint--admin {

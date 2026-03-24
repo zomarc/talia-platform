@@ -216,9 +216,61 @@
   justify-content: center;
 }
 
+.status-bar__header-btn--visibility {
+  width: 48px;
+  min-width: 48px;
+  justify-content: center;
+}
+
 .status-bar__icon-search {
   font-size: 12px;
   line-height: 1;
+}
+
+.status-bar__visibility-controls {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.status-bar__visibility-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 10025;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--theme-border-strong);
+  border-radius: var(--theme-radius-sm);
+  background: var(--theme-bg-elevated);
+  box-shadow: var(--theme-shadow-md);
+  min-width: 120px;
+}
+
+.status-bar__visibility-option {
+  height: 24px;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-xs);
+  background: var(--theme-glass);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 0 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.status-bar__visibility-option:hover {
+  border-color: var(--theme-border-strong);
+  background: var(--theme-glass-hover);
+}
+
+.status-bar__visibility-option--active {
+  border-color: color-mix(in srgb, var(--theme-warning) 52%, var(--theme-accent));
+  background: color-mix(in srgb, var(--theme-warning) 26%, var(--theme-bg-solid));
+  color: var(--theme-header-text);
 }
 
 .status-bar__header-btn:not(.status-bar__header-btn--active) {
@@ -496,6 +548,45 @@
   overflow-y: auto;
 }
 
+.status-bar__data-admin {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-padding-xs);
+  padding: 4px var(--theme-padding-md);
+  border-top: 1px solid var(--theme-border);
+  background: color-mix(in srgb, var(--theme-bg-elevated) 85%, var(--theme-warning) 15%);
+}
+
+.status-bar__data-admin-title {
+  font-size: var(--theme-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--theme-text-muted);
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.status-bar__data-admin-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-bar__data-admin-input {
+  height: 24px;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  background: var(--theme-glass);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size-xs);
+  padding: 0 6px;
+}
+
+.status-bar__data-admin-input:hover {
+  border-color: var(--theme-border-strong);
+  background: var(--theme-glass-hover);
+}
+
 .status-bar__details-header {
   display: flex;
   justify-content: space-between;
@@ -637,6 +728,10 @@
   .status-bar__item {
     flex: 1 1 auto;
     min-width: 0;
+  }
+
+  .status-bar__data-admin {
+    flex-wrap: wrap;
   }
 
   .status-bar__timestamp {

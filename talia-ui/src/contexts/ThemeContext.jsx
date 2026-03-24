@@ -190,7 +190,18 @@ export const ThemeProvider = ({ children }) => {
   const [rowHoverColorHex, setRowHoverColorHex] = useState(_localFS.rowHoverColorHex ?? '#7890a8');
   const [oddRowColorHex, setOddRowColorHex] = useState(_localFS.oddRowColorHex ?? '#c8cdd7');
   const [evenRowColorHex, setEvenRowColorHex] = useState(_localFS.evenRowColorHex ?? '#ffffff');
+  const [tableHeaderColorHex, setTableHeaderColorHex] = useState(_localFS.tableHeaderColorHex ?? '#3f5784');
   const [cardColorHex, setCardColorHex] = useState(_localFS.cardColorHex ?? '#252a37');
+  const [tableHeaderIntensity, setTableHeaderIntensity] = useState(_localFS.tableHeaderIntensity ?? 60);
+  const [panelTitlesVisible, setPanelTitlesVisible] = useState(
+    _localFS.panelTitlesVisible !== false
+  );
+  const [actionsVisible, setActionsVisible] = useState(
+    _localFS.actionsVisible !== false
+  );
+  const [calloutsVisible, setCalloutsVisible] = useState(
+    _localFS.calloutsVisible !== false
+  );
 
   const [appearanceProfiles, setAppearanceProfiles] = useState(_localProfiles);
   const [activeAppearanceProfileId, setActiveAppearanceProfileId] = useState(_localActiveProfile);
@@ -217,8 +228,13 @@ export const ThemeProvider = ({ children }) => {
     rowHoverColorHex,
     oddRowColorHex,
     evenRowColorHex,
+    tableHeaderColorHex,
     cardColorHex,
-  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, cardColorHex]);
+    tableHeaderIntensity,
+    panelTitlesVisible,
+    actionsVisible,
+    calloutsVisible,
+  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, calloutsVisible]);
 
   const applyAppearanceSettings = (settings) => {
     if (!settings || typeof settings !== 'object') return false;
@@ -236,7 +252,18 @@ export const ThemeProvider = ({ children }) => {
     if (settings.rowHoverColorHex) setRowHoverColorHex(settings.rowHoverColorHex);
     if (settings.oddRowColorHex) setOddRowColorHex(settings.oddRowColorHex);
     if (settings.evenRowColorHex) setEvenRowColorHex(settings.evenRowColorHex);
+    if (settings.tableHeaderColorHex) setTableHeaderColorHex(settings.tableHeaderColorHex);
     if (settings.cardColorHex) setCardColorHex(settings.cardColorHex);
+    if (Number.isFinite(settings.tableHeaderIntensity)) setTableHeaderIntensity(settings.tableHeaderIntensity);
+    if (Object.prototype.hasOwnProperty.call(settings, 'panelTitlesVisible')) {
+      setPanelTitlesVisible(settings.panelTitlesVisible !== false);
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'actionsVisible')) {
+      setActionsVisible(settings.actionsVisible !== false);
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'calloutsVisible')) {
+      setCalloutsVisible(settings.calloutsVisible !== false);
+    }
     return true;
   };
 
@@ -355,7 +382,7 @@ export const ThemeProvider = ({ children }) => {
         clearTimeout(saveSettingsTimerRef.current);
       }
     };
-  }, [appearanceDbLoaded, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, cardColorHex, activeAppearanceProfileId]);
+  }, [appearanceDbLoaded, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, calloutsVisible, activeAppearanceProfileId]);
 
   useEffect(() => {
     if (!appearanceDbLoaded) return undefined;
@@ -397,7 +424,10 @@ export const ThemeProvider = ({ children }) => {
         rowColorIntensity, oddRowIntensity, cardColorIntensity,
         evenRowIntensity, componentPadding, accentColor, rowAccentColor,
         cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex,
-        evenRowColorHex, cardColorHex, bgColor,
+        evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor,
+        panelTitlesVisible,
+        actionsVisible,
+        calloutsVisible,
       };
       localStorage.setItem('taliaLayout', JSON.stringify(parsed));
     } catch { /* best-effort */ }
@@ -405,7 +435,25 @@ export const ThemeProvider = ({ children }) => {
       localStorage.setItem('taliaAppearanceProfiles', JSON.stringify(appearanceProfiles));
       localStorage.setItem('taliaActiveAppearanceProfileId', activeAppearanceProfileId || '');
     } catch { /* best-effort */ }
-  }, [fontSize, fontFamily, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, cardColorHex, bgColor, appearanceProfiles, activeAppearanceProfileId]);
+  }, [fontSize, fontFamily, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor, panelTitlesVisible, actionsVisible, calloutsVisible, appearanceProfiles, activeAppearanceProfileId]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('talia-panel-titles-hidden', panelTitlesVisible === false);
+    window.__taliaPanelTitlesVisible = panelTitlesVisible !== false;
+  }, [panelTitlesVisible]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('talia-actions-hidden', actionsVisible === false);
+    window.__taliaActionsVisible = actionsVisible !== false;
+  }, [actionsVisible]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('talia-callouts-hidden', calloutsVisible === false);
+    window.__taliaCalloutsVisible = calloutsVisible !== false;
+  }, [calloutsVisible]);
 
   // Update CSS variables when font/appearance settings change
   useEffect(() => {
@@ -459,6 +507,15 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-component-gap-md', scaledPx(10));
     root.style.setProperty('--theme-card-padding', scaledPx(10));
     root.style.setProperty('--theme-component-control-height', scaledPx(28, 20));
+    // Shared panel-fit sizing tokens used by card/chart/map/table surfaces.
+    root.style.setProperty('--theme-card-min-height', scaledPx(160, 110));
+    root.style.setProperty('--theme-table-min-height', scaledPx(220, 140));
+    root.style.setProperty('--theme-chart-min-height', scaledPx(180, 130));
+    root.style.setProperty('--theme-chart-height', scaledPx(280, 180));
+    root.style.setProperty('--theme-map-min-height', scaledPx(200, 150));
+    root.style.setProperty('--theme-map-height', scaledPx(260, 180));
+    root.style.setProperty('--theme-side-panel-width', scaledPx(300, 220));
+    root.style.setProperty('--theme-report-card-min-track', scaledPx(240, 160));
 
     // Global text intensity across app/panels/tables
     const tt = textIntensity / 100;
@@ -469,7 +526,6 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-fg', `rgba(${fgR}, ${fgG}, ${fgB}, ${fgA})`);
     root.style.setProperty('--theme-text-secondary', `rgba(${fgR}, ${fgG}, ${fgB}, ${lerp(0.58, 0.90, tt)})`);
     root.style.setProperty('--theme-text-muted', `rgba(${fgR}, ${fgG}, ${fgB}, ${lerp(0.42, 0.76, tt)})`);
-    root.style.setProperty('--theme-tabulator-header-text', `rgba(${lerpInt(164, 246, tt)}, ${lerpInt(174, 250, tt)}, ${lerpInt(194, 255, tt)}, ${lerp(0.70, 0.98, tt)})`);
 
     // Global background presets: solid + gradient endpoints
     const BG_PRESETS = {
@@ -521,10 +577,23 @@ export const ThemeProvider = ({ children }) => {
     const rowHoverRgb = hexToRgb(rowHoverColorHex) || [120, 135, 160];
     const oddRowRgb = hexToRgb(oddRowColorHex) || [200, 205, 215];
     const evenRowRgb = hexToRgb(evenRowColorHex) || [255, 255, 255];
+    const headerRgb = hexToRgb(tableHeaderColorHex) || [63, 87, 132];
     const cardRgb = hexToRgb(cardColorHex) || [37, 42, 55];
+    const th = tableHeaderIntensity / 100;
+    const headerLuma = ((headerRgb[0] * 0.2126) + (headerRgb[1] * 0.7152) + (headerRgb[2] * 0.0722)) / 255;
+    const headerIsLight = headerLuma > 0.56;
+    const headerTextLo = headerIsLight ? 18 : 176;
+    const headerTextHi = headerIsLight ? 72 : 252;
+    const headerTextR = lerpInt(headerTextLo, headerTextHi, tt);
+    const headerTextG = lerpInt(headerIsLight ? 22 : 184, headerIsLight ? 78 : 255, tt);
+    const headerTextB = lerpInt(headerIsLight ? 28 : 200, headerIsLight ? 84 : 255, tt);
+    const headerTextAlpha = headerIsLight ? lerp(0.84, 0.98, tt) : lerp(0.72, 0.98, tt);
     root.style.setProperty('--theme-table-row-even', `rgba(${evenRowRgb.join(',')}, ${lerp(0.00, 0.16, te)})`);
     root.style.setProperty('--theme-table-row-odd', `rgba(${oddRowRgb.join(',')}, ${lerp(0.00, 0.22, to)})`);
     root.style.setProperty('--theme-table-row-hover', `rgba(${rowHoverRgb.join(',')}, ${lerp(0.04, 0.35, tr)})`);
+    root.style.setProperty('--theme-tabulator-header-bg', `rgba(${headerRgb.join(',')}, ${lerp(0.20, 0.74, th)})`);
+    root.style.setProperty('--theme-tabulator-header-border', `rgba(${headerRgb.join(',')}, ${lerp(0.30, 0.88, th)})`);
+    root.style.setProperty('--theme-tabulator-header-text', `rgba(${headerTextR}, ${headerTextG}, ${headerTextB}, ${headerTextAlpha})`);
     root.style.setProperty('--theme-card-bg', `rgba(${cardRgb.join(',')}, ${lerp(0.40, 1.00, tc)})`);
 
     // Elevated surfaces blend background base with card accent tint
@@ -539,7 +608,7 @@ export const ThemeProvider = ({ children }) => {
     // Re-sync Chart.js globals with current CSS variables
     initChartDefaults();
 
-  }, [fontSize, selectedFont, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, cardColorHex, bgColor]);
+  }, [fontSize, selectedFont, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor]);
 
   // Context value - provide theme and font settings
   const value = {
@@ -593,8 +662,18 @@ export const ThemeProvider = ({ children }) => {
     setOddRowColorHex,
     evenRowColorHex,
     setEvenRowColorHex,
+    tableHeaderColorHex,
+    setTableHeaderColorHex,
     cardColorHex,
     setCardColorHex,
+    tableHeaderIntensity,
+    setTableHeaderIntensity,
+    panelTitlesVisible,
+    setPanelTitlesVisible,
+    actionsVisible,
+    setActionsVisible,
+    calloutsVisible,
+    setCalloutsVisible,
 
     // Appearance profiles
     appearanceProfiles,

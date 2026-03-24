@@ -190,11 +190,7 @@ const registerTableInstance = (table, baseColumns = null) => {
   tableInstances.add(table);
 };
 
-/**
- * Initialize Tabulator
- * Returns the Tabulator constructor (already loaded via npm)
- */
-export const initTabulator = async () => {
+const getWrappedTabulatorClass = () => {
   ensureLayoutListenerBound();
   if (wrappedTabulatorClass) return wrappedTabulatorClass;
 
@@ -225,6 +221,14 @@ export const initTabulator = async () => {
 
   wrappedTabulatorClass = TaliaTabulator;
   return wrappedTabulatorClass;
+};
+
+/**
+ * Initialize Tabulator
+ * Returns the Tabulator constructor (already loaded via npm)
+ */
+export const initTabulator = async () => {
+  return getWrappedTabulatorClass();
 };
 
 /**
@@ -350,4 +354,4 @@ export const COMMON_COLUMN_TYPES = {
   })
 };
 
-export default Tabulator;
+export default getWrappedTabulatorClass();

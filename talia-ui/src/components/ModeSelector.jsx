@@ -1,7 +1,7 @@
 /**
  * ModeSelector - Discrete mode selection component
  * 
- * Provides a clean, themed interface for switching between App, Test, and Data modes.
+ * Provides a clean, themed interface for the main app mode.
  * Includes source/version information and Dev Role Selector dropdown.
  */
 
@@ -50,8 +50,8 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
   const isDevMode = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_MODE === 'true';
   const canOpenPrivileged = canAccessPrivilegedPanels(userRole);
 
-  const handleModeClick = (mode) => {
-    onModeChange(mode);
+  const handleModeClick = () => {
+    onModeChange('app');
     // Close dropdown when switching modes
     if (showDevDropdown) {
       setShowDevDropdown(false);
@@ -59,8 +59,7 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
   };
 
   const handleAppModeClick = () => {
-    // Always switch to app mode
-    handleModeClick('app');
+    handleModeClick();
   };
 
   const handleDevDropdownToggle = (e) => {
@@ -101,18 +100,8 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
   return (
     <div className="mode-selector">
       <div className="mode-selector__container">
-        {/* Mode Buttons */}
+        {/* Mode Button */}
         <div className="mode-selector__modes">
-          <button
-            className={`mode-selector__btn ${currentMode === 'test' ? 'mode-selector__btn--active' : ''}`}
-            onClick={() => handleModeClick('test')}
-            title={canOpenPrivileged ? 'Test Mode' : 'Test Mode (ADMIN/SUPER_USER only)'}
-            aria-label="Switch to test mode"
-            disabled={!canOpenPrivileged}
-          >
-            <span className="mode-selector__icon">🧪</span>
-          </button>
-          
           <div className="mode-selector__app-wrapper">
             <button
               className={`mode-selector__btn mode-selector__btn--app ${currentMode === 'app' ? 'mode-selector__btn--active' : ''}`}
@@ -123,16 +112,6 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
               <span className="mode-selector__icon">🚀</span>
             </button>
           </div>
-          
-          <button
-            className={`mode-selector__btn ${currentMode === 'data' ? 'mode-selector__btn--active' : ''}`}
-            onClick={() => handleModeClick('data')}
-            title={canOpenPrivileged ? 'Data Mode' : 'Data Mode (ADMIN/SUPER_USER only)'}
-            aria-label="Switch to data mode"
-            disabled={!canOpenPrivileged}
-          >
-            <span className="mode-selector__icon">📊</span>
-          </button>
         </div>
 
         {/* Source & Version Info */}
@@ -170,6 +149,7 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
                     className="mode-selector__dev-open-admin"
                     onClick={handleOpenAdminDashboard}
                     title="Open Admin Dashboard panel"
+                    disabled={!canOpenPrivileged}
                   >
                     Admin
                   </button>
@@ -189,6 +169,7 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
                       className="mode-selector__dev-shortcut-btn"
                       onClick={handleOpenAdminDashboard}
                       title="Open Admin Dashboard panel"
+                      disabled={!canOpenPrivileged}
                     >
                       ⚙️ Open Admin Dashboard
                     </button>

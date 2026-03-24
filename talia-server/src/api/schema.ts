@@ -390,6 +390,41 @@ export const typeDefs = `#graphql
     updatedAt: String
   }
 
+  enum ProfileSeriesKind {
+    REAL
+    TARGET
+    BUDGET
+    MODEL
+  }
+
+  type CurvePoint {
+    pointOrder: Int!
+    weekLabel: String!
+    weeksUntilSailing: Int
+    valueBookings: Float
+    valueGuests: Float
+    asOfDate: String
+    source: String
+    metadata: JSON
+  }
+
+  enum ProfileSeriesScope {
+    SYSTEM
+    GLOBAL
+    USER
+  }
+
+  type InventoryProfileSeries {
+    inventoryItemId: ID!
+    kind: ProfileSeriesKind!
+    modelKey: String
+    modelLabel: String
+    profileScope: ProfileSeriesScope
+    ownerKey: String
+    lastEditedBy: String
+    points: [CurvePoint!]!
+  }
+
   type PortNewsItem {
     id: ID!
     title: String!
@@ -455,6 +490,26 @@ export const typeDefs = `#graphql
     inventoryItem: InventoryItemInput
     memoText: String!
     memoType: String
+  }
+
+  input CurvePointInput {
+    pointOrder: Int
+    weekLabel: String!
+    weeksUntilSailing: Int
+    valueBookings: Float
+    valueGuests: Float
+    asOfDate: String
+    source: String
+    metadata: JSON
+  }
+
+  input InventoryProfileSeriesInput {
+    inventoryItemId: ID!
+    kind: ProfileSeriesKind!
+    modelKey: String
+    modelLabel: String
+    profileScope: ProfileSeriesScope
+    points: [CurvePointInput!]!
   }
 
   # Booking Profile Types
@@ -532,9 +587,33 @@ export const typeDefs = `#graphql
     buildCurves: [BuildCurvePoint!]!
     basedOnHistoric: [String!]!
     createdBy: ID
+    profileScope: ProfileSeriesScope
+    lastEditedBy: String
     createdAt: String!
     updatedAt: String!
     isActive: Boolean!
+  }
+
+  type BookingTargetSupplied {
+    id: ID!
+    sailCode: String!
+    shipCode: String
+    weekLabel: String!
+    weeksUntilSailing: Int
+    targetBookings: Int!
+    targetGuests: Int!
+    importBatchId: String!
+    importedAt: String!
+  }
+
+  type TargetMappingConfig {
+    id: ID!
+    name: String!
+    description: String
+    config: JSON!
+    isActive: Boolean!
+    createdAt: String!
+    updatedAt: String!
   }
 
   input BuildCurvePointInput {
@@ -554,6 +633,7 @@ export const typeDefs = `#graphql
     geogAreaCode: String
     buildCurves: [BuildCurvePointInput!]!
     basedOnHistoric: [String!]
+    profileScope: ProfileSeriesScope
   }
 
   input TargetProfileFilters {
@@ -562,6 +642,22 @@ export const typeDefs = `#graphql
     packageType: String
     seasonCode: String
     isActive: Boolean
+  }
+
+  input TargetDataRowInput {
+    sailCode: String!
+    shipCode: String
+    weekLabel: String!
+    weeksUntilSailing: Int
+    targetBookings: Int!
+    targetGuests: Int
+  }
+
+  type ImportTargetDataResult {
+    success: Boolean!
+    rowsImported: Int!
+    batchId: String!
+    errors: [String!]
   }
 
   # Competitor Pricing Types
@@ -984,6 +1080,7 @@ export const typeDefs = `#graphql
     reservations(filters: ReservationFilters): [Reservation!]!
     inventoryItems(filters: InventoryItemFilters): [InventoryItem!]!
     inventoryMemos(inventoryItemId: ID!): [InventoryMemo!]!
+    inventoryItemProfileSeries(inventoryItemId: ID!): [InventoryProfileSeries!]!
     publicItineraryCatalog(limit: Int): [PublicItineraryCatalogItem!]!
     publicImagePool(limit: Int): [PublicImagePoolItem!]!
     portNews(port: String!, limit: Int): [PortNewsItem!]!
@@ -1019,6 +1116,8 @@ export const typeDefs = `#graphql
     # Target Profiles
     targetProfiles(filters: TargetProfileFilters): [TargetProfile!]!
     targetProfile(id: ID!): TargetProfile
+    bookingTargetsSupplied(sailCode: String): [BookingTargetSupplied!]!
+    targetMappingConfigs: [TargetMappingConfig!]!
     
     # Data Debugging
     dataDebugInfo: DataDebugResponse!
@@ -1101,8 +1200,15 @@ export const typeDefs = `#graphql
     createTargetProfile(input: TargetProfileInput!): TargetProfile!
     updateTargetProfile(id: ID!, input: TargetProfileInput!): TargetProfile!
     deleteTargetProfile(id: ID!): Boolean!
+    importTargetData(rows: [TargetDataRowInput!]!): ImportTargetDataResult!
     upsertInventoryItem(input: InventoryItemInput!): InventoryItem!
     addInventoryMemo(input: InventoryMemoInput!): InventoryMemo!
+    upsertInventoryProfileSeries(input: InventoryProfileSeriesInput!): InventoryProfileSeries!
+    deleteInventoryProfileSeries(
+      inventoryItemId: ID!
+      kind: ProfileSeriesKind!
+      modelKey: String
+    ): Boolean!
     
     # Google Search Trends
     trackGoogleSearch(query: String!, trackTrend: Boolean): TrackSearchResult!
@@ -1175,6 +1281,7 @@ export const typeDefs = `#graphql
 
   type DatabaseTableMetadata {
     tableName: String!
+    hasSyncConfig: Boolean!
     source: String
     type: String
     loadMethod: String  # Optional - frontend calculates from tableSources config

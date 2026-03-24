@@ -431,7 +431,15 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, panelInstanceId, p
   }, [collapseAllGroups, cycleGroupState, openAllGroups, panelComponentId, panelInstanceId]);
 
   return (
-    <div className="focus-panel data-match data-match-panel">
+    <div className="focus-panel talia-report data-match data-match-panel">
+      <header className="talia-report__header">
+        <div className="talia-report__header-left">
+          <h2 className="talia-report__title">Data Match</h2>
+          <p className="talia-report__subtitle">
+            {transformedData.length} sailings • {(data?.tables || []).length} source tables
+          </p>
+        </div>
+      </header>
       {/* Filter Panel */}
       <div className="data-match__filters talia-report-filters">
         <label className="data-match__label talia-report-filters__group">

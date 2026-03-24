@@ -1,9 +1,22 @@
 import React from "react";
-import reportRegistry from "../focus-panels/registry";
+import reportRegistry, { canRoleAccessComponent } from "../focus-panels/registry";
 import UserProfile from "../UserProfile";
 import { isAdmin } from "../../utils/roleUtils";
 import { FocusSelector } from "../focus-management";
 import { useTheme } from "../../contexts/ThemeContext";
+import {
+  DASHBOARD_DETAILS_VISIBILITY_EVENT,
+  DASHBOARD_FILTER_VISIBILITY_EVENT,
+  DASHBOARD_TABLE_LAYOUT_EVENT,
+} from "../dockview/eventConstants";
+import {
+  getGlobalReportDetailsVisible,
+  setGlobalReportDetailsVisible,
+  clearPanelReportDetailsOverrides,
+} from "../../services/panelDetailsState";
+
+const FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderFiltersVisible';
+const TABLE_LAYOUT_STORAGE_KEY = 'taliaTableLayoutMode';
 
 function DashboardSidebar({
   isCollapsed,
@@ -45,8 +58,18 @@ function DashboardSidebar({
     setOddRowColorHex,
     evenRowColorHex,
     setEvenRowColorHex,
+    tableHeaderColorHex,
+    setTableHeaderColorHex,
     cardColorHex,
     setCardColorHex,
+    tableHeaderIntensity,
+    setTableHeaderIntensity,
+    panelTitlesVisible,
+    setPanelTitlesVisible,
+    actionsVisible,
+    setActionsVisible,
+    calloutsVisible,
+    setCalloutsVisible,
     appearanceProfiles,
     activeAppearanceProfileId,
     applyAppearanceProfile,
@@ -55,15 +78,110 @@ function DashboardSidebar({
     setBgColor
   } = useTheme();
   const [appearanceProfileName, setAppearanceProfileName] = React.useState('');
+  const [globalFiltersVisible, setGlobalFiltersVisible] = React.useState(() => {
+    try {
+      const saved = window.localStorage?.getItem?.(FILTERS_VISIBILITY_STORAGE_KEY);
+      if (saved === '0') return false;
+      if (saved === '1') return true;
+    } catch {
+      // ignore
+    }
+    return window.__taliaFiltersVisible !== false;
+  });
+  const [globalDetailsVisible, setGlobalDetailsVisible] = React.useState(() => getGlobalReportDetailsVisible());
+  const [globalTableLayoutMode, setGlobalTableLayoutMode] = React.useState(() => {
+    try {
+      const saved = window.localStorage?.getItem?.(TABLE_LAYOUT_STORAGE_KEY);
+      if (saved === 'data' || saved === 'width') return saved;
+    } catch {
+      // ignore
+    }
+    return window.__taliaTableLayoutMode === 'data' ? 'data' : 'width';
+  });
 
   React.useEffect(() => {
     const activeProfile = appearanceProfiles.find((entry) => entry.id === activeAppearanceProfileId);
     setAppearanceProfileName(activeProfile?.name || '');
   }, [appearanceProfiles, activeAppearanceProfileId]);
 
+  React.useEffect(() => {
+    const handleFilterVisibilityEvent = (event) => {
+      const visible = event?.detail?.visible;
+      if (typeof visible === 'boolean') {
+        setGlobalFiltersVisible(visible);
+      }
+    };
+    const handleTableLayoutEvent = (event) => {
+      const mode = event?.detail?.mode;
+      if (mode === 'data' || mode === 'width') {
+        setGlobalTableLayoutMode(mode);
+      }
+    };
+    const handleDetailsVisibilityEvent = (event) => {
+      const visible = event?.detail?.visible;
+      if (typeof visible === 'boolean') {
+        setGlobalDetailsVisible(visible);
+      }
+    };
+    window.addEventListener(DASHBOARD_FILTER_VISIBILITY_EVENT, handleFilterVisibilityEvent);
+    window.addEventListener(DASHBOARD_TABLE_LAYOUT_EVENT, handleTableLayoutEvent);
+    window.addEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibilityEvent);
+    return () => {
+      window.removeEventListener(DASHBOARD_FILTER_VISIBILITY_EVENT, handleFilterVisibilityEvent);
+      window.removeEventListener(DASHBOARD_TABLE_LAYOUT_EVENT, handleTableLayoutEvent);
+      window.removeEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibilityEvent);
+    };
+  }, []);
+
+  const handleGlobalFiltersToggle = (checked) => {
+    setGlobalFiltersVisible(checked);
+    window.__taliaFiltersVisible = checked;
+    const root = document.documentElement;
+    if (checked) {
+      root.classList.remove('talia-filters-hidden');
+    } else {
+      root.classList.add('talia-filters-hidden');
+    }
+    try {
+      window.localStorage?.setItem?.(FILTERS_VISIBILITY_STORAGE_KEY, checked ? '1' : '0');
+    } catch {
+      // ignore
+    }
+    window.dispatchEvent(new CustomEvent(DASHBOARD_FILTER_VISIBILITY_EVENT, {
+      detail: { visible: checked },
+    }));
+  };
+
+  const handleGlobalDetailsToggle = (checked) => {
+    setGlobalDetailsVisible(checked);
+    setGlobalReportDetailsVisible(checked);
+    clearPanelReportDetailsOverrides();
+    window.dispatchEvent(new CustomEvent(DASHBOARD_DETAILS_VISIBILITY_EVENT, {
+      detail: {
+        scope: 'all',
+        visible: checked,
+        action: 'set',
+      },
+    }));
+  };
+
+  const handleTableLayoutModeChange = (nextMode) => {
+    if (nextMode !== 'data' && nextMode !== 'width') return;
+    setGlobalTableLayoutMode(nextMode);
+    window.__taliaTableLayoutMode = nextMode;
+    try {
+      window.localStorage?.setItem?.(TABLE_LAYOUT_STORAGE_KEY, nextMode);
+    } catch {
+      // ignore
+    }
+    window.dispatchEvent(new CustomEvent(DASHBOARD_TABLE_LAYOUT_EVENT, {
+      detail: { mode: nextMode },
+    }));
+  };
+
   const reportGroups = React.useMemo(() => {
     const items = Object.values(reportRegistry)
-      .filter((report) => report.showInReports && report.panelId)
+      .filter((report) => report.showInReports && report.panelId && canRoleAccessComponent(report, userRole))
       .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
     const grouped = {};
     items.forEach((report) => {
@@ -74,12 +192,12 @@ function DashboardSidebar({
       grouped[category].push(report);
     });
     return grouped;
-  }, []);
+  }, [userRole]);
 
   const [expandedSections, setExpandedSections] = React.useState({
-    focus: true, // Only Focus Management open by default
+    focus: false,
     user: false,
-    reports: false,
+    reports: true, // Reports open by default for quick profile tooling access
     appearance: false,
   });
 
@@ -131,12 +249,12 @@ function DashboardSidebar({
 
       <div className="dashboard-explorer__content">
         <div className={`dashboard-section dashboard-section--focus ${expandedSections.focus ? 'dashboard-section--expanded' : 'dashboard-section--collapsed'}`}>
-          <div className="dashboard-section__header" onClick={() => toggleSection('focus')}>
+          <button type="button" className="dashboard-section__header" onClick={() => toggleSection('focus')}>
             <span className="dashboard-section__title">Focus Management</span>
             <span className={`dashboard-section__icon ${expandedSections.focus ? 'dashboard-section__icon--expanded' : ''}`}>
               ▶
             </span>
-          </div>
+          </button>
           <div className={`dashboard-section__content ${expandedSections.focus ? 'dashboard-section__content--expanded' : ''}`}>
             {focusLoading && (
               <div className="dashboard-loading">
@@ -158,13 +276,51 @@ function DashboardSidebar({
         </div>
 
         <div className="dashboard-section">
-          <div className="dashboard-section__header" onClick={() => toggleSection('reports')}>
+          <button type="button" className="dashboard-section__header" onClick={() => toggleSection('reports')}>
             <span className="dashboard-section__title">Reports</span>
             <span className={`dashboard-section__icon ${expandedSections.reports ? 'dashboard-section__icon--expanded' : ''}`}>
               ▶
             </span>
-          </div>
+          </button>
           <div className={`dashboard-section__content ${expandedSections.reports ? 'dashboard-section__content--expanded' : ''}`}>
+            <div className="dashboard-section__group">
+              <div className="dashboard-section__subtitle">Profile Tools (3 goals)</div>
+              <button
+                className="dashboard-btn"
+                onClick={() => onAddPanel('booking-profile', 'Real booking profile (+ YoY)', { reportId: 'booking-profile', includeComparison: false })}
+                title="Goal ① REAL: trends from bookings; select a sail in the table. Toggle YoY via the next button or panel params."
+              >
+                ① Real profile
+              </button>
+              <button
+                className="dashboard-btn"
+                onClick={() => onAddPanel('booking-profile', 'Real booking profile + YoY', { reportId: 'booking-profile', includeComparison: true })}
+                title="Goal ① REAL with year-over-year comparison (prior sail auto-derived unless you set previousYearSailCode in params)"
+              >
+                ① Real + YoY
+              </button>
+              <button
+                className="dashboard-btn"
+                onClick={() => onAddPanel('booking-target-data-simple', 'TARGET only (imported)', { reportId: 'booking-target-data-simple' })}
+                title="Goal ② TARGET: curve from Data Management import (booking_targets_supplied)"
+              >
+                ② Imported targets
+              </button>
+              <button
+                className="dashboard-btn"
+                onClick={() => onAddPanel('booking-combined-data-simple', 'Overlay: REAL + TARGET + MODEL', { reportId: 'booking-combined-data-simple' })}
+                title="Overlay REAL, imported TARGET, BUDGET, and inventory MODEL on one chart"
+              >
+                Overlay (all streams)
+              </button>
+              <button
+                className="dashboard-btn"
+                onClick={() => onAddPanel('booking-target-profile-editor-simple', 'MODEL profile editor (graph)', { reportId: 'booking-target-profile-editor-simple' })}
+                title="Goal ③ MODEL: drag points / edit table, save consolidated curve on inventory item"
+              >
+                ③ Model editor (graph)
+              </button>
+            </div>
             {Object.entries(reportGroups).sort(([a], [b]) => a.localeCompare(b)).map(([category, reports]) => (
               <div key={category} className="dashboard-section__group">
                 <div className="dashboard-section__subtitle">{category}</div>
@@ -188,12 +344,12 @@ function DashboardSidebar({
         </div>
 
         <div className="dashboard-section">
-          <div className="dashboard-section__header" onClick={() => toggleSection('appearance')}>
+          <button type="button" className="dashboard-section__header" onClick={() => toggleSection('appearance')}>
             <span className="dashboard-section__title">Appearance</span>
             <span className={`dashboard-section__icon ${expandedSections.appearance ? 'dashboard-section__icon--expanded' : ''}`}>
               ▶
             </span>
-          </div>
+          </button>
           <div className={`dashboard-section__content ${expandedSections.appearance ? 'dashboard-section__content--expanded' : ''}`}>
             <div className="dashboard-form-group">
               <label className="dashboard-form-label">Font Family:</label>
@@ -325,6 +481,29 @@ function DashboardSidebar({
               <div className="dashboard-form-hint">Controls even-row striping intensity in data tables.</div>
             </div>
             <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Table Header Contrast: {tableHeaderIntensity}%</label>
+              <div className="dashboard-form-control-row">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={tableHeaderIntensity}
+                  onChange={(event) => setTableHeaderIntensity(Number(event.target.value))}
+                  className="dashboard-form-input dashboard-form-input--range dashboard-form-input--range-inline"
+                />
+                <input
+                  type="color"
+                  className="dashboard-form-color-input"
+                  value={tableHeaderColorHex}
+                  onChange={(event) => setTableHeaderColorHex(event.target.value)}
+                  title="Select table header color"
+                  aria-label="Table header color"
+                />
+              </div>
+              <div className="dashboard-form-hint">Controls Tabulator header background for all tables globally.</div>
+            </div>
+            <div className="dashboard-form-group">
               <label className="dashboard-form-label">Card Intensity: {cardColorIntensity}%</label>
               <div className="dashboard-form-control-row">
                 <input
@@ -389,6 +568,78 @@ function DashboardSidebar({
                 ))}
               </div>
               <div className="dashboard-form-hint">Global background color theme.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Panel Titles</label>
+              <label className="dashboard-form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={panelTitlesVisible}
+                  onChange={(event) => setPanelTitlesVisible(event.target.checked)}
+                />
+                <span>Show panel titles across all reports</span>
+              </label>
+              <div className="dashboard-form-hint">Uses the shared panel header selector for all components that follow Talia report standards.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Actions</label>
+              <label className="dashboard-form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={actionsVisible}
+                  onChange={(event) => setActionsVisible(event.target.checked)}
+                />
+                <span>Show panel action sections across reports</span>
+              </label>
+              <div className="dashboard-form-hint">Matches the Actions toggle in the top header visibility menu.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Callouts</label>
+              <label className="dashboard-form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={calloutsVisible}
+                  onChange={(event) => setCalloutsVisible(event.target.checked)}
+                />
+                <span>Show informational callouts and tips across reports</span>
+              </label>
+              <div className="dashboard-form-hint">Matches the callouts toggle in the top header visibility menu.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Panel Details</label>
+              <label className="dashboard-form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={globalDetailsVisible}
+                  onChange={(event) => handleGlobalDetailsToggle(event.target.checked)}
+                />
+                <span>Show panel details across all reports</span>
+              </label>
+              <div className="dashboard-form-hint">Uses the same global details toggle available in the top header visibility controls.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Table Fit Mode</label>
+              <select
+                className="dashboard-form-input"
+                value={globalTableLayoutMode}
+                onChange={(event) => handleTableLayoutModeChange(event.target.value)}
+              >
+                <option value="width">Expand to Fit Width</option>
+                <option value="data">Fit to Data</option>
+              </select>
+              <div className="dashboard-form-hint">Uses the same fit control as the top header eye menu.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Global Filters</label>
+              <label className="dashboard-form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={globalFiltersVisible}
+                  onChange={(event) => handleGlobalFiltersToggle(event.target.checked)}
+                />
+                <span>Show report filter bars globally</span>
+              </label>
+              <div className="dashboard-form-hint">Matches the global filter toggle used in the top header.</div>
             </div>
             {isAdmin(userRole) && (
               <div className="dashboard-form-group">

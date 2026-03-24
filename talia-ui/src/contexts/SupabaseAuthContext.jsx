@@ -260,7 +260,7 @@ export const SupabaseAuthProvider = ({ children }) => {
 
     // Listen for auth state changes FIRST (this will also trigger on initial load)
     const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         console.log('🔐 Auth state changed:', event, session?.user?.email || 'no session');
         
         // Clear timeout since we got an auth event
@@ -269,7 +269,9 @@ export const SupabaseAuthProvider = ({ children }) => {
           timeoutId = null;
         }
         
-        await processSession(session, event);
+        Promise.resolve(processSession(session, event)).catch((callbackError) => {
+          console.error('❌ Error in auth state callback:', callbackError);
+        });
       }
     );
     subscription = authSubscription;
@@ -318,7 +320,7 @@ export const SupabaseAuthProvider = ({ children }) => {
       if (timeoutId) clearTimeout(timeoutId);
       if (subscription) subscription.unsubscribe();
     };
-  }, []);
+  }, [isDevMode]);
 
 
 

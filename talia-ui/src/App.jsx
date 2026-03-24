@@ -629,7 +629,7 @@ const TablePanel = React.memo(function TablePanel() {
     <div className="legacy-panel">
       <div className="legacy-panel__header">
         <strong>Table Filters:</strong> Use the filter controls in column headers to filter data. 
-        <span className="legacy-panel__header-tip">
+        <span className="legacy-panel__header-tip talia-callout">
           💡 Tip: Click filter icons in column headers to filter by Ship, Sailing, Status, or numeric values
         </span>
       </div>

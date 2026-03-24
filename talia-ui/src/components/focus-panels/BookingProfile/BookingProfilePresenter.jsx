@@ -8,11 +8,12 @@ import { Chart, registerables } from 'chart.js';
 import BuildCurveChart from './BuildCurveChart';
 import { formatDayMon } from '../../../lib/dateFormat';
 import { useTheme } from '../../../contexts/ThemeContext';
+import BookingGoalCallout from '../../shared/BookingGoalCallout';
 
 // Register Chart.js components
 Chart.register(...registerables);
 
-const BookingProfilePresenter = ({ data, sailCode, theme, includeBuildCurves = false }) => {
+const BookingProfilePresenter = ({ data, sailCode, theme, includeBuildCurves = false, includeComparison = false }) => {
   const { fontSize, fontFamily } = useTheme();
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
@@ -162,6 +163,7 @@ const BookingProfilePresenter = ({ data, sailCode, theme, includeBuildCurves = f
 
   return (
     <div className="booking-profile">
+      <BookingGoalCallout variant="REAL" includeComparison={includeComparison} />
       {/* Header */}
       <div className="booking-profile__header">
         <div>

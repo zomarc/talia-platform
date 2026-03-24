@@ -437,15 +437,15 @@ const ShipTrackerMapPresenter = ({
   );
 
   return (
-    <div className="ship-tracker-map">
-      <div className="ship-tracker-map__header">
+    <div className="ship-tracker-map talia-report">
+      <div className="ship-tracker-map__header talia-report__header">
         <div>
-          <h2 className="ship-tracker-map__title">Live Ship Route Map</h2>
-          <p className="ship-tracker-map__subtitle">
+          <h2 className="ship-tracker-map__title talia-report__title">Live Ship Route Map</h2>
+          <p className="ship-tracker-map__subtitle talia-report__subtitle">
             Current position, weather, occupancy, and route history for both ships
           </p>
         </div>
-        <div className="ship-tracker-map__header-actions">
+        <div className="ship-tracker-map__header-actions talia-report__actions talia-report-filters">
           <label className="ship-tracker-map__ship-filter-label" htmlFor="ship-tracker-ship-select">
             Ship
           </label>

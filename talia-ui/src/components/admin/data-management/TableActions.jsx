@@ -1,51 +1,58 @@
 import React from 'react';
+import { getPanelActionDefinition, PANEL_ACTION_IDS } from '../../shared/panelActions';
 
 const TableActions = ({
   table,
   isSyncing,
   selectedTable,
+  statusLoadingTable,
   reviewLoading,
-  setStatusTable,
+  onOpenStatus,
   tableActions
 }) => {
-  if (table.source === 'N/A' || table.type === 'unknown' || table.type === 'system' || table.type === 'application') {
+  if (table.hasSyncConfig !== true) {
     return <span className="dm-action-placeholder">—</span>;
   }
 
   return (
-    <div className="dm-action-group">
+    <div className="talia-action-group">
       <button
-        onClick={() => setStatusTable(table)}
-        className="dm-action-button dm-action-button-regular dm-action-button--status"
-        title="View table status details"
+        onClick={() => onOpenStatus(table)}
+        disabled={statusLoadingTable === table.tableName}
+        className="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--neutral"
+        title={getPanelActionDefinition(PANEL_ACTION_IDS.STATUS)?.title}
+        aria-label={getPanelActionDefinition(PANEL_ACTION_IDS.STATUS)?.label}
       >
-        🧾 Status
+        {statusLoadingTable === table.tableName ? '⏳' : getPanelActionDefinition(PANEL_ACTION_IDS.STATUS)?.icon}
       </button>
       {selectedTable === table.tableName && (
         <button
           onClick={() => tableActions.handleReview(table)}
           disabled={reviewLoading}
-          className="dm-action-button dm-action-button-bold dm-action-button--review"
-          title="Review top 100 rows"
+          className="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--success"
+          title={getPanelActionDefinition(PANEL_ACTION_IDS.REVIEW)?.title}
+          aria-label={getPanelActionDefinition(PANEL_ACTION_IDS.REVIEW)?.label}
         >
-          {reviewLoading ? '⏳' : '👁️ Review'}
+          {reviewLoading ? '⏳' : getPanelActionDefinition(PANEL_ACTION_IDS.REVIEW)?.icon}
         </button>
       )}
       <button
         onClick={() => tableActions.handleIncrementalSync(table)}
         disabled={isSyncing}
-        className="dm-action-button dm-action-button-regular dm-action-button--sync"
-        title="Incremental sync"
+        className="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--primary"
+        title={getPanelActionDefinition(PANEL_ACTION_IDS.SYNC)?.title}
+        aria-label={getPanelActionDefinition(PANEL_ACTION_IDS.SYNC)?.label}
       >
-        {isSyncing ? '⏳ Syncing...' : '🔄 Sync'}
+        {isSyncing ? '⏳' : getPanelActionDefinition(PANEL_ACTION_IDS.SYNC)?.icon}
       </button>
       <button
         onClick={() => tableActions.handleFullSync(table)}
         disabled={isSyncing}
-        className="dm-action-button dm-action-button-bold dm-action-button--full"
-        title="Force full refresh (syncs all data)"
+        className="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--warning"
+        title={getPanelActionDefinition(PANEL_ACTION_IDS.FULL)?.title}
+        aria-label={getPanelActionDefinition(PANEL_ACTION_IDS.FULL)?.label}
       >
-        {isSyncing ? '⏳' : '⚡ Full'}
+        {isSyncing ? '⏳' : getPanelActionDefinition(PANEL_ACTION_IDS.FULL)?.icon}
       </button>
     </div>
   );

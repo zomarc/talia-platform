@@ -13,20 +13,25 @@ const ServerStatusPanel = ({
   onMaximize,
   onMinimize,
   isMaximized,
-  fullHeight
+  fullHeight,
+  hideTitle,
+  embedded = false,
 }) => {
   const toggleHandler = isMaximized ? onMinimize : onMaximize;
-  const panelClassName = `dm-panel dm-status-panel ${fullHeight ? 'dm-panel--full dm-status-panel--full' : ''}`;
+  const onlineCount = serverServices.filter(service => serverStatus[service.id]?.online).length;
+  const panelClassName = `dm-panel dm-status-panel ${fullHeight ? 'dm-panel--full dm-status-panel--full' : ''} ${embedded ? 'dm-panel--embedded' : ''}`.trim();
   const listClassName = `dm-status-list ${fullHeight ? '' : 'dm-panel__content--limited'}`;
   return (
     <div className={panelClassName}>
-      <div className="dm-panel__header">
-        <div className="dm-panel__title dm-status-title">
-          🖥️ Server Status
-          <span className="dm-status-count">
-            ({serverServices.filter(service => serverStatus[service.id]?.online).length}/{serverServices.length} Online)
-          </span>
-        </div>
+      <div className={`dm-panel__header ${hideTitle ? 'dm-panel__header--actions-only' : ''}`}>
+        {!hideTitle && (
+          <div className="dm-panel__title dm-status-title">
+            🖥️ Server Status
+            <span className="dm-status-count">
+              ({onlineCount}/{serverServices.length} Online)
+            </span>
+          </div>
+        )}
         <div className="dm-panel__actions">
           {toggleHandler && (
             <button

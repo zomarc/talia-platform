@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useEffect, useState } from "react";
 import { DockviewReact } from "dockview";
 import "dockview/dist/styles/dockview.css"; // required Dockview CSS
-import reportRegistry from "./components/focus-panels/registry";
+import reportRegistry, { canRoleAccessComponent } from "./components/focus-panels/registry";
 import { normalizeRole } from "./utils/roleUtils";
 import { GraphQLUtils } from "./lib/apolloClient";
 // Focus Management Integration
@@ -10,7 +10,7 @@ import useDashboardSidebar from "./hooks/useDashboardSidebar";
 import graphQLFocusService from "./services/GraphQLFocusService";
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT, emitSailClear, emitSailSelect } from "./lib/eventBus";
 // Admin Components
-import { AdminDashboard, UserMappingTable, TaliaUserTable } from "./components/admin";
+import { UserMappingTable, TaliaUserTable } from "./components/admin";
 import userActivityTracker from "./services/userActivityTracker";
 // Context Row Monitor (Admin only)
 import ContextRowMonitor from "./components/focus-panels/ContextRowMonitor/index.jsx";
@@ -65,7 +65,7 @@ const toggleDockviewPanelLayout = (panelApi, dockviewApi) => {
 // - Only use addPanel() with proper position references
 
 // Basic startup logging
-console.log('🚀 App.jsx file loaded');
+console.log('🚀 Dashboard.jsx file loaded');
 console.log('📦 React version:', React?.version);
 console.log('🔧 Dockview imported:', !!DockviewReact);
 
@@ -404,7 +404,7 @@ const TablePanel = React.memo(function TablePanel() {
     <div className="dashboard-table-panel">
       <div className="dashboard-table-panel__note">
         <strong>Table Filters:</strong> Use the filter controls in column headers to filter data. 
-        <span className="dashboard-table-panel__tip">
+        <span className="dashboard-table-panel__tip talia-callout">
           💡 Tip: Click filter icons in column headers to filter by Ship, Sailing, Status, or numeric values
         </span>
       </div>
@@ -826,6 +826,15 @@ function Dashboard({ user }) {
     });
     return map;
   }, [theme]);
+  const reportMetadataByPanelId = React.useMemo(() => {
+    const map = new Map();
+    Object.values(reportRegistry).forEach((report) => {
+      if (report?.panelId) {
+        map.set(report.panelId, report);
+      }
+    });
+    return map;
+  }, []);
   
   // Status messages use global API (window.__taliaStatus)
   const setStatusMessage = (message) => {
@@ -1241,6 +1250,11 @@ function Dashboard({ user }) {
 
   const addNewPanel = (componentType, title, panelParams = {}) => {
     if (!apiRef.current) return;
+    const panelMetadata = reportMetadataByPanelId.get(componentType) || null;
+    if (panelMetadata && !canRoleAccessComponent(panelMetadata, userRole)) {
+      setStatusMessage(`${panelMetadata.title || title || componentType} is restricted for role ${userRole}`);
+      return;
+    }
     const id = "win-" + Date.now();
     try {
       userActivityTracker.recordPanelAccess(componentType, title || componentType);
@@ -1391,9 +1405,10 @@ function Dashboard({ user }) {
 
     const emitActivePanelState = () => {
       const activePanelId = api?.activePanel?.id || null;
+      const activePanelComponent = api?.activePanel?.component || api?.activePanel?.api?.component || null;
       window.__taliaActivePanelId = activePanelId;
       window.dispatchEvent(new CustomEvent(REPORT_ACTIVE_PANEL_EVENT, {
-        detail: { activePanelId }
+        detail: { activePanelId, panelComponent: activePanelComponent }
       }));
     };
 
@@ -1692,7 +1707,6 @@ function Dashboard({ user }) {
               "graphql-cabins": (props) => <GraphQLPanel {...props} params={{...props.params, dataType: "cabinAvailability"}} />,
               ...reportComponentMap,
               // Admin components
-              "admin-dashboard": AdminDashboard,
               "user-mapping-table": UserMappingTable,
               "talia-user-table": TaliaUserTable,
               "context-row-monitor": ContextRowMonitor

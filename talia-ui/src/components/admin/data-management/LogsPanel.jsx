@@ -1,8 +1,8 @@
 import React from 'react';
 
-const LogsPanel = ({ title, logs, emptyMessage, onClear, logRef, onMaximize, onMinimize, isMaximized, fullHeight }) => {
+const LogsPanel = ({ title, logs, emptyMessage, onClear, logRef, onMaximize, onMinimize, isMaximized, fullHeight, hideTitle, embedded = false }) => {
   const toggleHandler = isMaximized ? onMinimize : onMaximize;
-  const panelClassName = `dm-panel ${fullHeight ? 'dm-panel--full' : ''}`;
+  const panelClassName = `dm-panel ${fullHeight ? 'dm-panel--full' : ''} ${embedded ? 'dm-panel--embedded' : ''}`.trim();
   const contentClassName = `dm-panel__content ${fullHeight ? '' : 'dm-panel__content--limited'}`;
 
   const resolveVariant = (log) => {
@@ -16,8 +16,8 @@ const LogsPanel = ({ title, logs, emptyMessage, onClear, logRef, onMaximize, onM
 
   return (
     <div className={panelClassName}>
-      <div className="dm-panel__header">
-        <div className="dm-panel__title">{title}</div>
+      <div className={`dm-panel__header ${hideTitle ? 'dm-panel__header--actions-only' : ''}`}>
+        {!hideTitle && <div className="dm-panel__title">{title}</div>}
         <div className="dm-panel__actions">
           {toggleHandler && (
             <button

@@ -1177,6 +1177,13 @@ export class SupabaseDataService {
         buildCurves: profile.build_curves || [],
         basedOnHistoric: profile.based_on_historic || [],
         createdBy: profile.created_by,
+        profileScope: (() => {
+          const s = String(profile.profile_scope || 'system').toLowerCase();
+          if (s === 'system') return 'SYSTEM';
+          if (s === 'global') return 'GLOBAL';
+          return 'USER';
+        })(),
+        lastEditedBy: profile.last_edited_by || null,
         createdAt: profile.created_at,
         updatedAt: profile.updated_at,
         isActive: profile.is_active
@@ -1221,6 +1228,13 @@ export class SupabaseDataService {
         buildCurves: data.build_curves || [],
         basedOnHistoric: data.based_on_historic || [],
         createdBy: data.created_by,
+        profileScope: (() => {
+          const s = String(data.profile_scope || 'system').toLowerCase();
+          if (s === 'system') return 'SYSTEM';
+          if (s === 'global') return 'GLOBAL';
+          return 'USER';
+        })(),
+        lastEditedBy: data.last_edited_by || null,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         isActive: data.is_active
@@ -1237,7 +1251,7 @@ export class SupabaseDataService {
    * @param {string} createdBy - User ID who created this
    * @returns {Promise<Object>} Created target profile
    */
-  async createTargetProfile(input, createdBy) {
+  async createTargetProfile(input, lastEditedBy = null) {
     try {
       const { data, error } = await this.client
         .from('target_profiles')
@@ -1251,7 +1265,9 @@ export class SupabaseDataService {
           geog_area_code: input.geogAreaCode || null,
           build_curves: input.buildCurves || [],
           based_on_historic: input.basedOnHistoric || [],
-          created_by: createdBy || null,
+          created_by: null,
+          profile_scope: 'system',
+          last_edited_by: lastEditedBy || null,
           is_active: true
         })
         .select()
@@ -1274,6 +1290,10 @@ export class SupabaseDataService {
         buildCurves: data.build_curves || [],
         basedOnHistoric: data.based_on_historic || [],
         createdBy: data.created_by,
+        profileScope: String(data.profile_scope || 'system').toUpperCase() === 'GLOBAL'
+          ? 'GLOBAL'
+          : (String(data.profile_scope || 'system').toUpperCase() === 'SYSTEM' ? 'SYSTEM' : 'USER'),
+        lastEditedBy: data.last_edited_by || null,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         isActive: data.is_active
@@ -1290,7 +1310,7 @@ export class SupabaseDataService {
    * @param {Object} input - Target profile input
    * @returns {Promise<Object>} Updated target profile
    */
-  async updateTargetProfile(id, input) {
+  async updateTargetProfile(id, input, lastEditedBy = null) {
     try {
       const updateData = {};
       if (input.name !== undefined) updateData.name = input.name;
@@ -1302,6 +1322,11 @@ export class SupabaseDataService {
       if (input.geogAreaCode !== undefined) updateData.geog_area_code = input.geogAreaCode;
       if (input.buildCurves !== undefined) updateData.build_curves = input.buildCurves;
       if (input.basedOnHistoric !== undefined) updateData.based_on_historic = input.basedOnHistoric;
+      if (input.profileScope !== undefined) {
+        const ps = String(input.profileScope).toUpperCase();
+        updateData.profile_scope = ps === 'GLOBAL' ? 'global' : (ps === 'SYSTEM' ? 'system' : 'user');
+      }
+      if (lastEditedBy) updateData.last_edited_by = lastEditedBy;
 
       const { data, error } = await this.client
         .from('target_profiles')
@@ -1327,6 +1352,13 @@ export class SupabaseDataService {
         buildCurves: data.build_curves || [],
         basedOnHistoric: data.based_on_historic || [],
         createdBy: data.created_by,
+        profileScope: (() => {
+          const s = String(data.profile_scope || 'system').toLowerCase();
+          if (s === 'system') return 'SYSTEM';
+          if (s === 'global') return 'GLOBAL';
+          return 'USER';
+        })(),
+        lastEditedBy: data.last_edited_by || null,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         isActive: data.is_active
@@ -1356,6 +1388,110 @@ export class SupabaseDataService {
       return true;
     } catch (error) {
       console.error('Error deleting target profile:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Import booking targets supplied (CSV data) into booking_targets_supplied table
+   * @param {Array} rows - Array of { sailCode, shipCode, weekLabel, weeksUntilSailing, targetBookings, targetGuests }
+   * @param {string} batchId - UUID for this import batch
+   * @param {string} userId - Optional user ID
+   * @returns {Promise<{ rowsImported: number, batchId: string }>}
+   */
+  async importBookingTargetsSupplied(rows, batchId, userId = null) {
+    try {
+      const id = batchId || crypto.randomUUID();
+      if (!rows || rows.length === 0) {
+        return { rowsImported: 0, batchId: id };
+      }
+      // Replace mode: clear existing before insert
+      const { error: delError } = await this.client
+        .from('booking_targets_supplied')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // delete all
+      if (delError) throw delError;
+      const records = rows.map((r) => ({
+        sail_code: String(r.sailCode || '').trim(),
+        ship_code: r.shipCode ? String(r.shipCode).trim() : null,
+        week_label: String(r.weekLabel || '').trim(),
+        weeks_until_sailing: r.weeksUntilSailing != null ? parseInt(r.weeksUntilSailing, 10) : null,
+        target_bookings: parseInt(r.targetBookings, 10) || 0,
+        target_guests: parseInt(r.targetGuests, 10) || 0,
+        import_batch_id: id,
+        imported_by: userId || null,
+      })).filter((r) => r.sail_code && r.week_label);
+      const batchSize = 100;
+      let rowsImported = 0;
+      for (let i = 0; i < records.length; i += batchSize) {
+        const batch = records.slice(i, i + batchSize);
+        const { error } = await this.client
+          .from('booking_targets_supplied')
+          .insert(batch);
+        if (error) throw error;
+        rowsImported += batch.length;
+      }
+      return { rowsImported, batchId: id };
+    } catch (error) {
+      console.error('Error importing booking targets supplied:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get booking targets supplied (optionally by sail code)
+   */
+  async getBookingTargetsSupplied(sailCode = null) {
+    try {
+      let query = this.client
+        .from('booking_targets_supplied')
+        .select('*')
+        .order('sail_code')
+        .order('weeks_until_sailing', { ascending: false });
+      if (sailCode) {
+        query = query.eq('sail_code', sailCode);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []).map((r) => ({
+        id: r.id,
+        sailCode: r.sail_code,
+        shipCode: r.ship_code,
+        weekLabel: r.week_label,
+        weeksUntilSailing: r.weeks_until_sailing,
+        targetBookings: r.target_bookings,
+        targetGuests: r.target_guests,
+        importBatchId: r.import_batch_id,
+        importedAt: r.imported_at,
+      }));
+    } catch (error) {
+      console.error('Error getting booking targets supplied:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get target mapping configs
+   */
+  async getTargetMappingConfigs() {
+    try {
+      const { data, error } = await this.client
+        .from('target_mapping_config')
+        .select('*')
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map((r) => ({
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        config: r.config || {},
+        isActive: r.is_active,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      }));
+    } catch (error) {
+      console.error('Error getting target mapping configs:', error);
       throw error;
     }
   }
@@ -1550,6 +1686,113 @@ export class SupabaseDataService {
     } catch (error) {
       console.error('Error creating inventory memo:', error);
       throw new Error(error?.message || 'Failed to create inventory memo');
+    }
+  }
+
+  async getInventoryProfileSeriesPoints(inventoryItemId) {
+    try {
+      const { data, error } = await this.client
+        .from('inventory_item_profile_curve_point')
+        .select('*')
+        .eq('inventory_item_id', inventoryItemId)
+        .order('series_kind', { ascending: true })
+        .order('model_key', { ascending: true })
+        .order('point_order', { ascending: true });
+      if (error) throw new Error(error.message || 'Failed to fetch inventory profile curve points');
+      return data || [];
+    } catch (error) {
+      console.error('Error getting inventory profile series points:', error);
+      throw new Error(error?.message || 'Failed to load inventory profile series points');
+    }
+  }
+
+  async upsertInventoryProfileSeries(input = {}) {
+    try {
+      const inventoryItemId = Number(input.inventoryItemId);
+      if (!Number.isFinite(inventoryItemId)) {
+        throw new Error('inventoryItemId is required');
+      }
+      const kind = String(input.kind || '').toUpperCase();
+      const modelKey = input.modelKey ? String(input.modelKey).trim() : null;
+      const modelLabel = input.modelLabel ? String(input.modelLabel).trim() : null;
+      const points = Array.isArray(input.points) ? input.points : [];
+      const profileScope = String(input.profileScope || 'system').toLowerCase();
+      const ownerKey = String(input.ownerKey || 'talia');
+      const lastEditedBy = input.lastEditedBy || null;
+
+      let deleteQuery = this.client
+        .from('inventory_item_profile_curve_point')
+        .delete()
+        .eq('inventory_item_id', inventoryItemId)
+        .eq('series_kind', kind)
+        .eq('profile_scope', profileScope)
+        .eq('owner_key', ownerKey);
+      if (kind === 'MODEL') {
+        deleteQuery = deleteQuery.eq('model_key', modelKey || 'default');
+      } else {
+        deleteQuery = deleteQuery.is('model_key', null);
+      }
+      const { error: deleteError } = await deleteQuery;
+      if (deleteError) throw new Error(deleteError.message || 'Failed to clear previous series points');
+
+      if (points.length === 0) {
+        return [];
+      }
+
+      const rows = points.map((p, idx) => ({
+        inventory_item_id: inventoryItemId,
+        series_kind: kind,
+        model_key: kind === 'MODEL' ? (modelKey || 'default') : null,
+        model_label: kind === 'MODEL' ? modelLabel : null,
+        profile_scope: profileScope,
+        owner_key: ownerKey,
+        created_by: null,
+        last_edited_by: lastEditedBy,
+        point_order: p.pointOrder ?? idx,
+        week_label: p.weekLabel,
+        weeks_until_sailing: p.weeksUntilSailing ?? null,
+        value_bookings: p.valueBookings ?? null,
+        value_guests: p.valueGuests ?? null,
+        as_of_date: p.asOfDate || null,
+        source: p.source || null,
+        metadata: p.metadata || {},
+      }));
+
+      const { data, error } = await this.client
+        .from('inventory_item_profile_curve_point')
+        .insert(rows)
+        .select('*')
+        .order('point_order', { ascending: true });
+      if (error) throw new Error(error.message || 'Failed to insert inventory profile curve points');
+      return data || [];
+    } catch (error) {
+      console.error('Error upserting inventory profile series:', error);
+      throw new Error(error?.message || 'Failed to upsert inventory profile series');
+    }
+  }
+
+  async deleteInventoryProfileSeries(inventoryItemId, kind, modelKey = null) {
+    try {
+      let query = this.client
+        .from('inventory_item_profile_curve_point')
+        .delete()
+        .eq('inventory_item_id', inventoryItemId)
+        .eq('series_kind', String(kind || '').toUpperCase())
+        .eq('profile_scope', 'system')
+        .eq('owner_key', 'talia');
+
+      if (String(kind || '').toUpperCase() === 'MODEL') {
+        query = query.eq('model_key', modelKey || 'default');
+      } else {
+        query = query.is('model_key', null);
+      }
+
+      const { error } = await query;
+      if (error) throw new Error(error.message || 'Failed to delete inventory profile series');
+      return true;
+    } catch (error) {
+      console.error('Error deleting inventory profile series:', error);
+      throw new Error(error?.message || 'Failed to delete inventory profile series');
     }
   }
 

@@ -137,7 +137,7 @@ class TargetProfileService {
         component: 'Target Profiles',
         purpose: 'Fetch target profiles from talia graphql',
         tableName: 'target_profiles',
-        options: { fetchPolicy: 'cache-and-network' }
+        options: { fetchPolicy: 'network-only' }
       });
 
       return data.targetProfiles || [];
@@ -165,7 +165,7 @@ class TargetProfileService {
         component: 'Target Profiles',
         purpose: 'Fetch target profile by id from talia graphql',
         tableName: 'target_profile',
-        options: { fetchPolicy: 'cache-and-network' }
+        options: { fetchPolicy: 'network-only' }
       });
 
       if (!data || !data.targetProfile) {

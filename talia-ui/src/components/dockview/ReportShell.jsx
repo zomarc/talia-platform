@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import ReportEventMeta from "../shared/ReportEventMeta";
-import { REPORT_PANEL_PAUSE_EVENT, REPORT_TOGGLE_DETAILS_EVENT } from "./eventConstants";
+import { REPORT_PANEL_PAUSE_EVENT } from "./eventConstants";
+import usePanelTechnicalMetaVisibility from "../../hooks/usePanelTechnicalMetaVisibility";
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
 
 const deriveReportSources = (report) => {
@@ -17,7 +18,11 @@ const ReportShell = ({ report, panelInstanceId, children }) => {
   const emits = report?.events?.emits || [];
   const respondsTo = Array.from(new Set([...(report?.events?.respondsTo || []), DASHBOARD_GLOBAL_CRITERIA_EVENT]));
   const sources = deriveReportSources(report);
-  const [showDetails, setShowDetails] = useState(false);
+  const [showTechnicalMeta] = usePanelTechnicalMetaVisibility({
+    panelInstanceId,
+    panelComponentId: report?.panelId,
+  });
+  const [criteriaVersion, setCriteriaVersion] = useState(0);
   const [isPaused, setIsPaused] = useState(() => {
     const state = window.__taliaPanelPauseState || {};
     if (panelInstanceId && Object.prototype.hasOwnProperty.call(state, panelInstanceId)) {
@@ -30,15 +35,14 @@ const ReportShell = ({ report, panelInstanceId, children }) => {
   });
 
   useEffect(() => {
-    const handleToggleDetails = (event) => {
-      const requestedPanelId = event?.detail?.panelId;
-      if (!requestedPanelId) return;
-      if (requestedPanelId !== panelInstanceId && requestedPanelId !== report?.panelId) return;
-      setShowDetails((prev) => !prev);
+    const handleCriteriaUpdate = () => {
+      // Force a lightweight remount so every report "accepts" Global Criteria updates
+      // even if it does not implement explicit criteria listeners.
+      setCriteriaVersion((prev) => prev + 1);
     };
-    window.addEventListener(REPORT_TOGGLE_DETAILS_EVENT, handleToggleDetails);
-    return () => window.removeEventListener(REPORT_TOGGLE_DETAILS_EVENT, handleToggleDetails);
-  }, [panelInstanceId, report?.panelId]);
+    window.addEventListener(DASHBOARD_GLOBAL_CRITERIA_EVENT, handleCriteriaUpdate);
+    return () => window.removeEventListener(DASHBOARD_GLOBAL_CRITERIA_EVENT, handleCriteriaUpdate);
+  }, []);
 
   useEffect(() => {
     const handlePauseChange = (event) => {
@@ -59,16 +63,18 @@ const ReportShell = ({ report, panelInstanceId, children }) => {
 
   return (
     <div className={`talia-report-shell ${isPaused ? 'talia-report-shell--paused' : ''}`}>
-      {showDetails && (
-        <ReportEventMeta
-          emits={emits}
-          respondsTo={respondsTo}
-          sources={sources}
-          panelInstanceId={panelInstanceId}
-          panelComponentId={report?.panelId}
-        />
+      {showTechnicalMeta && (
+        <div className="talia-report-technical-meta">
+          <ReportEventMeta
+            emits={emits}
+            respondsTo={respondsTo}
+            sources={sources}
+            panelInstanceId={panelInstanceId}
+            panelComponentId={report?.panelId}
+          />
+        </div>
       )}
-      <div className="talia-report-shell__content">{children}</div>
+      <div className="talia-report-shell__content" key={`criteria-${criteriaVersion}`}>{children}</div>
       {isPaused && (
         <div className="talia-report-shell__pause-overlay" role="note" aria-live="polite">
           <span className="talia-report-shell__pause-title">Paused</span>

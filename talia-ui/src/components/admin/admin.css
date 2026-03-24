@@ -499,16 +499,16 @@
   background: var(--theme-panel-bg);
   display: flex;
   flex-direction: column;
-  min-height: 220px;
+  min-height: var(--theme-card-min-height);
 }
 
 .admin-access__panel--editor {
-  min-height: 280px;
+  min-height: var(--theme-table-min-height);
 }
 
 .admin-access__panel--full {
   grid-column: 1 / -1;
-  min-height: 220px;
+  min-height: var(--theme-card-min-height);
 }
 
 .admin-access__panel-header {
@@ -532,11 +532,11 @@
 
 .admin-access__table {
   height: 100%;
-  min-height: 170px;
+  min-height: 0;
 }
 
 .admin-access__table--users {
-  min-height: 220px;
+  min-height: var(--theme-table-min-height);
   max-height: 300px;
 }
 
@@ -577,21 +577,21 @@
 }
 
 .admin-access__table--activity {
-  min-height: 220px;
+  min-height: var(--theme-table-min-height);
 }
 
 .admin-access__activity-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(220px, var(--theme-side-panel-width));
   gap: var(--theme-component-gap-sm);
-  min-height: 260px;
+  min-height: var(--theme-table-min-height);
 }
 
 .admin-access__chart-card {
   border: 1px solid var(--theme-border-light);
   border-radius: 4px;
   padding: var(--theme-component-padding-sm);
-  min-height: 260px;
+  min-height: var(--theme-chart-min-height);
   background: var(--theme-panel-bg);
 }
 
@@ -606,7 +606,7 @@
 }
 
 .admin-logs__table {
-  min-height: 360px;
+  min-height: var(--theme-table-min-height);
 }
 
 .admin-access__form {

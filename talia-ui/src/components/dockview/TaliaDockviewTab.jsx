@@ -5,8 +5,12 @@ import {
   REPORT_ACTIVE_PANEL_EVENT,
   REPORT_GROUP_ACTION_EVENT,
   REPORT_PANEL_PAUSE_EVENT,
-  REPORT_TOGGLE_DETAILS_EVENT,
+  REPORT_PANEL_TECHNICAL_META_EVENT,
 } from "./eventConstants";
+import {
+  resolveTechnicalMetaVisible,
+  setPanelTechnicalMetaVisible,
+} from "../../services/panelTechnicalMetaState";
 
 const SIDE_EXPAND_DECISION_TIMEOUT_MS = 3000;
 
@@ -52,7 +56,7 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
   const panelComponent = panelApi?.component;
   const isReportTab = !!panelComponent && reportPanelIds?.has?.(panelComponent);
   const hasGroupActions = !!panelComponent && groupActionPanelIds?.has?.(panelComponent);
-  const [isMaximized, setIsMaximized] = React.useState(() => panelApi?.isMaximized?.() ?? false);
+  const [_isMaximized, setIsMaximized] = React.useState(() => panelApi?.isMaximized?.() ?? false);
   const [layoutCycleState, setLayoutCycleState] = React.useState(0); // 0: original, 1: side-expand window, 2: full-expand, 3: side-expand restore
   const layoutCycleRef = React.useRef({
     originalVisibility: null,
@@ -86,7 +90,11 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
       setIsPrimaryActive(activePanelId === panelId);
       return;
     }
-    setIsPrimaryActive(Boolean(panelApi?.isActive?.() ?? false));
+    const panelIsActive =
+      typeof panelApi?.isActive === 'function'
+        ? panelApi.isActive()
+        : (panelApi?.isActive === true);
+    setIsPrimaryActive(Boolean(panelIsActive));
   }, [panelApi, panelId]);
 
   const syncMaximizedState = React.useCallback(() => {
@@ -296,12 +304,20 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
     setShowCloseConfirm(false);
   };
 
-  const handleToggleDetails = (event) => {
+  /** Tab ⓘ — technical / dev panel info only (not user data tables; those use header ≣). */
+  const handleToggleTechnicalMeta = (event) => {
     event.stopPropagation();
-    if (!panelId) return;
+    if (!panelId && !panelComponent) return;
+    const current = resolveTechnicalMetaVisible(panelId, panelComponent);
+    const nextVisible = !current;
+    setPanelTechnicalMetaVisible(panelId, panelComponent, nextVisible);
     window.dispatchEvent(
-      new CustomEvent(REPORT_TOGGLE_DETAILS_EVENT, {
-        detail: { panelId, panelComponent },
+      new CustomEvent(REPORT_PANEL_TECHNICAL_META_EVENT, {
+        detail: {
+          panelId,
+          panelComponent,
+          visible: nextVisible,
+        },
       })
     );
   };
@@ -370,10 +386,10 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
         {isReportTab && (
           <button
             type="button"
-            className="talia-dv-tab__button talia-dv-tab__button--details"
-            title="Toggle details"
-            aria-label="Toggle details"
-            onClick={handleToggleDetails}
+            className="talia-dv-tab__button talia-dv-tab__button--technical"
+            title="Technical info (events, sources) — dev/admin; not the same as header data details"
+            aria-label="Toggle technical panel information"
+            onClick={handleToggleTechnicalMeta}
           >
             ⓘ
           </button>

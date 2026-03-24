@@ -442,9 +442,22 @@ class SynapseSyncService {
       return dateRegex.test(range.from) && dateRegex.test(range.to) && range.from <= range.to;
     };
 
+    const canApplyDateRangeOverride = () => {
+      const hasBetweenFilter = filters.some((filter) => (
+        filter?.operator === 'between' && Boolean(filter?.column)
+      ));
+      const hasReplaceDateWindow = Boolean(replace?.from && replace?.to);
+      const hasRuntimeDateColumn = Boolean(definition?.dateColumn || definition?.supabaseDateColumn);
+      return hasBetweenFilter || hasReplaceDateWindow || hasRuntimeDateColumn;
+    };
+
     const applyDateRangeOverride = (overrideRange, sourceLabel) => {
       if (!isValidDateRange(overrideRange)) {
         console.warn(`⚠️  Invalid date range override (${sourceLabel}). Ignoring.`);
+        return false;
+      }
+      if (!canApplyDateRangeOverride()) {
+        console.log(`ℹ️  Date range override (${sourceLabel}) skipped for ${tableName}; no date-capable sync window configured.`);
         return false;
       }
       dateRange = { from: overrideRange.from, to: overrideRange.to };

@@ -3,13 +3,68 @@
  * Displays booking trends and metrics for a specific sailing
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, extractSailCodeFromEvent } from '../../../lib/eventBus';
 import { useBookingProfile, useBookingProfileWithCurves } from '../../../hooks/data/useBookingProfile';
 import BookingProfilePresenter from './BookingProfilePresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 
-const BookingProfileContainer = ({ sailCode, includeComparison = false, previousYearSailCode = null, includeBuildCurves = false, theme }) => {
+const BookingProfileContainer = (props) => {
+  const {
+    sailCode: sailProp,
+    includeComparison: includeComparisonProp = false,
+    previousYearSailCode: previousYearProp = null,
+    includeBuildCurves = false,
+    theme,
+    params = {},
+  } = props;
+
+  const includeComparison = params.includeComparison ?? includeComparisonProp;
+  const previousYearSailCode = params.previousYearSailCode ?? previousYearProp;
+  const sailFromParams = params.sailCode ?? sailProp ?? null;
+
+  const [sailCode, setSailCode] = useState(sailFromParams);
+
+  useEffect(() => {
+    if (sailFromParams) setSailCode(sailFromParams);
+  }, [sailFromParams]);
+
+  useEffect(() => {
+    const handleSelect = (e) => {
+      const code = extractSailCodeFromEvent(e?.detail);
+      if (code) setSailCode(code);
+    };
+    const handleClear = () => setSailCode(null);
+    window.addEventListener(SAIL_SELECT_EVENT, handleSelect);
+    window.addEventListener(SAIL_CLEAR_EVENT, handleClear);
+    return () => {
+      window.removeEventListener(SAIL_SELECT_EVENT, handleSelect);
+      window.removeEventListener(SAIL_CLEAR_EVENT, handleClear);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (sailFromParams || sailCode) return;
+    const extractFromPersisted = () => {
+      const persistedCandidates = ['talia:persisted:lastEvent', 'talia:test:lastEvent'];
+      for (const key of persistedCandidates) {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(raw);
+          const code = extractSailCodeFromEvent(parsed?.detail);
+          if (code) return code;
+        } catch {
+          // ignore
+        }
+      }
+      return extractSailCodeFromEvent(window?.lastSailSelectEvent?.detail) || null;
+    };
+    const restored = extractFromPersisted();
+    if (restored) setSailCode(restored);
+  }, [sailFromParams, sailCode]);
+
   // Use build curves hook if requested, otherwise use standard hook
   const standardHook = useBookingProfile(sailCode, {
     includeComparison,
@@ -69,6 +124,7 @@ const BookingProfileContainer = ({ sailCode, includeComparison = false, previous
       theme={theme}
       onRefresh={refetch}
       includeBuildCurves={includeBuildCurves}
+      includeComparison={includeComparison}
     />
   );
 };

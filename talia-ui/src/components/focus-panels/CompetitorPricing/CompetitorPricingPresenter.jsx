@@ -8,6 +8,7 @@ import CompetitorPricingFilters from './components/CompetitorPricingFilters';
 import CompetitorScatterChart from './components/CompetitorScatterChart';
 import CompetitorPricingTable from './components/CompetitorPricingTable';
 import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import ReportDataDetails from '../../shared/ReportDataDetails';
 import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
 
 const CompetitorPricingPresenter = ({
@@ -55,7 +56,11 @@ const CompetitorPricingPresenter = ({
           tableVisible={showTable}
           chartOptions={chartOptions}
         />
-        {!expandedCabinType && showTable && <CompetitorPricingTable data={data} />}
+        {!expandedCabinType && (
+          <ReportDataDetails visible={showTable} className="competitor-pricing__data-details">
+            <CompetitorPricingTable data={data} />
+          </ReportDataDetails>
+        )}
       </main>
 
     </div>

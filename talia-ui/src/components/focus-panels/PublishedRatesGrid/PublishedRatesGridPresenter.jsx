@@ -50,7 +50,7 @@ const PublishedRatesGridPresenter = ({
   const [selectedPromo, setSelectedPromo] = React.useState(ALL_PROMOS);
   const [selectedRateType, setSelectedRateType] = React.useState(ALL_RATE_TYPES);
   const [selectedCurrency, setSelectedCurrency] = React.useState(ALL_CURRENCIES);
-  const [showDetails, setShowDetails] = usePanelDetailsVisibility({
+  const [showDetails] = usePanelDetailsVisibility({
     panelInstanceId,
     panelComponentId: panelComponentId || 'published-rates-grid',
   });
@@ -290,15 +290,18 @@ const PublishedRatesGridPresenter = ({
   const isSectionVisible = (sectionKey) => !expandedKey || expandedKey === sectionKey;
 
   return (
-    <div className={`published-rates-grid ${expandedKey ? 'published-rates-grid--focused' : ''}`}>
-      <header className="published-rates-grid__header">
-        <div>
-          <h2 className="published-rates-grid__title">Published Rates Grid</h2>
-          <p className="published-rates-grid__subtitle">
+    <div className={`talia-report published-rates-grid ${expandedKey ? 'published-rates-grid--focused' : ''}`}>
+      <header className="talia-report__header published-rates-grid__header">
+        <div className="talia-report__header-left">
+          <h2 className="talia-report__title published-rates-grid__title">Published Rates Grid</h2>
+          <p className="talia-report__subtitle published-rates-grid__subtitle">
             Sail: {selectedSailCode || 'None'} • {snapshotRows.length} snapshots
           </p>
         </div>
-        <div className="published-rates-grid__controls talia-report-filters">
+      </header>
+
+      <section className="published-rates-grid__filters talia-report-filters" aria-label="Published rates filters">
+        <div className="published-rates-grid__controls">
           <label className="talia-report-filters__group" htmlFor="published-rates-promo">
             <span className="talia-report-filters__label">Promo</span>
             <select
@@ -345,7 +348,11 @@ const PublishedRatesGridPresenter = ({
             </select>
           </label>
         </div>
-      </header>
+      </section>
+
+      <section className="published-rates-grid__callout talia-callout" role="note" aria-label="Published rates guidance">
+        Use filter selections to narrow promo, rate type, and currency. Toggle Callouts from the header eye menu or Appearance settings when you want a cleaner view.
+      </section>
 
       {showDetails && sailDetails && (
         <section className="published-rates-grid__details">

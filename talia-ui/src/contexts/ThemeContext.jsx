@@ -199,6 +199,9 @@ export const ThemeProvider = ({ children }) => {
   const [actionsVisible, setActionsVisible] = useState(
     _localFS.actionsVisible !== false
   );
+  const [controlsVisible, setControlsVisible] = useState(
+    _localFS.controlsVisible === true
+  );
   const [calloutsVisible, setCalloutsVisible] = useState(
     _localFS.calloutsVisible !== false
   );
@@ -233,8 +236,9 @@ export const ThemeProvider = ({ children }) => {
     tableHeaderIntensity,
     panelTitlesVisible,
     actionsVisible,
+    controlsVisible,
     calloutsVisible,
-  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, calloutsVisible]);
+  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, calloutsVisible]);
 
   const applyAppearanceSettings = (settings) => {
     if (!settings || typeof settings !== 'object') return false;
@@ -260,6 +264,9 @@ export const ThemeProvider = ({ children }) => {
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'actionsVisible')) {
       setActionsVisible(settings.actionsVisible !== false);
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'controlsVisible')) {
+      setControlsVisible(settings.controlsVisible === true);
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'calloutsVisible')) {
       setCalloutsVisible(settings.calloutsVisible !== false);
@@ -382,7 +389,7 @@ export const ThemeProvider = ({ children }) => {
         clearTimeout(saveSettingsTimerRef.current);
       }
     };
-  }, [appearanceDbLoaded, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, calloutsVisible, activeAppearanceProfileId]);
+  }, [appearanceDbLoaded, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, calloutsVisible, activeAppearanceProfileId]);
 
   useEffect(() => {
     if (!appearanceDbLoaded) return undefined;
@@ -427,6 +434,7 @@ export const ThemeProvider = ({ children }) => {
         evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor,
         panelTitlesVisible,
         actionsVisible,
+        controlsVisible,
         calloutsVisible,
       };
       localStorage.setItem('taliaLayout', JSON.stringify(parsed));
@@ -435,7 +443,7 @@ export const ThemeProvider = ({ children }) => {
       localStorage.setItem('taliaAppearanceProfiles', JSON.stringify(appearanceProfiles));
       localStorage.setItem('taliaActiveAppearanceProfileId', activeAppearanceProfileId || '');
     } catch { /* best-effort */ }
-  }, [fontSize, fontFamily, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor, panelTitlesVisible, actionsVisible, calloutsVisible, appearanceProfiles, activeAppearanceProfileId]);
+  }, [fontSize, fontFamily, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor, panelTitlesVisible, actionsVisible, controlsVisible, calloutsVisible, appearanceProfiles, activeAppearanceProfileId]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -448,6 +456,12 @@ export const ThemeProvider = ({ children }) => {
     root.classList.toggle('talia-actions-hidden', actionsVisible === false);
     window.__taliaActionsVisible = actionsVisible !== false;
   }, [actionsVisible]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('talia-controls-hidden', controlsVisible !== true);
+    window.__taliaControlsVisible = controlsVisible === true;
+  }, [controlsVisible]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -672,6 +686,8 @@ export const ThemeProvider = ({ children }) => {
     setPanelTitlesVisible,
     actionsVisible,
     setActionsVisible,
+    controlsVisible,
+    setControlsVisible,
     calloutsVisible,
     setCalloutsVisible,
 

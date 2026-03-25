@@ -21,6 +21,7 @@ import { createTableActions } from './tableActions.js';
 import { formatDayMon } from '../../../lib/dateFormat';
 import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
 import SubpanelExpandButton from '../../shared/SubpanelExpandButton.jsx';
+import { enforceDashboardUiState } from '../../../services/dashboardUiState';
 import {
   DATA_MANAGEMENT_STATE_EVENT,
   DATA_MANAGEMENT_SET_RANGE_EVENT,
@@ -34,6 +35,46 @@ import '../../../themes/dataMode.css';
 import '../admin.css';
 import './dataManagement.css';
 
+const INTERNAL_TALIA_TABLE_NAMES = new Set([
+  'booking_targets_supplied',
+  'target_profiles',
+  'target_mapping_config',
+  'inventory_item_profile_curve_point',
+  'focuses',
+  'operation_metadata',
+  'sync_metadata',
+  'data_refresh_metadata',
+]);
+
+const filterTablesByTextAndView = (sourceTables, filterText, viewMode) => {
+  const searchText = String(filterText || '').toLowerCase();
+  const searchFiltered = (sourceTables || []).filter((table) => {
+    if (!searchText) return true;
+    return (
+      table.tableName.toLowerCase().includes(searchText) ||
+      (table.source && table.source.toLowerCase().includes(searchText)) ||
+      String(table.status || '').toLowerCase().includes(searchText)
+    );
+  });
+  if (viewMode === 'no-data') return searchFiltered.filter((t) => t.rowCount === 0);
+  if (viewMode === 'has-data') return searchFiltered.filter((t) => t.rowCount > 0);
+  if (viewMode === 'synced') return searchFiltered.filter((t) => t.syncStatus === 'Synced');
+  if (viewMode === 'outdated') return searchFiltered.filter((t) => t.syncStatus === 'Outdated');
+  if (viewMode === 'top-five') {
+    return [...searchFiltered].sort((a, b) => b.rowCount - a.rowCount).slice(0, 5);
+  }
+  return searchFiltered;
+};
+
+const getTableCardTitle = (viewMode) => {
+  if (viewMode === 'top-five') return 'Top Five Tables';
+  if (viewMode === 'no-data') return 'No Data Tables';
+  if (viewMode === 'has-data') return 'Has Data Tables';
+  if (viewMode === 'synced') return 'Synced Tables';
+  if (viewMode === 'outdated') return 'Outdated Tables';
+  return 'All Tables';
+};
+
 export const DataManagementPanelCore = ({
   embedded = false,
   panelInstanceId = null,
@@ -42,6 +83,8 @@ export const DataManagementPanelCore = ({
   const { tables, loading, error, refetch, updateTable } = useDatabaseTables();
   const [filterText, setFilterText] = useState('');
   const [viewMode, setViewMode] = useState('all'); // 'all', 'top-five', 'no-data', 'has-data', 'synced', 'outdated'
+  const [internalFilterText, setInternalFilterText] = useState('');
+  const [internalViewMode, setInternalViewMode] = useState('all');
   const [syncingTables, setSyncingTables] = useState(new Set());
   const [syncProgress, setSyncProgress] = useState({}); // { tableName: { current: 0, total: 0, percentage: 0 } }
   const [syncBlock, setSyncBlock] = useState(null); // { tableName, message, timestamp }
@@ -49,6 +92,7 @@ export const DataManagementPanelCore = ({
   const [serverLogs, setServerLogs] = useState([]);
   const [allActivityLogs, setAllActivityLogs] = useState([]); // Unified activity log
   const [selectedTable, setSelectedTable] = useState(null);
+  const [selectedInternalTable, setSelectedInternalTable] = useState(null);
   const [reviewData, setReviewData] = useState(null);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [statusTable, setStatusTable] = useState(null);
@@ -445,45 +489,24 @@ The backup will be saved to: talia-server/backups/`;
     }
   };
 
-  const searchFilteredTables = tables.filter((table) => {
-    if (!filterText) return true;
-    const searchText = filterText.toLowerCase();
-    return (
-      table.tableName.toLowerCase().includes(searchText) ||
-      (table.source && table.source.toLowerCase().includes(searchText)) ||
-      table.status.toLowerCase().includes(searchText)
-    );
-  });
-
-  const displayedTables = React.useMemo(() => {
-    if (viewMode === 'no-data') {
-      return searchFilteredTables.filter((t) => t.rowCount === 0);
-    }
-    if (viewMode === 'has-data') {
-      return searchFilteredTables.filter((t) => t.rowCount > 0);
-    }
-    if (viewMode === 'synced') {
-      return searchFilteredTables.filter((t) => t.syncStatus === 'Synced');
-    }
-    if (viewMode === 'outdated') {
-      return searchFilteredTables.filter((t) => t.syncStatus === 'Outdated');
-    }
-    if (viewMode === 'top-five') {
-      return [...searchFilteredTables]
-        .sort((a, b) => b.rowCount - a.rowCount)
-        .slice(0, 5);
-    }
-    return searchFilteredTables;
-  }, [searchFilteredTables, viewMode]);
-
-  const tableCardTitle = React.useMemo(() => {
-    if (viewMode === 'top-five') return 'Top Five Tables';
-    if (viewMode === 'no-data') return 'No Data Tables';
-    if (viewMode === 'has-data') return 'Has Data Tables';
-    if (viewMode === 'synced') return 'Synced Tables';
-    if (viewMode === 'outdated') return 'Outdated Tables';
-    return 'All Tables';
-  }, [viewMode]);
+  const internalTables = React.useMemo(
+    () => tables.filter((table) => INTERNAL_TALIA_TABLE_NAMES.has(table.tableName) || table.type === 'application' || table.type === 'system'),
+    [tables]
+  );
+  const externalTables = React.useMemo(
+    () => tables.filter((table) => !internalTables.some((entry) => entry.tableName === table.tableName)),
+    [internalTables, tables]
+  );
+  const displayedTables = React.useMemo(
+    () => filterTablesByTextAndView(externalTables, filterText, viewMode),
+    [externalTables, filterText, viewMode]
+  );
+  const displayedInternalTables = React.useMemo(
+    () => filterTablesByTextAndView(internalTables, internalFilterText, internalViewMode),
+    [internalFilterText, internalTables, internalViewMode]
+  );
+  const tableCardTitle = React.useMemo(() => getTableCardTitle(viewMode), [viewMode]);
+  const internalTableCardTitle = React.useMemo(() => getTableCardTitle(internalViewMode), [internalViewMode]);
 
   const runningSyncTables = Array.from(syncingTables);
   const runningSyncCount = runningSyncTables.length;
@@ -495,8 +518,12 @@ The backup will be saved to: talia-server/backups/`;
     : 0;
 
   const syncableTableNames = React.useMemo(
-    () => tables.filter((t) => t?.hasSyncConfig === true).map((t) => t.tableName),
-    [tables]
+    () => externalTables.filter((t) => t?.hasSyncConfig === true).map((t) => t.tableName),
+    [externalTables]
+  );
+  const internalSyncableTableNames = React.useMemo(
+    () => internalTables.filter((t) => t?.hasSyncConfig === true).map((t) => t.tableName),
+    [internalTables]
   );
   const parseSyncBlockError = useCallback((message, fallbackTableName = null) => {
     const text = String(message || '');
@@ -517,6 +544,12 @@ The backup will be saved to: talia-server/backups/`;
       .map((t) => t.tableName)
       .sort((a, b) => String(a).localeCompare(String(b))),
     [displayedTables]
+  );
+  const selectableInternalTableNames = React.useMemo(
+    () => displayedInternalTables
+      .map((t) => t.tableName)
+      .sort((a, b) => String(a).localeCompare(String(b))),
+    [displayedInternalTables]
   );
 
   // Get GraphQL endpoint (same logic as Apollo client)
@@ -540,6 +573,34 @@ The backup will be saved to: talia-server/backups/`;
     }
     return result.data;
   };
+
+  const queryReviewTable = useCallback(async ({ tableName, limit = 100, filters = {} }) => {
+    const cleanedFilters = Object.entries(filters || {}).reduce((acc, [key, value]) => {
+      if (value === null || value === undefined) return acc;
+      if (typeof value === 'string' && value.trim() === '') return acc;
+      acc[key] = value;
+      return acc;
+    }, {});
+    const query = `
+      query GetTableData($tableName: String!, $limit: Int, $filters: TableDataFilters) {
+        tableData(tableName: $tableName, limit: $limit, filters: $filters)
+      }
+    `;
+    const data = await graphqlRequest(query, {
+      tableName,
+      limit: Number(limit) || 100,
+      filters: cleanedFilters,
+    });
+    const rows = Array.isArray(data?.tableData) ? data.tableData : [];
+    addClientLog({
+      id: `${Date.now()}-${++logIdCounterRef.current}`,
+      timestamp: new Date(),
+      type: 'info',
+      message: `Loaded ${rows.length} rows from ${tableName}`,
+      tableName,
+    });
+    return { tableName, data: rows, limit: Number(limit) || 100, filters: cleanedFilters };
+  }, [graphqlRequest]);
 
   const loadGlobalRange = async () => {
     try {
@@ -757,7 +818,7 @@ The backup will be saved to: talia-server/backups/`;
       // Sequential to avoid overlapping syncs
       // Capture per-table result to produce an explicit integration summary.
       // This keeps failures visible even when logs are noisy.
-      const result = await handleSync(table.tableName, forceFullSync);
+      const result = await handleSync(table.tableName, forceFullSync, { enforceUiState: false });
       results.push({
         tableName: table.tableName,
         ...(result || { success: false, error: 'No result returned by sync handler' })
@@ -806,6 +867,9 @@ The backup will be saved to: talia-server/backups/`;
     }
     setBulkSyncing(false);
     setBulkMode(null);
+    if (forceFullSync) {
+      enforceDashboardUiState({ dispatchEvents: true });
+    }
   };
 
   useEffect(() => {
@@ -956,7 +1020,8 @@ The backup will be saved to: talia-server/backups/`;
   }, [panelComponentId, rangeDraft.from, rangeDraft.to, handleSyncAll, refetch, tables]);
 
   // Handle sync button click
-  const handleSync = async (tableName, forceFullSync = false) => {
+  const handleSync = async (tableName, forceFullSync = false, options = {}) => {
+    const shouldEnforceUiState = options?.enforceUiState !== false;
     setSyncBlock(null);
     // Check if table has a sync configuration
     const table = tables.find(t => t.tableName === tableName);
@@ -1578,6 +1643,9 @@ The backup will be saved to: talia-server/backups/`;
           delete newProgress[tableName];
           return newProgress;
         });
+        if (forceFullSync && shouldEnforceUiState) {
+          enforceDashboardUiState({ dispatchEvents: true });
+        }
       }
   };
 
@@ -1720,6 +1788,114 @@ The backup will be saved to: talia-server/backups/`;
     );
   };
 
+  const renderIntegrationSection = ({
+    sectionKey,
+    sectionTitle,
+    sectionSubtitle,
+    sectionTables,
+    sectionDisplayedTables,
+    sectionCardTitle,
+    sectionSelectedTable,
+    sectionSetSelectedTable,
+    sectionTableNames,
+    sectionSyncableTableNames,
+    sectionViewMode,
+    sectionSetViewMode,
+    sectionFilterText,
+    sectionSetFilterText,
+  }) => (
+    <section className="dm-table-integration">
+      <header className="talia-report__header dm-section-header">
+        <div className="talia-report__header-left">
+          <h3 className="talia-report__title dm-section-header__title">{sectionTitle}</h3>
+          <span className="talia-report__subtitle dm-section-header__subtitle">{sectionSubtitle}</span>
+        </div>
+      </header>
+      <DataManagementActionHeader
+        panelComponentId={panelComponentId}
+        tables={sectionTables}
+        selectedTable={sectionSelectedTable}
+        syncableTableNames={sectionSyncableTableNames}
+        bulkSyncing={bulkSyncing}
+        runningSyncCount={runningSyncCount}
+        runningProgress={runningProgress}
+        bulkSummary={bulkSummary}
+        backupStatus={backupStatus}
+        configuredRange={configuredRange}
+        globalActualRange={globalActualRange}
+        formatDateTime={formatDateTime}
+        formatDateRange={formatDateRange}
+        lastActivityLog={lastActivityLog}
+        syncBlock={syncBlock}
+      />
+
+      <FiltersBar
+        tables={sectionTables}
+        selectedTable={sectionSelectedTable}
+        setSelectedTable={sectionSetSelectedTable}
+        tableNames={sectionTableNames}
+        syncableTableNames={sectionSyncableTableNames}
+        rangeDraft={rangeDraft}
+        setRangeDraft={setRangeDraft}
+        rangeSaving={rangeSaving}
+        rangeError={rangeError}
+        onSaveRange={() => saveRangeValues(rangeDraft)}
+        viewMode={sectionViewMode}
+        setViewMode={sectionSetViewMode}
+        filterText={sectionFilterText}
+        setFilterText={sectionSetFilterText}
+      />
+
+      {!loading && !error && sectionDisplayedTables.length > 0 && (
+        <div className={`talia-card talia-card--expandable dm-table-card dm-table-section--spaced ${expandedDataKey === sectionKey ? 'talia-card--expanded' : ''}`}>
+          <SubpanelExpandButton
+            className="talia-card__expand-toggle"
+            expanded={expandedDataKey === sectionKey}
+            onToggle={() => toggleExpandedDataKey(sectionKey)}
+            label="tables"
+          />
+          <div className="talia-card__header dm-table-card__header">
+            <h3 className="talia-card__title">{sectionCardTitle} ({sectionDisplayedTables.length})</h3>
+          </div>
+          <div className="talia-card__content dm-table-card__body">
+            <DataManagementTable
+              tableId={`dm-main-table-${sectionKey}`}
+              data={sectionDisplayedTables}
+              configuredRange={configuredRange}
+              selectedTable={sectionSelectedTable}
+              onSelectedTableChange={sectionSetSelectedTable}
+              syncingTables={syncingTables}
+              syncProgress={syncProgress}
+              blockedTableName={syncBlock?.tableName || null}
+              statusLoadingTable={statusLoadingTable}
+              reviewLoading={reviewLoading}
+              onOpenStatus={handleOpenStatus}
+              tableActions={tableActions}
+            />
+          </div>
+        </div>
+      )}
+
+      {loading && (
+        <div className="dm-card">
+          <LoadingSpinner size="small" message="Loading table information..." />
+        </div>
+      )}
+
+      {error && (
+        <div className="dm-card dm-card--error">
+          <ErrorMessage error={error} title="Error loading tables" onRetry={refetch} />
+        </div>
+      )}
+
+      {!loading && !error && sectionDisplayedTables.length === 0 && (
+        <div className="dm-card dm-card--empty">
+          {sectionFilterText || sectionViewMode !== 'all' ? 'No tables match your selected view' : 'No tables found'}
+        </div>
+      )}
+    </section>
+  );
+
   return (
     <div
       ref={rootRef}
@@ -1746,6 +1922,9 @@ The backup will be saved to: talia-server/backups/`;
           <button className={`admin-tab ${activeSection === 'external-integration' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('external-integration')}>
             External Integration
           </button>
+          <button className={`admin-tab ${activeSection === 'internal-integration' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('internal-integration')}>
+            Internal Integration
+          </button>
           <button className={`admin-tab ${activeSection === 'backup-status' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('backup-status')}>
             Backup and Status
           </button>
@@ -1756,100 +1935,59 @@ The backup will be saved to: talia-server/backups/`;
 
         <main className={`talia-report__content admin-dashboard-panel__content dm-dashboard-content ${activeSection === 'operations' ? 'dm-dashboard-content--operations' : ''}`.trim()}>
           {activeSection === 'table-integration' && (
-            <section className="dm-table-integration">
-              <DataManagementActionHeader
-                panelComponentId={panelComponentId}
-                tables={tables}
-                selectedTable={selectedTable}
-                syncableTableNames={syncableTableNames}
-                bulkSyncing={bulkSyncing}
-                runningSyncCount={runningSyncCount}
-                runningProgress={runningProgress}
-                bulkSummary={bulkSummary}
-                backupStatus={backupStatus}
-                configuredRange={configuredRange}
-                globalActualRange={globalActualRange}
-                formatDateTime={formatDateTime}
-                formatDateRange={formatDateRange}
-                lastActivityLog={lastActivityLog}
-                syncBlock={syncBlock}
-              />
-
-              <FiltersBar
-                tables={tables}
-                selectedTable={selectedTable}
-                setSelectedTable={setSelectedTable}
-                tableNames={selectableTableNames}
-                syncableTableNames={syncableTableNames}
-                rangeDraft={rangeDraft}
-                setRangeDraft={setRangeDraft}
-                rangeSaving={rangeSaving}
-                rangeError={rangeError}
-                onSaveRange={() => saveRangeValues(rangeDraft)}
-                viewMode={viewMode}
-                setViewMode={setViewMode}
-                filterText={filterText}
-                setFilterText={setFilterText}
-              />
-
-              {!loading && !error && displayedTables.length > 0 && (
-                <div className={`talia-card talia-card--expandable dm-table-card dm-table-section--spaced ${expandedDataKey === 'tables' ? 'talia-card--expanded' : ''}`}>
-                  <SubpanelExpandButton
-                    className="talia-card__expand-toggle"
-                    expanded={expandedDataKey === 'tables'}
-                    onToggle={() => toggleExpandedDataKey('tables')}
-                    label="tables"
-                  />
-                  <div className="talia-card__header dm-table-card__header">
-                    <h3 className="talia-card__title">{tableCardTitle} ({displayedTables.length})</h3>
-                  </div>
-                  <div className="talia-card__content dm-table-card__body">
-                    <DataManagementTable
-                      tableId="dm-main-table"
-                      data={displayedTables}
-                      configuredRange={configuredRange}
-                      selectedTable={selectedTable}
-                      onSelectedTableChange={setSelectedTable}
-                      syncingTables={syncingTables}
-                      syncProgress={syncProgress}
-                      blockedTableName={syncBlock?.tableName || null}
-                      statusLoadingTable={statusLoadingTable}
-                      reviewLoading={reviewLoading}
-                      onOpenStatus={handleOpenStatus}
-                      tableActions={tableActions}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {loading && (
-                <div className="dm-card">
-                  <LoadingSpinner size="small" message="Loading table information..." />
-                </div>
-              )}
-
-              {error && (
-                <div className="dm-card dm-card--error">
-                  <ErrorMessage error={error} title="Error loading tables" onRetry={refetch} />
-                </div>
-              )}
-
-              {!loading && !error && displayedTables.length === 0 && (
-                <div className="dm-card dm-card--empty">
-                  {filterText || viewMode !== 'all' ? 'No tables match your selected view' : 'No tables found'}
-                </div>
-              )}
-            </section>
+            renderIntegrationSection({
+              sectionKey: 'tables',
+              sectionTitle: 'Table Integration',
+              sectionSubtitle: 'External source tables and sync controls',
+              sectionTables: externalTables,
+              sectionDisplayedTables: displayedTables,
+              sectionCardTitle: tableCardTitle,
+              sectionSelectedTable: selectedTable,
+              sectionSetSelectedTable: setSelectedTable,
+              sectionTableNames: selectableTableNames,
+              sectionSyncableTableNames: syncableTableNames,
+              sectionViewMode: viewMode,
+              sectionSetViewMode: setViewMode,
+              sectionFilterText: filterText,
+              sectionSetFilterText: setFilterText,
+            })
           )}
 
           {activeSection === 'external-integration' && (
             <div className="dm-tab-stack">
+              <header className="talia-report__header dm-section-header">
+                <div className="talia-report__header-left">
+                  <h3 className="talia-report__title dm-section-header__title">External Integration</h3>
+                  <span className="talia-report__subtitle dm-section-header__subtitle">
+                    Import external CSV target data and map into Talia structures
+                  </span>
+                </div>
+              </header>
               <TargetImportSection
                 addClientLog={addClientLog}
                 logIdCounterRef={logIdCounterRef}
                 onImportComplete={() => updateTable('booking_targets_supplied')}
               />
             </div>
+          )}
+
+          {activeSection === 'internal-integration' && (
+            renderIntegrationSection({
+              sectionKey: 'internal',
+              sectionTitle: 'Internal Integration',
+              sectionSubtitle: 'Talia-owned tables, mappings, targets, and profile data',
+              sectionTables: internalTables,
+              sectionDisplayedTables: displayedInternalTables,
+              sectionCardTitle: internalTableCardTitle,
+              sectionSelectedTable: selectedInternalTable,
+              sectionSetSelectedTable: setSelectedInternalTable,
+              sectionTableNames: selectableInternalTableNames,
+              sectionSyncableTableNames: internalSyncableTableNames,
+              sectionViewMode: internalViewMode,
+              sectionSetViewMode: setInternalViewMode,
+              sectionFilterText: internalFilterText,
+              sectionSetFilterText: setInternalFilterText,
+            })
           )}
 
           {activeSection === 'backup-status' && (
@@ -2047,6 +2185,7 @@ The backup will be saved to: talia-server/backups/`;
 
       <ReviewModal
         reviewData={reviewData}
+        onQuery={queryReviewTable}
         onClose={() => setReviewData(null)}
       />
     </div>

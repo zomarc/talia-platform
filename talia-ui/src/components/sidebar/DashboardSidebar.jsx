@@ -68,6 +68,8 @@ function DashboardSidebar({
     setPanelTitlesVisible,
     actionsVisible,
     setActionsVisible,
+    controlsVisible,
+    setControlsVisible,
     calloutsVisible,
     setCalloutsVisible,
     appearanceProfiles,
@@ -592,6 +594,18 @@ function DashboardSidebar({
                 <span>Show panel action sections across reports</span>
               </label>
               <div className="dashboard-form-hint">Matches the Actions toggle in the top header visibility menu.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Controls</label>
+              <label className="dashboard-form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={controlsVisible}
+                  onChange={(event) => setControlsVisible(event.target.checked)}
+                />
+                <span>Show top-level controls drawer for Data Management</span>
+              </label>
+              <div className="dashboard-form-hint">Matches the Controls toggle in the top header visibility menu. Defaults to closed.</div>
             </div>
             <div className="dashboard-form-group">
               <label className="dashboard-form-label">Callouts</label>

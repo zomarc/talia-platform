@@ -711,6 +711,9 @@ export const typeDefs = `#graphql
     package_type: String
     geog_area_code: String
     include_non_real_sailings: Boolean
+    query_column: String
+    query_value: String
+    query_operator: String
     # Add other common filters as needed
   }
 

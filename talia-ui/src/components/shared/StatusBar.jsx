@@ -31,6 +31,7 @@ import {
   setGlobalReportDetailsVisible,
   clearPanelReportDetailsOverrides,
 } from '../../services/panelDetailsState';
+import { enforceDashboardUiState } from '../../services/dashboardUiState';
 import { useTheme } from '../../contexts/ThemeContext';
 import userActivityTracker from '../../services/userActivityTracker';
 import { loadUserProfileState, saveUserProfileState } from '../../services/data/userProfileState';
@@ -164,7 +165,8 @@ const HeaderCriteriaMenuSelect = ({
                 className={`status-bar__menu-select-option ${isSelected ? 'status-bar__menu-select-option--active' : ''}`}
                 onClick={() => handleOptionSelect(option.key)}
               >
-                {option.label}
+                <span>{option.label}</span>
+                {isSelected ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
               </button>
             );
           })}
@@ -192,6 +194,8 @@ const StatusBar = ({
     setPanelTitlesVisible,
     actionsVisible,
     setActionsVisible,
+    controlsVisible,
+    setControlsVisible,
     calloutsVisible,
     setCalloutsVisible,
   } = useTheme();
@@ -251,6 +255,7 @@ const StatusBar = ({
   const [profileCriteriaHydrated, setProfileCriteriaHydrated] = useState(false);
   const [visibilityControlsOpen, setVisibilityControlsOpen] = useState(false);
   const visibilityControlsRef = useRef(null);
+  const statusBarRootRef = useRef(null);
   const [activePanelComponent, setActivePanelComponent] = useState(() => (
     window?.dockviewApi?.activePanel?.component
     || window?.dockviewApi?.activePanel?.api?.component
@@ -270,6 +275,12 @@ const StatusBar = ({
     ? canUseAdvancedControls
     : canUseAdvancedHeader(userRole);
   const isDataManagementActive = activePanelComponent === 'data-management-panel';
+  const showDataAdminActions = actionsVisible === true;
+  const showDataAdminFilters = filtersVisible === true;
+  const showDataAdminStrip = hasAdvancedControls
+    && isDataManagementActive
+    && controlsVisible === true
+    && (showDataAdminActions || showDataAdminFilters);
 
   // Update display message when statusMessage changes
   useEffect(() => {
@@ -481,6 +492,12 @@ const StatusBar = ({
     setActionsVisible(nextVisible);
   };
 
+  const handleControlsToggle = () => {
+    const nextVisible = controlsVisible !== true;
+    userActivityTracker.recordHeaderAction('controls-toggle', { status: nextVisible ? 'show' : 'hide' });
+    setControlsVisible(nextVisible);
+  };
+
   const clearRefreshTimer = () => {
     if (refreshPhaseTimerRef.current) {
       window.clearTimeout(refreshPhaseTimerRef.current);
@@ -506,6 +523,7 @@ const StatusBar = ({
   };
 
   const handleGlobalRefreshCycle = () => {
+    enforceDashboardUiState({ dispatchEvents: true });
     const { panelId, panelComponent } = getActivePanelTarget();
     if (refreshPhase === 'active') {
       if (!panelId && !panelComponent) return;
@@ -629,6 +647,26 @@ const StatusBar = ({
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
       window.removeEventListener('keydown', handleEscape);
+    };
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!root) return undefined;
+    const updateOffset = () => {
+      const nextHeight = statusBarRootRef.current?.offsetHeight;
+      root.style.setProperty('--talia-status-bar-total-height', `${Math.max(38, nextHeight || 38)}px`);
+    };
+    updateOffset();
+    let resizeObserver = null;
+    if (typeof ResizeObserver !== 'undefined' && statusBarRootRef.current) {
+      resizeObserver = new ResizeObserver(updateOffset);
+      resizeObserver.observe(statusBarRootRef.current);
+    }
+    window.addEventListener('resize', updateOffset);
+    return () => {
+      if (resizeObserver) resizeObserver.disconnect();
+      window.removeEventListener('resize', updateOffset);
     };
   }, []);
 
@@ -803,6 +841,10 @@ const StatusBar = ({
     };
   }, [profileCriteriaHydrated, globalDateRange, globalDuration, activeOnly]);
 
+  useEffect(() => {
+    enforceDashboardUiState({ dispatchEvents: true });
+  }, []);
+
   // Get event summary
   const getEventSummary = (event) => {
     if (!event) return null;
@@ -857,7 +899,7 @@ const StatusBar = ({
 
   // Always render - mode selector should always be visible
   return (
-    <div className="status-bar">
+    <div className="status-bar" ref={statusBarRootRef}>
       <div className="status-bar__container">
         <div className="status-bar__leading">
           {currentMode === 'app' && (
@@ -897,9 +939,25 @@ const StatusBar = ({
                       <button
                         type="button"
                         role="menuitemcheckbox"
+                        aria-checked={controlsVisible}
+                        className={`status-bar__visibility-option ${controlsVisible ? 'status-bar__visibility-option--active' : ''}`}
+                        onClick={() => {
+                          handleControlsToggle();
+                          setVisibilityControlsOpen(false);
+                        }}
+                        title="Show or hide the top-level controls strip"
+                      >
+                        Controls
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitemcheckbox"
                         aria-checked={filtersVisible}
                         className={`status-bar__visibility-option ${filtersVisible ? 'status-bar__visibility-option--active' : ''}`}
-                        onClick={handleFiltersToggle}
+                        onClick={() => {
+                          handleFiltersToggle();
+                          setVisibilityControlsOpen(false);
+                        }}
                         title="Show or hide filter rows on all reports"
                       >
                         Filters
@@ -909,7 +967,10 @@ const StatusBar = ({
                         role="menuitemcheckbox"
                         aria-checked={calloutsVisible}
                         className={`status-bar__visibility-option ${calloutsVisible ? 'status-bar__visibility-option--active' : ''}`}
-                        onClick={handleCalloutsToggle}
+                        onClick={() => {
+                          handleCalloutsToggle();
+                          setVisibilityControlsOpen(false);
+                        }}
                         title="Show or hide informational callouts across all reports"
                       >
                         Callouts
@@ -919,7 +980,10 @@ const StatusBar = ({
                         role="menuitemcheckbox"
                         aria-checked={actionsVisible}
                         className={`status-bar__visibility-option ${actionsVisible ? 'status-bar__visibility-option--active' : ''}`}
-                        onClick={handleActionsToggle}
+                        onClick={() => {
+                          handleActionsToggle();
+                          setVisibilityControlsOpen(false);
+                        }}
                         title="Show or hide panel action sections across all reports"
                       >
                         Actions
@@ -929,7 +993,10 @@ const StatusBar = ({
                         role="menuitemcheckbox"
                         aria-checked={panelTitlesVisible}
                         className={`status-bar__visibility-option ${panelTitlesVisible ? 'status-bar__visibility-option--active' : ''}`}
-                        onClick={handlePanelTitlesToggle}
+                        onClick={() => {
+                          handlePanelTitlesToggle();
+                          setVisibilityControlsOpen(false);
+                        }}
                         title="Show or hide panel titles globally"
                       >
                         Titles
@@ -939,7 +1006,10 @@ const StatusBar = ({
                         role="menuitemcheckbox"
                         aria-checked={detailsVisible}
                         className={`status-bar__visibility-option ${detailsVisible ? 'status-bar__visibility-option--active' : ''}`}
-                        onClick={handleDetailsToggle}
+                        onClick={() => {
+                          handleDetailsToggle();
+                          setVisibilityControlsOpen(false);
+                        }}
                         title="Show or hide data details on all report panels"
                       >
                         Details
@@ -949,7 +1019,10 @@ const StatusBar = ({
                         role="menuitemcheckbox"
                         aria-checked={tableLayoutMode === 'width'}
                         className={`status-bar__visibility-option ${tableLayoutMode === 'width' ? 'status-bar__visibility-option--active' : ''}`}
-                        onClick={handleTableLayoutToggle}
+                        onClick={() => {
+                          handleTableLayoutToggle();
+                          setVisibilityControlsOpen(false);
+                        }}
                         title={tableLayoutMode === 'width' ? 'Tables fill width' : 'Tables fit data'}
                       >
                         Fit
@@ -1168,132 +1241,140 @@ const StatusBar = ({
 
       </div>
 
-      {hasAdvancedControls && isDataManagementActive && (
+      {showDataAdminStrip && (
         <div className="status-bar__data-admin">
           <span className="status-bar__data-admin-title">Data Mgmt</span>
-          <label className="status-bar__data-admin-range">
-            <span className="status-bar__header-range-label">Table</span>
-            <HeaderCriteriaMenuSelect
-              id="status-bar-data-management-table"
-              wide
-              options={[
-                { key: '', label: 'Select table' },
-                ...(dataMgmtState.syncableTableNames || []).map((tableName) => ({ key: tableName, label: tableName })),
-              ]}
-              value={dataMgmtState.selectedTable || ''}
-              onChange={handleDataMgmtSelectTable}
-              aria-label="Data Management target table"
-            />
-          </label>
-          <button
-            type="button"
-            className="status-bar__header-btn"
-            onClick={() => handleDataMgmtTableAction('status')}
-            title="Status for selected table"
-            aria-label="Status for selected table"
-            disabled={!dataMgmtState.selectedTable}
-          >
-            🧾
-          </button>
-          <button
-            type="button"
-            className="status-bar__header-btn"
-            onClick={() => handleDataMgmtTableAction('review')}
-            title="Review selected table rows"
-            aria-label="Review selected table rows"
-            disabled={!dataMgmtState.selectedTable}
-          >
-            👁️
-          </button>
-          <button
-            type="button"
-            className="status-bar__header-btn"
-            onClick={() => handleDataMgmtTableAction('sync')}
-            title="Sync selected table"
-            aria-label="Sync selected table"
-            disabled={!dataMgmtState.selectedTable}
-          >
-            🔄
-          </button>
-          <button
-            type="button"
-            className="status-bar__header-btn"
-            onClick={() => handleDataMgmtTableAction('full')}
-            title="Full update selected table"
-            aria-label="Full update selected table"
-            disabled={!dataMgmtState.selectedTable}
-          >
-            ⚡
-          </button>
-          <label className="status-bar__data-admin-range">
-            <span className="status-bar__header-range-label">From</span>
-            <input
-              type="date"
-              value={dataMgmtState.rangeDraft.from || ''}
-              onChange={(event) => handleDataMgmtRangeInput('from', event.target.value)}
-              className="status-bar__data-admin-input"
-              aria-label="Data Management range start"
-            />
-          </label>
-          <label className="status-bar__data-admin-range">
-            <span className="status-bar__header-range-label">To</span>
-            <input
-              type="date"
-              value={dataMgmtState.rangeDraft.to || ''}
-              onChange={(event) => handleDataMgmtRangeInput('to', event.target.value)}
-              className="status-bar__data-admin-input"
-              aria-label="Data Management range end"
-            />
-          </label>
-          <button
-            type="button"
-            className="status-bar__header-btn"
-            onClick={handleDataMgmtSaveRange}
-            disabled={dataMgmtState.rangeSaving}
-            title="Save integration date range"
-            aria-label="Save integration date range"
-          >
-            {dataMgmtState.rangeSaving ? '⏳' : '✓'}
-          </button>
-          <button
-            type="button"
-            className={`status-bar__header-btn ${dataMgmtState.bulkSyncing && dataMgmtState.bulkMode === 'sync' ? 'status-bar__header-btn--active' : ''}`}
-            onClick={() => handleDataMgmtSyncAll('sync')}
-            disabled={dataMgmtState.bulkSyncing}
-            title="Sync all configured tables"
-            aria-label="Sync all configured tables"
-          >
-            ↻
-          </button>
-          <button
-            type="button"
-            className={`status-bar__header-btn ${dataMgmtState.bulkSyncing && dataMgmtState.bulkMode === 'full' ? 'status-bar__header-btn--active' : ''}`}
-            onClick={() => handleDataMgmtSyncAll('full')}
-            disabled={dataMgmtState.bulkSyncing}
-            title="Full update all configured tables"
-            aria-label="Full update all configured tables"
-          >
-            ⚡
-          </button>
-          <button
-            type="button"
-            className="status-bar__header-btn"
-            onClick={handleDataMgmtBackup}
-            disabled={dataMgmtState.backupLoading}
-            title="Backup tools"
-            aria-label="Backup tools"
-          >
-            {dataMgmtState.backupLoading ? '⏳' : '💾'}
-          </button>
-          <button
-            type="button"
-            className="status-bar__header-btn"
-            onClick={handleDataMgmtRefresh}
-            title="Refresh Data Management state"
-            aria-label="Refresh Data Management state"
-          >
-            ⟳
-          </button>
+          {showDataAdminFilters && (
+            <>
+              <label className="status-bar__data-admin-range">
+                <span className="status-bar__header-range-label">Table</span>
+                <HeaderCriteriaMenuSelect
+                  id="status-bar-data-management-table"
+                  wide
+                  options={[
+                    { key: '', label: 'Select table' },
+                    ...(dataMgmtState.syncableTableNames || []).map((tableName) => ({ key: tableName, label: tableName })),
+                  ]}
+                  value={dataMgmtState.selectedTable || ''}
+                  onChange={handleDataMgmtSelectTable}
+                  aria-label="Data Management target table"
+                />
+              </label>
+              <label className="status-bar__data-admin-range">
+                <span className="status-bar__header-range-label">From</span>
+                <input
+                  type="date"
+                  value={dataMgmtState.rangeDraft.from || ''}
+                  onChange={(event) => handleDataMgmtRangeInput('from', event.target.value)}
+                  className="status-bar__data-admin-input"
+                  aria-label="Data Management range start"
+                />
+              </label>
+              <label className="status-bar__data-admin-range">
+                <span className="status-bar__header-range-label">To</span>
+                <input
+                  type="date"
+                  value={dataMgmtState.rangeDraft.to || ''}
+                  onChange={(event) => handleDataMgmtRangeInput('to', event.target.value)}
+                  className="status-bar__data-admin-input"
+                  aria-label="Data Management range end"
+                />
+              </label>
+              <button
+                type="button"
+                className="status-bar__header-btn"
+                onClick={handleDataMgmtSaveRange}
+                disabled={dataMgmtState.rangeSaving}
+                title="Save integration date range"
+                aria-label="Save integration date range"
+              >
+                {dataMgmtState.rangeSaving ? '⏳' : '✓'}
+              </button>
+            </>
+          )}
+          {showDataAdminActions && (
+            <>
+              <button
+                type="button"
+                className="status-bar__header-btn"
+                onClick={() => handleDataMgmtTableAction('status')}
+                title="Status for selected table"
+                aria-label="Status for selected table"
+                disabled={!dataMgmtState.selectedTable}
+              >
+                🧾
+              </button>
+              <button
+                type="button"
+                className="status-bar__header-btn"
+                onClick={() => handleDataMgmtTableAction('review')}
+                title="Review selected table rows"
+                aria-label="Review selected table rows"
+                disabled={!dataMgmtState.selectedTable}
+              >
+                👁️
+              </button>
+              <button
+                type="button"
+                className="status-bar__header-btn"
+                onClick={() => handleDataMgmtTableAction('sync')}
+                title="Sync selected table"
+                aria-label="Sync selected table"
+                disabled={!dataMgmtState.selectedTable}
+              >
+                🔄
+              </button>
+              <button
+                type="button"
+                className="status-bar__header-btn"
+                onClick={() => handleDataMgmtTableAction('full')}
+                title="Full update selected table"
+                aria-label="Full update selected table"
+                disabled={!dataMgmtState.selectedTable}
+              >
+                ⚡
+              </button>
+              <button
+                type="button"
+                className={`status-bar__header-btn ${dataMgmtState.bulkSyncing && dataMgmtState.bulkMode === 'sync' ? 'status-bar__header-btn--active' : ''}`}
+                onClick={() => handleDataMgmtSyncAll('sync')}
+                disabled={dataMgmtState.bulkSyncing}
+                title="Sync all configured tables"
+                aria-label="Sync all configured tables"
+              >
+                ↻
+              </button>
+              <button
+                type="button"
+                className={`status-bar__header-btn ${dataMgmtState.bulkSyncing && dataMgmtState.bulkMode === 'full' ? 'status-bar__header-btn--active' : ''}`}
+                onClick={() => handleDataMgmtSyncAll('full')}
+                disabled={dataMgmtState.bulkSyncing}
+                title="Full update all configured tables"
+                aria-label="Full update all configured tables"
+              >
+                ⚡
+              </button>
+              <button
+                type="button"
+                className="status-bar__header-btn"
+                onClick={handleDataMgmtBackup}
+                disabled={dataMgmtState.backupLoading}
+                title="Backup tools"
+                aria-label="Backup tools"
+              >
+                {dataMgmtState.backupLoading ? '⏳' : '💾'}
+              </button>
+              <button
+                type="button"
+                className="status-bar__header-btn"
+                onClick={handleDataMgmtRefresh}
+                title="Refresh Data Management state"
+                aria-label="Refresh Data Management state"
+              >
+                ⟳
+              </button>
+            </>
+          )}
         </div>
       )}
 

@@ -461,7 +461,7 @@
 
 .talia-app-shell {
   box-sizing: border-box;
-  padding-top: 38px;
+  padding-top: var(--talia-status-bar-total-height, 38px);
   transition: padding-top 0.3s ease;
   min-height: 100dvh;
   height: 100dvh;

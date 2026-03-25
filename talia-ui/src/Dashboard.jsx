@@ -926,6 +926,8 @@ function Dashboard({ user }) {
   const apiRef = useRef(null);
   const dockviewHostRef = useRef(null);
   const initializedRef = useRef(false); // guard for React 18 StrictMode
+  const pendingPersistedFocusIdRef = useRef(null);
+  const persistedFocusAppliedRef = useRef(false);
   const [isGroupMaximized, setIsGroupMaximized] = useState(false);
   const reportPanelIds = React.useMemo(
     () => new Set(Object.values(reportRegistry).map((report) => report.panelId).filter(Boolean)),
@@ -1106,6 +1108,16 @@ function Dashboard({ user }) {
       })
     );
   }, [taliaFocuses, currentFocus]);
+
+  useEffect(() => {
+    const pendingFocusId = pendingPersistedFocusIdRef.current;
+    if (!apiRef.current || !pendingFocusId || persistedFocusAppliedRef.current) return;
+    if (currentFocus !== pendingFocusId) return;
+    persistedFocusAppliedRef.current = true;
+    handleFocusChange(pendingFocusId).catch(() => {
+      persistedFocusAppliedRef.current = false;
+    });
+  }, [currentFocus, handleFocusChange]);
 
   // Save current layout to focus
   const handleSaveCurrentLayoutToFocus = useCallback(async (focusId) => {
@@ -1414,89 +1426,110 @@ function Dashboard({ user }) {
 
     debugLog("Dockview onReady - API initialized", api);
 
-    // Load and restore settings BEFORE creating panels
+    // Load and restore settings BEFORE creating panels.
+    // Priority: persisted focus layout (profile/local) > generic dockview layout fallback.
+    const runFallbackLayoutRestore = () => {
+      const saved = localStorage.getItem(LAYOUT_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed?.version === LAYOUT_VERSION && parsed?.data) {
+            const isValidLayout = validateLayoutData(parsed.data);
+            if (!isValidLayout) {
+              console.warn('Invalid layout data structure, clearing corrupted data');
+              localStorage.removeItem(LAYOUT_KEY);
+              createDefaultLayout();
+              return;
+            }
+
+            if (parsed.fontSettings) {
+              setCurrentTheme(parsed.fontSettings.theme || DEFAULT_THEME);
+              setFontSize(parsed.fontSettings.fontSize ?? 10);
+              setFontFamily(parsed.fontSettings.fontFamily || 'Inter');
+              setSpacingMode(parsed.fontSettings.spacingMode || 'default');
+            }
+
+            if (parsed.sidebar) {
+              setSidebarCollapsed(true);
+              setSidebarWidth(parsed.sidebar.width || 280);
+            }
+
+            if (parsed.globalFilters) {
+              setGlobalFilters(parsed.globalFilters);
+            }
+
+            setTimeout(() => {
+              try {
+                api.fromJSON(parsed.data);
+                debugLog('Layout restored from localStorage');
+              } catch (e) {
+                console.warn('Failed to restore layout, clearing corrupted data:', e);
+                localStorage.removeItem(LAYOUT_KEY);
+                createDefaultLayout();
+              }
+            }, 500);
+            return;
+          }
+        } catch (e) {
+          console.warn("Layout restore failed, clearing corrupted data:", e);
+          localStorage.removeItem(LAYOUT_KEY);
+        }
+      }
+
+      const preset = localStorage.getItem('dockview-layout-preset');
+      if (preset) {
+        loadLayoutPreset(api);
+      } else {
+        createDefaultLayout();
+      }
+    };
+
     const savedFocusId = window.localStorage?.getItem?.(SAVED_FOCUS_KEY) || '';
-    if (savedFocusId) {
-      setCurrentFocus(savedFocusId);
-    }
+    let fallbackTriggered = false;
+    const triggerFallbackOnce = () => {
+      if (fallbackTriggered) return;
+      fallbackTriggered = true;
+      runFallbackLayoutRestore();
+    };
+
     loadUserProfileState({ component: 'Dashboard' })
       .then((profileState) => {
         const profileFocusId = typeof profileState?.lastFocusId === 'string'
           ? profileState.lastFocusId
           : '';
-        if (!profileFocusId) return;
-        setCurrentFocus(profileFocusId);
+        const preferredFocusId = profileFocusId || savedFocusId;
+
+        if (!preferredFocusId) {
+          triggerFallbackOnce();
+          return;
+        }
+
+        setCurrentFocus(preferredFocusId);
+        pendingPersistedFocusIdRef.current = preferredFocusId;
+        persistedFocusAppliedRef.current = false;
         try {
-          window.localStorage?.setItem?.(SAVED_FOCUS_KEY, profileFocusId);
+          window.localStorage?.setItem?.(SAVED_FOCUS_KEY, preferredFocusId);
         } catch {
           // no-op
         }
+
+        handleFocusChange(preferredFocusId).catch((error) => {
+          console.warn('Failed to restore persisted focus layout, falling back to default layout:', error);
+          triggerFallbackOnce();
+        });
       })
       .catch(() => {
-        // best effort only
-      });
-    const saved = localStorage.getItem(LAYOUT_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed?.version === LAYOUT_VERSION && parsed?.data) { 
-          // Validate layout data structure before attempting to restore
-          const isValidLayout = validateLayoutData(parsed.data);
-          if (!isValidLayout) {
-            console.warn('Invalid layout data structure, clearing corrupted data');
-            localStorage.removeItem(LAYOUT_KEY);
-            createDefaultLayout();
-            return;
-          }
-          
-          // Restore font settings FIRST to prevent component recreation
-          if (parsed.fontSettings) {
-            setCurrentTheme(parsed.fontSettings.theme || DEFAULT_THEME);
-            setFontSize(parsed.fontSettings.fontSize ?? 10);
-            setFontFamily(parsed.fontSettings.fontFamily || 'Inter');
-            setSpacingMode(parsed.fontSettings.spacingMode || 'default');
-          }
-          
-          // Restore sidebar state
-          if (parsed.sidebar) {
-            // Always default closed on refresh/startup.
-            setSidebarCollapsed(true);
-            setSidebarWidth(parsed.sidebar.width || 280);
-          }
-          
-          // Restore global filters
-          if (parsed.globalFilters) {
-            setGlobalFilters(parsed.globalFilters);
-          }
-          
-          // Load layout after a longer delay to ensure all components are stable
-          setTimeout(() => {
-            try {
-              api.fromJSON(parsed.data);
-              debugLog('Layout restored from localStorage');
-            } catch (e) {
-              console.warn('Failed to restore layout, clearing corrupted data:', e);
-              // Clear corrupted layout data
-              localStorage.removeItem(LAYOUT_KEY);
-              createDefaultLayout();
-            }
-          }, 500);
-          
-          return; 
+        if (!savedFocusId) {
+          triggerFallbackOnce();
+          return;
         }
-      } catch (e) { 
-        console.warn("Layout restore failed, clearing corrupted data:", e);
-        localStorage.removeItem(LAYOUT_KEY);
-      }
-    }
-
-    // Check for layout preset first, otherwise create default layout
-    const preset = localStorage.getItem('dockview-layout-preset');
-    if (preset) {
-      loadLayoutPreset(api);
-    } else {
-      createDefaultLayout();
-    }
+        setCurrentFocus(savedFocusId);
+        pendingPersistedFocusIdRef.current = savedFocusId;
+        persistedFocusAppliedRef.current = false;
+        handleFocusChange(savedFocusId).catch(() => {
+          triggerFallbackOnce();
+        });
+      });
     
     // REMOVED: forcePanelResize function - let Dockview handle layout naturally
     

@@ -45,6 +45,34 @@ export const buildTableDataQueryResolvers = ({
           query = query.eq('geog_area_code', filters.geog_area_code);
           console.log(`[tableData] Applied filter: geog_area_code = ${filters.geog_area_code}`);
         }
+        if (filters.query_column && filters.query_value !== undefined && filters.query_value !== null && String(filters.query_value).trim() !== '') {
+          const column = String(filters.query_column).trim();
+          const value = String(filters.query_value).trim();
+          const operator = String(filters.query_operator || 'contains').toLowerCase();
+          if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(column)) {
+            throw new Error(`Invalid query column: ${column}`);
+          }
+          if (operator === 'eq') {
+            query = query.eq(column, value);
+          } else if (operator === 'neq') {
+            query = query.neq(column, value);
+          } else if (operator === 'starts_with') {
+            query = query.ilike(column, `${value}%`);
+          } else if (operator === 'ends_with') {
+            query = query.ilike(column, `%${value}`);
+          } else if (operator === 'gt') {
+            query = query.gt(column, value);
+          } else if (operator === 'gte') {
+            query = query.gte(column, value);
+          } else if (operator === 'lt') {
+            query = query.lt(column, value);
+          } else if (operator === 'lte') {
+            query = query.lte(column, value);
+          } else {
+            query = query.ilike(column, `%${value}%`);
+          }
+          console.log(`[tableData] Applied generic query filter: ${column} ${operator} ${value}`);
+        }
         if (!includeNonRealSailings && tableName === 'master_sail') {
           query = query.neq('is_active', 'N').neq('is_fake', 'Y');
           console.log('[tableData] Applied default real-sailing filter for master_sail (exclude is_active=N, is_fake=Y)');

@@ -414,6 +414,10 @@
   font-size: var(--theme-font-size-sm);
   text-align: left;
   padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   cursor: pointer;
 }
 
@@ -424,6 +428,11 @@
 .status-bar__menu-select-option--active {
   background: color-mix(in srgb, var(--theme-warning) 30%, transparent);
   color: var(--theme-header-text);
+}
+
+.status-bar__menu-select-check {
+  color: color-mix(in srgb, var(--theme-success) 75%, var(--theme-fg));
+  font-weight: 700;
 }
 
 .status-bar__header-checkbox {

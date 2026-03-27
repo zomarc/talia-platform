@@ -1,13 +1,38 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import GameScorePopover from '../../shared/games/GameScorePopover';
+import ArcadeGameCanvasOverlay from '../../shared/games/ArcadeGameCanvasOverlay';
+import ArcadeGameScoreHud from '../../shared/games/ArcadeGameScoreHud';
+import ArcadeGameDifficultyToggle from '../../shared/games/ArcadeGameDifficultyToggle';
+import {
+  buildArcadeIdleSubtitle,
+  formatArcadeOverlaySubtitle,
+  getArcadeOverlayTone,
+} from '../../shared/games/arcadeGameUi';
+import { ARCADE_DIFFICULTY_NORMAL, isArcadeEasy } from '../../shared/games/arcadeDifficulty';
+import useArcadeGameAudio from '../../shared/games/useArcadeGameAudio';
+import { useArcadeGameLoop } from '../../shared/games/useArcadeGameLoop';
+import { filterRowsByGame, getMaxHighScore } from '../../shared/games/leaderboardScope';
 import usePanelTabActive from '../../../hooks/usePanelTabActive';
 import usePanelPaused from '../../../hooks/usePanelPaused';
 import { isEditableTarget } from '../../shared/games/keyboardGuards';
+import { useArcadeGameOverlayResume } from '../../shared/games/useArcadeGameOverlayResume';
+import useGamePanelPauseResume from '../../shared/games/useGamePanelPauseResume';
+import {
+  armExtraSpawn,
+  createExtraSpawnState,
+  isExtraSpawnDue,
+} from '../../shared/games/arcadeGameExtra';
+import {
+  addArcadeScore,
+  armArcadeDoubleScore,
+} from '../../shared/games/arcadeDoubleScore';
+import useArcadeDoubleScoreHud from '../../shared/games/useArcadeDoubleScoreHud';
 
 const GAME_WIDTH = 640;
 const GAME_HEIGHT = 420;
 const BRICK_ROWS = 5;
 const BRICK_COLS = 9;
+const GAME_OVER_HOLD_MS = 5000;
+const PANEL_COMPONENT_ID = 'breakout-game';
 
 const createBricks = () => {
   const bricks = [];
@@ -37,6 +62,8 @@ const createInitialModel = () => ({
   running: false,
   waitingForLaunch: true,
   score: 0,
+  doubleScoreUntil: 0,
+  difficulty: ARCADE_DIFFICULTY_NORMAL,
   lives: 3,
   level: 1,
   ball: { x: GAME_WIDTH / 2, y: GAME_HEIGHT - 110, vx: 3.1, vy: -3.2, radius: 7 },
@@ -45,54 +72,45 @@ const createInitialModel = () => ({
   leftPressed: false,
   rightPressed: false,
   frame: 0,
+  extraSpawn: createExtraSpawnState(),
+  extra: null,
 });
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 const BreakoutGamePresenter = ({
   panelInstanceId,
-  loading,
-  loadError,
-  saveError,
-  saving,
-  userId,
+  gameId,
+  gameSoundEnabled,
   highScore,
-  lastScore,
-  updatedAt,
-  onReloadScore,
   onSaveScore,
   leaderboard,
   leaderboardLoading,
 }) => {
   const isPanelActive = usePanelTabActive(panelInstanceId);
-  const isPanelPaused = usePanelPaused(panelInstanceId, 'breakout-game');
-  const isPanelExecutionActive = isPanelActive && !isPanelPaused;
+  const isPanelPaused = usePanelPaused(panelInstanceId, PANEL_COMPONENT_ID);
   const canvasRef = useRef(null);
   const canvasWrapRef = useRef(null);
   const rafRef = useRef(0);
-  const pauseTimerRef = useRef(0);
-  const pausedByInactiveRef = useRef(false);
-  const inactiveResumeIntervalRef = useRef(0);
   const modelRef = useRef(createInitialModel());
-  const audioContextRef = useRef(null);
-  const audioMasterGainRef = useRef(null);
-  const lastSoundAtRef = useRef(0);
+  const {
+    ensureAudioContext,
+    audioMasterGainRef,
+    unlockAudio,
+    playBeep: playTick,
+    disposeAudio,
+  } = useArcadeGameAudio(gameSoundEnabled, 0.025);
   const renderMetricsRef = useRef({ scale: 1, offsetX: 0, offsetY: 0 });
+  const gameOverReleaseTimeoutRef = useRef(0);
+  const gameOverCountdownIntervalRef = useRef(0);
   const [gameState, setGameState] = useState('idle');
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
-  const [soundEnabled, setSoundEnabled] = useState(true);
   const [statusMessage, setStatusMessage] = useState('Press Start to play.');
   const [overlay, setOverlay] = useState(null);
-  const [showScorePopover, setShowScorePopover] = useState(false);
-
-  const userLabel = useMemo(() => String(userId || 'anonymous'), [userId]);
-  const updatedLabel = useMemo(() => {
-    if (!updatedAt) return 'Not saved yet';
-    const date = new Date(updatedAt);
-    if (Number.isNaN(date.getTime())) return 'Not saved yet';
-    return date.toLocaleString();
-  }, [updatedAt]);
+  const [restartInSeconds, setRestartInSeconds] = useState(0);
+  const [difficulty, setDifficulty] = useState(ARCADE_DIFFICULTY_NORMAL);
+  const doubleScoreHud = useArcadeDoubleScoreHud(modelRef, gameState === 'playing');
 
   const syncUiFromModel = useCallback(() => {
     const model = modelRef.current;
@@ -123,6 +141,19 @@ const BreakoutGamePresenter = ({
     ctx.lineWidth = 1;
     ctx.strokeRect(6, 6, GAME_WIDTH - 12, GAME_HEIGHT - 12);
 
+    if (model.extra) {
+      const e = model.extra;
+      ctx.fillStyle = 'rgba(255, 200, 90, 0.92)';
+      ctx.fillRect(e.x, e.y, e.w, e.h);
+      ctx.strokeStyle = 'rgba(255, 240, 200, 0.85)';
+      ctx.strokeRect(e.x, e.y, e.w, e.h);
+      ctx.font = 'bold 12px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(120, 40, 20, 0.95)';
+      ctx.fillText('★', e.x + e.w / 2, e.y + e.h / 2);
+    }
+
     bricks.forEach((brick) => {
       if (!brick.alive) return;
       const intensity = Math.max(0.22, Math.min(0.86, brick.points / 60));
@@ -143,68 +174,64 @@ const BreakoutGamePresenter = ({
     ctx.restore();
   }, []);
 
-  const ensureAudioContext = useCallback(() => {
-    if (audioContextRef.current) return audioContextRef.current;
-    const Ctor = window.AudioContext || window.webkitAudioContext;
-    if (!Ctor) return null;
-    const context = new Ctor();
-    const masterGain = context.createGain();
-    masterGain.gain.value = 0.025; // keep it subtle
-    masterGain.connect(context.destination);
-    audioContextRef.current = context;
-    audioMasterGainRef.current = masterGain;
-    return context;
+  const stopGame = useCallback(() => {
+    modelRef.current.running = false;
+    if (rafRef.current) {
+      window.cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+    }
   }, []);
 
-  const playTick = useCallback((frequency = 520, durationMs = 22) => {
-    if (!soundEnabled) return;
-    const now = performance.now();
-    if (now - lastSoundAtRef.current < 14) return;
-    lastSoundAtRef.current = now;
-    const context = ensureAudioContext();
-    const masterGain = audioMasterGainRef.current;
-    if (!context || !masterGain) return;
-
-    if (context.state === 'suspended') {
-      context.resume().catch(() => {});
+  const clearGameOverHold = useCallback(() => {
+    if (gameOverReleaseTimeoutRef.current) {
+      window.clearTimeout(gameOverReleaseTimeoutRef.current);
+      gameOverReleaseTimeoutRef.current = 0;
     }
-
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = 'sine';
-    oscillator.frequency.value = frequency;
-    gain.gain.value = 0;
-    oscillator.connect(gain);
-    gain.connect(masterGain);
-
-    const start = context.currentTime;
-    const end = start + durationMs / 1000;
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(0.45, start + 0.004);
-    gain.gain.exponentialRampToValueAtTime(0.0001, end);
-    oscillator.start(start);
-    oscillator.stop(end);
-  }, [ensureAudioContext, soundEnabled]);
-
-  const unlockAudio = useCallback(() => {
-    if (!soundEnabled) return;
-    const context = ensureAudioContext();
-    if (context?.state === 'suspended') {
-      context.resume().catch(() => {});
+    if (gameOverCountdownIntervalRef.current) {
+      window.clearInterval(gameOverCountdownIntervalRef.current);
+      gameOverCountdownIntervalRef.current = 0;
     }
-  }, [ensureAudioContext, soundEnabled]);
+    setRestartInSeconds(0);
+  }, []);
+
+  const beginGameOverHold = useCallback(() => {
+    clearGameOverHold();
+    const releaseAt = Date.now() + GAME_OVER_HOLD_MS;
+    setRestartInSeconds(Math.ceil(GAME_OVER_HOLD_MS / 1000));
+    gameOverCountdownIntervalRef.current = window.setInterval(() => {
+      const remainingMs = releaseAt - Date.now();
+      if (remainingMs <= 0) {
+        if (gameOverCountdownIntervalRef.current) {
+          window.clearInterval(gameOverCountdownIntervalRef.current);
+          gameOverCountdownIntervalRef.current = 0;
+        }
+        setRestartInSeconds(0);
+        return;
+      }
+      setRestartInSeconds(Math.ceil(remainingMs / 1000));
+    }, 250);
+    gameOverReleaseTimeoutRef.current = window.setTimeout(() => {
+      gameOverReleaseTimeoutRef.current = 0;
+      if (gameOverCountdownIntervalRef.current) {
+        window.clearInterval(gameOverCountdownIntervalRef.current);
+        gameOverCountdownIntervalRef.current = 0;
+      }
+      setRestartInSeconds(0);
+    }, GAME_OVER_HOLD_MS);
+  }, [clearGameOverHold]);
 
   const finishRound = useCallback(async () => {
+    stopGame();
     const model = modelRef.current;
-    model.running = false;
     setGameState('over');
     setStatusMessage(`Game over. Final score: ${model.score}`);
     setOverlay({
       title: 'Game Over',
       subtitle: `Final score: ${model.score}`,
     });
+    beginGameOverHold();
     // Dramatic but short game-over cue.
-    if (soundEnabled) {
+    if (gameSoundEnabled !== false) {
       const context = ensureAudioContext();
       const masterGain = audioMasterGainRef.current;
       if (context && masterGain) {
@@ -232,7 +259,7 @@ const BreakoutGamePresenter = ({
       }
     }
     await onSaveScore(model.score);
-  }, [ensureAudioContext, onSaveScore, soundEnabled]);
+  }, [beginGameOverHold, ensureAudioContext, gameSoundEnabled, onSaveScore, stopGame]);
 
   const resetBallToPaddle = useCallback(() => {
     const model = modelRef.current;
@@ -241,6 +268,22 @@ const BreakoutGamePresenter = ({
     model.ball.vx = 3 * (Math.random() > 0.5 ? 1 : -1);
     model.ball.vy = -3.2;
   }, []);
+
+  const armLaunch = useCallback((title = 'Ready', subtitle = 'Press Left/Right or move mouse to launch') => {
+    const model = modelRef.current;
+    model.waitingForLaunch = true;
+    setOverlay({ title, subtitle });
+    setStatusMessage('Ready to launch.');
+  }, []);
+
+  const activateLaunch = useCallback(() => {
+    const model = modelRef.current;
+    if (!model.running || !model.waitingForLaunch) return;
+    model.waitingForLaunch = false;
+    setOverlay(null);
+    setStatusMessage('Ball launched.');
+    playTick(720, 18);
+  }, [playTick]);
 
   const updateModel = useCallback(async () => {
     const model = modelRef.current;
@@ -283,7 +326,11 @@ const BreakoutGamePresenter = ({
       && model.ball.vy > 0
     ) {
       const impact = (model.ball.x - (model.paddle.x + model.paddle.w / 2)) / (model.paddle.w / 2);
-      model.ball.vx = clamp(impact * 5.5, -5.5, 5.5);
+      let nvx = clamp(impact * 5.5, -5.5, 5.5);
+      if (Math.abs(nvx) < 0.85) {
+        nvx = (nvx >= 0 ? 1 : -1) * 1.1;
+      }
+      model.ball.vx = nvx;
       model.ball.vy = -Math.max(2.8, Math.abs(model.ball.vy));
       playTick(580, 20);
     }
@@ -298,25 +345,71 @@ const BreakoutGamePresenter = ({
       if (!withinX || !withinY) return;
 
       brick.alive = false;
-      model.score += brick.points;
+      addArcadeScore(model, brick.points);
       hitBrick = true;
       model.ball.vy *= -1;
       playTick(680, 24);
     });
 
-    if (model.bricks.every((brick) => !brick.alive)) {
+    const hasActiveExtra = Boolean(model.extra);
+    if (isExtraSpawnDue(model.extraSpawn, model.frame, hasActiveExtra)) {
+      model.extra = {
+        x: 20 + Math.random() * (GAME_WIDTH - 40 - 38),
+        y: 38,
+        w: 38,
+        h: 15,
+        vy: 1.85,
+        points: 120,
+      };
+    }
+    if (model.extra) {
+      const e = model.extra;
+      e.y += e.vy;
+      const { ball, paddle } = model;
+      const hitBall = ball.x + ball.radius >= e.x
+        && ball.x - ball.radius <= e.x + e.w
+        && ball.y + ball.radius >= e.y
+        && ball.y - ball.radius <= e.y + e.h;
+      const hitPaddle = e.y + e.h >= paddle.y
+        && e.y <= paddle.y + paddle.h
+        && e.x + e.w >= paddle.x
+        && e.x <= paddle.x + paddle.w;
+      if (hitBall || hitPaddle) {
+        armArcadeDoubleScore(model);
+        addArcadeScore(model, e.points);
+        model.extra = null;
+        playTick(800, 26);
+        armExtraSpawn(model.extraSpawn, model.frame, 220, 520);
+      } else if (e.y > GAME_HEIGHT) {
+        model.extra = null;
+        armExtraSpawn(model.extraSpawn, model.frame, 160, 400);
+      }
+    }
+
+    if (model.bricks.length > 0 && model.bricks.every((brick) => !brick.alive)) {
+      const prevLevel = model.level;
+      const celebration = 95 + prevLevel * 28;
+      addArcadeScore(model, celebration);
+      model.extra = null;
+      armExtraSpawn(model.extraSpawn, model.frame, 200, 480);
       model.level += 1;
       model.bricks = createBricks();
       model.paddle.w = clamp(model.paddle.w - 5, 76, 120);
-      model.ball.vx *= 1.08;
-      model.ball.vy *= 1.08;
+      const speedUp = isArcadeEasy(model) ? 1.04 : 1.08;
+      model.ball.vx *= speedUp;
+      model.ball.vy *= speedUp;
       resetBallToPaddle();
-      model.waitingForLaunch = true;
-      setStatusMessage(`Level ${model.level} started.`);
+      syncUiFromModel();
+      stopGame();
       setOverlay({
-        title: `Level ${model.level}`,
-        subtitle: 'Click to launch ball',
+        title: 'Stage clear!',
+        subtitle: `Level ${model.level} · +${celebration} celebration`,
+        tone: 'win',
       });
+      setStatusMessage('Stage cleared.');
+      playTick(880, 30);
+      model.frame += 1;
+      return;
     }
 
     if (model.ball.y - model.ball.radius > GAME_HEIGHT) {
@@ -326,35 +419,19 @@ const BreakoutGamePresenter = ({
         await finishRound();
         return;
       }
-      model.running = false;
+      model.extra = null;
+      armExtraSpawn(model.extraSpawn, model.frame, 180, 420);
+      model.running = true;
       resetBallToPaddle();
       model.waitingForLaunch = true;
       syncUiFromModel();
-      setStatusMessage(`Ball lost. ${model.lives} lives remaining.`);
-      setOverlay({
-        title: `Ball lost - lives ${model.lives}`,
-        subtitle: 'Next ball in 5 seconds',
-      });
-      if (pauseTimerRef.current) {
-        window.clearTimeout(pauseTimerRef.current);
+      playTick(180, 96);
+      setTimeout(() => playTick(130, 126), 90);
+      armLaunch(`Life Lost - ${model.lives} left`, 'Press Left/Right or move mouse to continue');
+      model.frame += 1;
+      if (model.frame % 3 === 0) {
+        syncUiFromModel();
       }
-      pauseTimerRef.current = window.setTimeout(() => {
-        pauseTimerRef.current = 0;
-        setOverlay({
-          title: `Lives ${modelRef.current.lives}`,
-          subtitle: 'Click to launch ball',
-        });
-        setStatusMessage('Click canvas to launch next ball.');
-        modelRef.current.running = true;
-        const tick = async () => {
-          await updateModel();
-          draw();
-          if (modelRef.current.running) {
-            rafRef.current = window.requestAnimationFrame(tick);
-          }
-        };
-        rafRef.current = window.requestAnimationFrame(tick);
-      }, 5000);
       return;
     }
 
@@ -362,57 +439,89 @@ const BreakoutGamePresenter = ({
     if (model.frame % 3 === 0) {
       syncUiFromModel();
     }
-  }, [draw, finishRound, playTick, resetBallToPaddle, syncUiFromModel]);
+  }, [
+    armLaunch,
+    finishRound,
+    playTick,
+    resetBallToPaddle,
+    setOverlay,
+    setStatusMessage,
+    stopGame,
+    syncUiFromModel,
+  ]);
 
-  const loop = useCallback(async () => {
-    await updateModel();
-    draw();
-    if (modelRef.current.running) {
-      rafRef.current = window.requestAnimationFrame(loop);
+  const loop = useArcadeGameLoop({ modelRef, rafRef, updateModel, draw });
+
+  const resumePlaying = useCallback(() => {
+    modelRef.current.running = true;
+    if (modelRef.current.waitingForLaunch) {
+      setOverlay({ title: 'Ready', subtitle: 'Press Left/Right or move mouse to launch' });
+      setStatusMessage('Ready to launch.');
+    } else {
+      setOverlay((prev) => (prev?.title === 'Resuming' ? null : prev));
+      setStatusMessage('Resumed.');
     }
-  }, [draw, updateModel]);
+    if (rafRef.current) {
+      window.cancelAnimationFrame(rafRef.current);
+    }
+    rafRef.current = window.requestAnimationFrame(loop);
+  }, [loop]);
+
+  const { isPanelExecutionActive, clearResumeInterval: clearInactiveResumeCountdown } = useGamePanelPauseResume({
+    isPanelActive,
+    isPanelPaused,
+    gameState,
+    modelRef,
+    rafRef,
+    setOverlay,
+    setStatusMessage,
+    resumePlaying,
+  });
+
+  const dismissWinAndResume = useCallback(() => {
+    setOverlay(null);
+    const model = modelRef.current;
+    model.running = true;
+    armLaunch(`Level ${model.level}`, 'Press Left/Right or move mouse to launch');
+    if (rafRef.current) {
+      window.cancelAnimationFrame(rafRef.current);
+    }
+    rafRef.current = window.requestAnimationFrame(loop);
+  }, [armLaunch, loop]);
 
   const startGame = useCallback(() => {
+    if (restartInSeconds > 0) return;
+    clearGameOverHold();
     unlockAudio();
-    if (pauseTimerRef.current) {
-      window.clearTimeout(pauseTimerRef.current);
-      pauseTimerRef.current = 0;
-    }
     modelRef.current = createInitialModel();
+    modelRef.current.difficulty = difficulty;
+    if (isArcadeEasy(modelRef.current)) {
+      modelRef.current.ball.vx *= 0.74;
+      modelRef.current.ball.vy *= 0.74;
+      modelRef.current.paddle.w = clamp(modelRef.current.paddle.w + 14, 76, 126);
+      modelRef.current.paddle.speed *= 0.9;
+    }
+    armExtraSpawn(modelRef.current.extraSpawn, 0, 200, 520);
     modelRef.current.running = true;
     modelRef.current.waitingForLaunch = true;
     syncUiFromModel();
     setGameState('playing');
-    setStatusMessage('Use left/right arrows, then click canvas to launch.');
-    setOverlay({
-      title: 'Ready',
-      subtitle: 'Click to launch ball',
-    });
+    setOverlay({ title: 'Ready', subtitle: 'Press Left/Right or move mouse to launch' });
+    setStatusMessage('Ready to launch.');
     if (rafRef.current) {
       window.cancelAnimationFrame(rafRef.current);
     }
     rafRef.current = window.requestAnimationFrame(loop);
     canvasRef.current?.focus();
-  }, [loop, syncUiFromModel, unlockAudio]);
+  }, [clearGameOverHold, difficulty, loop, restartInSeconds, syncUiFromModel, unlockAudio]);
 
-  const stopGame = useCallback(() => {
-    modelRef.current.running = false;
-    if (pauseTimerRef.current) {
-      window.clearTimeout(pauseTimerRef.current);
-      pauseTimerRef.current = 0;
+  const onOverlayPrimaryClick = useCallback(() => {
+    if (overlay?.tone === 'win') {
+      dismissWinAndResume();
+      return;
     }
-    if (rafRef.current) {
-      window.cancelAnimationFrame(rafRef.current);
-      rafRef.current = 0;
-    }
-  }, []);
-
-  const clearInactiveResumeCountdown = useCallback(() => {
-    if (inactiveResumeIntervalRef.current) {
-      window.clearInterval(inactiveResumeIntervalRef.current);
-      inactiveResumeIntervalRef.current = 0;
-    }
-  }, []);
+    startGame();
+  }, [dismissWinAndResume, overlay?.tone, startGame]);
 
   useEffect(() => {
     draw();
@@ -443,19 +552,24 @@ const BreakoutGamePresenter = ({
   useEffect(() => {
     const wrap = canvasWrapRef.current;
     if (!wrap) return undefined;
-    const onUnlock = () => unlockAudio();
-    wrap.addEventListener('pointerdown', onUnlock);
-    return () => wrap.removeEventListener('pointerdown', onUnlock);
-  }, [unlockAudio]);
+    const onPointerDown = () => {
+      unlockAudio();
+      activateLaunch();
+    };
+    wrap.addEventListener('pointerdown', onPointerDown);
+    return () => wrap.removeEventListener('pointerdown', onPointerDown);
+  }, [activateLaunch, unlockAudio]);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (!isPanelExecutionActive || isEditableTarget(event)) return;
       if (event.key === 'ArrowLeft') {
         modelRef.current.leftPressed = true;
+        activateLaunch();
         event.preventDefault();
       } else if (event.key === 'ArrowRight') {
         modelRef.current.rightPressed = true;
+        activateLaunch();
         event.preventDefault();
       } else if (event.key === ' ' && gameState !== 'playing') {
         startGame();
@@ -478,61 +592,14 @@ const BreakoutGamePresenter = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameState, isPanelExecutionActive, startGame]);
+  }, [activateLaunch, gameState, isPanelExecutionActive, startGame]);
 
   useEffect(() => () => {
     stopGame();
     clearInactiveResumeCountdown();
-    try {
-      audioContextRef.current?.close?.();
-    } catch {
-      // no-op
-    }
-    audioContextRef.current = null;
-    audioMasterGainRef.current = null;
-  }, [clearInactiveResumeCountdown, stopGame]);
-
-  useEffect(() => {
-    if (!isPanelExecutionActive) {
-      clearInactiveResumeCountdown();
-      if (!modelRef.current.running) return;
-      pausedByInactiveRef.current = true;
-      modelRef.current.running = false;
-      if (rafRef.current) {
-        window.cancelAnimationFrame(rafRef.current);
-        rafRef.current = 0;
-      }
-      setOverlay({
-        title: 'Paused',
-        subtitle: isPanelPaused ? 'Paused by user (P)' : 'Panel is not active',
-      });
-      setStatusMessage(isPanelPaused ? 'Paused. Press P to resume.' : 'Paused while another tab is active.');
-      return;
-    }
-    if (!pausedByInactiveRef.current) return;
-    pausedByInactiveRef.current = false;
-    if (gameState !== 'playing') return;
-    if (modelRef.current.running) return;
-
-    let count = 5;
-    setOverlay({ title: 'Resuming', subtitle: `${count}` });
-    setStatusMessage(`Resuming in ${count}...`);
-    clearInactiveResumeCountdown();
-    inactiveResumeIntervalRef.current = window.setInterval(() => {
-      count -= 1;
-      if (count <= 0) {
-        clearInactiveResumeCountdown();
-        if (gameState !== 'playing' || !isPanelExecutionActive) return;
-        setOverlay((prev) => (prev?.title === 'Resuming' ? null : prev));
-        setStatusMessage('Resumed.');
-        modelRef.current.running = true;
-        rafRef.current = window.requestAnimationFrame(loop);
-        return;
-      }
-      setOverlay((prev) => (prev?.title === 'Resuming' ? { title: 'Resuming', subtitle: `${count}` } : prev));
-      setStatusMessage(`Resuming in ${count}...`);
-    }, 1000);
-  }, [clearInactiveResumeCountdown, gameState, isPanelExecutionActive, isPanelPaused, loop]);
+    clearGameOverHold();
+    disposeAudio();
+  }, [clearGameOverHold, clearInactiveResumeCountdown, disposeAudio, stopGame]);
 
   const handleCanvasMouseMove = (event) => {
     const canvas = canvasRef.current;
@@ -541,26 +608,45 @@ const BreakoutGamePresenter = ({
     const { scale, offsetX } = renderMetricsRef.current;
     const localX = ((event.clientX - rect.left) - offsetX) / Math.max(scale, 0.0001);
     modelRef.current.paddle.x = clamp(localX - modelRef.current.paddle.w / 2, 8, GAME_WIDTH - modelRef.current.paddle.w - 8);
-  };
-
-  const handleCanvasClick = () => {
-    if (gameState !== 'playing') return;
-    const model = modelRef.current;
-    if (!model.running) return;
-    if (!model.waitingForLaunch) return;
-    model.waitingForLaunch = false;
-    model.ball.vx = 3 * (Math.random() > 0.5 ? 1 : -1);
-    model.ball.vy = -3.2;
-    setOverlay(null);
-    setStatusMessage('Ball launched.');
-    if (soundEnabled) {
-      playTick(720, 18);
+    if (modelRef.current.waitingForLaunch) {
+      activateLaunch();
     }
   };
 
-  const gameActionLabel = gameState === 'playing' ? 'Restart' : 'Start';
+  const gameActionLabel = gameState === 'over' ? 'Insert Coin' : (gameState === 'playing' ? 'Restart' : 'Start');
   const topRows = Array.isArray(leaderboard?.top) ? leaderboard.top : [];
   const recentRows = Array.isArray(leaderboard?.recent) ? leaderboard.recent : [];
+  const currentGameTopRows = useMemo(() => filterRowsByGame(topRows, gameId), [gameId, topRows]);
+  const currentGameRecentRows = useMemo(() => filterRowsByGame(recentRows, gameId), [gameId, recentRows]);
+  const globalHighScore = useMemo(() => getMaxHighScore(currentGameTopRows), [currentGameTopRows]);
+  const showEntryOverlay = gameState !== 'playing';
+  const isGameOverHoldActive = gameState === 'over' && restartInSeconds > 0;
+  const overlayTitle = overlay?.title || (isGameOverHoldActive ? 'Game Over' : 'Ready');
+  const overlaySubtitle = formatArcadeOverlaySubtitle({
+    overlaySubtitle: overlay?.subtitle,
+    isGameOverHoldActive,
+    score,
+    restartInSeconds,
+    defaultIdle: buildArcadeIdleSubtitle(PANEL_COMPONENT_ID),
+  });
+  const showStartAction = (showEntryOverlay && !(gameState === 'over' && restartInSeconds > 0))
+    || overlay?.tone === 'win';
+  const isLifeLossMessage = /(life lost|ship hit|caught|missed)/i.test(overlayTitle) || /(life lost|ship hit|caught|missed)/i.test(statusMessage);
+  const overlayTone = getArcadeOverlayTone({
+    explicitTone: overlay?.tone,
+    overlayTitle,
+    isGameOverHoldActive,
+    isLifeLossMessage,
+  });
+  const overlayPrimaryLabel = overlay?.tone === 'win' ? 'Continue' : gameActionLabel;
+
+  const { onOverlayPointer, arcadeOverlayClickable } = useArcadeGameOverlayResume({
+    panelInstanceId,
+    panelComponentId: PANEL_COMPONENT_ID,
+    overlayTitle,
+    isPanelPaused,
+    isPanelActive,
+  });
 
   return (
     <div
@@ -571,80 +657,47 @@ const BreakoutGamePresenter = ({
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Breakout</h2>
-          <p className="talia-report__subtitle">Self-contained panel game with per-user score tracking.</p>
+          <p className="talia-report__subtitle">Clear bricks; optional bonus brick for extra points.</p>
         </div>
-        <div className="talia-report__actions">
-          <button type="button" className="talia-btn talia-btn--small talia-btn--primary" onClick={startGame}>
-            {gameActionLabel}
-          </button>
-          <button
-            type="button"
-            className={`talia-btn talia-btn--small ${soundEnabled ? 'talia-btn--active' : ''}`}
-            onClick={() => setSoundEnabled((prev) => !prev)}
-            title="Toggle subtle game sound"
-          >
-            {soundEnabled ? 'Sound On' : 'Sound Off'}
-          </button>
-          <button type="button" className="talia-btn talia-btn--small" onClick={onReloadScore}>
-            Reload Score
-          </button>
-        </div>
+        <ArcadeGameDifficultyToggle
+          value={difficulty}
+          onChange={setDifficulty}
+          disabled={gameState === 'playing'}
+        />
       </header>
 
-      <main className="talia-report__content breakout-game__content">
-        <div className="breakout-game__hud" role="status" aria-live="polite">
-          <span className="talia-event-meta__chip">User: {userLabel}</span>
-          <span className="talia-event-meta__chip">Score: {score}</span>
-          <span className="talia-event-meta__chip">Lives: {lives}</span>
-          <button
-            type="button"
-            className="talia-btn talia-btn--small"
-            onClick={() => setShowScorePopover((prev) => !prev)}
-            title="Show top and recent game highs"
-          >
-            Top High
-          </button>
-          <span className="talia-event-meta__chip talia-event-meta__chip--secondary">High: {highScore}</span>
-          <span className="talia-event-meta__chip talia-event-meta__chip--secondary">Last: {lastScore}</span>
-        </div>
-
-        <div ref={canvasWrapRef} className="breakout-game__canvas-wrap">
+      <main className="talia-report__content talia-game-panel-body">
+        <div ref={canvasWrapRef} className="talia-game-canvas-shell">
           <canvas
             ref={canvasRef}
-            className="breakout-game__canvas"
+            className="talia-arcade-canvas"
             onMouseMove={handleCanvasMouseMove}
-            onClick={handleCanvasClick}
             tabIndex={0}
             aria-label="Breakout game area"
           />
-          {overlay && (
-            <div className="breakout-game__overlay" role="status" aria-live="polite">
-              <div className="breakout-game__overlay-panel">
-                <div className="breakout-game__overlay-title">{overlay.title}</div>
-                {overlay.subtitle && (
-                  <div className="breakout-game__overlay-subtitle">{overlay.subtitle}</div>
-                )}
-              </div>
-            </div>
-          )}
+          <ArcadeGameScoreHud
+            currentScore={score}
+            userHighScore={highScore}
+            totalHighScore={globalHighScore}
+            meta={`Lives: ${lives}`}
+            doubleScoreSeconds={doubleScoreHud}
+          />
+          <ArcadeGameCanvasOverlay
+            open={Boolean(overlay || showEntryOverlay)}
+            tone={overlayTone}
+            title={overlayTitle}
+            subtitle={overlaySubtitle}
+            showStartButton={showStartAction}
+            startLabel={overlayPrimaryLabel}
+            onStartClick={onOverlayPrimaryClick}
+            onOverlayPointer={onOverlayPointer}
+            arcadeOverlayClickable={arcadeOverlayClickable}
+            gameState={gameState}
+            leaderboardLoading={leaderboardLoading}
+            topRows={currentGameTopRows}
+            recentRows={currentGameRecentRows}
+          />
         </div>
-
-        <div className="breakout-game__meta">
-          <span>{statusMessage}</span>
-          <span>{loading ? 'Loading score...' : `Last saved: ${updatedLabel}`}</span>
-          {saving && <span>Saving score...</span>}
-          {loadError && <span>Score load failed. You can still play.</span>}
-          {saveError && <span>Score save failed. Retry after next game.</span>}
-        </div>
-
-        <GameScorePopover
-          open={showScorePopover}
-          onClose={() => setShowScorePopover(false)}
-          title="Game Scores"
-          loading={leaderboardLoading}
-          top={topRows}
-          recent={recentRows}
-        />
       </main>
     </div>
   );

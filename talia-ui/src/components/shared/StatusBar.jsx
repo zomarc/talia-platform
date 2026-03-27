@@ -103,10 +103,14 @@ const HeaderCriteriaMenuSelect = ({
   onChange,
   ariaLabel,
   wide = false,
+  autoCloseMs = 5000,
 }) => {
   const [open, setOpen] = useState(false);
+  const [isFading, setIsFading] = useState(false);
+  const [isInteracting, setIsInteracting] = useState(false);
   const rootRef = useRef(null);
   const selected = options.find((option) => option.key === value) || options[0] || null;
+  const MENU_FADE_MS = 720;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -129,6 +133,26 @@ const HeaderCriteriaMenuSelect = ({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    if (isInteracting) return undefined;
+    setIsFading(false);
+    const timeoutMs = Number.isFinite(Number(autoCloseMs)) ? Math.max(1000, Number(autoCloseMs)) : 5000;
+    const fadeDelayMs = Math.max(120, timeoutMs - MENU_FADE_MS);
+    const fadeTimer = window.setTimeout(() => {
+      setIsFading(true);
+    }, fadeDelayMs);
+    const closeTimer = window.setTimeout(() => {
+      setOpen(false);
+      setIsFading(false);
+    }, timeoutMs);
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(closeTimer);
+      setIsFading(false);
+    };
+  }, [open, autoCloseMs, isInteracting]);
+
   const handleOptionSelect = (nextValue) => {
     setOpen(false);
     if (nextValue === value) return;
@@ -140,11 +164,23 @@ const HeaderCriteriaMenuSelect = ({
       id={id}
       ref={rootRef}
       className={`status-bar__menu-select ${wide ? 'status-bar__menu-select--wide' : ''}`}
+      onMouseEnter={() => setIsInteracting(true)}
+      onMouseLeave={() => setIsInteracting(false)}
+      onFocusCapture={() => setIsInteracting(true)}
+      onBlurCapture={(event) => {
+        const nextFocused = event?.relatedTarget;
+        if (!rootRef.current?.contains(nextFocused)) {
+          setIsInteracting(false);
+        }
+      }}
     >
       <button
         type="button"
         className="status-bar__menu-select-trigger"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => {
+          setIsFading(false);
+          setOpen((prev) => !prev);
+        }}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={ariaLabel}
@@ -153,7 +189,7 @@ const HeaderCriteriaMenuSelect = ({
         <span className="status-bar__menu-select-caret" aria-hidden="true">▾</span>
       </button>
       {open && (
-        <div className="status-bar__menu-select-menu" role="menu" aria-label={ariaLabel}>
+        <div className={`status-bar__menu-select-menu ${isFading ? 'status-bar__menu-select-menu--fading' : ''}`} role="menu" aria-label={ariaLabel}>
           {options.map((option) => {
             const isSelected = option.key === value;
             return (
@@ -196,6 +232,7 @@ const StatusBar = ({
     setActionsVisible,
     controlsVisible,
     setControlsVisible,
+    menuDisappearMs,
     calloutsVisible,
     setCalloutsVisible,
   } = useTheme();
@@ -230,6 +267,8 @@ const StatusBar = ({
     return Array.isArray(options) ? options.filter((focus) => focus?.id) : [];
   });
   const [selectedFocusId, setSelectedFocusId] = useState(() => window.__taliaFocusState?.currentFocusId || '');
+  const [lastFocusId, setLastFocusId] = useState('');
+  const currentFocusRef = useRef(window.__taliaFocusState?.currentFocusId || '');
   const [showSaveFocusConfirm, setShowSaveFocusConfirm] = useState(false);
   const [activeOnly, setActiveOnly] = useState(() => {
     const saved = window.__taliaGlobalCriteria;
@@ -255,6 +294,18 @@ const StatusBar = ({
   const [profileCriteriaHydrated, setProfileCriteriaHydrated] = useState(false);
   const [visibilityControlsOpen, setVisibilityControlsOpen] = useState(false);
   const visibilityControlsRef = useRef(null);
+  const visibilityPanelRef = useRef(null);
+  const [focusControlsOpen, setFocusControlsOpen] = useState(false);
+  const focusControlsRef = useRef(null);
+  const focusPanelRef = useRef(null);
+  const [autoCloseFading, setAutoCloseFading] = useState({
+    advanced: false,
+    criteria: false,
+    visibility: false,
+    focus: false,
+  });
+  const [isHeaderInteractionActive, setIsHeaderInteractionActive] = useState(false);
+  const focusOpenClickTimerRef = useRef(null);
   const statusBarRootRef = useRef(null);
   const [activePanelComponent, setActivePanelComponent] = useState(() => (
     window?.dockviewApi?.activePanel?.component
@@ -281,6 +332,15 @@ const StatusBar = ({
     && isDataManagementActive
     && controlsVisible === true
     && (showDataAdminActions || showDataAdminFilters);
+  const reportActionFailure = (message) => {
+    const text = String(message || '').trim() || 'Action failed.';
+    console.error(`[StatusBar] ${text}`);
+    try {
+      window.__taliaStatus?.setStatusMessage?.(`Error: ${text}`);
+    } catch {
+      // Avoid secondary failures while reporting an action error.
+    }
+  };
 
   // Update display message when statusMessage changes
   useEffect(() => {
@@ -358,11 +418,87 @@ const StatusBar = ({
     window.dispatchEvent(new CustomEvent(DASHBOARD_CYCLE_FOCUS_EVENT));
   };
 
+  const handleSwitchFocus = () => {
+    const targetFocusId = lastFocusId;
+    if (!targetFocusId) return;
+    if (targetFocusId === currentFocusRef.current) return;
+    if (!focusOptions.some((focus) => focus.id === targetFocusId)) return;
+    userActivityTracker.recordHeaderAction('focus-switch', { status: targetFocusId });
+    window.dispatchEvent(
+      new CustomEvent(DASHBOARD_SELECT_FOCUS_EVENT, {
+        detail: { focusId: targetFocusId },
+      })
+    );
+  };
+
+  const clearFocusOpenClickTimer = () => {
+    if (focusOpenClickTimerRef.current) {
+      window.clearTimeout(focusOpenClickTimerRef.current);
+      focusOpenClickTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    if (!eventsVisible && !criteriaVisible && !visibilityControlsOpen && !focusControlsOpen) {
+      setAutoCloseFading({
+        advanced: false,
+        criteria: false,
+        visibility: false,
+        focus: false,
+      });
+      return undefined;
+    }
+    if (isHeaderInteractionActive) {
+      setAutoCloseFading({
+        advanced: false,
+        criteria: false,
+        visibility: false,
+        focus: false,
+      });
+      return undefined;
+    }
+    const timeoutMs = Number.isFinite(Number(menuDisappearMs)) ? Math.max(1000, Number(menuDisappearMs)) : 5000;
+    const fadeMs = 720;
+    const fadeDelayMs = Math.max(120, timeoutMs - fadeMs);
+    const fadeTimer = window.setTimeout(() => {
+      setAutoCloseFading({
+        advanced: eventsVisible,
+        criteria: criteriaVisible,
+        visibility: visibilityControlsOpen,
+        focus: focusControlsOpen,
+      });
+    }, fadeDelayMs);
+    const closeTimer = window.setTimeout(() => {
+      setEventsVisible(false);
+      setCriteriaVisible(false);
+      setVisibilityControlsOpen(false);
+      setFocusControlsOpen(false);
+      setShowSaveFocusConfirm(false);
+      clearFocusOpenClickTimer();
+      setAutoCloseFading({
+        advanced: false,
+        criteria: false,
+        visibility: false,
+        focus: false,
+      });
+    }, timeoutMs);
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(closeTimer);
+      setAutoCloseFading({
+        advanced: false,
+        criteria: false,
+        visibility: false,
+        focus: false,
+      });
+    };
+  }, [eventsVisible, criteriaVisible, visibilityControlsOpen, focusControlsOpen, menuDisappearMs, isHeaderInteractionActive]);
+
   const handleQuickFocusChange = (nextValue) => {
     const focusId = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value || '';
-    setSelectedFocusId(focusId);
     setShowSaveFocusConfirm(false);
     if (!focusId) return;
+    if (focusId === currentFocusRef.current) return;
     userActivityTracker.recordHeaderAction('focus-select', { status: focusId });
     window.dispatchEvent(
       new CustomEvent(DASHBOARD_SELECT_FOCUS_EVENT, {
@@ -405,8 +541,8 @@ const StatusBar = ({
     window.__taliaTableLayoutMode = next;
     try {
       window.localStorage?.setItem?.(TABLE_LAYOUT_STORAGE_KEY, next);
-    } catch {
-      // no-op
+    } catch (error) {
+      reportActionFailure(`Failed to persist table layout mode "${next}": ${error?.message || 'Unknown error'}`);
     }
     window.dispatchEvent(
       new CustomEvent(DASHBOARD_TABLE_LAYOUT_EVENT, {
@@ -416,16 +552,82 @@ const StatusBar = ({
     userActivityTracker.recordHeaderAction('table-layout-toggle', { status: next });
   };
 
+  const handleTableLayoutSelect = (mode) => {
+    if (mode !== 'data' && mode !== 'width') return;
+    const next = mode;
+    if (next === tableLayoutMode) return;
+    setTableLayoutMode(next);
+    window.__taliaTableLayoutMode = next;
+    try {
+      window.localStorage?.setItem?.(TABLE_LAYOUT_STORAGE_KEY, next);
+    } catch (error) {
+      reportActionFailure(`Failed to persist table layout mode "${next}": ${error?.message || 'Unknown error'}`);
+    }
+    window.dispatchEvent(
+      new CustomEvent(DASHBOARD_TABLE_LAYOUT_EVENT, {
+        detail: { mode: next },
+      })
+    );
+    userActivityTracker.recordHeaderAction('table-layout-toggle', { status: next });
+  };
+
+  const closeOtherTopLevelGroups = (groupToKeep) => {
+    if (groupToKeep !== 'advanced') setEventsVisible(false);
+    if (groupToKeep !== 'criteria') setCriteriaVisible(false);
+    if (groupToKeep !== 'visibility') setVisibilityControlsOpen(false);
+    if (groupToKeep !== 'focus') {
+      setFocusControlsOpen(false);
+      setShowSaveFocusConfirm(false);
+      clearFocusOpenClickTimer();
+    }
+    setAutoCloseFading({
+      advanced: false,
+      criteria: false,
+      visibility: false,
+      focus: false,
+    });
+  };
+
   const handleEventsToggle = () => {
     const nextVisible = !eventsVisible;
     userActivityTracker.recordHeaderAction('advanced-controls-toggle', { status: nextVisible ? 'show' : 'hide' });
+    if (nextVisible) closeOtherTopLevelGroups('advanced');
     setEventsVisible(nextVisible);
   };
 
   const handleCriteriaToggle = () => {
     const nextVisible = !criteriaVisible;
     userActivityTracker.recordHeaderAction('criteria-toggle', { status: nextVisible ? 'show' : 'hide' });
+    if (nextVisible) closeOtherTopLevelGroups('criteria');
     setCriteriaVisible(nextVisible);
+  };
+
+  const handleVisibilityToggle = () => {
+    const nextVisible = !visibilityControlsOpen;
+    userActivityTracker.recordHeaderAction('visibility-toggle', { status: nextVisible ? 'show' : 'hide' });
+    if (nextVisible) closeOtherTopLevelGroups('visibility');
+    setVisibilityControlsOpen(nextVisible);
+  };
+
+  const handleFocusTopClick = () => {
+    clearFocusOpenClickTimer();
+    focusOpenClickTimerRef.current = window.setTimeout(() => {
+      closeOtherTopLevelGroups('focus');
+      setFocusControlsOpen(true);
+      setShowSaveFocusConfirm(false);
+      userActivityTracker.recordHeaderAction('focus-selector-open', { status: 'single-click' });
+      focusOpenClickTimerRef.current = null;
+    }, 220);
+  };
+
+  const handleFocusTopDoubleClick = (event) => {
+    event?.preventDefault?.();
+    clearFocusOpenClickTimer();
+    closeOtherTopLevelGroups('focus');
+    setFocusControlsOpen(false);
+    setShowSaveFocusConfirm(false);
+    handleCycleFocus();
+    userActivityTracker.recordHeaderAction('focus-next', { status: 'double-click' });
   };
 
   const handleGlobalDateRangeChange = (nextValue) => {
@@ -526,7 +728,10 @@ const StatusBar = ({
     enforceDashboardUiState({ dispatchEvents: true });
     const { panelId, panelComponent } = getActivePanelTarget();
     if (refreshPhase === 'active') {
-      if (!panelId && !panelComponent) return;
+      if (!panelId && !panelComponent) {
+        reportActionFailure('Refresh failed: no active panel is selected.');
+        return;
+      }
       dispatchReportRefresh({
         panelId: panelComponent || panelId,
         panelInstanceId: panelId || null,
@@ -598,7 +803,10 @@ const StatusBar = ({
 
   const handleDataMgmtTableAction = (action) => {
     const tableName = dataMgmtState.selectedTable || '';
-    if (!tableName) return;
+    if (!tableName) {
+      reportActionFailure(`Data Management ${action} failed: no table is selected.`);
+      return;
+    }
     dispatchDataManagementCommand(DATA_MANAGEMENT_TABLE_ACTION_EVENT, { tableName, action });
   };
 
@@ -632,14 +840,27 @@ const StatusBar = ({
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
-      if (!visibilityControlsRef.current) return;
-      if (!visibilityControlsRef.current.contains(event.target)) {
+      const insideTrigger = visibilityControlsRef.current?.contains(event.target);
+      const insidePanel = visibilityPanelRef.current?.contains(event.target);
+      const insideFocusTrigger = focusControlsRef.current?.contains(event.target);
+      const insideFocusPanel = focusPanelRef.current?.contains(event.target);
+      if (!insideTrigger && !insidePanel) {
         setVisibilityControlsOpen(false);
+      }
+      if (!insideFocusTrigger && !insideFocusPanel) {
+        setFocusControlsOpen(false);
+        setShowSaveFocusConfirm(false);
+        clearFocusOpenClickTimer();
       }
     };
     const handleEscape = (event) => {
       if (event.key === 'Escape') {
         setVisibilityControlsOpen(false);
+        setFocusControlsOpen(false);
+        setShowSaveFocusConfirm(false);
+        clearFocusOpenClickTimer();
+        setCriteriaVisible(false);
+        setEventsVisible(false);
       }
     };
     document.addEventListener('mousedown', handleOutsideClick);
@@ -709,6 +930,7 @@ const StatusBar = ({
   useEffect(() => {
     return () => {
       clearRefreshTimer();
+      clearFocusOpenClickTimer();
       if (messageFadeTimerRef.current) {
         window.clearTimeout(messageFadeTimerRef.current);
       }
@@ -725,12 +947,28 @@ const StatusBar = ({
       if (Array.isArray(options)) {
         setFocusOptions(options.filter((focus) => focus?.id));
       }
+      if (
+        currentFocusId
+        && currentFocusRef.current
+        && currentFocusRef.current !== currentFocusId
+      ) {
+        setLastFocusId(currentFocusRef.current);
+      }
+      currentFocusRef.current = currentFocusId || '';
       setSelectedFocusId(currentFocusId || '');
       setShowSaveFocusConfirm(false);
     };
     window.addEventListener(DASHBOARD_FOCUS_STATE_EVENT, handleFocusState);
     return () => window.removeEventListener(DASHBOARD_FOCUS_STATE_EVENT, handleFocusState);
   }, []);
+
+  useEffect(() => {
+    if (!lastFocusId) return;
+    const stillExists = focusOptions.some((focus) => focus.id === lastFocusId);
+    if (!stillExists) {
+      setLastFocusId('');
+    }
+  }, [focusOptions, lastFocusId]);
 
   useEffect(() => {
     const handleActivePanelChanged = (event) => {
@@ -784,8 +1022,8 @@ const StatusBar = ({
             setActiveOnly(criteria.includeNonRealSailings !== true);
           }
         }
-      } catch {
-        // local fallback remains in place
+      } catch (error) {
+        reportActionFailure(`Failed to load header criteria: ${error?.message || 'Unknown error'}`);
       } finally {
         if (!cancelled) setProfileCriteriaHydrated(true);
       }
@@ -899,7 +1137,19 @@ const StatusBar = ({
 
   // Always render - mode selector should always be visible
   return (
-    <div className="status-bar" ref={statusBarRootRef}>
+    <div
+      className="status-bar"
+      ref={statusBarRootRef}
+      onMouseEnter={() => setIsHeaderInteractionActive(true)}
+      onMouseLeave={() => setIsHeaderInteractionActive(false)}
+      onFocusCapture={() => setIsHeaderInteractionActive(true)}
+      onBlurCapture={(event) => {
+        const nextFocused = event?.relatedTarget;
+        if (!statusBarRootRef.current?.contains(nextFocused)) {
+          setIsHeaderInteractionActive(false);
+        }
+      }}
+    >
       <div className="status-bar__container">
         <div className="status-bar__leading">
           {currentMode === 'app' && (
@@ -917,142 +1167,6 @@ const StatusBar = ({
               <div className="status-bar__quick-actions">
                 <button
                   type="button"
-                  className={`status-bar__header-btn ${viewScope === 'wide' ? 'status-bar__header-btn--active' : ''}`}
-                  onClick={handleViewScopeToggle}
-                  title={viewScope === 'wide' ? 'Wide view active (click for local view)' : 'Local view active (click for wide view)'}
-                  aria-label={viewScope === 'wide' ? 'Switch to local view' : 'Switch to wide view'}
-                >
-                  {viewScope === 'wide' ? 'W' : 'L'}
-                </button>
-                <div className="status-bar__visibility-controls" ref={visibilityControlsRef}>
-                  <button
-                    type="button"
-                    className={`status-bar__header-btn status-bar__header-btn--visibility ${visibilityControlsOpen ? 'status-bar__header-btn--active' : ''}`}
-                    onClick={() => setVisibilityControlsOpen((prev) => !prev)}
-                    title={visibilityControlsOpen ? 'Hide visibility controls' : 'Show visibility controls'}
-                    aria-label={visibilityControlsOpen ? 'Hide visibility controls' : 'Show visibility controls'}
-                  >
-                    👁
-                  </button>
-                  {visibilityControlsOpen && (
-                    <div className="status-bar__visibility-menu" role="menu" aria-label="Visibility controls">
-                      <button
-                        type="button"
-                        role="menuitemcheckbox"
-                        aria-checked={controlsVisible}
-                        className={`status-bar__visibility-option ${controlsVisible ? 'status-bar__visibility-option--active' : ''}`}
-                        onClick={() => {
-                          handleControlsToggle();
-                          setVisibilityControlsOpen(false);
-                        }}
-                        title="Show or hide the top-level controls strip"
-                      >
-                        Controls
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitemcheckbox"
-                        aria-checked={filtersVisible}
-                        className={`status-bar__visibility-option ${filtersVisible ? 'status-bar__visibility-option--active' : ''}`}
-                        onClick={() => {
-                          handleFiltersToggle();
-                          setVisibilityControlsOpen(false);
-                        }}
-                        title="Show or hide filter rows on all reports"
-                      >
-                        Filters
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitemcheckbox"
-                        aria-checked={calloutsVisible}
-                        className={`status-bar__visibility-option ${calloutsVisible ? 'status-bar__visibility-option--active' : ''}`}
-                        onClick={() => {
-                          handleCalloutsToggle();
-                          setVisibilityControlsOpen(false);
-                        }}
-                        title="Show or hide informational callouts across all reports"
-                      >
-                        Callouts
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitemcheckbox"
-                        aria-checked={actionsVisible}
-                        className={`status-bar__visibility-option ${actionsVisible ? 'status-bar__visibility-option--active' : ''}`}
-                        onClick={() => {
-                          handleActionsToggle();
-                          setVisibilityControlsOpen(false);
-                        }}
-                        title="Show or hide panel action sections across all reports"
-                      >
-                        Actions
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitemcheckbox"
-                        aria-checked={panelTitlesVisible}
-                        className={`status-bar__visibility-option ${panelTitlesVisible ? 'status-bar__visibility-option--active' : ''}`}
-                        onClick={() => {
-                          handlePanelTitlesToggle();
-                          setVisibilityControlsOpen(false);
-                        }}
-                        title="Show or hide panel titles globally"
-                      >
-                        Titles
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitemcheckbox"
-                        aria-checked={detailsVisible}
-                        className={`status-bar__visibility-option ${detailsVisible ? 'status-bar__visibility-option--active' : ''}`}
-                        onClick={() => {
-                          handleDetailsToggle();
-                          setVisibilityControlsOpen(false);
-                        }}
-                        title="Show or hide data details on all report panels"
-                      >
-                        Details
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitemcheckbox"
-                        aria-checked={tableLayoutMode === 'width'}
-                        className={`status-bar__visibility-option ${tableLayoutMode === 'width' ? 'status-bar__visibility-option--active' : ''}`}
-                        onClick={() => {
-                          handleTableLayoutToggle();
-                          setVisibilityControlsOpen(false);
-                        }}
-                        title={tableLayoutMode === 'width' ? 'Tables fill width' : 'Tables fit data'}
-                      >
-                        Fit
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  className={`status-bar__header-btn ${refreshPhase !== 'active' ? 'status-bar__header-btn--active' : ''}`}
-                  onClick={handleGlobalRefreshCycle}
-                  title={refreshButtonTitle}
-                  aria-label={refreshButtonTitle}
-                  disabled={refreshPhase === 'cooldown'}
-                >
-                  {refreshButtonLabel}
-                </button>
-                {hasAdvancedControls && (
-                  <button
-                    type="button"
-                    className="status-bar__header-btn status-bar__header-btn--focus"
-                    onClick={handleCycleFocus}
-                    title="Cycle focus"
-                    aria-label="Cycle focus"
-                  >
-                    ⟳
-                  </button>
-                )}
-                <button
-                  type="button"
                   className={`status-bar__header-btn status-bar__header-btn--criteria ${criteriaVisible ? 'status-bar__header-btn--active' : ''}`}
                   onClick={handleCriteriaToggle}
                   title={criteriaVisible ? 'Hide global criteria controls' : 'Show global criteria controls'}
@@ -1060,11 +1174,51 @@ const StatusBar = ({
                 >
                   <span className="status-bar__icon-search" aria-hidden="true">🔍</span>
                 </button>
+                {hasAdvancedControls && (
+                  <div className="status-bar__focus-controls" ref={focusControlsRef}>
+                    <button
+                      type="button"
+                      className={`status-bar__header-btn status-bar__header-btn--focus-top ${focusControlsOpen ? 'status-bar__header-btn--active' : ''}`}
+                      onClick={handleFocusTopClick}
+                      onDoubleClick={handleFocusTopDoubleClick}
+                      title={focusControlsOpen
+                        ? 'Focus selector open (double-click for next focus)'
+                        : 'Open focus selector (double-click for next focus)'}
+                      aria-label="Focus controls"
+                    >
+                      ◎
+                    </button>
+                  </div>
+                )}
               </div>
-              {criteriaVisible && (
+              {focusControlsOpen && (
                 <>
                   <span className="status-bar__leading-separator" aria-hidden="true" />
-                  <div className="status-bar__criteria">
+                  <div
+                    ref={focusPanelRef}
+                    className={`status-bar__criteria status-bar__criteria--focus ${autoCloseFading.focus ? 'status-bar__auto-close-fade' : ''}`}
+                    role="group"
+                    aria-label="Focus controls"
+                  >
+                    <button
+                      type="button"
+                      className="status-bar__header-btn status-bar__header-btn--focus-prev"
+                      onClick={handleSwitchFocus}
+                      title={lastFocusId ? `Switch to ${lastFocusId}` : 'Switch to last focus'}
+                      aria-label="Switch focus"
+                      disabled={!lastFocusId}
+                    >
+                      Switch
+                    </button>
+                    <button
+                      type="button"
+                      className="status-bar__header-btn status-bar__header-btn--focus-next"
+                      onClick={handleCycleFocus}
+                      title="Move to next focus"
+                      aria-label="Next focus"
+                    >
+                      Next
+                    </button>
                     {focusOptions.length > 0 && (
                       <div className="status-bar__focus-control">
                         <label className="status-bar__header-range" title="Quick focus selector">
@@ -1076,9 +1230,10 @@ const StatusBar = ({
                             value={selectedFocusId}
                             onChange={handleQuickFocusChange}
                             aria-label="Quick focus selector"
+                            autoCloseMs={menuDisappearMs}
                           />
                         </label>
-                        {hasAdvancedControls && selectedFocusId && (
+                        {selectedFocusId && (
                           <div className="status-bar__focus-save">
                             <button
                               type="button"
@@ -1111,19 +1266,13 @@ const StatusBar = ({
                         )}
                       </div>
                     )}
-                    {appearanceProfiles.length > 0 && (
-                      <label className="status-bar__header-range" title="Apply a saved appearance profile">
-                        <span className="status-bar__header-range-label">Style</span>
-                        <HeaderCriteriaMenuSelect
-                          id="status-bar-appearance-profile"
-                          wide
-                          options={appearanceProfiles.map((profile) => ({ key: profile.id, label: profile.name }))}
-                          value={activeAppearanceProfileId}
-                          onChange={handleAppearanceProfileChange}
-                          aria-label="Appearance profile selector"
-                        />
-                      </label>
-                    )}
+                  </div>
+                </>
+              )}
+              {criteriaVisible && (
+                <>
+                  <span className="status-bar__leading-separator" aria-hidden="true" />
+                  <div className={`status-bar__criteria ${autoCloseFading.criteria ? 'status-bar__auto-close-fade' : ''}`}>
                     <label className="status-bar__header-range" title="Global date range applied across reports">
                       <span className="status-bar__header-range-label">Date</span>
                       <HeaderCriteriaMenuSelect
@@ -1132,6 +1281,7 @@ const StatusBar = ({
                         value={globalDateRange}
                         onChange={handleGlobalDateRangeChange}
                         aria-label="Global date range"
+                        autoCloseMs={menuDisappearMs}
                       />
                     </label>
                     <label className="status-bar__header-range" title="Global duration criteria applied across reports">
@@ -1142,6 +1292,7 @@ const StatusBar = ({
                         value={globalDuration}
                         onChange={handleGlobalDurationChange}
                         aria-label="Global duration criteria"
+                        autoCloseMs={menuDisappearMs}
                       />
                     </label>
                     <label className="status-bar__header-toggle" htmlFor="status-bar-active-only" title="Show active sailings only">
@@ -1154,6 +1305,17 @@ const StatusBar = ({
                         aria-label="Active sailings only"
                       />
                       <span className="status-bar__header-range-label">Active</span>
+                    </label>
+                    <label className="status-bar__header-toggle" htmlFor="status-bar-view-scope-wide" title="Switch between local and wide dashboard scope">
+                      <input
+                        id="status-bar-view-scope-wide"
+                        type="checkbox"
+                        className="status-bar__header-checkbox"
+                        checked={viewScope === 'wide'}
+                        onChange={handleViewScopeToggle}
+                        aria-label="Wide dashboard scope"
+                      />
+                      <span className="status-bar__header-range-label">Wide</span>
                     </label>
                   </div>
                 </>
@@ -1183,7 +1345,7 @@ const StatusBar = ({
 
         <div className="status-bar__right">
           {eventsVisible && (
-            <div className="status-bar__advanced">
+            <div className={`status-bar__advanced ${autoCloseFading.advanced ? 'status-bar__auto-close-fade' : ''}`}>
               {currentMode === 'app' && hasAdvancedControls && (
                 <div className="status-bar__events">
                   {currentEventSummary && (
@@ -1224,9 +1386,145 @@ const StatusBar = ({
               )}
             </div>
           )}
+          {visibilityControlsOpen && (
+            <div
+              ref={visibilityPanelRef}
+              className={`status-bar__criteria status-bar__criteria--visibility ${autoCloseFading.visibility ? 'status-bar__auto-close-fade' : ''}`}
+              role="menu"
+              aria-label="Visibility controls"
+            >
+              {appearanceProfiles.length > 0 && (
+                <label className="status-bar__header-range" title="Apply a saved appearance profile">
+                  <span className="status-bar__header-range-label">Style</span>
+                  <HeaderCriteriaMenuSelect
+                    id="status-bar-appearance-profile-visibility"
+                    wide
+                    options={appearanceProfiles.map((profile) => ({ key: profile.id, label: profile.name }))}
+                    value={activeAppearanceProfileId}
+                    onChange={handleAppearanceProfileChange}
+                    aria-label="Appearance profile selector"
+                    autoCloseMs={menuDisappearMs}
+                  />
+                </label>
+              )}
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={controlsVisible}
+                className={`status-bar__visibility-option ${controlsVisible ? 'status-bar__visibility-option--active' : ''}`}
+                onClick={handleControlsToggle}
+                title="Show or hide the top-level controls strip"
+              >
+                <span>Controls</span>
+                {controlsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+              </button>
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={filtersVisible}
+                className={`status-bar__visibility-option ${filtersVisible ? 'status-bar__visibility-option--active' : ''}`}
+                onClick={handleFiltersToggle}
+                title="Show or hide filter rows on all reports"
+              >
+                <span>Filters</span>
+                {filtersVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+              </button>
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={calloutsVisible}
+                className={`status-bar__visibility-option ${calloutsVisible ? 'status-bar__visibility-option--active' : ''}`}
+                onClick={handleCalloutsToggle}
+                title="Show or hide informational callouts across all reports"
+              >
+                <span>Callouts</span>
+                {calloutsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+              </button>
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={actionsVisible}
+                className={`status-bar__visibility-option ${actionsVisible ? 'status-bar__visibility-option--active' : ''}`}
+                onClick={handleActionsToggle}
+                title="Show or hide panel action sections across all reports"
+              >
+                <span>Actions</span>
+                {actionsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+              </button>
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={panelTitlesVisible}
+                className={`status-bar__visibility-option ${panelTitlesVisible ? 'status-bar__visibility-option--active' : ''}`}
+                onClick={handlePanelTitlesToggle}
+                title="Show or hide panel titles globally"
+              >
+                <span>Titles</span>
+                {panelTitlesVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+              </button>
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={detailsVisible}
+                className={`status-bar__visibility-option ${detailsVisible ? 'status-bar__visibility-option--active' : ''}`}
+                onClick={handleDetailsToggle}
+                title="Show or hide data details on all report panels"
+              >
+                <span>Details</span>
+                {detailsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+              </button>
+              <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={tableLayoutMode === 'width'}
+                className={`status-bar__visibility-option ${tableLayoutMode === 'width' ? 'status-bar__visibility-option--active' : ''}`}
+                onClick={() => handleTableLayoutSelect('width')}
+                title="Use width-fit table layout"
+              >
+                <span>Fit Width</span>
+                {tableLayoutMode === 'width' ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+              </button>
+              <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={tableLayoutMode === 'data'}
+                className={`status-bar__visibility-option ${tableLayoutMode === 'data' ? 'status-bar__visibility-option--active' : ''}`}
+                onClick={() => handleTableLayoutSelect('data')}
+                title="Use data-fit table layout"
+              >
+                <span>Fit Data</span>
+                {tableLayoutMode === 'data' ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+              </button>
+            </div>
+          )}
+          {currentMode === 'app' && (
+            <div className="status-bar__visibility-controls" ref={visibilityControlsRef}>
+              <button
+                type="button"
+                className={`status-bar__header-btn status-bar__header-btn--visibility ${visibilityControlsOpen ? 'status-bar__header-btn--active' : ''}`}
+                onClick={handleVisibilityToggle}
+                title={visibilityControlsOpen ? 'Hide visibility controls' : 'Show visibility controls'}
+                aria-label={visibilityControlsOpen ? 'Hide visibility controls' : 'Show visibility controls'}
+              >
+                👁
+              </button>
+            </div>
+          )}
+          {currentMode === 'app' && (
+            <button
+              type="button"
+              className={`status-bar__header-btn ${refreshPhase !== 'active' ? 'status-bar__header-btn--active' : ''}`}
+              onClick={handleGlobalRefreshCycle}
+              title={refreshButtonTitle}
+              aria-label={refreshButtonTitle}
+              disabled={refreshPhase === 'cooldown'}
+            >
+              {refreshButtonLabel}
+            </button>
+          )}
           <button
             type="button"
-            className={`status-bar__header-btn ${eventsVisible ? 'status-bar__header-btn--active' : ''}`}
+            className={`status-bar__header-btn status-bar__header-btn--advanced ${eventsVisible ? 'status-bar__header-btn--active' : ''}`}
             onClick={handleEventsToggle}
             title={eventsVisible ? 'Hide advanced header controls' : 'Show advanced header controls'}
             aria-label={eventsVisible ? 'Hide advanced header controls' : 'Show advanced header controls'}
@@ -1258,6 +1556,7 @@ const StatusBar = ({
                   value={dataMgmtState.selectedTable || ''}
                   onChange={handleDataMgmtSelectTable}
                   aria-label="Data Management target table"
+                  autoCloseMs={menuDisappearMs}
                 />
               </label>
               <label className="status-bar__data-admin-range">

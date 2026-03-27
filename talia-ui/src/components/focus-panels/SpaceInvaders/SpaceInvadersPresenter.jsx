@@ -1,11 +1,36 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import GameScorePopover from '../../shared/games/GameScorePopover';
+import ArcadeGameCanvasOverlay from '../../shared/games/ArcadeGameCanvasOverlay';
+import ArcadeGameScoreHud from '../../shared/games/ArcadeGameScoreHud';
+import ArcadeGameDifficultyToggle from '../../shared/games/ArcadeGameDifficultyToggle';
+import {
+  buildArcadeIdleSubtitle,
+  formatArcadeOverlaySubtitle,
+  getArcadeOverlayTone,
+} from '../../shared/games/arcadeGameUi';
+import { ARCADE_DIFFICULTY_NORMAL, isArcadeEasy } from '../../shared/games/arcadeDifficulty';
+import useArcadeGameAudio from '../../shared/games/useArcadeGameAudio';
+import { useArcadeGameLoop } from '../../shared/games/useArcadeGameLoop';
+import { filterRowsByGame, getMaxHighScore } from '../../shared/games/leaderboardScope';
 import usePanelTabActive from '../../../hooks/usePanelTabActive';
 import usePanelPaused from '../../../hooks/usePanelPaused';
 import { isEditableTarget } from '../../shared/games/keyboardGuards';
+import { useArcadeGameOverlayResume } from '../../shared/games/useArcadeGameOverlayResume';
+import useGamePanelPauseResume from '../../shared/games/useGamePanelPauseResume';
+import {
+  armExtraSpawn,
+  createExtraSpawnState,
+  isExtraSpawnDue,
+} from '../../shared/games/arcadeGameExtra';
+import {
+  addArcadeScore,
+  armArcadeDoubleScore,
+} from '../../shared/games/arcadeDoubleScore';
+import useArcadeDoubleScoreHud from '../../shared/games/useArcadeDoubleScoreHud';
 
 const GAME_WIDTH = 640;
 const GAME_HEIGHT = 440;
+const GAME_OVER_HOLD_MS = 5000;
+const PANEL_COMPONENT_ID = 'space-invaders';
 
 const createInvaders = () => {
   const invaders = [];
@@ -53,6 +78,9 @@ const createShields = () => {
 const createInitialModel = () => ({
   running: false,
   score: 0,
+  doubleScoreUntil: 0,
+  difficulty: ARCADE_DIFFICULTY_NORMAL,
+  wave: 1,
   lives: 3,
   player: { x: GAME_WIDTH / 2 - 14, y: GAME_HEIGHT - 48, w: 28, h: 14, speed: 5.4 },
   bullets: [],
@@ -65,103 +93,50 @@ const createInitialModel = () => ({
   frame: 0,
   leftPressed: false,
   rightPressed: false,
+  extraSpawn: createExtraSpawnState(),
+  extra: null,
 });
+
+const primeSpaceInvadersExtraSpawn = (model) => {
+  armExtraSpawn(model.extraSpawn, 0, 220, 480);
+};
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 const SpaceInvadersPresenter = ({
   panelInstanceId,
-  loading,
-  loadError,
-  saveError,
-  saving,
-  userId,
+  gameId,
+  gameSoundEnabled,
   highScore,
-  lastScore,
-  updatedAt,
-  onReloadScore,
   onSaveScore,
   leaderboard,
   leaderboardLoading,
 }) => {
   const isPanelActive = usePanelTabActive(panelInstanceId);
-  const isPanelPaused = usePanelPaused(panelInstanceId, 'space-invaders');
-  const isPanelExecutionActive = isPanelActive && !isPanelPaused;
+  const isPanelPaused = usePanelPaused(panelInstanceId, PANEL_COMPONENT_ID);
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const modelRef = useRef(createInitialModel());
   const rafRef = useRef(0);
-  const pausedByInactiveRef = useRef(false);
-  const inactiveResumeIntervalRef = useRef(0);
   const hitOverlayTimerRef = useRef(0);
-  const audioContextRef = useRef(null);
-  const audioMasterGainRef = useRef(null);
-  const lastSoundAtRef = useRef(0);
+  const { unlockAudio, playTone, disposeAudio } = useArcadeGameAudio(gameSoundEnabled, 0.03);
+  const gameOverReleaseTimeoutRef = useRef(0);
+  const gameOverCountdownIntervalRef = useRef(0);
   const renderMetricsRef = useRef({ scale: 1, offsetX: 0, offsetY: 0 });
   const [gameState, setGameState] = useState('idle');
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
   const [statusMessage, setStatusMessage] = useState('Press Start to defend the fleet.');
   const [overlay, setOverlay] = useState(null);
-  const [showScorePopover, setShowScorePopover] = useState(false);
-
-  const userLabel = useMemo(() => String(userId || 'anonymous'), [userId]);
-  const updatedLabel = useMemo(() => {
-    if (!updatedAt) return 'Not saved yet';
-    const date = new Date(updatedAt);
-    return Number.isNaN(date.getTime()) ? 'Not saved yet' : date.toLocaleString();
-  }, [updatedAt]);
+  const [restartInSeconds, setRestartInSeconds] = useState(0);
+  const [difficulty, setDifficulty] = useState(ARCADE_DIFFICULTY_NORMAL);
+  const doubleScoreHud = useArcadeDoubleScoreHud(modelRef, gameState === 'playing');
 
   const syncUi = useCallback(() => {
     const model = modelRef.current;
     setScore(model.score);
     setLives(model.lives);
   }, []);
-
-  const ensureAudioContext = useCallback(() => {
-    if (audioContextRef.current) return audioContextRef.current;
-    const Ctor = window.AudioContext || window.webkitAudioContext;
-    if (!Ctor) return null;
-    const context = new Ctor();
-    const masterGain = context.createGain();
-    masterGain.gain.value = 0.03;
-    masterGain.connect(context.destination);
-    audioContextRef.current = context;
-    audioMasterGainRef.current = masterGain;
-    return context;
-  }, []);
-
-  const playTone = useCallback((frequency = 420, durationMs = 40, type = 'square', volume = 0.45) => {
-    const now = performance.now();
-    if (now - lastSoundAtRef.current < 12) return;
-    lastSoundAtRef.current = now;
-    const context = ensureAudioContext();
-    const masterGain = audioMasterGainRef.current;
-    if (!context || !masterGain) return;
-    if (context.state === 'suspended') context.resume().catch(() => {});
-
-    const osc = context.createOscillator();
-    const gain = context.createGain();
-    osc.type = type;
-    osc.frequency.value = frequency;
-    gain.gain.value = 0.0001;
-    osc.connect(gain);
-    gain.connect(masterGain);
-    const start = context.currentTime;
-    const end = start + durationMs / 1000;
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(volume, start + 0.005);
-    gain.gain.exponentialRampToValueAtTime(0.0001, end);
-    osc.start(start);
-    osc.stop(end);
-  }, [ensureAudioContext]);
-
-  const unlockAudio = useCallback(() => {
-    const context = ensureAudioContext();
-    if (context?.state === 'suspended') {
-      context.resume().catch(() => {});
-    }
-  }, [ensureAudioContext]);
 
   const playExplosion = useCallback(() => {
     playTone(220, 60, 'sawtooth', 0.55);
@@ -190,6 +165,19 @@ const SpaceInvadersPresenter = ({
 
     ctx.strokeStyle = 'rgba(152, 175, 216, 0.25)';
     ctx.strokeRect(8, 8, GAME_WIDTH - 16, GAME_HEIGHT - 16);
+
+    if (model.extra) {
+      const u = model.extra;
+      ctx.fillStyle = 'rgba(255, 100, 160, 0.92)';
+      ctx.beginPath();
+      ctx.ellipse(u.x + u.w / 2, u.y + u.h / 2, u.w / 2, u.h / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255, 220, 120, 0.95)';
+      ctx.fillRect(u.x + 4, u.y + 2, 4, 3);
+      ctx.fillRect(u.x + u.w - 8, u.y + 2, 4, 3);
+      ctx.strokeStyle = 'rgba(255, 200, 200, 0.6)';
+      ctx.strokeRect(u.x, u.y, u.w, u.h);
+    }
 
     model.invaders.forEach((inv) => {
       if (!inv.alive) return;
@@ -242,12 +230,43 @@ const SpaceInvadersPresenter = ({
     }
   }, []);
 
-  const clearInactiveResumeCountdown = useCallback(() => {
-    if (inactiveResumeIntervalRef.current) {
-      window.clearInterval(inactiveResumeIntervalRef.current);
-      inactiveResumeIntervalRef.current = 0;
+  const clearGameOverHold = useCallback(() => {
+    if (gameOverReleaseTimeoutRef.current) {
+      window.clearTimeout(gameOverReleaseTimeoutRef.current);
+      gameOverReleaseTimeoutRef.current = 0;
     }
+    if (gameOverCountdownIntervalRef.current) {
+      window.clearInterval(gameOverCountdownIntervalRef.current);
+      gameOverCountdownIntervalRef.current = 0;
+    }
+    setRestartInSeconds(0);
   }, []);
+
+  const beginGameOverHold = useCallback(() => {
+    clearGameOverHold();
+    const releaseAt = Date.now() + GAME_OVER_HOLD_MS;
+    setRestartInSeconds(Math.ceil(GAME_OVER_HOLD_MS / 1000));
+    gameOverCountdownIntervalRef.current = window.setInterval(() => {
+      const remainingMs = releaseAt - Date.now();
+      if (remainingMs <= 0) {
+        if (gameOverCountdownIntervalRef.current) {
+          window.clearInterval(gameOverCountdownIntervalRef.current);
+          gameOverCountdownIntervalRef.current = 0;
+        }
+        setRestartInSeconds(0);
+        return;
+      }
+      setRestartInSeconds(Math.ceil(remainingMs / 1000));
+    }, 250);
+    gameOverReleaseTimeoutRef.current = window.setTimeout(() => {
+      gameOverReleaseTimeoutRef.current = 0;
+      if (gameOverCountdownIntervalRef.current) {
+        window.clearInterval(gameOverCountdownIntervalRef.current);
+        gameOverCountdownIntervalRef.current = 0;
+      }
+      setRestartInSeconds(0);
+    }, GAME_OVER_HOLD_MS);
+  }, [clearGameOverHold]);
 
   const finishGame = useCallback(async (reason) => {
     stopGame();
@@ -255,11 +274,12 @@ const SpaceInvadersPresenter = ({
     const finalScore = modelRef.current.score;
     setStatusMessage(`Game over: ${reason}`);
     setOverlay({ title: 'Game Over', subtitle: `Final score: ${finalScore}` });
+    beginGameOverHold();
     playTone(480, 70, 'triangle', 0.5);
     setTimeout(() => playTone(360, 90, 'triangle', 0.5), 85);
     setTimeout(() => playTone(240, 120, 'triangle', 0.5), 190);
     await onSaveScore(finalScore);
-  }, [onSaveScore, playTone, stopGame]);
+  }, [beginGameOverHold, onSaveScore, playTone, stopGame]);
 
   const updateModel = useCallback(async () => {
     const model = modelRef.current;
@@ -272,10 +292,11 @@ const SpaceInvadersPresenter = ({
       model.player.x = clamp(model.player.x + model.player.speed, 12, GAME_WIDTH - model.player.w - 12);
     }
 
+    const invMult = isArcadeEasy(model) ? 0.76 : 1;
     let hitEdge = false;
     model.invaders.forEach((inv) => {
       if (!inv.alive) return;
-      inv.x += model.invaderDirection * model.invaderSpeed;
+      inv.x += model.invaderDirection * model.invaderSpeed * invMult;
       if (inv.x <= 14 || inv.x + inv.w >= GAME_WIDTH - 14) {
         hitEdge = true;
       }
@@ -294,17 +315,50 @@ const SpaceInvadersPresenter = ({
     model.bullets = model.bullets
       .map((b) => ({ ...b, y: b.y - 5.2 }))
       .filter((b) => b.y > 10);
+    const ebStep = isArcadeEasy(model) ? 2.5 : 3.1;
     model.enemyBullets = model.enemyBullets
-      .map((b) => ({ ...b, y: b.y + 3.1 }))
+      .map((b) => ({ ...b, y: b.y + ebStep }))
       .filter((b) => b.y < GAME_HEIGHT - 8);
 
+    const saucerPointsTable = [50, 50, 100, 100, 150, 150, 300];
+    if (isExtraSpawnDue(model.extraSpawn, model.frame, model.extra != null)) {
+      const fromLeft = Math.random() < 0.5;
+      model.extra = {
+        x: fromLeft ? -28 : GAME_WIDTH + 4,
+        y: 40,
+        w: 28,
+        h: 12,
+        vx: fromLeft ? 2.35 : -2.35,
+        points: saucerPointsTable[Math.floor(Math.random() * saucerPointsTable.length)],
+      };
+    }
+    if (model.extra) {
+      const e = model.extra;
+      e.x += e.vx;
+      if (e.x < -36 || e.x > GAME_WIDTH + 36) {
+        model.extra = null;
+        armExtraSpawn(model.extraSpawn, model.frame, 420, 780);
+      }
+    }
+
     model.bullets.forEach((bullet) => {
+      if (model.extra) {
+        const e = model.extra;
+        if (bullet.x >= e.x && bullet.x <= e.x + e.w && bullet.y >= e.y && bullet.y <= e.y + e.h) {
+          armArcadeDoubleScore(model);
+          addArcadeScore(model, e.points);
+          bullet.y = -100;
+          model.extra = null;
+          armExtraSpawn(model.extraSpawn, model.frame, 420, 780);
+          playTone(880, 55, 'triangle', 0.52);
+        }
+      }
       model.invaders.forEach((inv) => {
         if (!inv.alive) return;
         if (bullet.x < inv.x || bullet.x > inv.x + inv.w || bullet.y < inv.y || bullet.y > inv.y + inv.h) return;
         inv.alive = false;
         bullet.y = -100;
-        model.score += inv.points;
+        addArcadeScore(model, inv.points);
         playTone(640, 40, 'triangle', 0.5);
       });
     });
@@ -351,9 +405,10 @@ const SpaceInvadersPresenter = ({
     if (playerHit) {
       model.lives -= 1;
       playExplosion();
-      setStatusMessage('Ship hit!');
+      setTimeout(playExplosion, 90);
+      setStatusMessage('Life lost!');
       setOverlay({
-        title: 'Ship Hit!',
+        title: 'Life Lost',
         subtitle: `Lives ${Math.max(0, model.lives)}`,
       });
       if (hitOverlayTimerRef.current) {
@@ -361,7 +416,7 @@ const SpaceInvadersPresenter = ({
       }
       hitOverlayTimerRef.current = window.setTimeout(() => {
         hitOverlayTimerRef.current = 0;
-        setOverlay((prev) => (prev?.title === 'Ship Hit!' ? null : prev));
+        setOverlay((prev) => (prev?.title === 'Life Lost' ? null : prev));
       }, 700);
     }
 
@@ -376,30 +431,74 @@ const SpaceInvadersPresenter = ({
     }
 
     if (aliveInvaders.length === 0) {
+      const w = model.wave || 1;
+      const celeb = 115 + w * 36;
+      addArcadeScore(model, celeb);
+      model.wave = w + 1;
       model.invaders = createInvaders();
       model.shields = createShields();
-      model.invaderSpeed = Math.min(1.8, model.invaderSpeed + 0.12);
-      setStatusMessage('Wave cleared. Next wave!');
-      playTone(760, 60, 'triangle', 0.45);
+      const ramp = isArcadeEasy(model) ? 0.09 : 0.12;
+      model.invaderSpeed = Math.min(1.8, model.invaderSpeed + ramp);
+      syncUi();
+      stopGame();
+      setOverlay({
+        title: 'Wave cleared!',
+        subtitle: `Wave ${w} complete · +${celeb} celebration`,
+        tone: 'win',
+      });
+      setStatusMessage('Wave cleared.');
+      playTone(820, 55, 'triangle', 0.48);
+      model.frame += 1;
+      return;
     }
 
     model.frame += 1;
     if (model.frame % 3 === 0) {
       syncUi();
     }
-  }, [finishGame, playExplosion, syncUi]);
+  }, [finishGame, playExplosion, setOverlay, setStatusMessage, stopGame, syncUi]);
 
-  const loop = useCallback(async () => {
-    await updateModel();
-    draw();
-    if (modelRef.current.running) {
-      rafRef.current = window.requestAnimationFrame(loop);
+  const loop = useArcadeGameLoop({ modelRef, rafRef, updateModel, draw });
+
+  const resumePlaying = useCallback(() => {
+    setOverlay((prev) => (prev?.title === 'Resuming' ? null : prev));
+    setStatusMessage('Resumed.');
+    modelRef.current.running = true;
+    if (rafRef.current) {
+      window.cancelAnimationFrame(rafRef.current);
     }
-  }, [draw, updateModel]);
+    rafRef.current = window.requestAnimationFrame(loop);
+  }, [loop]);
+
+  const { isPanelExecutionActive, clearResumeInterval: clearInactiveResumeCountdown } = useGamePanelPauseResume({
+    isPanelActive,
+    isPanelPaused,
+    gameState,
+    modelRef,
+    rafRef,
+    setOverlay,
+    setStatusMessage,
+    resumePlaying,
+  });
+
+  const dismissWinAndResume = useCallback(() => {
+    setOverlay(null);
+    modelRef.current.running = true;
+    setStatusMessage('Arrows move, Space shoots.');
+    if (rafRef.current) {
+      window.cancelAnimationFrame(rafRef.current);
+    }
+    rafRef.current = window.requestAnimationFrame(loop);
+    canvasRef.current?.focus();
+  }, [loop, setStatusMessage]);
 
   const startGame = useCallback(() => {
+    if (restartInSeconds > 0) return;
+    clearGameOverHold();
     unlockAudio();
     modelRef.current = createInitialModel();
+    modelRef.current.difficulty = difficulty;
+    primeSpaceInvadersExtraSpawn(modelRef.current);
     modelRef.current.running = true;
     setGameState('playing');
     setStatusMessage('Arrows move, Space shoots.');
@@ -411,7 +510,15 @@ const SpaceInvadersPresenter = ({
     rafRef.current = window.requestAnimationFrame(loop);
     canvasRef.current?.focus();
     playTone(520, 36, 'triangle', 0.38);
-  }, [loop, playTone, syncUi, unlockAudio]);
+  }, [clearGameOverHold, difficulty, loop, playTone, restartInSeconds, syncUi, unlockAudio]);
+
+  const onOverlayPrimaryClick = useCallback(() => {
+    if (overlay?.tone === 'win') {
+      dismissWinAndResume();
+      return;
+    }
+    startGame();
+  }, [dismissWinAndResume, overlay?.tone, startGame]);
 
   const fireBullet = useCallback(() => {
     const model = modelRef.current;
@@ -485,60 +592,13 @@ const SpaceInvadersPresenter = ({
   useEffect(() => () => {
     stopGame();
     clearInactiveResumeCountdown();
+    clearGameOverHold();
     if (hitOverlayTimerRef.current) {
       window.clearTimeout(hitOverlayTimerRef.current);
       hitOverlayTimerRef.current = 0;
     }
-    try {
-      audioContextRef.current?.close?.();
-    } catch {
-      // no-op
-    }
-    audioContextRef.current = null;
-    audioMasterGainRef.current = null;
-  }, [clearInactiveResumeCountdown, stopGame]);
-
-  useEffect(() => {
-    if (!isPanelExecutionActive) {
-      clearInactiveResumeCountdown();
-      if (!modelRef.current.running) return;
-      pausedByInactiveRef.current = true;
-      modelRef.current.running = false;
-      if (rafRef.current) {
-        window.cancelAnimationFrame(rafRef.current);
-        rafRef.current = 0;
-      }
-      setOverlay({
-        title: 'Paused',
-        subtitle: isPanelPaused ? 'Paused by user (P)' : 'Panel is not active',
-      });
-      setStatusMessage(isPanelPaused ? 'Paused. Press P to resume.' : 'Paused while another tab is active.');
-      return;
-    }
-    if (!pausedByInactiveRef.current) return;
-    pausedByInactiveRef.current = false;
-    if (gameState !== 'playing') return;
-    if (modelRef.current.running) return;
-
-    let count = 5;
-    setOverlay({ title: 'Resuming', subtitle: `${count}` });
-    setStatusMessage(`Resuming in ${count}...`);
-    clearInactiveResumeCountdown();
-    inactiveResumeIntervalRef.current = window.setInterval(() => {
-      count -= 1;
-      if (count <= 0) {
-        clearInactiveResumeCountdown();
-        if (gameState !== 'playing' || !isPanelExecutionActive) return;
-        setOverlay((prev) => (prev?.title === 'Resuming' ? null : prev));
-        setStatusMessage('Resumed.');
-        modelRef.current.running = true;
-        rafRef.current = window.requestAnimationFrame(loop);
-        return;
-      }
-      setOverlay((prev) => (prev?.title === 'Resuming' ? { title: 'Resuming', subtitle: `${count}` } : prev));
-      setStatusMessage(`Resuming in ${count}...`);
-    }, 1000);
-  }, [clearInactiveResumeCountdown, gameState, isPanelExecutionActive, isPanelPaused, loop]);
+    disposeAudio();
+  }, [clearGameOverHold, clearInactiveResumeCountdown, disposeAudio, stopGame]);
 
   const handlePointerMove = (event) => {
     if (gameState !== 'playing') return;
@@ -552,7 +612,38 @@ const SpaceInvadersPresenter = ({
 
   const topRows = Array.isArray(leaderboard?.top) ? leaderboard.top : [];
   const recentRows = Array.isArray(leaderboard?.recent) ? leaderboard.recent : [];
-  const actionLabel = gameState === 'playing' ? 'Restart' : 'Start';
+  const currentGameTopRows = useMemo(() => filterRowsByGame(topRows, gameId), [gameId, topRows]);
+  const currentGameRecentRows = useMemo(() => filterRowsByGame(recentRows, gameId), [gameId, recentRows]);
+  const globalHighScore = useMemo(() => getMaxHighScore(currentGameTopRows), [currentGameTopRows]);
+  const actionLabel = gameState === 'over' ? 'Insert Coin' : (gameState === 'playing' ? 'Restart' : 'Start');
+  const showEntryOverlay = gameState !== 'playing';
+  const isGameOverHoldActive = gameState === 'over' && restartInSeconds > 0;
+  const overlayTitle = overlay?.title || (isGameOverHoldActive ? 'Game Over' : 'Ready');
+  const overlaySubtitle = formatArcadeOverlaySubtitle({
+    overlaySubtitle: overlay?.subtitle,
+    isGameOverHoldActive,
+    score,
+    restartInSeconds,
+    defaultIdle: buildArcadeIdleSubtitle(PANEL_COMPONENT_ID),
+  });
+  const showStartAction = (showEntryOverlay && !(gameState === 'over' && restartInSeconds > 0))
+    || overlay?.tone === 'win';
+  const isLifeLossMessage = /(life lost|ship hit|caught|missed)/i.test(overlayTitle) || /(life lost|ship hit|caught|missed)/i.test(statusMessage);
+  const overlayTone = getArcadeOverlayTone({
+    explicitTone: overlay?.tone,
+    overlayTitle,
+    isGameOverHoldActive,
+    isLifeLossMessage,
+  });
+  const overlayPrimaryLabel = overlay?.tone === 'win' ? 'Continue' : actionLabel;
+
+  const { onOverlayPointer, arcadeOverlayClickable } = useArcadeGameOverlayResume({
+    panelInstanceId,
+    panelComponentId: PANEL_COMPONENT_ID,
+    overlayTitle,
+    isPanelPaused,
+    isPanelActive,
+  });
 
   return (
     <div
@@ -563,70 +654,48 @@ const SpaceInvadersPresenter = ({
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Space Invaders</h2>
-          <p className="talia-report__subtitle">Standalone arcade panel with shared game score service.</p>
+          <p className="talia-report__subtitle">Shoot invaders; bonus saucer for points.</p>
         </div>
-        <div className="talia-report__actions">
-          <button type="button" className="talia-btn talia-btn--small talia-btn--primary" onClick={startGame}>
-            {actionLabel}
-          </button>
-          <button type="button" className="talia-btn talia-btn--small" onClick={onReloadScore}>
-            Reload Score
-          </button>
-        </div>
+        <ArcadeGameDifficultyToggle
+          value={difficulty}
+          onChange={setDifficulty}
+          disabled={gameState === 'playing'}
+        />
       </header>
 
-      <main className="talia-report__content space-invaders__content">
-        <div className="space-invaders__hud" role="status" aria-live="polite">
-          <span className="talia-event-meta__chip">User: {userLabel}</span>
-          <span className="talia-event-meta__chip">Score: {score}</span>
-          <span className="talia-event-meta__chip">Lives: {lives}</span>
-          <button
-            type="button"
-            className="talia-btn talia-btn--small"
-            onClick={() => setShowScorePopover((prev) => !prev)}
-            title="Show top and recent game highs"
-          >
-            Top High
-          </button>
-          <span className="talia-event-meta__chip talia-event-meta__chip--secondary">High: {highScore}</span>
-          <span className="talia-event-meta__chip talia-event-meta__chip--secondary">Last: {lastScore}</span>
-        </div>
-
-        <div ref={wrapRef} className="space-invaders__canvas-wrap">
+      <main className="talia-report__content talia-game-panel-body">
+        <div ref={wrapRef} className="talia-game-canvas-shell">
           <canvas
             ref={canvasRef}
-            className="space-invaders__canvas"
+            className="talia-arcade-canvas"
             tabIndex={0}
             aria-label="Space Invaders game area"
             onMouseMove={handlePointerMove}
             onClick={fireBullet}
           />
-          {overlay && (
-            <div className="space-invaders__overlay" role="status" aria-live="polite">
-              <div className="space-invaders__overlay-panel">
-                <div className="space-invaders__overlay-title">{overlay.title}</div>
-                {overlay.subtitle && <div className="space-invaders__overlay-subtitle">{overlay.subtitle}</div>}
-              </div>
-            </div>
-          )}
+          <ArcadeGameScoreHud
+            currentScore={score}
+            userHighScore={highScore}
+            totalHighScore={globalHighScore}
+            meta={`Lives: ${lives}`}
+            doubleScoreSeconds={doubleScoreHud}
+          />
+          <ArcadeGameCanvasOverlay
+            open={Boolean(overlay || showEntryOverlay)}
+            tone={overlayTone}
+            title={overlayTitle}
+            subtitle={overlaySubtitle}
+            showStartButton={showStartAction}
+            startLabel={overlayPrimaryLabel}
+            onStartClick={onOverlayPrimaryClick}
+            onOverlayPointer={onOverlayPointer}
+            arcadeOverlayClickable={arcadeOverlayClickable}
+            gameState={gameState}
+            leaderboardLoading={leaderboardLoading}
+            topRows={currentGameTopRows}
+            recentRows={currentGameRecentRows}
+          />
         </div>
-
-        <div className="space-invaders__meta">
-          <span>{statusMessage}</span>
-          <span>{loading ? 'Loading score...' : `Last saved: ${updatedLabel}`}</span>
-          {saving && <span>Saving score...</span>}
-          {loadError && <span>Score load failed. You can still play.</span>}
-          {saveError && <span>Score save failed. Retry after next game.</span>}
-        </div>
-
-        <GameScorePopover
-          open={showScorePopover}
-          onClose={() => setShowScorePopover(false)}
-          title="Game Scores"
-          loading={leaderboardLoading}
-          top={topRows}
-          recent={recentRows}
-        />
       </main>
     </div>
   );

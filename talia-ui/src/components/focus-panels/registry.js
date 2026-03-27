@@ -34,6 +34,7 @@ import SpaceInvaders from './SpaceInvaders';
 import PacMan from './PacMan';
 import Asteroids from './Asteroids';
 import Pong from './Pong';
+import MoonLanderGame from './MoonLanderGame';
 import BtopTerminal from './BtopTerminal';
 import MasterVoyagePerformanceSummaryContainer from './MasterVoyagePerformanceSummary';
 import VoyageReportContainer from './VoyageReport';
@@ -606,6 +607,19 @@ export const componentRegistry = {
     events: { emits: [], respondsTo: [] },
     showInReports: true,
     filePath: 'src/components/focus-panels/Pong/index.jsx'
+  },
+  MoonLanderGame: {
+    component: MoonLanderGame,
+    panelId: 'moon-lander',
+    category: 'Fun',
+    title: 'Moon Lander',
+    description: 'Minimal lunar landing game (gravity, thrust, pad landing) with score tracking',
+    usesMockData: false,
+    props: {},
+    dataRequirements: 'Stores score per user via generic game score GraphQL service',
+    events: { emits: [], respondsTo: [] },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/MoonLanderGame/index.jsx'
   },
   MasterVoyagePerformanceSummary: {
     component: MasterVoyagePerformanceSummaryContainer,

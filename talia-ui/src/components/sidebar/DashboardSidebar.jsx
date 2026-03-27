@@ -17,10 +17,10 @@ import {
 
 const FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderFiltersVisible';
 const TABLE_LAYOUT_STORAGE_KEY = 'taliaTableLayoutMode';
+const SIDEBAR_SECTIONS_STORAGE_KEY = 'taliaSidebarExpandedSections';
 
 function DashboardSidebar({
   isCollapsed,
-  onToggle,
   onAddPanel,
   currentFocus,
   onFocusChange,
@@ -70,8 +70,18 @@ function DashboardSidebar({
     setActionsVisible,
     controlsVisible,
     setControlsVisible,
+    menuDisappearMs,
+    setMenuDisappearMs,
+    sidebarAutoCloseEnabled,
+    setSidebarAutoCloseEnabled,
+    sidebarAutoCloseMs,
+    setSidebarAutoCloseMs,
+    sidebarDisplayMode,
+    setSidebarDisplayMode,
     calloutsVisible,
     setCalloutsVisible,
+    gameSoundEnabled,
+    setGameSoundEnabled,
     appearanceProfiles,
     activeAppearanceProfileId,
     applyAppearanceProfile,
@@ -196,12 +206,36 @@ function DashboardSidebar({
     return grouped;
   }, [userRole]);
 
-  const [expandedSections, setExpandedSections] = React.useState({
-    focus: false,
-    user: false,
-    reports: true, // Reports open by default for quick profile tooling access
-    appearance: false,
+  const [expandedSections, setExpandedSections] = React.useState(() => {
+    const defaultState = {
+      focus: false,
+      user: false,
+      reports: false,
+      appearance: false,
+    };
+    try {
+      const raw = window.localStorage?.getItem?.(SIDEBAR_SECTIONS_STORAGE_KEY);
+      if (!raw) return defaultState;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return defaultState;
+      return {
+        focus: parsed.focus === true,
+        user: parsed.user === true,
+        reports: parsed.reports === true,
+        appearance: parsed.appearance === true,
+      };
+    } catch {
+      return defaultState;
+    }
   });
+
+  React.useEffect(() => {
+    try {
+      window.localStorage?.setItem?.(SIDEBAR_SECTIONS_STORAGE_KEY, JSON.stringify(expandedSections));
+    } catch {
+      // Best-effort local persistence only.
+    }
+  }, [expandedSections]);
 
   const toggleSection = (section) => {
     setExpandedSections((prev) => {
@@ -225,30 +259,11 @@ function DashboardSidebar({
   };
 
   if (isCollapsed) {
-    return (
-      <div className="dashboard-sidebar dashboard-sidebar--collapsed">
-        <div className="dashboard-sidebar__header">
-          <button onClick={onToggle} className="dashboard-sidebar__close-btn">
-            ☰
-          </button>
-        </div>
-        <div className="dashboard-sidebar__nav">
-          <button className="dashboard-sidebar__nav-btn" title="Reports">📋</button>
-          <button className="dashboard-sidebar__nav-btn" title="Appearance">🎨</button>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (
     <div className="dashboard-sidebar">
-      <div className="dashboard-explorer__header">
-        <span className="dashboard-explorer__title">Explorer</span>
-        <button onClick={onToggle} className="dashboard-sidebar__close-btn">
-          ◀
-        </button>
-      </div>
-
       <div className="dashboard-explorer__content">
         <div className={`dashboard-section dashboard-section--focus ${expandedSections.focus ? 'dashboard-section--expanded' : 'dashboard-section--collapsed'}`}>
           <button type="button" className="dashboard-section__header" onClick={() => toggleSection('focus')}>
@@ -277,7 +292,7 @@ function DashboardSidebar({
           </div>
         </div>
 
-        <div className="dashboard-section">
+        <div className={`dashboard-section ${expandedSections.reports ? 'dashboard-section--expanded' : 'dashboard-section--collapsed'}`}>
           <button type="button" className="dashboard-section__header" onClick={() => toggleSection('reports')}>
             <span className="dashboard-section__title">Reports</span>
             <span className={`dashboard-section__icon ${expandedSections.reports ? 'dashboard-section__icon--expanded' : ''}`}>
@@ -345,7 +360,7 @@ function DashboardSidebar({
           </div>
         </div>
 
-        <div className="dashboard-section">
+        <div className={`dashboard-section ${expandedSections.appearance ? 'dashboard-section--expanded' : 'dashboard-section--collapsed'}`}>
           <button type="button" className="dashboard-section__header" onClick={() => toggleSection('appearance')}>
             <span className="dashboard-section__title">Appearance</span>
             <span className={`dashboard-section__icon ${expandedSections.appearance ? 'dashboard-section__icon--expanded' : ''}`}>
@@ -608,6 +623,53 @@ function DashboardSidebar({
               <div className="dashboard-form-hint">Matches the Controls toggle in the top header visibility menu. Defaults to closed.</div>
             </div>
             <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Disappear Time: {menuDisappearMs} ms</label>
+              <input
+                type="range"
+                min="1000"
+                max="30000"
+                step="500"
+                value={menuDisappearMs}
+                onChange={(event) => setMenuDisappearMs(Number(event.target.value))}
+                className="dashboard-form-input dashboard-form-input--range"
+              />
+              <div className="dashboard-form-hint">Global auto-dismiss delay for header menus and dropdowns across the app.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Sidebar Behavior</label>
+              <select
+                className="dashboard-form-input"
+                value={sidebarDisplayMode}
+                onChange={(event) => setSidebarDisplayMode(event.target.value === 'overlay' ? 'overlay' : 'panel')}
+              >
+                <option value="panel">Panel (push layout)</option>
+                <option value="overlay">Overlay (float over panels)</option>
+              </select>
+              <label className="dashboard-form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={sidebarAutoCloseEnabled}
+                  onChange={(event) => setSidebarAutoCloseEnabled(event.target.checked)}
+                />
+                <span>Auto close sidebar after delay</span>
+              </label>
+              <div className="dashboard-form-hint">Choose whether sidebar opens as a layout panel or as an overlay. Auto close is optional in both modes.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Sidebar Auto Close: {sidebarAutoCloseMs} ms</label>
+              <input
+                type="range"
+                min="1000"
+                max="60000"
+                step="500"
+                value={sidebarAutoCloseMs}
+                onChange={(event) => setSidebarAutoCloseMs(Number(event.target.value))}
+                className="dashboard-form-input dashboard-form-input--range"
+                disabled={!sidebarAutoCloseEnabled}
+              />
+              <div className="dashboard-form-hint">Used only when sidebar auto close is enabled.</div>
+            </div>
+            <div className="dashboard-form-group">
               <label className="dashboard-form-label">Callouts</label>
               <label className="dashboard-form-checkbox">
                 <input
@@ -618,6 +680,18 @@ function DashboardSidebar({
                 <span>Show informational callouts and tips across reports</span>
               </label>
               <div className="dashboard-form-hint">Matches the callouts toggle in the top header visibility menu.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Game Sound</label>
+              <label className="dashboard-form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={gameSoundEnabled}
+                  onChange={(event) => setGameSoundEnabled(event.target.checked)}
+                />
+                <span>Enable sound effects across all game panels</span>
+              </label>
+              <div className="dashboard-form-hint">Global setting for arcade sound effects (Pong, Breakout, Space Invaders, Pac-Man, Asteroids, Moon Lander).</div>
             </div>
             <div className="dashboard-form-group">
               <label className="dashboard-form-label">Panel Details</label>
@@ -718,7 +792,7 @@ function DashboardSidebar({
 
       </div>
 
-      <UserProfile isCollapsed={isCollapsed} onToggle={onToggle} />
+      <UserProfile isCollapsed={isCollapsed} />
 
       <div className="dashboard-user-info">Dockview v4.6.2</div>
     </div>

@@ -109,16 +109,25 @@ const applyLayoutModeToTable = (table) => {
   const nextLayout = mode === TABLE_LAYOUT_DATA ? 'fitDataTable' : 'fitDataStretch';
   try {
     const meta = tableMeta.get(table);
+    const isBuilt = meta?.isBuilt === true;
     const shouldRebuildColumns = meta?.lastAppliedMode !== mode;
     if (meta) {
       meta.lastAppliedMode = mode;
     }
-    if (shouldRebuildColumns && meta?.baseColumns?.length && typeof table.setColumns === 'function') {
+    if (isBuilt && shouldRebuildColumns && meta?.baseColumns?.length && typeof table.setColumns === 'function') {
       const nextColumns = mode === TABLE_LAYOUT_DATA
         ? stripFixedWidths(meta.baseColumns)
         : applyLastColumnGrow(meta.baseColumns);
       table.setColumns(nextColumns);
     }
+
+    if (!isBuilt) {
+      if (table.options) {
+        table.options.layout = nextLayout;
+      }
+      return;
+    }
+
     if (typeof table.setOption === 'function') {
       table.setOption('layout', nextLayout);
     } else if (table.options) {
@@ -184,7 +193,8 @@ const registerTableInstance = (table, baseColumns = null) => {
   if (!tableMeta.has(table)) {
     tableMeta.set(table, {
       baseColumns: Array.isArray(baseColumns) ? cloneColumnDefs(baseColumns) : null,
-      lastAppliedMode: null
+      lastAppliedMode: null,
+      isBuilt: false
     });
   }
   tableInstances.add(table);
@@ -211,6 +221,10 @@ const getWrappedTabulatorClass = () => {
       applyLayoutModeToTable(this);
 
       this.on?.('tableBuilt', () => {
+        const meta = tableMeta.get(this);
+        if (meta) {
+          meta.isBuilt = true;
+        }
         applyLayoutModeToTable(this);
       });
       this.on?.('tableDestroyed', () => {

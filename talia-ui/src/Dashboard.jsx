@@ -21,12 +21,14 @@ import {
   DOCKVIEW_MAXIMIZE_STATE_EVENT,
   REPORT_ACTIVE_PANEL_EVENT,
   REPORT_PANEL_PAUSE_EVENT,
+  REPORT_PANEL_LAYOUT_CYCLE_EVENT,
   DASHBOARD_CYCLE_FOCUS_EVENT,
   DASHBOARD_SELECT_FOCUS_EVENT,
   DASHBOARD_FOCUS_STATE_EVENT,
   DASHBOARD_OPEN_PANEL_EVENT,
 } from "./components/dockview/eventConstants";
 import { isEditableTarget } from "./components/shared/games/keyboardGuards";
+import { ARCADE_GAME_PANEL_COMPONENTS } from "./components/shared/games/arcadeGamePanelIds";
 // Dev Role Selector is now integrated into ModeSelector dropdown
 // Theme System - using centralized theme context
 import { useTheme } from "./contexts/ThemeContext";
@@ -801,7 +803,17 @@ const GraphQLPanel = React.memo(function GraphQLPanel(props) {
 });
 
 function Dashboard({ user }) {
-  const { theme, setCurrentTheme, fontSize, setFontSize, setFontFamily, setSpacingMode } = useTheme();
+  const {
+    theme,
+    setCurrentTheme,
+    fontSize,
+    setFontSize,
+    setFontFamily,
+    setSpacingMode,
+    sidebarAutoCloseEnabled,
+    sidebarAutoCloseMs,
+    sidebarDisplayMode,
+  } = useTheme();
 
   const reportComponentMap = React.useMemo(() => {
     const map = {};
@@ -943,6 +955,13 @@ function Dashboard({ user }) {
     []
   );
 
+  const [isSidebarInteractionActive, setIsSidebarInteractionActive] = useState(false);
+  const [hasSidebarInteraction, setHasSidebarInteraction] = useState(false);
+  const [isSidebarClosing, setIsSidebarClosing] = useState(false);
+  const [shouldRenderSidebar, setShouldRenderSidebar] = useState(false);
+  const sidebarAutoClosePaused = isSidebarInteractionActive || isSidebarClosing;
+  const overlayBlurCloseTimerRef = useRef(null);
+
   const {
     shellRef,
     sidebarCollapsed,
@@ -952,7 +971,64 @@ function Dashboard({ user }) {
     isResizing,
     toggleSidebar,
     handleMouseDown,
-  } = useDashboardSidebar({ initialCollapsed: true });
+  } = useDashboardSidebar({
+    initialCollapsed: true,
+    autoCloseEnabled: sidebarAutoCloseEnabled,
+    autoCloseMs: sidebarAutoCloseMs,
+    autoClosePaused: sidebarAutoClosePaused,
+  });
+  const isSidebarOverlay = sidebarDisplayMode === 'overlay';
+
+  useEffect(() => {
+    if (!sidebarCollapsed) {
+      setShouldRenderSidebar(true);
+      setIsSidebarClosing(false);
+      setHasSidebarInteraction(false);
+      return undefined;
+    }
+    if (!shouldRenderSidebar) {
+      setIsSidebarClosing(false);
+      return undefined;
+    }
+    setIsSidebarClosing(true);
+    const timer = window.setTimeout(() => {
+      setShouldRenderSidebar(false);
+      setIsSidebarClosing(false);
+      setIsSidebarInteractionActive(false);
+    }, 460);
+    return () => window.clearTimeout(timer);
+  }, [sidebarCollapsed, shouldRenderSidebar]);
+
+  useEffect(() => {
+    if (overlayBlurCloseTimerRef.current) {
+      window.clearTimeout(overlayBlurCloseTimerRef.current);
+      overlayBlurCloseTimerRef.current = null;
+    }
+    if (sidebarAutoCloseEnabled !== true) return undefined;
+    if (sidebarCollapsed || isSidebarClosing || !shouldRenderSidebar) return undefined;
+    if (!hasSidebarInteraction) return undefined;
+    if (isSidebarInteractionActive) return undefined;
+    const blurCloseDelayMs = Math.max(500, Number.isFinite(Number(sidebarAutoCloseMs)) ? Number(sidebarAutoCloseMs) : 500);
+    overlayBlurCloseTimerRef.current = window.setTimeout(() => {
+      setSidebarCollapsed(true);
+      overlayBlurCloseTimerRef.current = null;
+    }, blurCloseDelayMs);
+    return () => {
+      if (overlayBlurCloseTimerRef.current) {
+        window.clearTimeout(overlayBlurCloseTimerRef.current);
+        overlayBlurCloseTimerRef.current = null;
+      }
+    };
+  }, [
+    sidebarAutoCloseEnabled,
+    sidebarAutoCloseMs,
+    sidebarCollapsed,
+    isSidebarClosing,
+    shouldRenderSidebar,
+    hasSidebarInteraction,
+    isSidebarInteractionActive,
+    setSidebarCollapsed,
+  ]);
 
   const [globalFilters, setGlobalFilters] = React.useState({
     ship: '',
@@ -1360,18 +1436,32 @@ function Dashboard({ user }) {
   }, []);
 
   useEffect(() => {
-    const handleGlobalPauseKey = (event) => {
+    const handleArcadePanelKeys = (event) => {
       if (event.defaultPrevented) return;
       if (event.repeat) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (isEditableTarget(event)) return;
+      const api = apiRef.current;
+      const active = api?.activePanel;
+      const component = active?.component || active?.api?.component || null;
+      if (!component || !ARCADE_GAME_PANEL_COMPONENTS.has(component)) return;
       const key = String(event.key || '').toLowerCase();
-      if (key !== 'p') return;
-      event.preventDefault();
-      toggleActivePanelPause();
+      if (key === 'p') {
+        event.preventDefault();
+        toggleActivePanelPause();
+        return;
+      }
+      if (key === 'w') {
+        const panelId = active?.id || null;
+        if (!panelId) return;
+        event.preventDefault();
+        window.dispatchEvent(
+          new CustomEvent(REPORT_PANEL_LAYOUT_CYCLE_EVENT, { detail: { panelId } })
+        );
+      }
     };
-    window.addEventListener('keydown', handleGlobalPauseKey);
-    return () => window.removeEventListener('keydown', handleGlobalPauseKey);
+    window.addEventListener('keydown', handleArcadePanelKeys);
+    return () => window.removeEventListener('keydown', handleArcadePanelKeys);
   }, [toggleActivePanelPause]);
 
   React.useEffect(() => {
@@ -1426,70 +1516,14 @@ function Dashboard({ user }) {
 
     debugLog("Dockview onReady - API initialized", api);
 
-    // Load and restore settings BEFORE creating panels.
-    // Priority: persisted focus layout (profile/local) > generic dockview layout fallback.
-    const runFallbackLayoutRestore = () => {
-      const saved = localStorage.getItem(LAYOUT_KEY);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed?.version === LAYOUT_VERSION && parsed?.data) {
-            const isValidLayout = validateLayoutData(parsed.data);
-            if (!isValidLayout) {
-              console.warn('Invalid layout data structure, clearing corrupted data');
-              localStorage.removeItem(LAYOUT_KEY);
-              createDefaultLayout();
-              return;
-            }
-
-            if (parsed.fontSettings) {
-              setCurrentTheme(parsed.fontSettings.theme || DEFAULT_THEME);
-              setFontSize(parsed.fontSettings.fontSize ?? 10);
-              setFontFamily(parsed.fontSettings.fontFamily || 'Inter');
-              setSpacingMode(parsed.fontSettings.spacingMode || 'default');
-            }
-
-            if (parsed.sidebar) {
-              setSidebarCollapsed(true);
-              setSidebarWidth(parsed.sidebar.width || 280);
-            }
-
-            if (parsed.globalFilters) {
-              setGlobalFilters(parsed.globalFilters);
-            }
-
-            setTimeout(() => {
-              try {
-                api.fromJSON(parsed.data);
-                debugLog('Layout restored from localStorage');
-              } catch (e) {
-                console.warn('Failed to restore layout, clearing corrupted data:', e);
-                localStorage.removeItem(LAYOUT_KEY);
-                createDefaultLayout();
-              }
-            }, 500);
-            return;
-          }
-        } catch (e) {
-          console.warn("Layout restore failed, clearing corrupted data:", e);
-          localStorage.removeItem(LAYOUT_KEY);
-        }
+    const reportLayoutRestoreFailure = (reason, error = null) => {
+      const message = String(reason || '').trim() || 'Dashboard layout restore failed.';
+      console.error(`[Dashboard] ${message}`, error || '');
+      try {
+        window.__taliaStatus?.setStatusMessage?.(`Error: ${message}`);
+      } catch {
+        // Avoid secondary failures while reporting startup issues.
       }
-
-      const preset = localStorage.getItem('dockview-layout-preset');
-      if (preset) {
-        loadLayoutPreset(api);
-      } else {
-        createDefaultLayout();
-      }
-    };
-
-    const savedFocusId = window.localStorage?.getItem?.(SAVED_FOCUS_KEY) || '';
-    let fallbackTriggered = false;
-    const triggerFallbackOnce = () => {
-      if (fallbackTriggered) return;
-      fallbackTriggered = true;
-      runFallbackLayoutRestore();
     };
 
     loadUserProfileState({ component: 'Dashboard' })
@@ -1497,10 +1531,10 @@ function Dashboard({ user }) {
         const profileFocusId = typeof profileState?.lastFocusId === 'string'
           ? profileState.lastFocusId
           : '';
-        const preferredFocusId = profileFocusId || savedFocusId;
+        const preferredFocusId = profileFocusId;
 
         if (!preferredFocusId) {
-          triggerFallbackOnce();
+          reportLayoutRestoreFailure('No persisted focus is available for restore.');
           return;
         }
 
@@ -1510,25 +1544,15 @@ function Dashboard({ user }) {
         try {
           window.localStorage?.setItem?.(SAVED_FOCUS_KEY, preferredFocusId);
         } catch {
-          // no-op
+          reportLayoutRestoreFailure('Failed to persist restored focus id.');
         }
 
         handleFocusChange(preferredFocusId).catch((error) => {
-          console.warn('Failed to restore persisted focus layout, falling back to default layout:', error);
-          triggerFallbackOnce();
+          reportLayoutRestoreFailure(`Failed to restore persisted focus layout for "${preferredFocusId}".`, error);
         });
       })
-      .catch(() => {
-        if (!savedFocusId) {
-          triggerFallbackOnce();
-          return;
-        }
-        setCurrentFocus(savedFocusId);
-        pendingPersistedFocusIdRef.current = savedFocusId;
-        persistedFocusAppliedRef.current = false;
-        handleFocusChange(savedFocusId).catch(() => {
-          triggerFallbackOnce();
-        });
+      .catch((error) => {
+        reportLayoutRestoreFailure('Failed to load user profile state for focus restore.', error);
       });
     
     // REMOVED: forcePanelResize function - let Dockview handle layout naturally
@@ -1557,140 +1581,6 @@ function Dashboard({ user }) {
     // No MutationObserver or DOM manipulation needed
   }, []);
 
-  const createDefaultLayout = useCallback(async () => {
-    // Load the first available focus layout as the default
-    // Try to find a focus by name "Performance" or use the first available focus
-    console.log('Creating default layout using first available focus');
-    try {
-      const focuses = await graphQLFocusService.getFocusesForRole(normalizedUserRole || 'ADMIN');
-      if (focuses && focuses.length > 0) {
-        let savedFocusId = '';
-        try {
-          const profileState = await loadUserProfileState({ component: 'Dashboard' });
-          const profileFocusId = typeof profileState?.lastFocusId === 'string'
-            ? profileState.lastFocusId
-            : '';
-          if (profileFocusId) {
-            savedFocusId = profileFocusId;
-            window.localStorage?.setItem?.(SAVED_FOCUS_KEY, profileFocusId);
-          }
-        } catch {
-          // fall back to local storage
-        }
-        if (!savedFocusId) {
-          savedFocusId = window.localStorage?.getItem?.(SAVED_FOCUS_KEY) || '';
-        }
-        const savedFocus = savedFocusId ? focuses.find((focus) => focus?.id === savedFocusId) : null;
-        // Saved focus (explicit user action) takes priority.
-        // Fallback remains: Performance focus, then first focus.
-        const defaultFocus = savedFocus || focuses.find((f) => f.name.toLowerCase().includes('performance')) || focuses[0];
-        console.log(`Loading default focus: ${defaultFocus.name} (ID: ${defaultFocus.id})`);
-        await handleFocusChange(defaultFocus.id);
-      } else {
-        console.warn('No focuses available, skipping default layout load');
-      }
-    } catch (error) {
-      console.error('Error loading default focus:', error);
-      // Don't throw - allow the app to continue without a default layout
-    }
-    
-    // Safety: in case Tabulator doesn't emit, show first sailing
-    setTimeout(() => { emitSelect({ id:1, ship:"Celestyal Discovery", sailing:"7N Islands" }); }, 700);
-  }, [handleFocusChange, normalizedUserRole]);
-
-  // Load layout preset on startup
-  const loadLayoutPreset = useCallback((api) => {
-    const preset = localStorage.getItem('dockview-layout-preset');
-    if (preset) {
-      localStorage.removeItem('dockview-layout-preset'); // Clear after use
-      
-      const timestamp = Date.now();
-      
-      switch (preset) {
-        case 'grid':
-          // 2x2 grid layout - add first panel without reference
-          api.addPanel({ id: `grid-${timestamp}-1`, component: "table", title: "Sailings (Tabulator)" });
-          setTimeout(() => {
-            // Add second panel to the right
-            api.addPanel({ id: `grid-${timestamp}-2`, component: "chart", title: "Booking Curve (Chart.js)" });
-            setTimeout(() => {
-              // Add third panel below first
-              api.addPanel({ id: `grid-${timestamp}-3`, component: "graphql-books", title: "Books (GraphQL)" });
-              setTimeout(() => {
-                // Add fourth panel to the right of third
-                api.addPanel({ id: `grid-${timestamp}-4`, component: "graphql-ships", title: "Ships (GraphQL)" });
-              }, 300);
-            }, 300);
-          }, 300);
-          break;
-          
-        case 'horizontal':
-          // Horizontal layout - all panels in a row
-          api.addPanel({ id: `h-${timestamp}-1`, component: "table", title: "Sailings (Tabulator)" });
-          setTimeout(() => {
-            // Add second panel to the right of first
-            try {
-              api.addPanel({ id: `h-${timestamp}-2`, component: "chart", title: "Booking Curve (Chart.js)", position: { referencePanel: `h-${timestamp}-1`, direction: "right" } });
-            } catch (e) {
-              console.warn('Failed to add panel with reference, adding without position:', e);
-              api.addPanel({ id: `h-${timestamp}-2`, component: "chart", title: "Booking Curve (Chart.js)" });
-            }
-            setTimeout(() => {
-              // Add third panel to the right of second
-              try {
-                api.addPanel({ id: `h-${timestamp}-3`, component: "graphql-books", title: "Books (GraphQL)", position: { referencePanel: `h-${timestamp}-2`, direction: "right" } });
-              } catch (e) {
-                console.warn('Failed to add panel with reference, adding without position:', e);
-                api.addPanel({ id: `h-${timestamp}-3`, component: "graphql-books", title: "Books (GraphQL)" });
-              }
-              setTimeout(() => {
-                // Add fourth panel to the right of third
-                try {
-                  api.addPanel({ id: `h-${timestamp}-4`, component: "graphql-ships", title: "Ships (GraphQL)", position: { referencePanel: `h-${timestamp}-3`, direction: "right" } });
-                } catch (e) {
-                  console.warn('Failed to add panel with reference, adding without position:', e);
-                  api.addPanel({ id: `h-${timestamp}-4`, component: "graphql-ships", title: "Ships (GraphQL)" });
-                }
-              }, 500);
-            }, 500);
-          }, 500);
-          break;
-          
-        case 'vertical':
-          // Vertical layout - all panels stacked
-          api.addPanel({ id: `v-${timestamp}-1`, component: "table", title: "Sailings (Tabulator)" });
-          setTimeout(() => {
-            // Add second panel below first
-            try {
-              api.addPanel({ id: `v-${timestamp}-2`, component: "chart", title: "Booking Curve (Chart.js)", position: { referencePanel: `v-${timestamp}-1`, direction: "below" } });
-            } catch (e) {
-              console.warn('Failed to add panel with reference, adding without position:', e);
-              api.addPanel({ id: `v-${timestamp}-2`, component: "chart", title: "Booking Curve (Chart.js)" });
-            }
-            setTimeout(() => {
-              // Add third panel below second
-              try {
-                api.addPanel({ id: `v-${timestamp}-3`, component: "graphql-books", title: "Books (GraphQL)", position: { referencePanel: `v-${timestamp}-2`, direction: "below" } });
-              } catch (e) {
-                console.warn('Failed to add panel with reference, adding without position:', e);
-                api.addPanel({ id: `v-${timestamp}-3`, component: "graphql-books", title: "Books (GraphQL)" });
-              }
-              setTimeout(() => {
-                // Add fourth panel below third
-                try {
-                  api.addPanel({ id: `v-${timestamp}-4`, component: "graphql-ships", title: "Ships (GraphQL)", position: { referencePanel: `v-${timestamp}-3`, direction: "below" } });
-                } catch (e) {
-                  console.warn('Failed to add panel with reference, adding without position:', e);
-                  api.addPanel({ id: `v-${timestamp}-4`, component: "graphql-ships", title: "Ships (GraphQL)" });
-                }
-              }, 500);
-            }, 500);
-          }, 500);
-          break;
-      }
-    }
-  }, []);
-
   debugLog('App render called');
 
   return (
@@ -1701,30 +1591,52 @@ function Dashboard({ user }) {
       className={`dashboard-shell dockview-theme-${theme.name.toLowerCase().replace(' ', '-')} ${isGroupMaximized ? 'dashboard-shell--maximized' : ''}`} 
       ref={shellRef}
     >
-      <div className="dashboard-layout">
-        {!sidebarCollapsed && (
-          <DashboardSidebar
-            isCollapsed={sidebarCollapsed}
-            onToggle={toggleSidebar}
-            onAddPanel={addNewPanel}
-            currentFocus={currentFocus}
-            onFocusChange={handleFocusChange}
-            userRole={userRole}
-            focusLoading={focusLoading}
-            focusError={focusError}
-            onSaveCurrentLayout={handleSaveCurrentLayoutToFocus}
-          />
+      <div className={`dashboard-layout ${isSidebarOverlay ? 'dashboard-layout--sidebar-overlay' : ''}`}>
+        {shouldRenderSidebar && (
+          <div
+            className={[
+              isSidebarOverlay ? 'dashboard-sidebar-overlay' : 'dashboard-sidebar-shell',
+              isSidebarClosing ? 'dashboard-sidebar-shell--closing' : '',
+            ].filter(Boolean).join(' ')}
+            onMouseEnter={() => {
+              setIsSidebarInteractionActive(true);
+              setHasSidebarInteraction(true);
+            }}
+            onMouseLeave={() => setIsSidebarInteractionActive(false)}
+            onFocusCapture={() => {
+              setIsSidebarInteractionActive(true);
+              setHasSidebarInteraction(true);
+            }}
+            onBlurCapture={(event) => {
+              const nextFocused = event?.relatedTarget;
+              const currentTarget = event?.currentTarget;
+              if (!currentTarget?.contains?.(nextFocused)) {
+                setIsSidebarInteractionActive(false);
+              }
+            }}
+          >
+            <DashboardSidebar
+              isCollapsed={sidebarCollapsed}
+              onAddPanel={addNewPanel}
+              currentFocus={currentFocus}
+              onFocusChange={handleFocusChange}
+              userRole={userRole}
+              focusLoading={focusLoading}
+              focusError={focusError}
+              onSaveCurrentLayout={handleSaveCurrentLayoutToFocus}
+            />
+          </div>
         )}
         
         {/* Resize Handle - positioned between sidebar and main content */}
-        {!sidebarCollapsed && (
+        {shouldRenderSidebar && !sidebarCollapsed && !isSidebarOverlay && (
           <div
             className="dashboard-resize-handle"
             onMouseDown={handleMouseDown}
           />
         )}
         
-        {isResizing && (
+        {isResizing && !sidebarCollapsed && !isSidebarOverlay && (
           <div className="dashboard-resize-guide" />
         )}
         

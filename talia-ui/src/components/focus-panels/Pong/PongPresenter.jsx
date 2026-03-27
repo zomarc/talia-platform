@@ -1,117 +1,103 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import GameScorePopover from '../../shared/games/GameScorePopover';
+import ArcadeGameCanvasOverlay from '../../shared/games/ArcadeGameCanvasOverlay';
+import ArcadeGameScoreHud from '../../shared/games/ArcadeGameScoreHud';
+import ArcadeGameDifficultyToggle from '../../shared/games/ArcadeGameDifficultyToggle';
+import {
+  buildArcadeIdleSubtitle,
+  formatArcadeOverlaySubtitle,
+  getArcadeOverlayTone,
+} from '../../shared/games/arcadeGameUi';
+import { ARCADE_DIFFICULTY_NORMAL, isArcadeEasy } from '../../shared/games/arcadeDifficulty';
+import useArcadeGameAudio from '../../shared/games/useArcadeGameAudio';
+import { useArcadeGameLoop } from '../../shared/games/useArcadeGameLoop';
+import { filterRowsByGame, getMaxHighScore } from '../../shared/games/leaderboardScope';
 import usePanelTabActive from '../../../hooks/usePanelTabActive';
 import usePanelPaused from '../../../hooks/usePanelPaused';
 import { isEditableTarget } from '../../shared/games/keyboardGuards';
+import { useArcadeGameOverlayResume } from '../../shared/games/useArcadeGameOverlayResume';
+import useGamePanelPauseResume from '../../shared/games/useGamePanelPauseResume';
+import {
+  armExtraSpawn,
+  createExtraSpawnState,
+  isExtraSpawnDue,
+} from '../../shared/games/arcadeGameExtra';
+import {
+  addArcadeScore,
+  armArcadeDoubleScore,
+} from '../../shared/games/arcadeDoubleScore';
+import useArcadeDoubleScoreHud from '../../shared/games/useArcadeDoubleScoreHud';
 
 const GAME_WIDTH = 680;
 const GAME_HEIGHT = 420;
+const GAME_OVER_HOLD_MS = 5000;
+const PANEL_COMPONENT_ID = 'pong';
+const PONG_FULL_PADDLE_H = 92;
+const PONG_MATCH_WIN_EASY = 6;
+const PONG_MATCH_WIN_NORMAL = 10;
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+const shrinkPongPaddleOnEdgeHit = (paddle, impactNorm) => {
+  if (Math.abs(impactNorm) < 0.62) return;
+  const nextH = Math.max(48, paddle.h - 8);
+  if (nextH >= paddle.h) return;
+  const cy = paddle.y + paddle.h / 2;
+  paddle.h = nextH;
+  paddle.y = clamp(cy - paddle.h / 2, 10, GAME_HEIGHT - paddle.h - 10);
+};
 
 const createModel = () => ({
   running: false,
   waitingForServe: true,
   score: 0,
+  doubleScoreUntil: 0,
+  difficulty: ARCADE_DIFFICULTY_NORMAL,
+  matchPoints: 0,
   lives: 3,
-  paddle: { x: 28, y: GAME_HEIGHT / 2 - 46, w: 10, h: 92, speed: 7.2 },
-  ai: { x: GAME_WIDTH - 38, y: GAME_HEIGHT / 2 - 46, w: 10, h: 92, speed: 4.6 },
+  paddle: { x: 28, y: GAME_HEIGHT / 2 - PONG_FULL_PADDLE_H / 2, w: 10, h: PONG_FULL_PADDLE_H, speed: 7.2 },
+  ai: { x: GAME_WIDTH - 38, y: GAME_HEIGHT / 2 - PONG_FULL_PADDLE_H / 2, w: 10, h: PONG_FULL_PADDLE_H, speed: 4.6 },
   ball: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, vx: 4.2, vy: 2.4, r: 7 },
   upPressed: false,
   downPressed: false,
   frame: 0,
+  extraSpawn: createExtraSpawnState(),
+  extra: null,
 });
 
 const PongPresenter = ({
   panelInstanceId,
-  loading,
-  loadError,
-  saveError,
-  saving,
-  userId,
+  gameId,
+  gameSoundEnabled,
   highScore,
-  lastScore,
-  updatedAt,
-  onReloadScore,
   onSaveScore,
   leaderboard,
   leaderboardLoading,
 }) => {
   const isPanelActive = usePanelTabActive(panelInstanceId);
-  const isPanelPaused = usePanelPaused(panelInstanceId, 'pong');
-  const isPanelExecutionActive = isPanelActive && !isPanelPaused;
+  const isPanelPaused = usePanelPaused(panelInstanceId, PANEL_COMPONENT_ID);
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const rafRef = useRef(0);
-  const pausedByInactiveRef = useRef(false);
-  const inactiveResumeIntervalRef = useRef(0);
   const modelRef = useRef(createModel());
   const renderMetricsRef = useRef({ scale: 1, offsetX: 0, offsetY: 0 });
-  const audioContextRef = useRef(null);
-  const audioMasterGainRef = useRef(null);
-  const lastSoundAtRef = useRef(0);
+  const { unlockAudio, playTone, disposeAudio } = useArcadeGameAudio(gameSoundEnabled, 0.024);
+  const gameOverReleaseTimeoutRef = useRef(0);
+  const gameOverCountdownIntervalRef = useRef(0);
   const [gameState, setGameState] = useState('idle');
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
-  const [statusMessage, setStatusMessage] = useState('Press Start, then click to serve.');
+  const [statusMessage, setStatusMessage] = useState('Press Start to begin.');
   const [overlay, setOverlay] = useState(null);
-  const [showScorePopover, setShowScorePopover] = useState(false);
-
-  const userLabel = useMemo(() => String(userId || 'anonymous'), [userId]);
-  const updatedLabel = useMemo(() => {
-    if (!updatedAt) return 'Not saved yet';
-    const date = new Date(updatedAt);
-    return Number.isNaN(date.getTime()) ? 'Not saved yet' : date.toLocaleString();
-  }, [updatedAt]);
+  const [restartInSeconds, setRestartInSeconds] = useState(0);
+  const [difficulty, setDifficulty] = useState(ARCADE_DIFFICULTY_NORMAL);
+  const [matchPoints, setMatchPoints] = useState(0);
+  const doubleScoreHud = useArcadeDoubleScoreHud(modelRef, gameState === 'playing');
 
   const syncUi = useCallback(() => {
     setScore(modelRef.current.score);
     setLives(modelRef.current.lives);
+    setMatchPoints(modelRef.current.matchPoints);
   }, []);
-
-  const ensureAudioContext = useCallback(() => {
-    if (audioContextRef.current) return audioContextRef.current;
-    const Ctor = window.AudioContext || window.webkitAudioContext;
-    if (!Ctor) return null;
-    const context = new Ctor();
-    const master = context.createGain();
-    master.gain.value = 0.024;
-    master.connect(context.destination);
-    audioContextRef.current = context;
-    audioMasterGainRef.current = master;
-    return context;
-  }, []);
-
-  const playTone = useCallback((freq = 420, durationMs = 30, type = 'square', volume = 0.32) => {
-    const now = performance.now();
-    if (now - lastSoundAtRef.current < 10) return;
-    lastSoundAtRef.current = now;
-    const context = ensureAudioContext();
-    const master = audioMasterGainRef.current;
-    if (!context || !master) return;
-    if (context.state === 'suspended') context.resume().catch(() => {});
-    const osc = context.createOscillator();
-    const gain = context.createGain();
-    osc.type = type;
-    osc.frequency.value = freq;
-    gain.gain.value = 0.0001;
-    osc.connect(gain);
-    gain.connect(master);
-    const start = context.currentTime;
-    const end = start + durationMs / 1000;
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(volume, start + 0.004);
-    gain.gain.exponentialRampToValueAtTime(0.0001, end);
-    osc.start(start);
-    osc.stop(end);
-  }, [ensureAudioContext]);
-
-  const unlockAudio = useCallback(() => {
-    const context = ensureAudioContext();
-    if (context?.state === 'suspended') {
-      context.resume().catch(() => {});
-    }
-  }, [ensureAudioContext]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -148,6 +134,17 @@ const PongPresenter = ({
     ctx.fillStyle = 'rgba(132, 196, 255, 0.95)';
     ctx.fillRect(ai.x, ai.y, ai.w, ai.h);
 
+    if (m.extra) {
+      const e = m.extra;
+      ctx.strokeStyle = 'rgba(255, 210, 80, 0.95)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255, 230, 120, 0.35)';
+      ctx.fill();
+    }
+
     ctx.fillStyle = 'rgba(245, 249, 255, 0.95)';
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
@@ -159,10 +156,11 @@ const PongPresenter = ({
 
   const resetBall = useCallback((serveToRight = true) => {
     const m = modelRef.current;
+    const spd = isArcadeEasy(m) ? 0.84 : 1;
     m.ball.x = GAME_WIDTH / 2;
     m.ball.y = GAME_HEIGHT / 2;
-    m.ball.vx = (serveToRight ? 1 : -1) * (4 + Math.random() * 0.9);
-    m.ball.vy = (Math.random() > 0.5 ? 1 : -1) * (2 + Math.random() * 1.2);
+    m.ball.vx = (serveToRight ? 1 : -1) * (4 + Math.random() * 0.9) * spd;
+    m.ball.vy = (Math.random() > 0.5 ? 1 : -1) * (2 + Math.random() * 1.2) * spd;
     m.waitingForServe = true;
   }, []);
 
@@ -174,12 +172,53 @@ const PongPresenter = ({
     }
   }, []);
 
-  const clearInactiveResumeCountdown = useCallback(() => {
-    if (inactiveResumeIntervalRef.current) {
-      window.clearInterval(inactiveResumeIntervalRef.current);
-      inactiveResumeIntervalRef.current = 0;
+  const clearGameOverHold = useCallback(() => {
+    if (gameOverReleaseTimeoutRef.current) {
+      window.clearTimeout(gameOverReleaseTimeoutRef.current);
+      gameOverReleaseTimeoutRef.current = 0;
     }
+    if (gameOverCountdownIntervalRef.current) {
+      window.clearInterval(gameOverCountdownIntervalRef.current);
+      gameOverCountdownIntervalRef.current = 0;
+    }
+    setRestartInSeconds(0);
   }, []);
+
+  const beginGameOverHold = useCallback(() => {
+    clearGameOverHold();
+    const releaseAt = Date.now() + GAME_OVER_HOLD_MS;
+    setRestartInSeconds(Math.ceil(GAME_OVER_HOLD_MS / 1000));
+    gameOverCountdownIntervalRef.current = window.setInterval(() => {
+      const remainingMs = releaseAt - Date.now();
+      if (remainingMs <= 0) {
+        if (gameOverCountdownIntervalRef.current) {
+          window.clearInterval(gameOverCountdownIntervalRef.current);
+          gameOverCountdownIntervalRef.current = 0;
+        }
+        setRestartInSeconds(0);
+        return;
+      }
+      setRestartInSeconds(Math.ceil(remainingMs / 1000));
+    }, 250);
+    gameOverReleaseTimeoutRef.current = window.setTimeout(() => {
+      gameOverReleaseTimeoutRef.current = 0;
+      if (gameOverCountdownIntervalRef.current) {
+        window.clearInterval(gameOverCountdownIntervalRef.current);
+        gameOverCountdownIntervalRef.current = 0;
+      }
+      setRestartInSeconds(0);
+    }, GAME_OVER_HOLD_MS);
+  }, [clearGameOverHold]);
+
+  const activateServe = useCallback(() => {
+    const m = modelRef.current;
+    if (!m.running || !m.waitingForServe) return;
+    m.waitingForServe = false;
+    setOverlay(null);
+    setStatusMessage('Ball in play.');
+    playTone(680, 20, 'square', 0.28);
+    canvasRef.current?.focus();
+  }, [playTone]);
 
   const finishGame = useCallback(async (reason) => {
     stopGame();
@@ -187,10 +226,11 @@ const PongPresenter = ({
     const finalScore = modelRef.current.score;
     setOverlay({ title: 'Game Over', subtitle: `Final score: ${finalScore}` });
     setStatusMessage(`Game over: ${reason}`);
+    beginGameOverHold();
     playTone(360, 80, 'triangle', 0.44);
     setTimeout(() => playTone(260, 120, 'triangle', 0.44), 90);
     await onSaveScore(finalScore);
-  }, [onSaveScore, playTone, stopGame]);
+  }, [beginGameOverHold, onSaveScore, playTone, stopGame]);
 
   const updateModel = useCallback(async () => {
     const m = modelRef.current;
@@ -212,6 +252,36 @@ const PongPresenter = ({
       return;
     }
 
+    if (isExtraSpawnDue(m.extraSpawn, m.frame, m.extra != null)) {
+      m.extra = {
+        x: GAME_WIDTH / 2 + (Math.random() - 0.5) * 200,
+        y: GAME_HEIGHT / 2 + (Math.random() - 0.5) * 160,
+        r: 10,
+        vx: (Math.random() - 0.5) * 3.4,
+        vy: (Math.random() - 0.5) * 3.4,
+        points: 80,
+      };
+    }
+    if (m.extra) {
+      const e = m.extra;
+      e.x += e.vx;
+      e.y += e.vy;
+      if (e.x < 22 || e.x > GAME_WIDTH - 22) e.vx *= -1;
+      if (e.y < 22 || e.y > GAME_HEIGHT - 22) e.vy *= -1;
+      e.x = clamp(e.x, 22, GAME_WIDTH - 22);
+      e.y = clamp(e.y, 22, GAME_HEIGHT - 22);
+      const dx = ball.x - e.x;
+      const dy = ball.y - e.y;
+      const hitR = ball.r + e.r;
+      if (dx * dx + dy * dy <= hitR * hitR) {
+        armArcadeDoubleScore(m);
+        addArcadeScore(m, e.points);
+        m.extra = null;
+        armExtraSpawn(m.extraSpawn, m.frame, 380, 760);
+        playTone(820, 32, 'triangle', 0.36);
+      }
+    }
+
     ball.x += ball.vx;
     ball.y += ball.vy;
 
@@ -226,9 +296,10 @@ const PongPresenter = ({
       && ball.vx < 0;
     if (hitPlayer) {
       const impact = (ball.y - (paddle.y + paddle.h / 2)) / (paddle.h / 2);
+      shrinkPongPaddleOnEdgeHit(paddle, impact);
       ball.vx = Math.abs(ball.vx) + 0.25;
       ball.vy = clamp(impact * 4.2, -4.2, 4.2);
-      m.score += 5;
+      addArcadeScore(m, 5);
       playTone(620, 24, 'square', 0.3);
     }
 
@@ -238,53 +309,130 @@ const PongPresenter = ({
       && ball.vx > 0;
     if (hitAi) {
       const impact = (ball.y - (ai.y + ai.h / 2)) / (ai.h / 2);
+      shrinkPongPaddleOnEdgeHit(ai, impact);
       ball.vx = -Math.abs(ball.vx) - 0.22;
       ball.vy = clamp(impact * 3.9, -3.9, 3.9);
       playTone(520, 20, 'triangle', 0.24);
     }
 
     if (ball.x + ball.r >= GAME_WIDTH - 10) {
-      m.score += 25;
+      addArcadeScore(m, 25);
+      m.matchPoints += 1;
+      const need = isArcadeEasy(m) ? PONG_MATCH_WIN_EASY : PONG_MATCH_WIN_NORMAL;
+      if (m.matchPoints >= need) {
+        const vic = 380 + need * 35;
+        addArcadeScore(m, vic);
+        m.matchPoints = 0;
+        syncUi();
+        stopGame();
+        setOverlay({
+          title: 'Match won!',
+          subtitle: `+${vic} victory bonus · Play again`,
+          tone: 'win',
+        });
+        setStatusMessage('Match won!');
+        playTone(920, 40, 'triangle', 0.42);
+        m.frame += 1;
+        return;
+      }
       playTone(760, 36, 'triangle', 0.33);
-      setOverlay({ title: 'Point!', subtitle: 'Click to serve next ball' });
       resetBall(false);
+      setStatusMessage('Point scored. Move paddle to serve.');
     }
 
     if (ball.x - ball.r <= 10) {
       m.lives -= 1;
       playTone(220, 70, 'sawtooth', 0.36);
+      setTimeout(() => playTone(160, 120, 'triangle', 0.42), 85);
       if (m.lives <= 0) {
         await finishGame('No lives remaining');
         return;
       }
-      setOverlay({ title: `Missed - lives ${m.lives}`, subtitle: 'Click to serve next ball' });
       resetBall(true);
+      setOverlay({ title: `Life Lost - ${m.lives} left`, subtitle: 'Move paddle to continue' });
+      setStatusMessage('Move paddle to continue.');
     }
 
     m.frame += 1;
     if (m.frame % 3 === 0) syncUi();
-  }, [finishGame, playTone, resetBall, syncUi]);
+  }, [finishGame, playTone, resetBall, stopGame, syncUi]);
 
-  const loop = useCallback(async () => {
-    await updateModel();
-    draw();
-    if (modelRef.current.running) {
-      rafRef.current = window.requestAnimationFrame(loop);
+  const loop = useArcadeGameLoop({ modelRef, rafRef, updateModel, draw });
+
+  const resumePlaying = useCallback(() => {
+    modelRef.current.running = true;
+    if (modelRef.current.waitingForServe) {
+      setOverlay({ title: 'Ready', subtitle: 'Move paddle to serve' });
+      setStatusMessage('Move paddle to serve.');
+    } else {
+      setOverlay((prev) => (prev?.title === 'Resuming' ? null : prev));
+      setStatusMessage('Resumed.');
     }
-  }, [draw, updateModel]);
+    if (rafRef.current) {
+      window.cancelAnimationFrame(rafRef.current);
+    }
+    rafRef.current = window.requestAnimationFrame(loop);
+    canvasRef.current?.focus();
+  }, [loop]);
+
+  const { isPanelExecutionActive, clearResumeInterval: clearInactiveResumeCountdown } = useGamePanelPauseResume({
+    isPanelActive,
+    isPanelPaused,
+    gameState,
+    modelRef,
+    rafRef,
+    setOverlay,
+    setStatusMessage,
+    resumePlaying,
+  });
+
+  const dismissWinAndResume = useCallback(() => {
+    const m = modelRef.current;
+    m.paddle.h = PONG_FULL_PADDLE_H;
+    m.ai.h = PONG_FULL_PADDLE_H;
+    m.paddle.y = clamp(GAME_HEIGHT / 2 - m.paddle.h / 2, 10, GAME_HEIGHT - m.paddle.h - 10);
+    m.ai.y = clamp(GAME_HEIGHT / 2 - m.ai.h / 2, 10, GAME_HEIGHT - m.ai.h - 10);
+    setOverlay({ title: 'Ready', subtitle: 'Move paddle to serve' });
+    setStatusMessage('Move paddle to serve.');
+    m.running = true;
+    m.waitingForServe = true;
+    resetBall(false);
+    syncUi();
+    if (rafRef.current) {
+      window.cancelAnimationFrame(rafRef.current);
+    }
+    rafRef.current = window.requestAnimationFrame(loop);
+    canvasRef.current?.focus();
+  }, [loop, resetBall, syncUi]);
 
   const startGame = useCallback(() => {
+    if (restartInSeconds > 0) return;
+    clearGameOverHold();
     unlockAudio();
     modelRef.current = createModel();
+    modelRef.current.difficulty = difficulty;
+    if (isArcadeEasy(modelRef.current)) {
+      modelRef.current.ai.speed *= 0.74;
+      modelRef.current.paddle.speed *= 1.05;
+    }
+    armExtraSpawn(modelRef.current.extraSpawn, 0, 280, 560);
     modelRef.current.running = true;
     setGameState('playing');
-    setStatusMessage('W/S or Arrow keys move. Click to serve.');
-    setOverlay({ title: 'Ready', subtitle: 'Click to serve' });
+    setOverlay({ title: 'Ready', subtitle: 'Move paddle to serve' });
+    setStatusMessage('Move paddle to serve.');
     syncUi();
     if (rafRef.current) window.cancelAnimationFrame(rafRef.current);
     rafRef.current = window.requestAnimationFrame(loop);
     canvasRef.current?.focus();
-  }, [loop, syncUi, unlockAudio]);
+  }, [clearGameOverHold, difficulty, loop, restartInSeconds, syncUi, unlockAudio]);
+
+  const onOverlayPrimaryClick = useCallback(() => {
+    if (overlay?.tone === 'win') {
+      dismissWinAndResume();
+      return;
+    }
+    startGame();
+  }, [dismissWinAndResume, overlay?.tone, startGame]);
 
   useEffect(() => {
     draw();
@@ -313,23 +461,32 @@ const PongPresenter = ({
   useEffect(() => {
     const wrap = wrapRef.current;
     if (!wrap) return undefined;
-    const onUnlock = () => unlockAudio();
-    wrap.addEventListener('pointerdown', onUnlock);
-    return () => wrap.removeEventListener('pointerdown', onUnlock);
-  }, [unlockAudio]);
+    const onPointerDown = () => {
+      unlockAudio();
+      activateServe();
+    };
+    wrap.addEventListener('pointerdown', onPointerDown);
+    return () => wrap.removeEventListener('pointerdown', onPointerDown);
+  }, [activateServe, unlockAudio]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
       if (!isPanelExecutionActive || isEditableTarget(event)) return;
       const m = modelRef.current;
-      if (event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') m.upPressed = true;
-      if (event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') m.downPressed = true;
-      if (['ArrowUp', 'ArrowDown', 'w', 'W', 's', 'S'].includes(event.key)) event.preventDefault();
+      if (event.key === 'ArrowUp') {
+        m.upPressed = true;
+        activateServe();
+      }
+      if (event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') {
+        m.downPressed = true;
+        activateServe();
+      }
+      if (['ArrowUp', 'ArrowDown', 's', 'S'].includes(event.key)) event.preventDefault();
     };
     const onKeyUp = (event) => {
       if (!isPanelExecutionActive || isEditableTarget(event)) return;
       const m = modelRef.current;
-      if (event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') m.upPressed = false;
+      if (event.key === 'ArrowUp') m.upPressed = false;
       if (event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') m.downPressed = false;
     };
     window.addEventListener('keydown', onKeyDown);
@@ -338,73 +495,18 @@ const PongPresenter = ({
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [isPanelExecutionActive]);
+  }, [activateServe, isPanelExecutionActive]);
 
   useEffect(() => () => {
     stopGame();
     clearInactiveResumeCountdown();
-    try {
-      audioContextRef.current?.close?.();
-    } catch {
-      // no-op
-    }
-    audioContextRef.current = null;
-    audioMasterGainRef.current = null;
-  }, [clearInactiveResumeCountdown, stopGame]);
-
-  useEffect(() => {
-    if (!isPanelExecutionActive) {
-      clearInactiveResumeCountdown();
-      if (!modelRef.current.running) return;
-      pausedByInactiveRef.current = true;
-      modelRef.current.running = false;
-      if (rafRef.current) {
-        window.cancelAnimationFrame(rafRef.current);
-        rafRef.current = 0;
-      }
-      setOverlay({
-        title: 'Paused',
-        subtitle: isPanelPaused ? 'Paused by user (P)' : 'Panel is not active',
-      });
-      setStatusMessage(isPanelPaused ? 'Paused. Press P to resume.' : 'Paused while another tab is active.');
-      return;
-    }
-    if (!pausedByInactiveRef.current) return;
-    pausedByInactiveRef.current = false;
-    if (gameState !== 'playing') return;
-    if (modelRef.current.running) return;
-
-    let count = 5;
-    setOverlay({ title: 'Resuming', subtitle: `${count}` });
-    setStatusMessage(`Resuming in ${count}...`);
-    clearInactiveResumeCountdown();
-    inactiveResumeIntervalRef.current = window.setInterval(() => {
-      count -= 1;
-      if (count <= 0) {
-        clearInactiveResumeCountdown();
-        if (gameState !== 'playing' || !isPanelExecutionActive) return;
-        setOverlay((prev) => (prev?.title === 'Resuming' ? null : prev));
-        setStatusMessage('Resumed.');
-        modelRef.current.running = true;
-        rafRef.current = window.requestAnimationFrame(loop);
-        return;
-      }
-      setOverlay((prev) => (prev?.title === 'Resuming' ? { title: 'Resuming', subtitle: `${count}` } : prev));
-      setStatusMessage(`Resuming in ${count}...`);
-    }, 1000);
-  }, [clearInactiveResumeCountdown, gameState, isPanelExecutionActive, isPanelPaused, loop]);
-
-  const handleCanvasClick = () => {
-    const m = modelRef.current;
-    if (gameState !== 'playing' || !m.running || !m.waitingForServe) return;
-    m.waitingForServe = false;
-    setOverlay(null);
-    setStatusMessage('Ball in play.');
-    playTone(680, 20, 'square', 0.28);
-  };
+    clearGameOverHold();
+    disposeAudio();
+  }, [clearGameOverHold, clearInactiveResumeCountdown, disposeAudio, stopGame]);
 
   const handleMouseMove = (event) => {
     if (gameState !== 'playing') return;
+    activateServe();
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -415,7 +517,39 @@ const PongPresenter = ({
 
   const topRows = Array.isArray(leaderboard?.top) ? leaderboard.top : [];
   const recentRows = Array.isArray(leaderboard?.recent) ? leaderboard.recent : [];
-  const actionLabel = gameState === 'playing' ? 'Restart' : 'Start';
+  const currentGameTopRows = useMemo(() => filterRowsByGame(topRows, gameId), [gameId, topRows]);
+  const currentGameRecentRows = useMemo(() => filterRowsByGame(recentRows, gameId), [gameId, recentRows]);
+  const globalHighScore = useMemo(() => getMaxHighScore(currentGameTopRows), [currentGameTopRows]);
+  const actionLabel = gameState === 'over' ? 'Insert Coin' : (gameState === 'playing' ? 'Restart' : 'Start');
+  const showEntryOverlay = gameState !== 'playing';
+  const isGameOverHoldActive = gameState === 'over' && restartInSeconds > 0;
+  const overlayTitle = overlay?.title || (isGameOverHoldActive ? 'Game Over' : 'Ready');
+  const overlaySubtitle = formatArcadeOverlaySubtitle({
+    overlaySubtitle: overlay?.subtitle,
+    isGameOverHoldActive,
+    score,
+    restartInSeconds,
+    defaultIdle: buildArcadeIdleSubtitle(PANEL_COMPONENT_ID),
+  });
+  const rallyTarget = difficulty === ARCADE_DIFFICULTY_NORMAL ? PONG_MATCH_WIN_NORMAL : PONG_MATCH_WIN_EASY;
+  const showStartAction = (showEntryOverlay && !(gameState === 'over' && restartInSeconds > 0))
+    || overlay?.tone === 'win';
+  const isLifeLossMessage = /(life lost|ship hit|caught|missed)/i.test(overlayTitle) || /(life lost|ship hit|caught|missed)/i.test(statusMessage);
+  const overlayTone = getArcadeOverlayTone({
+    explicitTone: overlay?.tone,
+    overlayTitle,
+    isGameOverHoldActive,
+    isLifeLossMessage,
+  });
+  const overlayPrimaryLabel = overlay?.tone === 'win' ? 'Continue' : actionLabel;
+
+  const { onOverlayPointer, arcadeOverlayClickable } = useArcadeGameOverlayResume({
+    panelInstanceId,
+    panelComponentId: PANEL_COMPONENT_ID,
+    overlayTitle,
+    isPanelPaused,
+    isPanelActive,
+  });
 
   return (
     <div
@@ -426,70 +560,47 @@ const PongPresenter = ({
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Pong</h2>
-          <p className="talia-report__subtitle">Contained panel demo with shared per-user score tracking.</p>
+          <p className="talia-report__subtitle">One-player vs AI; optional bonus orb.</p>
         </div>
-        <div className="talia-report__actions">
-          <button type="button" className="talia-btn talia-btn--small talia-btn--primary" onClick={startGame}>
-            {actionLabel}
-          </button>
-          <button type="button" className="talia-btn talia-btn--small" onClick={onReloadScore}>
-            Reload Score
-          </button>
-        </div>
+        <ArcadeGameDifficultyToggle
+          value={difficulty}
+          onChange={setDifficulty}
+          disabled={gameState === 'playing'}
+        />
       </header>
 
-      <main className="talia-report__content pong-game__content">
-        <div className="pong-game__hud" role="status" aria-live="polite">
-          <span className="talia-event-meta__chip">User: {userLabel}</span>
-          <span className="talia-event-meta__chip">Score: {score}</span>
-          <span className="talia-event-meta__chip">Lives: {lives}</span>
-          <button
-            type="button"
-            className="talia-btn talia-btn--small"
-            onClick={() => setShowScorePopover((prev) => !prev)}
-            title="Show top and recent game highs"
-          >
-            Top High
-          </button>
-          <span className="talia-event-meta__chip talia-event-meta__chip--secondary">High: {highScore}</span>
-          <span className="talia-event-meta__chip talia-event-meta__chip--secondary">Last: {lastScore}</span>
-        </div>
-
-        <div ref={wrapRef} className="pong-game__canvas-wrap">
+      <main className="talia-report__content talia-game-panel-body">
+        <div ref={wrapRef} className="talia-game-canvas-shell">
           <canvas
             ref={canvasRef}
-            className="pong-game__canvas"
+            className="talia-arcade-canvas"
             tabIndex={0}
             aria-label="Pong game area"
-            onClick={handleCanvasClick}
             onMouseMove={handleMouseMove}
           />
-          {overlay && (
-            <div className="pong-game__overlay" role="status" aria-live="polite">
-              <div className="pong-game__overlay-panel">
-                <div className="pong-game__overlay-title">{overlay.title}</div>
-                {overlay.subtitle && <div className="pong-game__overlay-subtitle">{overlay.subtitle}</div>}
-              </div>
-            </div>
-          )}
+          <ArcadeGameScoreHud
+            currentScore={score}
+            userHighScore={highScore}
+            totalHighScore={globalHighScore}
+            meta={`Lives ${lives} · Rallies ${matchPoints}/${rallyTarget}`}
+            doubleScoreSeconds={doubleScoreHud}
+          />
+          <ArcadeGameCanvasOverlay
+            open={Boolean(overlay || showEntryOverlay)}
+            tone={overlayTone}
+            title={overlayTitle}
+            subtitle={overlaySubtitle}
+            showStartButton={showStartAction}
+            startLabel={overlayPrimaryLabel}
+            onStartClick={onOverlayPrimaryClick}
+            onOverlayPointer={onOverlayPointer}
+            arcadeOverlayClickable={arcadeOverlayClickable}
+            gameState={gameState}
+            leaderboardLoading={leaderboardLoading}
+            topRows={currentGameTopRows}
+            recentRows={currentGameRecentRows}
+          />
         </div>
-
-        <div className="pong-game__meta">
-          <span>{statusMessage}</span>
-          <span>{loading ? 'Loading score...' : `Last saved: ${updatedLabel}`}</span>
-          {saving && <span>Saving score...</span>}
-          {loadError && <span>Score load failed. You can still play.</span>}
-          {saveError && <span>Score save failed. Retry after next game.</span>}
-        </div>
-
-        <GameScorePopover
-          open={showScorePopover}
-          onClose={() => setShowScorePopover(false)}
-          title="Game Scores"
-          loading={leaderboardLoading}
-          top={topRows}
-          recent={recentRows}
-        />
       </main>
     </div>
   );

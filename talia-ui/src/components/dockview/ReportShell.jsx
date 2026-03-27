@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import ReportEventMeta from "../shared/ReportEventMeta";
 import { REPORT_PANEL_PAUSE_EVENT } from "./eventConstants";
 import usePanelTechnicalMetaVisibility from "../../hooks/usePanelTechnicalMetaVisibility";
+import { isArcadeGamePanelComponent } from "../shared/games/arcadeGamePanelIds";
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
 
 const deriveReportSources = (report) => {
@@ -61,8 +62,11 @@ const ReportShell = ({ report, panelInstanceId, children }) => {
     return () => window.removeEventListener(REPORT_PANEL_PAUSE_EVENT, handlePauseChange);
   }, [panelInstanceId, report?.panelId]);
 
+  const isArcadePanel = isArcadeGamePanelComponent(report?.panelId);
+  const shellPauseChrome = isPaused && !isArcadePanel;
+
   return (
-    <div className={`talia-report-shell ${isPaused ? 'talia-report-shell--paused' : ''}`}>
+    <div className={`talia-report-shell ${shellPauseChrome ? 'talia-report-shell--paused' : ''}`}>
       {showTechnicalMeta && (
         <div className="talia-report-technical-meta">
           <ReportEventMeta
@@ -75,7 +79,7 @@ const ReportShell = ({ report, panelInstanceId, children }) => {
         </div>
       )}
       <div className="talia-report-shell__content" key={`criteria-${criteriaVersion}`}>{children}</div>
-      {isPaused && (
+      {shellPauseChrome && (
         <div className="talia-report-shell__pause-overlay" role="note" aria-live="polite">
           <span className="talia-report-shell__pause-title">Paused</span>
           <span className="talia-report-shell__pause-subtitle">Press P to resume</span>

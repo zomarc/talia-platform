@@ -5,6 +5,7 @@ import {
   REPORT_ACTIVE_PANEL_EVENT,
   REPORT_GROUP_ACTION_EVENT,
   REPORT_PANEL_PAUSE_EVENT,
+  REPORT_PANEL_LAYOUT_CYCLE_EVENT,
   REPORT_PANEL_TECHNICAL_META_EVENT,
 } from "./eventConstants";
 import {
@@ -83,6 +84,15 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
   const [showCloseConfirm, setShowCloseConfirm] = React.useState(false);
   const [isPrimaryActive, setIsPrimaryActive] = React.useState(false);
   const [isPaused, setIsPaused] = React.useState(false);
+  const reportLayoutFailure = React.useCallback((reason, extra = null) => {
+    const message = String(reason || '').trim() || 'Layout action failed.';
+    console.error(`[TaliaDockviewTab] ${message}`, extra || '');
+    try {
+      window.__taliaStatus?.setStatusMessage?.(`Error: ${message}`);
+    } catch {
+      // Avoid secondary failures while reporting an action error.
+    }
+  }, []);
 
   const syncPrimaryActiveState = React.useCallback(() => {
     const activePanelId = window?.__taliaActivePanelId || window?.dockviewApi?.activePanel?.id || null;
@@ -199,10 +209,21 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
     setShowCloseConfirm(false);
 
     const dockviewApi = window.dockviewApi;
-    const activePanelId = panelApi?.id || layoutCycleRef.current.panelId;
-    const currentPanelApi = activePanelId
-      ? dockviewApi?.getPanel?.(activePanelId)?.api || panelApi
-      : panelApi;
+    const targetPanelId = panelId;
+    if (!dockviewApi) {
+      reportLayoutFailure('Layout action failed: Dockview API is not available.');
+      return;
+    }
+    if (!targetPanelId) {
+      reportLayoutFailure('Layout action failed: panel id is unavailable.');
+      return;
+    }
+    const currentPanelApi = dockviewApi?.getPanel?.(targetPanelId)?.api;
+    if (!currentPanelApi) {
+      reportLayoutFailure(`Layout action failed: panel "${targetPanelId}" is not available.`);
+      return;
+    }
+    currentPanelApi?.setActive?.();
     const currentGroupId = currentPanelApi?.group?.id;
 
     if (layoutCycleState === 0) {
@@ -212,13 +233,13 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
       }
       const sideGroupIds = getGroupIdsInSameVisualSide(dockviewApi, currentGroupId);
       let appliedSideIsolation = false;
-      if (sideGroupIds && sideGroupIds.size > 0 && activePanelId) {
+      if (sideGroupIds && sideGroupIds.size > 0) {
         const visibilitySnapshot = {};
         (dockviewApi?.groups || []).forEach((group) => {
           visibilitySnapshot[group.id] = !!group?.api?.isVisible;
         });
         layoutCycleRef.current.originalVisibility = visibilitySnapshot;
-        layoutCycleRef.current.panelId = activePanelId;
+        layoutCycleRef.current.panelId = targetPanelId;
         (dockviewApi?.groups || []).forEach((group) => {
           if (sideGroupIds.has(group.id)) {
             // First step: isolate selected panel within its current left/right side container.
@@ -232,10 +253,9 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
         currentPanelApi?.setActive?.();
         appliedSideIsolation = true;
       } else {
-        // Never full-maximize on first click.
-        // If side isolation can't be resolved for this layout, keep current layout unchanged.
         layoutCycleRef.current.originalVisibility = null;
         layoutCycleRef.current.panelId = null;
+        reportLayoutFailure(`Layout action failed: cannot isolate side groups for panel "${targetPanelId}".`);
       }
       if (appliedSideIsolation) {
         setLayoutCycleState(1);
@@ -252,22 +272,35 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
         sideExpandTimerRef.current = null;
       }
       const targetPanelApi =
-        (layoutCycleRef.current.panelId ? dockviewApi?.getPanel?.(layoutCycleRef.current.panelId)?.api : null) ||
-        currentPanelApi;
+        (layoutCycleRef.current.panelId ? dockviewApi?.getPanel?.(layoutCycleRef.current.panelId)?.api : null)
+        || dockviewApi?.getPanel?.(targetPanelId)?.api;
+      if (!targetPanelApi) {
+        reportLayoutFailure(`Layout action failed: cannot resolve panel "${targetPanelId}" for maximize.`);
+        return;
+      }
+      targetPanelApi?.setActive?.();
       if (dockviewApi?.hasMaximizedGroup?.() && !targetPanelApi?.isMaximized?.()) {
         dockviewApi?.exitMaximizedGroup?.();
       }
       if (!targetPanelApi?.isMaximized?.()) {
         targetPanelApi?.maximize?.();
       }
+      layoutCycleRef.current.panelId = targetPanelId;
       setLayoutCycleState(2);
     } else {
       if (sideExpandTimerRef.current) {
         window.clearTimeout(sideExpandTimerRef.current);
         sideExpandTimerRef.current = null;
       }
-      if (currentPanelApi?.isMaximized?.()) {
-        currentPanelApi?.exitMaximized?.();
+      const targetPanelApi =
+        (layoutCycleRef.current.panelId ? dockviewApi?.getPanel?.(layoutCycleRef.current.panelId)?.api : null)
+        || dockviewApi?.getPanel?.(targetPanelId)?.api;
+      if (!targetPanelApi) {
+        reportLayoutFailure(`Layout action failed: cannot resolve panel "${targetPanelId}" for restore.`);
+        return;
+      }
+      if (targetPanelApi?.isMaximized?.()) {
+        targetPanelApi?.exitMaximized?.();
       }
       if (dockviewApi?.hasMaximizedGroup?.()) {
         dockviewApi?.exitMaximizedGroup?.();
@@ -279,7 +312,7 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
           group?.api?.setVisible?.(typeof previousValue === 'boolean' ? previousValue : true);
         });
       }
-      const cyclePanelId = layoutCycleRef.current.panelId;
+      const cyclePanelId = layoutCycleRef.current.panelId || targetPanelId;
       const restoredPanel = cyclePanelId ? dockviewApi?.getPanel?.(cyclePanelId)?.api : null;
       restoredPanel?.setActive?.();
 
@@ -292,6 +325,19 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
     window.dispatchEvent(new CustomEvent(DOCKVIEW_MAXIMIZE_STATE_EVENT));
     window.requestAnimationFrame(syncMaximizedState);
   };
+
+  const handleLayoutToggleRef = React.useRef(handleLayoutToggle);
+  handleLayoutToggleRef.current = handleLayoutToggle;
+
+  React.useEffect(() => {
+    const onLayoutCycleRequest = (event) => {
+      const targetId = event?.detail?.panelId || null;
+      if (!targetId || targetId !== panelId) return;
+      handleLayoutToggleRef.current({ stopPropagation: () => {} });
+    };
+    window.addEventListener(REPORT_PANEL_LAYOUT_CYCLE_EVENT, onLayoutCycleRequest);
+    return () => window.removeEventListener(REPORT_PANEL_LAYOUT_CYCLE_EVENT, onLayoutCycleRequest);
+  }, [panelId]);
 
   const handleConfirmClose = (event) => {
     event.stopPropagation();

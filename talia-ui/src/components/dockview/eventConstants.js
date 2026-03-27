@@ -10,6 +10,8 @@ export const DASHBOARD_FILTER_VISIBILITY_EVENT = 'talia:dashboard.filterVisibili
 export const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 export const REPORT_ACTIVE_PANEL_EVENT = 'talia:report.activePanelChanged';
 export const REPORT_PANEL_PAUSE_EVENT = 'talia:report.panelPauseChanged';
+/** Request one step of the tab layout cycle (↑/↔/↓) for a specific panel instance id */
+export const REPORT_PANEL_LAYOUT_CYCLE_EVENT = 'talia:report.panelLayoutCycle';
 export const DOCKVIEW_MAXIMIZE_STATE_EVENT = 'talia:dockview.maximizeStateChanged';
 export const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
 export const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';

@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "check:standards": "node ./scripts/check-component-standards.mjs && node ./scripts/check-data-boundary.mjs",
     "check:standards:strict": "node ./scripts/check-component-standards.mjs --strict && node ./scripts/check-data-boundary.mjs --strict",
+    "verify:arcade": "node ./scripts/verify-arcade-panels.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

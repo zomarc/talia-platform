@@ -13,6 +13,9 @@ export const useDashboardSidebar = ({
   initialWidth = 280,
   minWidth = DEFAULT_MIN_WIDTH,
   maxWidth = DEFAULT_MAX_WIDTH,
+  autoCloseEnabled = false,
+  autoCloseMs = 8000,
+  autoClosePaused = false,
 } = {}) => {
   const shellRef = useRef(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(initialCollapsed);
@@ -45,6 +48,21 @@ export const useDashboardSidebar = ({
       })
     );
   }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    if (sidebarCollapsed) return undefined;
+    if (autoCloseEnabled !== true) return undefined;
+    if (autoClosePaused === true) return undefined;
+    const timeoutMs = Number.isFinite(Number(autoCloseMs))
+      ? Math.min(60000, Math.max(1000, Number(autoCloseMs)))
+      : 8000;
+    const timer = window.setTimeout(() => {
+      setSidebarCollapsed(true);
+    }, timeoutMs);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [sidebarCollapsed, autoCloseEnabled, autoCloseMs, autoClosePaused]);
 
   const handleMouseDown = useCallback((event) => {
     setIsResizing(true);

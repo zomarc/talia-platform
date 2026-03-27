@@ -58,6 +58,28 @@ const buildEditableRows = ({ labels, actualMap, suppliedMap, profileMap }) =>
     };
   });
 
+const rowsEqual = (a = [], b = []) => {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    const left = a[i];
+    const right = b[i];
+    if (!left || !right) return false;
+    if (
+      left.weekLabel !== right.weekLabel ||
+      left.weeksUntilSailing !== right.weeksUntilSailing ||
+      left.actualBookings !== right.actualBookings ||
+      left.actualGuests !== right.actualGuests ||
+      left.targetBookings !== right.targetBookings ||
+      left.targetGuests !== right.targetGuests
+    ) {
+      return false;
+    }
+  }
+  return true;
+};
+
 const BookingTargetProfileEditorSimple = ({ panelInstanceId, panelComponentId }) => {
   const [selectedProfileKey, setSelectedProfileKey] = useState('');
   const [profileName, setProfileName] = useState('');
@@ -226,7 +248,8 @@ const BookingTargetProfileEditorSimple = ({ panelInstanceId, panelComponentId })
   }, [selectedModel]);
 
   useEffect(() => {
-    setRows(buildEditableRows({ labels, actualMap, suppliedMap, profileMap }));
+    const nextRows = buildEditableRows({ labels, actualMap, suppliedMap, profileMap });
+    setRows((prevRows) => (rowsEqual(prevRows, nextRows) ? prevRows : nextRows));
   }, [labels, actualMap, suppliedMap, profileMap]);
 
   const initializeControlPoints = () => {

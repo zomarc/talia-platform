@@ -1,11 +1,36 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import GameScorePopover from '../../shared/games/GameScorePopover';
+import ArcadeGameCanvasOverlay from '../../shared/games/ArcadeGameCanvasOverlay';
+import ArcadeGameScoreHud from '../../shared/games/ArcadeGameScoreHud';
+import ArcadeGameDifficultyToggle from '../../shared/games/ArcadeGameDifficultyToggle';
+import {
+  buildArcadeIdleSubtitle,
+  formatArcadeOverlaySubtitle,
+  getArcadeOverlayTone,
+} from '../../shared/games/arcadeGameUi';
+import { ARCADE_DIFFICULTY_NORMAL, isArcadeEasy } from '../../shared/games/arcadeDifficulty';
+import useArcadeGameAudio from '../../shared/games/useArcadeGameAudio';
+import { useArcadeGameLoop } from '../../shared/games/useArcadeGameLoop';
+import { filterRowsByGame, getMaxHighScore } from '../../shared/games/leaderboardScope';
 import usePanelTabActive from '../../../hooks/usePanelTabActive';
 import usePanelPaused from '../../../hooks/usePanelPaused';
 import { isEditableTarget } from '../../shared/games/keyboardGuards';
+import { useArcadeGameOverlayResume } from '../../shared/games/useArcadeGameOverlayResume';
+import useGamePanelPauseResume from '../../shared/games/useGamePanelPauseResume';
+import {
+  armExtraSpawn,
+  createExtraSpawnState,
+  isExtraSpawnDue,
+} from '../../shared/games/arcadeGameExtra';
+import {
+  addArcadeScore,
+  armArcadeDoubleScore,
+} from '../../shared/games/arcadeDoubleScore';
+import useArcadeDoubleScoreHud from '../../shared/games/useArcadeDoubleScoreHud';
 
 const GAME_WIDTH = 680;
 const GAME_HEIGHT = 430;
+const GAME_OVER_HOLD_MS = 5000;
+const PANEL_COMPONENT_ID = 'asteroids';
 
 const rand = (min, max) => min + Math.random() * (max - min);
 const wrap = (value, max) => {
@@ -32,6 +57,9 @@ const createAsteroid = (size = 3, x = rand(0, GAME_WIDTH), y = rand(0, GAME_HEIG
 const createModel = () => ({
   running: false,
   score: 0,
+  doubleScoreUntil: 0,
+  difficulty: ARCADE_DIFFICULTY_NORMAL,
+  wave: 1,
   lives: 3,
   ship: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, vx: 0, vy: 0, angle: -Math.PI / 2 },
   bullets: [],
@@ -39,98 +67,42 @@ const createModel = () => ({
   keys: { left: false, right: false, thrust: false, fire: false },
   fireCooldown: 0,
   frame: 0,
+  extraSpawn: createExtraSpawnState(),
+  extraUfo: null,
 });
 
 const AsteroidsPresenter = ({
   panelInstanceId,
-  loading,
-  loadError,
-  saveError,
-  saving,
-  userId,
+  gameId,
+  gameSoundEnabled,
   highScore,
-  lastScore,
-  updatedAt,
-  onReloadScore,
   onSaveScore,
   leaderboard,
   leaderboardLoading,
 }) => {
   const isPanelActive = usePanelTabActive(panelInstanceId);
-  const isPanelPaused = usePanelPaused(panelInstanceId, 'asteroids');
-  const isPanelExecutionActive = isPanelActive && !isPanelPaused;
+  const isPanelPaused = usePanelPaused(panelInstanceId, PANEL_COMPONENT_ID);
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const modelRef = useRef(createModel());
   const rafRef = useRef(0);
-  const pausedByInactiveRef = useRef(false);
-  const inactiveResumeIntervalRef = useRef(0);
-  const audioContextRef = useRef(null);
-  const audioMasterGainRef = useRef(null);
-  const lastSoundAtRef = useRef(0);
+  const { unlockAudio, playTone, disposeAudio } = useArcadeGameAudio(gameSoundEnabled, 0.023);
+  const gameOverReleaseTimeoutRef = useRef(0);
+  const gameOverCountdownIntervalRef = useRef(0);
   const [gameState, setGameState] = useState('idle');
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
   const [statusMessage, setStatusMessage] = useState('Press Start and use arrows + Space.');
   const [overlay, setOverlay] = useState(null);
-  const [showScorePopover, setShowScorePopover] = useState(false);
-
-  const userLabel = useMemo(() => String(userId || 'anonymous'), [userId]);
-  const updatedLabel = useMemo(() => {
-    if (!updatedAt) return 'Not saved yet';
-    const date = new Date(updatedAt);
-    return Number.isNaN(date.getTime()) ? 'Not saved yet' : date.toLocaleString();
-  }, [updatedAt]);
+  const [restartInSeconds, setRestartInSeconds] = useState(0);
+  const [difficulty, setDifficulty] = useState(ARCADE_DIFFICULTY_NORMAL);
+  const doubleScoreHud = useArcadeDoubleScoreHud(modelRef, gameState === 'playing');
 
   const syncUi = useCallback(() => {
     const m = modelRef.current;
     setScore(m.score);
     setLives(m.lives);
   }, []);
-
-  const ensureAudioContext = useCallback(() => {
-    if (audioContextRef.current) return audioContextRef.current;
-    const Ctor = window.AudioContext || window.webkitAudioContext;
-    if (!Ctor) return null;
-    const context = new Ctor();
-    const master = context.createGain();
-    master.gain.value = 0.023;
-    master.connect(context.destination);
-    audioContextRef.current = context;
-    audioMasterGainRef.current = master;
-    return context;
-  }, []);
-
-  const playTone = useCallback((freq = 320, durationMs = 30, type = 'square', volume = 0.34) => {
-    const now = performance.now();
-    if (now - lastSoundAtRef.current < 10) return;
-    lastSoundAtRef.current = now;
-    const context = ensureAudioContext();
-    const master = audioMasterGainRef.current;
-    if (!context || !master) return;
-    if (context.state === 'suspended') context.resume().catch(() => {});
-    const osc = context.createOscillator();
-    const gain = context.createGain();
-    osc.type = type;
-    osc.frequency.value = freq;
-    gain.gain.value = 0.0001;
-    osc.connect(gain);
-    gain.connect(master);
-    const start = context.currentTime;
-    const end = start + durationMs / 1000;
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(volume, start + 0.005);
-    gain.gain.exponentialRampToValueAtTime(0.0001, end);
-    osc.start(start);
-    osc.stop(end);
-  }, [ensureAudioContext]);
-
-  const unlockAudio = useCallback(() => {
-    const context = ensureAudioContext();
-    if (context?.state === 'suspended') {
-      context.resume().catch(() => {});
-    }
-  }, [ensureAudioContext]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -156,6 +128,17 @@ const AsteroidsPresenter = ({
       const sx = (i * 97) % GAME_WIDTH;
       const sy = (i * 41) % GAME_HEIGHT;
       ctx.fillRect(sx, sy, 1.4, 1.4);
+    }
+
+    if (m.extraUfo) {
+      const u = m.extraUfo;
+      ctx.fillStyle = u.variant === 'b' ? 'rgba(255, 120, 200, 0.9)' : 'rgba(160, 220, 255, 0.9)';
+      ctx.beginPath();
+      ctx.ellipse(u.x, u.y, u.r * 1.1, u.r * 0.62, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255, 255, 200, 0.85)';
+      ctx.fillRect(u.x - 6, u.y - 4, 4, 3);
+      ctx.fillRect(u.x + 2, u.y - 4, 4, 3);
     }
 
     m.asteroids.forEach((a) => {
@@ -220,12 +203,43 @@ const AsteroidsPresenter = ({
     }
   }, []);
 
-  const clearInactiveResumeCountdown = useCallback(() => {
-    if (inactiveResumeIntervalRef.current) {
-      window.clearInterval(inactiveResumeIntervalRef.current);
-      inactiveResumeIntervalRef.current = 0;
+  const clearGameOverHold = useCallback(() => {
+    if (gameOverReleaseTimeoutRef.current) {
+      window.clearTimeout(gameOverReleaseTimeoutRef.current);
+      gameOverReleaseTimeoutRef.current = 0;
     }
+    if (gameOverCountdownIntervalRef.current) {
+      window.clearInterval(gameOverCountdownIntervalRef.current);
+      gameOverCountdownIntervalRef.current = 0;
+    }
+    setRestartInSeconds(0);
   }, []);
+
+  const beginGameOverHold = useCallback(() => {
+    clearGameOverHold();
+    const releaseAt = Date.now() + GAME_OVER_HOLD_MS;
+    setRestartInSeconds(Math.ceil(GAME_OVER_HOLD_MS / 1000));
+    gameOverCountdownIntervalRef.current = window.setInterval(() => {
+      const remainingMs = releaseAt - Date.now();
+      if (remainingMs <= 0) {
+        if (gameOverCountdownIntervalRef.current) {
+          window.clearInterval(gameOverCountdownIntervalRef.current);
+          gameOverCountdownIntervalRef.current = 0;
+        }
+        setRestartInSeconds(0);
+        return;
+      }
+      setRestartInSeconds(Math.ceil(remainingMs / 1000));
+    }, 250);
+    gameOverReleaseTimeoutRef.current = window.setTimeout(() => {
+      gameOverReleaseTimeoutRef.current = 0;
+      if (gameOverCountdownIntervalRef.current) {
+        window.clearInterval(gameOverCountdownIntervalRef.current);
+        gameOverCountdownIntervalRef.current = 0;
+      }
+      setRestartInSeconds(0);
+    }, GAME_OVER_HOLD_MS);
+  }, [clearGameOverHold]);
 
   const finishGame = useCallback(async (reason) => {
     stopGame();
@@ -233,16 +247,18 @@ const AsteroidsPresenter = ({
     const finalScore = modelRef.current.score;
     setOverlay({ title: 'Game Over', subtitle: `Final score: ${finalScore}` });
     setStatusMessage(`Game over: ${reason}`);
+    beginGameOverHold();
     playTone(340, 80, 'triangle', 0.45);
     setTimeout(() => playTone(250, 120, 'triangle', 0.45), 100);
     await onSaveScore(finalScore);
-  }, [onSaveScore, playTone, stopGame]);
+  }, [beginGameOverHold, onSaveScore, playTone, stopGame]);
 
   const handleShipCollision = useCallback(async () => {
     const m = modelRef.current;
     m.lives -= 1;
     syncUi();
     playTone(200, 80, 'sawtooth', 0.45);
+    setTimeout(() => playTone(140, 120, 'triangle', 0.42), 90);
     if (m.lives <= 0) {
       await finishGame('Ship destroyed');
       return;
@@ -252,7 +268,7 @@ const AsteroidsPresenter = ({
     m.ship.vx = 0;
     m.ship.vy = 0;
     m.ship.angle = -Math.PI / 2;
-    setOverlay({ title: `Ship hit`, subtitle: `${m.lives} lives left` });
+    setOverlay({ title: 'Life Lost', subtitle: `${m.lives} lives left` });
     window.setTimeout(() => setOverlay(null), 900);
   }, [finishGame, playTone, syncUi]);
 
@@ -290,11 +306,54 @@ const AsteroidsPresenter = ({
       .map((b) => ({ ...b, x: wrap(b.x + b.vx, GAME_WIDTH), y: wrap(b.y + b.vy, GAME_HEIGHT), ttl: b.ttl - 1 }))
       .filter((b) => b.ttl > 0);
 
+    if (isExtraSpawnDue(m.extraSpawn, m.frame, m.extraUfo != null)) {
+      const fromLeft = Math.random() < 0.5;
+      m.extraUfo = {
+        x: fromLeft ? -22 : GAME_WIDTH + 22,
+        y: 52 + Math.random() * (GAME_HEIGHT - 120),
+        vx: fromLeft ? 2.55 : -2.55,
+        vy: (Math.random() - 0.5) * 0.4,
+        r: 15,
+        points: Math.random() < 0.55 ? 200 : 450,
+        wobble: Math.random() * Math.PI * 2,
+        variant: Math.random() < 0.5 ? 'a' : 'b',
+      };
+    }
+    if (m.extraUfo) {
+      const u = m.extraUfo;
+      const ufoMult = isArcadeEasy(m) ? 0.84 : 1;
+      u.x += u.vx * ufoMult;
+      u.wobble += 0.1;
+      u.y += Math.sin(u.wobble) * 0.65 + u.vy;
+      u.y = Math.max(28, Math.min(GAME_HEIGHT - 28, u.y));
+      if (u.x < -36 || u.x > GAME_WIDTH + 36) {
+        m.extraUfo = null;
+        armExtraSpawn(m.extraSpawn, m.frame, 520, 960);
+      }
+    }
+
+    m.bullets.forEach((b) => {
+      if (!m.extraUfo) return;
+      const u = m.extraUfo;
+      const dx = b.x - u.x;
+      const dy = b.y - u.y;
+      if (dx * dx + dy * dy <= (u.r + 4) ** 2) {
+        armArcadeDoubleScore(m);
+        addArcadeScore(m, u.points);
+        b.ttl = 0;
+        m.extraUfo = null;
+        armExtraSpawn(m.extraSpawn, m.frame, 520, 960);
+        playTone(660, 40, 'triangle', 0.4);
+      }
+    });
+    m.bullets = m.bullets.filter((b) => b.ttl > 0);
+
+    const am = isArcadeEasy(m) ? 0.82 : 1;
     m.asteroids = m.asteroids.map((a) => ({
       ...a,
-      x: wrap(a.x + a.vx, GAME_WIDTH),
-      y: wrap(a.y + a.vy, GAME_HEIGHT),
-      angle: a.angle + a.spin,
+      x: wrap(a.x + a.vx * am, GAME_WIDTH),
+      y: wrap(a.y + a.vy * am, GAME_HEIGHT),
+      angle: a.angle + a.spin * am,
     }));
 
     const spawned = [];
@@ -306,7 +365,7 @@ const AsteroidsPresenter = ({
         if (dx * dx + dy * dy > (a.radius + 2) ** 2) return;
         a.dead = true;
         b.ttl = 0;
-        m.score += a.size === 3 ? 20 : a.size === 2 ? 50 : 100;
+        addArcadeScore(m, a.size === 3 ? 20 : a.size === 2 ? 50 : 100);
         playTone(a.size === 3 ? 420 : 540, 34, 'triangle', 0.34);
         if (a.size > 1) {
           spawned.push(createAsteroid(a.size - 1, a.x + rand(-8, 8), a.y + rand(-8, 8)));
@@ -327,29 +386,70 @@ const AsteroidsPresenter = ({
     }
 
     if (m.asteroids.length === 0) {
-      m.score += 200;
+      const w = m.wave || 1;
+      const celeb = 100 + w * 42;
+      addArcadeScore(m, 200);
+      addArcadeScore(m, celeb);
+      m.wave = w + 1;
       m.asteroids.push(createAsteroid(3), createAsteroid(3), createAsteroid(2), createAsteroid(2));
+      syncUi();
+      stopGame();
+      setOverlay({
+        title: 'Sector clear!',
+        subtitle: `Wave ${w} · +${celeb} celebration`,
+        tone: 'win',
+      });
       setStatusMessage('New asteroid field');
-      setOverlay({ title: 'Wave Cleared', subtitle: 'Incoming field' });
       playTone(860, 50, 'triangle', 0.34);
-      window.setTimeout(() => setOverlay(null), 800);
+      m.frame += 1;
+      return;
     }
 
     m.frame += 1;
     if (m.frame % 3 === 0) syncUi();
-  }, [handleShipCollision, playTone, syncUi]);
+  }, [handleShipCollision, playTone, setOverlay, setStatusMessage, stopGame, syncUi]);
 
-  const loop = useCallback(async () => {
-    await updateModel();
-    draw();
-    if (modelRef.current.running) {
-      rafRef.current = window.requestAnimationFrame(loop);
+  const loop = useArcadeGameLoop({ modelRef, rafRef, updateModel, draw });
+
+  const resumePlaying = useCallback(() => {
+    setOverlay((prev) => (prev?.title === 'Resuming' ? null : prev));
+    setStatusMessage('Resumed.');
+    modelRef.current.running = true;
+    if (rafRef.current) {
+      window.cancelAnimationFrame(rafRef.current);
     }
-  }, [draw, updateModel]);
+    rafRef.current = window.requestAnimationFrame(loop);
+  }, [loop]);
+
+  const { isPanelExecutionActive, clearResumeInterval: clearInactiveResumeCountdown } = useGamePanelPauseResume({
+    isPanelActive,
+    isPanelPaused,
+    gameState,
+    modelRef,
+    rafRef,
+    setOverlay,
+    setStatusMessage,
+    resumePlaying,
+  });
+
+  const dismissWinAndResume = useCallback(() => {
+    setOverlay(null);
+    modelRef.current.running = true;
+    setStatusMessage('Arrow keys turn/thrust, Space fires.');
+    if (rafRef.current) {
+      window.cancelAnimationFrame(rafRef.current);
+    }
+    rafRef.current = window.requestAnimationFrame(loop);
+    canvasRef.current?.focus();
+  }, [loop, setStatusMessage]);
 
   const startGame = useCallback(() => {
+    if (restartInSeconds > 0) return;
+    clearGameOverHold();
     unlockAudio();
     modelRef.current = createModel();
+    modelRef.current.difficulty = difficulty;
+    armExtraSpawn(modelRef.current.extraSpawn, 0, 400, 720);
     modelRef.current.running = true;
     setGameState('playing');
     setStatusMessage('Arrow keys turn/thrust, Space fires.');
@@ -358,7 +458,15 @@ const AsteroidsPresenter = ({
     if (rafRef.current) window.cancelAnimationFrame(rafRef.current);
     rafRef.current = window.requestAnimationFrame(loop);
     canvasRef.current?.focus();
-  }, [loop, syncUi, unlockAudio]);
+  }, [clearGameOverHold, difficulty, loop, restartInSeconds, syncUi, unlockAudio]);
+
+  const onOverlayPrimaryClick = useCallback(() => {
+    if (overlay?.tone === 'win') {
+      dismissWinAndResume();
+      return;
+    }
+    startGame();
+  }, [dismissWinAndResume, overlay?.tone, startGame]);
 
   useEffect(() => {
     draw();
@@ -423,60 +531,44 @@ const AsteroidsPresenter = ({
   useEffect(() => () => {
     stopGame();
     clearInactiveResumeCountdown();
-    try {
-      audioContextRef.current?.close?.();
-    } catch {
-      // no-op
-    }
-    audioContextRef.current = null;
-    audioMasterGainRef.current = null;
-  }, [clearInactiveResumeCountdown, stopGame]);
-
-  useEffect(() => {
-    if (!isPanelExecutionActive) {
-      clearInactiveResumeCountdown();
-      if (!modelRef.current.running) return;
-      pausedByInactiveRef.current = true;
-      modelRef.current.running = false;
-      if (rafRef.current) {
-        window.cancelAnimationFrame(rafRef.current);
-        rafRef.current = 0;
-      }
-      setOverlay({
-        title: 'Paused',
-        subtitle: isPanelPaused ? 'Paused by user (P)' : 'Panel is not active',
-      });
-      setStatusMessage(isPanelPaused ? 'Paused. Press P to resume.' : 'Paused while another tab is active.');
-      return;
-    }
-    if (!pausedByInactiveRef.current) return;
-    pausedByInactiveRef.current = false;
-    if (gameState !== 'playing') return;
-    if (modelRef.current.running) return;
-
-    let count = 5;
-    setOverlay({ title: 'Resuming', subtitle: `${count}` });
-    setStatusMessage(`Resuming in ${count}...`);
-    clearInactiveResumeCountdown();
-    inactiveResumeIntervalRef.current = window.setInterval(() => {
-      count -= 1;
-      if (count <= 0) {
-        clearInactiveResumeCountdown();
-        if (gameState !== 'playing' || !isPanelExecutionActive) return;
-        setOverlay((prev) => (prev?.title === 'Resuming' ? null : prev));
-        setStatusMessage('Resumed.');
-        modelRef.current.running = true;
-        rafRef.current = window.requestAnimationFrame(loop);
-        return;
-      }
-      setOverlay((prev) => (prev?.title === 'Resuming' ? { title: 'Resuming', subtitle: `${count}` } : prev));
-      setStatusMessage(`Resuming in ${count}...`);
-    }, 1000);
-  }, [clearInactiveResumeCountdown, gameState, isPanelExecutionActive, isPanelPaused, loop]);
+    clearGameOverHold();
+    disposeAudio();
+  }, [clearGameOverHold, clearInactiveResumeCountdown, disposeAudio, stopGame]);
 
   const topRows = Array.isArray(leaderboard?.top) ? leaderboard.top : [];
   const recentRows = Array.isArray(leaderboard?.recent) ? leaderboard.recent : [];
-  const actionLabel = gameState === 'playing' ? 'Restart' : 'Start';
+  const currentGameTopRows = useMemo(() => filterRowsByGame(topRows, gameId), [gameId, topRows]);
+  const currentGameRecentRows = useMemo(() => filterRowsByGame(recentRows, gameId), [gameId, recentRows]);
+  const globalHighScore = useMemo(() => getMaxHighScore(currentGameTopRows), [currentGameTopRows]);
+  const actionLabel = gameState === 'over' ? 'Insert Coin' : (gameState === 'playing' ? 'Restart' : 'Start');
+  const showEntryOverlay = gameState !== 'playing';
+  const isGameOverHoldActive = gameState === 'over' && restartInSeconds > 0;
+  const overlayTitle = overlay?.title || (isGameOverHoldActive ? 'Game Over' : 'Ready');
+  const overlaySubtitle = formatArcadeOverlaySubtitle({
+    overlaySubtitle: overlay?.subtitle,
+    isGameOverHoldActive,
+    score,
+    restartInSeconds,
+    defaultIdle: buildArcadeIdleSubtitle(PANEL_COMPONENT_ID),
+  });
+  const showStartAction = (showEntryOverlay && !(gameState === 'over' && restartInSeconds > 0))
+    || overlay?.tone === 'win';
+  const isLifeLossMessage = /(life lost|ship hit|caught|missed)/i.test(overlayTitle) || /(life lost|ship hit|caught|missed)/i.test(statusMessage);
+  const overlayTone = getArcadeOverlayTone({
+    explicitTone: overlay?.tone,
+    overlayTitle,
+    isGameOverHoldActive,
+    isLifeLossMessage,
+  });
+  const overlayPrimaryLabel = overlay?.tone === 'win' ? 'Continue' : actionLabel;
+
+  const { onOverlayPointer, arcadeOverlayClickable } = useArcadeGameOverlayResume({
+    panelInstanceId,
+    panelComponentId: PANEL_COMPONENT_ID,
+    overlayTitle,
+    isPanelPaused,
+    isPanelActive,
+  });
 
   return (
     <div
@@ -487,63 +579,41 @@ const AsteroidsPresenter = ({
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Asteroids</h2>
-          <p className="talia-report__subtitle">Contained arcade demo with shared user score tracking.</p>
+          <p className="talia-report__subtitle">Turn, thrust, shoot rocks and saucers.</p>
         </div>
-        <div className="talia-report__actions">
-          <button type="button" className="talia-btn talia-btn--small talia-btn--primary" onClick={startGame}>
-            {actionLabel}
-          </button>
-          <button type="button" className="talia-btn talia-btn--small" onClick={onReloadScore}>
-            Reload Score
-          </button>
-        </div>
+        <ArcadeGameDifficultyToggle
+          value={difficulty}
+          onChange={setDifficulty}
+          disabled={gameState === 'playing'}
+        />
       </header>
 
-      <main className="talia-report__content asteroids-game__content">
-        <div className="asteroids-game__hud" role="status" aria-live="polite">
-          <span className="talia-event-meta__chip">User: {userLabel}</span>
-          <span className="talia-event-meta__chip">Score: {score}</span>
-          <span className="talia-event-meta__chip">Lives: {lives}</span>
-          <button
-            type="button"
-            className="talia-btn talia-btn--small"
-            onClick={() => setShowScorePopover((prev) => !prev)}
-            title="Show top and recent game highs"
-          >
-            Top High
-          </button>
-          <span className="talia-event-meta__chip talia-event-meta__chip--secondary">High: {highScore}</span>
-          <span className="talia-event-meta__chip talia-event-meta__chip--secondary">Last: {lastScore}</span>
+      <main className="talia-report__content talia-game-panel-body">
+        <div ref={wrapRef} className="talia-game-canvas-shell">
+          <canvas ref={canvasRef} className="talia-arcade-canvas" tabIndex={0} aria-label="Asteroids game area" />
+          <ArcadeGameScoreHud
+            currentScore={score}
+            userHighScore={highScore}
+            totalHighScore={globalHighScore}
+            meta={`Lives: ${lives}`}
+            doubleScoreSeconds={doubleScoreHud}
+          />
+          <ArcadeGameCanvasOverlay
+            open={Boolean(overlay || showEntryOverlay)}
+            tone={overlayTone}
+            title={overlayTitle}
+            subtitle={overlaySubtitle}
+            showStartButton={showStartAction}
+            startLabel={overlayPrimaryLabel}
+            onStartClick={onOverlayPrimaryClick}
+            onOverlayPointer={onOverlayPointer}
+            arcadeOverlayClickable={arcadeOverlayClickable}
+            gameState={gameState}
+            leaderboardLoading={leaderboardLoading}
+            topRows={currentGameTopRows}
+            recentRows={currentGameRecentRows}
+          />
         </div>
-
-        <div ref={wrapRef} className="asteroids-game__canvas-wrap">
-          <canvas ref={canvasRef} className="asteroids-game__canvas" tabIndex={0} aria-label="Asteroids game area" />
-          {overlay && (
-            <div className="asteroids-game__overlay" role="status" aria-live="polite">
-              <div className="asteroids-game__overlay-panel">
-                <div className="asteroids-game__overlay-title">{overlay.title}</div>
-                {overlay.subtitle && <div className="asteroids-game__overlay-subtitle">{overlay.subtitle}</div>}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="asteroids-game__meta">
-          <span>{statusMessage}</span>
-          <span>{loading ? 'Loading score...' : `Last saved: ${updatedLabel}`}</span>
-          {saving && <span>Saving score...</span>}
-          {loadError && <span>Score load failed. You can still play.</span>}
-          {saveError && <span>Score save failed. Retry after next game.</span>}
-        </div>
-
-        <GameScorePopover
-          open={showScorePopover}
-          onClose={() => setShowScorePopover(false)}
-          title="Game Scores"
-          loading={leaderboardLoading}
-          top={topRows}
-          recent={recentRows}
-        />
       </main>
     </div>
   );

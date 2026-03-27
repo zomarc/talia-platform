@@ -75,6 +75,22 @@ const mixRgb = (fromRgb, toRgb, t) => ([
   Math.round(fromRgb[2] + (toRgb[2] - fromRgb[2]) * t),
 ]);
 
+const normalizeMenuDisappearMs = (value, fallback = 5000) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(30000, Math.max(1000, Math.round(parsed)));
+};
+
+const normalizeSidebarAutoCloseMs = (value, fallback = 8000) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(60000, Math.max(1000, Math.round(parsed)));
+};
+
+const normalizeSidebarDisplayMode = (value, fallback = 'panel') => (
+  value === 'overlay' ? 'overlay' : fallback
+);
+
 /**
  * Font families available in the application
  */
@@ -202,8 +218,23 @@ export const ThemeProvider = ({ children }) => {
   const [controlsVisible, setControlsVisible] = useState(
     _localFS.controlsVisible === true
   );
+  const [menuDisappearMs, setMenuDisappearMs] = useState(
+    normalizeMenuDisappearMs(_localFS.menuDisappearMs, 5000)
+  );
+  const [sidebarAutoCloseEnabled, setSidebarAutoCloseEnabled] = useState(
+    _localFS.sidebarAutoCloseEnabled === true
+  );
+  const [sidebarAutoCloseMs, setSidebarAutoCloseMs] = useState(
+    normalizeSidebarAutoCloseMs(_localFS.sidebarAutoCloseMs, 8000)
+  );
+  const [sidebarDisplayMode, setSidebarDisplayMode] = useState(
+    normalizeSidebarDisplayMode(_localFS.sidebarDisplayMode, 'panel')
+  );
   const [calloutsVisible, setCalloutsVisible] = useState(
     _localFS.calloutsVisible !== false
+  );
+  const [gameSoundEnabled, setGameSoundEnabled] = useState(
+    _localFS.gameSoundEnabled !== false
   );
 
   const [appearanceProfiles, setAppearanceProfiles] = useState(_localProfiles);
@@ -237,8 +268,13 @@ export const ThemeProvider = ({ children }) => {
     panelTitlesVisible,
     actionsVisible,
     controlsVisible,
+    menuDisappearMs,
+    sidebarAutoCloseEnabled,
+    sidebarAutoCloseMs,
+    sidebarDisplayMode,
     calloutsVisible,
-  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, calloutsVisible]);
+    gameSoundEnabled,
+  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled]);
 
   const applyAppearanceSettings = (settings) => {
     if (!settings || typeof settings !== 'object') return false;
@@ -268,8 +304,23 @@ export const ThemeProvider = ({ children }) => {
     if (Object.prototype.hasOwnProperty.call(settings, 'controlsVisible')) {
       setControlsVisible(settings.controlsVisible === true);
     }
+    if (Object.prototype.hasOwnProperty.call(settings, 'menuDisappearMs')) {
+      setMenuDisappearMs(normalizeMenuDisappearMs(settings.menuDisappearMs, 5000));
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'sidebarAutoCloseEnabled')) {
+      setSidebarAutoCloseEnabled(settings.sidebarAutoCloseEnabled === true);
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'sidebarAutoCloseMs')) {
+      setSidebarAutoCloseMs(normalizeSidebarAutoCloseMs(settings.sidebarAutoCloseMs, 8000));
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'sidebarDisplayMode')) {
+      setSidebarDisplayMode(normalizeSidebarDisplayMode(settings.sidebarDisplayMode, 'panel'));
+    }
     if (Object.prototype.hasOwnProperty.call(settings, 'calloutsVisible')) {
       setCalloutsVisible(settings.calloutsVisible !== false);
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'gameSoundEnabled')) {
+      setGameSoundEnabled(settings.gameSoundEnabled !== false);
     }
     return true;
   };
@@ -389,7 +440,7 @@ export const ThemeProvider = ({ children }) => {
         clearTimeout(saveSettingsTimerRef.current);
       }
     };
-  }, [appearanceDbLoaded, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, calloutsVisible, activeAppearanceProfileId]);
+  }, [appearanceDbLoaded, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, activeAppearanceProfileId]);
 
   useEffect(() => {
     if (!appearanceDbLoaded) return undefined;
@@ -435,7 +486,12 @@ export const ThemeProvider = ({ children }) => {
         panelTitlesVisible,
         actionsVisible,
         controlsVisible,
+        menuDisappearMs,
+        sidebarAutoCloseEnabled,
+        sidebarAutoCloseMs,
+        sidebarDisplayMode,
         calloutsVisible,
+        gameSoundEnabled,
       };
       localStorage.setItem('taliaLayout', JSON.stringify(parsed));
     } catch { /* best-effort */ }
@@ -443,7 +499,7 @@ export const ThemeProvider = ({ children }) => {
       localStorage.setItem('taliaAppearanceProfiles', JSON.stringify(appearanceProfiles));
       localStorage.setItem('taliaActiveAppearanceProfileId', activeAppearanceProfileId || '');
     } catch { /* best-effort */ }
-  }, [fontSize, fontFamily, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor, panelTitlesVisible, actionsVisible, controlsVisible, calloutsVisible, appearanceProfiles, activeAppearanceProfileId]);
+  }, [fontSize, fontFamily, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, appearanceProfiles, activeAppearanceProfileId]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -530,6 +586,7 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-map-height', scaledPx(260, 180));
     root.style.setProperty('--theme-side-panel-width', scaledPx(300, 220));
     root.style.setProperty('--theme-report-card-min-track', scaledPx(240, 160));
+    root.style.setProperty('--theme-auto-disappear-ms', `${normalizeMenuDisappearMs(menuDisappearMs, 5000)}ms`);
 
     // Global text intensity across app/panels/tables
     const tt = textIntensity / 100;
@@ -622,7 +679,7 @@ export const ThemeProvider = ({ children }) => {
     // Re-sync Chart.js globals with current CSS variables
     initChartDefaults();
 
-  }, [fontSize, selectedFont, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor]);
+  }, [fontSize, selectedFont, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor, menuDisappearMs]);
 
   // Context value - provide theme and font settings
   const value = {
@@ -688,8 +745,18 @@ export const ThemeProvider = ({ children }) => {
     setActionsVisible,
     controlsVisible,
     setControlsVisible,
+    menuDisappearMs,
+    setMenuDisappearMs,
+    sidebarAutoCloseEnabled,
+    setSidebarAutoCloseEnabled,
+    sidebarAutoCloseMs,
+    setSidebarAutoCloseMs,
+    sidebarDisplayMode,
+    setSidebarDisplayMode,
     calloutsVisible,
     setCalloutsVisible,
+    gameSoundEnabled,
+    setGameSoundEnabled,
 
     // Appearance profiles
     appearanceProfiles,

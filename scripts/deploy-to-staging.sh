@@ -3,6 +3,11 @@
 # Policy: staging deploys default to direct local -> staging LAN sync.
 # Git-based sync is intentionally guarded and requires explicit typed confirmation.
 # Usage: ./scripts/deploy-to-staging.sh [--ui-only|--full|--dry-run|--git-sync]
+#
+# Non-interactive (CI / automation): set STAGING_DEPLOY_CONFIRM_TOKEN to the
+# exact token the script would ask for: DEPLOY_UI_ONLY or DEPLOY_FULL_STACK
+# (must match --ui-only vs --full). Example:
+#   STAGING_DEPLOY_CONFIRM_TOKEN=DEPLOY_UI_ONLY ./scripts/deploy-to-staging.sh --ui-only
 
 set -euo pipefail
 
@@ -71,44 +76,62 @@ if [ -z "$DEPLOY_MODE" ]; then
 fi
 
 if [ "$DRY_RUN" = false ]; then
-  if [ ! -t 0 ]; then
-    echo -e "${RED}Error: staging deploy requires interactive confirmation.${NC}"
+  STAGING_DEPLOY_CONFIRM_TOKEN="${STAGING_DEPLOY_CONFIRM_TOKEN:-}"
+  use_noninteractive=false
+  if [ -n "$STAGING_DEPLOY_CONFIRM_TOKEN" ]; then
+    if [ "$DEPLOY_MODE" = "full" ] && [ "$STAGING_DEPLOY_CONFIRM_TOKEN" = "DEPLOY_FULL_STACK" ]; then
+      use_noninteractive=true
+      CONFIRM_TOKEN="DEPLOY_FULL_STACK"
+    elif [ "$DEPLOY_MODE" = "ui-only" ] && [ "$STAGING_DEPLOY_CONFIRM_TOKEN" = "DEPLOY_UI_ONLY" ]; then
+      use_noninteractive=true
+      CONFIRM_TOKEN="DEPLOY_UI_ONLY"
+    else
+      echo -e "${RED}Error: STAGING_DEPLOY_CONFIRM_TOKEN must be DEPLOY_UI_ONLY (with --ui-only) or DEPLOY_FULL_STACK (with --full).${NC}"
+      exit 1
+    fi
+  fi
+
+  if [ "$use_noninteractive" = true ]; then
+    echo -e "${BLUE}Non-interactive deploy: confirmed via STAGING_DEPLOY_CONFIRM_TOKEN=${CONFIRM_TOKEN}${NC}"
+    DEPLOY_CONFIRM="$CONFIRM_TOKEN"
+  elif [ ! -t 0 ]; then
+    echo -e "${RED}Error: staging deploy requires interactive confirmation or STAGING_DEPLOY_CONFIRM_TOKEN.${NC}"
     echo -e "${RED}Deployment scope must be selected explicitly (UI-only or Full stack).${NC}"
     exit 1
-  fi
+  else
+    echo -e "${BLUE}Select deployment scope:${NC}"
+    echo "  1) UI-only  (default, recommended) - rebuild/restart UI only"
+    echo "  2) Full stack - rebuild UI + GraphQL and run schema guard"
+    echo ""
 
-  echo -e "${BLUE}Select deployment scope:${NC}"
-  echo "  1) UI-only  (default, recommended) - rebuild/restart UI only"
-  echo "  2) Full stack - rebuild UI + GraphQL and run schema guard"
-  echo ""
+    default_scope="1"
+    if [ "$DEPLOY_MODE" = "full" ]; then
+      default_scope="2"
+    fi
 
-  default_scope="1"
-  if [ "$DEPLOY_MODE" = "full" ]; then
-    default_scope="2"
-  fi
+    read -r -p "Choose scope [1/2] (default: ${default_scope}): " SCOPE_CHOICE
+    SCOPE_CHOICE="${SCOPE_CHOICE:-$default_scope}"
 
-  read -r -p "Choose scope [1/2] (default: ${default_scope}): " SCOPE_CHOICE
-  SCOPE_CHOICE="${SCOPE_CHOICE:-$default_scope}"
+    case "$SCOPE_CHOICE" in
+      1)
+        DEPLOY_MODE="ui-only"
+        CONFIRM_TOKEN="DEPLOY_UI_ONLY"
+        ;;
+      2)
+        DEPLOY_MODE="full"
+        CONFIRM_TOKEN="DEPLOY_FULL_STACK"
+        ;;
+      *)
+        echo -e "${RED}Invalid selection. Aborting.${NC}"
+        exit 1
+        ;;
+    esac
 
-  case "$SCOPE_CHOICE" in
-    1)
-      DEPLOY_MODE="ui-only"
-      CONFIRM_TOKEN="DEPLOY_UI_ONLY"
-      ;;
-    2)
-      DEPLOY_MODE="full"
-      CONFIRM_TOKEN="DEPLOY_FULL_STACK"
-      ;;
-    *)
-      echo -e "${RED}Invalid selection. Aborting.${NC}"
+    read -r -p "Type ${CONFIRM_TOKEN} to continue: " DEPLOY_CONFIRM
+    if [ "$DEPLOY_CONFIRM" != "$CONFIRM_TOKEN" ]; then
+      echo -e "${RED}Aborted: deployment not confirmed.${NC}"
       exit 1
-      ;;
-  esac
-
-  read -r -p "Type ${CONFIRM_TOKEN} to continue: " DEPLOY_CONFIRM
-  if [ "$DEPLOY_CONFIRM" != "$CONFIRM_TOKEN" ]; then
-    echo -e "${RED}Aborted: deployment not confirmed.${NC}"
-    exit 1
+    fi
   fi
 fi
 

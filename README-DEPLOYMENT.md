@@ -47,6 +47,9 @@ ssh zomarc@192.168.1.120 "cd ~/talia-docker && \
 
 Deploys code changes to staging server.
 
+**Non-interactive** (automation): `STAGING_DEPLOY_CONFIRM_TOKEN=DEPLOY_UI_ONLY ./scripts/deploy-to-staging.sh --ui-only`  
+(or `DEPLOY_FULL_STACK` with `--full`). Must match the deploy mode.
+
 **Features:**
 - Automatically restarts all services in correct order
 - Tests critical endpoints after deployment

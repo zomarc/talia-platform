@@ -2,11 +2,11 @@
 # Deploy Talia Platform from local to staging environment.
 # Policy: staging deploys default to direct local -> staging LAN sync.
 # Git-based sync is intentionally guarded and requires explicit typed confirmation.
-# Usage: ./scripts/deploy-to-staging.sh [--ui-only|--full|--dry-run|--git-sync]
+# Usage: ./scripts/deploy-to-staging.sh [--ui-only|--full|--scripts-only|--dry-run|--git-sync]
 #
 # Non-interactive (CI / automation): set STAGING_DEPLOY_CONFIRM_TOKEN to the
-# exact token the script would ask for: DEPLOY_UI_ONLY or DEPLOY_FULL_STACK
-# (must match --ui-only vs --full). Example:
+# exact token the script would ask for: DEPLOY_UI_ONLY / DEPLOY_FULL_STACK /
+# DEPLOY_SCRIPTS_ONLY (must match selected mode). Example:
 #   STAGING_DEPLOY_CONFIRM_TOKEN=DEPLOY_UI_ONLY ./scripts/deploy-to-staging.sh --ui-only
 
 set -euo pipefail
@@ -25,6 +25,8 @@ STAGING_DIR="${STAGING_DIR:-${STAGING_APP_DIR:-/home/${STAGING_USER}/talia-docke
 STAGING_GIT_DIR="${STAGING_GIT_DIR:-${STAGING_DIR}}"
 LOCAL_ARCHIVE="${LOCAL_ARCHIVE:-/tmp/talia-staging-code-sync.tar.gz}"
 REMOTE_ARCHIVE="${REMOTE_ARCHIVE:-/tmp/talia-staging-code-sync.tar.gz}"
+LOCAL_SCRIPTS_ARCHIVE="${LOCAL_SCRIPTS_ARCHIVE:-/tmp/talia-staging-scripts-sync.tar.gz}"
+REMOTE_SCRIPTS_ARCHIVE="${REMOTE_SCRIPTS_ARCHIVE:-/tmp/talia-staging-scripts-sync.tar.gz}"
 LOCAL_UI_DIST_ARCHIVE="${LOCAL_UI_DIST_ARCHIVE:-/tmp/talia-staging-ui-dist.tar.gz}"
 REMOTE_UI_DIST_ARCHIVE="${REMOTE_UI_DIST_ARCHIVE:-/tmp/talia-staging-ui-dist.tar.gz}"
 LOCAL_SERVER_DIST_ARCHIVE="${LOCAL_SERVER_DIST_ARCHIVE:-/tmp/talia-staging-server-dist.tar.gz}"
@@ -57,6 +59,10 @@ while [[ $# -gt 0 ]]; do
       DEPLOY_MODE="full"
       shift
       ;;
+    --scripts-only)
+      DEPLOY_MODE="scripts-only"
+      shift
+      ;;
     --dry-run)
       DRY_RUN=true
       shift
@@ -67,7 +73,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo -e "${RED}Unknown option: $1${NC}"
-      echo "Usage: $0 [--ui-only|--full|--dry-run|--git-sync]"
+      echo "Usage: $0 [--ui-only|--full|--scripts-only|--dry-run|--git-sync]"
       exit 1
       ;;
   esac
@@ -93,8 +99,11 @@ if [ "$DRY_RUN" = false ]; then
     elif [ "$DEPLOY_MODE" = "ui-only" ] && [ "$STAGING_DEPLOY_CONFIRM_TOKEN" = "DEPLOY_UI_ONLY" ]; then
       use_noninteractive=true
       CONFIRM_TOKEN="DEPLOY_UI_ONLY"
+    elif [ "$DEPLOY_MODE" = "scripts-only" ] && [ "$STAGING_DEPLOY_CONFIRM_TOKEN" = "DEPLOY_SCRIPTS_ONLY" ]; then
+      use_noninteractive=true
+      CONFIRM_TOKEN="DEPLOY_SCRIPTS_ONLY"
     else
-      echo -e "${RED}Error: STAGING_DEPLOY_CONFIRM_TOKEN must be DEPLOY_UI_ONLY (with --ui-only) or DEPLOY_FULL_STACK (with --full).${NC}"
+      echo -e "${RED}Error: STAGING_DEPLOY_CONFIRM_TOKEN must match mode: DEPLOY_UI_ONLY / DEPLOY_FULL_STACK / DEPLOY_SCRIPTS_ONLY.${NC}"
       exit 1
     fi
   fi
@@ -104,12 +113,13 @@ if [ "$DRY_RUN" = false ]; then
     DEPLOY_CONFIRM="$CONFIRM_TOKEN"
   elif [ ! -t 0 ]; then
     echo -e "${RED}Error: staging deploy requires interactive confirmation or STAGING_DEPLOY_CONFIRM_TOKEN.${NC}"
-    echo -e "${RED}Deployment scope must be selected explicitly (UI-only or Full stack).${NC}"
+    echo -e "${RED}Deployment scope must be selected explicitly (UI-only, Full stack, or Scripts-only).${NC}"
     exit 1
   else
     echo -e "${BLUE}Select deployment scope:${NC}"
     echo "  1) UI-only  (default, recommended) - rebuild/restart UI only"
     echo "  2) Full stack - rebuild UI + GraphQL and run schema guard"
+    echo "  3) Scripts + config only - sync scripts + config without restarting services"
     echo ""
 
     default_scope="1"
@@ -128,6 +138,10 @@ if [ "$DRY_RUN" = false ]; then
       2)
         DEPLOY_MODE="full"
         CONFIRM_TOKEN="DEPLOY_FULL_STACK"
+        ;;
+      3)
+        DEPLOY_MODE="scripts-only"
+        CONFIRM_TOKEN="DEPLOY_SCRIPTS_ONLY"
         ;;
       *)
         echo -e "${RED}Invalid selection. Aborting.${NC}"
@@ -219,19 +233,32 @@ fi
 # Local sync package transfer (default mode)
 if [ "$SYNC_MODE" = "local" ]; then
   echo ""
-  echo -e "${BLUE}📦 Preparing local code archive for staging...${NC}"
+  if [ "$DEPLOY_MODE" = "scripts-only" ]; then
+    echo -e "${BLUE}📦 Preparing scripts/config archive for staging...${NC}"
+  else
+    echo -e "${BLUE}📦 Preparing local code archive for staging...${NC}"
+  fi
   if [ "$DRY_RUN" = false ]; then
-    tar -czf "$LOCAL_ARCHIVE" \
-      --exclude='.git' \
-      --exclude='talia-ui/node_modules' \
-      --exclude='talia-server/node_modules' \
-      --exclude='talia-ui/dist' \
-      --exclude='talia-server/dist' \
-      --exclude='.DS_Store' \
-      docker-compose.staging.yml talia-ui talia-server scripts supabase
-    scp "$LOCAL_ARCHIVE" "${STAGING_USER}@${STAGING_HOST}:${REMOTE_ARCHIVE}"
-    rm -f "$LOCAL_ARCHIVE"
-    echo -e "${GREEN}✅ Local code archive copied to staging${NC}"
+    if [ "$DEPLOY_MODE" = "scripts-only" ]; then
+      tar -czf "$LOCAL_SCRIPTS_ARCHIVE" \
+        --exclude='.DS_Store' \
+        scripts validate
+      scp "$LOCAL_SCRIPTS_ARCHIVE" "${STAGING_USER}@${STAGING_HOST}:${REMOTE_SCRIPTS_ARCHIVE}"
+      rm -f "$LOCAL_SCRIPTS_ARCHIVE"
+      echo -e "${GREEN}✅ Scripts/config archive copied to staging${NC}"
+    else
+      tar -czf "$LOCAL_ARCHIVE" \
+        --exclude='.git' \
+        --exclude='talia-ui/node_modules' \
+        --exclude='talia-server/node_modules' \
+        --exclude='talia-ui/dist' \
+        --exclude='talia-server/dist' \
+        --exclude='.DS_Store' \
+        docker-compose.staging.yml talia-ui talia-server scripts supabase
+      scp "$LOCAL_ARCHIVE" "${STAGING_USER}@${STAGING_HOST}:${REMOTE_ARCHIVE}"
+      rm -f "$LOCAL_ARCHIVE"
+      echo -e "${GREEN}✅ Local code archive copied to staging${NC}"
+    fi
 
     # Prepare local build artifacts so LAN deploys do not require remote image rebuilds.
     # This keeps deployment resilient when staging host DNS/registry access is unstable.
@@ -273,7 +300,11 @@ if [ "$SYNC_MODE" = "local" ]; then
       echo -e "${GREEN}✅ Local GraphQL dist artifact copied to staging${NC}"
     fi
   else
-    echo -e "${YELLOW}[DRY RUN] Would create and copy archive: ${LOCAL_ARCHIVE}${NC}"
+    if [ "$DEPLOY_MODE" = "scripts-only" ]; then
+      echo -e "${YELLOW}[DRY RUN] Would create and copy scripts/config archive: ${LOCAL_SCRIPTS_ARCHIVE}${NC}"
+    else
+      echo -e "${YELLOW}[DRY RUN] Would create and copy archive: ${LOCAL_ARCHIVE}${NC}"
+    fi
     if [ "$DEPLOY_MODE" = "ui-only" ] || [ "$DEPLOY_MODE" = "full" ]; then
       echo -e "${YELLOW}[DRY RUN] Would build and copy local UI dist artifact: ${LOCAL_UI_DIST_ARCHIVE}${NC}"
     fi
@@ -288,6 +319,8 @@ DEPLOY_SCRIPT="
 set -e
 mkdir -p $STAGING_GIT_DIR
 cd $STAGING_GIT_DIR
+REMOTE_ARCHIVE='$REMOTE_ARCHIVE'
+REMOTE_SCRIPTS_ARCHIVE='$REMOTE_SCRIPTS_ARCHIVE'
 REMOTE_UI_DIST_ARCHIVE='$REMOTE_UI_DIST_ARCHIVE'
 REMOTE_SERVER_DIST_ARCHIVE='$REMOTE_SERVER_DIST_ARCHIVE'
 
@@ -296,12 +329,21 @@ if [ \"$SYNC_MODE\" = \"git\" ]; then
   git fetch origin
   git reset --hard origin/main
 else
-  echo '📦 Extracting local code archive...'
-  tar -xzf $REMOTE_ARCHIVE -C .
-  rm -f $REMOTE_ARCHIVE
+  if [ \"$DEPLOY_MODE\" = \"scripts-only\" ]; then
+    echo '📦 Extracting scripts/config archive...'
+    tar -xzf \"\$REMOTE_SCRIPTS_ARCHIVE\" -C .
+    rm -f \"\$REMOTE_SCRIPTS_ARCHIVE\"
+    chmod +x ./scripts/validate ./validate 2>/dev/null || true
+  else
+    echo '📦 Extracting local code archive...'
+    tar -xzf \"\$REMOTE_ARCHIVE\" -C .
+    rm -f \"\$REMOTE_ARCHIVE\"
+  fi
 fi
 
-if [ \"$DEPLOY_MODE\" = \"full\" ]; then
+if [ \"$DEPLOY_MODE\" = \"scripts-only\" ]; then
+  echo '🎯 Scripts/config deployment complete (no service restarts).'
+elif [ \"$DEPLOY_MODE\" = \"full\" ]; then
   echo '🎯 Full deployment (backend + UI + schema guard)...'
   if [ -f \"\$REMOTE_SERVER_DIST_ARCHIVE\" ] && [ -f \"\$REMOTE_UI_DIST_ARCHIVE\" ]; then
     echo '📦 Applying local GraphQL/UI artifacts (no remote image rebuild)...'
@@ -396,14 +438,16 @@ if [ \"$DEPLOY_MODE\" = \"full\" ]; then
   bash ./scripts/staging-db-guard.sh
 fi
 
-echo '⏳ Waiting for services to be healthy...'
-sleep 10
+if [ \"$DEPLOY_MODE\" != \"scripts-only\" ]; then
+  echo '⏳ Waiting for services to be healthy...'
+  sleep 10
 
-echo '📊 Checking service status...'
-docker compose -f docker-compose.staging.yml ps
+  echo '📊 Checking service status...'
+  docker compose -f docker-compose.staging.yml ps
 
-echo ''
-echo '🧪 Testing critical endpoints...'
+  echo ''
+  echo '🧪 Testing critical endpoints...'
+fi
 
 # Wait for services to be ready
 max_attempts=30
@@ -467,17 +511,23 @@ if [ \"$DEPLOY_MODE\" = \"full\" ]; then
 fi
 
 # Test UI GraphQL proxy
-echo -n '  Testing UI GraphQL proxy... '
-if curl -sS -f -X POST http://localhost:5173/api/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ __typename }\"}' > /dev/null 2>&1; then
-  echo '✅ OK'
-else
-  echo '❌ FAILED - UI proxy not working'
-  exit 1
+if [ \"$DEPLOY_MODE\" != \"scripts-only\" ]; then
+  echo -n '  Testing UI GraphQL proxy... '
+  if curl -sS -f -X POST http://localhost:5173/api/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ __typename }\"}' > /dev/null 2>&1; then
+    echo '✅ OK'
+  else
+    echo '❌ FAILED - UI proxy not working'
+    exit 1
+  fi
 fi
 
 echo ''
-echo '✅ Deployment complete and verified!'
-echo '🌐 Verify direct staging: ${STAGING_VERIFY_UI_URL}'
+if [ \"$DEPLOY_MODE\" = \"scripts-only\" ]; then
+  echo '✅ Scripts/config deployment complete!'
+else
+  echo '✅ Deployment complete and verified!'
+  echo '🌐 Verify direct staging: ${STAGING_VERIFY_UI_URL}'
+fi
 "
 
 if [ "$DRY_RUN" = false ]; then

@@ -32,6 +32,12 @@ BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
 
+locale_supports_utf8() {
+  local lc
+  lc="${LC_ALL:-${LC_CTYPE:-${LANG:-}}}"
+  [[ "$lc" == *"UTF-8"* || "$lc" == *"utf8"* || "$lc" == *"UTF8"* ]]
+}
+
 # Detect environment
 HOSTNAME=$(hostname)
 IS_ON_STAGING=false
@@ -52,7 +58,13 @@ LOCAL_SUPABASE_KONG_PORT="${LOCAL_SUPABASE_KONG_PORT:-54321}"
 LOCAL_SUPABASE_URL="${LOCAL_SUPABASE_URL:-http://${LOCAL_SUPABASE_HOST}:${LOCAL_SUPABASE_KONG_PORT}/}"
 STAGING_UI_URL="${STAGING_UI_URL:-http://${STAGING_UI_HOST:-${STAGING_HOST}}:${STAGING_UI_PORT:-5173}}"
 STAGING_GRAPHQL_URL="${STAGING_GRAPHQL_URL:-http://${STAGING_UI_HOST:-${STAGING_HOST}}:${STAGING_GRAPHQL_PORT:-4000}/graphql}"
-STAGING_SUPABASE_URL="${STAGING_SUPABASE_URL:-http://${STAGING_UI_HOST:-${STAGING_HOST}}:${STAGING_SUPABASE_KONG_PORT:-54321}/}"
+if $IS_ON_STAGING; then
+  DEFAULT_STAGING_SUPABASE_KONG_PORT=8000
+else
+  DEFAULT_STAGING_SUPABASE_KONG_PORT=54321
+fi
+STAGING_SUPABASE_KONG_PORT="${STAGING_SUPABASE_KONG_PORT:-${DEFAULT_STAGING_SUPABASE_KONG_PORT}}"
+STAGING_SUPABASE_URL="${STAGING_SUPABASE_URL:-http://${STAGING_UI_HOST:-${STAGING_HOST}}:${STAGING_SUPABASE_KONG_PORT}/}"
 
 PUBLIC_MAIN_URL="${PUBLIC_MAIN_URL:-https://taliahub.com}"
 PUBLIC_SECONDARY_URL="${PUBLIC_SECONDARY_URL:-https://celestyal.taliahub.com}"
@@ -389,10 +401,118 @@ run_staging_ssh_command() {
   return "$rc"
 }
 
+is_quick_up() {
+  local code="$1"
+  local kind="$2"
+  if [[ "$kind" == "gql" ]]; then
+    [[ "$code" == "200" || "$code" == "400" ]]
+    return $?
+  fi
+  if [[ "$kind" == "kong" ]]; then
+    case "$code" in
+      200|301|302|401|403|404) return 0 ;;
+      *) return 1 ;;
+    esac
+  fi
+  [[ "$code" == "200" || "$code" == "302" ]]
+}
+
+target_status_label() {
+  local target="$1"
+  local loc_ui="$2" loc_gql="$3" loc_sb="$4"
+  local st_ui="$5" st_gql="$6" st_sb="$7"
+  if [[ "$target" == "local" ]]; then
+    if is_quick_up "$loc_ui" "ui" && is_quick_up "$loc_gql" "gql" && is_quick_up "$loc_sb" "kong" && is_docker_ready; then
+      echo -e "${GREEN}UP${NC}"
+    else
+      echo -e "${YELLOW}DOWN${NC}"
+    fi
+    return 0
+  fi
+  if [[ "$target" == "staging" ]]; then
+    if is_quick_up "$st_ui" "ui" && is_quick_up "$st_gql" "gql" && is_quick_up "$st_sb" "kong"; then
+      echo -e "${GREEN}UP${NC}"
+    else
+      echo -e "${YELLOW}DOWN${NC}"
+    fi
+    return 0
+  fi
+  echo -e "${DIM}UNKNOWN${NC}"
+}
+
+target_status_plain() {
+  local target="$1"
+  local loc_ui="$2" loc_gql="$3" loc_sb="$4"
+  local st_ui="$5" st_gql="$6" st_sb="$7"
+  if [[ "$target" == "local" ]]; then
+    if is_quick_up "$loc_ui" "ui" && is_quick_up "$loc_gql" "gql" && is_quick_up "$loc_sb" "kong" && is_docker_ready; then
+      echo "UP"
+    else
+      echo "DOWN"
+    fi
+    return 0
+  fi
+  if [[ "$target" == "staging" ]]; then
+    if is_quick_up "$st_ui" "ui" && is_quick_up "$st_gql" "gql" && is_quick_up "$st_sb" "kong"; then
+      echo "UP"
+    else
+      echo "DOWN"
+    fi
+    return 0
+  fi
+  echo "UNKNOWN"
+}
+
+external_status_label() {
+  local presenter="$1"
+  local pub_code="$2"
+  local gateway="$3"
+  local src
+
+  case "$presenter" in
+    local|staging) src=$(echo "$presenter" | tr '[:lower:]' '[:upper:]') ;;
+    conflict) src="CONFLICT" ;;
+    none) src="NONE" ;;
+    *) src="UNKNOWN" ;;
+  esac
+
+  if [[ "$presenter" == "local" || "$presenter" == "staging" ]]; then
+    if [[ "$gateway" == "proxied" ]] || [[ "$pub_code" == "200" || "$pub_code" == "302" || "$pub_code" == "401" || "$pub_code" == "403" ]]; then
+      echo -e "${GREEN}UP${NC} (${src})"
+      return 0
+    fi
+  fi
+  echo -e "${YELLOW}DOWN${NC} (${src})"
+}
+
+external_status_plain() {
+  local presenter="$1"
+  local pub_code="$2"
+  local gateway="$3"
+  local src status="DOWN"
+
+  case "$presenter" in
+    local|staging) src=$(echo "$presenter" | tr '[:lower:]' '[:upper:]') ;;
+    conflict) src="CONFLICT" ;;
+    none) src="NONE" ;;
+    *) src="UNKNOWN" ;;
+  esac
+
+  if [[ "$presenter" == "local" || "$presenter" == "staging" ]]; then
+    if [[ "$gateway" == "proxied" ]] || [[ "$pub_code" == "200" || "$pub_code" == "302" || "$pub_code" == "401" || "$pub_code" == "403" ]]; then
+      status="UP"
+    fi
+  fi
+  echo "${status} (${src})"
+}
+
 print_quick_targets_summary() {
   local work presenter top_level_version
   local loc_ui loc_gql loc_sb st_ui st_gql st_sb pub_code gateway ext_line
   local loc_ui_version st_ui_version pub_ui_version
+  local target_status_plain_text ext_status_plain_text
+  local local_marker staging_marker
+  local header_sep
   work=$(get_effective_working_target)
   presenter=$(get_current_target)
 
@@ -453,28 +573,41 @@ print_quick_targets_summary() {
   work_u=$(echo "$work" | tr '[:lower:]' '[:upper:]')
   [[ "$work" == "local" ]] && work_color="$GREEN"
   [[ "$work" == "staging" ]] && work_color="$BLUE"
+  target_status_plain_text=$(target_status_plain "$work" "$loc_ui" "$loc_gql" "$loc_sb" "$st_ui" "$st_gql" "$st_sb")
+  ext_status_plain_text=$(external_status_plain "$presenter" "$pub_code" "$gateway")
+  local_marker=" "
+  staging_marker=" "
+  [[ "$work" == "local" ]] && local_marker="▶"
+  [[ "$work" == "staging" ]] && staging_marker="▶"
 
-  echo -e "  ${BOLD}Current working target${NC} (start/stop/check use this): ${work_color}${BOLD}${work_u}${NC}"
-  echo -e "  ${BOLD}Public demo${NC} ${PUBLIC_MAIN_URL}: ${ext_line}"
-  echo -e "  ${BOLD}Top-level deployed version${NC}: ${top_level_version}"
+  header_sep=$(printf '%*s' 96 '' | tr ' ' '-')
+  echo -e "${CYAN}${header_sep}${NC}"
+  echo -e "${BOLD}TALIA OPS - ${work_u}${NC}"
+  echo -e "Version: ${top_level_version}"
+  echo -e "Target: ${target_status_plain_text}   External: ${ext_status_plain_text}"
+  echo -e "${CYAN}${header_sep}${NC}"
+  echo -e "${DIM}Host: ${HOSTNAME} · ${SCRIPT_VERSION} · $(date '+%Y-%m-%d %H:%M:%S')${NC}"
+  echo -e "  ${BOLD}Public demo${NC}: ${PUBLIC_MAIN_URL} (${ext_line})"
   local rem_disp
   rem_disp=$(get_remembered_target)
   [[ -z "$rem_disp" ]] && rem_disp="(default by host)"
-  echo -e "  ${DIM}Remembered file: ${TARGET_STATE_FILE/#$HOME/~} → ${rem_disp}${NC}"
+  echo -e "  ${DIM}Remembered target: ${rem_disp} (${TARGET_STATE_FILE/#$HOME/~})${NC}"
   echo ""
-  echo -e "  ${BOLD}Endpoints (quick HTTP)${NC}"
-  printf "  %-10s  %-36s  %s\n" "Local" "${LOCAL_UI_HOST}:${LOCAL_UI_PORT} UI" "$(quick_up_label "$loc_ui" "200")"
-  printf "  %-10s  %-36s  %s\n" "" "${LOCAL_GRAPHQL_HOST}:${LOCAL_GRAPHQL_PORT} GraphQL" "$(quick_up_label "$loc_gql" "gql")"
-  printf "  %-10s  %-36s  %s\n" "" "${LOCAL_SUPABASE_HOST}:${LOCAL_SUPABASE_KONG_PORT} Supabase Kong" "$(quick_up_label "$loc_sb" "kong")"
-  printf "  %-10s  %-36s  %s\n" "" "Docker daemon (local)" "$(docker_status_label)"
-  printf "  %-10s  %-36s  %s\n" "Staging" "${STAGING_UI_HOST:-?}:${STAGING_UI_PORT} UI" "$(quick_up_label "$st_ui" "200")"
-  printf "  %-10s  %-36s  %s\n" "" "${STAGING_UI_HOST:-?}:${STAGING_GRAPHQL_PORT:-4000} GraphQL" "$(quick_up_label "$st_gql" "gql")"
-  printf "  %-10s  %-36s  %s\n" "" "${STAGING_UI_HOST:-?}:${STAGING_SUPABASE_KONG_PORT:-54321} Kong" "$(quick_up_label "$st_sb" "kong")"
+  echo -e "${BOLD}Endpoints${NC}"
+  printf "  %s %-9s  %-36s  %s\n" "$local_marker" "Local" "${LOCAL_UI_HOST}:${LOCAL_UI_PORT} UI" "$(quick_up_label "$loc_ui" "200")"
+  printf "  %s %-9s  %-36s  %s\n" "$local_marker" "" "${LOCAL_GRAPHQL_HOST}:${LOCAL_GRAPHQL_PORT} GraphQL" "$(quick_up_label "$loc_gql" "gql")"
+  printf "  %s %-9s  %-36s  %s\n" "$local_marker" "" "${LOCAL_SUPABASE_HOST}:${LOCAL_SUPABASE_KONG_PORT} Supabase Kong" "$(quick_up_label "$loc_sb" "kong")"
+  printf "  %s %-9s  %-36s  %s\n" "$local_marker" "" "Docker daemon (local)" "$(docker_status_label)"
+  echo ""
+  printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "Staging" "${STAGING_UI_HOST:-?}:${STAGING_UI_PORT} UI" "$(quick_up_label "$st_ui" "200")"
+  printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "" "${STAGING_UI_HOST:-?}:${STAGING_GRAPHQL_PORT:-4000} GraphQL" "$(quick_up_label "$st_gql" "gql")"
+  printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "" "${STAGING_UI_HOST:-?}:${STAGING_SUPABASE_KONG_PORT} Kong" "$(quick_up_label "$st_sb" "kong")"
+  echo ""
   printf "  %-10s  %-36s  HTTP %s  gateway=%s\n" "External" "${PUBLIC_MAIN_URL}" "${pub_code}" "${gateway}"
   echo ""
-  echo -e "  ${BOLD}Deployed versions (quick)${NC}"
-  printf "  %-10s  %-36s  %s\n" "Local" "${LOCAL_UI_URL}" "${loc_ui_version}"
-  printf "  %-10s  %-36s  %s\n" "Staging" "${STAGING_UI_URL}" "${st_ui_version}"
+  echo -e "${BOLD}Deployed Versions${NC}"
+  printf "  %s %-9s  %-36s  %s\n" "$local_marker" "Local" "${LOCAL_UI_URL}" "${loc_ui_version}"
+  printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "Staging" "${STAGING_UI_URL}" "${st_ui_version}"
   printf "  %-10s  %-36s  %s\n" "Public" "${PUBLIC_MAIN_URL}" "${pub_ui_version}"
   echo ""
 }
@@ -637,17 +770,11 @@ print_front_page_status() {
 print_header() {
   clear
   echo ""
-  echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
-  echo -e "${CYAN}║${NC}${BOLD}            TALIA OPS — validate                            ${NC}${CYAN}║${NC}"
-  echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
-  echo ""
-  echo -e "  ${DIM}Host: ${HOSTNAME}  ·  ${SCRIPT_VERSION}  ·  $(date '+%Y-%m-%d %H:%M:%S')${NC}"
-  echo ""
   print_quick_targets_summary
 }
 
 print_menu() {
-  echo -e "${BOLD}Actions (use current working target above, except option 1):${NC}"
+  echo -e "${BOLD}Actions (core)${NC}"
   echo ""
 
   echo -e "  ${GREEN}1)${NC} Set working target (local / staging)"
@@ -656,7 +783,10 @@ print_menu() {
   echo -e "  ${GREEN}4)${NC} Stop core services"
   echo -e "  ${GREEN}5)${NC} Start external access (${PUBLIC_MAIN_URL#https://} → this target)"
   echo -e "  ${GREEN}6)${NC} Stop external access (ngrok off; Cloudflare shows unavailable)"
-  echo -e "  ${GREEN}7)${NC} Advanced: full validation / gateway detail (slower)"
+  echo ""
+  echo -e "${BOLD}Advanced${NC}"
+  echo ""
+  echo -e "  ${GREEN}7)${NC} Full validation / gateway detail (slower)"
   echo -e "  ${GREEN}8)${NC} Deploy to staging (local sync)"
   echo ""
   echo -e "  ${YELLOW}0)${NC} Exit"
@@ -1028,6 +1158,7 @@ deploy_to_staging_from_local() {
   echo -e "${BOLD}Deploy to staging (local sync):${NC}"
   echo -e "  ${GREEN}1)${NC} UI-only (recommended)"
   echo -e "  ${GREEN}2)${NC} Full stack"
+  echo -e "  ${GREEN}3)${NC} Scripts + config only"
   echo -e "  ${YELLOW}0)${NC} Back"
   echo ""
   echo -n -e "${BOLD}Choice: ${NC}"
@@ -1046,6 +1177,12 @@ deploy_to_staging_from_local() {
       token="DEPLOY_FULL_STACK"
       timeout_sec="1800"
       label="full"
+      ;;
+    3|scripts|scripts-only|config)
+      mode="--scripts-only"
+      token="DEPLOY_SCRIPTS_ONLY"
+      timeout_sec="300"
+      label="scripts+config"
       ;;
     0|back|q|quit|exit)
       return 0
@@ -2169,7 +2306,7 @@ Talia validate — quick overview by default; heavy checks only from the menu or
   $0 stop-core                    stop core (ngrok unchanged)
   $0 external-on                  ngrok $PUBLIC_MAIN_URL → current target
   $0 external-off                 stop all ngrok (Cloudflare unavailable page)
-  $0 deploy-staging               local-sync deploy to staging (ui-only/full prompt)
+  $0 deploy-staging               local-sync deploy to staging (ui/full/scripts prompt)
   $0 comprehensive                full repo validation (slow)
   $0 status                       quick summary lines (no menu)
 EOF

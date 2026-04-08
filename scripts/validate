@@ -657,6 +657,7 @@ print_menu() {
   echo -e "  ${GREEN}5)${NC} Start external access (${PUBLIC_MAIN_URL#https://} → this target)"
   echo -e "  ${GREEN}6)${NC} Stop external access (ngrok off; Cloudflare shows unavailable)"
   echo -e "  ${GREEN}7)${NC} Advanced: full validation / gateway detail (slower)"
+  echo -e "  ${GREEN}8)${NC} Deploy to staging (local sync)"
   echo ""
   echo -e "  ${YELLOW}0)${NC} Exit"
   echo ""
@@ -1010,6 +1011,52 @@ stop_core_for_working_target() {
       return 1
       ;;
   esac
+}
+
+deploy_to_staging_from_local() {
+  if $IS_ON_STAGING; then
+    echo -e "${YELLOW}Run this deploy action from your local dev machine, not on staging.${NC}"
+    return 1
+  fi
+
+  if [[ ! -x "${SCRIPT_DIR}/deploy-to-staging.sh" ]]; then
+    echo -e "${RED}Missing deploy script: ${SCRIPT_DIR}/deploy-to-staging.sh${NC}"
+    return 1
+  fi
+
+  echo ""
+  echo -e "${BOLD}Deploy to staging (local sync):${NC}"
+  echo -e "  ${GREEN}1)${NC} UI-only (recommended)"
+  echo -e "  ${GREEN}2)${NC} Full stack"
+  echo -e "  ${YELLOW}0)${NC} Back"
+  echo ""
+  echo -n -e "${BOLD}Choice: ${NC}"
+  read -r choice
+
+  local mode token timeout_sec label
+  case "$choice" in
+    1|ui|ui-only)
+      mode="--ui-only"
+      token="DEPLOY_UI_ONLY"
+      timeout_sec="900"
+      label="ui-only"
+      ;;
+    2|full)
+      mode="--full"
+      token="DEPLOY_FULL_STACK"
+      timeout_sec="1800"
+      label="full"
+      ;;
+    0|back|q|quit|exit)
+      return 0
+      ;;
+    *)
+      echo -e "${RED}Invalid choice${NC}"
+      return 1
+      ;;
+  esac
+
+  run_command "cd \"${ROOT_DIR}\" && STAGING_DEPLOY_CONFIRM_TOKEN=${token} ./scripts/deploy-to-staging.sh ${mode}" "Deploy to staging via local sync (${label})" "$timeout_sec"
 }
 
 check_services_for_working_target() {
@@ -2072,8 +2119,11 @@ handle_remote_menu() {
     7|advanced|complete|full)
       advanced_validate_interactive
       ;;
+    8|deploy|deploy-staging)
+      deploy_to_staging_from_local
+      ;;
     # Legacy numeric / names (older validate menu)
-    8)
+    9)
       enable_remembered_target_external
       ;;
     status|summary|total)
@@ -2105,6 +2155,7 @@ handle_cli() {
     stop-core|stop-core) stop_core_for_working_target ;;
     external-on|enable-external) start_external_for_working_target ;;
     external-off|stop-external) stop_external_everywhere ;;
+    deploy|deploy-staging) deploy_to_staging_from_local ;;
     comprehensive) run_comprehensive_check ;;
     status|summary) print_quick_targets_summary ;;
     help|-h|--help)
@@ -2118,6 +2169,7 @@ Talia validate — quick overview by default; heavy checks only from the menu or
   $0 stop-core                    stop core (ngrok unchanged)
   $0 external-on                  ngrok $PUBLIC_MAIN_URL → current target
   $0 external-off                 stop all ngrok (Cloudflare unavailable page)
+  $0 deploy-staging               local-sync deploy to staging (ui-only/full prompt)
   $0 comprehensive                full repo validation (slow)
   $0 status                       quick summary lines (no menu)
 EOF

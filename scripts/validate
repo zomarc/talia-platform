@@ -4,17 +4,18 @@
 # Calls underlying validation scripts based on user selection
 #
 # Usage:
-#   ./scripts/validate           # Interactive menu
-#   ./scripts/validate 1         # Run option 1 directly
-#   ./scripts/validate local     # Run local checks
-#   ./scripts/validate staging   # Run staging checks
-#   ./scripts/validate all       # Run all checks
+#   ./scripts/validate                    # Interactive menu (fast overview, then actions)
+#   ./scripts/validate set-target local|staging
+#   ./scripts/validate check              # Deep checks for current working target only
+#   ./scripts/validate start-core | stop-core
+#   ./scripts/validate external-on | external-off
+#   ./scripts/validate comprehensive      # Full validate-staging.sh (slow)
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SCRIPT_VERSION="2026-02-12.3"
+SCRIPT_VERSION="2026-04-08.1"
 CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
 if [[ -f "${CONFIG_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -46,13 +47,21 @@ STAGING_NGROK_SERVICE="${STAGING_NGROK_SERVICE:-ngrok-taliahub}"
 
 LOCAL_UI_URL="${LOCAL_UI_URL:-http://${LOCAL_UI_HOST:-127.0.0.1}:${LOCAL_UI_PORT:-5173}}"
 LOCAL_GRAPHQL_URL="${LOCAL_GRAPHQL_URL:-http://${LOCAL_GRAPHQL_HOST:-127.0.0.1}:${LOCAL_GRAPHQL_PORT:-4000}/graphql}"
+LOCAL_SUPABASE_HOST="${LOCAL_SUPABASE_HOST:-127.0.0.1}"
+LOCAL_SUPABASE_KONG_PORT="${LOCAL_SUPABASE_KONG_PORT:-54321}"
+LOCAL_SUPABASE_URL="${LOCAL_SUPABASE_URL:-http://${LOCAL_SUPABASE_HOST}:${LOCAL_SUPABASE_KONG_PORT}/}"
 STAGING_UI_URL="${STAGING_UI_URL:-http://${STAGING_UI_HOST:-${STAGING_HOST}}:${STAGING_UI_PORT:-5173}}"
+STAGING_GRAPHQL_URL="${STAGING_GRAPHQL_URL:-http://${STAGING_UI_HOST:-${STAGING_HOST}}:${STAGING_GRAPHQL_PORT:-4000}/graphql}"
+STAGING_SUPABASE_URL="${STAGING_SUPABASE_URL:-http://${STAGING_UI_HOST:-${STAGING_HOST}}:${STAGING_SUPABASE_KONG_PORT:-54321}/}"
 
 PUBLIC_MAIN_URL="${PUBLIC_MAIN_URL:-https://taliahub.com}"
 PUBLIC_SECONDARY_URL="${PUBLIC_SECONDARY_URL:-https://celestyal.taliahub.com}"
 NGROK_BASIC_USER="${NGROK_BASIC_USER:-talia}"
 NGROK_BASIC_PASS="${NGROK_BASIC_PASS:-dev2025tal}"
 STAGING_SSH_TARGET="${STAGING_USER}@${STAGING_HOST}"
+STAGING_SSH_BASE_OPTS="${STAGING_SSH_BASE_OPTS:--o ConnectTimeout=5 -o ConnectionAttempts=1 -o ServerAliveInterval=5 -o ServerAliveCountMax=1 -o BatchMode=yes}"
+STAGING_SSH_READY_ATTEMPTS="${STAGING_SSH_READY_ATTEMPTS:-5}"
+STAGING_REMOTE_CMD_RETRIES="${STAGING_REMOTE_CMD_RETRIES:-2}"
 LOCAL_NGROK_DOMAIN="${LOCAL_NGROK_DOMAIN:-${PUBLIC_MAIN_URL#https://}}"
 LOCAL_NGROK_DOMAIN="${LOCAL_NGROK_DOMAIN#http://}"
 
@@ -226,7 +235,8 @@ get_target_external_state() {
         sudo systemctl is-active "$STAGING_NGROK_SERVICE" 2>/dev/null || echo "inactive"
       else
         local status
-        status=$(ssh -o ConnectTimeout=4 -o BatchMode=yes "$STAGING_SSH_TARGET" "sudo systemctl is-active $STAGING_NGROK_SERVICE 2>/dev/null || true" 2>/dev/null | head -n 1)
+        # sudo -n avoids a password prompt; outer sleep caps total wait
+        status=$(ssh_staging_with_timeout 5 "sudo -n systemctl is-active $STAGING_NGROK_SERVICE 2>/dev/null || echo inactive" | head -n 1)
         [[ -z "$status" ]] && status="unreachable"
         echo "$status"
       fi
@@ -279,6 +289,255 @@ get_current_target() {
   fi
 
   echo "$presenter"
+}
+
+get_effective_working_target() {
+  local remembered
+  remembered=$(get_remembered_target)
+  if [[ -n "$remembered" ]]; then
+    echo "$remembered"
+    return 0
+  fi
+  if $IS_ON_STAGING; then
+    echo "staging"
+  else
+    echo "local"
+  fi
+}
+
+get_http_code_quick() {
+  local url="$1"
+  local max_time="${2:-2}"
+  local out
+  out=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time "$max_time" "$url" 2>/dev/null) || true
+  if [[ -z "$out" ]]; then
+    echo "000"
+  else
+    echo "$out"
+  fi
+}
+
+# Run SSH remote command with a hard wall-clock limit (avoids rare hangs).
+ssh_staging_with_timeout() {
+  local sec="$1"
+  shift
+  local outf pidf killer
+  outf=$(mktemp "${TMPDIR:-/tmp}/talia-ssh-out.XXXXXX")
+  pidf=$(mktemp "${TMPDIR:-/tmp}/talia-ssh-pid.XXXXXX")
+  ssh $STAGING_SSH_BASE_OPTS "$STAGING_SSH_TARGET" "$@" >"$outf" 2>/dev/null &
+  echo $! >"$pidf"
+  ( sleep "$sec"; kill "$(cat "$pidf" 2>/dev/null)" 2>/dev/null || true ) &
+  killer=$!
+  wait "$(cat "$pidf")" 2>/dev/null || true
+  kill "$killer" 2>/dev/null || true
+  wait "$killer" 2>/dev/null || true
+  cat "$outf" 2>/dev/null || true
+  rm -f "$outf" "$pidf"
+}
+
+check_staging_ssh_ready() {
+  if $IS_ON_STAGING; then
+    return 0
+  fi
+
+  local attempt out cleaned last_error attempts
+  attempts="${STAGING_SSH_READY_ATTEMPTS}"
+  echo -e "  Checking SSH reachability to ${STAGING_SSH_TARGET}..."
+  for ((attempt=1; attempt<=attempts; attempt++)); do
+    out=$(ssh_staging_with_timeout 8 "echo ok")
+    cleaned=$(echo "$out" | tr -d '\r' | awk 'NF{print; exit}')
+    if [[ "$cleaned" == "ok" ]]; then
+      echo -e "  ${GREEN}✓${NC} SSH reachable (attempt ${attempt}/${attempts})"
+      return 0
+    fi
+    if [[ -n "$cleaned" ]]; then
+      last_error="$cleaned"
+      echo -e "  ${DIM}Attempt ${attempt}/${attempts} failed: ${cleaned}${NC}"
+    else
+      last_error="timeout/no response"
+      echo -e "  ${DIM}Attempt ${attempt}/${attempts} failed: timeout/no response${NC}"
+    fi
+    sleep 1
+  done
+
+  echo -e "  ${RED}✗ Cannot reach staging over SSH (${STAGING_SSH_TARGET})${NC}"
+  echo -e "  ${YELLOW}Last error:${NC} ${last_error}"
+  echo -e "  ${YELLOW}Check VPN/LAN path and SSH service on ${STAGING_HOST}:${NC}22"
+  return 1
+}
+
+run_staging_ssh_command() {
+  local remote_cmd="$1"
+  local desc="$2"
+  local timeout_sec="${3:-60}"
+  local attempt rc retries
+
+  retries="${STAGING_REMOTE_CMD_RETRIES}"
+  for ((attempt=1; attempt<=retries; attempt++)); do
+    check_staging_ssh_ready || return 1
+    echo -e "  ${DIM}Remote attempt ${attempt}/${retries}${NC}"
+    run_command "ssh ${STAGING_SSH_BASE_OPTS} ${STAGING_SSH_TARGET} \"$remote_cmd\"" "$desc" "$timeout_sec"
+    rc=$?
+    if [[ "$rc" -eq 0 ]]; then
+      return 0
+    fi
+    if [[ "$attempt" -lt "$retries" ]]; then
+      echo -e "  ${YELLOW}Retrying remote command after failure (exit ${rc})...${NC}"
+      sleep 2
+    fi
+  done
+  return "$rc"
+}
+
+print_quick_targets_summary() {
+  local work presenter top_level_version
+  local loc_ui loc_gql loc_sb st_ui st_gql st_sb pub_code gateway ext_line
+  local loc_ui_version st_ui_version pub_ui_version
+  work=$(get_effective_working_target)
+  presenter=$(get_current_target)
+
+  loc_ui=$(get_http_code_quick "${LOCAL_UI_URL}/" 1)
+  loc_gql=$(get_http_code_quick "${LOCAL_GRAPHQL_URL%/}" 1)
+  loc_sb=$(get_http_code_quick "${LOCAL_SUPABASE_URL}" 1)
+
+  if $IS_ON_STAGING; then
+    st_ui=$(get_http_code_quick "${STAGING_UI_URL}/" 1)
+    st_gql=$(get_http_code_quick "${STAGING_GRAPHQL_URL%/}" 1)
+    st_sb=$(get_http_code_quick "${STAGING_SUPABASE_URL}" 1)
+  else
+    st_ui=$(get_http_code_quick "${STAGING_UI_URL}/" 1)
+    st_gql=$(get_http_code_quick "${STAGING_GRAPHQL_URL%/}" 1)
+    st_sb=$(get_http_code_quick "${STAGING_SUPABASE_URL}" 1)
+  fi
+
+  local pub_headers
+  pub_headers=$(curl -sS -I --connect-timeout 2 --max-time 2 "${PUBLIC_MAIN_URL}/" 2>/dev/null || true)
+  pub_code=$(echo "$pub_headers" | awk 'NR==1{print $2}')
+  gateway=$(echo "$pub_headers" | awk -F': ' 'tolower($1)=="x-taliahub-gateway"{gsub("\r","",$2); print $2; exit}')
+  [[ -z "$pub_code" ]] && pub_code="000"
+  [[ -z "$gateway" ]] && gateway="n/a"
+
+  loc_ui_version=$(quick_ui_version_label "${LOCAL_UI_URL}" "${loc_ui}" "true")
+  st_ui_version=$(quick_ui_version_label "${STAGING_UI_URL}" "${st_ui}" "false")
+  pub_ui_version=$(quick_ui_version_label "${PUBLIC_MAIN_URL}" "${pub_code}" "false")
+
+  case "$presenter" in
+    local)
+      top_level_version="${loc_ui_version} (via local presenter)"
+      ;;
+    staging)
+      top_level_version="${st_ui_version} (via staging presenter)"
+      ;;
+    conflict)
+      top_level_version="CONFLICT (both local and staging presenters active)"
+      ;;
+    *)
+      if [[ "$pub_ui_version" == "n/a (DOWN)" ]]; then
+        top_level_version="UNAVAILABLE (public gateway fallback/inactive)"
+      else
+        top_level_version="${pub_ui_version} (public)"
+      fi
+      ;;
+  esac
+
+  case "$presenter" in
+    local) ext_line="${GREEN}active → local${NC}" ;;
+    staging) ext_line="${BLUE}active → staging${NC}" ;;
+    conflict) ext_line="${RED}CONFLICT (local + staging both on)${NC}" ;;
+    none) ext_line="${YELLOW}inactive${NC} (Cloudflare / holding page expected)" ;;
+    *) ext_line="${DIM}unknown${NC}" ;;
+  esac
+
+  local work_color="$YELLOW"
+  local work_u
+  work_u=$(echo "$work" | tr '[:lower:]' '[:upper:]')
+  [[ "$work" == "local" ]] && work_color="$GREEN"
+  [[ "$work" == "staging" ]] && work_color="$BLUE"
+
+  echo -e "  ${BOLD}Current working target${NC} (start/stop/check use this): ${work_color}${BOLD}${work_u}${NC}"
+  echo -e "  ${BOLD}Public demo${NC} ${PUBLIC_MAIN_URL}: ${ext_line}"
+  echo -e "  ${BOLD}Top-level deployed version${NC}: ${top_level_version}"
+  local rem_disp
+  rem_disp=$(get_remembered_target)
+  [[ -z "$rem_disp" ]] && rem_disp="(default by host)"
+  echo -e "  ${DIM}Remembered file: ${TARGET_STATE_FILE/#$HOME/~} → ${rem_disp}${NC}"
+  echo ""
+  echo -e "  ${BOLD}Endpoints (quick HTTP)${NC}"
+  printf "  %-10s  %-36s  %s\n" "Local" "${LOCAL_UI_HOST}:${LOCAL_UI_PORT} UI" "$(quick_up_label "$loc_ui" "200")"
+  printf "  %-10s  %-36s  %s\n" "" "${LOCAL_GRAPHQL_HOST}:${LOCAL_GRAPHQL_PORT} GraphQL" "$(quick_up_label "$loc_gql" "gql")"
+  printf "  %-10s  %-36s  %s\n" "" "${LOCAL_SUPABASE_HOST}:${LOCAL_SUPABASE_KONG_PORT} Supabase Kong" "$(quick_up_label "$loc_sb" "kong")"
+  printf "  %-10s  %-36s  %s\n" "" "Docker daemon (local)" "$(docker_status_label)"
+  printf "  %-10s  %-36s  %s\n" "Staging" "${STAGING_UI_HOST:-?}:${STAGING_UI_PORT} UI" "$(quick_up_label "$st_ui" "200")"
+  printf "  %-10s  %-36s  %s\n" "" "${STAGING_UI_HOST:-?}:${STAGING_GRAPHQL_PORT:-4000} GraphQL" "$(quick_up_label "$st_gql" "gql")"
+  printf "  %-10s  %-36s  %s\n" "" "${STAGING_UI_HOST:-?}:${STAGING_SUPABASE_KONG_PORT:-54321} Kong" "$(quick_up_label "$st_sb" "kong")"
+  printf "  %-10s  %-36s  HTTP %s  gateway=%s\n" "External" "${PUBLIC_MAIN_URL}" "${pub_code}" "${gateway}"
+  echo ""
+  echo -e "  ${BOLD}Deployed versions (quick)${NC}"
+  printf "  %-10s  %-36s  %s\n" "Local" "${LOCAL_UI_URL}" "${loc_ui_version}"
+  printf "  %-10s  %-36s  %s\n" "Staging" "${STAGING_UI_URL}" "${st_ui_version}"
+  printf "  %-10s  %-36s  %s\n" "Public" "${PUBLIC_MAIN_URL}" "${pub_ui_version}"
+  echo ""
+}
+
+quick_up_label() {
+  local code="$1"
+  local kind="$2"
+  if [[ "$kind" == "gql" ]]; then
+    if [[ "$code" == "200" || "$code" == "400" ]]; then
+      echo -e "${GREEN}UP${NC} (${code})"
+    else
+      echo -e "${YELLOW}DOWN${NC} (${code})"
+    fi
+  elif [[ "$kind" == "kong" ]]; then
+    case "$code" in
+      200|301|302|401|403|404) echo -e "${GREEN}UP${NC} (${code})" ;;
+      *) echo -e "${YELLOW}DOWN${NC} (${code})" ;;
+    esac
+  else
+    if [[ "$code" == "200" || "$code" == "302" ]]; then
+      echo -e "${GREEN}UP${NC} (${code})"
+    else
+      echo -e "${YELLOW}DOWN${NC} (${code})"
+    fi
+  fi
+}
+
+docker_status_label() {
+  if ! command -v docker >/dev/null 2>&1; then
+    echo -e "${YELLOW}MISSING${NC} (docker CLI not found)"
+    return 0
+  fi
+  if docker info >/dev/null 2>&1; then
+    echo -e "${GREEN}UP${NC}"
+  else
+    echo -e "${YELLOW}DOWN${NC} (daemon unreachable)"
+  fi
+}
+
+quick_ui_version_label() {
+  local base_url="$1"
+  local http_code="$2"
+  local use_display="${3:-false}"
+  local raw
+
+  case "$http_code" in
+    200|302) ;;
+    *) echo "n/a (DOWN)"; return 0 ;;
+  esac
+
+  if [[ "$use_display" == "true" ]]; then
+    raw=$(get_display_version "$base_url")
+  else
+    raw=$(get_ui_version "$base_url")
+  fi
+
+  if [[ "$raw" =~ ^0\.1\.[0-9]+$ ]]; then
+    echo "v${raw}"
+  elif [[ "$raw" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+    echo "v${raw}"
+  else
+    echo "$raw"
+  fi
 }
 
 print_front_page_status() {
@@ -376,48 +635,28 @@ print_front_page_status() {
 }
 
 print_header() {
-  local current_target
-  local current_target_upper
-  local remembered_target
-  local target_color="$YELLOW"
-  current_target=$(get_current_target)
-  current_target_upper=$(echo "$current_target" | tr '[:lower:]' '[:upper:]')
-  remembered_target=$(get_remembered_target)
-  if [[ "$current_target" == "local" ]]; then
-    target_color="$GREEN"
-  elif [[ "$current_target" == "staging" ]]; then
-    target_color="$BLUE"
-  elif [[ "$current_target" == "conflict" ]]; then
-    target_color="$RED"
-  fi
-
   clear
   echo ""
   echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
-  echo -e "${CYAN}║${NC}${BOLD}            TALIA VALIDATION MENU                           ${NC}${CYAN}║${NC}"
+  echo -e "${CYAN}║${NC}${BOLD}            TALIA OPS — validate                            ${NC}${CYAN}║${NC}"
   echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
   echo ""
-  echo -e "  ${BOLD}Current Target:${NC} ${target_color}${current_target_upper}${NC}"
-  echo -e "  ${DIM}Remembered Target: ${remembered_target:-none}${NC}"
-  echo -e "  ${DIM}Host: ${HOSTNAME}${NC}"
-  echo -e "  ${DIM}Time: $(date '+%Y-%m-%d %H:%M:%S')${NC}"
-  echo -e "  ${DIM}Version: ${SCRIPT_VERSION}${NC}"
+  echo -e "  ${DIM}Host: ${HOSTNAME}  ·  ${SCRIPT_VERSION}  ·  $(date '+%Y-%m-%d %H:%M:%S')${NC}"
   echo ""
-  print_front_page_status
+  print_quick_targets_summary
 }
 
 print_menu() {
-  echo -e "${BOLD}Select an option:${NC}"
+  echo -e "${BOLD}Actions (use current working target above, except option 1):${NC}"
   echo ""
 
-  echo -e "  ${GREEN}1)${NC} Total status"
-  echo -e "  ${GREEN}2)${NC} Check services"
-  echo -e "  ${GREEN}3)${NC} Start services"
-  echo -e "  ${GREEN}4)${NC} Stop services"
-  echo -e "  ${GREEN}5)${NC} Complete check"
-  echo -e "  ${GREEN}6)${NC} Switch target (local/staging)"
-  echo -e "  ${GREEN}7)${NC} Stop External (disable ngrok local+staging)"
-  echo -e "  ${GREEN}8)${NC} Enable External (use remembered target)"
+  echo -e "  ${GREEN}1)${NC} Set working target (local / staging)"
+  echo -e "  ${GREEN}2)${NC} Check services (deep check, current target only)"
+  echo -e "  ${GREEN}3)${NC} Start core services (UI + GraphQL + Supabase stack)"
+  echo -e "  ${GREEN}4)${NC} Stop core services"
+  echo -e "  ${GREEN}5)${NC} Start external access (${PUBLIC_MAIN_URL#https://} → this target)"
+  echo -e "  ${GREEN}6)${NC} Stop external access (ngrok off; Cloudflare shows unavailable)"
+  echo -e "  ${GREEN}7)${NC} Advanced: full validation / gateway detail (slower)"
   echo ""
   echo -e "  ${YELLOW}0)${NC} Exit"
   echo ""
@@ -446,20 +685,108 @@ run_script() {
 run_command() {
   local cmd="$1"
   local desc="$2"
-  
+  local timeout_sec="${3:-180}"
+  local start_epoch now elapsed exit_code
+  local cmd_pid
+
   echo ""
   echo -e "${CYAN}${desc}${NC}"
   echo -e "${DIM}────────────────────────────────────────────────────────────${NC}"
   echo ""
-  eval "$cmd"
+  echo -e "${DIM}Command:${NC} ${cmd}"
+  echo ""
+
+  start_epoch=$(date +%s)
+  ( eval "$cmd" ) &
+  cmd_pid=$!
+
+  while kill -0 "$cmd_pid" 2>/dev/null; do
+    now=$(date +%s)
+    elapsed=$((now - start_epoch))
+    if [[ "$elapsed" -ge "$timeout_sec" ]]; then
+      echo -e "  ${RED}✗ Timed out after ${elapsed}s${NC}"
+      kill "$cmd_pid" 2>/dev/null || true
+      sleep 1
+      kill -9 "$cmd_pid" 2>/dev/null || true
+      exit_code=124
+      break
+    fi
+    echo -e "  ${DIM}... running (${elapsed}s elapsed)${NC}"
+    sleep 3
+  done
+
+  if [[ -z "${exit_code:-}" ]]; then
+    wait "$cmd_pid"
+    exit_code=$?
+    now=$(date +%s)
+    elapsed=$((now - start_epoch))
+  fi
+
+  if [[ "$exit_code" -eq 0 ]]; then
+    echo -e "  ${GREEN}✓ Completed in ${elapsed}s${NC}"
+  else
+    echo -e "  ${RED}✗ Failed in ${elapsed}s (exit ${exit_code})${NC}"
+  fi
   echo ""
   echo -e "${DIM}────────────────────────────────────────────────────────────${NC}"
+  return "$exit_code"
 }
 
 wait_for_key() {
   echo ""
   echo -e "${DIM}Press any key to continue...${NC}"
   read -n 1 -s
+}
+
+is_docker_ready() {
+  if ! command -v docker >/dev/null 2>&1; then
+    return 1
+  fi
+  docker info >/dev/null 2>&1
+}
+
+ensure_docker_runtime_up() {
+  local wait_seconds="${1:-60}"
+  local elapsed=0
+  local startup_attempted=false
+
+  if is_docker_ready; then
+    return 0
+  fi
+
+  echo -e "  ${YELLOW}Docker daemon is not reachable; attempting to start it...${NC}"
+
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    if command -v open >/dev/null 2>&1; then
+      if open -g -a Docker >/dev/null 2>&1; then
+        startup_attempted=true
+        echo -e "  ${DIM}Requested Docker Desktop startup${NC}"
+      elif open -g -a OrbStack >/dev/null 2>&1; then
+        startup_attempted=true
+        echo -e "  ${DIM}Requested OrbStack startup${NC}"
+      fi
+    fi
+  fi
+
+  if [[ "$startup_attempted" == false ]] && command -v colima >/dev/null 2>&1; then
+    if colima start >/dev/null 2>&1; then
+      startup_attempted=true
+      echo -e "  ${DIM}Requested Colima startup${NC}"
+    fi
+  fi
+
+  while [[ "$elapsed" -lt "$wait_seconds" ]]; do
+    if is_docker_ready; then
+      echo -e "  ${GREEN}✓${NC} Docker daemon is ready"
+      return 0
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+
+  echo -e "  ${RED}✗ Docker daemon did not become ready within ${wait_seconds}s${NC}"
+  echo -e "  ${YELLOW}Start Docker Desktop/OrbStack/Colima, then retry.${NC}"
+  return 1
 }
 
 prompt_target() {
@@ -511,6 +838,15 @@ check_local_services() {
   local local_graphql_health_url="${LOCAL_GRAPHQL_URL%/}"
   local local_ui_graphql_url="${LOCAL_UI_URL%/}/api/graphql"
   echo -e "${BOLD}Local Services:${NC}"
+  echo -n "  Docker daemon: "
+  if ! command -v docker >/dev/null 2>&1; then
+    echo -e "${YELLOW}MISSING${NC} (docker CLI not found)"
+  elif docker info >/dev/null 2>&1; then
+    echo -e "${GREEN}UP${NC}"
+  else
+    echo -e "${YELLOW}DOWN${NC} (daemon unreachable)"
+  fi
+
   echo -n "  UI (localhost:5173): "
   local ui
   ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$local_ui_health_url" 2>/dev/null || echo "000")
@@ -602,6 +938,160 @@ start_local_services() {
 
   sleep 2
   echo -e "  ${DIM}Logs:${NC} /tmp/talia-ui.log, /tmp/talia-server.log"
+}
+
+start_local_supabase_if_needed() {
+  if ! ensure_docker_runtime_up 90; then
+    return 1
+  fi
+
+  local code
+  code=$(get_http_code_quick "${LOCAL_SUPABASE_URL}" 2)
+  case "$code" in
+    200|301|302|401|403|404)
+      echo -e "  ${GREEN}✓${NC} Supabase Kong already up (${LOCAL_SUPABASE_URL})"
+      return 0
+      ;;
+  esac
+  if command -v supabase >/dev/null 2>&1 && [[ -f "${ROOT_DIR}/talia-server/supabase/config.toml" ]]; then
+    echo -e "  Starting Supabase (CLI, background → /tmp/talia-supabase.log)..."
+    (cd "${ROOT_DIR}/talia-server" && nohup supabase start >>/tmp/talia-supabase.log 2>&1 &)
+  else
+    echo -e "  ${YELLOW}Supabase not reachable on ${LOCAL_SUPABASE_URL}; install Supabase CLI or run: cd talia-server && supabase start${NC}"
+  fi
+}
+
+stop_local_supabase_if_available() {
+  if command -v supabase >/dev/null 2>&1 && [[ -f "${ROOT_DIR}/talia-server/supabase/config.toml" ]]; then
+    echo -e "${BOLD}Stopping local Supabase (CLI):${NC}"
+    (cd "${ROOT_DIR}/talia-server" && supabase stop) || true
+  else
+    echo -e "  ${DIM}Supabase CLI not configured here; skipped${NC}"
+  fi
+}
+
+start_local_core() {
+  echo -e "${BOLD}Start core (local):${NC}"
+  start_local_services
+  if ! start_local_supabase_if_needed; then
+    return 1
+  fi
+}
+
+stop_local_core() {
+  echo -e "${BOLD}Stop core (local):${NC}"
+  stop_local_dev_services
+  stop_local_supabase_if_available
+}
+
+start_core_for_working_target() {
+  local t
+  t=$(get_effective_working_target)
+  echo -e "${CYAN}Starting core services for target: ${BOLD}${t}${NC}"
+  case "$t" in
+    local) start_local_core ;;
+    staging) start_staging_core_remote ;;
+    *)
+      echo -e "${RED}Unknown working target: ${t}${NC}"
+      return 1
+      ;;
+  esac
+}
+
+stop_core_for_working_target() {
+  local t
+  t=$(get_effective_working_target)
+  echo -e "${CYAN}Stopping core services for target: ${BOLD}${t}${NC}"
+  case "$t" in
+    local) stop_local_core ;;
+    staging) stop_staging_core_remote ;;
+    *)
+      echo -e "${RED}Unknown working target: ${t}${NC}"
+      return 1
+      ;;
+  esac
+}
+
+check_services_for_working_target() {
+  local t
+  t=$(get_effective_working_target)
+  echo -e "${BOLD}Service check (current target: ${t})${NC}"
+  echo ""
+  case "$t" in
+    local) check_local_services ;;
+    staging) check_staging_services_remote ;;
+    *)
+      echo -e "${RED}Unknown working target: ${t}${NC}"
+      return 1
+      ;;
+  esac
+  echo ""
+  check_external_gateway_quick
+}
+
+set_working_target_interactive() {
+  echo ""
+  echo -e "${BOLD}Set working target:${NC}"
+  echo -e "  ${GREEN}1)${NC} Local (this machine’s dev stack)"
+  echo -e "  ${GREEN}2)${NC} Staging (${STAGING_HOST})"
+  echo -e "  ${YELLOW}0)${NC} Back"
+  echo ""
+  echo -n -e "${BOLD}Choice: ${NC}"
+  read -r t
+  case "$t" in
+    1|local)
+      remember_target "local" || true
+      echo -e "${GREEN}Working target saved: LOCAL${NC}"
+      ;;
+    2|staging)
+      remember_target "staging" || true
+      echo -e "${GREEN}Working target saved: STAGING${NC}"
+      ;;
+    0|back|q|quit) return 0 ;;
+    *)
+      echo -e "${RED}Invalid choice${NC}"
+      return 1
+      ;;
+  esac
+}
+
+start_external_for_working_target() {
+  local t
+  t=$(get_effective_working_target)
+  remember_target "$t" || true
+  echo -e "${CYAN}Starting external access for ${BOLD}${t}${NC}${CYAN} → ${PUBLIC_MAIN_URL}${NC}"
+  apply_target_external "$t"
+  local new_target new_u
+  new_target=$(get_current_target)
+  new_u=$(echo "$new_target" | tr '[:lower:]' '[:upper:]')
+  echo ""
+  echo -e "${BOLD}External presenter (ngrok):${NC} ${GREEN}${new_u}${NC}"
+}
+
+advanced_validate_interactive() {
+  echo ""
+  echo -e "${BOLD}Advanced (slower):${NC}"
+  echo -e "  ${GREEN}1)${NC} validate-staging.sh local"
+  echo -e "  ${GREEN}2)${NC} validate-staging.sh staging"
+  echo -e "  ${GREEN}3)${NC} validate-staging.sh (default)"
+  echo -e "  ${GREEN}4)${NC} External gateway detail"
+  echo -e "  ${GREEN}5)${NC} Comprehensive (git + standards + connectivity)"
+  echo -e "  ${YELLOW}0)${NC} Back"
+  echo ""
+  echo -n -e "${BOLD}Choice: ${NC}"
+  read -r a
+  case "$a" in
+    1) run_script "validate-staging.sh" "local" ;;
+    2) run_script "validate-staging.sh" "staging" ;;
+    3) run_script "validate-staging.sh" ;;
+    4) check_external_gateway ;;
+    5) run_comprehensive_check ;;
+    0|back|q|quit) return 0 ;;
+    *)
+      echo -e "${RED}Invalid choice${NC}"
+      return 1
+      ;;
+  esac
 }
 
 start_services() {
@@ -736,6 +1226,41 @@ check_external_gateway() {
   echo -e "  ${DIM}- If still DOWN: check UI on localhost:5173 and ngrok status.${NC}"
 }
 
+check_external_gateway_quick() {
+  echo -e "${BOLD}External gateway (quick):${NC}"
+  local urls=("${PUBLIC_MAIN_URL%/}/" "${PUBLIC_SECONDARY_URL%/}/")
+  for url in "${urls[@]}"; do
+    local headers code gateway status detail
+    headers=$(curl -sI --max-time 4 "$url" 2>/dev/null || true)
+    code=$(echo "$headers" | awk 'NR==1{print $2}')
+    gateway=$(echo "$headers" | awk -F': ' 'tolower($1)=="x-taliahub-gateway"{gsub("\r","",$2); print $2; exit}')
+    [[ -z "$code" ]] && code="000"
+    status="WARN"
+    detail="HTTP ${code}"
+    if [[ "$code" == "000" ]]; then
+      status="DOWN"
+      detail="no response"
+    elif [[ "$gateway" == "fallback" ]]; then
+      status="DOWN"
+      detail="holding page"
+    elif [[ "$gateway" == "proxied" && ( "$code" == "200" || "$code" == "302" ) ]]; then
+      status="UP"
+      detail="app served"
+    elif [[ "$code" == "200" || "$code" == "302" ]]; then
+      status="UP"
+      detail="app served"
+    elif [[ "$code" == "503" ]]; then
+      status="DOWN"
+      detail="holding page"
+    fi
+    local status_color="$YELLOW"
+    [[ "$status" == "UP" ]] && status_color="$GREEN"
+    [[ "$status" == "DOWN" ]] && status_color="$RED"
+    printf "  %-36s  ${BOLD}%b%-6s${NC}  %s  gateway=%s\n" "$url" "$status_color" "$status" "$detail" "${gateway:-n/a}"
+  done
+  echo ""
+}
+
 start_ngrok_local() {
   local local_ui_health_url="${LOCAL_UI_URL%/}/"
   local local_ui_port="${LOCAL_UI_PORT:-5173}"
@@ -781,14 +1306,18 @@ start_ngrok_local() {
 }
 
 start_ngrok_staging_remote() {
-  run_command "ssh -o ConnectTimeout=5 ${STAGING_SSH_TARGET} \"sudo systemctl start ${STAGING_NGROK_SERVICE} && sleep 2 && sudo systemctl status ${STAGING_NGROK_SERVICE} --no-pager\"" "Start ngrok on staging (systemd)"
+  if $IS_ON_STAGING; then
+    run_command "sudo systemctl start ${STAGING_NGROK_SERVICE} && sleep 2 && sudo systemctl status ${STAGING_NGROK_SERVICE} --no-pager" "Start ngrok on staging (systemd)"
+  else
+    run_staging_ssh_command "sudo systemctl start ${STAGING_NGROK_SERVICE} && sleep 2 && sudo systemctl status ${STAGING_NGROK_SERVICE} --no-pager" "Start ngrok on staging (systemd)" "45"
+  fi
 }
 
 stop_ngrok_staging_remote() {
   if $IS_ON_STAGING; then
     run_command "sudo systemctl stop ${STAGING_NGROK_SERVICE}" "Stop ngrok on staging (systemd)"
   else
-    run_command "ssh -o ConnectTimeout=5 ${STAGING_SSH_TARGET} \"sudo systemctl stop ${STAGING_NGROK_SERVICE}\"" "Stop ngrok on staging (systemd)"
+    run_staging_ssh_command "sudo systemctl stop ${STAGING_NGROK_SERVICE}" "Stop ngrok on staging (systemd)" "45"
   fi
 }
 
@@ -796,7 +1325,7 @@ start_staging_services_remote() {
   if $IS_ON_STAGING; then
     run_command "sudo systemctl start ${STAGING_NGROK_SERVICE}; cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml up -d; docker compose -f docker-compose.staging.yml ps" "Start staging services (ngrok + docker)"
   else
-    run_command "ssh -o ConnectTimeout=5 ${STAGING_SSH_TARGET} \"sudo systemctl start ${STAGING_NGROK_SERVICE}; cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml up -d; docker compose -f docker-compose.staging.yml ps\"" "Start staging services (ngrok + docker)"
+    run_staging_ssh_command "sudo systemctl start ${STAGING_NGROK_SERVICE}; cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml up -d; docker compose -f docker-compose.staging.yml ps" "Start staging services (ngrok + docker)" "60"
   fi
 }
 
@@ -836,7 +1365,23 @@ stop_staging_services_remote() {
   if $IS_ON_STAGING; then
     run_command "sudo systemctl stop ${STAGING_NGROK_SERVICE}; cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml stop" "Stop staging services (ngrok + docker)"
   else
-    run_command "ssh -o ConnectTimeout=5 ${STAGING_SSH_TARGET} \"sudo systemctl stop ${STAGING_NGROK_SERVICE}; cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml stop\"" "Stop staging services (ngrok + docker)"
+    run_staging_ssh_command "sudo systemctl stop ${STAGING_NGROK_SERVICE}; cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml stop" "Stop staging services (ngrok + docker)" "60"
+  fi
+}
+
+start_staging_core_remote() {
+  if $IS_ON_STAGING; then
+    run_command "cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml up -d && docker compose -f docker-compose.staging.yml ps" "Start staging core (Docker only, ngrok unchanged)"
+  else
+    run_staging_ssh_command "cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml up -d && docker compose -f docker-compose.staging.yml ps" "Start staging core (Docker only, ngrok unchanged)" "60"
+  fi
+}
+
+stop_staging_core_remote() {
+  if $IS_ON_STAGING; then
+    run_command "cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml stop" "Stop staging core (Docker only, ngrok unchanged)"
+  else
+    run_staging_ssh_command "cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml stop" "Stop staging core (Docker only, ngrok unchanged)" "60"
   fi
 }
 
@@ -1506,47 +2051,33 @@ handle_remote_menu() {
   local choice="$1"
 
   case "$choice" in
-    1|status)
-      total_status
+    1|set-target|target|switch-target|switch)
+      set_working_target_interactive
       ;;
     2|check)
-      local target
-      target=$(prompt_target)
-      [[ "$target" == "back" || "$target" == "invalid" ]] && return 1
-      if [[ "$target" == "local" || "$target" == "all" ]]; then
-        check_local_services
-      fi
-      if [[ "$target" == "staging" || "$target" == "all" ]]; then
-        check_staging_services_remote
-      fi
-      check_external_gateway
+      check_services_for_working_target
       ;;
-    3|start)
-      local group
-      group=$(prompt_service_group)
-      [[ "$group" == "back" || "$group" == "invalid" ]] && return 1
-      start_services "$group"
+    3|start|start-core)
+      start_core_for_working_target
       ;;
-    4|stop)
-      local group
-      group=$(prompt_service_group)
-      [[ "$group" == "back" || "$group" == "invalid" ]] && return 1
-      stop_services "$group"
+    4|stop|stop-core)
+      stop_core_for_working_target
       ;;
-    5|complete)
-      local target
-      target=$(prompt_target)
-      [[ "$target" == "back" || "$target" == "invalid" ]] && return 1
-      complete_check "$target"
+    5|enable-external|external-on|restart-external|external-restart|bounce-external)
+      start_external_for_working_target
       ;;
-    6|switch|target|switch-target)
-      switch_target
-      ;;
-    7|stop-external|external-off|offline)
+    6|stop-external|external-off|offline)
       stop_external_everywhere
       ;;
-    8|enable-external|external-on|restart-external|external-restart|bounce-external)
+    7|advanced|complete|full)
+      advanced_validate_interactive
+      ;;
+    # Legacy numeric / names (older validate menu)
+    8)
       enable_remembered_target_external
+      ;;
+    status|summary|total)
+      print_quick_targets_summary
       ;;
     0|q|quit|exit)
       echo -e "${GREEN}Goodbye!${NC}"
@@ -1559,24 +2090,65 @@ handle_remote_menu() {
   esac
 }
 
+handle_cli() {
+  case "${1:-}" in
+    set-target)
+      if ! is_supported_target "${2:-}"; then
+        echo "Usage: $0 set-target local|staging"
+        return 1
+      fi
+      remember_target "$2"
+      echo "Working target saved: $2"
+      ;;
+    check) check_services_for_working_target ;;
+    start-core|start) start_core_for_working_target ;;
+    stop-core|stop-core) stop_core_for_working_target ;;
+    external-on|enable-external) start_external_for_working_target ;;
+    external-off|stop-external) stop_external_everywhere ;;
+    comprehensive) run_comprehensive_check ;;
+    status|summary) print_quick_targets_summary ;;
+    help|-h|--help)
+      cat <<EOF
+Talia validate — quick overview by default; heavy checks only from the menu or explicit commands.
+
+  $0                              interactive menu
+  $0 set-target local|staging     persist working target (~/.talia-validate-last-target)
+  $0 check                        deep service check for current target only
+  $0 start-core                   UI + GraphQL + Supabase (local) or Docker stack (staging)
+  $0 stop-core                    stop core (ngrok unchanged)
+  $0 external-on                  ngrok $PUBLIC_MAIN_URL → current target
+  $0 external-off                 stop all ngrok (Cloudflare unavailable page)
+  $0 comprehensive                full repo validation (slow)
+  $0 status                       quick summary lines (no menu)
+EOF
+      ;;
+    *)
+      echo "Unknown command: ${1:-}. Try: $0 help"
+      return 1
+      ;;
+  esac
+}
+
 # Main
 main() {
-  # If argument provided, run directly without menu
   if [[ $# -gt 0 ]]; then
-    handle_remote_menu "$1"
+    if [[ "$1" =~ ^[0-9]+$ ]]; then
+      handle_remote_menu "$1"
+    else
+      handle_cli "$@"
+    fi
     exit $?
   fi
-  
-  # Interactive menu loop
+
   while true; do
     print_header
     print_menu
-    
+
     echo -n -e "${BOLD}Enter choice: ${NC}"
     read -r choice
-    
+
     handle_remote_menu "$choice" || true
-    
+
     wait_for_key
   done
 }

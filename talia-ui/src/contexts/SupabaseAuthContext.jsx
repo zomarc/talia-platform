@@ -29,6 +29,20 @@ export const SupabaseAuthProvider = ({ children }) => {
   
   // Development mode flag - check both Vite dev mode and custom env var for staging
   const isDevMode = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_MODE === 'true';
+
+  const resolveUserRole = (email) => {
+    const normalizedEmail = String(email || '').toLowerCase().trim();
+    if (!normalizedEmail) return 'USER';
+    if (normalizedEmail === 'admin@talia.dev') return 'ADMIN';
+
+    const devMatch = DEV_USERS.find((entry) => String(entry.email || '').toLowerCase() === normalizedEmail);
+    if (devMatch?.role) return devMatch.role;
+
+    // In dev/staging mode, authenticated users should be able to exercise admin workflows.
+    if (isDevMode) return 'ADMIN';
+
+    return 'USER';
+  };
   
   // Create mock user for development
   const createMockUser = () => {
@@ -197,11 +211,7 @@ export const SupabaseAuthProvider = ({ children }) => {
           
           if (!isMounted) return;
           
-          // Determine user role (admin@talia.dev gets ADMIN role in dev mode)
-          let userRole = 'USER';
-          if (session.user.email === 'admin@talia.dev') {
-            userRole = 'ADMIN';
-          }
+          const userRole = resolveUserRole(session.user.email);
           
           // Set role in localStorage for GraphQL context
           GraphQLUtils.setUserContext({
@@ -222,7 +232,7 @@ export const SupabaseAuthProvider = ({ children }) => {
           console.error('❌ Error processing user:', error);
           // Even if there's an error, set the user so auth can proceed
           if (isMounted && session?.user) {
-            const userRole = session.user.email === 'admin@talia.dev' ? 'ADMIN' : 'USER';
+            const userRole = resolveUserRole(session.user.email);
             GraphQLUtils.setUserContext({
               role: userRole,
               email: session.user.email,

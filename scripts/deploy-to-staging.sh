@@ -25,7 +25,15 @@ STAGING_DIR="${STAGING_DIR:-${STAGING_APP_DIR:-/home/${STAGING_USER}/talia-docke
 STAGING_GIT_DIR="${STAGING_GIT_DIR:-${STAGING_DIR}}"
 LOCAL_ARCHIVE="${LOCAL_ARCHIVE:-/tmp/talia-staging-code-sync.tar.gz}"
 REMOTE_ARCHIVE="${REMOTE_ARCHIVE:-/tmp/talia-staging-code-sync.tar.gz}"
+LOCAL_UI_DIST_ARCHIVE="${LOCAL_UI_DIST_ARCHIVE:-/tmp/talia-staging-ui-dist.tar.gz}"
+REMOTE_UI_DIST_ARCHIVE="${REMOTE_UI_DIST_ARCHIVE:-/tmp/talia-staging-ui-dist.tar.gz}"
+LOCAL_SERVER_DIST_ARCHIVE="${LOCAL_SERVER_DIST_ARCHIVE:-/tmp/talia-staging-server-dist.tar.gz}"
+REMOTE_SERVER_DIST_ARCHIVE="${REMOTE_SERVER_DIST_ARCHIVE:-/tmp/talia-staging-server-dist.tar.gz}"
 STAGING_VERIFY_UI_URL="${STAGING_VERIFY_UI_URL:-http://${STAGING_HOST}:${STAGING_UI_PORT:-5173}}"
+STAGING_UI_SUPABASE_URL="${STAGING_UI_SUPABASE_URL:-http://${STAGING_HOST}:54321}"
+STAGING_UI_SUPABASE_ANON_KEY="${STAGING_UI_SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"
+STAGING_UI_GRAPHQL_ENDPOINT="${STAGING_UI_GRAPHQL_ENDPOINT:-http://${STAGING_HOST}:4000/graphql}"
+STAGING_UI_ENABLE_DEV_MODE="${STAGING_UI_ENABLE_DEV_MODE:-true}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -224,8 +232,54 @@ if [ "$SYNC_MODE" = "local" ]; then
     scp "$LOCAL_ARCHIVE" "${STAGING_USER}@${STAGING_HOST}:${REMOTE_ARCHIVE}"
     rm -f "$LOCAL_ARCHIVE"
     echo -e "${GREEN}✅ Local code archive copied to staging${NC}"
+
+    # Prepare local build artifacts so LAN deploys do not require remote image rebuilds.
+    # This keeps deployment resilient when staging host DNS/registry access is unstable.
+    if [ "$DEPLOY_MODE" = "ui-only" ] || [ "$DEPLOY_MODE" = "full" ]; then
+      echo -e "${BLUE}🧱 Building local UI dist artifact...${NC}"
+      UI_APP_VERSION="$(python3 -c 'import json;print(json.load(open("talia-ui/package.json","r",encoding="utf-8")).get("version","0.0.0"))')"
+      (
+        cd talia-ui
+        if [ ! -d "node_modules" ]; then
+          echo -e "${YELLOW}node_modules not found in talia-ui; running npm install...${NC}"
+          npm install
+        fi
+        VITE_SUPABASE_URL="$STAGING_UI_SUPABASE_URL" \
+        VITE_SUPABASE_ANON_KEY="$STAGING_UI_SUPABASE_ANON_KEY" \
+        VITE_GRAPHQL_ENDPOINT="$STAGING_UI_GRAPHQL_ENDPOINT" \
+        VITE_ENABLE_DEV_MODE="$STAGING_UI_ENABLE_DEV_MODE" \
+        VITE_APP_VERSION="$UI_APP_VERSION" \
+        npm run build
+      )
+      tar -czf "$LOCAL_UI_DIST_ARCHIVE" -C talia-ui dist
+      scp "$LOCAL_UI_DIST_ARCHIVE" "${STAGING_USER}@${STAGING_HOST}:${REMOTE_UI_DIST_ARCHIVE}"
+      rm -f "$LOCAL_UI_DIST_ARCHIVE"
+      echo -e "${GREEN}✅ Local UI dist artifact copied to staging${NC}"
+    fi
+
+    if [ "$DEPLOY_MODE" = "full" ]; then
+      echo -e "${BLUE}🧱 Building local GraphQL dist artifact...${NC}"
+      (
+        cd talia-server
+        if [ ! -d "node_modules" ]; then
+          echo -e "${YELLOW}node_modules not found in talia-server; running npm install...${NC}"
+          npm install
+        fi
+        npm run compile
+      )
+      tar -czf "$LOCAL_SERVER_DIST_ARCHIVE" -C talia-server dist sync.config.json sync-cli.js package.json
+      scp "$LOCAL_SERVER_DIST_ARCHIVE" "${STAGING_USER}@${STAGING_HOST}:${REMOTE_SERVER_DIST_ARCHIVE}"
+      rm -f "$LOCAL_SERVER_DIST_ARCHIVE"
+      echo -e "${GREEN}✅ Local GraphQL dist artifact copied to staging${NC}"
+    fi
   else
     echo -e "${YELLOW}[DRY RUN] Would create and copy archive: ${LOCAL_ARCHIVE}${NC}"
+    if [ "$DEPLOY_MODE" = "ui-only" ] || [ "$DEPLOY_MODE" = "full" ]; then
+      echo -e "${YELLOW}[DRY RUN] Would build and copy local UI dist artifact: ${LOCAL_UI_DIST_ARCHIVE}${NC}"
+    fi
+    if [ "$DEPLOY_MODE" = "full" ]; then
+      echo -e "${YELLOW}[DRY RUN] Would build and copy local GraphQL dist artifact: ${LOCAL_SERVER_DIST_ARCHIVE}${NC}"
+    fi
   fi
 fi
 
@@ -234,6 +288,8 @@ DEPLOY_SCRIPT="
 set -e
 mkdir -p $STAGING_GIT_DIR
 cd $STAGING_GIT_DIR
+REMOTE_UI_DIST_ARCHIVE='$REMOTE_UI_DIST_ARCHIVE'
+REMOTE_SERVER_DIST_ARCHIVE='$REMOTE_SERVER_DIST_ARCHIVE'
 
 if [ \"$SYNC_MODE\" = \"git\" ]; then
   echo '📥 Pulling latest code from git...'
@@ -246,14 +302,93 @@ else
 fi
 
 if [ \"$DEPLOY_MODE\" = \"full\" ]; then
-  echo '🐳 Rebuilding Docker containers...'
-  docker compose -f docker-compose.staging.yml build --no-cache ui graphql-server
-  docker compose -f docker-compose.staging.yml up -d
+  echo '🎯 Full deployment (backend + UI + schema guard)...'
+  if [ -f \"\$REMOTE_SERVER_DIST_ARCHIVE\" ] && [ -f \"\$REMOTE_UI_DIST_ARCHIVE\" ]; then
+    echo '📦 Applying local GraphQL/UI artifacts (no remote image rebuild)...'
+    docker compose -f docker-compose.staging.yml up -d --no-deps graphql-server ui
+
+    GRAPHQL_CONTAINER_ID=\$(docker compose -f docker-compose.staging.yml ps -q graphql-server)
+    if [ -z \"\$GRAPHQL_CONTAINER_ID\" ]; then
+      echo '❌ FAILED - graphql-server container is not running; cannot apply local artifact'
+      exit 1
+    fi
+    TMP_SERVER_DIST_DIR=\"/tmp/talia-server-dist-fallback\"
+    rm -rf \"\$TMP_SERVER_DIST_DIR\"
+    mkdir -p \"\$TMP_SERVER_DIST_DIR\"
+    tar -xzf \"\$REMOTE_SERVER_DIST_ARCHIVE\" -C \"\$TMP_SERVER_DIST_DIR\"
+    if [ ! -d \"\$TMP_SERVER_DIST_DIR/dist\" ]; then
+      echo '❌ FAILED - dist folder missing in GraphQL artifact'
+      exit 1
+    fi
+    docker cp \"\$TMP_SERVER_DIST_DIR/dist/.\" \"\$GRAPHQL_CONTAINER_ID:/app/dist/\"
+    if [ -f \"\$TMP_SERVER_DIST_DIR/sync.config.json\" ]; then
+      docker cp \"\$TMP_SERVER_DIST_DIR/sync.config.json\" \"\$GRAPHQL_CONTAINER_ID:/app/sync.config.json\"
+      docker cp \"\$TMP_SERVER_DIST_DIR/sync.config.json\" \"\$GRAPHQL_CONTAINER_ID:/app/dist/sync.config.json\"
+    fi
+    if [ -f \"\$TMP_SERVER_DIST_DIR/sync-cli.js\" ]; then
+      docker cp \"\$TMP_SERVER_DIST_DIR/sync-cli.js\" \"\$GRAPHQL_CONTAINER_ID:/app/sync-cli.js\"
+      docker cp \"\$TMP_SERVER_DIST_DIR/sync-cli.js\" \"\$GRAPHQL_CONTAINER_ID:/app/dist/sync-cli.js\"
+    fi
+    if [ -f \"\$TMP_SERVER_DIST_DIR/package.json\" ]; then
+      docker cp \"\$TMP_SERVER_DIST_DIR/package.json\" \"\$GRAPHQL_CONTAINER_ID:/app/package.json\"
+    fi
+    docker compose -f docker-compose.staging.yml restart graphql-server
+    rm -rf \"\$TMP_SERVER_DIST_DIR\"
+    rm -f \"\$REMOTE_SERVER_DIST_ARCHIVE\"
+
+    UI_CONTAINER_ID=\$(docker compose -f docker-compose.staging.yml ps -q ui)
+    if [ -z \"\$UI_CONTAINER_ID\" ]; then
+      echo '❌ FAILED - ui container is not running; cannot apply local dist artifact'
+      exit 1
+    fi
+    TMP_UI_DIST_DIR=\"/tmp/talia-ui-dist-fallback\"
+    rm -rf \"\$TMP_UI_DIST_DIR\"
+    mkdir -p \"\$TMP_UI_DIST_DIR\"
+    tar -xzf \"\$REMOTE_UI_DIST_ARCHIVE\" -C \"\$TMP_UI_DIST_DIR\"
+    if [ ! -d \"\$TMP_UI_DIST_DIR/dist\" ]; then
+      echo '❌ FAILED - dist folder missing in UI artifact'
+      exit 1
+    fi
+    docker cp \"\$TMP_UI_DIST_DIR/dist/.\" \"\$UI_CONTAINER_ID:/usr/share/nginx/html/\"
+    docker compose -f docker-compose.staging.yml restart ui
+    rm -rf \"\$TMP_UI_DIST_DIR\"
+    rm -f \"\$REMOTE_UI_DIST_ARCHIVE\"
+    echo '✅ Local GraphQL/UI artifacts applied to running containers'
+  else
+    echo '🔨 Local artifacts not found; falling back to remote image rebuild...'
+    docker compose -f docker-compose.staging.yml build --no-cache ui graphql-server
+    docker compose -f docker-compose.staging.yml up -d
+    echo '✅ Remote image rebuild succeeded'
+  fi
 else
   echo '🎯 UI-only deployment (backend/data services untouched)...'
-  echo '🔨 Rebuilding UI container with latest code...'
-  docker compose -f docker-compose.staging.yml build ui
-  docker compose -f docker-compose.staging.yml up -d --no-deps ui
+  if [ -f \"\$REMOTE_UI_DIST_ARCHIVE\" ]; then
+    echo '📦 Applying local UI dist artifact (no remote image rebuild)...'
+    docker compose -f docker-compose.staging.yml up -d --no-deps ui
+    UI_CONTAINER_ID=\$(docker compose -f docker-compose.staging.yml ps -q ui)
+    if [ -z \"\$UI_CONTAINER_ID\" ]; then
+      echo '❌ FAILED - ui container is not running; cannot apply local dist artifact'
+      exit 1
+    fi
+    TMP_UI_DIST_DIR=\"/tmp/talia-ui-dist-fallback\"
+    rm -rf \"\$TMP_UI_DIST_DIR\"
+    mkdir -p \"\$TMP_UI_DIST_DIR\"
+    tar -xzf \"\$REMOTE_UI_DIST_ARCHIVE\" -C \"\$TMP_UI_DIST_DIR\"
+    if [ ! -d \"\$TMP_UI_DIST_DIR/dist\" ]; then
+      echo '❌ FAILED - dist folder missing in fallback archive'
+      exit 1
+    fi
+    docker cp \"\$TMP_UI_DIST_DIR/dist/.\" \"\$UI_CONTAINER_ID:/usr/share/nginx/html/\"
+    docker compose -f docker-compose.staging.yml restart ui
+    rm -rf \"\$TMP_UI_DIST_DIR\"
+    rm -f \"\$REMOTE_UI_DIST_ARCHIVE\"
+    echo '✅ Local UI dist artifact applied to running ui container'
+  else
+    echo '🔨 No local UI dist artifact found; falling back to remote ui image rebuild...'
+    docker compose -f docker-compose.staging.yml build ui
+    docker compose -f docker-compose.staging.yml up -d --no-deps ui
+    echo '✅ UI image rebuild succeeded'
+  fi
 fi
 
 if [ \"$DEPLOY_MODE\" = \"full\" ]; then

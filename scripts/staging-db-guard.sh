@@ -13,7 +13,7 @@ set -euo pipefail
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.staging.yml}"
 MIGRATIONS_DIR="${MIGRATIONS_DIR:-talia-server/supabase/migrations}"
 DB_CONTAINER="${DB_CONTAINER:-talia-supabase-db}"
-REQUIRED_TABLES="${REQUIRED_TABLES:-inventory_item inventory_item_memo}"
+REQUIRED_TABLES="${REQUIRED_TABLES:-inventory_item inventory_item_memo talia_users}"
 DB_NAME="${DB_NAME:-postgres}"
 DB_USER="${DB_USER:-postgres}"
 
@@ -69,6 +69,9 @@ find_candidates_for_table() {
       ;;
     inventory_item_memo)
       ls -1 "$MIGRATIONS_DIR"/20260302000000_create_inventoy_item_and_memos.sql 2>/dev/null | sort || true
+      ;;
+    talia_users)
+      ls -1 "$MIGRATIONS_DIR"/20260327000000_create_talia_users.sql 2>/dev/null | sort || true
       ;;
     *)
       rg --files-with-matches "$table_name" "$MIGRATIONS_DIR" --glob "*.sql" | sort || true

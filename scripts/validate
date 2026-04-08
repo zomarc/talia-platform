@@ -788,6 +788,7 @@ print_menu() {
   echo ""
   echo -e "  ${GREEN}7)${NC} Full validation / gateway detail (slower)"
   echo -e "  ${GREEN}8)${NC} Deploy to staging (local sync)"
+  echo -e "  ${GREEN}9)${NC} Emergency reboot staging server"
   echo ""
   echo -e "  ${YELLOW}0)${NC} Exit"
   echo ""
@@ -1141,6 +1142,30 @@ stop_core_for_working_target() {
       return 1
       ;;
   esac
+}
+
+reboot_staging_emergency() {
+  local confirm
+
+  echo ""
+  echo -e "${RED}${BOLD}Emergency action: reboot staging server${NC}"
+  echo -e "${YELLOW}This will immediately restart ${STAGING_HOST} and interrupt all staging sessions.${NC}"
+  echo -e "${YELLOW}Use only for recovery from staging issues.${NC}"
+  echo ""
+  echo -n -e "${BOLD}Type REBOOT_STAGING_NOW to continue: ${NC}"
+  read -r confirm
+  if [[ "$confirm" != "REBOOT_STAGING_NOW" ]]; then
+    echo -e "${YELLOW}Reboot cancelled.${NC}"
+    return 1
+  fi
+
+  if $IS_ON_STAGING; then
+    run_command "sudo nohup bash -lc 'sleep 2; /sbin/reboot' >/tmp/talia-reboot.log 2>&1 < /dev/null & echo REBOOT_SCHEDULED" "Schedule local reboot on staging host" "20"
+    return $?
+  fi
+
+  check_staging_ssh_ready || return 1
+  run_command "ssh ${STAGING_SSH_BASE_OPTS} ${STAGING_SSH_TARGET} \"sudo nohup bash -lc 'sleep 2; /sbin/reboot' >/tmp/talia-reboot.log 2>&1 < /dev/null & echo REBOOT_SCHEDULED\"" "Schedule remote reboot on staging host" "20"
 }
 
 deploy_to_staging_from_local() {
@@ -2259,8 +2284,11 @@ handle_remote_menu() {
     8|deploy|deploy-staging)
       deploy_to_staging_from_local
       ;;
+    9|reboot|reboot-staging)
+      reboot_staging_emergency
+      ;;
     # Legacy numeric / names (older validate menu)
-    9)
+    10)
       enable_remembered_target_external
       ;;
     status|summary|total)
@@ -2293,6 +2321,7 @@ handle_cli() {
     external-on|enable-external) start_external_for_working_target ;;
     external-off|stop-external) stop_external_everywhere ;;
     deploy|deploy-staging) deploy_to_staging_from_local ;;
+    reboot-staging|reboot) reboot_staging_emergency ;;
     comprehensive) run_comprehensive_check ;;
     status|summary) print_quick_targets_summary ;;
     help|-h|--help)
@@ -2307,6 +2336,7 @@ Talia validate — quick overview by default; heavy checks only from the menu or
   $0 external-on                  ngrok $PUBLIC_MAIN_URL → current target
   $0 external-off                 stop all ngrok (Cloudflare unavailable page)
   $0 deploy-staging               local-sync deploy to staging (ui/full/scripts prompt)
+  $0 reboot-staging               emergency reboot of staging host (confirmation required)
   $0 comprehensive                full repo validation (slow)
   $0 status                       quick summary lines (no menu)
 EOF

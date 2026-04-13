@@ -2,6 +2,8 @@
 
 This guide covers deployment options for Talia Platform v0.1.0 (Alpha).
 
+For **local vs staging (MiniPC) vs MVP (Azure)**, **local-from-laptop deploys**, and **backup-driven data moves**, see **`docs/ENVIRONMENTS-AND-DEPLOY.md`**.
+
 ---
 
 ## 📋 Table of Contents

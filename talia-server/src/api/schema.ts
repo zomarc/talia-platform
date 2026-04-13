@@ -954,6 +954,10 @@ export const typeDefs = `#graphql
     envKeys: [InstanceEnvKeyRow!]!
     backupBetweenInstances: String!
     architectureNotes: [String!]!
+    """talia-server package.json version running this GraphQL process."""
+    graphqlServerPackageVersion: String!
+    """Ops menu script revision (keep in sync with scripts/validate SCRIPT_VERSION)."""
+    validateScriptDocVersion: String!
   }
   
   input IntegrationDateRangeInput {

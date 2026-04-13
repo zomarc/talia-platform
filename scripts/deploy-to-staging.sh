@@ -270,6 +270,8 @@ if [ "$SYNC_MODE" = "local" ]; then
     if [ "$DEPLOY_MODE" = "ui-only" ] || [ "$DEPLOY_MODE" = "full" ]; then
       echo -e "${BLUE}🧱 Building local UI dist artifact...${NC}"
       UI_APP_VERSION="$(python3 -c 'import json;print(json.load(open("talia-ui/package.json","r",encoding="utf-8")).get("version","0.0.0"))')"
+      UI_BUILD_TIME="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+      VITE_ENVIRONMENT="${VITE_ENVIRONMENT:-${DEPLOY_TARGET_LABEL:-staging}}"
       (
         cd talia-ui
         if [ ! -d "node_modules" ]; then
@@ -281,6 +283,8 @@ if [ "$SYNC_MODE" = "local" ]; then
         VITE_GRAPHQL_ENDPOINT="$STAGING_UI_GRAPHQL_ENDPOINT" \
         VITE_ENABLE_DEV_MODE="$STAGING_UI_ENABLE_DEV_MODE" \
         VITE_APP_VERSION="$UI_APP_VERSION" \
+        VITE_ENVIRONMENT="$VITE_ENVIRONMENT" \
+        VITE_BUILD_TIME="$UI_BUILD_TIME" \
         npm run build
       )
       tar -czf "$LOCAL_UI_DIST_ARCHIVE" -C talia-ui dist

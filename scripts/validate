@@ -16,7 +16,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SCRIPT_VERSION="2026-04-13.1"
+SCRIPT_VERSION="2026-04-14.1"
 CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
 if [[ -f "${CONFIG_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -606,12 +606,17 @@ print_quick_targets_summary() {
   [[ "$work" == "staging" ]] && staging_marker="▶"
 
   header_sep=$(printf '%*s' 96 '' | tr ' ' '-')
+  local validate_run_iso validate_run_local
+  validate_run_iso="$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u '+%Y-%m-%d %H:%M:%S UTC')"
+  validate_run_local="$(date '+%Y-%m-%d %H:%M:%S %Z (UTC%z)' 2>/dev/null || date)"
   echo -e "${CYAN}${header_sep}${NC}"
   echo -e "${BOLD}TALIA OPS - ${work_u}${NC}"
   echo -e "Version: ${top_level_version}"
   echo -e "Target: ${target_status_plain_text}   External: ${ext_status_plain_text}"
   echo -e "${CYAN}${header_sep}${NC}"
-  echo -e "${DIM}Host: ${HOSTNAME} · ${SCRIPT_VERSION} · $(date '+%Y-%m-%d %H:%M:%S')${NC}"
+  echo -e "${DIM}Validate script: ${SCRIPT_VERSION}${NC}"
+  echo -e "${DIM}Run at (UTC):   ${validate_run_iso}${NC}"
+  echo -e "${DIM}Run at (local): ${validate_run_local} · host: ${HOSTNAME}${NC}"
   echo -e "  ${BOLD}Public demo${NC}: ${PUBLIC_MAIN_URL} (${ext_line})"
   local rem_disp
   rem_disp=$(get_remembered_target)

@@ -1,8 +1,22 @@
+import { createRequire } from 'module';
 import { supabaseDataService } from '../../services/supabase.js';
 import { synapseSyncService, isSynapseSyncDisabled } from '../../services/synapse-sync.js';
 import { configService } from '../../services/config-service.js';
 
+/** Bump together with scripts/validate SCRIPT_VERSION (ops menu + Data Management cross-check). */
+export const VALIDATE_SCRIPT_DOC_VERSION = '2026-04-14.1'; // sync: scripts/validate SCRIPT_VERSION
+
 type Importance = 'REQUIRED' | 'CONDITIONAL' | 'OPTIONAL';
+
+function readGraphqlServerPackageVersion(): string {
+  try {
+    const require = createRequire(import.meta.url);
+    const pkg = require('../../../package.json') as { version?: string };
+    return pkg.version || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
 
 const trim = (v: string | undefined) => (typeof v === 'string' ? v.trim() : '');
 const isSet = (v: string | undefined) => trim(v).length > 0;
@@ -204,11 +218,14 @@ export const instanceConnectionQueryResolvers = {
         note: k.note,
       })),
       backupBetweenInstances:
-        'Database dumps move business data between instances. Each deployment keeps its own Supabase JWT secrets and POSTGRES_PASSWORD; after restore, run role password alignment and ensure VITE_* and compose keys match this stack. Application config in talia_config may differ per environment — it is stored in Postgres and travels with the backup.',
+        'Business data lives in Postgres (Supabase). pg_dump backups can be restored on local (laptop), staging (MiniPC), or MVP (Azure). Each host keeps its own JWT secrets and POSTGRES_PASSWORD; after restore use scripts/supabase/align-db-role-passwords.sh and match VITE_* to that host. talia_config tables travel inside the dump.',
       architectureNotes: [
         'GraphQL uses SUPABASE_URL inside Docker (often http://supabase-kong:8000). Browsers use VITE_SUPABASE_URL pointing at the host-mapped Kong port (e.g. :54321). Both must refer to the same logical Supabase project.',
         'Separate instances should use separate .env / secrets. Only restore backups onto a target after aligning passwords and keys for that target.',
+        'Code reaches staging/MVP via ./scripts/deploy-to-staging.sh and ./scripts/deploy-to-mvp.sh (local tar + dist), not by relying on unpushed Git on your laptop.',
       ],
+      graphqlServerPackageVersion: readGraphqlServerPackageVersion(),
+      validateScriptDocVersion: VALIDATE_SCRIPT_DOC_VERSION,
     };
   },
 };

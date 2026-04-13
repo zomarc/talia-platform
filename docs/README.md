@@ -14,6 +14,7 @@ Use this page as the entry point for all active development documentation.
 - `docs/QUICK-START-GUIDE.md` - boot and verify quickly
 - `docs/ARCHITECTURE.md` - system architecture and boundaries
 - `docs/DEPLOYMENT.md` - deployment and environment operations
+- `docs/ENVIRONMENTS-AND-DEPLOY.md` - local, staging (MiniPC), MVP (Azure), backups, version labels
 - `docs/AZURE-STAGING.md` - Azure Ubuntu VM + Docker staging runbook
 - `docs/CHANGELOG.md` - tracked changes and release notes
 

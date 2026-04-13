@@ -7,6 +7,10 @@ const appVersion = JSON.parse(
   readFileSync(new URL('./package.json', import.meta.url), 'utf-8')
 ).version
 
+const buildTime =
+  globalThis.process?.env?.VITE_BUILD_TIME ||
+  new Date().toISOString()
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
@@ -17,7 +21,8 @@ export default defineConfig({
     force: true
   },
   define: {
-    'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion)
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
+    'import.meta.env.VITE_BUILD_TIME': JSON.stringify(buildTime),
   },
   // Base path for deployment - set via environment variable or default to root
   // For celestyal path: VITE_BASE_PATH=/celestyal

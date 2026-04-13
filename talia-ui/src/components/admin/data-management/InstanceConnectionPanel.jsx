@@ -13,6 +13,8 @@ const INSTANCE_PROFILE_QUERY = `
       nodeEnv
       dataSourcePriority
       synapseSyncDisabled
+      graphqlServerPackageVersion
+      validateScriptDocVersion
       backupBetweenInstances
       architectureNotes
       dataTargets {
@@ -78,6 +80,24 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
 
   const viteRows = [
     {
+      key: 'VITE_ENVIRONMENT',
+      label: 'Deploy label (local | staging | mvp | production)',
+      present: vitePresent('VITE_ENVIRONMENT'),
+      valuePreview: import.meta.env.VITE_ENVIRONMENT || '',
+    },
+    {
+      key: 'VITE_APP_VERSION',
+      label: 'UI package version (build)',
+      present: vitePresent('VITE_APP_VERSION'),
+      valuePreview: import.meta.env.VITE_APP_VERSION || '',
+    },
+    {
+      key: 'VITE_BUILD_TIME',
+      label: 'UI bundle build timestamp (UTC ISO)',
+      present: vitePresent('VITE_BUILD_TIME'),
+      valuePreview: import.meta.env.VITE_BUILD_TIME || '',
+    },
+    {
       key: 'VITE_SUPABASE_URL',
       label: 'Public Supabase URL (browser)',
       present: vitePresent('VITE_SUPABASE_URL'),
@@ -107,7 +127,14 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
   const missingRequiredServer = serverKeys.filter(
     (k) => k.importance === 'REQUIRED' && !k.present
   );
-  const missingRequiredVite = viteRows.filter((r) => r.key !== 'VITE_GRAPHQL_ENDPOINT' && !r.present);
+  const missingRequiredVite = viteRows.filter(
+    (r) =>
+      r.key !== 'VITE_GRAPHQL_ENDPOINT' &&
+      r.key !== 'VITE_BUILD_TIME' &&
+      r.key !== 'VITE_ENVIRONMENT' &&
+      r.key !== 'VITE_APP_VERSION' &&
+      !r.present
+  );
 
   const keysByScope = scopeOrder.map((scope) => ({
     scope,
@@ -172,6 +199,46 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
               </dl>
             </div>
           </div>
+
+          <section className="dm-instance-profile__section">
+            <h4 className="dm-instance-profile__h4">Deploy &amp; version cross-check (use on local, staging, MVP)</h4>
+            <p className="dm-instance-profile__hint">
+              Compare with the top bar <strong>Source</strong> / version and with <code>./scripts/validate</code> (script version + run time).
+              GraphQL row is the running <code>talia-server</code>; UI rows are baked into this bundle at <code>npm run build</code>.
+            </p>
+            <div className="talia-card">
+              <div className="talia-card__content">
+                <dl className="dm-instance-profile__dl">
+                  <div>
+                    <dt>GraphQL server (package.json)</dt>
+                    <dd>v{profile.graphqlServerPackageVersion}</dd>
+                  </div>
+                  <div>
+                    <dt>Validate script doc version</dt>
+                    <dd>
+                      {profile.validateScriptDocVersion}
+                      <span className="dm-instance-profile__note">
+                        {' '}
+                        — should match <code>SCRIPT_VERSION</code> in <code>scripts/validate</code>
+                      </span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>UI VITE_ENVIRONMENT</dt>
+                    <dd>{import.meta.env.VITE_ENVIRONMENT || (import.meta.env.DEV ? 'local (dev)' : 'production')}</dd>
+                  </div>
+                  <div>
+                    <dt>UI VITE_APP_VERSION</dt>
+                    <dd>{import.meta.env.VITE_APP_VERSION || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>UI VITE_BUILD_TIME</dt>
+                    <dd>{import.meta.env.VITE_BUILD_TIME || '—'}</dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          </section>
 
           {(missingRequiredServer.length > 0 || missingRequiredVite.length > 0) && (
             <div className="dm-instance-profile__alert talia-card talia-card--warning">

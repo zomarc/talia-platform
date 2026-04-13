@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Deploy from this machine to MVP over SSH — same path as LAN staging (tar + local UI/server dist).
-# Does not pull from GitHub on the VM. Configure MVP_* in scripts/config/targets.env.
+# Your laptop code is what ships; MVP is not updated from GitHub by this script. Configure MVP_* in scripts/config/targets.env.
 #
 # Usage:
 #   ./scripts/deploy-to-mvp.sh [--ui-only|--full|--scripts-only|--dry-run]
@@ -45,6 +45,10 @@ export STAGING_UI_SUPABASE_URL="${STAGING_UI_SUPABASE_URL:-http://${PUB_HOST}:${
 export STAGING_UI_GRAPHQL_ENDPOINT="${STAGING_UI_GRAPHQL_ENDPOINT:-http://${MVP_SSH_HOST}:${GQL_PORT}/graphql}"
 export STAGING_UI_SUPABASE_ANON_KEY="${STAGING_UI_SUPABASE_ANON_KEY:-${MVP_UI_SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}}"
 export STAGING_UI_ENABLE_DEV_MODE="${STAGING_UI_ENABLE_DEV_MODE:-${MVP_UI_ENABLE_DEV_MODE:-true}}"
+
+# UI banner: show "mvp" in ModeSelector / Data Management (not "staging")
+export DEPLOY_TARGET_LABEL=mvp
+export VITE_ENVIRONMENT="${VITE_ENVIRONMENT:-mvp}"
 
 # Optional: isolate archive paths if you deploy staging and MVP from the same laptop in parallel
 export LOCAL_ARCHIVE="${LOCAL_ARCHIVE:-/tmp/talia-mvp-code-sync.tar.gz}"

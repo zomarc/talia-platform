@@ -18,10 +18,11 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
   const [version, setVersion] = useState('0.1.7');
   const [userRole, setUserRole] = useState(() => normalizeRole(GraphQLUtils.getUserRole() || 'USER'));
 
-  // Determine source from environment
+  // Deploy label: set VITE_ENVIRONMENT at build (staging | mvp | local). Avoid defaulting to "staging" on every production build.
   useEffect(() => {
-    const envSource = import.meta.env.VITE_ENVIRONMENT || 
-                     (import.meta.env.DEV ? 'local' : 'staging');
+    const envSource =
+      import.meta.env.VITE_ENVIRONMENT ||
+      (import.meta.env.DEV ? 'local' : 'production');
     setSource(envSource);
   }, []);
 

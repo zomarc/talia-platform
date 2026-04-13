@@ -7,6 +7,9 @@
 #
 # Non-interactive:
 #   AZURE_STAGING_DEPLOY_CONFIRM_TOKEN=DEPLOY_AZURE_FULL ./scripts/deploy-to-mvp.sh --full
+#
+# Preflight: refuses if your local branch is ahead of origin (unpushed commits), because the VM
+# only pulls GitHub. Push first, or set SKIP_ORIGIN_CHECK=1 (deploys whatever is already on origin).
 
 set -euo pipefail
 

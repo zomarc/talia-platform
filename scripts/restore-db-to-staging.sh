@@ -86,44 +86,52 @@ STAGING_SSH_TARGET="${STAGING_SSH_USER}@${STAGING_SSH_HOST}"
 echo "Copying backup to ${STAGING_SSH_TARGET}:${REMOTE_GZ} ..."
 scp -o StrictHostKeyChecking=accept-new "${BACKUP}" "${STAGING_SSH_TARGET}:${REMOTE_GZ}"
 
-REMOTE_SCRIPT=$(cat <<EOS
+# IMPORTANT: Do not nest \${arr[@]} inside a variable passed to ssh — the local shell expands it empty.
+# Inject paths via printf %q and run a single un-nested heredoc so only the remote bash interprets \$vars.
+echo "Running remote restore on staging..."
+ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "${STAGING_SSH_TARGET}" bash <<EOF
 set -euo pipefail
-cd "${STAGING_APP_DIR}"
-if [[ ! -f "${STAGING_COMPOSE_ENV}" ]]; then
-  echo "Missing ${STAGING_COMPOSE_ENV} in ${STAGING_APP_DIR}" >&2
-  exit 1
-fi
+cd $(printf %q "$STAGING_APP_DIR")
+COMP_FILE=$(printf %q "$STAGING_COMPOSE_FILE")
+COMP_ENV=$(printf %q "$STAGING_COMPOSE_ENV")
+RESTORE_GZ=$(printf %q "$REMOTE_GZ")
+
+run_dc() {
+  if [[ -f "\$COMP_ENV" ]]; then
+    sudo docker compose --env-file "\$COMP_ENV" -f "\$COMP_FILE" "\$@"
+  else
+    sudo docker compose -f "\$COMP_FILE" "\$@"
+  fi
+}
+
 echo "Stopping dependent containers (keeping Postgres)..."
-sudo docker compose --env-file "${STAGING_COMPOSE_ENV}" -f "${STAGING_COMPOSE_FILE}" stop \\
+run_dc stop \\
   graphql-server ui supabase-kong supabase-auth supabase-rest supabase-realtime \\
   supabase-storage supabase-studio supabase-pg-meta supabase-imgproxy 2>/dev/null || true
 echo "Restoring into talia-supabase-db (pg_dump --clean style; ON_ERROR_STOP off)..."
-gunzip -c "${REMOTE_GZ}" | sudo docker exec -i talia-supabase-db psql -q -U postgres -d postgres --set ON_ERROR_STOP=off || true
+gunzip -c "\$RESTORE_GZ" | sudo docker exec -i talia-supabase-db psql -q -U postgres -d postgres --set ON_ERROR_STOP=off || true
 echo "Starting full stack..."
-sudo docker compose --env-file "${STAGING_COMPOSE_ENV}" -f "${STAGING_COMPOSE_FILE}" up -d
+run_dc up -d
 echo "Aligning Postgres role passwords with PostgREST..."
 if [[ -f scripts/supabase/align-db-role-passwords.sh ]]; then
   sudo bash scripts/supabase/align-db-role-passwords.sh --from-running-postgrest
 else
   echo "Warning: missing scripts/supabase/align-db-role-passwords.sh" >&2
 fi
-echo "Persisting POSTGRES_PASSWORD into ${STAGING_COMPOSE_ENV}..."
+ENV_OUT="\$COMP_ENV"
+if [[ ! -f "\$ENV_OUT" ]]; then
+  ENV_OUT=".env.staging"
+fi
+echo "Persisting POSTGRES_PASSWORD into \$ENV_OUT..."
 if [[ -f scripts/supabase/write-postgres-password-from-postgrest-to-env.sh ]]; then
-  sudo bash scripts/supabase/write-postgres-password-from-postgrest-to-env.sh "${STAGING_COMPOSE_ENV}"
+  sudo bash scripts/supabase/write-postgres-password-from-postgrest-to-env.sh "\$ENV_OUT"
 else
   echo "Warning: missing scripts/supabase/write-postgres-password-from-postgrest-to-env.sh" >&2
 fi
 echo "Restarting PostgREST, Kong, GraphQL..."
-sudo docker compose --env-file "${STAGING_COMPOSE_ENV}" -f "${STAGING_COMPOSE_FILE}" restart \\
-  supabase-rest supabase-kong graphql-server
-rm -f "${REMOTE_GZ}"
+run_dc restart supabase-rest supabase-kong graphql-server
+rm -f "\$RESTORE_GZ"
 echo "Done."
-EOS
-)
-
-echo "Running remote restore on staging..."
-ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "${STAGING_SSH_TARGET}" bash <<EOF
-${REMOTE_SCRIPT}
 EOF
 
 echo "Restore finished. Check UI: http://${STAGING_SSH_HOST}:${STAGING_UI_PORT:-5173}/"

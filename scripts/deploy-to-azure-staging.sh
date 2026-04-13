@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Deploy Talia to Azure staging over SSH: git pull + docker compose (optional --full rebuild).
+# Optional: deploy from a VM that has a git clone — git pull origin + docker compose.
+# For day-to-day work, prefer local → host sync: ./scripts/deploy-to-staging.sh or ./scripts/deploy-to-mvp.sh
 # Configure via scripts/config/targets.env (AZURE_STAGING_* vars) or environment variables.
 #
 # Usage:
@@ -62,23 +63,6 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
-
-# Remote VMs run git reset --hard origin/<branch>; they never see unpushed local commits.
-if [[ "${SKIP_ORIGIN_CHECK:-0}" != "1" ]] && [[ -d "${SCRIPT_DIR}/../.git" ]]; then
-  ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-  BR="$(git -C "${ROOT_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-  if [[ -n "$BR" && "$BR" != "HEAD" ]]; then
-    LOCAL_SHA="$(git -C "${ROOT_DIR}" rev-parse HEAD 2>/dev/null || true)"
-    REMOTE_SHA="$(git ls-remote origin "refs/heads/${BR}" 2>/dev/null | awk '{print $1}')"
-    if [[ -n "$REMOTE_SHA" && -n "$LOCAL_SHA" && "$LOCAL_SHA" != "$REMOTE_SHA" ]] &&
-      git -C "${ROOT_DIR}" merge-base --is-ancestor "${REMOTE_SHA}" "${LOCAL_SHA}" 2>/dev/null; then
-      echo -e "${RED}Local branch ${BR} is ahead of origin.${NC} The VM will deploy old code from GitHub." >&2
-      echo "Push first: git push origin ${BR}" >&2
-      echo "Or bypass (not recommended): SKIP_ORIGIN_CHECK=1 $0 ..." >&2
-      exit 1
-    fi
-  fi
-fi
 
 CONFIRM_TOKEN="DEPLOY_AZURE_STACK"
 if [[ "$FULL" == true ]]; then

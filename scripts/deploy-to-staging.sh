@@ -37,6 +37,11 @@ STAGING_UI_SUPABASE_ANON_KEY="${STAGING_UI_SUPABASE_ANON_KEY:-sb_publishable_ACJ
 STAGING_UI_GRAPHQL_ENDPOINT="${STAGING_UI_GRAPHQL_ENDPOINT:-http://${STAGING_HOST}:4000/graphql}"
 STAGING_UI_ENABLE_DEV_MODE="${STAGING_UI_ENABLE_DEV_MODE:-true}"
 
+# Remote Docker Compose invocation (set DEPLOY_DOCKER_COMPOSE='sudo docker compose' for Azure MVP if needed)
+DC="${DEPLOY_DOCKER_COMPOSE:-docker compose}"
+# Remote docker binary for docker cp (set DEPLOY_DOCKER_BIN=sudo docker with sudo compose)
+DOCKER_BIN="${DEPLOY_DOCKER_BIN:-docker}"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -347,9 +352,9 @@ elif [ \"$DEPLOY_MODE\" = \"full\" ]; then
   echo '🎯 Full deployment (backend + UI + schema guard)...'
   if [ -f \"\$REMOTE_SERVER_DIST_ARCHIVE\" ] && [ -f \"\$REMOTE_UI_DIST_ARCHIVE\" ]; then
     echo '📦 Applying local GraphQL/UI artifacts (no remote image rebuild)...'
-    docker compose -f docker-compose.staging.yml up -d --no-deps graphql-server ui
+    ${DC} -f docker-compose.staging.yml up -d --no-deps graphql-server ui
 
-    GRAPHQL_CONTAINER_ID=\$(docker compose -f docker-compose.staging.yml ps -q graphql-server)
+    GRAPHQL_CONTAINER_ID=\$(${DC} -f docker-compose.staging.yml ps -q graphql-server)
     if [ -z \"\$GRAPHQL_CONTAINER_ID\" ]; then
       echo '❌ FAILED - graphql-server container is not running; cannot apply local artifact'
       exit 1
@@ -362,23 +367,23 @@ elif [ \"$DEPLOY_MODE\" = \"full\" ]; then
       echo '❌ FAILED - dist folder missing in GraphQL artifact'
       exit 1
     fi
-    docker cp \"\$TMP_SERVER_DIST_DIR/dist/.\" \"\$GRAPHQL_CONTAINER_ID:/app/dist/\"
+    ${DOCKER_BIN} cp \"\$TMP_SERVER_DIST_DIR/dist/.\" \"\$GRAPHQL_CONTAINER_ID:/app/dist/\"
     if [ -f \"\$TMP_SERVER_DIST_DIR/sync.config.json\" ]; then
-      docker cp \"\$TMP_SERVER_DIST_DIR/sync.config.json\" \"\$GRAPHQL_CONTAINER_ID:/app/sync.config.json\"
-      docker cp \"\$TMP_SERVER_DIST_DIR/sync.config.json\" \"\$GRAPHQL_CONTAINER_ID:/app/dist/sync.config.json\"
+      ${DOCKER_BIN} cp \"\$TMP_SERVER_DIST_DIR/sync.config.json\" \"\$GRAPHQL_CONTAINER_ID:/app/sync.config.json\"
+      ${DOCKER_BIN} cp \"\$TMP_SERVER_DIST_DIR/sync.config.json\" \"\$GRAPHQL_CONTAINER_ID:/app/dist/sync.config.json\"
     fi
     if [ -f \"\$TMP_SERVER_DIST_DIR/sync-cli.js\" ]; then
-      docker cp \"\$TMP_SERVER_DIST_DIR/sync-cli.js\" \"\$GRAPHQL_CONTAINER_ID:/app/sync-cli.js\"
-      docker cp \"\$TMP_SERVER_DIST_DIR/sync-cli.js\" \"\$GRAPHQL_CONTAINER_ID:/app/dist/sync-cli.js\"
+      ${DOCKER_BIN} cp \"\$TMP_SERVER_DIST_DIR/sync-cli.js\" \"\$GRAPHQL_CONTAINER_ID:/app/sync-cli.js\"
+      ${DOCKER_BIN} cp \"\$TMP_SERVER_DIST_DIR/sync-cli.js\" \"\$GRAPHQL_CONTAINER_ID:/app/dist/sync-cli.js\"
     fi
     if [ -f \"\$TMP_SERVER_DIST_DIR/package.json\" ]; then
-      docker cp \"\$TMP_SERVER_DIST_DIR/package.json\" \"\$GRAPHQL_CONTAINER_ID:/app/package.json\"
+      ${DOCKER_BIN} cp \"\$TMP_SERVER_DIST_DIR/package.json\" \"\$GRAPHQL_CONTAINER_ID:/app/package.json\"
     fi
-    docker compose -f docker-compose.staging.yml restart graphql-server
+    ${DC} -f docker-compose.staging.yml restart graphql-server
     rm -rf \"\$TMP_SERVER_DIST_DIR\"
     rm -f \"\$REMOTE_SERVER_DIST_ARCHIVE\"
 
-    UI_CONTAINER_ID=\$(docker compose -f docker-compose.staging.yml ps -q ui)
+    UI_CONTAINER_ID=\$(${DC} -f docker-compose.staging.yml ps -q ui)
     if [ -z \"\$UI_CONTAINER_ID\" ]; then
       echo '❌ FAILED - ui container is not running; cannot apply local dist artifact'
       exit 1
@@ -391,23 +396,23 @@ elif [ \"$DEPLOY_MODE\" = \"full\" ]; then
       echo '❌ FAILED - dist folder missing in UI artifact'
       exit 1
     fi
-    docker cp \"\$TMP_UI_DIST_DIR/dist/.\" \"\$UI_CONTAINER_ID:/usr/share/nginx/html/\"
-    docker compose -f docker-compose.staging.yml restart ui
+    ${DOCKER_BIN} cp \"\$TMP_UI_DIST_DIR/dist/.\" \"\$UI_CONTAINER_ID:/usr/share/nginx/html/\"
+    ${DC} -f docker-compose.staging.yml restart ui
     rm -rf \"\$TMP_UI_DIST_DIR\"
     rm -f \"\$REMOTE_UI_DIST_ARCHIVE\"
     echo '✅ Local GraphQL/UI artifacts applied to running containers'
   else
     echo '🔨 Local artifacts not found; falling back to remote image rebuild...'
-    docker compose -f docker-compose.staging.yml build --no-cache ui graphql-server
-    docker compose -f docker-compose.staging.yml up -d
+    ${DC} -f docker-compose.staging.yml build --no-cache ui graphql-server
+    ${DC} -f docker-compose.staging.yml up -d
     echo '✅ Remote image rebuild succeeded'
   fi
 else
   echo '🎯 UI-only deployment (backend/data services untouched)...'
   if [ -f \"\$REMOTE_UI_DIST_ARCHIVE\" ]; then
     echo '📦 Applying local UI dist artifact (no remote image rebuild)...'
-    docker compose -f docker-compose.staging.yml up -d --no-deps ui
-    UI_CONTAINER_ID=\$(docker compose -f docker-compose.staging.yml ps -q ui)
+    ${DC} -f docker-compose.staging.yml up -d --no-deps ui
+    UI_CONTAINER_ID=\$(${DC} -f docker-compose.staging.yml ps -q ui)
     if [ -z \"\$UI_CONTAINER_ID\" ]; then
       echo '❌ FAILED - ui container is not running; cannot apply local dist artifact'
       exit 1
@@ -420,15 +425,15 @@ else
       echo '❌ FAILED - dist folder missing in fallback archive'
       exit 1
     fi
-    docker cp \"\$TMP_UI_DIST_DIR/dist/.\" \"\$UI_CONTAINER_ID:/usr/share/nginx/html/\"
-    docker compose -f docker-compose.staging.yml restart ui
+    ${DOCKER_BIN} cp \"\$TMP_UI_DIST_DIR/dist/.\" \"\$UI_CONTAINER_ID:/usr/share/nginx/html/\"
+    ${DC} -f docker-compose.staging.yml restart ui
     rm -rf \"\$TMP_UI_DIST_DIR\"
     rm -f \"\$REMOTE_UI_DIST_ARCHIVE\"
     echo '✅ Local UI dist artifact applied to running ui container'
   else
     echo '🔨 No local UI dist artifact found; falling back to remote ui image rebuild...'
-    docker compose -f docker-compose.staging.yml build ui
-    docker compose -f docker-compose.staging.yml up -d --no-deps ui
+    ${DC} -f docker-compose.staging.yml build ui
+    ${DC} -f docker-compose.staging.yml up -d --no-deps ui
     echo '✅ UI image rebuild succeeded'
   fi
 fi
@@ -443,7 +448,7 @@ if [ \"$DEPLOY_MODE\" != \"scripts-only\" ]; then
   sleep 10
 
   echo '📊 Checking service status...'
-  docker compose -f docker-compose.staging.yml ps
+  ${DC} -f docker-compose.staging.yml ps
 
   echo ''
   echo '🧪 Testing critical endpoints...'
@@ -490,7 +495,7 @@ if [ \"$DEPLOY_MODE\" = \"full\" ]; then
 
   # Test required schema tables for ship tracker/inventory memo features
   echo -n '  Testing required tables (inventory_item, inventory_item_memo)... '
-  required_tables_check=\$(docker compose -f docker-compose.staging.yml exec -T supabase-db psql -U postgres -d postgres -tAc \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('inventory_item','inventory_item_memo');\" | tr -d '[:space:]')
+  required_tables_check=\$(${DC} -f docker-compose.staging.yml exec -T supabase-db psql -U postgres -d postgres -tAc \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('inventory_item','inventory_item_memo');\" | tr -d '[:space:]')
   if [ \"\$required_tables_check\" = \"2\" ]; then
     echo '✅ OK'
   else
@@ -537,7 +542,7 @@ if [ "$DRY_RUN" = false ]; then
   echo ""
   echo -e "${BLUE}Next steps:${NC}"
   echo "  1. Verify direct staging: ${STAGING_VERIFY_UI_URL}"
-  echo "  2. Check logs if needed: ssh ${STAGING_USER}@${STAGING_HOST} 'cd ${STAGING_DIR} && docker compose logs'"
+  echo "  2. Check logs if needed: ssh ${STAGING_USER}@${STAGING_HOST} 'cd ${STAGING_DIR} && ${DC} logs'"
 else
   echo -e "${YELLOW}[DRY RUN] Would execute on staging:${NC}"
   echo "$DEPLOY_SCRIPT"

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Git pull + docker compose on the MVP Azure host (same flow as deploy-to-azure-staging.sh).
-# Configure MVP_SSH_* in scripts/config/targets.env.
+# Deploy from this machine to MVP over SSH — same path as LAN staging (tar + local UI/server dist).
+# Does not pull from GitHub on the VM. Configure MVP_* in scripts/config/targets.env.
 #
 # Usage:
-#   ./scripts/deploy-to-mvp.sh [--full] [--with-caddy] [--dry-run]
+#   ./scripts/deploy-to-mvp.sh [--ui-only|--full|--scripts-only|--dry-run]
 #
-# Non-interactive:
-#   AZURE_STAGING_DEPLOY_CONFIRM_TOKEN=DEPLOY_AZURE_FULL ./scripts/deploy-to-mvp.sh --full
+# Non-interactive (same tokens as deploy-to-staging.sh):
+#   STAGING_DEPLOY_CONFIRM_TOKEN=DEPLOY_FULL_STACK ./scripts/deploy-to-mvp.sh --full
 #
-# Preflight: refuses if your local branch is ahead of origin (unpushed commits), because the VM
-# only pulls GitHub. Push first, or set SKIP_ORIGIN_CHECK=1 (deploys whatever is already on origin).
+# Azure user often needs sudo for docker; override if your MVP user is in the docker group:
+#   DEPLOY_DOCKER_COMPOSE="docker compose" ./scripts/deploy-to-mvp.sh --full
 
 set -euo pipefail
 
@@ -20,13 +20,45 @@ if [[ -f "${CONFIG_FILE}" ]]; then
   source "${CONFIG_FILE}"
 fi
 
-export AZURE_STAGING_USER="${MVP_SSH_USER:-azureuser}"
-export AZURE_STAGING_HOST="${MVP_SSH_HOST:-}"
-export AZURE_STAGING_DIR="${MVP_APP_DIR:-/home/${AZURE_STAGING_USER}/talia-docker}"
-
-if [[ -z "$AZURE_STAGING_HOST" ]]; then
+if [[ -z "${MVP_SSH_HOST:-}" ]]; then
   echo "Set MVP_SSH_HOST in scripts/config/targets.env (or export it)." >&2
   exit 1
 fi
 
-exec "${SCRIPT_DIR}/deploy-to-azure-staging.sh" "$@"
+MVP_USER="${MVP_SSH_USER:-azureuser}"
+MVP_HOME="${MVP_APP_DIR:-/home/${MVP_USER}/talia-docker}"
+PUB_HOST="${MVP_UI_HOST:-$MVP_SSH_HOST}"
+UI_PORT="${MVP_UI_PORT:-5173}"
+KONG_PORT="${MVP_KONG_PORT:-54321}"
+GQL_PORT="${MVP_GRAPHQL_PORT:-4000}"
+
+export STAGING_USER="${MVP_USER}"
+export STAGING_HOST="${MVP_SSH_HOST}"
+export STAGING_SSH_USER="${MVP_USER}"
+export STAGING_SSH_HOST="${MVP_SSH_HOST}"
+export STAGING_DIR="${MVP_HOME}"
+export STAGING_APP_DIR="${MVP_HOME}"
+export STAGING_GIT_DIR="${MVP_HOME}"
+
+export STAGING_VERIFY_UI_URL="${STAGING_VERIFY_UI_URL:-http://${PUB_HOST}:${UI_PORT}}"
+export STAGING_UI_SUPABASE_URL="${STAGING_UI_SUPABASE_URL:-http://${PUB_HOST}:${KONG_PORT}}"
+export STAGING_UI_GRAPHQL_ENDPOINT="${STAGING_UI_GRAPHQL_ENDPOINT:-http://${MVP_SSH_HOST}:${GQL_PORT}/graphql}"
+export STAGING_UI_SUPABASE_ANON_KEY="${STAGING_UI_SUPABASE_ANON_KEY:-${MVP_UI_SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}}"
+export STAGING_UI_ENABLE_DEV_MODE="${STAGING_UI_ENABLE_DEV_MODE:-${MVP_UI_ENABLE_DEV_MODE:-true}}"
+
+# Optional: isolate archive paths if you deploy staging and MVP from the same laptop in parallel
+export LOCAL_ARCHIVE="${LOCAL_ARCHIVE:-/tmp/talia-mvp-code-sync.tar.gz}"
+export REMOTE_ARCHIVE="${REMOTE_ARCHIVE:-/tmp/talia-mvp-code-sync.tar.gz}"
+export LOCAL_UI_DIST_ARCHIVE="${LOCAL_UI_DIST_ARCHIVE:-/tmp/talia-mvp-ui-dist.tar.gz}"
+export REMOTE_UI_DIST_ARCHIVE="${REMOTE_UI_DIST_ARCHIVE:-/tmp/talia-mvp-ui-dist.tar.gz}"
+export LOCAL_SERVER_DIST_ARCHIVE="${LOCAL_SERVER_DIST_ARCHIVE:-/tmp/talia-mvp-server-dist.tar.gz}"
+export REMOTE_SERVER_DIST_ARCHIVE="${REMOTE_SERVER_DIST_ARCHIVE:-/tmp/talia-mvp-server-dist.tar.gz}"
+
+export DEPLOY_DOCKER_COMPOSE="${DEPLOY_DOCKER_COMPOSE:-sudo docker compose}"
+export DEPLOY_DOCKER_BIN="${DEPLOY_DOCKER_BIN:-sudo docker}"
+
+if [[ -n "${AZURE_STAGING_DEPLOY_CONFIRM_TOKEN:-}" && -z "${STAGING_DEPLOY_CONFIRM_TOKEN:-}" ]]; then
+  export STAGING_DEPLOY_CONFIRM_TOKEN="${AZURE_STAGING_DEPLOY_CONFIRM_TOKEN}"
+fi
+
+exec "${SCRIPT_DIR}/deploy-to-staging.sh" "$@"

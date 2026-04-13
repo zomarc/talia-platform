@@ -88,6 +88,11 @@ export const typeDefs = `#graphql
     activeProfileId: String
   }
 
+  type TaliaUiThemeRegistryPayload {
+    themes: JSON!
+    assets: JSON!
+  }
+
   type BreakoutScore {
     userId: String!
     highScore: Int!
@@ -910,6 +915,46 @@ export const typeDefs = `#graphql
     dataSources: [DataSource!]!
     settings: JSON
   }
+
+  enum EnvKeyImportance {
+    REQUIRED
+    CONDITIONAL
+    OPTIONAL
+  }
+
+  type InstanceEnvKeyRow {
+    key: String!
+    scope: String!
+    label: String!
+    present: Boolean!
+    sensitive: Boolean!
+    importance: EnvKeyImportance!
+    whenRequired: String
+    note: String
+  }
+
+  type RuntimeDataTarget {
+    id: String!
+    label: String!
+    role: String!
+    address: String!
+    """When true, online is not measured (e.g. Synapse sync disabled on this instance)."""
+    skipped: Boolean!
+    online: Boolean!
+    detail: String
+  }
+
+  type InstanceConnectionProfile {
+    collectedAt: String!
+    configEnvironmentName: String
+    nodeEnv: String!
+    dataSourcePriority: String!
+    synapseSyncDisabled: Boolean!
+    dataTargets: [RuntimeDataTarget!]!
+    envKeys: [InstanceEnvKeyRow!]!
+    backupBetweenInstances: String!
+    architectureNotes: [String!]!
+  }
   
   input IntegrationDateRangeInput {
     integrationName: String
@@ -1146,9 +1191,13 @@ export const typeDefs = `#graphql
     # Date Range Configuration (legacy - env vars)
     dateRangeConfig: DateRangeConfig!
     
+    # Instance wiring (safe snapshot: no secret values, only presence + addresses)
+    instanceConnectionProfile: InstanceConnectionProfile!
+
     # Talia Configuration (database-backed)
     taliaConfig: TaliaConfigSummary!
     appearanceSettings(userId: String): AppearanceSettings!
+    taliaUiThemeRegistry: TaliaUiThemeRegistryPayload!
     userProfileState(userId: String): JSON
     gameScore(gameId: String!, userId: String): GameScore!
     gameLeaderboard(gameId: String!, limitTop: Int, limitRecent: Int): GameLeaderboard!
@@ -1195,6 +1244,7 @@ export const typeDefs = `#graphql
     setDefaultDateRange(id: Int!): IntegrationDateRange!
     saveAppearanceSettings(settings: JSON!, activeProfileId: String, userId: String): AppearanceSettings!
     saveAppearanceProfiles(profiles: JSON!, userId: String): [AppearanceProfile!]!
+    saveTaliaUiThemeRegistry(themes: JSON, assets: JSON): TaliaUiThemeRegistryPayload!
     saveUserProfileState(patch: JSON!, userId: String): JSON
     saveGameScore(gameId: String!, score: Int!, userId: String): GameScore!
     saveBreakoutScore(score: Int!, userId: String): BreakoutScore!

@@ -10,10 +10,17 @@
  */
 
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import theme from '../config/themes';
 import { initChartDefaults } from '../lib/chartConfig';
 import { trackedFetchGraphql } from '../services/data/trackedGraphql';
+import { useSupabaseAuth } from './SupabaseAuthContext.jsx';
+import {
+  TALIA_UI_THEME_KEYS,
+  TALIA_UI_THEMES,
+  mergeTaliaUiThemesFromDb,
+  resolveThemeDefaultHeaderLogoUrl,
+} from '../themes/taliaUiThemes';
 
 const ThemeContext = createContext();
 const APPEARANCE_SETTINGS_QUERY = `
@@ -51,9 +58,23 @@ const SAVE_APPEARANCE_PROFILES_MUTATION = `
   }
 `;
 
-const getCurrentDevUserId = () => {
-  try { return localStorage.getItem('devUserId') || 'dev-user-1'; } catch { return 'dev-user-1'; }
-};
+const TALIA_UI_THEME_REGISTRY_QUERY = `
+  query TaliaUiThemeRegistry {
+    taliaUiThemeRegistry {
+      themes
+      assets
+    }
+  }
+`;
+
+const LEGACY_APPEARANCE_MIGRATE_PREFIX = 'taliaAppearanceMigrated:';
+
+/** Old App.jsx sidebar used `fontSettings.theme` with default/dark/light — not Talia bg ids. */
+const LEGACY_APP_THEME_TO_BG = Object.freeze({
+  default: 'midnight',
+  dark: 'midnight',
+  light: 'porcelain',
+});
 
 const hexToRgb = (hex) => {
   if (typeof hex !== 'string') return null;
@@ -67,6 +88,14 @@ const hexToRgb = (hex) => {
     parseInt(normalized.slice(2, 4), 16),
     parseInt(normalized.slice(4, 6), 16),
   ];
+};
+
+const normalizeCustomBackgroundHex = (value) => {
+  if (value == null) return '';
+  const rgb = hexToRgb(String(value));
+  if (!rgb) return '';
+  const h = (n) => n.toString(16).padStart(2, '0');
+  return `#${h(rgb[0])}${h(rgb[1])}${h(rgb[2])}`.toLowerCase();
 };
 
 const mixRgb = (fromRgb, toRgb, t) => ([
@@ -90,6 +119,9 @@ const normalizeSidebarAutoCloseMs = (value, fallback = 8000) => {
 const normalizeSidebarDisplayMode = (value, fallback = 'panel') => (
   value === 'overlay' ? 'overlay' : fallback
 );
+
+/** @deprecated Import from `../themes/taliaUiThemes` */
+export { TALIA_BG_PRESETS, TALIA_UI_THEME_KEYS as TALIA_BG_COLOR_KEYS } from '../themes/taliaUiThemes';
 
 /**
  * Font families available in the application
@@ -168,82 +200,106 @@ export const useTheme = () => {
  * Provides theme values and font settings to the application
  */
 export const ThemeProvider = ({ children }) => {
-  // Read localStorage once for instant rendering before DB loads.
-  // DB settings override these on load; if DB is empty we migrate these up.
-  const _localFS = (() => {
-    try {
-      const raw = localStorage.getItem('taliaLayout');
-      return raw ? JSON.parse(raw).fontSettings || {} : {};
-    } catch { return {}; }
-  })();
+  const { user, loading: authLoading } = useSupabaseAuth();
+  const rawTaliaId = user?.taliaUserId ?? user?.talia_user_id;
+  const appearanceUserId =
+    rawTaliaId != null && rawTaliaId !== '' ? String(rawTaliaId) : null;
 
-  const _localProfiles = (() => {
-    try {
-      const raw = localStorage.getItem('taliaAppearanceProfiles');
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed.filter((e) => e?.id && e?.name && e?.settings) : [];
-    } catch { return []; }
-  })();
-
-  const _localActiveProfile = (() => {
-    try { return localStorage.getItem('taliaActiveAppearanceProfileId') || ''; } catch { return ''; }
-  })();
-
-  const [fontSize, setFontSize] = useState(_localFS.fontSize ?? 10);
-  const [fontFamily, setFontFamily] = useState(_localFS.fontFamily || 'Inter');
-  const [textIntensity, setTextIntensity] = useState(_localFS.textIntensity ?? 45);
-  const [groupColorIntensity, setGroupColorIntensity] = useState(_localFS.groupColorIntensity ?? 60);
-  const [rowColorIntensity, setRowColorIntensity] = useState(_localFS.rowColorIntensity ?? 40);
-  const [oddRowIntensity, setOddRowIntensity] = useState(_localFS.oddRowIntensity ?? 40);
-  const [cardColorIntensity, setCardColorIntensity] = useState(_localFS.cardColorIntensity ?? 40);
-  const [evenRowIntensity, setEvenRowIntensity] = useState(_localFS.evenRowIntensity ?? 20);
-  const [componentPadding, setComponentPadding] = useState(_localFS.componentPadding ?? 50);
-  const [accentColor, setAccentColor] = useState(_localFS.accentColor ?? 'blue');
-  const [rowAccentColor, setRowAccentColor] = useState(_localFS.rowAccentColor ?? 'slate');
-  const [cardAccentColor, setCardAccentColor] = useState(_localFS.cardAccentColor ?? 'slate');
-  const [groupColorHex, setGroupColorHex] = useState(_localFS.groupColorHex ?? '#385c94');
-  const [rowHoverColorHex, setRowHoverColorHex] = useState(_localFS.rowHoverColorHex ?? '#7890a8');
-  const [oddRowColorHex, setOddRowColorHex] = useState(_localFS.oddRowColorHex ?? '#c8cdd7');
-  const [evenRowColorHex, setEvenRowColorHex] = useState(_localFS.evenRowColorHex ?? '#ffffff');
-  const [tableHeaderColorHex, setTableHeaderColorHex] = useState(_localFS.tableHeaderColorHex ?? '#3f5784');
-  const [cardColorHex, setCardColorHex] = useState(_localFS.cardColorHex ?? '#252a37');
-  const [tableHeaderIntensity, setTableHeaderIntensity] = useState(_localFS.tableHeaderIntensity ?? 60);
-  const [panelTitlesVisible, setPanelTitlesVisible] = useState(
-    _localFS.panelTitlesVisible !== false
-  );
-  const [actionsVisible, setActionsVisible] = useState(
-    _localFS.actionsVisible !== false
-  );
-  const [controlsVisible, setControlsVisible] = useState(
-    _localFS.controlsVisible === true
-  );
+  const [fontSize, setFontSize] = useState(10);
+  const [fontFamily, setFontFamily] = useState('Inter');
+  const [textIntensity, setTextIntensity] = useState(45);
+  const [groupColorIntensity, setGroupColorIntensity] = useState(60);
+  const [rowColorIntensity, setRowColorIntensity] = useState(40);
+  const [oddRowIntensity, setOddRowIntensity] = useState(40);
+  const [cardColorIntensity, setCardColorIntensity] = useState(40);
+  const [evenRowIntensity, setEvenRowIntensity] = useState(20);
+  const [componentPadding, setComponentPadding] = useState(50);
+  const [accentColor, setAccentColor] = useState('blue');
+  const [rowAccentColor, setRowAccentColor] = useState('slate');
+  const [cardAccentColor, setCardAccentColor] = useState('slate');
+  const [groupColorHex, setGroupColorHex] = useState('#385c94');
+  const [rowHoverColorHex, setRowHoverColorHex] = useState('#7890a8');
+  const [oddRowColorHex, setOddRowColorHex] = useState('#c8cdd7');
+  const [evenRowColorHex, setEvenRowColorHex] = useState('#ffffff');
+  const [tableHeaderColorHex, setTableHeaderColorHex] = useState('#3f5784');
+  const [cardColorHex, setCardColorHex] = useState('#252a37');
+  const [tableHeaderIntensity, setTableHeaderIntensity] = useState(60);
+  const [panelTitlesVisible, setPanelTitlesVisible] = useState(true);
+  const [actionsVisible, setActionsVisible] = useState(true);
+  const [controlsVisible, setControlsVisible] = useState(false);
   const [menuDisappearMs, setMenuDisappearMs] = useState(
-    normalizeMenuDisappearMs(_localFS.menuDisappearMs, 5000)
+    normalizeMenuDisappearMs(undefined, 5000)
   );
-  const [sidebarAutoCloseEnabled, setSidebarAutoCloseEnabled] = useState(
-    _localFS.sidebarAutoCloseEnabled === true
-  );
+  const [sidebarAutoCloseEnabled, setSidebarAutoCloseEnabled] = useState(false);
   const [sidebarAutoCloseMs, setSidebarAutoCloseMs] = useState(
-    normalizeSidebarAutoCloseMs(_localFS.sidebarAutoCloseMs, 8000)
+    normalizeSidebarAutoCloseMs(undefined, 8000)
   );
   const [sidebarDisplayMode, setSidebarDisplayMode] = useState(
-    normalizeSidebarDisplayMode(_localFS.sidebarDisplayMode, 'panel')
+    normalizeSidebarDisplayMode(undefined, 'panel')
   );
-  const [calloutsVisible, setCalloutsVisible] = useState(
-    _localFS.calloutsVisible !== false
-  );
-  const [gameSoundEnabled, setGameSoundEnabled] = useState(
-    _localFS.gameSoundEnabled !== false
-  );
+  const [calloutsVisible, setCalloutsVisible] = useState(true);
+  const [gameSoundEnabled, setGameSoundEnabled] = useState(true);
 
-  const [appearanceProfiles, setAppearanceProfiles] = useState(_localProfiles);
-  const [activeAppearanceProfileId, setActiveAppearanceProfileId] = useState(_localActiveProfile);
+  const [appearanceProfiles, setAppearanceProfiles] = useState([]);
+  const [activeAppearanceProfileId, setActiveAppearanceProfileId] = useState('');
   const [appearanceDbLoaded, setAppearanceDbLoaded] = useState(false);
+  const [themeRegistryFromDb, setThemeRegistryFromDb] = useState({ themes: {}, assets: {} });
   const saveSettingsTimerRef = useRef(null);
   const saveProfilesTimerRef = useRef(null);
 
-  const [bgColor, setBgColor] = useState(_localFS.bgColor ?? 'midnight');
+  const mergedTaliaUiThemes = useMemo(
+    () => mergeTaliaUiThemesFromDb(TALIA_UI_THEMES, themeRegistryFromDb.themes),
+    [themeRegistryFromDb.themes]
+  );
+
+  const taliaUiThemeKeysOrdered = useMemo(() => {
+    const keys = Object.keys(mergedTaliaUiThemes);
+    const ordered = [...TALIA_UI_THEME_KEYS];
+    for (const k of keys) {
+      if (!ordered.includes(k)) ordered.push(k);
+    }
+    return ordered;
+  }, [mergedTaliaUiThemes]);
+
+  const normalizeBgColorKey = useCallback((value, fallback = 'midnight') => {
+    if (typeof value !== 'string') return fallback;
+    const k = value.trim();
+    if (!k) return fallback;
+    if (Object.prototype.hasOwnProperty.call(mergedTaliaUiThemes, k)) return k;
+    const lower = k.toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(mergedTaliaUiThemes, lower)) return lower;
+    if (Object.prototype.hasOwnProperty.call(LEGACY_APP_THEME_TO_BG, lower)) {
+      return LEGACY_APP_THEME_TO_BG[lower];
+    }
+    return fallback;
+  }, [mergedTaliaUiThemes]);
+
+  const [bgColor, setBgColorState] = useState('midnight');
+  const setBgColor = useCallback((next) => {
+    setBgColorState(normalizeBgColorKey(typeof next === 'string' ? next : String(next), 'midnight'));
+  }, [normalizeBgColorKey]);
+
+  const resolveThemeDefaultHeaderLogoForTheme = useCallback(
+    (themeKey) => {
+      const meta = mergedTaliaUiThemes[themeKey];
+      if (!meta) return '';
+      return resolveThemeDefaultHeaderLogoUrl(meta, themeRegistryFromDb.assets) || '';
+    },
+    [mergedTaliaUiThemes, themeRegistryFromDb.assets]
+  );
+
+  const [headerLogoUrl, setHeaderLogoUrl] = useState('');
+  const [headerLogoVisible, setHeaderLogoVisible] = useState(true);
+
+  const [customBackgroundHex, setCustomBackgroundHexState] = useState('');
+  const setCustomBackgroundHex = useCallback((next) => {
+    if (next == null || next === '') {
+      setCustomBackgroundHexState('');
+      return;
+    }
+    const n = normalizeCustomBackgroundHex(next);
+    setCustomBackgroundHexState(n || '');
+  }, []);
 
   const selectedFont = FONT_FAMILIES[fontFamily] || FONT_FAMILIES['Inter'];
 
@@ -274,7 +330,10 @@ export const ThemeProvider = ({ children }) => {
     sidebarDisplayMode,
     calloutsVisible,
     gameSoundEnabled,
-  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled]);
+    headerLogoUrl,
+    headerLogoVisible,
+    customBackgroundHex,
+  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, headerLogoUrl, headerLogoVisible, customBackgroundHex]);
 
   const applyAppearanceSettings = (settings) => {
     if (!settings || typeof settings !== 'object') return false;
@@ -287,7 +346,31 @@ export const ThemeProvider = ({ children }) => {
     if (Number.isFinite(settings.evenRowIntensity)) setEvenRowIntensity(settings.evenRowIntensity);
     if (Number.isFinite(settings.cardColorIntensity)) setCardColorIntensity(settings.cardColorIntensity);
     if (Number.isFinite(settings.componentPadding)) setComponentPadding(settings.componentPadding);
-    if (settings.bgColor) setBgColor(settings.bgColor);
+    const rawBg =
+      (Object.prototype.hasOwnProperty.call(settings, 'bgColor') && settings.bgColor != null && String(settings.bgColor).trim() !== '')
+        ? String(settings.bgColor).trim()
+        : (Object.prototype.hasOwnProperty.call(settings, 'currentTheme') && settings.currentTheme != null && String(settings.currentTheme).trim() !== '')
+          ? String(settings.currentTheme).trim()
+          : (Object.prototype.hasOwnProperty.call(settings, 'theme') && settings.theme != null && String(settings.theme).trim() !== '')
+            ? String(settings.theme).trim()
+            : null;
+    if (rawBg) {
+      setBgColor(rawBg);
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'customBackgroundHex')) {
+      const raw = settings.customBackgroundHex;
+      if (raw == null || raw === '') {
+        setCustomBackgroundHex('');
+      } else {
+        setCustomBackgroundHex(String(raw));
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'headerLogoUrl')) {
+      setHeaderLogoUrl(typeof settings.headerLogoUrl === 'string' ? settings.headerLogoUrl : '');
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'headerLogoVisible')) {
+      setHeaderLogoVisible(settings.headerLogoVisible !== false);
+    }
     if (settings.groupColorHex) setGroupColorHex(settings.groupColorHex);
     if (settings.rowHoverColorHex) setRowHoverColorHex(settings.rowHoverColorHex);
     if (settings.oddRowColorHex) setOddRowColorHex(settings.oddRowColorHex);
@@ -360,19 +443,79 @@ export const ThemeProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    if (authLoading) return undefined;
+    setFontSize(10);
+    setFontFamily('Inter');
+    setTextIntensity(45);
+    setGroupColorIntensity(60);
+    setRowColorIntensity(40);
+    setOddRowIntensity(40);
+    setCardColorIntensity(40);
+    setEvenRowIntensity(20);
+    setComponentPadding(50);
+    setAccentColor('blue');
+    setRowAccentColor('slate');
+    setCardAccentColor('slate');
+    setGroupColorHex('#385c94');
+    setRowHoverColorHex('#7890a8');
+    setOddRowColorHex('#c8cdd7');
+    setEvenRowColorHex('#ffffff');
+    setTableHeaderColorHex('#3f5784');
+    setCardColorHex('#252a37');
+    setTableHeaderIntensity(60);
+    setPanelTitlesVisible(true);
+    setActionsVisible(true);
+    setControlsVisible(false);
+    setMenuDisappearMs(normalizeMenuDisappearMs(undefined, 5000));
+    setSidebarAutoCloseEnabled(false);
+    setSidebarAutoCloseMs(normalizeSidebarAutoCloseMs(undefined, 8000));
+    setSidebarDisplayMode(normalizeSidebarDisplayMode(undefined, 'panel'));
+    setCalloutsVisible(true);
+    setGameSoundEnabled(true);
+    setAppearanceProfiles([]);
+    setActiveAppearanceProfileId('');
+    setBgColorState('midnight');
+    setHeaderLogoUrl('');
+    setHeaderLogoVisible(true);
+    setCustomBackgroundHexState('');
+    setAppearanceDbLoaded(false);
+    return undefined;
+  }, [authLoading, appearanceUserId]);
+
+  useEffect(() => {
     let cancelled = false;
+    if (authLoading) return undefined;
+
+    if (appearanceUserId == null) {
+      setAppearanceDbLoaded(true);
+      return undefined;
+    }
+
     const loadAppearanceSettings = async () => {
-      const userId = getCurrentDevUserId();
+      const userId = appearanceUserId;
       try {
-        const data = await trackedFetchGraphql({
-          query: APPEARANCE_SETTINGS_QUERY,
-          variables: { userId },
-          component: 'ThemeContext',
-          purpose: `Load appearance settings for ${userId}`,
-          tableName: 'config_setting'
-        });
+        const [appearanceData, registryData] = await Promise.all([
+          trackedFetchGraphql({
+            query: APPEARANCE_SETTINGS_QUERY,
+            variables: { userId },
+            component: 'ThemeContext',
+            purpose: `Load appearance settings for Talia user ${userId}`,
+            tableName: 'config_setting'
+          }),
+          trackedFetchGraphql({
+            query: TALIA_UI_THEME_REGISTRY_QUERY,
+            component: 'ThemeContext',
+            purpose: 'Load UI theme registry from database',
+            tableName: 'config_setting'
+          })
+        ]);
         if (cancelled) return;
-        const payload = data?.appearanceSettings;
+        const reg = registryData?.taliaUiThemeRegistry;
+        setThemeRegistryFromDb({
+          themes: reg?.themes && typeof reg.themes === 'object' ? reg.themes : {},
+          assets: reg?.assets && typeof reg.assets === 'object' ? reg.assets : {}
+        });
+        const payload = appearanceData?.appearanceSettings;
         const dbHasSettings = payload?.settings && typeof payload.settings === 'object'
           && Object.keys(payload.settings).length > 0;
 
@@ -395,8 +538,82 @@ export const ThemeProvider = ({ children }) => {
           setActiveAppearanceProfileId(payload.activeProfileId);
         }
 
-        if (!dbHasSettings) {
-          console.log(`[ThemeContext] DB empty for ${userId} — migrating localStorage appearance to database`);
+        const migrateKey = `${LEGACY_APPEARANCE_MIGRATE_PREFIX}${userId}`;
+        const dbHasProfiles = Array.isArray(payload?.profiles) && payload.profiles.length > 0;
+        if (!sessionStorage.getItem(migrateKey)) {
+          try {
+            const layoutRaw = localStorage.getItem('taliaLayout');
+            const parsedLayout = layoutRaw ? JSON.parse(layoutRaw) : {};
+            const legacyFs = parsedLayout?.fontSettings && typeof parsedLayout.fontSettings === 'object'
+              ? parsedLayout.fontSettings
+              : null;
+            const profilesRaw = localStorage.getItem('taliaAppearanceProfiles');
+            let legacyProfiles = [];
+            if (profilesRaw) {
+              const pr = JSON.parse(profilesRaw);
+              legacyProfiles = Array.isArray(pr) ? pr.filter((e) => e?.id && e?.name && e?.settings) : [];
+            }
+            const legacyActive = localStorage.getItem('taliaActiveAppearanceProfileId') || '';
+            const hasLegacyFs = legacyFs && Object.keys(legacyFs).length > 0;
+            const migrateSettings = !dbHasSettings && hasLegacyFs;
+            const migrateProfiles = !dbHasProfiles && legacyProfiles.length > 0;
+            const migrateActiveOnly = legacyActive && !migrateSettings && !migrateProfiles;
+            const hasLegacy = hasLegacyFs || legacyProfiles.length > 0 || legacyActive;
+            const shouldMigrate = hasLegacy && (migrateSettings || migrateProfiles || migrateActiveOnly);
+
+            if (shouldMigrate) {
+              if (migrateSettings) {
+                await trackedFetchGraphql({
+                  query: SAVE_APPEARANCE_SETTINGS_MUTATION,
+                  variables: {
+                    settings: legacyFs,
+                    activeProfileId: legacyActive || null,
+                    userId
+                  },
+                  component: 'ThemeContext',
+                  purpose: `One-time legacy appearance migration for Talia user ${userId}`,
+                  tableName: 'config_setting'
+                });
+                applyAppearanceSettings(legacyFs);
+              } else if (migrateActiveOnly) {
+                await trackedFetchGraphql({
+                  query: SAVE_APPEARANCE_SETTINGS_MUTATION,
+                  variables: {
+                    settings: {},
+                    activeProfileId: legacyActive,
+                    userId
+                  },
+                  component: 'ThemeContext',
+                  purpose: `One-time legacy active profile id for Talia user ${userId}`,
+                  tableName: 'config_setting'
+                });
+              }
+              if (migrateProfiles) {
+                await trackedFetchGraphql({
+                  query: SAVE_APPEARANCE_PROFILES_MUTATION,
+                  variables: { profiles: legacyProfiles, userId },
+                  component: 'ThemeContext',
+                  purpose: `One-time legacy profiles migration for Talia user ${userId}`,
+                  tableName: 'config_setting'
+                });
+                setAppearanceProfiles(legacyProfiles);
+              }
+              if (legacyActive && (migrateSettings || migrateProfiles || migrateActiveOnly)) {
+                setActiveAppearanceProfileId(legacyActive);
+              }
+              localStorage.removeItem('taliaAppearanceProfiles');
+              localStorage.removeItem('taliaActiveAppearanceProfileId');
+              if (layoutRaw) {
+                const next = { ...parsedLayout };
+                delete next.fontSettings;
+                localStorage.setItem('taliaLayout', JSON.stringify(next));
+              }
+              sessionStorage.setItem(migrateKey, '1');
+              console.log(`[ThemeContext] Migrated legacy browser appearance to DB for Talia user ${userId}`);
+            }
+          } catch (migrateErr) {
+            console.warn('[ThemeContext] Legacy appearance migration skipped:', migrateErr);
+          }
         }
       } catch (error) {
         console.warn('[ThemeContext] Failed to load appearance settings from DB:', error);
@@ -410,15 +627,23 @@ export const ThemeProvider = ({ children }) => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authLoading, appearanceUserId]);
 
   useEffect(() => {
     if (!appearanceDbLoaded) return undefined;
+    if (!Object.prototype.hasOwnProperty.call(mergedTaliaUiThemes, bgColor)) {
+      setBgColorState('midnight');
+    }
+    return undefined;
+  }, [appearanceDbLoaded, mergedTaliaUiThemes, bgColor]);
+
+  useEffect(() => {
+    if (!appearanceDbLoaded || !appearanceUserId) return undefined;
     if (saveSettingsTimerRef.current) {
       clearTimeout(saveSettingsTimerRef.current);
     }
     saveSettingsTimerRef.current = setTimeout(async () => {
-      const userId = getCurrentDevUserId();
+      const userId = appearanceUserId;
       try {
         await trackedFetchGraphql({
           query: SAVE_APPEARANCE_SETTINGS_MUTATION,
@@ -428,7 +653,7 @@ export const ThemeProvider = ({ children }) => {
             userId
           },
           component: 'ThemeContext',
-          purpose: `Persist appearance settings for ${userId}`,
+          purpose: `Persist appearance settings for Talia user ${userId}`,
           tableName: 'config_setting'
         });
       } catch (error) {
@@ -440,15 +665,15 @@ export const ThemeProvider = ({ children }) => {
         clearTimeout(saveSettingsTimerRef.current);
       }
     };
-  }, [appearanceDbLoaded, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, activeAppearanceProfileId]);
+  }, [appearanceDbLoaded, appearanceUserId, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, customBackgroundHex, headerLogoUrl, headerLogoVisible, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, activeAppearanceProfileId]);
 
   useEffect(() => {
-    if (!appearanceDbLoaded) return undefined;
+    if (!appearanceDbLoaded || !appearanceUserId) return undefined;
     if (saveProfilesTimerRef.current) {
       clearTimeout(saveProfilesTimerRef.current);
     }
     saveProfilesTimerRef.current = setTimeout(async () => {
-      const userId = getCurrentDevUserId();
+      const userId = appearanceUserId;
       try {
         await trackedFetchGraphql({
           query: SAVE_APPEARANCE_PROFILES_MUTATION,
@@ -457,7 +682,7 @@ export const ThemeProvider = ({ children }) => {
             userId
           },
           component: 'ThemeContext',
-          purpose: 'Persist appearance profiles to database',
+          purpose: `Persist appearance profiles for Talia user ${userId}`,
           tableName: 'config_setting'
         });
       } catch (error) {
@@ -469,37 +694,7 @@ export const ThemeProvider = ({ children }) => {
         clearTimeout(saveProfilesTimerRef.current);
       }
     };
-  }, [appearanceDbLoaded, appearanceProfiles]);
-
-  // Write-through localStorage cache for instant load before DB responds
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('taliaLayout');
-      const parsed = saved ? JSON.parse(saved) : {};
-      parsed.fontSettings = {
-        ...(parsed.fontSettings || {}),
-        fontSize, fontFamily, textIntensity, groupColorIntensity,
-        rowColorIntensity, oddRowIntensity, cardColorIntensity,
-        evenRowIntensity, componentPadding, accentColor, rowAccentColor,
-        cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex,
-        evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor,
-        panelTitlesVisible,
-        actionsVisible,
-        controlsVisible,
-        menuDisappearMs,
-        sidebarAutoCloseEnabled,
-        sidebarAutoCloseMs,
-        sidebarDisplayMode,
-        calloutsVisible,
-        gameSoundEnabled,
-      };
-      localStorage.setItem('taliaLayout', JSON.stringify(parsed));
-    } catch { /* best-effort */ }
-    try {
-      localStorage.setItem('taliaAppearanceProfiles', JSON.stringify(appearanceProfiles));
-      localStorage.setItem('taliaActiveAppearanceProfileId', activeAppearanceProfileId || '');
-    } catch { /* best-effort */ }
-  }, [fontSize, fontFamily, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, appearanceProfiles, activeAppearanceProfileId]);
+  }, [appearanceDbLoaded, appearanceUserId, appearanceProfiles]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -588,29 +783,105 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-report-card-min-track', scaledPx(240, 160));
     root.style.setProperty('--theme-auto-disappear-ms', `${normalizeMenuDisappearMs(menuDisappearMs, 5000)}ms`);
 
-    // Global text intensity across app/panels/tables
-    const tt = textIntensity / 100;
-    const fgR = lerpInt(150, 236, tt);
-    const fgG = lerpInt(160, 244, tt);
-    const fgB = lerpInt(178, 252, tt);
-    const fgA = lerp(0.72, 0.98, tt);
-    root.style.setProperty('--theme-fg', `rgba(${fgR}, ${fgG}, ${fgB}, ${fgA})`);
-    root.style.setProperty('--theme-text-secondary', `rgba(${fgR}, ${fgG}, ${fgB}, ${lerp(0.58, 0.90, tt)})`);
-    root.style.setProperty('--theme-text-muted', `rgba(${fgR}, ${fgG}, ${fgB}, ${lerp(0.42, 0.76, tt)})`);
+    const uiTheme = mergedTaliaUiThemes[bgColor] || mergedTaliaUiThemes.midnight;
+    const customBgRgb = (() => {
+      const h = typeof customBackgroundHex === 'string' ? customBackgroundHex.trim() : '';
+      return h ? hexToRgb(h) : null;
+    })();
 
-    // Global background presets: solid + gradient endpoints
-    const BG_PRESETS = {
-      midnight:  { solid: [26, 29, 51],  g1: [17, 19, 37],  g2: [32, 36, 59]  },
-      charcoal:  { solid: [30, 30, 34],  g1: [20, 20, 24],  g2: [38, 38, 44]  },
-      navy:      { solid: [18, 24, 42],  g1: [12, 16, 30],  g2: [26, 34, 56]  },
-      graphite:  { solid: [34, 36, 40],  g1: [24, 26, 30],  g2: [42, 44, 50]  },
-      ocean:     { solid: [18, 30, 38],  g1: [12, 20, 28],  g2: [26, 40, 52]  },
-      obsidian:  { solid: [16, 16, 20],  g1: [10, 10, 14],  g2: [22, 22, 28]  },
-    };
-    const bg = BG_PRESETS[bgColor] || BG_PRESETS.midnight;
-    const [s, g1, g2] = [bg.solid, bg.g1, bg.g2];
+    let warmMed;
+    let lightPalette;
+    let s;
+    let g1;
+    let g2;
+    if (customBgRgb) {
+      s = customBgRgb;
+      g1 = mixRgb(customBgRgb, [0, 0, 0], 0.18);
+      g2 = mixRgb(customBgRgb, [255, 255, 255], 0.14);
+      const luma = ((0.2126 * s[0]) + (0.7152 * s[1]) + (0.0722 * s[2])) / 255;
+      lightPalette = luma > 0.55;
+      warmMed = false;
+    } else {
+      warmMed = uiTheme.palette === 'warmMediterranean';
+      lightPalette = uiTheme.palette === 'light';
+      const bg = uiTheme.bg;
+      s = bg.solid;
+      g1 = bg.g1;
+      g2 = bg.g2;
+    }
+
+    // Global text intensity — dark text on light themes, light text on dark
+    const tt = textIntensity / 100;
+    if (lightPalette) {
+      const dr = lerpInt(42, 24, tt);
+      const dg = lerpInt(48, 28, tt);
+      const db = lerpInt(58, 32, tt);
+      const fgA = lerp(0.88, 0.98, tt);
+      root.style.setProperty('--theme-fg', `rgba(${dr}, ${dg}, ${db}, ${fgA})`);
+      root.style.setProperty('--theme-text-secondary', `rgba(${dr}, ${dg}, ${db}, ${lerp(0.62, 0.82, tt)})`);
+      root.style.setProperty('--theme-text-muted', `rgba(${dr}, ${dg}, ${db}, ${lerp(0.45, 0.68, tt)})`);
+    } else {
+      const fgR = lerpInt(150, 236, tt);
+      const fgG = lerpInt(160, 244, tt);
+      const fgB = lerpInt(178, 252, tt);
+      const fgA = lerp(0.72, 0.98, tt);
+      root.style.setProperty('--theme-fg', `rgba(${fgR}, ${fgG}, ${fgB}, ${fgA})`);
+      root.style.setProperty('--theme-text-secondary', `rgba(${fgR}, ${fgG}, ${fgB}, ${lerp(0.58, 0.90, tt)})`);
+      root.style.setProperty('--theme-text-muted', `rgba(${fgR}, ${fgG}, ${fgB}, ${lerp(0.42, 0.76, tt)})`);
+    }
+
     root.style.setProperty('--theme-bg-solid', `rgb(${s.join(',')})`);
     root.style.setProperty('--theme-bg', `linear-gradient(135deg, rgb(${g1.join(',')}) 0%, rgb(${s.join(',')}) 50%, rgb(${g2.join(',')}) 100%)`);
+
+    root.dataset.taliaBgColor = customBgRgb ? 'custom' : bgColor;
+    root.dataset.taliaUiTheme = customBgRgb ? 'custom' : bgColor;
+
+    root.classList.toggle('talia-theme-palette-warmMediterranean', warmMed);
+    root.classList.toggle('talia-theme-palette-light', lightPalette);
+
+    if (warmMed) {
+      root.style.setProperty('--theme-accent', '#0d9488');
+      root.style.setProperty('--theme-accent-hover', '#0f766e');
+      root.style.setProperty('--theme-accent-light', 'rgba(13, 148, 136, 0.18)');
+      root.style.setProperty('--theme-hover', 'rgba(13, 148, 136, 0.24)');
+      root.style.setProperty('--theme-selected', 'rgba(13, 148, 136, 0.14)');
+      root.style.setProperty('--theme-selected-hover', 'rgba(13, 148, 136, 0.22)');
+      root.style.setProperty('--theme-focus', 'rgba(45, 212, 191, 0.35)');
+      root.style.setProperty('--theme-border', 'rgba(232, 213, 184, 0.14)');
+      root.style.setProperty('--theme-border-light', 'rgba(232, 213, 184, 0.07)');
+      root.style.setProperty('--theme-glass', 'rgba(255, 250, 240, 0.06)');
+      root.style.setProperty('--theme-glass-border', 'rgba(232, 213, 184, 0.12)');
+      root.style.setProperty('--theme-sidebar-border', 'rgba(232, 213, 184, 0.1)');
+      root.style.setProperty('--theme-tabulator-sort-active', '#5eead4');
+    } else if (lightPalette) {
+      root.style.setProperty('--theme-accent', '#2563eb');
+      root.style.setProperty('--theme-accent-hover', '#1d4ed8');
+      root.style.setProperty('--theme-accent-light', 'rgba(37, 99, 235, 0.12)');
+      root.style.setProperty('--theme-hover', 'rgba(37, 99, 235, 0.08)');
+      root.style.setProperty('--theme-selected', 'rgba(37, 99, 235, 0.1)');
+      root.style.setProperty('--theme-selected-hover', 'rgba(37, 99, 235, 0.16)');
+      root.style.setProperty('--theme-focus', 'rgba(37, 99, 235, 0.35)');
+      root.style.setProperty('--theme-border', 'rgba(15, 23, 42, 0.12)');
+      root.style.setProperty('--theme-border-light', 'rgba(15, 23, 42, 0.06)');
+      root.style.setProperty('--theme-glass', 'rgba(255, 255, 255, 0.72)');
+      root.style.setProperty('--theme-glass-border', 'rgba(15, 23, 42, 0.1)');
+      root.style.setProperty('--theme-sidebar-border', 'rgba(15, 23, 42, 0.08)');
+      root.style.setProperty('--theme-tabulator-sort-active', '#2563eb');
+    } else {
+      root.style.setProperty('--theme-accent', '#5b9bd5');
+      root.style.setProperty('--theme-accent-hover', '#4a8bc2');
+      root.style.setProperty('--theme-accent-light', 'rgba(91, 155, 213, 0.15)');
+      root.style.setProperty('--theme-hover', 'rgba(91, 155, 213, 0.25)');
+      root.style.setProperty('--theme-selected', 'rgba(91, 155, 213, 0.15)');
+      root.style.setProperty('--theme-selected-hover', 'rgba(91, 155, 213, 0.25)');
+      root.style.setProperty('--theme-focus', 'rgba(91, 155, 213, 0.4)');
+      root.style.setProperty('--theme-border', 'rgba(255, 255, 255, 0.15)');
+      root.style.setProperty('--theme-border-light', 'rgba(255, 255, 255, 0.08)');
+      root.style.setProperty('--theme-glass', 'rgba(255, 255, 255, 0.08)');
+      root.style.setProperty('--theme-glass-border', 'rgba(255, 255, 255, 0.15)');
+      root.style.setProperty('--theme-sidebar-border', 'rgba(255, 255, 255, 0.12)');
+      root.style.setProperty('--theme-tabulator-sort-active', '#7db3ea');
+    }
 
     // Group row color can be any color selected via color input
     const fallbackAccent = [56, 92, 148];
@@ -662,24 +933,42 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-table-row-even', `rgba(${evenRowRgb.join(',')}, ${lerp(0.00, 0.16, te)})`);
     root.style.setProperty('--theme-table-row-odd', `rgba(${oddRowRgb.join(',')}, ${lerp(0.00, 0.22, to)})`);
     root.style.setProperty('--theme-table-row-hover', `rgba(${rowHoverRgb.join(',')}, ${lerp(0.04, 0.35, tr)})`);
+    if (warmMed) {
+      root.style.setProperty('--theme-table-row-hover', 'rgba(13, 148, 136, 0.16)');
+      root.style.setProperty('--theme-table-row-selected', 'rgba(13, 148, 136, 0.28)');
+      root.style.setProperty('--theme-table-row-selected-hover', 'rgba(13, 148, 136, 0.38)');
+    } else if (lightPalette) {
+      root.style.setProperty('--theme-table-row-hover', 'rgba(37, 99, 235, 0.07)');
+      root.style.setProperty('--theme-table-row-selected', 'rgba(37, 99, 235, 0.12)');
+      root.style.setProperty('--theme-table-row-selected-hover', 'rgba(37, 99, 235, 0.18)');
+    } else {
+      root.style.removeProperty('--theme-table-row-selected');
+      root.style.removeProperty('--theme-table-row-selected-hover');
+    }
     root.style.setProperty('--theme-tabulator-header-bg', `rgba(${headerRgb.join(',')}, ${lerp(0.20, 0.74, th)})`);
     root.style.setProperty('--theme-tabulator-header-border', `rgba(${headerRgb.join(',')}, ${lerp(0.30, 0.88, th)})`);
     root.style.setProperty('--theme-tabulator-header-text', `rgba(${headerTextR}, ${headerTextG}, ${headerTextB}, ${headerTextAlpha})`);
     root.style.setProperty('--theme-card-bg', `rgba(${cardRgb.join(',')}, ${lerp(0.40, 1.00, tc)})`);
 
     // Elevated surfaces blend background base with card accent tint
-    const elR = lerpInt(g2[0], cardRgb[0], tc);
-    const elG = lerpInt(g2[1], cardRgb[1], tc);
-    const elB = lerpInt(g2[2], cardRgb[2], tc);
-    root.style.setProperty('--theme-bg-elevated', `rgb(${elR}, ${elG}, ${elB})`);
-
-    // Panel background derives from the global bg
-    root.style.setProperty('--theme-panel-bg', `rgb(${lerpInt(s[0], 42, 0.3)}, ${lerpInt(s[1], 46, 0.3)}, ${lerpInt(s[2], 68, 0.3)})`);
+    if (lightPalette) {
+      const elR = lerpInt(g2[0], 255, 0.25);
+      const elG = lerpInt(g2[1], 255, 0.25);
+      const elB = lerpInt(g2[2], 255, 0.28);
+      root.style.setProperty('--theme-bg-elevated', `rgb(${elR}, ${elG}, ${elB})`);
+      root.style.setProperty('--theme-panel-bg', `rgb(${lerpInt(s[0], 252, 0.55)}, ${lerpInt(s[1], 252, 0.55)}, ${lerpInt(s[2], 254, 0.55)})`);
+    } else {
+      const elR = lerpInt(g2[0], cardRgb[0], tc);
+      const elG = lerpInt(g2[1], cardRgb[1], tc);
+      const elB = lerpInt(g2[2], cardRgb[2], tc);
+      root.style.setProperty('--theme-bg-elevated', `rgb(${elR}, ${elG}, ${elB})`);
+      root.style.setProperty('--theme-panel-bg', `rgb(${lerpInt(s[0], 42, 0.3)}, ${lerpInt(s[1], 46, 0.3)}, ${lerpInt(s[2], 68, 0.3)})`);
+    }
 
     // Re-sync Chart.js globals with current CSS variables
     initChartDefaults();
 
-  }, [fontSize, selectedFont, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor, menuDisappearMs]);
+  }, [fontSize, selectedFont, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor, customBackgroundHex, menuDisappearMs, mergedTaliaUiThemes]);
 
   // Context value - provide theme and font settings
   const value = {
@@ -687,9 +976,15 @@ export const ThemeProvider = ({ children }) => {
     theme,
     
     // Legacy aliases for backward compatibility
-    currentTheme: 'talia',
-    setCurrentTheme: () => {}, // No-op - single theme
-    availableThemes: [{ key: 'talia', name: 'Talia Professional' }],
+    currentTheme: bgColor,
+    setCurrentTheme: setBgColor,
+    availableThemes: taliaUiThemeKeysOrdered.map((key) => ({
+      key,
+      name: mergedTaliaUiThemes[key]?.label || key,
+    })),
+    taliaUiThemeKeys: taliaUiThemeKeysOrdered,
+    mergedTaliaUiThemes,
+    resolveThemeDefaultHeaderLogoForTheme,
     themeColors: theme.colors,
     
     // Font settings (user-adjustable)
@@ -765,10 +1060,16 @@ export const ThemeProvider = ({ children }) => {
     saveAppearanceProfile,
     applyAppearanceProfile,
 
-    // Background color
+    // UI theme (persisted as bgColor) + optional header logo (any theme)
     bgColor,
     setBgColor,
-    
+    customBackgroundHex,
+    setCustomBackgroundHex,
+    headerLogoUrl,
+    setHeaderLogoUrl,
+    headerLogoVisible,
+    setHeaderLogoVisible,
+
     // Legacy - kept for compatibility
     spacingMode: 'compact',
     setSpacingMode: () => {},

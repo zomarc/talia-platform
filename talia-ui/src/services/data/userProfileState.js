@@ -1,4 +1,5 @@
 import { trackedFetchGraphql } from './trackedGraphql';
+import { GraphQLUtils } from '../../lib/apolloClient';
 
 const USER_PROFILE_STATE_QUERY = `
   query UserProfileState($userId: String) {
@@ -14,9 +15,9 @@ const SAVE_USER_PROFILE_STATE_MUTATION = `
 
 export const getCurrentUserId = () => {
   try {
-    return localStorage.getItem('devUserId')
-      || localStorage.getItem('userId')
-      || 'dev-user-1';
+    const tid = GraphQLUtils.getTaliaUserId?.();
+    if (tid) return tid;
+    return localStorage.getItem('devUserId') || 'dev-user-1';
   } catch {
     return 'dev-user-1';
   }

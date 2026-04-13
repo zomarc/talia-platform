@@ -57,10 +57,12 @@ const normalizeCriteria = (criteria) => {
 const currentUserSnapshot = () => {
   const devUserId = localStorage.getItem('devUserId') || '';
   const userId = localStorage.getItem('userId') || devUserId || 'anonymous';
+  const taliaUserId = localStorage.getItem('taliaUserId') || '';
   const userEmail = localStorage.getItem('userEmail') || '';
   const userRole = localStorage.getItem('userRole') || localStorage.getItem('devUserRole') || 'USER';
   return {
     userId,
+    taliaUserId,
     userEmail,
     userRole,
   };

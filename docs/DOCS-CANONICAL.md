@@ -10,6 +10,7 @@ This file defines the authoritative documentation set for active development.
 - `docs/ARCHITECTURE.md` - system architecture and boundaries
 - `docs/DEVELOPMENT-WORKFLOW.md` - development workflow and daily usage
 - `docs/DEPLOYMENT.md` - deployment and environment operations
+- `docs/AZURE-STAGING.md` - Azure VM + Docker staging (Bicep, Caddy, env files)
 - `docs/QUICK-START-GUIDE.md` - quick startup and verification
 
 ## Canonical UI Standards (Authoritative for `talia-ui`)

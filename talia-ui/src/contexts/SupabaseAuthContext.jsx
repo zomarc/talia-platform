@@ -66,7 +66,8 @@ export const SupabaseAuthProvider = ({ children }) => {
     GraphQLUtils.setUserContext({
       role,
       email: mockUser.email,
-      id: mockUser.id
+      id: mockUser.id,
+      taliaUserId: devEntry.talia_user_id
     });
     
     return mockUser;
@@ -98,7 +99,8 @@ export const SupabaseAuthProvider = ({ children }) => {
     GraphQLUtils.setUserContext({
       role: target.role,
       email: target.email,
-      id: target.id
+      id: target.id,
+      taliaUserId: target.talia_user_id
     });
   };
 
@@ -121,7 +123,8 @@ export const SupabaseAuthProvider = ({ children }) => {
       GraphQLUtils.setUserContext({
         role: newRole,
         email: updatedUser.email,
-        id: updatedUser.id
+        id: updatedUser.id,
+        taliaUserId: updatedUser.talia_user_id ?? updatedUser.taliaUser?.talia_user_id
       });
     }
   };
@@ -204,10 +207,9 @@ export const SupabaseAuthProvider = ({ children }) => {
       
       if (session?.user) {
         try {
-          // Get or create Talia user record (with timeout to prevent hanging)
-          const taliaUserPromise = getOrCreateTaliaUser(session.user);
-          const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 3000));
-          const taliaUser = await Promise.race([taliaUserPromise, timeoutPromise]);
+          // Resolve Talia mapping before marking auth ready — appearance/focus keys need talia_user_id.
+          // (A short Promise.race timeout previously left taliaUser null and broke ThemeContext / GraphQL identity.)
+          const taliaUser = await getOrCreateTaliaUser(session.user);
           
           if (!isMounted) return;
           
@@ -217,12 +219,14 @@ export const SupabaseAuthProvider = ({ children }) => {
           GraphQLUtils.setUserContext({
             role: userRole,
             email: session.user.email,
-            id: session.user.id
+            id: session.user.id,
+            taliaUserId: taliaUser?.talia_user_id ?? null
           });
           
           setUser({
             ...session.user,
             taliaUserId: taliaUser?.talia_user_id || null,
+            talia_user_id: taliaUser?.talia_user_id ?? undefined,
             taliaUser: taliaUser,
             role: userRole
           });
@@ -236,7 +240,8 @@ export const SupabaseAuthProvider = ({ children }) => {
             GraphQLUtils.setUserContext({
               role: userRole,
               email: session.user.email,
-              id: session.user.id
+              id: session.user.id,
+              taliaUserId: null
             });
             setUser({
               ...session.user,
@@ -429,6 +434,7 @@ export const SupabaseAuthProvider = ({ children }) => {
       if (error) throw error;
       setUser(null);
       setSession(null);
+      GraphQLUtils.clearUserContext();
     } catch (err) {
       setError(err);
       console.error('Error signing out:', err.message);

@@ -16,6 +16,7 @@ import ReviewModal from './ReviewModal.jsx';
 import LogsPanel from './LogsPanel.jsx';
 import ServerStatusPanel from './ServerStatusPanel.jsx';
 import DataManagementTable from './DataManagementTable.jsx';
+import InstanceConnectionPanel from './InstanceConnectionPanel.jsx';
 import TargetImportSection from './TargetImportSection.jsx';
 import { createTableActions } from './tableActions.js';
 import { formatDayMon } from '../../../lib/dateFormat';
@@ -1928,6 +1929,9 @@ The backup will be saved to: talia-server/backups/`;
           <button className={`admin-tab ${activeSection === 'backup-status' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('backup-status')}>
             Backup and Status
           </button>
+          <button className={`admin-tab ${activeSection === 'instance-connection' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('instance-connection')}>
+            Instance &amp; keys
+          </button>
           <button className={`admin-tab ${activeSection === 'operations' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('operations')}>
             Operations
           </button>
@@ -1988,6 +1992,12 @@ The backup will be saved to: talia-server/backups/`;
               sectionFilterText: internalFilterText,
               sectionSetFilterText: setInternalFilterText,
             })
+          )}
+
+          {activeSection === 'instance-connection' && (
+            <div className="dm-tab-stack">
+              <InstanceConnectionPanel formatDateTime={formatDateTime} />
+            </div>
           )}
 
           {activeSection === 'backup-status' && (

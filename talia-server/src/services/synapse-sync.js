@@ -31,6 +31,12 @@ import { getSyncConfigNameForTable, getSyncTypeForTable } from '../config/table-
 const require = createRequire(import.meta.url);
 const syncConfig = require('../../sync.config.json');
 
+/** When set to 1/true/yes/on, blocks all Synapse → Supabase sync (CLI, GraphQL, dataset runs). */
+export function isSynapseSyncDisabled() {
+  const v = (process.env.TALIA_SYNAPSE_SYNC_DISABLED || '').toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
+
 class SynapseSyncService {
   constructor() {
     this.synapseConfig = {
@@ -2002,6 +2008,18 @@ class SynapseSyncService {
     // CRITICAL: Use uiTableName for event emission (what UI listens to)
     // tableName is the sync config name (camelCase), uiTableName is the UI table name (snake_case)
     const eventTableName = overrides.uiTableName || tableName;
+
+    if (isSynapseSyncDisabled()) {
+      return {
+        success: false,
+        tableName,
+        message: 'Synapse sync is disabled (TALIA_SYNAPSE_SYNC_DISABLED).',
+        recordsProcessed: 0,
+        duration: 0,
+        error: 'Synapse sync disabled (TALIA_SYNAPSE_SYNC_DISABLED)',
+        detailedLogs: []
+      };
+    }
     
     // CONCURRENCY CONTROL: Check if sync is already running (use sync config name)
     const existingSync = this.activeSyncs.get(tableName);
@@ -2127,6 +2145,19 @@ class SynapseSyncService {
   async syncDataset(datasetName = this.defaultDataset) {
     if (!datasetName) {
       throw new Error('No dataset specified and no default dataset available.');
+    }
+
+    if (isSynapseSyncDisabled()) {
+      console.warn('Synapse sync disabled (TALIA_SYNAPSE_SYNC_DISABLED); skipping dataset sync.');
+      return {
+        success: false,
+        dataset: datasetName,
+        totalTables: 0,
+        successfulTables: 0,
+        totalRecords: 0,
+        duration: 0,
+        results: []
+      };
     }
 
     const dataset = this.getDatasetConfig(datasetName);

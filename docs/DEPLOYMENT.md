@@ -25,6 +25,8 @@ Talia Platform supports three deployment strategies:
 
 Choose the strategy that best fits your infrastructure and scaling needs.
 
+For a **self-hosted Docker stack on an Azure Ubuntu VM** (Supabase + GraphQL + UI, optional Caddy TLS), use **`docs/AZURE-STAGING.md`**.
+
 ---
 
 ## 🔑 API Keys & Configuration

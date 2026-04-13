@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { GraphQLUtils } from '../../../lib/apolloClient';
 import { loadGameScore, loadGameScoreBoard, saveGameScore } from '../../../services/data/gameScores';
 
-const getCurrentUserId = () => {
+const getScoreUserId = () => {
   try {
-    return localStorage.getItem('devUserId')
-      || localStorage.getItem('userId')
-      || 'dev-user-1';
+    const tid = GraphQLUtils.getTaliaUserId?.();
+    if (tid) return tid;
+    return localStorage.getItem('devUserId') || 'dev-user-1';
   } catch {
     return 'dev-user-1';
   }
@@ -18,14 +19,12 @@ const useArcadeGameScores = ({ gameId, componentLabel }) => {
   const [saving, setSaving] = useState(false);
   const [leaderboardLoading, setLeaderboardLoading] = useState(true);
   const [scoreState, setScoreState] = useState({
-    userId: getCurrentUserId(),
+    userId: getScoreUserId(),
     highScore: 0,
     lastScore: 0,
     updatedAt: null,
   });
   const [leaderboard, setLeaderboard] = useState({ top: [], recent: [] });
-
-  const userId = useMemo(() => getCurrentUserId(), []);
 
   const loadLeaderboard = useCallback(async () => {
     setLeaderboardLoading(true);
@@ -50,6 +49,7 @@ const useArcadeGameScores = ({ gameId, componentLabel }) => {
   const loadScore = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const userId = getScoreUserId();
     try {
       const payload = await loadGameScore({
         gameId,
@@ -68,7 +68,7 @@ const useArcadeGameScores = ({ gameId, componentLabel }) => {
       setLoading(false);
     }
     await loadLeaderboard();
-  }, [componentLabel, gameId, loadLeaderboard, userId]);
+  }, [componentLabel, gameId, loadLeaderboard]);
 
   useEffect(() => {
     loadScore();
@@ -76,6 +76,7 @@ const useArcadeGameScores = ({ gameId, componentLabel }) => {
 
   const saveScore = useCallback(async (score) => {
     const parsedScore = Math.max(0, Number(score) || 0);
+    const userId = getScoreUserId();
     setSaving(true);
     setSaveError(null);
     try {
@@ -101,7 +102,7 @@ const useArcadeGameScores = ({ gameId, componentLabel }) => {
     } finally {
       setSaving(false);
     }
-  }, [componentLabel, gameId, loadLeaderboard, userId]);
+  }, [componentLabel, gameId, loadLeaderboard]);
 
   return {
     loading,

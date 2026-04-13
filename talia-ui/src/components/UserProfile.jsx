@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
+import { GraphQLUtils } from '../lib/apolloClient';
 import { loadGameScore, loadGameScoreBoard } from '../services/data/gameScores';
 import {
   isAdmin,
@@ -20,9 +21,7 @@ const UserProfile = ({ isCollapsed }) => {
   const [adminUserScores, setAdminUserScores] = useState([]);
   const [adminScoresLoading, setAdminScoresLoading] = useState(false);
 
-  if (!user) return null;
-
-  const normalizedRole = normalizeRole(user.role || 'USER');
+  const normalizedRole = normalizeRole(user?.role || 'USER');
   const roleDisplay = normalizedRole === 'SUPER_USER' ? 'Super User' : (
     normalizedRole.charAt(0) + normalizedRole.slice(1).toLowerCase()
   );
@@ -68,7 +67,8 @@ const UserProfile = ({ isCollapsed }) => {
 
   const activeUserId = useMemo(() => (
     String(
-      user?.id
+      (user?.taliaUserId ?? user?.talia_user_id ?? GraphQLUtils.getTaliaUserId?.())
+      || user?.id
       || user?.userId
       || localStorage.getItem('userId')
       || localStorage.getItem('devUserId')
@@ -146,6 +146,8 @@ const UserProfile = ({ isCollapsed }) => {
       cancelled = true;
     };
   }, [activeUserId, normalizedRole, trackedGameIds]);
+
+  if (!user) return null;
 
   const handleSignOut = async () => {
     try {

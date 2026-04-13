@@ -3,7 +3,7 @@
 // CLI for Talia Data Sync Service
 // Provides easy command-line interface for syncing data from Synapse to Supabase
 
-import { synapseSyncService } from './src/services/synapse-sync.js';
+import { synapseSyncService, isSynapseSyncDisabled } from './src/services/synapse-sync.js';
 
 const command = process.argv[2];
 const arg1 = process.argv[3];
@@ -79,6 +79,10 @@ async function main() {
   try {
     switch (command) {
       case 'sync-all': {
+        if (isSynapseSyncDisabled()) {
+          console.error('❌ Synapse sync is disabled (TALIA_SYNAPSE_SYNC_DISABLED). Unset it or set to 0 to run sync.');
+          process.exit(1);
+        }
         try {
           const dataset = resolveDataset(arg1);
           console.log(`🚀 Starting full data sync for dataset "${dataset}"...`);
@@ -97,6 +101,10 @@ async function main() {
       }
 
       case 'sync-dataset':
+        if (isSynapseSyncDisabled()) {
+          console.error('❌ Synapse sync is disabled (TALIA_SYNAPSE_SYNC_DISABLED). Unset it or set to 0 to run sync.');
+          process.exit(1);
+        }
         if (!arg1) {
           console.error('❌ Please specify dataset name: node sync-cli.js sync-dataset sept-dec-2025');
           listDatasets();
@@ -117,6 +125,10 @@ async function main() {
         break;
 
       case 'sync-table':
+        if (isSynapseSyncDisabled()) {
+          console.error('❌ Synapse sync is disabled (TALIA_SYNAPSE_SYNC_DISABLED). Unset it or set to 0 to run sync.');
+          process.exit(1);
+        }
         if (!arg1) {
           console.error('❌ Please specify table name: node sync-cli.js sync-table ships');
           console.log('\nAvailable tables:');

@@ -2,7 +2,7 @@
 
 import { sampleData } from './schema.js';
 import { supabaseDataService } from '../services/supabase.js';
-import { synapseSyncService } from '../services/synapse-sync.js';
+import { synapseSyncService, isSynapseSyncDisabled } from '../services/synapse-sync.js';
 import { googleSearchService } from '../services/google-search.js';
 import { googleTrendsService } from '../services/google-trends.js';
 import { googleTrendsService as googleTrendsApiService } from '../services/google-trends-service.js';
@@ -24,6 +24,7 @@ import {
 import { uiActivityMutationResolvers, uiActivityQueryResolvers } from './resolver-modules/uiActivityResolvers.js';
 import { userMutationResolvers, userQueryResolvers } from './resolver-modules/userResolvers.js';
 import { statusQueryResolvers } from './resolver-modules/statusResolvers.js';
+import { instanceConnectionQueryResolvers } from './resolver-modules/instanceConnectionResolvers.js';
 import { refreshQueryResolvers } from './resolver-modules/refreshResolvers.js';
 import { metadataQueryResolvers } from './resolver-modules/metadataResolvers.js';
 import { buildTableCatalogQueryResolvers } from './resolver-modules/tableCatalogResolvers.js';
@@ -700,6 +701,8 @@ const mapGraphQLFocusToDb = (input: any, createdBy?: string) => {
 };
 
 const APPEARANCE_SETTINGS_CATEGORY = 'ui_appearance';
+const THEME_REGISTRY_SETTING_KEY = 'theme_registry';
+const THEME_ASSET_OVERRIDES_SETTING_KEY = 'theme_asset_overrides';
 const USER_PROFILE_CATEGORY = 'ui_profile';
 const GAME_SETTINGS_CATEGORY = 'ui_game';
 const DEFAULT_GAME_ID = 'breakout';
@@ -917,6 +920,15 @@ const mapAppearanceSettingsPayload = (settings: any, profiles: any, activeProfil
   profiles: normalizeAppearanceProfiles(profiles),
   activeProfileId: typeof activeProfileId === 'string' ? activeProfileId : null
 });
+
+const mergeAppearanceSettingsObjects = (globalSettings: any, userSettings: any) => {
+  const g = globalSettings && typeof globalSettings === 'object' && !Array.isArray(globalSettings) ? globalSettings : {};
+  if (userSettings === undefined || userSettings === null) {
+    return { ...g };
+  }
+  const u = userSettings && typeof userSettings === 'object' && !Array.isArray(userSettings) ? userSettings : {};
+  return { ...g, ...u };
+};
 
 const normalizeUserProfileState = (raw: any) => {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
@@ -2077,6 +2089,7 @@ export const resolvers = {
     },
 
     ...statusQueryResolvers,
+    ...instanceConnectionQueryResolvers,
     ...metadataQueryResolvers,
     ...tableCatalogQueryResolvers,
     ...tableDataQueryResolvers,
@@ -2276,12 +2289,48 @@ export const resolvers = {
     appearanceSettings: async (parent: any, args: any) => {
       const uid = args.userId || null;
       try {
-        const [settings, profiles, activeProfileId] = await Promise.all([
+        if (!uid) {
+          const [settings, profiles, activeProfileId] = await Promise.all([
+            configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('current_settings', null)),
+            configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('profiles', null)),
+            configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('active_profile_id', null))
+          ]);
+          return mapAppearanceSettingsPayload(settings, profiles, activeProfileId);
+        }
+
+        const [
+          globalSettings,
+          globalProfiles,
+          globalActive,
+          userSettings,
+          userProfiles,
+          userActive
+        ] = await Promise.all([
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('current_settings', null)),
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('profiles', null)),
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('active_profile_id', null)),
           configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('current_settings', uid)),
           configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('profiles', uid)),
           configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('active_profile_id', uid))
         ]);
-        return mapAppearanceSettingsPayload(settings, profiles, activeProfileId);
+
+        const mergedSettings = mergeAppearanceSettingsObjects(globalSettings, userSettings);
+        const userProfilesNorm = normalizeAppearanceProfiles(userProfiles);
+        const globalProfilesNorm = normalizeAppearanceProfiles(globalProfiles);
+        const profiles =
+          userProfiles !== undefined && userProfiles !== null
+            ? userProfilesNorm
+            : globalProfilesNorm;
+        const activeProfileId =
+          userActive !== undefined && userActive !== null
+            ? typeof userActive === 'string'
+              ? userActive
+              : null
+            : typeof globalActive === 'string'
+              ? globalActive
+              : null;
+
+        return mapAppearanceSettingsPayload(mergedSettings, profiles, activeProfileId);
       } catch (error: any) {
         console.error('Error getting appearance settings:', error);
         return {
@@ -2289,6 +2338,22 @@ export const resolvers = {
           profiles: [],
           activeProfileId: null
         };
+      }
+    },
+
+    taliaUiThemeRegistry: async () => {
+      try {
+        const [themes, assets] = await Promise.all([
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, THEME_REGISTRY_SETTING_KEY),
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, THEME_ASSET_OVERRIDES_SETTING_KEY)
+        ]);
+        return {
+          themes: themes && typeof themes === 'object' ? themes : {},
+          assets: assets && typeof assets === 'object' ? assets : {}
+        };
+      } catch (error: any) {
+        console.error('Error getting UI theme registry:', error);
+        return { themes: {}, assets: {} };
       }
     },
 
@@ -3352,6 +3417,18 @@ export const resolvers = {
             detailedLogs: []
           };
         }
+
+        if (isSynapseSyncDisabled()) {
+          return {
+            success: false,
+            tableName,
+            message: 'Synapse sync is disabled (TALIA_SYNAPSE_SYNC_DISABLED).',
+            recordsProcessed: null,
+            duration: null,
+            error: 'Synapse sync disabled (TALIA_SYNAPSE_SYNC_DISABLED)',
+            detailedLogs: []
+          };
+        }
         
         // Create logger for sync operation
         const logger = new SyncLogger(tableName, syncEventEmitter);
@@ -3535,6 +3612,51 @@ export const resolvers = {
       } catch (error: any) {
         console.error('Error saving appearance profiles:', error);
         throw new Error(`Failed to save appearance profiles: ${error.message}`);
+      }
+    },
+
+    saveTaliaUiThemeRegistry: async (parent: any, args: any) => {
+      const { themes, assets } = args;
+      try {
+        if (themes !== undefined && themes !== null) {
+          if (typeof themes !== 'object' || Array.isArray(themes)) {
+            throw new Error('themes must be a JSON object');
+          }
+          await configService.upsertSetting(
+            APPEARANCE_SETTINGS_CATEGORY,
+            THEME_REGISTRY_SETTING_KEY,
+            themes,
+            {
+              displayName: 'Talia UI theme registry',
+              description: 'Named UI themes (gradients, palettes, default header logo references)'
+            }
+          );
+        }
+        if (assets !== undefined && assets !== null) {
+          if (typeof assets !== 'object' || Array.isArray(assets)) {
+            throw new Error('assets must be a JSON object');
+          }
+          await configService.upsertSetting(
+            APPEARANCE_SETTINGS_CATEGORY,
+            THEME_ASSET_OVERRIDES_SETTING_KEY,
+            assets,
+            {
+              displayName: 'Talia UI theme assets',
+              description: 'Inline SVG or other small asset payloads keyed by filename'
+            }
+          );
+        }
+        const [savedThemes, savedAssets] = await Promise.all([
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, THEME_REGISTRY_SETTING_KEY),
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, THEME_ASSET_OVERRIDES_SETTING_KEY)
+        ]);
+        return {
+          themes: savedThemes && typeof savedThemes === 'object' ? savedThemes : {},
+          assets: savedAssets && typeof savedAssets === 'object' ? savedAssets : {}
+        };
+      } catch (error: any) {
+        console.error('Error saving UI theme registry:', error);
+        throw new Error(`Failed to save UI theme registry: ${error.message}`);
       }
     },
 

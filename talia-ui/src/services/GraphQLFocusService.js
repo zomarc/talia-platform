@@ -1,4 +1,4 @@
-import { apolloClient } from '../lib/apolloClient';
+import { apolloClient, GraphQLUtils } from '../lib/apolloClient';
 import { gql } from '@apollo/client';
 import { normalizeRole } from '../utils/roleUtils';
 
@@ -215,15 +215,16 @@ class GraphQLFocusService {
   async getFocusesForRole(userRole, userId) {
     try {
       const normalizedRole = normalizeRole(userRole || 'USER');
-      const devUserId = userId || localStorage.getItem('devUserId') || null;
-      console.log(`🔍 Getting focuses for role from GraphQL: ${normalizedRole}, userId: ${devUserId}`);
+      const taliaUserId =
+        userId || GraphQLUtils.getTaliaUserId?.() || localStorage.getItem('devUserId') || null;
+      console.log(`🔍 Getting focuses for role from GraphQL: ${normalizedRole}, taliaUserId: ${taliaUserId}`);
 
       let data;
       let error;
       try {
         const result = await apolloClient.query({
           query: GET_FOCUSES_BY_ROLE_QUERY,
-          variables: { role: normalizedRole, userId: devUserId },
+          variables: { role: normalizedRole, userId: taliaUserId },
           fetchPolicy: 'network-only',
           errorPolicy: 'all'
         });

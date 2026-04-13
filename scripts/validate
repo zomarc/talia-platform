@@ -10,12 +10,13 @@
 #   ./scripts/validate start-core | stop-core
 #   ./scripts/validate external-on | external-off
 #   ./scripts/validate comprehensive      # Full validate-staging.sh (slow)
+#   ./scripts/validate deploy-themes-db   # Upsert UI themes (+ optional Talia id 1000 appearance) to staging DB only
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SCRIPT_VERSION="2026-04-08.1"
+SCRIPT_VERSION="2026-04-13.1"
 CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
 if [[ -f "${CONFIG_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -65,6 +66,18 @@ else
 fi
 STAGING_SUPABASE_KONG_PORT="${STAGING_SUPABASE_KONG_PORT:-${DEFAULT_STAGING_SUPABASE_KONG_PORT}}"
 STAGING_SUPABASE_URL="${STAGING_SUPABASE_URL:-http://${STAGING_UI_HOST:-${STAGING_HOST}}:${STAGING_SUPABASE_KONG_PORT}/}"
+STAGING_SUPABASE_ANON_KEY="${STAGING_SUPABASE_ANON_KEY:-${STAGING_UI_SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}}"
+STAGING_SUPABASE_SERVICE_ROLE_KEY="${STAGING_SUPABASE_SERVICE_ROLE_KEY:-}"
+
+# MVP (Azure test instance — scripts/backup-local-db-for-mvp.sh, restore-db-to-mvp.sh)
+MVP_VALIDATE="${MVP_VALIDATE:-0}"
+MVP_UI_HOST="${MVP_UI_HOST:-}"
+MVP_UI_PORT="${MVP_UI_PORT:-5173}"
+MVP_GRAPHQL_PORT="${MVP_GRAPHQL_PORT:-4000}"
+MVP_KONG_PORT="${MVP_KONG_PORT:-54321}"
+MVP_UI_URL="${MVP_UI_URL:-http://${MVP_UI_HOST}:${MVP_UI_PORT}}"
+MVP_GRAPHQL_URL="${MVP_GRAPHQL_URL:-http://${MVP_UI_HOST}:${MVP_GRAPHQL_PORT}/graphql}"
+MVP_SUPABASE_URL="${MVP_SUPABASE_URL:-http://${MVP_UI_HOST}:${MVP_KONG_PORT}/}"
 
 PUBLIC_MAIN_URL="${PUBLIC_MAIN_URL:-https://taliahub.com}"
 PUBLIC_SECONDARY_URL="${PUBLIC_SECONDARY_URL:-https://celestyal.taliahub.com}"
@@ -513,6 +526,7 @@ print_quick_targets_summary() {
   local target_status_plain_text ext_status_plain_text
   local local_marker staging_marker
   local header_sep
+  local mvp_ui mvp_gql mvp_sb mvp_ui_version
   work=$(get_effective_working_target)
   presenter=$(get_current_target)
 
@@ -528,6 +542,17 @@ print_quick_targets_summary() {
     st_ui=$(get_http_code_quick "${STAGING_UI_URL}/" 1)
     st_gql=$(get_http_code_quick "${STAGING_GRAPHQL_URL%/}" 1)
     st_sb=$(get_http_code_quick "${STAGING_SUPABASE_URL}" 1)
+  fi
+
+  mvp_ui="000"
+  mvp_gql="000"
+  mvp_sb="000"
+  mvp_ui_version="n/a"
+  if [[ "$MVP_VALIDATE" == "1" && -n "$MVP_UI_HOST" ]]; then
+    mvp_ui=$(get_http_code_quick "${MVP_UI_URL}/" 1)
+    mvp_gql=$(get_http_code_quick "${MVP_GRAPHQL_URL%/}" 1)
+    mvp_sb=$(get_http_code_quick "${MVP_SUPABASE_URL}" 1)
+    mvp_ui_version=$(quick_ui_version_label "${MVP_UI_URL}" "${mvp_ui}" "false")
   fi
 
   local pub_headers
@@ -602,12 +627,21 @@ print_quick_targets_summary() {
   printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "Staging" "${STAGING_UI_HOST:-?}:${STAGING_UI_PORT} UI" "$(quick_up_label "$st_ui" "200")"
   printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "" "${STAGING_UI_HOST:-?}:${STAGING_GRAPHQL_PORT:-4000} GraphQL" "$(quick_up_label "$st_gql" "gql")"
   printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "" "${STAGING_UI_HOST:-?}:${STAGING_SUPABASE_KONG_PORT} Kong" "$(quick_up_label "$st_sb" "kong")"
+  if [[ "$MVP_VALIDATE" == "1" && -n "$MVP_UI_HOST" ]]; then
+    echo ""
+    printf "  %s %-9s  %-36s  %s\n" " " "MVP" "${MVP_UI_HOST}:${MVP_UI_PORT} UI (Azure)" "$(quick_up_label "$mvp_ui" "200")"
+    printf "  %s %-9s  %-36s  %s\n" " " "" "${MVP_UI_HOST}:${MVP_GRAPHQL_PORT} GraphQL" "$(quick_up_label "$mvp_gql" "gql")"
+    printf "  %s %-9s  %-36s  %s\n" " " "" "${MVP_UI_HOST}:${MVP_KONG_PORT} Kong" "$(quick_up_label "$mvp_sb" "kong")"
+  fi
   echo ""
   printf "  %-10s  %-36s  HTTP %s  gateway=%s\n" "External" "${PUBLIC_MAIN_URL}" "${pub_code}" "${gateway}"
   echo ""
   echo -e "${BOLD}Deployed Versions${NC}"
   printf "  %s %-9s  %-36s  %s\n" "$local_marker" "Local" "${LOCAL_UI_URL}" "${loc_ui_version}"
   printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "Staging" "${STAGING_UI_URL}" "${st_ui_version}"
+  if [[ "$MVP_VALIDATE" == "1" && -n "$MVP_UI_HOST" ]]; then
+    printf "  %-10s  %-36s  %s\n" "MVP" "${MVP_UI_URL}" "${mvp_ui_version}"
+  fi
   printf "  %-10s  %-36s  %s\n" "Public" "${PUBLIC_MAIN_URL}" "${pub_ui_version}"
   echo ""
 }
@@ -694,10 +728,23 @@ print_front_page_status() {
   local local_external_label
   local staging_external_label
   local remembered_target
+  local mvp_ui_code
+  local mvp_status
 
   local_ui_code=$(get_http_code "${local_ui_url}/")
   staging_ui_code=$(get_http_code "${staging_ui_url}/")
   public_code=$(get_http_code "${public_url}/")
+
+  mvp_ui_code="000"
+  mvp_status="n/a"
+  if [[ "$MVP_VALIDATE" == "1" && -n "$MVP_UI_HOST" ]]; then
+    mvp_ui_code=$(get_http_code "${MVP_UI_URL}/")
+    if [[ "$mvp_ui_code" == "200" || "$mvp_ui_code" == "302" ]]; then
+      mvp_status="UP"
+    else
+      mvp_status="DOWN"
+    fi
+  fi
 
   local_ui_version=$(get_display_version "${local_ui_url}")
   staging_ui_version=$(get_display_version "${staging_ui_url}")
@@ -759,10 +806,13 @@ print_front_page_status() {
   echo -e "  1) ${PUBLIC_MAIN_URL} target: ${BOLD}${presenter}${NC} (gateway=${gateway})"
   echo -e "  2) target version: ${public_version}"
   echo -e "  3) target status: ${target_status} (HTTP ${public_code})"
-  echo -e "  4) local: ${local_status} (HTTP ${local_ui_code}, v${local_ui_version}) | staging: ${staging_status} (HTTP ${staging_ui_code}, v${staging_ui_version})"
+  echo -e "  4) local: ${local_status} (HTTP ${local_ui_code}, v${local_ui_version}) | staging: ${staging_status} (HTTP ${staging_ui_code}, v${staging_ui_version}) | mvp: ${mvp_status} (HTTP ${mvp_ui_code})"
   echo -e "     Remembered target -> ${remembered_target:-none}"
   echo -e "     Local addresses   -> direct: ${local_ui_url} | external: ${local_external_label}"
   echo -e "     Staging addresses -> direct: ${staging_ui_url} | external: ${staging_external_label}"
+  if [[ "$MVP_VALIDATE" == "1" && -n "$MVP_UI_HOST" ]]; then
+    echo -e "     MVP (Azure)       -> direct: ${MVP_UI_URL}"
+  fi
   echo -e "     External aliases  -> ${PUBLIC_MAIN_URL} | ${PUBLIC_SECONDARY_URL}"
   echo ""
 }
@@ -1168,6 +1218,42 @@ reboot_staging_emergency() {
   run_command "ssh ${STAGING_SSH_BASE_OPTS} ${STAGING_SSH_TARGET} \"sudo nohup bash -lc 'sleep 2; /sbin/reboot' >/tmp/talia-reboot.log 2>&1 < /dev/null & echo REBOOT_SCHEDULED\"" "Schedule remote reboot on staging host" "20"
 }
 
+deploy_ui_themes_db_to_staging() {
+  if $IS_ON_STAGING; then
+    echo -e "${YELLOW}Run UI theme DB sync from your local dev machine, not on staging.${NC}"
+    return 1
+  fi
+
+  if [[ ! -f "${SCRIPT_DIR}/sync-ui-themes-to-staging.sh" ]]; then
+    echo -e "${RED}Missing sync script: ${SCRIPT_DIR}/sync-ui-themes-to-staging.sh${NC}"
+    return 1
+  fi
+
+  echo ""
+  echo -e "${BOLD}Sync UI themes to staging (database only)${NC}"
+  echo -e "  ${DIM}Upserts ${GREEN}theme_registry${NC} and ${GREEN}theme_asset_overrides${NC} from local Supabase → staging.${NC}"
+  echo -e "  ${DIM}Does not deploy code, reset data, or change other tables.${NC}"
+  echo ""
+  echo -n -e "Also sync saved appearance for default dev Talia id ${GREEN}1000${NC} (settings + profiles + active profile id)? [y/N]: "
+  read -r sync_u1
+  local sync_ids=""
+  case "$sync_u1" in
+    y|Y|yes|YES) sync_ids="1000" ;;
+  esac
+
+  export TARGET_SUPABASE_URL="${STAGING_SUPABASE_URL}"
+  export TARGET_SUPABASE_KEY="${STAGING_SUPABASE_SERVICE_ROLE_KEY:-$STAGING_SUPABASE_ANON_KEY}"
+  export SOURCE_SUPABASE_URL="${SOURCE_SUPABASE_URL:-$LOCAL_SUPABASE_URL}"
+  export SYNC_APPEARANCE_USER_IDS="${sync_ids}"
+
+  echo ""
+  echo -e "${DIM}Source: ${SOURCE_SUPABASE_URL}${NC}"
+  echo -e "${DIM}Target: ${TARGET_SUPABASE_URL}${NC}"
+  echo ""
+
+  bash "${SCRIPT_DIR}/sync-ui-themes-to-staging.sh"
+}
+
 deploy_to_staging_from_local() {
   if $IS_ON_STAGING; then
     echo -e "${YELLOW}Run this deploy action from your local dev machine, not on staging.${NC}"
@@ -1184,6 +1270,7 @@ deploy_to_staging_from_local() {
   echo -e "  ${GREEN}1)${NC} UI-only (recommended)"
   echo -e "  ${GREEN}2)${NC} Full stack"
   echo -e "  ${GREEN}3)${NC} Scripts + config only"
+  echo -e "  ${GREEN}4)${NC} UI themes → staging DB only (safe upsert; no app deploy)"
   echo -e "  ${YELLOW}0)${NC} Back"
   echo ""
   echo -n -e "${BOLD}Choice: ${NC}"
@@ -1208,6 +1295,10 @@ deploy_to_staging_from_local() {
       token="DEPLOY_SCRIPTS_ONLY"
       timeout_sec="300"
       label="scripts+config"
+      ;;
+    4|themes-db|themes|ui-themes-db|appearance-db)
+      deploy_ui_themes_db_to_staging
+      return $?
       ;;
     0|back|q|quit|exit)
       return 0
@@ -2321,6 +2412,7 @@ handle_cli() {
     external-on|enable-external) start_external_for_working_target ;;
     external-off|stop-external) stop_external_everywhere ;;
     deploy|deploy-staging) deploy_to_staging_from_local ;;
+    deploy-themes-db|sync-ui-themes-staging) deploy_ui_themes_db_to_staging ;;
     reboot-staging|reboot) reboot_staging_emergency ;;
     comprehensive) run_comprehensive_check ;;
     status|summary) print_quick_targets_summary ;;
@@ -2335,7 +2427,8 @@ Talia validate — quick overview by default; heavy checks only from the menu or
   $0 stop-core                    stop core (ngrok unchanged)
   $0 external-on                  ngrok $PUBLIC_MAIN_URL → current target
   $0 external-off                 stop all ngrok (Cloudflare unavailable page)
-  $0 deploy-staging               local-sync deploy to staging (ui/full/scripts prompt)
+  $0 deploy-staging               local-sync deploy to staging (ui/full/scripts/themes-db prompt)
+  $0 deploy-themes-db             upsert theme_registry + assets (and optional Talia id 1000 appearance) local → staging DB only
   $0 reboot-staging               emergency reboot of staging host (confirmation required)
   $0 comprehensive                full repo validation (slow)
   $0 status                       quick summary lines (no menu)

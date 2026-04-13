@@ -3,7 +3,7 @@
  * Uses GraphQL service to fetch and manage focus data from Supabase
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import graphQLFocusService from '../services/GraphQLFocusService';
 import focusPreferencesService from '../services/FocusPreferencesService';
@@ -12,6 +12,10 @@ import { GraphQLUtils } from '../lib/apolloClient';
 
 export const useTaliaFocusManagement = () => {
   const { user, loading: authLoading, error: authError } = useSupabaseAuth();
+  const focusPreferenceUserKey = useMemo(() => {
+    const t = user?.taliaUserId ?? user?.talia_user_id;
+    return t != null && t !== '' ? String(t) : null;
+  }, [user]);
   const [taliaFocuses, setTaliaFocuses] = useState([]);
   const [currentTaliaFocus, setCurrentTaliaFocus] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -30,7 +34,13 @@ export const useTaliaFocusManagement = () => {
     setError(null);
 
     try {
-      const focuses = await graphQLFocusService.getFocusesForRole(userRole, user?.id);
+      const taliaUserKey =
+        user?.taliaUserId != null && user.taliaUserId !== ''
+          ? String(user.taliaUserId)
+          : user?.talia_user_id != null && user.talia_user_id !== ''
+            ? String(user.talia_user_id)
+            : null;
+      const focuses = await graphQLFocusService.getFocusesForRole(userRole, taliaUserKey);
       setTaliaFocuses(focuses || []);
 
       // Set default focus if none selected
@@ -45,7 +55,7 @@ export const useTaliaFocusManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [userRole, user?.id, currentTaliaFocus]);
+  }, [userRole, user?.taliaUserId, user?.talia_user_id, currentTaliaFocus]);
 
   useEffect(() => {
     loadTaliaFocuses();
@@ -159,15 +169,15 @@ export const useTaliaFocusManagement = () => {
 
   // Load focus preferences
   const loadFocusPreferences = useCallback(async () => {
-    if (!user?.id) return;
+    if (!focusPreferenceUserKey) return;
 
     try {
-      const preferences = await focusPreferencesService.getUserPreferences(user.id);
+      const preferences = await focusPreferencesService.getUserPreferences();
       setFocusPreferences(preferences);
     } catch (err) {
       console.error('Error loading focus preferences:', err);
     }
-  }, [user?.id]);
+  }, [focusPreferenceUserKey]);
 
   // Load focus groups
   const loadFocusGroups = useCallback(async () => {
@@ -186,10 +196,10 @@ export const useTaliaFocusManagement = () => {
 
   // Toggle favorite
   const toggleFavorite = useCallback(async (taliaFocusId) => {
-    if (!user?.id) return false;
+    if (!focusPreferenceUserKey) return false;
 
     try {
-      const updated = await focusPreferencesService.toggleFavorite(user.id, taliaFocusId);
+      const updated = await focusPreferencesService.toggleFavorite(taliaFocusId);
       setFocusPreferences(prev => {
         const filtered = prev.filter(p => p.focusId !== taliaFocusId);
         return [...filtered, updated];
@@ -200,26 +210,26 @@ export const useTaliaFocusManagement = () => {
       setError(err.message);
       return false;
     }
-  }, [user?.id]);
+  }, [focusPreferenceUserKey]);
 
   // Update last used
   const updateLastUsed = useCallback(async (taliaFocusId) => {
-    if (!user?.id) return;
+    if (!focusPreferenceUserKey) return;
 
     try {
-      await focusPreferencesService.updateLastUsed(user.id, taliaFocusId);
+      await focusPreferencesService.updateLastUsed(taliaFocusId);
       await loadFocusPreferences();
     } catch (err) {
       console.error('Error updating last used:', err);
     }
-  }, [user?.id, loadFocusPreferences]);
+  }, [focusPreferenceUserKey, loadFocusPreferences]);
 
   // Save custom layout
   const saveCustomLayout = useCallback(async (taliaFocusId, layout) => {
-    if (!user?.id) return false;
+    if (!focusPreferenceUserKey) return false;
 
     try {
-      await focusPreferencesService.saveCustomLayout(user.id, taliaFocusId, layout);
+      await focusPreferencesService.saveCustomLayout(taliaFocusId, layout);
       await loadFocusPreferences();
       return true;
     } catch (err) {
@@ -227,7 +237,7 @@ export const useTaliaFocusManagement = () => {
       setError(err.message);
       return false;
     }
-  }, [user?.id, loadFocusPreferences]);
+  }, [focusPreferenceUserKey, loadFocusPreferences]);
 
   // Focus group management (admin only)
   const createFocusGroup = useCallback(async (groupData) => {

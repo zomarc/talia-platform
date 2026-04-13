@@ -88,10 +88,10 @@ export PGPASSWORD="$DB_PASSWORD"
 # Determine if file is compressed
 if [[ "$BACKUP_FILE" == *.gz ]]; then
     echo -e "${GREEN}Decompressing and restoring backup...${NC}"
-    gunzip -c "$BACKUP_FILE" | psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" 2>&1
+    gunzip -c "$BACKUP_FILE" | psql -q -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" 2>&1
 else
     echo -e "${GREEN}Restoring backup...${NC}"
-    psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$BACKUP_FILE" 2>&1
+    psql -q -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$BACKUP_FILE" 2>&1
 fi
 
 if [ $? -eq 0 ]; then

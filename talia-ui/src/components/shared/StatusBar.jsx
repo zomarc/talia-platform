@@ -9,7 +9,7 @@
  * - Clickable to view details
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import ModeSelector from '../ModeSelector';
 import { canUseAdvancedHeader } from '../../utils/roleUtils';
 import {
@@ -33,6 +33,7 @@ import {
 } from '../../services/panelDetailsState';
 import { enforceDashboardUiState } from '../../services/dashboardUiState';
 import { useTheme } from '../../contexts/ThemeContext';
+import { DEFAULT_HEADER_LOGO_SRC, resolveAppPublicUrl } from '../../lib/headerLogoAsset';
 import userActivityTracker from '../../services/userActivityTracker';
 import { loadUserProfileState, saveUserProfileState } from '../../services/data/userProfileState';
 // CSS imported globally in main.jsx
@@ -235,7 +236,25 @@ const StatusBar = ({
     menuDisappearMs,
     calloutsVisible,
     setCalloutsVisible,
+    headerLogoUrl,
+    headerLogoVisible,
   } = useTheme();
+
+  const resolvedHeaderLogoSrc = useMemo(() => {
+    if (!headerLogoVisible) return '';
+    const raw = String(headerLogoUrl || '').trim();
+    if (raw) {
+      if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw;
+      const path = raw.startsWith('/') ? raw.slice(1) : raw;
+      return resolveAppPublicUrl(path);
+    }
+    return DEFAULT_HEADER_LOGO_SRC;
+  }, [headerLogoUrl, headerLogoVisible]);
+
+  const [headerLogoBroken, setHeaderLogoBroken] = useState(false);
+  useEffect(() => {
+    setHeaderLogoBroken(false);
+  }, [resolvedHeaderLogoSrc]);
   const [showDetails, setShowDetails] = useState(false);
   const [displayMessage, setDisplayMessage] = useState(statusMessage);
   const [isMessageFading, setIsMessageFading] = useState(false);
@@ -332,6 +351,16 @@ const StatusBar = ({
     && isDataManagementActive
     && controlsVisible === true
     && (showDataAdminActions || showDataAdminFilters);
+
+  /** Hide centered logo while any top header strip / panel is open (avoids overlap). */
+  const headerLogoSuppressed = useMemo(() => (
+    visibilityControlsOpen
+    || criteriaVisible
+    || focusControlsOpen
+    || eventsVisible
+    || showDataAdminStrip
+  ), [visibilityControlsOpen, criteriaVisible, focusControlsOpen, eventsVisible, showDataAdminStrip]);
+
   const reportActionFailure = (message) => {
     const text = String(message || '').trim() || 'Action failed.';
     console.error(`[StatusBar] ${text}`);
@@ -1323,6 +1352,23 @@ const StatusBar = ({
             </>
           )}
         </div>
+
+        {resolvedHeaderLogoSrc && !headerLogoBroken && !headerLogoSuppressed && (
+          <div
+            className="status-bar__brand"
+            role="img"
+            aria-label="Header logo"
+          >
+            <img
+              key={resolvedHeaderLogoSrc}
+              className="status-bar__brand-mark"
+              src={resolvedHeaderLogoSrc}
+              alt=""
+              decoding="async"
+              onError={() => setHeaderLogoBroken(true)}
+            />
+          </div>
+        )}
 
         {/* Left side: Status messages and events */}
         <div className="status-bar__left">

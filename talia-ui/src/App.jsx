@@ -1735,21 +1735,6 @@ function App() {
         fontSize: fontSize,
         fontFamily: fontFamily,
         spacingMode: spacingMode,
-        textIntensity: (() => { try { const s = localStorage.getItem("taliaLayout"); return s ? JSON.parse(s).fontSettings?.textIntensity ?? 45 : 45; } catch { return 45; } })(),
-        groupColorIntensity: (() => { try { const s = localStorage.getItem("taliaLayout"); return s ? JSON.parse(s).fontSettings?.groupColorIntensity ?? 60 : 60; } catch { return 60; } })(),
-        rowColorIntensity: (() => { try { const s = localStorage.getItem("taliaLayout"); return s ? JSON.parse(s).fontSettings?.rowColorIntensity ?? 40 : 40; } catch { return 40; } })(),
-        oddRowIntensity: (() => { try { const s = localStorage.getItem("taliaLayout"); const p = s ? JSON.parse(s).fontSettings : null; return p?.oddRowIntensity ?? p?.rowColorIntensity ?? 40; } catch { return 40; } })(),
-        evenRowIntensity: (() => { try { const s = localStorage.getItem("taliaLayout"); const p = s ? JSON.parse(s).fontSettings : null; return p?.evenRowIntensity ?? 20; } catch { return 20; } })(),
-        cardColorIntensity: (() => { try { const s = localStorage.getItem("taliaLayout"); const p = s ? JSON.parse(s).fontSettings : null; return p?.cardColorIntensity ?? p?.rowColorIntensity ?? 40; } catch { return 40; } })(),
-        accentColor: (() => { try { const s = localStorage.getItem("taliaLayout"); return s ? JSON.parse(s).fontSettings?.accentColor ?? 'blue' : 'blue'; } catch { return 'blue'; } })(),
-        rowAccentColor: (() => { try { const s = localStorage.getItem("taliaLayout"); return s ? JSON.parse(s).fontSettings?.rowAccentColor ?? 'slate' : 'slate'; } catch { return 'slate'; } })(),
-        cardAccentColor: (() => { try { const s = localStorage.getItem("taliaLayout"); const p = s ? JSON.parse(s).fontSettings : null; return p?.cardAccentColor ?? p?.rowAccentColor ?? 'slate'; } catch { return 'slate'; } })(),
-        groupColorHex: (() => { try { const s = localStorage.getItem("taliaLayout"); const p = s ? JSON.parse(s).fontSettings : null; return p?.groupColorHex ?? '#385c94'; } catch { return '#385c94'; } })(),
-        rowHoverColorHex: (() => { try { const s = localStorage.getItem("taliaLayout"); const p = s ? JSON.parse(s).fontSettings : null; return p?.rowHoverColorHex ?? '#7890a8'; } catch { return '#7890a8'; } })(),
-        oddRowColorHex: (() => { try { const s = localStorage.getItem("taliaLayout"); const p = s ? JSON.parse(s).fontSettings : null; return p?.oddRowColorHex ?? '#c8cdd7'; } catch { return '#c8cdd7'; } })(),
-        evenRowColorHex: (() => { try { const s = localStorage.getItem("taliaLayout"); const p = s ? JSON.parse(s).fontSettings : null; return p?.evenRowColorHex ?? '#ffffff'; } catch { return '#ffffff'; } })(),
-        cardColorHex: (() => { try { const s = localStorage.getItem("taliaLayout"); const p = s ? JSON.parse(s).fontSettings : null; return p?.cardColorHex ?? '#252a37'; } catch { return '#252a37'; } })(),
-        bgColor: (() => { try { const s = localStorage.getItem("taliaLayout"); return s ? JSON.parse(s).fontSettings?.bgColor ?? 'midnight' : 'midnight'; } catch { return 'midnight'; } })()
       }
     };
     localStorage.setItem(LAYOUT_KEY, JSON.stringify(payload));
@@ -2449,11 +2434,12 @@ class ErrorBoundary extends React.Component {
 
 // Initialize user context on app start
 const initializeUserContext = () => {
-  // Set default user context for development
+  // Default dev GraphQL identity: Talia canonical id in headers (matches SupabaseAuthContext DEV_USERS[0])
   GraphQLUtils.setUserContext({
-    id: '1',
+    id: 'dev-user-1',
     role: 'ADMIN',
-    email: 'admin@celestyal.com'
+    email: 'dev@talia.local',
+    taliaUserId: 1000
   });
 };
 

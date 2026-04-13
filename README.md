@@ -24,6 +24,9 @@ cd talia-ui && npm run dev
 ./scripts/deploy-to-staging.sh --full
 ```
 
+### Azure staging (VM + Docker)
+See [`docs/AZURE-STAGING.md`](docs/AZURE-STAGING.md) (Bicep VM, Docker install, Caddy TLS, `deploy-to-azure-staging.sh`).
+
 ## Documentation
 
 ### Canonical Docs

@@ -254,7 +254,7 @@ if [ "$SYNC_MODE" = "local" ]; then
         --exclude='talia-ui/dist' \
         --exclude='talia-server/dist' \
         --exclude='.DS_Store' \
-        docker-compose.staging.yml talia-ui talia-server scripts supabase
+        docker-compose.staging.yml .env.staging.example talia-ui talia-server scripts supabase infra
       scp "$LOCAL_ARCHIVE" "${STAGING_USER}@${STAGING_HOST}:${REMOTE_ARCHIVE}"
       rm -f "$LOCAL_ARCHIVE"
       echo -e "${GREEN}✅ Local code archive copied to staging${NC}"

@@ -1,0 +1,38 @@
+# Path-based routing: one hostname, TLS on 443.
+# Browser URLs must match (VITE_* and SUPABASE_PUBLIC_URL), e.g. https://talia-staging.example.com
+#
+# Let's Encrypt: set TALIA_TLS_DOMAIN to a public DNS name pointing at this VM and comment out
+# the "tls internal" line below. For IP-only or quick tests, keep "tls internal" (browser will warn).
+
+{$TALIA_TLS_DOMAIN:localhost} {
+	tls internal
+	encode gzip
+
+	# GraphQL: prefer https://<host>/api/graphql (talia-ui nginx proxies to graphql-server:4000).
+	# If you set VITE_GRAPHQL_ENDPOINT to https://<host>/graphql instead, add:
+	#   handle /graphql* { reverse_proxy graphql-server:4000 }
+
+	handle /rest* {
+		reverse_proxy supabase-kong:8000
+	}
+
+	handle /auth* {
+		reverse_proxy supabase-kong:8000
+	}
+
+	handle /storage* {
+		reverse_proxy supabase-kong:8000
+	}
+
+	handle /realtime* {
+		reverse_proxy supabase-kong:8000
+	}
+
+	handle /functions* {
+		reverse_proxy supabase-kong:8000
+	}
+
+	handle {
+		reverse_proxy ui:80
+	}
+}

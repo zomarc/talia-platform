@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+  <!-- Placeholder client mark (Mediterranean waves + sun). Swap file for official Celestyal logo if provided. -->
+  <circle cx="36" cy="14" r="5" fill="#d4a574"/>
+  <path d="M6 30c6-4 12-4 18 0s12 4 18 0" stroke="#0d9488" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M4 36c8-5 16-5 24 0s16 5 24 0" stroke="#0f766e" stroke-width="2" stroke-linecap="round" opacity="0.88"/>
+</svg>

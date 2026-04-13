@@ -26,7 +26,10 @@ const httpLink = createHttpLink({
 const authLink = setContext((_, { headers }) => {
   // Get user information from localStorage or context
   const userRole = localStorage.getItem('userRole') || 'GUEST';
-  const userId = localStorage.getItem('userId') || 'anonymous';
+  const taliaUserId = localStorage.getItem('taliaUserId');
+  const storedUserId = localStorage.getItem('userId') || 'anonymous';
+  const userId =
+    taliaUserId != null && taliaUserId !== '' ? taliaUserId : storedUserId;
   const userEmail = localStorage.getItem('userEmail') || 'guest@celestyal.com';
 
   return {
@@ -423,8 +426,22 @@ export const GraphQLUtils = {
       localStorage.setItem('userRole', user.role || 'GUEST');
       localStorage.setItem('userId', user.id || 'anonymous');
       localStorage.setItem('userEmail', user.email || 'guest@celestyal.com');
+      const tid = user.taliaUserId ?? user.talia_user_id;
+      if (tid != null && tid !== '') {
+        localStorage.setItem('taliaUserId', String(tid));
+      } else {
+        localStorage.removeItem('taliaUserId');
+      }
     } catch (error) {
       console.warn('Failed to set user context:', error);
+    }
+  },
+
+  getTaliaUserId: () => {
+    try {
+      return localStorage.getItem('taliaUserId');
+    } catch {
+      return null;
     }
   },
 
@@ -434,6 +451,7 @@ export const GraphQLUtils = {
       localStorage.removeItem('userRole');
       localStorage.removeItem('userId');
       localStorage.removeItem('userEmail');
+      localStorage.removeItem('taliaUserId');
     } catch (error) {
       console.warn('Failed to clear user context:', error);
     }

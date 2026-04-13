@@ -4,6 +4,7 @@ import UserProfile from "../UserProfile";
 import { isAdmin } from "../../utils/roleUtils";
 import { FocusSelector } from "../focus-management";
 import { useTheme } from "../../contexts/ThemeContext";
+import { DEFAULT_HEADER_LOGO_SRC, resolveAppPublicUrl } from "../../lib/headerLogoAsset";
 import {
   DASHBOARD_DETAILS_VISIBILITY_EVENT,
   DASHBOARD_FILTER_VISIBILITY_EVENT,
@@ -87,9 +88,63 @@ function DashboardSidebar({
     applyAppearanceProfile,
     saveAppearanceProfile,
     bgColor,
-    setBgColor
+    setBgColor,
+    headerLogoUrl,
+    setHeaderLogoUrl,
+    headerLogoVisible,
+    setHeaderLogoVisible,
+    taliaUiThemeKeys,
+    mergedTaliaUiThemes,
+    resolveThemeDefaultHeaderLogoForTheme,
+    customBackgroundHex,
+    setCustomBackgroundHex,
   } = useTheme();
+
+  const themeSolidToHex = (solid) => {
+    if (!solid || solid.length !== 3) return '#1a1d33';
+    const h = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+    return `#${h(solid[0])}${h(solid[1])}${h(solid[2])}`;
+  };
+  const themeBgHexFallback = themeSolidToHex(mergedTaliaUiThemes[bgColor]?.bg?.solid);
+  const backgroundColorPickerValue = customBackgroundHex || themeBgHexFallback;
   const [appearanceProfileName, setAppearanceProfileName] = React.useState('');
+  const [lastUploadedLogoName, setLastUploadedLogoName] = React.useState('');
+
+  const resolveCustomLogoPreviewSrc = (raw) => {
+    const t = String(raw || '').trim();
+    if (!t) return '';
+    if (t.startsWith('http://') || t.startsWith('https://') || t.startsWith('data:')) return t;
+    const path = t.startsWith('/') ? t.slice(1) : t;
+    return resolveAppPublicUrl(path);
+  };
+
+  const effectiveHeaderLogoPreviewSrc = () => {
+    if (!headerLogoVisible) return '';
+    const t = String(headerLogoUrl || '').trim();
+    if (t) return resolveCustomLogoPreviewSrc(headerLogoUrl);
+    return DEFAULT_HEADER_LOGO_SRC;
+  };
+
+  const handleHeaderLogoFile = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !file.type.startsWith('image/')) {
+      setLastUploadedLogoName('');
+      return;
+    }
+    const maxBytes = 2 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      window.alert('Please choose an image under 2 MB.');
+      setLastUploadedLogoName('');
+      return;
+    }
+    setLastUploadedLogoName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') setHeaderLogoUrl(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
   const [globalFiltersVisible, setGlobalFiltersVisible] = React.useState(() => {
     try {
       const saved = window.localStorage?.getItem?.(FILTERS_VISIBILITY_STORAGE_KEY);
@@ -557,34 +612,170 @@ function DashboardSidebar({
               <div className="dashboard-form-hint">Scales spacing for shared component elements and cards across reports.</div>
             </div>
             <div className="dashboard-form-group">
-              <label className="dashboard-form-label">Background</label>
+              <label className="dashboard-form-label">UI theme</label>
               <div style={{ display: 'flex', gap: 'var(--theme-component-gap-sm)', flexWrap: 'wrap', marginTop: 'var(--theme-component-gap-xs)' }}>
-                {[
-                  { key: 'midnight',  label: 'Midnight',  swatch: '#1a1d33' },
-                  { key: 'charcoal',  label: 'Charcoal',  swatch: '#1e1e22' },
-                  { key: 'navy',      label: 'Navy',      swatch: '#12182a' },
-                  { key: 'graphite',  label: 'Graphite',  swatch: '#222428' },
-                  { key: 'ocean',     label: 'Ocean',     swatch: '#121e26' },
-                  { key: 'obsidian',  label: 'Obsidian',  swatch: '#101014' },
-                ].map((c) => (
+                {taliaUiThemeKeys.map((key) => {
+                  const meta = mergedTaliaUiThemes[key];
+                  if (!meta) return null;
+                  const selected = !customBackgroundHex && bgColor === key;
+                  const lightSwatch = meta.palette === 'light';
+                  return (
                   <button
-                    key={c.key}
-                    title={c.label}
-                    onClick={() => setBgColor(c.key)}
+                    key={key}
+                    type="button"
+                    title={meta.label}
+                    onClick={() => {
+                      setCustomBackgroundHex('');
+                      setBgColor(key);
+                      const def = resolveThemeDefaultHeaderLogoForTheme(key);
+                      if (def && !String(headerLogoUrl || '').trim()) {
+                        setHeaderLogoUrl(def);
+                      }
+                    }}
                     style={{
                       width: 28,
                       height: 28,
                       borderRadius: 6,
-                      border: bgColor === c.key ? '2px solid rgba(255,255,255,0.85)' : '2px solid rgba(255,255,255,0.15)',
-                      background: c.swatch,
+                      border: selected
+                        ? (lightSwatch ? '2px solid #2563eb' : '2px solid rgba(255,255,255,0.85)')
+                        : (lightSwatch ? '2px solid rgba(15,23,42,0.14)' : '2px solid rgba(255,255,255,0.15)'),
+                      background: meta.swatch,
                       cursor: 'pointer',
-                      boxShadow: bgColor === c.key ? '0 0 0 1px rgba(255,255,255,0.3)' : 'none',
+                      boxShadow: selected
+                        ? (lightSwatch ? '0 0 0 1px rgba(37,99,235,0.35)' : '0 0 0 1px rgba(255,255,255,0.3)')
+                        : 'none',
                       transition: 'border-color 0.15s, box-shadow 0.15s',
                     }}
                   />
-                ))}
+                  );
+                })}
               </div>
-              <div className="dashboard-form-hint">Global background color theme.</div>
+              <div className="dashboard-form-hint">Includes light themes (Porcelain, Linen) for bright backgrounds. Celestyal can fill a default logo if the logo field is empty.</div>
+              <label className="dashboard-form-label" htmlFor="talia-custom-bg-color" style={{ marginTop: 'var(--theme-component-gap-md)' }}>
+                Background color
+              </label>
+              <div
+                className="dashboard-form-control-row"
+                style={{
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: 'var(--theme-component-gap-sm)',
+                  marginTop: 'var(--theme-component-gap-xs)',
+                }}
+              >
+                <input
+                  id="talia-custom-bg-color"
+                  type="color"
+                  className="dashboard-form-color-input dashboard-form-color-input--large"
+                  value={backgroundColorPickerValue}
+                  onChange={(event) => setCustomBackgroundHex(event.target.value)}
+                  aria-label="Pick custom background color"
+                  title="Custom background (overrides preset gradient)"
+                />
+                <button
+                  type="button"
+                  className="dashboard-form-button"
+                  disabled={!customBackgroundHex}
+                  onClick={() => setCustomBackgroundHex('')}
+                >
+                  Use preset gradient
+                </button>
+              </div>
+              <div className="dashboard-form-hint">
+                Chooses a solid base and a subtle gradient. Text and accents follow light or dark contrast automatically. Clear to return to the selected preset theme above.
+              </div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Logo for this appearance</label>
+              <label className="dashboard-form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={headerLogoVisible}
+                  onChange={(event) => setHeaderLogoVisible(event.target.checked)}
+                />
+                <span>Show header logo (centered in top bar)</span>
+              </label>
+              <p className="dashboard-form-hint" style={{ marginTop: 'var(--theme-component-gap-xs)' }}>
+                Uploads and URLs below are stored with these appearance settings and included when you save an appearance profile. With show on and no custom image, the default Talia logo is used.
+              </p>
+              <label className="dashboard-form-label" htmlFor="talia-appearance-logo-upload" style={{ marginTop: 'var(--theme-component-gap-sm)' }}>
+                Upload logo image
+              </label>
+              <input
+                id="talia-appearance-logo-upload"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif,image/*"
+                className="dashboard-form-input dashboard-form-input--file-native"
+                onChange={handleHeaderLogoFile}
+              />
+              {lastUploadedLogoName ? (
+                <p className="dashboard-form-hint" style={{ marginTop: 'var(--theme-component-gap-xs)' }}>
+                  Last file read: {lastUploadedLogoName} (embedded in this appearance)
+                </p>
+              ) : null}
+              <div className="dashboard-form-control-row" style={{ flexWrap: 'wrap', gap: 'var(--theme-component-gap-sm)', marginTop: 'var(--theme-component-gap-sm)' }}>
+                <button
+                  type="button"
+                  className="dashboard-form-button"
+                  disabled={!String(headerLogoUrl || '').trim()}
+                  onClick={() => {
+                    setHeaderLogoUrl('');
+                    setLastUploadedLogoName('');
+                  }}
+                >
+                  Clear custom logo
+                </button>
+              </div>
+              {!headerLogoVisible ? (
+                <p className="dashboard-form-hint" style={{ marginTop: 'var(--theme-component-gap-sm)' }}>
+                  Logo hidden — enable &quot;Show header logo&quot; above to display the default or custom image.
+                </p>
+              ) : null}
+              {headerLogoVisible && effectiveHeaderLogoPreviewSrc() ? (
+                <div
+                  className="dashboard-header-logo-preview"
+                  style={{
+                    marginTop: 'var(--theme-component-gap-sm)',
+                    padding: 'var(--theme-component-padding-sm)',
+                    borderRadius: 'var(--theme-radius-sm)',
+                    border: '1px solid var(--theme-border)',
+                    background: 'var(--theme-glass)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 'var(--theme-component-gap-xs)',
+                  }}
+                >
+                  <span className="dashboard-form-hint" style={{ margin: 0 }}>
+                    {String(headerLogoUrl || '').trim() ? 'Preview (custom)' : 'Preview (default Talia logo)'}
+                  </span>
+                  <img
+                    src={effectiveHeaderLogoPreviewSrc()}
+                    alt=""
+                    style={{
+                      maxHeight: 48,
+                      maxWidth: 200,
+                      width: 'auto',
+                      height: 'auto',
+                      objectFit: 'contain',
+                    }}
+                  />
+                </div>
+              ) : null}
+              <label className="dashboard-form-label" htmlFor="talia-header-logo-url" style={{ marginTop: 'var(--theme-component-gap-md)' }}>Or logo URL</label>
+              <input
+                id="talia-header-logo-url"
+                type="text"
+                className="dashboard-form-input"
+                value={headerLogoUrl}
+                onChange={(event) => {
+                  const v = event.target.value;
+                  setHeaderLogoUrl(v);
+                  if (!String(v).startsWith('data:')) setLastUploadedLogoName('');
+                }}
+                placeholder="https://… or path under /public"
+                autoComplete="off"
+              />
             </div>
             <div className="dashboard-form-group">
               <label className="dashboard-form-label">Panel Titles</label>

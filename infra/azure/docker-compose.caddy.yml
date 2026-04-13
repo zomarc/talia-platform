@@ -1,0 +1,32 @@
+# TLS reverse proxy for Talia staging (use with docker-compose.staging.yml from repo root).
+# Example:
+#   docker compose --env-file .env.staging -f docker-compose.staging.yml -f infra/azure/docker-compose.caddy.yml up -d
+#
+# Set TALIA_TLS_DOMAIN in .env.staging (DNS A/AAAA to this VM). For HTTPS with a public DNS name,
+# remove or comment out the "tls internal" line in Caddyfile so Caddy obtains a Let's Encrypt cert.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: talia-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      TALIA_TLS_DOMAIN: ${TALIA_TLS_DOMAIN:-localhost}
+    volumes:
+      - ./infra/azure/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      ui:
+        condition: service_started
+      graphql-server:
+        condition: service_started
+      supabase-kong:
+        condition: service_healthy
+
+volumes:
+  caddy-data:
+  caddy-config:

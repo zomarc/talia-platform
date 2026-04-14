@@ -17,12 +17,15 @@ cd talia-ui && npm run dev
 
 ### Deploy to Staging
 ```bash
-# Code-only deployment
-./scripts/deploy-to-staging.sh --code-only
+# UI bundle only (fast)
+./scripts/deploy-to-staging.sh --ui-only
 
-# Full deployment with Docker rebuild
+# UI + GraphQL image rebuild + schema guard
 ./scripts/deploy-to-staging.sh --full
 ```
+
+Deploys use **your local tree** → tarball/scp → staging host (see `docs/ENVIRONMENTS-AND-DEPLOY.md`).  
+`package-lock.json` may still mention npm packages whose *names* include `github` (e.g. transitive tooling); that is not a project remote.
 
 ### Azure staging (VM + Docker)
 See [`docs/AZURE-STAGING.md`](docs/AZURE-STAGING.md) (Bicep VM, Docker install, Caddy TLS, `deploy-to-azure-staging.sh`).

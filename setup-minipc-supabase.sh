@@ -46,43 +46,13 @@ if ! command -v supabase &> /dev/null; then
         fi
     fi
     
-    # Method 2: Try direct download with specific version
-    if [ $INSTALLED -eq 0 ]; then
-        echo "   Downloading Supabase CLI v2.67.1..."
-        wget -O /tmp/supabase.deb https://github.com/supabase/cli/releases/download/v2.67.1/supabase_linux_amd64.deb 2>&1 | grep -v "404" || true
-        if [ -f /tmp/supabase.deb ] && [ -s /tmp/supabase.deb ]; then
-            sudo dpkg -i /tmp/supabase.deb || sudo apt-get install -f -y
-            rm /tmp/supabase.deb
-            if command -v supabase &> /dev/null; then
-                INSTALLED=1
-                echo "   ✅ Installed from downloaded .deb file"
-            fi
-        fi
-    fi
-    
-    # Method 3: Try using npm (if available)
+    # Method 2: Try using npm (if available)
     if [ $INSTALLED -eq 0 ] && command -v npm &> /dev/null; then
         echo "   Trying npm installation method..."
         sudo npm install -g supabase
         if command -v supabase &> /dev/null; then
             INSTALLED=1
             echo "   ✅ Installed via npm"
-        fi
-    fi
-    
-    # Method 4: Manual binary download
-    if [ $INSTALLED -eq 0 ]; then
-        echo "   Trying binary download method..."
-        wget -O /tmp/supabase.tar.gz https://github.com/supabase/cli/releases/download/v2.67.1/supabase_2.67.1_linux_amd64.tar.gz 2>&1 | grep -v "404" || true
-        if [ -f /tmp/supabase.tar.gz ] && [ -s /tmp/supabase.tar.gz ]; then
-            tar -xzf /tmp/supabase.tar.gz -C /tmp/
-            sudo mv /tmp/supabase /usr/local/bin/supabase
-            sudo chmod +x /usr/local/bin/supabase
-            rm /tmp/supabase.tar.gz
-            if command -v supabase &> /dev/null; then
-                INSTALLED=1
-                echo "   ✅ Installed from binary"
-            fi
         fi
     fi
     

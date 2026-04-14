@@ -1,6 +1,5 @@
 # Netlify Configuration for Talia Platform v0.1.0 (Alpha)
 # Unified deployment for multi-customer revenue and inventory management system
-# Repository: https://github.com/zomarc/talia-platform
 
 [build]
   # Build command for the entire monorepo

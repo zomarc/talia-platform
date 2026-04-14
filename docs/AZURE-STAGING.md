@@ -36,12 +36,12 @@ Add your user to the `docker` group (log out and back in after):
 ssh "${USER}@${VM_IP}" 'sudo usermod -aG docker "$USER"'
 ```
 
-## 3. Clone the app and configure `.env.staging`
+## 3. Copy the app tree and configure `.env.staging`
 
 ```bash
 ssh "${USER}@${VM_IP}"
 sudo apt-get update && sudo apt-get install -y git
-git clone https://github.com/zomarc/talia-platform.git talia-docker
+# Place the monorepo on the VM (same tree you ship with deploy-to-staging / deploy-to-mvp).
 cd talia-docker
 cp .env.staging.example .env.staging
 ```

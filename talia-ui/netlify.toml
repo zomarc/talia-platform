@@ -1,5 +1,4 @@
 # Talia Platform UI - Independent Deployment Config v0.1.0 (Alpha)
-# Repository: https://github.com/zomarc/talia-platform
 
 [build]
   publish = "dist"

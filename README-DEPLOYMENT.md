@@ -4,7 +4,7 @@
 
 ### Deployment Policy (Default)
 - **Default and expected**: direct local -> staging deployment on LAN.
-- **When user says "deploy to staging"**: use local direct method, not GitHub/git-sync.
+- **When user says "deploy to staging"**: use `deploy-to-staging.sh` (local tree → tarball/SSH), not remote git pull on the server.
 - **Any non-default method**: stop and get explicit confirmation first.
 
 ### Deploy Code to Staging

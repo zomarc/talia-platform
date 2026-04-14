@@ -195,13 +195,9 @@ sudo usermod -aG docker $USER
 ### Step 3.3: Install Supabase CLI on MiniPC
 
 ```bash
-# Ubuntu/Debian
-# Download and install Supabase CLI
-wget -O supabase.deb https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.deb
-sudo dpkg -i supabase.deb
-
-# Or using package manager
-# See: https://supabase.com/docs/guides/cli/getting-started
+# Install Supabase CLI (pick one; see Supabase CLI getting-started in their docs)
+sudo npm install -g supabase
+# or follow the Linux installer instructions in Supabase’s documentation.
 ```
 
 ### Step 3.4: Create Supabase Project Directory on MiniPC

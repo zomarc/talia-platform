@@ -3,9 +3,9 @@
 ## 🚀 Successful Deployment Steps
 
 ### **Repository Information**
-- **GitHub Repository:** `https://github.com/rbryer/dockview01.git`
+- **Source:** Local monorepo / your chosen host for CI
 - **Domain:** `taliahub.com`
-- **Current Working Branch:** `feature-talia-auth`
+- **Current Working Branch:** `feature-talia-auth` (example)
 
 ### **Build Configuration**
 - **Build Command:** `npm run build`
@@ -21,8 +21,7 @@
 git add .
 git commit -m "Your commit message"
 
-# Push to GitHub
-git push origin feature-talia-auth
+# Push or upload to your remote / CI as you prefer
 ```
 
 #### **Step 2: Netlify Configuration**
@@ -100,7 +99,7 @@ The `netlify.toml` file is already configured with:
 - Active Exceptions
 
 ### **Deployment Checklist**
-- [ ] All changes committed and pushed to GitHub
+- [ ] All changes committed; build source matches what Netlify will build
 - [ ] Netlify branch set to correct branch
 - [ ] Build command: `npm run build`
 - [ ] Publish directory: `dist`
@@ -114,8 +113,7 @@ The `netlify.toml` file is already configured with:
 # Quick deployment workflow
 git add .
 git commit -m "feat: Your feature description"
-git push origin feature-talia-auth
-# Then trigger deploy in Netlify dashboard
+# Then trigger deploy in Netlify dashboard (or connect your git remote there)
 ```
 
 ---

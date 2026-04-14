@@ -37,7 +37,7 @@ For a **self-hosted Docker stack on an Azure Ubuntu VM** (Supabase + GraphQL + U
 
 **Good News**: Existing InstantDB App ID can be reused!
 
-- App ID is tied to your InstantDB application, not the GitHub repository
+- App ID is tied to your InstantDB application, not your source tree layout
 - All user data and mappings persist when moving to a new repository
 - No reconfiguration needed
 

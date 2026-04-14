@@ -91,9 +91,8 @@ sudo systemctl start docker
 
 ### ✅ Install Supabase CLI
 ```bash
-# See: https://supabase.com/docs/guides/cli/getting-started
-wget -O supabase.deb https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.deb
-sudo dpkg -i supabase.deb
+# See Supabase’s CLI getting-started documentation (npm global, package, or installer).
+sudo npm install -g supabase
 ```
 
 ### ✅ Initialize Supabase Project

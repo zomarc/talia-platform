@@ -323,7 +323,7 @@ await db.transact([
 - **Authentication**: https://instantdb.com/docs/auth
 - **Schema Reference**: https://instantdb.com/docs/schema
 - **Permissions**: https://instantdb.com/docs/permissions
-- **GitHub**: https://github.com/instantdb/instant
+- **Upstream**: InstantDB product documentation and SDK references
 
 ---
 

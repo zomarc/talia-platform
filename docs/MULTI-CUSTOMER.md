@@ -37,7 +37,7 @@ Talia Platform is designed as a **multi-customer revenue and inventory managemen
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│              Talia Platform (GitHub Repo)                   │
+│                    Talia Platform (monorepo)                 │
 │                  talia-platform                             │
 └─────────────────────────────────────────────────────────────┘
                            │

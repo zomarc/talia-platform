@@ -48,10 +48,6 @@
   ],
   "author": "Zomarc",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/zomarc/talia-platform"
-  },
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=8.0.0"

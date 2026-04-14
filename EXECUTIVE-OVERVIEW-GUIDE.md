@@ -184,16 +184,13 @@ git add EXECUTIVE-OVERVIEW.md
 
 ### CI/CD Integration
 
-Add to your CI/CD pipeline:
+Add to your CI/CD pipeline (steps only — wire them to whatever runner you use):
+
 ```yaml
-# Example GitHub Actions
 - name: Generate Executive Overview
   run: npm run generate:overview
-- name: Upload PDF
-  uses: actions/upload-artifact@v3
-  with:
-    name: executive-overview
-    path: EXECUTIVE-OVERVIEW.pdf
+- name: Archive PDF artifact
+  run: test -f EXECUTIVE-OVERVIEW.pdf
 ```
 
 ---

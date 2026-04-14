@@ -1,102 +1,42 @@
-# Staging Git Repository Setup - Complete ✅
+# Staging working copy (historical note)
 
 ## Overview
 
-The staging server (MiniPC) now has a proper git repository set up in `~/talia-docker` for automated deployments.
+Staging (`~/talia-docker` on the MiniPC) may keep a **local git working copy** for your own history. **Deploys do not rely on any remote git host**: use `./scripts/deploy-to-staging.sh` from your laptop (tarball over SSH + Docker Compose on the host).
 
-## Environment Architecture
+## Environment architecture
 
-### 1. **Local (Laptop)**
-- **Location**: `/path/to/talia`
-- **Purpose**: Development environment
-- **Services**: 
-  - Supabase (Docker) on `localhost:54321`
-  - GraphQL server on `localhost:4000`
-  - UI dev server on `localhost:5173`
-- **Access**: Direct localhost access
+### Local (laptop)
 
-### 2. **Staging (MiniPC)**
-- **Location**: `~/talia-docker` on `192.168.1.120`
-- **Purpose**: Staging/pre-production environment
-- **Services**: 
-  - Full Docker stack (Supabase + GraphQL + UI)
-  - UI accessible on `http://192.168.1.120:5173`
-- **Access**: 
-  - Internal network: `http://192.168.1.120:5173`
-  - SSH: `ssh zomarc@192.168.1.120`
-- **Git Repository**: `~/talia-docker/.git` (cloned from GitHub)
+- Development, `npm run dev`, optional local Docker.
 
-### 3. **External (taliahub.com)**
-- **URL**: `https://taliahub.com`
-- **Purpose**: External client access
-- **Connection**: ngrok tunnel from staging server
-- **Gateway Auth**: `talia` / `dev2025tal` (temporary, development only)
-- **Backend**: Directly connected to staging (MiniPC) services
+### Staging (MiniPC)
 
-## Git Setup on Staging
+- Path: `~/talia-docker` (example host `192.168.1.120`).
+- Stack: `docker compose -f docker-compose.staging.yml`.
+- **Deploy**: `./scripts/deploy-to-staging.sh` (`--ui-only`, `--full`, or `--graphql-only`).
 
-### Repository Location
-```bash
-~/talia-docker/.git
-```
+### External (e.g. taliahub.com)
 
-### Remote Configuration
-- **Origin**: `https://github.com/zomarc/talia-platform.git`
-- **Branch**: `main`
+- Tunnel (e.g. ngrok) from staging when explicitly enabled; see `./scripts/validate`.
 
-### Deployment Workflow
+## Deployment workflow (supported)
 
-1. **Local Development**
+1. Commit on your laptop if you want a saved revision (local repo only).
+2. From repo root:
+
    ```bash
-   # Make changes locally
-   git add .
-   git commit -m "your message"
-   git push
+   ./scripts/deploy-to-staging.sh --ui-only   # or --full
    ```
 
-2. **Deploy to Staging**
-   ```bash
-   # From local laptop
-   ./scripts/deploy-to-staging.sh --code-only
-   ```
-   
-   This script:
-   - Pushes code to GitHub
-   - SSH to staging
-   - Pulls latest code from git
-   - Restarts services (or rebuilds for full deploy)
-
-3. **Full Deployment (Code + Docker Images)**
-   ```bash
-   ./scripts/deploy-to-staging.sh --full
-   ```
-   
-   This rebuilds Docker containers with new code.
+3. Script builds artifacts on the laptop, copies them over SSH, extracts on staging, restarts/rebuilds containers as needed.
 
 ## Verification
 
-### Check Staging Git Status
-```bash
-ssh zomarc@192.168.1.120 'cd ~/talia-docker && git status'
-```
-
-### Check Staging Services
 ```bash
 ssh zomarc@192.168.1.120 'cd ~/talia-docker && docker compose -f docker-compose.staging.yml ps'
 ```
 
-### Test External Access
-```bash
-curl --basic -u "talia:dev2025tal" https://taliahub.com
-```
-
-## Notes
-
-- **Staging git repo**: Cloned from GitHub, tracks `main` branch
-- **Docker containers**: Need rebuild when code changes (use `--full` deploy)
-- **Code-only deploy**: Restarts services (faster, but uses existing images)
-- **Full deploy**: Rebuilds containers (slower, but includes all code changes)
-
 ---
 
-**Status**: ✅ Git repository configured and ready for automated deployments
+**Policy**: Prefer tarball/SSH deploys; treat any `git remote` on staging as optional bookkeeping, not the source of truth for what runs.

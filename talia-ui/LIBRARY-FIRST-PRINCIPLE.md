@@ -49,7 +49,7 @@ Before writing any code, ask:
 Don't assume—check the docs:
 - Official documentation
 - Examples and tutorials
-- GitHub issues (for common patterns)
+- Issue trackers / internal notes (for common patterns)
 
 ### Step 3: Use It
 

@@ -246,7 +246,7 @@ When InstantDB updates:
 - **Auth Guide**: https://instantdb.com/docs/auth
 - **React Guide**: https://instantdb.com/docs/react
 - **API Reference**: https://instantdb.com/docs/api
-- **GitHub**: https://github.com/instantdb/instant
+- **Upstream**: InstantDB product documentation and SDK references
 
 ## 🔄 **Migration Notes**
 

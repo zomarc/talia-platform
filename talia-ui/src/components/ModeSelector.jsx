@@ -10,12 +10,12 @@ import DevRoleSelector from './dev/DevRoleSelector';
 import { DASHBOARD_OPEN_PANEL_EVENT } from './dockview/eventConstants';
 import { GraphQLUtils } from '../lib/apolloClient';
 import { canAccessPrivilegedPanels, normalizeRole } from '../utils/roleUtils';
+import { getTaliaVersionDisplayLabel } from '../config/taliaVersion';
 import '../styles/mode-selector.css';
 
 const ModeSelector = ({ currentMode, onModeChange }) => {
   const [showDevDropdown, setShowDevDropdown] = useState(false);
   const [source, setSource] = useState('local');
-  const [version, setVersion] = useState('0.2.0');
   const [userRole, setUserRole] = useState(() => normalizeRole(GraphQLUtils.getUserRole() || 'USER'));
 
   // Deploy label: set VITE_ENVIRONMENT at build (staging | mvp | local). Avoid defaulting to "staging" on every production build.
@@ -26,11 +26,6 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
     setSource(envSource);
   }, []);
 
-  // Get version from package.json (would need to be injected at build time)
-  useEffect(() => {
-    const envVersion = import.meta.env.VITE_APP_VERSION || '0.2.0';
-    setVersion(envVersion);
-  }, []);
   useEffect(() => {
     const syncRole = () => setUserRole(normalizeRole(GraphQLUtils.getUserRole() || 'USER'));
     const onStorage = (event) => {
@@ -44,7 +39,7 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
       window.removeEventListener('focus', syncRole);
     };
   }, []);
-  const versionLabel = `${version}-dev`;
+  const versionLabel = getTaliaVersionDisplayLabel();
 
 
 

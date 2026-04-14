@@ -89,18 +89,71 @@ print_info() {
 get_ui_version() {
   local base_url="$1"
   python3 - "$base_url" <<'PY'
+import json
 import re
 import sys
 import urllib.request
-import urllib.error
 
 base = sys.argv[1].rstrip("/")
-index_url = f"{base}/"
+
+
+def version_from_html(html: str):
+    m = re.search(
+        r'<meta\s+name=["\']talia-app-version["\']\s+content=["\'](\d+\.\d+\.\d+)["\']',
+        html,
+        re.I,
+    )
+    return m.group(1) if m else None
+
+
+def version_from_json_blob(raw: str):
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return None
+    v = data.get("taliaAppVersion") or data.get("version")
+    if isinstance(v, str) and re.fullmatch(r"\d+\.\d+\.\d+", v):
+        return v
+    return None
+
+
+def best_guess_from_deps_noise(js: str):
+    cands = set(re.findall(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3})\b", js))
+    ok = []
+    for s in cands:
+        if not re.fullmatch(r"(0|1)\.\d{1,4}\.\d{1,4}", s):
+            continue
+        parts = [int(x) for x in s.split(".")]
+        a, b, c = parts
+        if a == 0 and b == 0 and c == 0:
+            continue
+        ok.append(s)
+    if not ok:
+        return None
+    return sorted(ok, key=lambda x: tuple(int(p) for p in x.split(".")), reverse=True)[0]
+
+
 try:
-    html = urllib.request.urlopen(index_url, timeout=5).read().decode("utf-8", "ignore")
+    html = urllib.request.urlopen(f"{base}/", timeout=5).read().decode("utf-8", "ignore")
 except Exception:
     print("UNREACHABLE")
     raise SystemExit(0)
+
+v = version_from_html(html)
+if v:
+    print(v)
+    raise SystemExit(0)
+
+try:
+    jraw = urllib.request.urlopen(f"{base}/talia-app-version.json", timeout=5).read().decode(
+        "utf-8", "ignore"
+    )
+    v = version_from_json_blob(jraw)
+    if v:
+        print(v)
+        raise SystemExit(0)
+except Exception:
+    pass
 
 asset_match = re.search(r'assets/index-[^"\']+\.js', html)
 if not asset_match:
@@ -114,13 +167,9 @@ except Exception:
     print("NO_BUNDLE")
     raise SystemExit(0)
 
-vers = sorted(
-    set(re.findall(r'\b(0\.\d+\.\d+)\b', js)),
-    key=lambda s: tuple(int(x) for x in s.split('.')),
-    reverse=True,
-)
-if vers:
-    print(vers[0])
+guess = best_guess_from_deps_noise(js)
+if guess:
+    print(guess)
 else:
     print("UNKNOWN")
 PY
@@ -385,7 +434,7 @@ if [[ "$LOCAL_UI_CODE" == "200" ]]; then
     else
       check_status "Local UI health" "WARN" "reachable, dev server (source version unknown)"
     fi
-  elif [[ "$LOCAL_UI_VERSION" =~ ^0\.1\.[0-9]+$ ]]; then
+  elif [[ "$LOCAL_UI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     check_status "Local UI health" "OK" "reachable, v${LOCAL_UI_VERSION}"
   else
     check_status "Local UI health" "WARN" "reachable, version=${LOCAL_UI_VERSION}"
@@ -397,7 +446,7 @@ fi
 STAGING_UI_CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "${STAGING_UI_URL}/" 2>/dev/null || echo "000")
 STAGING_UI_VERSION=$(get_ui_version "${STAGING_UI_URL}")
 if [[ "$STAGING_UI_CODE" == "200" ]]; then
-  if [[ "$STAGING_UI_VERSION" =~ ^0\.[0-9]+\.[0-9]+$ ]]; then
+  if [[ "$STAGING_UI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     check_status "Staging UI health" "OK" "reachable, v${STAGING_UI_VERSION}"
   else
     check_status "Staging UI health" "WARN" "reachable, version=${STAGING_UI_VERSION}"

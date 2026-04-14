@@ -1,5 +1,6 @@
 /* eslint-env node */
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { resolve as pathResolve } from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -11,9 +12,32 @@ const buildTime =
   globalThis.process?.env?.VITE_BUILD_TIME ||
   new Date().toISOString()
 
+/** HTML meta + dist JSON for ops probes — avoids mistaking IP fragments in bundles for semver. */
+function taliaReleaseProbePlugin(version) {
+  let outDir = 'dist'
+  return {
+    name: 'talia-release-probe',
+    configResolved(config) {
+      outDir = pathResolve(config.root, config.build.outDir)
+    },
+    transformIndexHtml(html) {
+      if (/name=["']talia-app-version["']/i.test(html)) {
+        return html
+      }
+      const tag = `    <meta name="talia-app-version" content="${version}" />\n`
+      return html.replace('<head>', `<head>\n${tag}`)
+    },
+    writeBundle() {
+      mkdirSync(outDir, { recursive: true })
+      const payload = `${JSON.stringify({ taliaAppVersion: version })}\n`
+      writeFileSync(pathResolve(outDir, 'talia-app-version.json'), payload, 'utf8')
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), taliaReleaseProbePlugin(appVersion)],
   optimizeDeps: {
     // Keep these pre-bundled deterministically to avoid transient
     // 504 errors from /node_modules/.vite/deps during dev reloads.
@@ -21,6 +45,7 @@ export default defineConfig({
     force: true
   },
   define: {
+    // Talia product semver only (from talia-ui/package.json). Dependency versions stay in lockfiles.
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
     'import.meta.env.VITE_BUILD_TIME': JSON.stringify(buildTime),
   },

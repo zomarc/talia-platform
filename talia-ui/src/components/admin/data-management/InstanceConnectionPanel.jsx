@@ -14,6 +14,7 @@ const INSTANCE_PROFILE_QUERY = `
       dataSourcePriority
       synapseSyncDisabled
       graphqlServerPackageVersion
+      nodeRuntimeVersion
       validateScriptDocVersion
       backupBetweenInstances
       architectureNotes
@@ -212,6 +213,10 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
                   <div>
                     <dt>GraphQL server (package.json)</dt>
                     <dd>v{profile.graphqlServerPackageVersion}</dd>
+                  </div>
+                  <div>
+                    <dt>GraphQL Node.js runtime</dt>
+                    <dd>{profile.nodeRuntimeVersion}</dd>
                   </div>
                   <div>
                     <dt>Validate script doc version</dt>

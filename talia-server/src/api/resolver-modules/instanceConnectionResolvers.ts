@@ -225,6 +225,7 @@ export const instanceConnectionQueryResolvers = {
         'Code reaches staging/MVP via ./scripts/deploy-to-staging.sh and ./scripts/deploy-to-mvp.sh (local tar + dist), not by relying on unpushed Git on your laptop.',
       ],
       graphqlServerPackageVersion: readGraphqlServerPackageVersion(),
+      nodeRuntimeVersion: typeof process !== 'undefined' && process.version ? process.version : 'unknown',
       validateScriptDocVersion: VALIDATE_SCRIPT_DOC_VERSION,
     };
   },

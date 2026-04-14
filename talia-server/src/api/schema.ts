@@ -956,6 +956,8 @@ export const typeDefs = `#graphql
     architectureNotes: [String!]!
     """talia-server package.json version running this GraphQL process."""
     graphqlServerPackageVersion: String!
+    """Node.js runtime for this GraphQL process (process.version, e.g. v22.12.0)."""
+    nodeRuntimeVersion: String!
     """Ops validate menu token (same value as SCRIPT_VERSION in scripts/validate)."""
     validateScriptDocVersion: String!
   }

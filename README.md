@@ -25,7 +25,7 @@ cd talia-ui && npm run dev
 ```
 
 Deploys use **your local tree** → tarball/scp → staging host (see `docs/ENVIRONMENTS-AND-DEPLOY.md`).  
-`package-lock.json` may still mention npm packages whose *names* include `github` (e.g. transitive tooling); that is not a project remote.
+Root `package-lock.json` may still list a few transitive npm packages with legacy names from upstream tooling; those are not Talia remotes and are unrelated to deploy.
 
 ### Azure staging (VM + Docker)
 See [`docs/AZURE-STAGING.md`](docs/AZURE-STAGING.md) (Bicep VM, Docker install, Caddy TLS, `deploy-to-azure-staging.sh`).

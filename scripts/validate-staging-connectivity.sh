@@ -114,12 +114,13 @@ except Exception:
     print("NO_BUNDLE")
     raise SystemExit(0)
 
-versions = sorted(
-    {int(n) for n in re.findall(r'0\.1\.(\d+)', js)},
-    reverse=True
+vers = sorted(
+    set(re.findall(r'\b(0\.\d+\.\d+)\b', js)),
+    key=lambda s: tuple(int(x) for x in s.split('.')),
+    reverse=True,
 )
-if versions:
-    print(f"0.1.{versions[0]}")
+if vers:
+    print(vers[0])
 else:
     print("UNKNOWN")
 PY

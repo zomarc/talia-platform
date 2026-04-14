@@ -10,7 +10,8 @@
 #   ./scripts/restart-and-check.sh local
 #   ./scripts/restart-and-check.sh staging
 #   ./scripts/restart-and-check.sh all
-#   ./scripts/restart-and-check.sh staging --restart
+#   ./scripts/restart-and-check.sh --restart staging
+#   ./scripts/restart-and-check.sh staging --restart   # flags may appear before or after target
 #
 set -euo pipefail
 
@@ -43,17 +44,30 @@ Env overrides:
 EOF
 }
 
+TARGET=""
 while [[ $# -gt 0 ]]; do
   case "${1:-}" in
     --restart) DO_RESTART=true; shift ;;
     --tunnel-only) TUNNEL_ONLY=true; shift ;;
     --azure) TEST_AZURE=true; shift ;;
     -h|--help) usage; exit 0 ;;
-    *) break ;;
+    staging|local|all)
+      if [[ -n "${TARGET}" ]]; then
+        echo "Error: multiple targets (already have '${TARGET}', got '$1')" >&2
+        usage
+        exit 1
+      fi
+      TARGET="$1"
+      shift
+      ;;
+    *)
+      echo "Error: unknown argument '$1'" >&2
+      usage
+      exit 1
+      ;;
   esac
 done
 
-TARGET="${1:-}"
 if [[ -z "${TARGET}" ]]; then
   usage
   exit 1

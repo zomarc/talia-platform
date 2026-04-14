@@ -11,12 +11,14 @@
 #   ./scripts/validate external-on | external-off
 #   ./scripts/validate comprehensive      # Full validate-staging.sh (slow)
 #   ./scripts/validate deploy-themes-db   # Upsert UI themes (+ optional Talia id 1000 appearance) to staging DB only
+#   ./scripts/validate deploy-mvp         # Deploy to MVP (Azure); uses scripts/deploy-to-mvp.sh
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SCRIPT_VERSION="2026-04-14.1"
+# Monotonic ops token (not a calendar stamp). Bump when validate menu behavior or Instance & keys cross-check changes.
+SCRIPT_VERSION="ops-4"
 CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
 if [[ -f "${CONFIG_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -78,6 +80,10 @@ MVP_KONG_PORT="${MVP_KONG_PORT:-54321}"
 MVP_UI_URL="${MVP_UI_URL:-http://${MVP_UI_HOST}:${MVP_UI_PORT}}"
 MVP_GRAPHQL_URL="${MVP_GRAPHQL_URL:-http://${MVP_UI_HOST}:${MVP_GRAPHQL_PORT}/graphql}"
 MVP_SUPABASE_URL="${MVP_SUPABASE_URL:-http://${MVP_UI_HOST}:${MVP_KONG_PORT}/}"
+# SSH used when Kong is UP on the VM but host ports are not reachable from the validate machine (e.g. Azure NSG).
+MVP_SSH_USER="${MVP_SSH_USER:-azureuser}"
+MVP_SSH_HOST="${MVP_SSH_HOST:-${MVP_UI_HOST:-}}"
+MVP_SSH_BASE_OPTS="${MVP_SSH_BASE_OPTS:--o ConnectTimeout=6 -o ConnectionAttempts=1 -o BatchMode=yes}"
 
 PUBLIC_MAIN_URL="${PUBLIC_MAIN_URL:-https://taliahub.com}"
 PUBLIC_SECONDARY_URL="${PUBLIC_SECONDARY_URL:-https://celestyal.taliahub.com}"
@@ -124,9 +130,13 @@ except Exception:
     print("NO_BUNDLE")
     raise SystemExit(0)
 
-versions = sorted({int(n) for n in re.findall(r'0\.1\.(\d+)', js)}, reverse=True)
-if versions:
-    print(f"0.1.{versions[0]}")
+vers = sorted(
+    set(re.findall(r'\b(0\.\d+\.\d+)\b', js)),
+    key=lambda s: tuple(int(x) for x in s.split('.')),
+    reverse=True,
+)
+if vers:
+    print(vers[0])
 else:
     print("UNKNOWN")
 PY
@@ -342,6 +352,92 @@ get_http_code_quick() {
   fi
 }
 
+# docker-compose.staging.yml maps Kong to both 54321 and 8000; some clouds only expose one.
+# Sets MVP_SUPABASE_KONG_LIVE_PORT and MVP_SUPABASE_KONG_LIVE_CODE for the summary line.
+mvp_supabase_kong_quick_probe() {
+  local host="$1"
+  local primary="${2:-54321}"
+  local p code
+  MVP_SUPABASE_KONG_LIVE_PORT=""
+  MVP_SUPABASE_KONG_LIVE_CODE="000"
+  # Always exit 0: probe result is in MVP_SUPABASE_KONG_LIVE_* (set -e would abort callers on return 1).
+  [[ -z "$host" ]] && return 0
+  local try_order=("$primary")
+  for p in 8000 54321; do
+    [[ "$p" == "$primary" ]] && continue
+    try_order+=("$p")
+  done
+  for p in "${try_order[@]}"; do
+    code=$(get_http_code_quick "http://${host}:${p}/" 1)
+    if [[ "$code" != "000" ]]; then
+      MVP_SUPABASE_KONG_LIVE_PORT="$p"
+      MVP_SUPABASE_KONG_LIVE_CODE="$code"
+      return 0
+    fi
+  done
+  MVP_SUPABASE_KONG_LIVE_PORT="$primary"
+  MVP_SUPABASE_KONG_LIVE_CODE="000"
+  return 0
+}
+
+# If direct curls to MVP public IP failed, Kong may still be healthy on the VM (firewall/NSG).
+# Sets MVP_SUPABASE_KONG_LIVE_* and MVP_SUPABASE_KONG_NOTE when a fallback succeeds.
+mvp_supabase_kong_mvp_fallbacks() {
+  MVP_SUPABASE_KONG_NOTE=""
+  [[ "${MVP_SUPABASE_KONG_LIVE_CODE:-000}" != "000" ]] && return 0
+  [[ "$MVP_VALIDATE" != "1" || -z "${MVP_UI_HOST:-}" ]] && return 0
+
+  if [[ -n "${MVP_SSH_HOST:-}" ]]; then
+    local out u
+    u="${MVP_SSH_USER}@${MVP_SSH_HOST}"
+    out=$(ssh ${MVP_SSH_BASE_OPTS} "$u" \
+      'for p in 8000 54321; do c=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 2 "http://127.0.0.1:${p}/" 2>/dev/null || echo 000); if [[ "$c" != "000" && -n "$c" ]]; then echo "$p $c"; exit 0; fi; done; exit 1' \
+      2>/dev/null) || true
+    if [[ -n "$out" ]]; then
+      MVP_SUPABASE_KONG_LIVE_PORT="${out%% *}"
+      MVP_SUPABASE_KONG_LIVE_CODE="${out#* }"
+      MVP_SUPABASE_KONG_NOTE="(Kong UP on VM :${MVP_SUPABASE_KONG_LIVE_PORT}; not reachable from this host — open NSG or use SSH tunnel)"
+      return 0
+    fi
+  fi
+
+  local body
+  body=$(curl -sS --max-time 4 -X POST "${MVP_GRAPHQL_URL}" -H 'Content-Type: application/json' \
+    -d '{"query":"{ supabaseConnectionStatus { online } }"}' 2>/dev/null) || true
+  if echo "$body" | grep -q '"online"[[:space:]]*:[[:space:]]*true'; then
+    MVP_SUPABASE_KONG_LIVE_CODE="404"
+    MVP_SUPABASE_KONG_LIVE_PORT="${MVP_KONG_PORT:-54321}"
+    MVP_SUPABASE_KONG_NOTE="(Supabase OK via GraphQL; direct Kong from this host failed)"
+    return 0
+  fi
+  return 0
+}
+
+# Typed confirmation before any ngrok / public tunnel start. Non-TTY: set TALIA_CONFIRM_NGROK=ENABLE_NGROK_EXTERNAL.
+confirm_ngrok_external_start() {
+  local summary="${1:-Start ngrok / external presenter}"
+  if [[ "${TALIA_CONFIRM_NGROK:-}" == "ENABLE_NGROK_EXTERNAL" ]]; then
+    return 0
+  fi
+  if [[ ! -t 0 ]]; then
+    echo -e "${RED}Refusing ngrok: ${summary}${NC}" >&2
+    echo -e "${YELLOW}Not a TTY. To proceed: export TALIA_CONFIRM_NGROK=ENABLE_NGROK_EXTERNAL${NC}" >&2
+    return 1
+  fi
+  echo ""
+  echo -e "${YELLOW}${BOLD}External presenter (ngrok)${NC}"
+  echo -e "  ${summary}"
+  echo -e "  ${DIM}Maps ${PUBLIC_MAIN_URL} to your stack. Only continue if you intend that.${NC}"
+  echo ""
+  echo -n "Type ENABLE_NGROK_EXTERNAL to confirm: "
+  read -r typed
+  if [[ "$typed" != "ENABLE_NGROK_EXTERNAL" ]]; then
+    echo -e "${YELLOW}Cancelled — ngrok not started.${NC}"
+    return 1
+  fi
+  return 0
+}
+
 # Run SSH remote command with a hard wall-clock limit (avoids rare hangs).
 ssh_staging_with_timeout() {
   local sec="$1"
@@ -519,6 +615,21 @@ external_status_plain() {
   echo "${status} (${src})"
 }
 
+# One-line TTY hint while slow probes run; pair with progress_line_clear() before final output.
+progress_line_busy() {
+  [[ -t 1 ]] || return 0
+  echo -e "${CYAN}${1:-Checking…}${NC}"
+}
+
+progress_line_clear() {
+  [[ -t 1 ]] || return 0
+  if tput cuu1 2>/dev/null && tput el 2>/dev/null; then
+    :
+  else
+    printf '\033[1A\033[2K'
+  fi
+}
+
 print_quick_targets_summary() {
   local work presenter top_level_version
   local loc_ui loc_gql loc_sb st_ui st_gql st_sb pub_code gateway ext_line
@@ -527,6 +638,7 @@ print_quick_targets_summary() {
   local local_marker staging_marker
   local header_sep
   local mvp_ui mvp_gql mvp_sb mvp_ui_version
+  progress_line_busy "Checking local, staging, MVP, and public endpoints…"
   work=$(get_effective_working_target)
   presenter=$(get_current_target)
 
@@ -547,11 +659,21 @@ print_quick_targets_summary() {
   mvp_ui="000"
   mvp_gql="000"
   mvp_sb="000"
+  mvp_kong_line_suffix=""
   mvp_ui_version="n/a"
   if [[ "$MVP_VALIDATE" == "1" && -n "$MVP_UI_HOST" ]]; then
     mvp_ui=$(get_http_code_quick "${MVP_UI_URL}/" 1)
     mvp_gql=$(get_http_code_quick "${MVP_GRAPHQL_URL%/}" 1)
-    mvp_sb=$(get_http_code_quick "${MVP_SUPABASE_URL}" 1)
+    mvp_supabase_kong_quick_probe "${MVP_UI_HOST}" "${MVP_KONG_PORT:-54321}"
+    mvp_sb="${MVP_SUPABASE_KONG_LIVE_CODE}"
+    mvp_supabase_kong_mvp_fallbacks
+    mvp_sb="${MVP_SUPABASE_KONG_LIVE_CODE}"
+    mvp_kong_line_suffix=""
+    if [[ -n "${MVP_SUPABASE_KONG_NOTE:-}" ]]; then
+      mvp_kong_line_suffix=" ${DIM}${MVP_SUPABASE_KONG_NOTE}${NC}"
+    elif [[ -n "${MVP_SUPABASE_KONG_LIVE_PORT:-}" && "${MVP_SUPABASE_KONG_LIVE_PORT}" != "${MVP_KONG_PORT:-54321}" && "${mvp_sb}" != "000" ]]; then
+      mvp_kong_line_suffix=" ${DIM}(reachable on :${MVP_SUPABASE_KONG_LIVE_PORT}; targets.env MVP_KONG_PORT=${MVP_KONG_PORT:-54321})${NC}"
+    fi
     mvp_ui_version=$(quick_ui_version_label "${MVP_UI_URL}" "${mvp_ui}" "false")
   fi
 
@@ -605,6 +727,8 @@ print_quick_targets_summary() {
   [[ "$work" == "local" ]] && local_marker="▶"
   [[ "$work" == "staging" ]] && staging_marker="▶"
 
+  progress_line_clear
+
   header_sep=$(printf '%*s' 96 '' | tr ' ' '-')
   local validate_run_iso validate_run_local
   validate_run_iso="$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u '+%Y-%m-%d %H:%M:%S UTC')"
@@ -636,7 +760,7 @@ print_quick_targets_summary() {
     echo ""
     printf "  %s %-9s  %-36s  %s\n" " " "MVP" "${MVP_UI_HOST}:${MVP_UI_PORT} UI (Azure)" "$(quick_up_label "$mvp_ui" "200")"
     printf "  %s %-9s  %-36s  %s\n" " " "" "${MVP_UI_HOST}:${MVP_GRAPHQL_PORT} GraphQL" "$(quick_up_label "$mvp_gql" "gql")"
-    printf "  %s %-9s  %-36s  %s\n" " " "" "${MVP_UI_HOST}:${MVP_KONG_PORT} Kong" "$(quick_up_label "$mvp_sb" "kong")"
+    printf "  %s %-9s  %-36s  %s%s\n" " " "" "${MVP_UI_HOST}:${MVP_SUPABASE_KONG_LIVE_PORT:-${MVP_KONG_PORT:-54321}} Supabase Kong" "$(quick_up_label "$mvp_sb" "kong")" "${mvp_kong_line_suffix}"
   fi
   echo ""
   printf "  %-10s  %-36s  HTTP %s  gateway=%s\n" "External" "${PUBLIC_MAIN_URL}" "${pub_code}" "${gateway}"
@@ -823,7 +947,10 @@ print_front_page_status() {
 }
 
 print_header() {
-  clear
+  # Non-TTY (CI, some IDE terminals): `clear` exits 1 and `set -e` would kill the script with no output.
+  if [[ -t 1 ]]; then
+    clear
+  fi
   echo ""
   print_quick_targets_summary
 }
@@ -836,7 +963,7 @@ print_menu() {
   echo -e "  ${GREEN}2)${NC} Check services (deep check, current target only)"
   echo -e "  ${GREEN}3)${NC} Start core services (UI + GraphQL + Supabase stack)"
   echo -e "  ${GREEN}4)${NC} Stop core services"
-  echo -e "  ${GREEN}5)${NC} Start external access (${PUBLIC_MAIN_URL#https://} → this target)"
+  echo -e "  ${GREEN}5)${NC} Start external access — ${DIM}ngrok; requires typing ENABLE_NGROK_EXTERNAL${NC}"
   echo -e "  ${GREEN}6)${NC} Stop external access (ngrok off; Cloudflare shows unavailable)"
   echo ""
   echo -e "${BOLD}Advanced${NC}"
@@ -844,6 +971,12 @@ print_menu() {
   echo -e "  ${GREEN}7)${NC} Full validation / gateway detail (slower)"
   echo -e "  ${GREEN}8)${NC} Deploy to staging (local sync)"
   echo -e "  ${GREEN}9)${NC} Emergency reboot staging server"
+  if [[ -n "${MVP_SSH_HOST:-}" ]]; then
+    echo -e "  ${GREEN}10)${NC} Deploy to MVP (Azure — ${MVP_SSH_HOST})"
+  else
+    echo -e "  ${GREEN}10)${NC} Deploy to MVP (Azure — set MVP_SSH_HOST in targets.env)"
+  fi
+  echo -e "  ${DIM}91)${NC} ${DIM}Legacy: enable external (ngrok) for remembered target — same confirmation as (5)${NC}"
   echo ""
   echo -e "  ${YELLOW}0)${NC} Exit"
   echo ""
@@ -1317,6 +1450,68 @@ deploy_to_staging_from_local() {
   run_command "cd \"${ROOT_DIR}\" && STAGING_DEPLOY_CONFIRM_TOKEN=${token} ./scripts/deploy-to-staging.sh ${mode}" "Deploy to staging via local sync (${label})" "$timeout_sec"
 }
 
+deploy_to_mvp_from_local() {
+  if $IS_ON_STAGING; then
+    echo -e "${YELLOW}Run MVP deploy from your local dev machine (same as staging deploy), not on the MiniPC host.${NC}"
+    return 1
+  fi
+
+  if [[ -z "${MVP_SSH_HOST:-}" ]]; then
+    echo -e "${RED}MVP_SSH_HOST is not set. Add MVP_* to ${CONFIG_FILE/#$HOME/~} (see MVP_SSH_HOST).${NC}"
+    return 1
+  fi
+
+  if [[ ! -x "${SCRIPT_DIR}/deploy-to-mvp.sh" ]]; then
+    echo -e "${RED}Missing deploy script: ${SCRIPT_DIR}/deploy-to-mvp.sh${NC}"
+    return 1
+  fi
+
+  echo ""
+  echo -e "${BOLD}Deploy to MVP (Azure) — ${MVP_SSH_HOST}${NC}"
+  echo -e "  ${DIM}These scripts sync built artifacts over SSH and restart containers.${NC}"
+  echo -e "  ${DIM}They do not drop databases or run destructive DB resets.${NC}"
+  echo -e "  ${YELLOW}Full stack${NC} updates GraphQL + UI containers (still no intentional data deletion)."
+  echo ""
+  echo -e "  ${GREEN}1)${NC} UI-only (fast; static bundle into nginx container)"
+  echo -e "  ${GREEN}2)${NC} Full stack (GraphQL dist + UI dist + schema guard on host)"
+  echo -e "  ${GREEN}3)${NC} Scripts + config only (no container restarts)"
+  echo -e "  ${YELLOW}0)${NC} Back"
+  echo ""
+  echo -n -e "${BOLD}Choice: ${NC}"
+  read -r choice
+
+  local mode token timeout_sec label
+  case "$choice" in
+    1|ui|ui-only)
+      mode="--ui-only"
+      token="DEPLOY_UI_ONLY"
+      timeout_sec="900"
+      label="ui-only"
+      ;;
+    2|full)
+      mode="--full"
+      token="DEPLOY_FULL_STACK"
+      timeout_sec="1800"
+      label="full"
+      ;;
+    3|scripts|scripts-only|config)
+      mode="--scripts-only"
+      token="DEPLOY_SCRIPTS_ONLY"
+      timeout_sec="300"
+      label="scripts+config"
+      ;;
+    0|back|q|quit|exit)
+      return 0
+      ;;
+    *)
+      echo -e "${RED}Invalid choice${NC}"
+      return 1
+      ;;
+  esac
+
+  run_command "cd \"${ROOT_DIR}\" && STAGING_DEPLOY_CONFIRM_TOKEN=${token} ./scripts/deploy-to-mvp.sh ${mode}" "Deploy to MVP via ${SCRIPT_DIR}/deploy-to-mvp.sh (${label})" "$timeout_sec"
+}
+
 check_services_for_working_target() {
   local t
   t=$(get_effective_working_target)
@@ -1364,6 +1559,9 @@ start_external_for_working_target() {
   local t
   t=$(get_effective_working_target)
   remember_target "$t" || true
+  if ! confirm_ngrok_external_start "${PUBLIC_MAIN_URL} → working target ${t} (ngrok)"; then
+    return 1
+  fi
   echo -e "${CYAN}Starting external access for ${BOLD}${t}${NC}${CYAN} → ${PUBLIC_MAIN_URL}${NC}"
   apply_target_external "$t"
   local new_target new_u
@@ -1772,11 +1970,17 @@ switch_target() {
     1|local)
       echo -e "${CYAN}Switching target to LOCAL...${NC}"
       remember_target "local" || true
+      if ! confirm_ngrok_external_start "${PUBLIC_MAIN_URL} → LOCAL (ngrok)"; then
+        return 1
+      fi
       apply_target_external "local"
       ;;
     2|staging)
       echo -e "${CYAN}Switching target to STAGING...${NC}"
       remember_target "staging" || true
+      if ! confirm_ngrok_external_start "${PUBLIC_MAIN_URL} → STAGING (ngrok)"; then
+        return 1
+      fi
       apply_target_external "staging"
       ;;
     0|back|q|quit|exit)
@@ -1827,12 +2031,15 @@ enable_remembered_target_external() {
       remember_target "$remembered_target" || true
     else
       echo -e "${YELLOW}No remembered target found.${NC}"
-      echo -e "${YELLOW}Use option 6 to select local or staging first.${NC}"
+      echo -e "${YELLOW}Use option 1 to set working target (local or staging) first.${NC}"
       return 1
     fi
   fi
 
   echo -e "${CYAN}Enabling external access on remembered target: ${remembered_target}${NC}"
+  if ! confirm_ngrok_external_start "${PUBLIC_MAIN_URL} → remembered target ${remembered_target} (ngrok)"; then
+    return 1
+  fi
   apply_target_external "$remembered_target"
 
   local new_target
@@ -2101,10 +2308,14 @@ handle_staging_menu_legacy() {
       check_external_gateway
       ;;
     5|start-ngrok)
-      run_command "sudo systemctl start ${STAGING_NGROK_SERVICE} && sleep 2 && sudo systemctl status ${STAGING_NGROK_SERVICE} --no-pager" "Start ngrok tunnel"
+      if confirm_ngrok_external_start "STAGING systemd ngrok (on-host legacy menu)"; then
+        run_command "sudo systemctl start ${STAGING_NGROK_SERVICE} && sleep 2 && sudo systemctl status ${STAGING_NGROK_SERVICE} --no-pager" "Start ngrok tunnel"
+      fi
       ;;
     6|start-ngrok-staging)
-      run_command "sudo systemctl start ${STAGING_NGROK_SERVICE} && sleep 2 && sudo systemctl status ${STAGING_NGROK_SERVICE} --no-pager" "Start ngrok tunnel"
+      if confirm_ngrok_external_start "STAGING systemd ngrok (on-host legacy menu)"; then
+        run_command "sudo systemctl start ${STAGING_NGROK_SERVICE} && sleep 2 && sudo systemctl status ${STAGING_NGROK_SERVICE} --no-pager" "Start ngrok tunnel"
+      fi
       ;;
     7|stop-local)
       echo -e "${BOLD}Stopping local staging services:${NC}"
@@ -2234,10 +2445,10 @@ handle_remote_menu_legacy() {
       check_external_gateway
       ;;
     5|start-ngrok)
-      start_ngrok_local
+      if confirm_ngrok_external_start "LOCAL ngrok (legacy menu)"; then start_ngrok_local; fi
       ;;
     6|start-ngrok-staging)
-      start_ngrok_staging_remote
+      if confirm_ngrok_external_start "STAGING ngrok systemd (legacy menu)"; then start_ngrok_staging_remote; fi
       ;;
     7|stop-local)
       stop_local_services
@@ -2383,8 +2594,11 @@ handle_remote_menu() {
     9|reboot|reboot-staging)
       reboot_staging_emergency
       ;;
+    10|deploy-mvp|mvp-deploy|deploy_mvp)
+      deploy_to_mvp_from_local
+      ;;
     # Legacy numeric / names (older validate menu)
-    10)
+    91|remembered-external|enable-remembered-external)
       enable_remembered_target_external
       ;;
     status|summary|total)
@@ -2417,6 +2631,7 @@ handle_cli() {
     external-on|enable-external) start_external_for_working_target ;;
     external-off|stop-external) stop_external_everywhere ;;
     deploy|deploy-staging) deploy_to_staging_from_local ;;
+    deploy-mvp|deploy-mvp-azure) deploy_to_mvp_from_local ;;
     deploy-themes-db|sync-ui-themes-staging) deploy_ui_themes_db_to_staging ;;
     reboot-staging|reboot) reboot_staging_emergency ;;
     comprehensive) run_comprehensive_check ;;
@@ -2430,9 +2645,10 @@ Talia validate — quick overview by default; heavy checks only from the menu or
   $0 check                        deep service check for current target only
   $0 start-core                   UI + GraphQL + Supabase (local) or Docker stack (staging)
   $0 stop-core                    stop core (ngrok unchanged)
-  $0 external-on                  ngrok $PUBLIC_MAIN_URL → current target
+  $0 external-on                  ngrok → current target (TTY: type ENABLE_NGROK_EXTERNAL; else TALIA_CONFIRM_NGROK=...)
   $0 external-off                 stop all ngrok (Cloudflare unavailable page)
   $0 deploy-staging               local-sync deploy to staging (ui/full/scripts/themes-db prompt)
+  $0 deploy-mvp                   deploy to MVP Azure host from scripts/config/targets.env (ui/full/scripts prompt)
   $0 deploy-themes-db             upsert theme_registry + assets (and optional Talia id 1000 appearance) local → staging DB only
   $0 reboot-staging               emergency reboot of staging host (confirmation required)
   $0 comprehensive                full repo validation (slow)

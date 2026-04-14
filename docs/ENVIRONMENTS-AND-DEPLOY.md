@@ -24,7 +24,7 @@ Optional legacy path: `deploy-to-azure-staging.sh` only if the VM has its **own 
 
 1. **Git-on-VM deploys** reset the server to **whatever was on GitHub**. If **`git push` failed**, GitHub stayed old while your laptop was new — the VM correctly matched **stale GitHub**, not your laptop.
 
-2. **Pinned UI version in compose:** `docker-compose.staging.yml` used to hardcode `VITE_APP_VERSION: "0.1.1"` for image builds, so the corner version could stay **0.1.1** even when `package.json` was **0.1.7**. That is now avoided: UI version comes from **`talia-ui/package.json`** at build time unless you override.
+2. **Pinned UI version in compose:** `docker-compose.staging.yml` used to hardcode `VITE_APP_VERSION: "0.1.1"` for image builds, so the corner version could stay **0.1.1** even when `package.json` was newer. That is now avoided: UI version comes from **`talia-ui/package.json`** at build time unless you override.
 
 3. **Misleading “Source: STAGING”:** Production builds without `VITE_ENVIRONMENT` used to default the label to **staging** in the UI. Deploy scripts now set **`VITE_ENVIRONMENT=staging`** or **`mvp`** when building.
 
@@ -39,4 +39,4 @@ Optional legacy path: `deploy-to-azure-staging.sh` only if the VM has its **own 
 - **`./scripts/validate`** — interactive menu; header shows **script version**, **UTC time**, and **local time** each run.
 - **Data Management → Instance & keys** — shows **GraphQL server version**, **validate script doc version** (must match `SCRIPT_VERSION` in `scripts/validate`), and **UI build** (`VITE_*`). Use this on **local, staging, and MVP** to confirm you are on the build you expect.
 
-When bumping the validate script version, update **both** `SCRIPT_VERSION` in `scripts/validate` and `VALIDATE_SCRIPT_DOC_VERSION` in `talia-server/src/api/resolver-modules/instanceConnectionResolvers.ts`.
+When the validate menu / Instance cross-check contract changes, bump the **same** token in both `SCRIPT_VERSION` (`scripts/validate`) and `VALIDATE_SCRIPT_DOC_VERSION` (`instanceConnectionResolvers.ts`) — use a neutral monotonic value (e.g. `ops-4`), not calendar dates.

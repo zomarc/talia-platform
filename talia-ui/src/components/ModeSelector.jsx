@@ -15,7 +15,7 @@ import '../styles/mode-selector.css';
 const ModeSelector = ({ currentMode, onModeChange }) => {
   const [showDevDropdown, setShowDevDropdown] = useState(false);
   const [source, setSource] = useState('local');
-  const [version, setVersion] = useState('0.1.7');
+  const [version, setVersion] = useState('0.2.0');
   const [userRole, setUserRole] = useState(() => normalizeRole(GraphQLUtils.getUserRole() || 'USER'));
 
   // Deploy label: set VITE_ENVIRONMENT at build (staging | mvp | local). Avoid defaulting to "staging" on every production build.
@@ -28,7 +28,7 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
 
   // Get version from package.json (would need to be injected at build time)
   useEffect(() => {
-    const envVersion = import.meta.env.VITE_APP_VERSION || '0.1.7';
+    const envVersion = import.meta.env.VITE_APP_VERSION || '0.2.0';
     setVersion(envVersion);
   }, []);
   useEffect(() => {

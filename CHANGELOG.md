@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.2.0] - 2026-04-14
+
+### Summary
+
+Release focused on deploy reliability, ops validation, and focus/GraphQL alignment across environments.
+
+### Changed
+
+- **Deploy:** GraphQL updates use `docker compose build graphql-server` from synced source (no `docker cp` of `dist` only); `--graphql-only` syncs code and rebuilds the image; UI dist copy unchanged.
+- **Validate:** MVP Supabase/Kong status uses SSH and GraphQL fallbacks when public ports are firewalled; “Checking…” progress line while probes run; ngrok / external mapping requires typing `ENABLE_NGROK_EXTERNAL` (or `TALIA_CONFIRM_NGROK`) before start.
+- **Ops tokens:** `SCRIPT_VERSION` / `VALIDATE_SCRIPT_DOC_VERSION` bumped to **ops-4** (Instance & keys cross-check).
+- **UI / GraphQL:** Focus and profile-state handling improvements; optional legacy Focus enum compatibility via env where needed.
+
 ## [0.1.0] - 2025-10-08 (Alpha)
 
 ### Initial Development Baseline
@@ -100,4 +113,5 @@ First alpha release of Talia Platform with core features for revenue and invento
 
 ---
 
+[0.2.0]: https://github.com/zomarc/talia-platform/releases/tag/v0.2.0
 [0.1.0]: https://github.com/zomarc/talia-platform/releases/tag/v0.1.0

@@ -3,8 +3,8 @@ import { supabaseDataService } from '../../services/supabase.js';
 import { synapseSyncService, isSynapseSyncDisabled } from '../../services/synapse-sync.js';
 import { configService } from '../../services/config-service.js';
 
-/** Bump together with scripts/validate SCRIPT_VERSION (ops menu + Data Management cross-check). */
-export const VALIDATE_SCRIPT_DOC_VERSION = '2026-04-14.1'; // sync: scripts/validate SCRIPT_VERSION
+/** Must match SCRIPT_VERSION in scripts/validate (same string token; bump both when the cross-check contract changes). */
+export const VALIDATE_SCRIPT_DOC_VERSION = 'ops-4';
 
 type Importance = 'REQUIRED' | 'CONDITIONAL' | 'OPTIONAL';
 

@@ -642,6 +642,12 @@ const fetchLatestAvailableData = async (tableName: string, rowCount: number) => 
   return null;
 };
 
+// Older graphql-server images may ship a FocusType enum without ROLE; Postgres can still store type='role'.
+// Resolvers filter using raw DB rows (before this mapper); only the GraphQL `type` field is adjusted here.
+const legacyFocusEnumWithoutRole = () =>
+  process.env.TALIA_GRAPHQL_LEGACY_FOCUS_ENUM === '1' ||
+  process.env.TALIA_GRAPHQL_LEGACY_FOCUS_ENUM === 'true';
+
 // Helper function to map database focus to GraphQL Focus format
 const mapDbFocusToGraphQL = (dbFocus: any) => {
   if (!dbFocus) return null;
@@ -654,12 +660,18 @@ const mapDbFocusToGraphQL = (dbFocus: any) => {
   const primaryRole = dbFocus.assigned_roles && dbFocus.assigned_roles.length > 0 
     ? dbFocus.assigned_roles[0].toUpperCase() 
     : 'ADMIN';
+
+  const rawType = dbFocus.type ? String(dbFocus.type).toUpperCase() : 'STANDARD';
+  let graphqlType = rawType;
+  if (legacyFocusEnumWithoutRole() && graphqlType === 'ROLE') {
+    graphqlType = 'STANDARD';
+  }
   
   return {
     id: dbFocus.id,
     name: dbFocus.name,
     description: dbFocus.description || null,
-    type: dbFocus.type ? dbFocus.type.toUpperCase() : 'STANDARD',
+    type: graphqlType,
     role: primaryRole,
     assignedRoles: (dbFocus.assigned_roles || []).map((r: string) => String(r).toUpperCase()),
     assignedUserId: dbFocus.assigned_user_id || null,

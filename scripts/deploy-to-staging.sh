@@ -60,6 +60,10 @@ while [[ $# -gt 0 ]]; do
       DEPLOY_MODE="ui-only"
       shift
       ;;
+    --graphql-only)
+      DEPLOY_MODE="graphql-only"
+      shift
+      ;;
     --full)
       DEPLOY_MODE="full"
       shift
@@ -78,7 +82,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo -e "${RED}Unknown option: $1${NC}"
-      echo "Usage: $0 [--ui-only|--full|--scripts-only|--dry-run|--git-sync]"
+      echo "Usage: $0 [--ui-only|--graphql-only|--full|--scripts-only|--dry-run|--git-sync]"
       exit 1
       ;;
   esac
@@ -104,11 +108,14 @@ if [ "$DRY_RUN" = false ]; then
     elif [ "$DEPLOY_MODE" = "ui-only" ] && [ "$STAGING_DEPLOY_CONFIRM_TOKEN" = "DEPLOY_UI_ONLY" ]; then
       use_noninteractive=true
       CONFIRM_TOKEN="DEPLOY_UI_ONLY"
+    elif [ "$DEPLOY_MODE" = "graphql-only" ] && [ "$STAGING_DEPLOY_CONFIRM_TOKEN" = "DEPLOY_GRAPHQL_ONLY" ]; then
+      use_noninteractive=true
+      CONFIRM_TOKEN="DEPLOY_GRAPHQL_ONLY"
     elif [ "$DEPLOY_MODE" = "scripts-only" ] && [ "$STAGING_DEPLOY_CONFIRM_TOKEN" = "DEPLOY_SCRIPTS_ONLY" ]; then
       use_noninteractive=true
       CONFIRM_TOKEN="DEPLOY_SCRIPTS_ONLY"
     else
-      echo -e "${RED}Error: STAGING_DEPLOY_CONFIRM_TOKEN must match mode: DEPLOY_UI_ONLY / DEPLOY_FULL_STACK / DEPLOY_SCRIPTS_ONLY.${NC}"
+      echo -e "${RED}Error: STAGING_DEPLOY_CONFIRM_TOKEN must match mode: DEPLOY_UI_ONLY / DEPLOY_GRAPHQL_ONLY / DEPLOY_FULL_STACK / DEPLOY_SCRIPTS_ONLY.${NC}"
       exit 1
     fi
   fi
@@ -118,21 +125,26 @@ if [ "$DRY_RUN" = false ]; then
     DEPLOY_CONFIRM="$CONFIRM_TOKEN"
   elif [ ! -t 0 ]; then
     echo -e "${RED}Error: staging deploy requires interactive confirmation or STAGING_DEPLOY_CONFIRM_TOKEN.${NC}"
-    echo -e "${RED}Deployment scope must be selected explicitly (UI-only, Full stack, or Scripts-only).${NC}"
+    echo -e "${RED}Deployment scope must be selected explicitly (UI-only, GraphQL-only, Full stack, or Scripts-only).${NC}"
     exit 1
   else
     echo -e "${BLUE}Select deployment scope:${NC}"
     echo "  1) UI-only  (default, recommended) - rebuild/restart UI only"
     echo "  2) Full stack - rebuild UI + GraphQL and run schema guard"
-    echo "  3) Scripts + config only - sync scripts + config without restarting services"
+    echo "  3) GraphQL only - sync talia-server + docker compose build graphql-server (no UI, no schema guard)"
+    echo "  4) Scripts + config only - sync scripts + config without restarting services"
     echo ""
 
     default_scope="1"
     if [ "$DEPLOY_MODE" = "full" ]; then
       default_scope="2"
+    elif [ "$DEPLOY_MODE" = "graphql-only" ]; then
+      default_scope="3"
+    elif [ "$DEPLOY_MODE" = "scripts-only" ]; then
+      default_scope="4"
     fi
 
-    read -r -p "Choose scope [1/2] (default: ${default_scope}): " SCOPE_CHOICE
+    read -r -p "Choose scope [1/2/3/4] (default: ${default_scope}): " SCOPE_CHOICE
     SCOPE_CHOICE="${SCOPE_CHOICE:-$default_scope}"
 
     case "$SCOPE_CHOICE" in
@@ -145,6 +157,10 @@ if [ "$DRY_RUN" = false ]; then
         CONFIRM_TOKEN="DEPLOY_FULL_STACK"
         ;;
       3)
+        DEPLOY_MODE="graphql-only"
+        CONFIRM_TOKEN="DEPLOY_GRAPHQL_ONLY"
+        ;;
+      4)
         DEPLOY_MODE="scripts-only"
         CONFIRM_TOKEN="DEPLOY_SCRIPTS_ONLY"
         ;;
@@ -233,6 +249,9 @@ if [ "$DEPLOY_MODE" = "full" ]; then
   echo -e "${YELLOW}Note: Docker image deployment requires separate script${NC}"
   echo -e "${YELLOW}Run: ./scripts/deploy-to-staging-docker.sh${NC}"
   echo ""
+elif [ "$DEPLOY_MODE" = "graphql-only" ]; then
+  echo -e "${YELLOW}GraphQL-only: sync code archive + docker compose build graphql-server (no UI, no schema guard).${NC}"
+  echo ""
 fi
 
 # Local sync package transfer (default mode)
@@ -252,21 +271,26 @@ if [ "$SYNC_MODE" = "local" ]; then
       rm -f "$LOCAL_SCRIPTS_ARCHIVE"
       echo -e "${GREEN}✅ Scripts/config archive copied to staging${NC}"
     else
-      tar -czf "$LOCAL_ARCHIVE" \
-        --exclude='.git' \
-        --exclude='talia-ui/node_modules' \
-        --exclude='talia-server/node_modules' \
-        --exclude='talia-ui/dist' \
-        --exclude='talia-server/dist' \
-        --exclude='.DS_Store' \
-        docker-compose.staging.yml .env.staging.example talia-ui talia-server scripts supabase infra
-      scp "$LOCAL_ARCHIVE" "${STAGING_USER}@${STAGING_HOST}:${REMOTE_ARCHIVE}"
-      rm -f "$LOCAL_ARCHIVE"
-      echo -e "${GREEN}✅ Local code archive copied to staging${NC}"
+      if [ "${DEPLOY_SKIP_CODE_ARCHIVE:-0}" = "1" ] && [ "$DEPLOY_MODE" = "ui-only" ]; then
+        echo -e "${BLUE}⏭️  Skipping full code archive (ui-only + DEPLOY_SKIP_CODE_ARCHIVE=1).${NC}"
+        echo -e "${BLUE}   Pushing UI dist only. GraphQL/backend updates use --graphql-only or --full (syncs talia-server + compose build).${NC}"
+      else
+        tar -czf "$LOCAL_ARCHIVE" \
+          --exclude='.git' \
+          --exclude='talia-ui/node_modules' \
+          --exclude='talia-server/node_modules' \
+          --exclude='talia-ui/dist' \
+          --exclude='talia-server/dist' \
+          --exclude='.DS_Store' \
+          docker-compose.staging.yml .env.staging.example talia-ui talia-server scripts supabase infra
+        scp "$LOCAL_ARCHIVE" "${STAGING_USER}@${STAGING_HOST}:${REMOTE_ARCHIVE}"
+        rm -f "$LOCAL_ARCHIVE"
+        echo -e "${GREEN}✅ Local code archive copied to staging${NC}"
+      fi
     fi
 
-    # Prepare local build artifacts so LAN deploys do not require remote image rebuilds.
-    # This keeps deployment resilient when staging host DNS/registry access is unstable.
+    # UI: static dist can be copied into the nginx container. GraphQL: always built on the host via
+    # Dockerfile (npm install + compile + prune) so node_modules and dist stay in sync — never docker-cp dist only.
     if [ "$DEPLOY_MODE" = "ui-only" ] || [ "$DEPLOY_MODE" = "full" ]; then
       echo -e "${BLUE}🧱 Building local UI dist artifact...${NC}"
       UI_APP_VERSION="$(python3 -c 'import json;print(json.load(open("talia-ui/package.json","r",encoding="utf-8")).get("version","0.0.0"))')"
@@ -293,21 +317,6 @@ if [ "$SYNC_MODE" = "local" ]; then
       echo -e "${GREEN}✅ Local UI dist artifact copied to staging${NC}"
     fi
 
-    if [ "$DEPLOY_MODE" = "full" ]; then
-      echo -e "${BLUE}🧱 Building local GraphQL dist artifact...${NC}"
-      (
-        cd talia-server
-        if [ ! -d "node_modules" ]; then
-          echo -e "${YELLOW}node_modules not found in talia-server; running npm install...${NC}"
-          npm install
-        fi
-        npm run compile
-      )
-      tar -czf "$LOCAL_SERVER_DIST_ARCHIVE" -C talia-server dist sync.config.json sync-cli.js package.json
-      scp "$LOCAL_SERVER_DIST_ARCHIVE" "${STAGING_USER}@${STAGING_HOST}:${REMOTE_SERVER_DIST_ARCHIVE}"
-      rm -f "$LOCAL_SERVER_DIST_ARCHIVE"
-      echo -e "${GREEN}✅ Local GraphQL dist artifact copied to staging${NC}"
-    fi
   else
     if [ "$DEPLOY_MODE" = "scripts-only" ]; then
       echo -e "${YELLOW}[DRY RUN] Would create and copy scripts/config archive: ${LOCAL_SCRIPTS_ARCHIVE}${NC}"
@@ -317,13 +326,11 @@ if [ "$SYNC_MODE" = "local" ]; then
     if [ "$DEPLOY_MODE" = "ui-only" ] || [ "$DEPLOY_MODE" = "full" ]; then
       echo -e "${YELLOW}[DRY RUN] Would build and copy local UI dist artifact: ${LOCAL_UI_DIST_ARCHIVE}${NC}"
     fi
-    if [ "$DEPLOY_MODE" = "full" ]; then
-      echo -e "${YELLOW}[DRY RUN] Would build and copy local GraphQL dist artifact: ${LOCAL_SERVER_DIST_ARCHIVE}${NC}"
-    fi
   fi
 fi
 
 # SSH to staging and deploy
+_DEPLOY_SKIP_CODE_EXTRACT="${DEPLOY_SKIP_CODE_ARCHIVE:-0}"
 DEPLOY_SCRIPT="
 set -e
 mkdir -p $STAGING_GIT_DIR
@@ -331,7 +338,6 @@ cd $STAGING_GIT_DIR
 REMOTE_ARCHIVE='$REMOTE_ARCHIVE'
 REMOTE_SCRIPTS_ARCHIVE='$REMOTE_SCRIPTS_ARCHIVE'
 REMOTE_UI_DIST_ARCHIVE='$REMOTE_UI_DIST_ARCHIVE'
-REMOTE_SERVER_DIST_ARCHIVE='$REMOTE_SERVER_DIST_ARCHIVE'
 
 if [ \"$SYNC_MODE\" = \"git\" ]; then
   echo '📥 Pulling latest code from git...'
@@ -344,9 +350,13 @@ else
     rm -f \"\$REMOTE_SCRIPTS_ARCHIVE\"
     chmod +x ./scripts/validate ./validate 2>/dev/null || true
   else
-    echo '📦 Extracting local code archive...'
-    tar -xzf \"\$REMOTE_ARCHIVE\" -C .
-    rm -f \"\$REMOTE_ARCHIVE\"
+    if [ \"$_DEPLOY_SKIP_CODE_EXTRACT\" = \"1\" ] && [ \"$DEPLOY_MODE\" = \"ui-only\" ]; then
+      echo '📦 Skipping full code archive extract (ui-only dist sync).'
+    else
+      echo '📦 Extracting local code archive...'
+      tar -xzf \"\$REMOTE_ARCHIVE\" -C .
+      rm -f \"\$REMOTE_ARCHIVE\"
+    fi
   fi
 fi
 
@@ -354,39 +364,13 @@ if [ \"$DEPLOY_MODE\" = \"scripts-only\" ]; then
   echo '🎯 Scripts/config deployment complete (no service restarts).'
 elif [ \"$DEPLOY_MODE\" = \"full\" ]; then
   echo '🎯 Full deployment (backend + UI + schema guard)...'
-  if [ -f \"\$REMOTE_SERVER_DIST_ARCHIVE\" ] && [ -f \"\$REMOTE_UI_DIST_ARCHIVE\" ]; then
-    echo '📦 Applying local GraphQL/UI artifacts (no remote image rebuild)...'
-    ${DC} -f docker-compose.staging.yml up -d --no-deps graphql-server ui
+  echo '🔨 Building graphql-server image (Dockerfile: npm install + compile + prune)...'
+  ${DC} -f docker-compose.staging.yml build graphql-server
+  ${DC} -f docker-compose.staging.yml up -d --no-deps graphql-server
 
-    GRAPHQL_CONTAINER_ID=\$(${DC} -f docker-compose.staging.yml ps -q graphql-server)
-    if [ -z \"\$GRAPHQL_CONTAINER_ID\" ]; then
-      echo '❌ FAILED - graphql-server container is not running; cannot apply local artifact'
-      exit 1
-    fi
-    TMP_SERVER_DIST_DIR=\"/tmp/talia-server-dist-fallback\"
-    rm -rf \"\$TMP_SERVER_DIST_DIR\"
-    mkdir -p \"\$TMP_SERVER_DIST_DIR\"
-    tar -xzf \"\$REMOTE_SERVER_DIST_ARCHIVE\" -C \"\$TMP_SERVER_DIST_DIR\"
-    if [ ! -d \"\$TMP_SERVER_DIST_DIR/dist\" ]; then
-      echo '❌ FAILED - dist folder missing in GraphQL artifact'
-      exit 1
-    fi
-    ${DOCKER_BIN} cp \"\$TMP_SERVER_DIST_DIR/dist/.\" \"\$GRAPHQL_CONTAINER_ID:/app/dist/\"
-    if [ -f \"\$TMP_SERVER_DIST_DIR/sync.config.json\" ]; then
-      ${DOCKER_BIN} cp \"\$TMP_SERVER_DIST_DIR/sync.config.json\" \"\$GRAPHQL_CONTAINER_ID:/app/sync.config.json\"
-      ${DOCKER_BIN} cp \"\$TMP_SERVER_DIST_DIR/sync.config.json\" \"\$GRAPHQL_CONTAINER_ID:/app/dist/sync.config.json\"
-    fi
-    if [ -f \"\$TMP_SERVER_DIST_DIR/sync-cli.js\" ]; then
-      ${DOCKER_BIN} cp \"\$TMP_SERVER_DIST_DIR/sync-cli.js\" \"\$GRAPHQL_CONTAINER_ID:/app/sync-cli.js\"
-      ${DOCKER_BIN} cp \"\$TMP_SERVER_DIST_DIR/sync-cli.js\" \"\$GRAPHQL_CONTAINER_ID:/app/dist/sync-cli.js\"
-    fi
-    if [ -f \"\$TMP_SERVER_DIST_DIR/package.json\" ]; then
-      ${DOCKER_BIN} cp \"\$TMP_SERVER_DIST_DIR/package.json\" \"\$GRAPHQL_CONTAINER_ID:/app/package.json\"
-    fi
-    ${DC} -f docker-compose.staging.yml restart graphql-server
-    rm -rf \"\$TMP_SERVER_DIST_DIR\"
-    rm -f \"\$REMOTE_SERVER_DIST_ARCHIVE\"
-
+  if [ -f \"\$REMOTE_UI_DIST_ARCHIVE\" ]; then
+    echo '📦 Applying local UI dist artifact...'
+    ${DC} -f docker-compose.staging.yml up -d --no-deps ui
     UI_CONTAINER_ID=\$(${DC} -f docker-compose.staging.yml ps -q ui)
     if [ -z \"\$UI_CONTAINER_ID\" ]; then
       echo '❌ FAILED - ui container is not running; cannot apply local dist artifact'
@@ -404,13 +388,18 @@ elif [ \"$DEPLOY_MODE\" = \"full\" ]; then
     ${DC} -f docker-compose.staging.yml restart ui
     rm -rf \"\$TMP_UI_DIST_DIR\"
     rm -f \"\$REMOTE_UI_DIST_ARCHIVE\"
-    echo '✅ Local GraphQL/UI artifacts applied to running containers'
+    echo '✅ UI dist applied; graphql-server rebuilt from image'
   else
-    echo '🔨 Local artifacts not found; falling back to remote image rebuild...'
-    ${DC} -f docker-compose.staging.yml build --no-cache ui graphql-server
-    ${DC} -f docker-compose.staging.yml up -d
-    echo '✅ Remote image rebuild succeeded'
+    echo '🔨 No local UI dist artifact; rebuilding ui image...'
+    ${DC} -f docker-compose.staging.yml build ui
+    ${DC} -f docker-compose.staging.yml up -d --no-deps ui
+    echo '✅ UI image rebuild succeeded'
   fi
+elif [ \"$DEPLOY_MODE\" = \"graphql-only\" ]; then
+  echo '🎯 GraphQL-only: rebuild graphql-server from synced talia-server (Dockerfile)...'
+  ${DC} -f docker-compose.staging.yml build graphql-server
+  ${DC} -f docker-compose.staging.yml up -d --no-deps graphql-server
+  echo '✅ graphql-server container running from new image'
 else
   echo '🎯 UI-only deployment (backend/data services untouched)...'
   if [ -f \"\$REMOTE_UI_DIST_ARCHIVE\" ]; then
@@ -462,7 +451,7 @@ fi
 max_attempts=30
 attempt=0
 
-if [ \"$DEPLOY_MODE\" = \"full\" ]; then
+if [ \"$DEPLOY_MODE\" = \"full\" ] || [ \"$DEPLOY_MODE\" = \"graphql-only\" ]; then
   # Test GraphQL server
   echo -n '  Testing GraphQL server... '
   while [ \$attempt -lt \$max_attempts ]; do
@@ -496,7 +485,9 @@ if [ \"$DEPLOY_MODE\" = \"full\" ]; then
     echo '❌ FAILED - No tables returned'
     exit 1
   fi
+fi
 
+if [ \"$DEPLOY_MODE\" = \"full\" ]; then
   # Test required schema tables for ship tracker/inventory memo features
   echo -n '  Testing required tables (inventory_item, inventory_item_memo)... '
   required_tables_check=\$(${DC} -f docker-compose.staging.yml exec -T supabase-db psql -U postgres -d postgres -tAc \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('inventory_item','inventory_item_memo');\" | tr -d '[:space:]')

@@ -234,6 +234,8 @@ services:
       DATA_SOURCE_PRIORITY: supabase
       # Set to 1 on MVP/staging to block Synapse → Supabase sync (CLI + GraphQL). See talia-server/.env.example.
       TALIA_SYNAPSE_SYNC_DISABLED: ${TALIA_SYNAPSE_SYNC_DISABLED:-}
+      # Set to 1 only if this host still runs an older GraphQL schema whose FocusType enum omits ROLE (wire compat; DB unchanged).
+      TALIA_GRAPHQL_LEGACY_FOCUS_ENUM: ${TALIA_GRAPHQL_LEGACY_FOCUS_ENUM:-}
     depends_on:
       supabase-kong:
         condition: service_healthy

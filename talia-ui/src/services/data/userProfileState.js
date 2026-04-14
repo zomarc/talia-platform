@@ -25,14 +25,20 @@ export const getCurrentUserId = () => {
 
 export const loadUserProfileState = async ({ userId, component = 'User Profile' } = {}) => {
   const targetUserId = userId || getCurrentUserId();
-  const data = await trackedFetchGraphql({
-    query: USER_PROFILE_STATE_QUERY,
-    variables: { userId: targetUserId },
-    component,
-    purpose: `Load user profile state for ${targetUserId}`,
-    tableName: 'config_setting',
-  });
-  return data?.userProfileState || {};
+  try {
+    const data = await trackedFetchGraphql({
+      query: USER_PROFILE_STATE_QUERY,
+      variables: { userId: targetUserId },
+      component,
+      purpose: `Load user profile state for ${targetUserId}`,
+      tableName: 'config_setting',
+    });
+    return data?.userProfileState || {};
+  } catch (e) {
+    // Older GraphQL stacks (e.g. MVP not yet redeployed) omit userProfileState; treat as empty profile.
+    console.warn('[userProfileState] load skipped (GraphQL unavailable or schema mismatch):', e?.message || e);
+    return {};
+  }
 };
 
 export const saveUserProfileState = async ({ patch, userId, component = 'User Profile' }) => {

@@ -219,7 +219,7 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
                       {profile.validateScriptDocVersion}
                       <span className="dm-instance-profile__note">
                         {' '}
-                        — should match <code>SCRIPT_VERSION</code> in <code>scripts/validate</code>
+                        — same token as <code>SCRIPT_VERSION</code> in <code>scripts/validate</code>
                       </span>
                     </dd>
                   </div>

@@ -1528,13 +1528,20 @@ function Dashboard({ user }) {
 
     loadUserProfileState({ component: 'Dashboard' })
       .then((profileState) => {
-        const profileFocusId = typeof profileState?.lastFocusId === 'string'
+        let profileFocusId = typeof profileState?.lastFocusId === 'string'
           ? profileState.lastFocusId
           : '';
+        if (!profileFocusId) {
+          try {
+            profileFocusId = window.localStorage?.getItem?.(SAVED_FOCUS_KEY) || '';
+          } catch {
+            profileFocusId = '';
+          }
+        }
         const preferredFocusId = profileFocusId;
 
         if (!preferredFocusId) {
-          reportLayoutRestoreFailure('No persisted focus is available for restore.');
+          debugLog('Dashboard: no persisted focus (profile empty or first visit); skipping restore.');
           return;
         }
 

@@ -242,7 +242,7 @@ class GraphQLFocusService {
           errorPolicy: 'all'
         });
         data = legacy?.data;
-        error = error || legacy?.error;
+        error = legacy?.error;
       }
 
       console.log('📊 GraphQL response:', { 
@@ -251,6 +251,12 @@ class GraphQLFocusService {
         dataKeys: data ? Object.keys(data) : [],
         focusesCount: data?.focusesByRole?.length || 0
       });
+
+      // If we have a usable list (even empty), do not throw stale errors from the primary query
+      // (e.g. older GraphQL rejects userId / assignedRoles — legacy query then succeeds).
+      if (Array.isArray(data?.focusesByRole)) {
+        error = undefined;
+      }
 
       if (error) {
         console.error('❌ GraphQL query error:', error);

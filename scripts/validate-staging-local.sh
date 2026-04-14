@@ -224,14 +224,8 @@ fi
 echo ""
 echo -e "${BLUE}=== Versions / Deploy Commit ===${NC}"
 if git -C "$STAGING_DIR" rev-parse HEAD >/dev/null 2>&1; then
-  git -C "$STAGING_DIR" fetch origin >/dev/null 2>&1 || true
   STAGING_HEAD=$(git -C "$STAGING_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
-  STAGING_ORIGIN=$(git -C "$STAGING_DIR" rev-parse --short origin/main 2>/dev/null || echo "unknown")
-  if [[ "$STAGING_HEAD" == "$STAGING_ORIGIN" ]]; then
-    check_status "Staging git" "OK" "HEAD ${STAGING_HEAD} (matches origin/main)"
-  else
-    check_status "Staging git" "WARN" "HEAD ${STAGING_HEAD}, origin/main ${STAGING_ORIGIN}"
-  fi
+  check_status "Staging git" "OK" "HEAD ${STAGING_HEAD} (on-disk ref; no remote fetch)"
 else
   check_status "Staging git" "WARN" "repo not found"
 fi

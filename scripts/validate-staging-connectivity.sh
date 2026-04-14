@@ -397,7 +397,7 @@ fi
 STAGING_UI_CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "${STAGING_UI_URL}/" 2>/dev/null || echo "000")
 STAGING_UI_VERSION=$(get_ui_version "${STAGING_UI_URL}")
 if [[ "$STAGING_UI_CODE" == "200" ]]; then
-  if [[ "$STAGING_UI_VERSION" =~ ^0\.1\.[0-9]+$ ]]; then
+  if [[ "$STAGING_UI_VERSION" =~ ^0\.[0-9]+\.[0-9]+$ ]]; then
     check_status "Staging UI health" "OK" "reachable, v${STAGING_UI_VERSION}"
   else
     check_status "Staging UI health" "WARN" "reachable, version=${STAGING_UI_VERSION}"
@@ -409,28 +409,17 @@ fi
 echo ""
 echo -e "${BLUE}=== Versions / Deploy Commit ===${NC}"
 
-# Local repo version
+# Local repo (no network fetch — deploy path is local tree → scp → staging)
 if git -C "$ROOT_DIR" rev-parse HEAD >/dev/null 2>&1; then
-  git -C "$ROOT_DIR" fetch origin >/dev/null 2>&1 || true
   LOCAL_HEAD=$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
-  LOCAL_ORIGIN=$(git -C "$ROOT_DIR" rev-parse --short origin/main 2>/dev/null || echo "unknown")
-  if [[ "$LOCAL_HEAD" == "$LOCAL_ORIGIN" ]]; then
-    check_status "Local git" "OK" "HEAD ${LOCAL_HEAD} (matches origin/main)"
-  else
-    check_status "Local git" "WARN" "HEAD ${LOCAL_HEAD}, origin/main ${LOCAL_ORIGIN}"
-  fi
+  check_status "Local git" "OK" "HEAD ${LOCAL_HEAD}"
 else
   check_status "Local git" "WARN" "not a git repo"
 fi
 
-# Staging repo version
+# Staging checkout on host (reference only; runtime is Docker)
 STAGING_HEAD=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && git rev-parse --short HEAD 2>/dev/null || echo 'unknown'" 2>/dev/null || echo "unknown")
-STAGING_ORIGIN=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && git fetch origin >/dev/null 2>&1 && git rev-parse --short origin/main 2>/dev/null || echo 'unknown'" 2>/dev/null || echo "unknown")
-if [[ "$STAGING_HEAD" == "$STAGING_ORIGIN" ]]; then
-  check_status "Staging git" "OK" "HEAD ${STAGING_HEAD} (matches origin/main)"
-else
-  check_status "Staging git" "WARN" "HEAD ${STAGING_HEAD}, origin/main ${STAGING_ORIGIN}"
-fi
+check_status "Staging git" "OK" "HEAD ${STAGING_HEAD} (on-disk ref)"
 
 if [[ "$TEST_AZURE" == "true" ]]; then
   echo ""

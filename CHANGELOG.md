@@ -113,5 +113,4 @@ First alpha release of Talia Platform with core features for revenue and invento
 
 ---
 
-[0.2.0]: https://github.com/zomarc/talia-platform/releases/tag/v0.2.0
-[0.1.0]: https://github.com/zomarc/talia-platform/releases/tag/v0.1.0
+<!-- Release tags are local or team-defined; deploy path is laptop → staging/MVP over SSH, not a public host. -->

@@ -1,8 +1,7 @@
 #!/bin/bash
-# Deploy Talia Platform from local to staging environment.
-# Policy: staging deploys default to direct local -> staging LAN sync.
-# Git-based sync is intentionally guarded and requires explicit typed confirmation.
-# Usage: ./scripts/deploy-to-staging.sh [--ui-only|--full|--scripts-only|--dry-run|--git-sync]
+# Deploy Talia Platform from this machine to staging over SSH.
+# Policy: only local working tree → tarball/scp → extract on host → compose (no remote git pull, no push).
+# Usage: ./scripts/deploy-to-staging.sh [--ui-only|--graphql-only|--full|--scripts-only|--dry-run]
 #
 # Non-interactive (CI / automation): set STAGING_DEPLOY_CONFIRM_TOKEN to the
 # exact token the script would ask for: DEPLOY_UI_ONLY / DEPLOY_FULL_STACK /
@@ -52,7 +51,6 @@ NC='\033[0m' # No Color
 # Parse arguments
 DEPLOY_MODE=""
 DRY_RUN=false
-SYNC_MODE="local"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -77,12 +75,12 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --git-sync)
-      SYNC_MODE="git"
-      shift
+      echo -e "${RED}--git-sync is removed.${NC} Deploy uses only your local tree → scp tarball → staging (see header)." >&2
+      exit 1
       ;;
     *)
       echo -e "${RED}Unknown option: $1${NC}"
-      echo "Usage: $0 [--ui-only|--graphql-only|--full|--scripts-only|--dry-run|--git-sync]"
+      echo "Usage: $0 [--ui-only|--graphql-only|--full|--scripts-only|--dry-run]"
       exit 1
       ;;
   esac
@@ -179,7 +177,7 @@ if [ "$DRY_RUN" = false ]; then
 fi
 
 echo -e "Mode: ${YELLOW}${DEPLOY_MODE}${NC}"
-echo -e "Sync: ${YELLOW}${SYNC_MODE}${NC} (default: local)"
+echo -e "Sync: ${YELLOW}local tree → tarball/scp → staging${NC} (no remote git)"
 if [ "$DRY_RUN" = true ]; then
   echo -e "Dry Run: ${YELLOW}YES${NC}"
 fi
@@ -191,54 +189,7 @@ if [ ! -f "package.json" ] || [ ! -d "talia-ui" ] || [ ! -d "talia-server" ]; th
   exit 1
 fi
 
-if [ "$SYNC_MODE" = "git" ]; then
-  echo -e "${YELLOW}⚠️  You selected --git-sync.${NC}"
-  echo -e "${YELLOW}⚠️  Default/approved method is direct local -> staging LAN deployment.${NC}"
-  echo -e "${YELLOW}⚠️  Use git-sync only with explicit approval for this run.${NC}"
-  echo ""
-  if [ "$DRY_RUN" = false ]; then
-    if [ ! -t 0 ]; then
-      echo -e "${RED}Error: --git-sync requires an interactive terminal confirmation.${NC}"
-      echo -e "${RED}Run again interactively or use default local sync.${NC}"
-      exit 1
-    fi
-    read -r -p "Type APPROVE_GIT_SYNC to continue with git-based deployment: " GIT_SYNC_APPROVAL
-    if [ "$GIT_SYNC_APPROVAL" != "APPROVE_GIT_SYNC" ]; then
-      echo -e "${RED}Aborted: git-sync not approved. Use default local sync deployment.${NC}"
-      exit 1
-    fi
-  fi
-
-  echo -e "${BLUE}📋 Checking git status...${NC}"
-  if [ -n "$(git status --porcelain)" ]; then
-    echo -e "${YELLOW}⚠️  You have uncommitted changes${NC}"
-    echo ""
-    read -p "Do you want to commit them now? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-      read -p "Commit message: " COMMIT_MSG
-      if [ -z "$COMMIT_MSG" ]; then
-        COMMIT_MSG="chore: deploy to staging"
-      fi
-      git add .
-      git commit -m "$COMMIT_MSG"
-      echo -e "${GREEN}✅ Changes committed${NC}"
-    else
-      echo -e "${YELLOW}⚠️  Proceeding with uncommitted changes${NC}"
-    fi
-  fi
-
-  echo ""
-  echo -e "${BLUE}📤 Pushing to git...${NC}"
-  if [ "$DRY_RUN" = false ]; then
-    git push
-    echo -e "${GREEN}✅ Code pushed to git${NC}"
-  else
-    echo -e "${YELLOW}[DRY RUN] Would run: git push${NC}"
-  fi
-else
-  echo -e "${BLUE}📦 Local sync mode selected (no git push/pull).${NC}"
-fi
+echo -e "${BLUE}📦 Source: this machine’s working tree (commit locally if you want a saved revision).${NC}"
 
 # Deploy to staging
 echo ""
@@ -254,8 +205,7 @@ elif [ "$DEPLOY_MODE" = "graphql-only" ]; then
   echo ""
 fi
 
-# Local sync package transfer (default mode)
-if [ "$SYNC_MODE" = "local" ]; then
+# Local sync package transfer
   echo ""
   if [ "$DEPLOY_MODE" = "scripts-only" ]; then
     echo -e "${BLUE}📦 Preparing scripts/config archive for staging...${NC}"
@@ -327,7 +277,6 @@ if [ "$SYNC_MODE" = "local" ]; then
       echo -e "${YELLOW}[DRY RUN] Would build and copy local UI dist artifact: ${LOCAL_UI_DIST_ARCHIVE}${NC}"
     fi
   fi
-fi
 
 # SSH to staging and deploy
 _DEPLOY_SKIP_CODE_EXTRACT="${DEPLOY_SKIP_CODE_ARCHIVE:-0}"
@@ -339,24 +288,18 @@ REMOTE_ARCHIVE='$REMOTE_ARCHIVE'
 REMOTE_SCRIPTS_ARCHIVE='$REMOTE_SCRIPTS_ARCHIVE'
 REMOTE_UI_DIST_ARCHIVE='$REMOTE_UI_DIST_ARCHIVE'
 
-if [ \"$SYNC_MODE\" = \"git\" ]; then
-  echo '📥 Pulling latest code from git...'
-  git fetch origin
-  git reset --hard origin/main
+if [ \"$DEPLOY_MODE\" = \"scripts-only\" ]; then
+  echo '📦 Extracting scripts/config archive...'
+  tar -xzf \"\$REMOTE_SCRIPTS_ARCHIVE\" -C .
+  rm -f \"\$REMOTE_SCRIPTS_ARCHIVE\"
+  chmod +x ./scripts/validate ./validate 2>/dev/null || true
 else
-  if [ \"$DEPLOY_MODE\" = \"scripts-only\" ]; then
-    echo '📦 Extracting scripts/config archive...'
-    tar -xzf \"\$REMOTE_SCRIPTS_ARCHIVE\" -C .
-    rm -f \"\$REMOTE_SCRIPTS_ARCHIVE\"
-    chmod +x ./scripts/validate ./validate 2>/dev/null || true
+  if [ \"$_DEPLOY_SKIP_CODE_EXTRACT\" = \"1\" ] && [ \"$DEPLOY_MODE\" = \"ui-only\" ]; then
+    echo '📦 Skipping full code archive extract (ui-only dist sync).'
   else
-    if [ \"$_DEPLOY_SKIP_CODE_EXTRACT\" = \"1\" ] && [ \"$DEPLOY_MODE\" = \"ui-only\" ]; then
-      echo '📦 Skipping full code archive extract (ui-only dist sync).'
-    else
-      echo '📦 Extracting local code archive...'
-      tar -xzf \"\$REMOTE_ARCHIVE\" -C .
-      rm -f \"\$REMOTE_ARCHIVE\"
-    fi
+    echo '📦 Extracting local code archive...'
+    tar -xzf \"\$REMOTE_ARCHIVE\" -C .
+    rm -f \"\$REMOTE_ARCHIVE\"
   fi
 fi
 

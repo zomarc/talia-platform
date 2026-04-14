@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Deploy from this machine to MVP over SSH — same path as LAN staging (tar + local UI/server dist).
-# Your laptop code is what ships; MVP is not updated from GitHub by this script. Configure MVP_* in scripts/config/targets.env.
+# Deploy from this machine to MVP over SSH — same path as LAN staging (tarball/scp + compose on the VM).
+# Only your local working tree is shipped; no remote git pull on MVP. Configure MVP_* in scripts/config/targets.env.
 #
 # Usage:
 #   ./scripts/deploy-to-mvp.sh [--ui-only|--graphql-only|--full|--scripts-only|--dry-run]

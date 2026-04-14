@@ -2244,18 +2244,11 @@ run_comprehensive_check() {
 
   echo -e "${BOLD}=== VERSIONS / COMMITS ===${NC}"
   if git -C "$ROOT_DIR" rev-parse HEAD >/dev/null 2>&1; then
-    git -C "$ROOT_DIR" fetch origin >/dev/null 2>&1 || true
     local head
-    local origin
-    head=$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
-    origin=$(git -C "$ROOT_DIR" rev-parse --short origin/main 2>/dev/null || echo "unknown")
     local status
+    head=$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
     status=$(git -C "$ROOT_DIR" status --porcelain | wc -l | tr -d ' ')
-    if [[ "$head" == "$origin" ]]; then
-      echo -e "  ${GREEN}✓${NC} Local HEAD ${head} matches origin/main"
-    else
-      echo -e "  ${YELLOW}⚠️${NC} Local HEAD ${head}, origin/main ${origin}"
-    fi
+    echo -e "  ${GREEN}✓${NC} Local repo HEAD ${head} (offline; no remote compare)"
     if [[ "$status" -eq 0 ]]; then
       echo -e "  ${GREEN}✓${NC} Working tree clean"
     else

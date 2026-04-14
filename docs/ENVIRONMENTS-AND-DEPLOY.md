@@ -8,21 +8,21 @@
 | **staging** | MiniPC on your LAN (`192.168.1.120` in default `targets.env`) | Integration testing on real hardware near you. |
 | **mvp** | Azure VM (e.g. public IP in `MVP_SSH_HOST`) | Cloud-shaped test instance; same stack as staging, different host and secrets. |
 
-None of these names imply GitHub. **Staging** and **mvp** are updated by **deploying from your laptop** with the scripts below, not by “mystery” remote git unless you explicitly use the optional git-based script.
+**Staging** and **mvp** are updated only by **deploying from your laptop** (`deploy-to-staging.sh` / `deploy-to-mvp.sh`): tarball over SSH and compose on the host. There is no `git push` or remote pull in that path.
 
 ## How code reaches staging and MVP
 
 - **Staging:** `./scripts/deploy-to-staging.sh` (default: `--ui-only` or `--full`)  
-  Builds UI (and GraphQL for `--full`) **on your laptop**, ships a tarball + `dist` artifacts, applies them over SSH. **No GitHub required.**
+  Builds UI (and GraphQL for `--full`) **on your laptop**, ships a tarball + `dist` artifacts, applies them over SSH.
 
 - **MVP:** `./scripts/deploy-to-mvp.sh` (same flags)  
   Same mechanism; sets `VITE_ENVIRONMENT=mvp` so the UI banner shows **mvp**, not a misleading **staging** label.
 
-Optional legacy path: `deploy-to-azure-staging.sh` only if the VM has its **own git clone** and you **want** `git pull` there.
+Optional: `deploy-to-azure-staging.sh` is a separate recipe for VMs that update via **their own** git remote (not part of the laptop tarball flow).
 
 ## Why MVP once looked “reverted” to old v0.1.1
 
-1. **Git-on-VM deploys** reset the server to **whatever was on GitHub**. If **`git push` failed**, GitHub stayed old while your laptop was new — the VM correctly matched **stale GitHub**, not your laptop.
+1. **Git-on-VM deploys** (if used) reset the server to **whatever commit the VM’s remote had**, which could lag **your laptop** if you never deployed the tarball path.
 
 2. **Pinned UI version in compose:** `docker-compose.staging.yml` used to hardcode `VITE_APP_VERSION: "0.1.1"` for image builds, so the corner version could stay **0.1.1** even when `package.json` was newer. That is now avoided: UI version comes from **`talia-ui/package.json`** at build time unless you override.
 

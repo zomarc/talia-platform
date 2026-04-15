@@ -4,8 +4,8 @@
 # Calls underlying validation scripts based on user selection
 #
 # Usage:
-#   ./scripts/validate                    # Interactive menu (fast overview, then actions)
-#   ./scripts/validate set-target local|staging
+#   ./scripts/validate                    # Interactive: full probe once at start; cached OPS header each menu (10 = refresh probes)
+#   ./scripts/validate set-target local|staging|mvp
 #   ./scripts/validate check              # Deep checks for current working target only
 #   ./scripts/validate start-core | stop-core
 #   ./scripts/validate external-on | external-off
@@ -18,7 +18,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Monotonic ops token (not a calendar stamp). Bump when validate menu behavior or Instance & keys cross-check changes.
-SCRIPT_VERSION="ops-4"
+SCRIPT_VERSION="ops-5"
 CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
 if [[ -f "${CONFIG_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -84,6 +84,13 @@ MVP_SUPABASE_URL="${MVP_SUPABASE_URL:-http://${MVP_UI_HOST}:${MVP_KONG_PORT}/}"
 MVP_SSH_USER="${MVP_SSH_USER:-azureuser}"
 MVP_SSH_HOST="${MVP_SSH_HOST:-${MVP_UI_HOST:-}}"
 MVP_SSH_BASE_OPTS="${MVP_SSH_BASE_OPTS:--o ConnectTimeout=6 -o ConnectionAttempts=1 -o BatchMode=yes}"
+# Same compose file as staging; app dir on MVP VM (override in targets.env if different).
+MVP_APP_DIR="${MVP_APP_DIR:-/home/${MVP_SSH_USER}/talia-docker}"
+MVP_DOCKER_COMPOSE="${MVP_DOCKER_COMPOSE:-sudo docker compose}"
+# Optional: docker compose command when driving staging over SSH from your laptop (no sudo on MiniPC).
+STAGING_REMOTE_DOCKER_COMPOSE="${STAGING_REMOTE_DOCKER_COMPOSE:-docker compose}"
+# Local Postgres container for disk report (docker-compose.staging service supabase-db).
+LOCAL_SUPABASE_DB_CONTAINER="${LOCAL_SUPABASE_DB_CONTAINER:-talia-supabase-db}"
 
 PUBLIC_MAIN_URL="${PUBLIC_MAIN_URL:-https://taliahub.com}"
 # Optional: GraphQL URL for public row in "Deployed versions" (defaults to /api/graphql on same host).
@@ -100,6 +107,10 @@ LOCAL_NGROK_DOMAIN="${LOCAL_NGROK_DOMAIN#http://}"
 
 # External target memory (persists across runs)
 TARGET_STATE_FILE="${TARGET_STATE_FILE:-${HOME}/.talia-validate-last-target}"
+# Snapshot of endpoint checks + deployed rows (bash-sourced to redraw with live ▶ markers). Written on full probe.
+VALIDATE_SUMMARY_PROBE_STATE_FILE="${VALIDATE_SUMMARY_PROBE_STATE_FILE:-${HOME}/.talia-validate-last-summary.state}}"
+# Optional full ANSI transcript (e.g. menu 11 summary notes).
+VALIDATE_SUMMARY_CACHE_FILE="${VALIDATE_SUMMARY_CACHE_FILE:-${HOME}/.talia-validate-last-summary.txt}"
 
 get_http_code() {
   local url="$1"
@@ -302,7 +313,7 @@ graphql_instance_profile_probe() {
   local gql_url="$1"
   local gql_code="$2"
   case "$gql_code" in
-    200|400) ;;
+    200|400|405) ;;
     *) echo "n/a|n/a|n/a"; return 0 ;;
   esac
   python3 - "$gql_url" <<'PY'
@@ -312,43 +323,65 @@ import urllib.error
 import urllib.request
 
 url = sys.argv[1]
-payload = json.dumps(
-    {
-        "query": (
-            "query ValidateInstanceProfile { instanceConnectionProfile { "
-            "graphqlServerPackageVersion nodeRuntimeVersion nodeEnv } }"
-        ),
-    }
-).encode()
-req = urllib.request.Request(
-    url,
-    data=payload,
-    headers={"Content-Type": "application/json"},
-    method="POST",
-)
-try:
-    with urllib.request.urlopen(req, timeout=5) as r:
-        body = json.loads(r.read().decode())
-except (OSError, ValueError, urllib.error.URLError):
-    print("n/a|n/a|n/a")
+
+QUERIES = [
+    (
+        "full",
+        "query ValidateInstanceProfile { instanceConnectionProfile { "
+        "graphqlServerPackageVersion nodeRuntimeVersion nodeEnv } }",
+    ),
+    (
+        "compat",
+        "query ValidateInstanceCompat { instanceConnectionProfile { "
+        "graphqlServerPackageVersion nodeEnv } }",
+    ),
+]
+
+
+def post(query: str):
+    payload = json.dumps({"query": query}).encode()
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=12) as r:
+            return json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        try:
+            return json.loads(e.read().decode())
+        except Exception:
+            return None
+    except Exception:
+        return None
+
+
+def emit(prof, include_node: bool):
+    if not prof:
+        print("n/a|n/a|n/a")
+        return
+
+    def f(key):
+        v = prof.get(key)
+        return str(v).strip() if v is not None else "n/a"
+
+    node = f("nodeRuntimeVersion") if include_node else "n/a"
+    print(f"{f('graphqlServerPackageVersion')}|{node}|{f('nodeEnv')}")
+
+
+for name, q in QUERIES:
+    body = post(q)
+    if not body or body.get("errors"):
+        continue
+    prof = (body.get("data") or {}).get("instanceConnectionProfile")
+    if not prof:
+        continue
+    emit(prof, include_node=(name == "full"))
     raise SystemExit(0)
-if body.get("errors"):
-    print("n/a|n/a|n/a")
-    raise SystemExit(0)
-prof = (body.get("data") or {}).get("instanceConnectionProfile")
-if not prof:
-    print("n/a|n/a|n/a")
-    raise SystemExit(0)
 
-
-def f(key):
-    v = prof.get(key)
-    return str(v).strip() if v is not None else "n/a"
-
-
-print(
-    f"{f('graphqlServerPackageVersion')}|{f('nodeRuntimeVersion')}|{f('nodeEnv')}"
-)
+print("n/a|n/a|n/a")
 PY
 }
 
@@ -370,6 +403,10 @@ get_display_version() {
 is_supported_target() {
   case "$1" in
     local|staging) return 0 ;;
+    mvp)
+      [[ "$MVP_VALIDATE" == "1" && -n "${MVP_SSH_HOST:-}" ]]
+      return $?
+      ;;
     *) return 1 ;;
   esac
 }
@@ -378,6 +415,7 @@ get_target_direct_url() {
   case "$1" in
     local) echo "$LOCAL_UI_URL" ;;
     staging) echo "$STAGING_UI_URL" ;;
+    mvp) echo "$MVP_UI_URL" ;;
     *) echo "" ;;
   esac
 }
@@ -637,6 +675,25 @@ run_staging_ssh_command() {
   return "$rc"
 }
 
+check_mvp_ssh_ready() {
+  [[ -n "${MVP_SSH_HOST:-}" ]] || return 1
+  local out
+  out=$(ssh ${MVP_SSH_BASE_OPTS} "${MVP_SSH_USER}@${MVP_SSH_HOST}" "echo ok" 2>/dev/null | tr -d '\r' | awk 'NF{print; exit}')
+  [[ "$out" == "ok" ]]
+}
+
+run_mvp_ssh_command() {
+  local remote_cmd="$1"
+  local desc="$2"
+  local timeout_sec="${3:-90}"
+
+  if ! check_mvp_ssh_ready; then
+    echo -e "  ${RED}✗ Cannot reach MVP over SSH (${MVP_SSH_USER}@${MVP_SSH_HOST})${NC}"
+    return 1
+  fi
+  run_command "ssh ${MVP_SSH_BASE_OPTS} ${MVP_SSH_USER}@${MVP_SSH_HOST} \"$remote_cmd\"" "$desc" "$timeout_sec"
+}
+
 is_quick_up() {
   local code="$1"
   local kind="$2"
@@ -742,7 +799,6 @@ external_status_plain() {
   echo "${status} (${src})"
 }
 
-# One-line TTY hint while slow probes run; pair with progress_line_clear() before final output.
 deployed_versions_print_row() {
   local marker="$1" title="$2" hostport="$3" talia_ui="$4" prof="$5"
   local pkg node env
@@ -751,21 +807,250 @@ deployed_versions_print_row() {
     "${pkg:-n/a}" "${node:-n/a}" "${env:-n/a}"
 }
 
-progress_line_busy() {
-  [[ -t 1 ]] || return 0
-  echo -e "${CYAN}${1:-Checking…}${NC}"
+_validate_summary_ms_now() {
+  python3 -c "import time; print(int(time.time() * 1000))"
 }
 
-progress_line_clear() {
-  [[ -t 1 ]] || return 0
-  if tput cuu1 2>/dev/null && tput el 2>/dev/null; then
-    :
-  else
-    printf '\033[1A\033[2K'
+validate_summary_timing_reset() {
+  local now
+  now=$(_validate_summary_ms_now)
+  _VALIDATE_SUMMARY_T0="$now"
+  _VALIDATE_SUMMARY_LAST="$now"
+}
+
+# Log elapsed ms since previous step (or reset), then advance the interval marker.
+validate_summary_log_step() {
+  local label="$1"
+  local now elapsed
+  now=$(_validate_summary_ms_now)
+  elapsed=$((now - _VALIDATE_SUMMARY_LAST))
+  printf '  %b%7d ms%b\t%s\n' "$DIM" "$elapsed" "$NC" "$label"
+  _VALIDATE_SUMMARY_LAST=$now
+}
+
+validate_summary_log_total() {
+  local now total
+  now=$(_validate_summary_ms_now)
+  total=$((now - _VALIDATE_SUMMARY_T0))
+  printf '  %b%7d ms%b\t%b%s%b\n' "$DIM" "$total" "$NC" "$BOLD" "total (quick summary)" "$NC"
+  echo ""
+}
+
+# Persist endpoint codes + deployed rows for menu redraw (live working-target ▶ markers).
+validate_summary_snapshot_write_v1() {
+  local tmp="${VALIDATE_SUMMARY_PROBE_STATE_FILE}.new.$$"
+  umask 077
+  {
+    echo '# talia-validate summary snapshot v1'
+    printf 'loc_ui=%q\n' "$1"
+    printf 'loc_gql=%q\n' "$2"
+    printf 'loc_sb=%q\n' "$3"
+    printf 'st_ui=%q\n' "$4"
+    printf 'st_gql=%q\n' "$5"
+    printf 'st_sb=%q\n' "$6"
+    printf 'mvp_ui=%q\n' "$7"
+    printf 'mvp_gql=%q\n' "$8"
+    printf 'mvp_sb=%q\n' "$9"
+    printf 'mvp_kong_line_suffix=%q\n' "${10}"
+    printf 'mvp_kong_hostport=%q\n' "${11}"
+    printf 'pub_code=%q\n' "${12}"
+    printf 'gateway=%q\n' "${13}"
+    printf 'loc_hp=%q\n' "${14}"
+    printf 'st_hp=%q\n' "${15}"
+    printf 'pub_hp=%q\n' "${16}"
+    printf 'mvp_hp=%q\n' "${17}"
+    printf 'loc_ui_version=%q\n' "${18}"
+    printf 'st_ui_version=%q\n' "${19}"
+    printf 'pub_ui_version=%q\n' "${20}"
+    printf 'mvp_ui_version=%q\n' "${21}"
+    printf 'loc_gql_prof=%q\n' "${22}"
+    printf 'st_gql_prof=%q\n' "${23}"
+    printf 'pub_gql_prof=%q\n' "${24}"
+    printf 'mvp_gql_prof=%q\n' "${25}"
+    printf 'mvp_section=%q\n' "${26}"
+  } >"$tmp" && mv "$tmp" "${VALIDATE_SUMMARY_PROBE_STATE_FILE}"
+}
+
+_emit_validate_summary_endpoints() {
+  local local_marker="$1" staging_marker="$2"
+  echo ""
+  echo -e "${BOLD}Endpoints${NC}"
+  printf "  %s %-9s  %-36s  %s\n" "$local_marker" "Local" "${LOCAL_UI_HOST}:${LOCAL_UI_PORT} UI" "$(quick_up_label "$loc_ui" "200")"
+  printf "  %s %-9s  %-36s  %s\n" "$local_marker" "" "${LOCAL_GRAPHQL_HOST}:${LOCAL_GRAPHQL_PORT} GraphQL" "$(quick_up_label "$loc_gql" "gql")"
+  printf "  %s %-9s  %-36s  %s\n" "$local_marker" "" "${LOCAL_SUPABASE_HOST}:${LOCAL_SUPABASE_KONG_PORT} Supabase Kong" "$(quick_up_label "$loc_sb" "kong")"
+  printf "  %s %-9s  %-36s  %s\n" "$local_marker" "" "Docker daemon (local)" "$(docker_status_label)"
+  echo ""
+  printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "Staging" "${STAGING_UI_HOST:-?}:${STAGING_UI_PORT} UI" "$(quick_up_label "$st_ui" "200")"
+  printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "" "${STAGING_UI_HOST:-?}:${STAGING_GRAPHQL_PORT:-4000} GraphQL" "$(quick_up_label "$st_gql" "gql")"
+  printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "" "${STAGING_UI_HOST:-?}:${STAGING_SUPABASE_KONG_PORT} Kong" "$(quick_up_label "$st_sb" "kong")"
+  if [[ "${mvp_section}" == "1" ]]; then
+    echo ""
+    printf "  %s %-9s  %-36s  %s\n" " " "MVP" "${MVP_UI_HOST}:${MVP_UI_PORT} UI (Azure)" "$(quick_up_label "$mvp_ui" "200")"
+    printf "  %s %-9s  %-36s  %s\n" " " "" "${MVP_UI_HOST}:${MVP_GRAPHQL_PORT} GraphQL" "$(quick_up_label "$mvp_gql" "gql")"
+    printf "  %s %-9s  %-36s  %s%s\n" " " "" "${mvp_kong_hostport:-${MVP_UI_HOST}:${MVP_SUPABASE_KONG_LIVE_PORT:-${MVP_KONG_PORT:-54321}}} Supabase Kong" "$(quick_up_label "$mvp_sb" "kong")" "${mvp_kong_line_suffix:-}"
   fi
+  echo ""
+  printf "  %-10s  %-36s  HTTP %s  gateway=%s\n" "External" "${PUBLIC_MAIN_URL}" "${pub_code}" "${gateway}"
+  echo ""
 }
 
-print_quick_targets_summary() {
+_emit_validate_summary_deployed_canonical() {
+  local local_marker="$1" staging_marker="$2"
+  echo -e "${BOLD}Deployed versions (per target)${NC}"
+  echo -e "  ${DIM}Talia UI = static app release · GQL package = talia-server package.json · Node = GraphQL process runtime${NC}"
+  echo ""
+  printf "  %s %-9s  %-24s  %-14s  %-12s  %-16s  %s\n" "" "Target" "UI host:port" "Talia UI" "GQL package" "Node runtime" "NODE_ENV"
+  echo -e "  ${DIM}$(printf '%-12s %-24s %-14s %-12s %-16s %-12s' '----------' '------------------------' '--------------' '------------' '----------------' '------------')${NC}"
+  deployed_versions_print_row "$local_marker" "Local" "$loc_hp" "$loc_ui_version" "$loc_gql_prof"
+  deployed_versions_print_row "$staging_marker" "Staging" "$st_hp" "$st_ui_version" "$st_gql_prof"
+  if [[ "${mvp_section}" == "1" ]]; then
+    deployed_versions_print_row " " "MVP" "$mvp_hp" "$mvp_ui_version" "$mvp_gql_prof"
+  fi
+  deployed_versions_print_row " " "Public" "$pub_hp" "$pub_ui_version" "$pub_gql_prof"
+
+  local canonical_ui canon_sem loc_sem st_sem mvp_sem pub_sem
+  canonical_ui=$(get_local_source_version)
+  canon_sem=""
+  [[ "$canonical_ui" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && canon_sem="$canonical_ui"
+  if [[ -n "$canon_sem" ]]; then
+    echo -e "  ${DIM}Canonical Talia app version (talia-ui/package.json → build meta + talia-app-version.json)${NC}  v${canon_sem}"
+    loc_sem=$(extract_ui_semver_from_label "$loc_ui_version")
+    st_sem=$(extract_ui_semver_from_label "$st_ui_version")
+    pub_sem=$(extract_ui_semver_from_label "$pub_ui_version")
+    mvp_sem=""
+    if [[ "${mvp_section}" == "1" ]]; then
+      mvp_sem=$(extract_ui_semver_from_label "$mvp_ui_version")
+    fi
+    local mismatch_lines=()
+    [[ -n "$loc_sem" && "$loc_sem" != "$canon_sem" ]] && mismatch_lines+=("Local ${loc_ui_version} (expected v${canon_sem})")
+    [[ -n "$st_sem" && "$st_sem" != "$canon_sem" ]] && mismatch_lines+=("Staging ${st_ui_version} (expected v${canon_sem})")
+    if [[ "${mvp_section}" == "1" && -n "$mvp_sem" && "$mvp_sem" != "$canon_sem" ]]; then
+      mismatch_lines+=("MVP ${mvp_ui_version} (expected v${canon_sem})")
+    fi
+    [[ -n "$pub_sem" && "$pub_sem" != "$canon_sem" ]] && mismatch_lines+=("Public ${pub_ui_version} (expected v${canon_sem})")
+    if ((${#mismatch_lines[@]} > 0)); then
+      echo -e "  ${YELLOW}⚠ Deployed UI bundles differ from repo canonical version.${NC}"
+      local line
+      for line in "${mismatch_lines[@]}"; do
+        echo -e "    ${YELLOW}-${NC} ${line}"
+      done
+      echo -e "  ${DIM}Redeploy UI (e.g. deploy-to-staging.sh / deploy-to-mvp.sh) so hosts serve v${canon_sem}.${NC}"
+    fi
+  elif [[ "$canonical_ui" != "UNKNOWN" ]]; then
+    echo -e "  ${YELLOW}⚠ Could not read canonical version from talia-ui/package.json (${canonical_ui}).${NC}"
+  fi
+  echo ""
+}
+
+print_validate_summary_body_from_state() {
+  local f="${VALIDATE_SUMMARY_PROBE_STATE_FILE}"
+  [[ -s "$f" ]] || return 1
+  (
+    # shellcheck disable=SC1090
+    source "$f"
+    local work local_marker staging_marker
+    work=$(get_effective_working_target)
+    local_marker=" "
+    staging_marker=" "
+    [[ "$work" == "local" ]] && local_marker="▶"
+    [[ "$work" == "staging" ]] && staging_marker="▶"
+    _emit_validate_summary_endpoints "$local_marker" "$staging_marker"
+    _emit_validate_summary_deployed_canonical "$local_marker" "$staging_marker"
+  )
+}
+
+# Live OPS banner (working target, presenter, light HTTP — no GraphQL instanceConnectionProfile).
+_print_ops_summary_live_header() {
+  local work presenter top_level_version ext_line
+  local loc_ui loc_gql loc_sb st_ui st_gql st_sb pub_code gateway
+  local loc_ui_version st_ui_version pub_ui_version mvp_ui mvp_ui_version
+  local target_status_plain_text ext_status_plain_text work_u header_sep
+  local validate_run_iso validate_run_local rem_disp
+
+  work=$(get_effective_working_target)
+  presenter=$(get_current_target)
+
+  loc_ui=$(get_http_code_quick "${LOCAL_UI_URL}/" 1)
+  loc_gql=$(get_http_code_quick "${LOCAL_GRAPHQL_URL%/}" 1)
+  loc_sb=$(get_http_code_quick "${LOCAL_SUPABASE_URL}" 1)
+  if $IS_ON_STAGING; then
+    st_ui=$(get_http_code_quick "${STAGING_UI_URL}/" 1)
+    st_gql=$(get_http_code_quick "${STAGING_GRAPHQL_URL%/}" 1)
+    st_sb=$(get_http_code_quick "${STAGING_SUPABASE_URL}" 1)
+  else
+    st_ui=$(get_http_code_quick "${STAGING_UI_URL}/" 1)
+    st_gql=$(get_http_code_quick "${STAGING_GRAPHQL_URL%/}" 1)
+    st_sb=$(get_http_code_quick "${STAGING_SUPABASE_URL}" 1)
+  fi
+
+  local pub_headers
+  pub_headers=$(curl -sS -I --connect-timeout 2 --max-time 2 "${PUBLIC_MAIN_URL}/" 2>/dev/null || true)
+  pub_code=$(echo "$pub_headers" | awk 'NR==1{print $2}')
+  gateway=$(echo "$pub_headers" | awk -F': ' 'tolower($1)=="x-taliahub-gateway"{gsub("\r","",$2); print $2; exit}')
+  [[ -z "$pub_code" ]] && pub_code="000"
+  [[ -z "$gateway" ]] && gateway="n/a"
+
+  loc_ui_version=$(quick_ui_version_label "${LOCAL_UI_URL}" "${loc_ui}" "true")
+  st_ui_version=$(quick_ui_version_label "${STAGING_UI_URL}" "${st_ui}" "false")
+  pub_ui_version=$(quick_ui_version_label "${PUBLIC_MAIN_URL}" "${pub_code}" "false")
+
+  mvp_ui="000"
+  mvp_ui_version="n/a"
+  if [[ "$MVP_VALIDATE" == "1" && -n "$MVP_UI_HOST" ]]; then
+    mvp_ui=$(get_http_code_quick "${MVP_UI_URL}/" 1)
+    mvp_ui_version=$(quick_ui_version_label "${MVP_UI_URL}" "${mvp_ui}" "false")
+  fi
+
+  case "$presenter" in
+    local)
+      top_level_version="${loc_ui_version} (via local presenter)"
+      ;;
+    staging)
+      top_level_version="${st_ui_version} (via staging presenter)"
+      ;;
+    conflict)
+      top_level_version="CONFLICT (both local and staging presenters active)"
+      ;;
+    *)
+      if [[ "$pub_ui_version" == "n/a (DOWN)" ]]; then
+        top_level_version="UNAVAILABLE (public gateway fallback/inactive)"
+      else
+        top_level_version="${pub_ui_version} (public)"
+      fi
+      ;;
+  esac
+
+  case "$presenter" in
+    local) ext_line="${GREEN}active → local${NC}" ;;
+    staging) ext_line="${BLUE}active → staging${NC}" ;;
+    conflict) ext_line="${RED}CONFLICT (local + staging both on)${NC}" ;;
+    none) ext_line="${YELLOW}inactive${NC} (Cloudflare / holding page expected)" ;;
+    *) ext_line="${DIM}unknown${NC}" ;;
+  esac
+
+  work_u=$(echo "$work" | tr '[:lower:]' '[:upper:]')
+  target_status_plain_text=$(target_status_plain "$work" "$loc_ui" "$loc_gql" "$loc_sb" "$st_ui" "$st_gql" "$st_sb")
+  ext_status_plain_text=$(external_status_plain "$presenter" "$pub_code" "$gateway")
+
+  header_sep=$(printf '%*s' 96 '' | tr ' ' '-')
+  validate_run_iso="$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u '+%Y-%m-%d %H:%M:%S UTC')"
+  validate_run_local="$(date '+%Y-%m-%d %H:%M:%S %Z (UTC%z)' 2>/dev/null || date)"
+  echo -e "${CYAN}${header_sep}${NC}"
+  echo -e "${BOLD}TALIA OPS - ${work_u}${NC}"
+  echo -e "Version: ${top_level_version}"
+  echo -e "Target: ${target_status_plain_text}   External: ${ext_status_plain_text}"
+  echo -e "${CYAN}${header_sep}${NC}"
+  echo -e "${DIM}Validate script: ${SCRIPT_VERSION}${NC}"
+  echo -e "${DIM}Run at (UTC):   ${validate_run_iso}${NC}"
+  echo -e "${DIM}Run at (local): ${validate_run_local} · host: ${HOSTNAME}${NC}"
+  echo -e "  ${BOLD}Public demo${NC}: ${PUBLIC_MAIN_URL} (${ext_line})"
+  rem_disp=$(get_remembered_target)
+  [[ -z "$rem_disp" ]] && rem_disp="(default by host)"
+  echo -e "  ${DIM}Remembered target: ${rem_disp} (${TARGET_STATE_FILE/#$HOME/~})${NC}"
+  echo ""
+}
+
+_print_quick_targets_summary_impl() {
   local work presenter top_level_version
   local loc_ui loc_gql loc_sb st_ui st_gql st_sb pub_code gateway ext_line
   local loc_ui_version st_ui_version pub_ui_version
@@ -773,13 +1058,20 @@ print_quick_targets_summary() {
   local local_marker staging_marker
   local header_sep
   local mvp_ui mvp_gql mvp_sb mvp_ui_version
-  progress_line_busy "Checking local, staging, MVP, and public endpoints…"
+
+  echo -e "${DIM}Quick summary · startup sequence:${NC}"
+  validate_summary_timing_reset
+
   work=$(get_effective_working_target)
+  validate_summary_log_step "Working target (file / hostname default)"
+
   presenter=$(get_current_target)
+  validate_summary_log_step "External presenter (ngrok state; may SSH to staging)"
 
   loc_ui=$(get_http_code_quick "${LOCAL_UI_URL}/" 1)
   loc_gql=$(get_http_code_quick "${LOCAL_GRAPHQL_URL%/}" 1)
   loc_sb=$(get_http_code_quick "${LOCAL_SUPABASE_URL}" 1)
+  validate_summary_log_step "HTTP · local UI, GraphQL, Supabase Kong"
 
   if $IS_ON_STAGING; then
     st_ui=$(get_http_code_quick "${STAGING_UI_URL}/" 1)
@@ -790,6 +1082,7 @@ print_quick_targets_summary() {
     st_gql=$(get_http_code_quick "${STAGING_GRAPHQL_URL%/}" 1)
     st_sb=$(get_http_code_quick "${STAGING_SUPABASE_URL}" 1)
   fi
+  validate_summary_log_step "HTTP · staging UI, GraphQL, Kong"
 
   mvp_ui="000"
   mvp_gql="000"
@@ -810,6 +1103,7 @@ print_quick_targets_summary() {
       mvp_kong_line_suffix=" ${DIM}(reachable on :${MVP_SUPABASE_KONG_LIVE_PORT}; targets.env MVP_KONG_PORT=${MVP_KONG_PORT:-54321})${NC}"
     fi
     mvp_ui_version=$(quick_ui_version_label "${MVP_UI_URL}" "${mvp_ui}" "false")
+    validate_summary_log_step "HTTP · MVP UI/GraphQL/Kong (+ SSH Kong fallback if needed)"
   fi
 
   local pub_headers
@@ -818,10 +1112,12 @@ print_quick_targets_summary() {
   gateway=$(echo "$pub_headers" | awk -F': ' 'tolower($1)=="x-taliahub-gateway"{gsub("\r","",$2); print $2; exit}')
   [[ -z "$pub_code" ]] && pub_code="000"
   [[ -z "$gateway" ]] && gateway="n/a"
+  validate_summary_log_step "Public demo URL headers + X-Taliahub-Gateway"
 
   loc_ui_version=$(quick_ui_version_label "${LOCAL_UI_URL}" "${loc_ui}" "true")
   st_ui_version=$(quick_ui_version_label "${STAGING_UI_URL}" "${st_ui}" "false")
   pub_ui_version=$(quick_ui_version_label "${PUBLIC_MAIN_URL}" "${pub_code}" "false")
+  validate_summary_log_step "Deployed Talia UI version (meta / JSON / bundle per host)"
 
   local loc_hp st_hp pub_hp pub_gql pub_gql_prof
   local loc_gql_prof st_gql_prof mvp_gql_prof mvp_hp
@@ -829,14 +1125,23 @@ print_quick_targets_summary() {
   st_hp=$(host_port_from_ui_url "${STAGING_UI_URL}")
   pub_hp=$(host_port_from_ui_url "${PUBLIC_MAIN_URL}")
   pub_gql=$(get_http_code_quick "${PUBLIC_GRAPHQL_PROBE_URL%/}" 1)
+  validate_summary_log_step "UI host:port labels + public GraphQL route HTTP code"
+
   loc_gql_prof=$(graphql_instance_profile_probe "${LOCAL_GRAPHQL_URL}" "${loc_gql}")
+  validate_summary_log_step "GraphQL instanceConnectionProfile · local"
+
   st_gql_prof=$(graphql_instance_profile_probe "${STAGING_GRAPHQL_URL}" "${st_gql}")
+  validate_summary_log_step "GraphQL instanceConnectionProfile · staging"
+
   pub_gql_prof=$(graphql_instance_profile_probe "${PUBLIC_GRAPHQL_PROBE_URL}" "${pub_gql}")
+  validate_summary_log_step "GraphQL instanceConnectionProfile · public"
+
   mvp_gql_prof="n/a|n/a|n/a"
   mvp_hp=""
   if [[ "$MVP_VALIDATE" == "1" && -n "$MVP_UI_HOST" ]]; then
     mvp_hp=$(host_port_from_ui_url "${MVP_UI_URL}")
     mvp_gql_prof=$(graphql_instance_profile_probe "${MVP_GRAPHQL_URL}" "${mvp_gql}")
+    validate_summary_log_step "GraphQL instanceConnectionProfile · MVP"
   fi
 
   case "$presenter" in
@@ -878,7 +1183,8 @@ print_quick_targets_summary() {
   [[ "$work" == "local" ]] && local_marker="▶"
   [[ "$work" == "staging" ]] && staging_marker="▶"
 
-  progress_line_clear
+  validate_summary_log_step "Assemble markers + status strings"
+  validate_summary_log_total
 
   header_sep=$(printf '%*s' 96 '' | tr ' ' '-')
   local validate_run_iso validate_run_local
@@ -898,68 +1204,50 @@ print_quick_targets_summary() {
   [[ -z "$rem_disp" ]] && rem_disp="(default by host)"
   echo -e "  ${DIM}Remembered target: ${rem_disp} (${TARGET_STATE_FILE/#$HOME/~})${NC}"
   echo ""
-  echo -e "${BOLD}Endpoints${NC}"
-  printf "  %s %-9s  %-36s  %s\n" "$local_marker" "Local" "${LOCAL_UI_HOST}:${LOCAL_UI_PORT} UI" "$(quick_up_label "$loc_ui" "200")"
-  printf "  %s %-9s  %-36s  %s\n" "$local_marker" "" "${LOCAL_GRAPHQL_HOST}:${LOCAL_GRAPHQL_PORT} GraphQL" "$(quick_up_label "$loc_gql" "gql")"
-  printf "  %s %-9s  %-36s  %s\n" "$local_marker" "" "${LOCAL_SUPABASE_HOST}:${LOCAL_SUPABASE_KONG_PORT} Supabase Kong" "$(quick_up_label "$loc_sb" "kong")"
-  printf "  %s %-9s  %-36s  %s\n" "$local_marker" "" "Docker daemon (local)" "$(docker_status_label)"
-  echo ""
-  printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "Staging" "${STAGING_UI_HOST:-?}:${STAGING_UI_PORT} UI" "$(quick_up_label "$st_ui" "200")"
-  printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "" "${STAGING_UI_HOST:-?}:${STAGING_GRAPHQL_PORT:-4000} GraphQL" "$(quick_up_label "$st_gql" "gql")"
-  printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "" "${STAGING_UI_HOST:-?}:${STAGING_SUPABASE_KONG_PORT} Kong" "$(quick_up_label "$st_sb" "kong")"
-  if [[ "$MVP_VALIDATE" == "1" && -n "$MVP_UI_HOST" ]]; then
-    echo ""
-    printf "  %s %-9s  %-36s  %s\n" " " "MVP" "${MVP_UI_HOST}:${MVP_UI_PORT} UI (Azure)" "$(quick_up_label "$mvp_ui" "200")"
-    printf "  %s %-9s  %-36s  %s\n" " " "" "${MVP_UI_HOST}:${MVP_GRAPHQL_PORT} GraphQL" "$(quick_up_label "$mvp_gql" "gql")"
-    printf "  %s %-9s  %-36s  %s%s\n" " " "" "${MVP_UI_HOST}:${MVP_SUPABASE_KONG_LIVE_PORT:-${MVP_KONG_PORT:-54321}} Supabase Kong" "$(quick_up_label "$mvp_sb" "kong")" "${mvp_kong_line_suffix}"
-  fi
-  echo ""
-  printf "  %-10s  %-36s  HTTP %s  gateway=%s\n" "External" "${PUBLIC_MAIN_URL}" "${pub_code}" "${gateway}"
-  echo ""
-  echo -e "${BOLD}Deployed versions (per target)${NC}"
-  echo -e "  ${DIM}Talia UI = static app release · GQL package = talia-server package.json · Node = GraphQL process runtime${NC}"
-  echo ""
-  printf "  %s %-9s  %-24s  %-14s  %-12s  %-16s  %s\n" "" "Target" "UI host:port" "Talia UI" "GQL package" "Node runtime" "NODE_ENV"
-  echo -e "  ${DIM}$(printf '%-12s %-24s %-14s %-12s %-16s %-12s' '----------' '------------------------' '--------------' '------------' '----------------' '------------')${NC}"
-  deployed_versions_print_row "$local_marker" "Local" "$loc_hp" "$loc_ui_version" "$loc_gql_prof"
-  deployed_versions_print_row "$staging_marker" "Staging" "$st_hp" "$st_ui_version" "$st_gql_prof"
-  if [[ "$MVP_VALIDATE" == "1" && -n "$MVP_UI_HOST" ]]; then
-    deployed_versions_print_row " " "MVP" "$mvp_hp" "$mvp_ui_version" "$mvp_gql_prof"
-  fi
-  deployed_versions_print_row " " "Public" "$pub_hp" "$pub_ui_version" "$pub_gql_prof"
+  local mvp_snap mvp_section
+  mvp_snap="$([[ "$MVP_VALIDATE" == "1" && -n "$MVP_UI_HOST" ]] && echo 1 || echo 0)"
+  mvp_section="$mvp_snap"
+  validate_summary_snapshot_write_v1 \
+    "$loc_ui" "$loc_gql" "$loc_sb" "$st_ui" "$st_gql" "$st_sb" \
+    "$mvp_ui" "$mvp_gql" "$mvp_sb" "$mvp_kong_line_suffix" \
+    "${MVP_UI_HOST}:${MVP_SUPABASE_KONG_LIVE_PORT:-${MVP_KONG_PORT:-54321}}" \
+    "$pub_code" "$gateway" \
+    "$loc_hp" "$st_hp" "$pub_hp" "$mvp_hp" \
+    "$loc_ui_version" "$st_ui_version" "$pub_ui_version" "$mvp_ui_version" \
+    "$loc_gql_prof" "$st_gql_prof" "$pub_gql_prof" "$mvp_gql_prof" \
+    "$mvp_snap"
 
-  local canonical_ui canon_sem loc_sem st_sem mvp_sem pub_sem
-  canonical_ui=$(get_local_source_version)
-  canon_sem=""
-  [[ "$canonical_ui" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && canon_sem="$canonical_ui"
-  if [[ -n "$canon_sem" ]]; then
-    echo -e "  ${DIM}Canonical Talia app version (talia-ui/package.json → build meta + talia-app-version.json)${NC}  v${canon_sem}"
-    loc_sem=$(extract_ui_semver_from_label "$loc_ui_version")
-    st_sem=$(extract_ui_semver_from_label "$st_ui_version")
-    pub_sem=$(extract_ui_semver_from_label "$pub_ui_version")
-    mvp_sem=""
-    if [[ "$MVP_VALIDATE" == "1" && -n "$MVP_UI_HOST" ]]; then
-      mvp_sem=$(extract_ui_semver_from_label "$mvp_ui_version")
-    fi
-    local mismatch_lines=()
-    [[ -n "$loc_sem" && "$loc_sem" != "$canon_sem" ]] && mismatch_lines+=("Local ${loc_ui_version} (expected v${canon_sem})")
-    [[ -n "$st_sem" && "$st_sem" != "$canon_sem" ]] && mismatch_lines+=("Staging ${st_ui_version} (expected v${canon_sem})")
-    if [[ "$MVP_VALIDATE" == "1" && -n "$MVP_UI_HOST" && -n "$mvp_sem" && "$mvp_sem" != "$canon_sem" ]]; then
-      mismatch_lines+=("MVP ${mvp_ui_version} (expected v${canon_sem})")
-    fi
-    [[ -n "$pub_sem" && "$pub_sem" != "$canon_sem" ]] && mismatch_lines+=("Public ${pub_ui_version} (expected v${canon_sem})")
-    if ((${#mismatch_lines[@]} > 0)); then
-      echo -e "  ${YELLOW}⚠ Deployed UI bundles differ from repo canonical version.${NC}"
-      local line
-      for line in "${mismatch_lines[@]}"; do
-        echo -e "    ${YELLOW}-${NC} ${line}"
-      done
-      echo -e "  ${DIM}Redeploy UI (e.g. deploy-to-staging.sh / deploy-to-mvp.sh) so hosts serve v${canon_sem}.${NC}"
-    fi
-  elif [[ "$canonical_ui" != "UNKNOWN" ]]; then
-    echo -e "  ${YELLOW}⚠ Could not read canonical version from talia-ui/package.json (${canonical_ui}).${NC}"
+  _emit_validate_summary_endpoints "$local_marker" "$staging_marker"
+  _emit_validate_summary_deployed_canonical "$local_marker" "$staging_marker"
+}
+
+print_quick_targets_summary() {
+  if [[ "${VALIDATE_SUMMARY_SKIP_CACHE_WRITE:-}" == "1" ]]; then
+    _print_quick_targets_summary_impl
+    return 0
+  fi
+  _print_quick_targets_summary_impl | tee "${VALIDATE_SUMMARY_CACHE_FILE}"
+}
+
+# Same layout as the menu header, plus paths (live header + snapshot body; optional full transcript file).
+print_cached_quick_targets_summary() {
+  if [[ -t 1 ]]; then
+    clear
   fi
   echo ""
+  if [[ ! -s "${VALIDATE_SUMMARY_PROBE_STATE_FILE}" ]]; then
+    echo -e "${YELLOW}No snapshot on disk yet.${NC}"
+    echo -e "  Run a full probe: menu ${GREEN}10${NC}, or start ./validate, or: ${GREEN}$0 status${NC}"
+    return 1
+  fi
+  _print_ops_summary_live_header
+  print_validate_summary_body_from_state || true
+  echo ""
+  echo -e "${DIM}Endpoint/deployed snapshot: ${VALIDATE_SUMMARY_PROBE_STATE_FILE/#$HOME/~}${NC}"
+  if [[ -s "${VALIDATE_SUMMARY_CACHE_FILE}" ]]; then
+    echo -e "${DIM}Full last transcript (timing + all): ${VALIDATE_SUMMARY_CACHE_FILE/#$HOME/~}${NC}"
+  fi
+  echo -e "${DIM}Refresh: ${GREEN}10${NC} or ${GREEN}$0 status${NC}${DIM}.${NC}"
 }
 
 quick_up_label() {
@@ -1131,7 +1419,8 @@ print_front_page_status() {
   echo ""
 }
 
-print_header() {
+# Full probe summary (slow): all HTTP + UI versions + GraphQL instanceConnectionProfile calls.
+print_full_interactive_header() {
   # Non-TTY (CI, some IDE terminals): `clear` exits 1 and `set -e` would kill the script with no output.
   if [[ -t 1 ]]; then
     clear
@@ -1140,27 +1429,49 @@ print_header() {
   print_quick_targets_summary
 }
 
+# Menu draw: live OPS header (target/presenter/light HTTP) + cached Endpoints / Deployed from last full probe.
+print_interactive_header_from_cache() {
+  if [[ -t 1 ]]; then
+    clear
+  fi
+  echo ""
+  _print_ops_summary_live_header
+  if print_validate_summary_body_from_state; then
+    echo -e "${DIM}${GREEN}10${NC}${DIM} = re-run probes (refreshes endpoint/deployed snapshot below)${NC}"
+    echo ""
+  else
+    echo -e "${YELLOW}No endpoint snapshot yet.${NC} Choose ${GREEN}10${NC} to run a full probe (or restart; first screen runs probes)."
+    echo ""
+  fi
+}
+
 print_menu() {
   echo -e "${BOLD}Actions (core)${NC}"
   echo ""
 
-  echo -e "  ${GREEN}1)${NC} Set working target (local / staging)"
+  echo -e "  ${GREEN}1)${NC} Set working target (local / staging / MVP when configured)"
   echo -e "  ${GREEN}2)${NC} Check services (deep check, current target only)"
-  echo -e "  ${GREEN}3)${NC} Start core services (UI + GraphQL + Supabase stack)"
-  echo -e "  ${GREEN}4)${NC} Stop core services"
+  echo -e "  ${GREEN}3)${NC} Start core services (local dev stack or Docker on staging / MVP)"
+  echo -e "  ${GREEN}4)${NC} Stop core services (same scope as 3)"
   echo -e "  ${GREEN}5)${NC} Start external access — ${DIM}ngrok; requires typing ENABLE_NGROK_EXTERNAL${NC}"
   echo -e "  ${GREEN}6)${NC} Stop external access (ngrok off; Cloudflare shows unavailable)"
   echo ""
+  echo -e "${BOLD}Deploy${NC}"
+  echo ""
+  echo -e "  ${GREEN}7)${NC} Deploy to staging (local sync)"
+  if [[ -n "${MVP_SSH_HOST:-}" ]]; then
+    echo -e "  ${GREEN}8)${NC} Deploy to MVP (Azure — ${MVP_SSH_HOST})"
+  else
+    echo -e "  ${GREEN}8)${NC} Deploy to MVP (Azure — set MVP_SSH_HOST in targets.env)"
+  fi
+  echo ""
   echo -e "${BOLD}Advanced${NC}"
   echo ""
-  echo -e "  ${GREEN}7)${NC} Full validation / gateway detail (slower)"
-  echo -e "  ${GREEN}8)${NC} Deploy to staging (local sync)"
-  echo -e "  ${GREEN}9)${NC} Emergency reboot staging server"
-  if [[ -n "${MVP_SSH_HOST:-}" ]]; then
-    echo -e "  ${GREEN}10)${NC} Deploy to MVP (Azure — ${MVP_SSH_HOST})"
-  else
-    echo -e "  ${GREEN}10)${NC} Deploy to MVP (Azure — set MVP_SSH_HOST in targets.env)"
-  fi
+  echo -e "  ${GREEN}9)${NC} Database disk usage (Postgres total + top 5 public tables, current target)"
+  echo -e "  ${GREEN}10)${NC} Refresh quick summary ${DIM}(re-run all endpoint probes — same as startup)${NC}"
+  echo -e "  ${GREEN}11)${NC} Summary notes ${DIM}(paths: ${VALIDATE_SUMMARY_PROBE_STATE_FILE/#$HOME/~} · ${VALIDATE_SUMMARY_CACHE_FILE/#$HOME/~})${NC}"
+  echo -e "  ${GREEN}12)${NC} Full validation / gateway detail (slower)"
+  echo -e "  ${GREEN}13)${NC} Emergency reboot staging server"
   echo -e "  ${DIM}91)${NC} ${DIM}Legacy: enable external (ngrok) for remembered target — same confirmation as (5)${NC}"
   echo ""
   echo -e "  ${YELLOW}0)${NC} Exit"
@@ -1496,6 +1807,7 @@ start_core_for_working_target() {
   case "$t" in
     local) start_local_core ;;
     staging) start_staging_core_remote ;;
+    mvp) start_mvp_core_remote ;;
     *)
       echo -e "${RED}Unknown working target: ${t}${NC}"
       return 1
@@ -1510,6 +1822,7 @@ stop_core_for_working_target() {
   case "$t" in
     local) stop_local_core ;;
     staging) stop_staging_core_remote ;;
+    mvp) stop_mvp_core_remote ;;
     *)
       echo -e "${RED}Unknown working target: ${t}${NC}"
       return 1
@@ -1697,6 +2010,22 @@ deploy_to_mvp_from_local() {
   run_command "cd \"${ROOT_DIR}\" && STAGING_DEPLOY_CONFIRM_TOKEN=${token} ./scripts/deploy-to-mvp.sh ${mode}" "Deploy to MVP via ${SCRIPT_DIR}/deploy-to-mvp.sh (${label})" "$timeout_sec"
 }
 
+check_mvp_services_remote() {
+  echo -e "${BOLD}MVP (${MVP_UI_HOST:-?}) — quick probes${NC}"
+  local ui gql
+  ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "${MVP_UI_URL%/}/" 2>/dev/null || echo "000")
+  gql=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "${MVP_GRAPHQL_URL%/}" 2>/dev/null || echo "000")
+  echo -n "  UI (${MVP_UI_URL}): "
+  [[ "$ui" == "200" || "$ui" == "302" ]] && echo -e "${GREEN}UP${NC} ($ui)" || echo -e "${YELLOW}DOWN${NC} ($ui)"
+  echo -n "  GraphQL (${MVP_GRAPHQL_URL}): "
+  [[ "$gql" == "200" || "$gql" == "400" ]] && echo -e "${GREEN}UP${NC} ($gql)" || echo -e "${YELLOW}DOWN${NC} ($gql)"
+  if check_mvp_ssh_ready 2>/dev/null; then
+    echo -e "  SSH ${MVP_SSH_USER}@${MVP_SSH_HOST}: ${GREEN}OK${NC}"
+  else
+    echo -e "  SSH ${MVP_SSH_USER}@${MVP_SSH_HOST}: ${YELLOW}unreachable${NC}"
+  fi
+}
+
 check_services_for_working_target() {
   local t
   t=$(get_effective_working_target)
@@ -1705,6 +2034,7 @@ check_services_for_working_target() {
   case "$t" in
     local) check_local_services ;;
     staging) check_staging_services_remote ;;
+    mvp) check_mvp_services_remote ;;
     *)
       echo -e "${RED}Unknown working target: ${t}${NC}"
       return 1
@@ -1719,6 +2049,11 @@ set_working_target_interactive() {
   echo -e "${BOLD}Set working target:${NC}"
   echo -e "  ${GREEN}1)${NC} Local (this machine’s dev stack)"
   echo -e "  ${GREEN}2)${NC} Staging (${STAGING_HOST})"
+  if [[ "$MVP_VALIDATE" == "1" && -n "${MVP_SSH_HOST:-}" ]]; then
+    echo -e "  ${GREEN}3)${NC} MVP — Azure (${MVP_SSH_HOST})"
+  else
+    echo -e "  ${DIM}3)${NC} ${DIM}MVP (set MVP_VALIDATE=1 and MVP_SSH_HOST in targets.env)${NC}"
+  fi
   echo -e "  ${YELLOW}0)${NC} Back"
   echo ""
   echo -n -e "${BOLD}Choice: ${NC}"
@@ -1731,6 +2066,14 @@ set_working_target_interactive() {
     2|staging)
       remember_target "staging" || true
       echo -e "${GREEN}Working target saved: STAGING${NC}"
+      ;;
+    3|mvp)
+      if ! is_supported_target "mvp"; then
+        echo -e "${RED}MVP is not configured (MVP_VALIDATE=1 and MVP_SSH_HOST required).${NC}"
+        return 1
+      fi
+      remember_target "mvp" || true
+      echo -e "${GREEN}Working target saved: MVP${NC}"
       ;;
     0|back|q|quit) return 0 ;;
     *)
@@ -2071,6 +2414,104 @@ stop_staging_core_remote() {
   else
     run_staging_ssh_command "cd ${STAGING_DIR} && docker compose -f docker-compose.staging.yml stop" "Stop staging core (Docker only, ngrok unchanged)" "60"
   fi
+}
+
+start_mvp_core_remote() {
+  if [[ -z "${MVP_SSH_HOST:-}" ]]; then
+    echo -e "${RED}MVP_SSH_HOST is not set (scripts/config/targets.env).${NC}"
+    return 1
+  fi
+  local dc="${MVP_DOCKER_COMPOSE}"
+  run_mvp_ssh_command "cd ${MVP_APP_DIR} && ${dc} -f docker-compose.staging.yml up -d && ${dc} -f docker-compose.staging.yml ps" \
+    "Start MVP core (Docker compose on ${MVP_SSH_HOST})" "120"
+}
+
+stop_mvp_core_remote() {
+  if [[ -z "${MVP_SSH_HOST:-}" ]]; then
+    echo -e "${RED}MVP_SSH_HOST is not set (scripts/config/targets.env).${NC}"
+    return 1
+  fi
+  local dc="${MVP_DOCKER_COMPOSE}"
+  run_mvp_ssh_command "cd ${MVP_APP_DIR} && ${dc} -f docker-compose.staging.yml stop" \
+    "Stop MVP core (Docker compose on ${MVP_SSH_HOST})" "120"
+}
+
+_db_disk_sql_b64() {
+  printf '%s' "$1" | base64 | tr -d '\n'
+}
+
+db_disk_report_local() {
+  local c="${LOCAL_SUPABASE_DB_CONTAINER}"
+  echo -e "${BOLD}Postgres (local Docker — container ${c})${NC}"
+  if ! is_docker_ready; then
+    echo -e "${YELLOW}Docker is not reachable.${NC}"
+    return 1
+  fi
+  if ! docker exec "$c" psql -U postgres -d postgres -c "SELECT 1" >/dev/null 2>&1; then
+    echo -e "${YELLOW}Cannot run psql in ${c}.${NC}"
+    echo -e "${DIM}Start the stack (e.g. docker compose -f docker-compose.staging.yml up -d) or set LOCAL_SUPABASE_DB_CONTAINER.${NC}"
+    return 1
+  fi
+  echo ""
+  echo -e "${BOLD}Total size (current database)${NC}"
+  docker exec "$c" psql -U postgres -d postgres -t -A -c "SELECT pg_size_pretty(pg_database_size(current_database()));"
+  echo ""
+  echo -e "${BOLD}Largest public tables (top 5)${NC}"
+  docker exec "$c" psql -U postgres -d postgres -c "SELECT relname AS table, pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' ORDER BY pg_total_relation_size(c.oid) DESC LIMIT 5;"
+}
+
+db_disk_report_staging_remote() {
+  local dc="${STAGING_REMOTE_DOCKER_COMPOSE}"
+  local b64_total b64_top
+  b64_total=$(_db_disk_sql_b64 "SELECT pg_size_pretty(pg_database_size(current_database()));")
+  b64_top=$(_db_disk_sql_b64 "SELECT relname AS table, pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' ORDER BY pg_total_relation_size(c.oid) DESC LIMIT 5;")
+  echo -e "${BOLD}Postgres on staging (${STAGING_HOST} — supabase-db)${NC}"
+  echo ""
+  echo -e "${BOLD}Total size (current database)${NC}"
+  run_staging_ssh_command "cd ${STAGING_DIR} && echo ${b64_total} | base64 -d | ${dc} -f docker-compose.staging.yml exec -T supabase-db psql -U postgres -d postgres -t -A -f -" \
+    "Staging: database total size" "60"
+  echo ""
+  echo -e "${BOLD}Largest public tables (top 5)${NC}"
+  run_staging_ssh_command "cd ${STAGING_DIR} && echo ${b64_top} | base64 -d | ${dc} -f docker-compose.staging.yml exec -T supabase-db psql -U postgres -d postgres -f -" \
+    "Staging: top 5 tables by size" "60"
+}
+
+db_disk_report_mvp_remote() {
+  if [[ -z "${MVP_SSH_HOST:-}" ]]; then
+    echo -e "${RED}MVP_SSH_HOST is not set.${NC}"
+    return 1
+  fi
+  local dc="${MVP_DOCKER_COMPOSE}"
+  local b64_total b64_top
+  b64_total=$(_db_disk_sql_b64 "SELECT pg_size_pretty(pg_database_size(current_database()));")
+  b64_top=$(_db_disk_sql_b64 "SELECT relname AS table, pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' ORDER BY pg_total_relation_size(c.oid) DESC LIMIT 5;")
+  echo -e "${BOLD}Postgres on MVP (${MVP_SSH_HOST} — supabase-db)${NC}"
+  echo ""
+  echo -e "${BOLD}Total size (current database)${NC}"
+  run_mvp_ssh_command "cd ${MVP_APP_DIR} && echo ${b64_total} | base64 -d | ${dc} -f docker-compose.staging.yml exec -T supabase-db psql -U postgres -d postgres -t -A -f -" \
+    "MVP: database total size" "90"
+  echo ""
+  echo -e "${BOLD}Largest public tables (top 5)${NC}"
+  run_mvp_ssh_command "cd ${MVP_APP_DIR} && echo ${b64_top} | base64 -d | ${dc} -f docker-compose.staging.yml exec -T supabase-db psql -U postgres -d postgres -f -" \
+    "MVP: top 5 tables by size" "90"
+}
+
+print_database_disk_usage_for_working_target() {
+  local t
+  t=$(get_effective_working_target)
+  echo ""
+  echo -e "${BOLD}Database disk usage (working target: ${t})${NC}"
+  echo -e "${DIM}Shows Postgres database size and largest public tables (read-only).${NC}"
+  echo ""
+  case "$t" in
+    local) db_disk_report_local ;;
+    staging) db_disk_report_staging_remote ;;
+    mvp) db_disk_report_mvp_remote ;;
+    *)
+      echo -e "${RED}Unknown working target: ${t}${NC}"
+      return 1
+      ;;
+  esac
 }
 
 start_external_services() {
@@ -2763,17 +3204,27 @@ handle_remote_menu() {
     6|stop-external|external-off|offline)
       stop_external_everywhere
       ;;
-    7|advanced|complete|full)
-      advanced_validate_interactive
-      ;;
-    8|deploy|deploy-staging)
+    7|deploy|deploy-staging)
       deploy_to_staging_from_local
       ;;
-    9|reboot|reboot-staging)
-      reboot_staging_emergency
-      ;;
-    10|deploy-mvp|mvp-deploy|deploy_mvp)
+    8|deploy-mvp|mvp-deploy|deploy_mvp)
       deploy_to_mvp_from_local
+      ;;
+    9|db-disk|database-disk|disk|postgres-size)
+      print_database_disk_usage_for_working_target
+      ;;
+    10|refresh-summary|rerun-summary|rescan-summary)
+      # Handled in main() so the next loop draws print_full_interactive_header; kept here for direct/CLI parity.
+      print_full_interactive_header
+      ;;
+    11|last-summary|show-last-summary|cached-summary)
+      print_cached_quick_targets_summary
+      ;;
+    12|advanced|complete|full)
+      advanced_validate_interactive
+      ;;
+    13|reboot|reboot-staging)
+      reboot_staging_emergency
       ;;
     # Legacy numeric / names (older validate menu)
     91|remembered-external|enable-remembered-external)
@@ -2797,13 +3248,15 @@ handle_cli() {
   case "${1:-}" in
     set-target)
       if ! is_supported_target "${2:-}"; then
-        echo "Usage: $0 set-target local|staging"
+        echo "Usage: $0 set-target local|staging|mvp"
+        echo "  (mvp requires MVP_VALIDATE=1 and MVP_SSH_HOST in scripts/config/targets.env)"
         return 1
       fi
       remember_target "$2"
       echo "Working target saved: $2"
       ;;
     check) check_services_for_working_target ;;
+    db-disk|database-disk|postgres-size) print_database_disk_usage_for_working_target ;;
     start-core|start) start_core_for_working_target ;;
     stop-core|stop-core) stop_core_for_working_target ;;
     external-on|enable-external) start_external_for_working_target ;;
@@ -2814,15 +3267,17 @@ handle_cli() {
     reboot-staging|reboot) reboot_staging_emergency ;;
     comprehensive) run_comprehensive_check ;;
     status|summary) print_quick_targets_summary ;;
+    last-summary|show-last-summary|cached-summary) print_cached_quick_targets_summary ;;
     help|-h|--help)
       cat <<EOF
 Talia validate — quick overview by default; heavy checks only from the menu or explicit commands.
 
-  $0                              interactive menu
-  $0 set-target local|staging     persist working target (~/.talia-validate-last-target)
+  $0                              interactive menu (probe once at start; cached summary atop every menu; 10 = refresh probes)
+  $0 set-target local|staging|mvp  persist working target (~/.talia-validate-last-target; mvp needs MVP_* in targets.env)
   $0 check                        deep service check for current target only
-  $0 start-core                   UI + GraphQL + Supabase (local) or Docker stack (staging)
+  $0 start-core                   UI + GraphQL + Supabase (local) or Docker stack (staging/MVP)
   $0 stop-core                    stop core (ngrok unchanged)
+  $0 db-disk                      Postgres size + top 5 public tables for current target
   $0 external-on                  ngrok → current target (TTY: type ENABLE_NGROK_EXTERNAL; else TALIA_CONFIRM_NGROK=...)
   $0 external-off                 stop all ngrok (Cloudflare unavailable page)
   $0 deploy-staging               local-sync deploy to staging (ui/full/scripts/themes-db prompt)
@@ -2830,7 +3285,8 @@ Talia validate — quick overview by default; heavy checks only from the menu or
   $0 deploy-themes-db             upsert theme_registry + assets (and optional Talia id 1000 appearance) local → staging DB only
   $0 reboot-staging               emergency reboot of staging host (confirmation required)
   $0 comprehensive                full repo validation (slow)
-  $0 status                       quick summary lines (no menu)
+  $0 status                       full probe + transcript; refreshes ~/.talia-validate-last-summary.{txt,state}
+  $0 last-summary                 live header + snapshot body (light HTTP on header; run status first for data)
 EOF
       ;;
     *)
@@ -2851,12 +3307,30 @@ main() {
     exit $?
   fi
 
+  local validate_menu_full_scan=1
   while true; do
-    print_header
+    if [[ "$validate_menu_full_scan" -eq 1 ]]; then
+      print_full_interactive_header
+      validate_menu_full_scan=0
+    else
+      print_interactive_header_from_cache
+    fi
     print_menu
 
     echo -n -e "${BOLD}Enter choice: ${NC}"
     read -r choice
+
+    case "$choice" in
+      10|refresh|refresh-summary|rerun-summary|rescan|rescan-summary)
+        validate_menu_full_scan=1
+        continue
+        ;;
+      11|last-summary|show-last-summary|cached-summary)
+        print_cached_quick_targets_summary || true
+        wait_for_key
+        continue
+        ;;
+    esac
 
     handle_remote_menu "$choice" || true
 

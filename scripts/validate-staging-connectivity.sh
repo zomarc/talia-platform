@@ -25,6 +25,14 @@ STAGING_DIR="${STAGING_DIR:-${STAGING_APP_DIR:-/home/${STAGING_USER}/talia-docke
 LOCAL_UI_URL="${LOCAL_UI_URL:-http://${LOCAL_UI_HOST:-127.0.0.1}:${LOCAL_UI_PORT:-5173}}"
 STAGING_UI_URL="${STAGING_UI_URL:-http://${STAGING_UI_HOST:-${STAGING_HOST}}:${STAGING_UI_PORT:-5173}}"
 
+# OpenSSH can wait a very long time when the staging LAN is down; cap TCP connect.
+# MiniPC / busy Wi‑Fi LANs sometimes need 15–25s before sshd answers; 8–12s looks like a hang/failure.
+STAGING_SSH_CONNECT_TIMEOUT="${STAGING_SSH_CONNECT_TIMEOUT:-25}"
+STAGING_SSH_OPTS=(
+  -o "ConnectTimeout=${STAGING_SSH_CONNECT_TIMEOUT}"
+  -o ConnectionAttempts=1
+)
+
 NGROK_USER="${NGROK_USER:-${NGROK_BASIC_USER:-talia}}"
 NGROK_PASS="${NGROK_PASS:-${NGROK_BASIC_PASS:-dev2025tal}}"
 NGROK_URL="${NGROK_URL:-${PUBLIC_MAIN_URL:-https://taliahub.com}}"
@@ -214,7 +222,7 @@ else
   LOCAL_NGROK_STATUS="inactive"
 fi
 
-STAGING_NGROK_STATUS_FRONT=$(ssh "${STAGING_USER}@${STAGING_HOST}" "sudo systemctl is-active ${STAGING_NGROK_SERVICE} 2>/dev/null || true" 2>/dev/null | head -n 1 || true)
+STAGING_NGROK_STATUS_FRONT=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "sudo systemctl is-active ${STAGING_NGROK_SERVICE} 2>/dev/null || true" 2>/dev/null | head -n 1 || true)
 if [[ -z "$STAGING_NGROK_STATUS_FRONT" ]]; then STAGING_NGROK_STATUS_FRONT="unreachable"; fi
 TALIAHUB_HEADERS=$(curl -sS -I --max-time 10 "${NGROK_URL}" 2>/dev/null || true)
 TALIAHUB_CODE=$(printf "%s\n" "$TALIAHUB_HEADERS" | awk 'tolower($1) ~ /^http/{print $2; exit}')
@@ -246,9 +254,10 @@ echo "  -> Present STAGING: stop local ngrok, start staging ngrok"
 echo ""
 
 echo -e "${BLUE}=== VPN Connection ===${NC}"
+print_info "Staging SSH" "${STAGING_USER}@${STAGING_HOST} (ConnectTimeout=${STAGING_SSH_CONNECT_TIMEOUT}s; long pause = unreachable host or SSH waiting for password/key)"
 
 # Check VPN service status
-VPN_STATUS=$(ssh "${STAGING_USER}@${STAGING_HOST}" "sudo systemctl is-active protonvpn-openvpn 2>/dev/null || echo 'inactive'" 2>/dev/null || echo "unreachable")
+VPN_STATUS=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "sudo systemctl is-active protonvpn-openvpn 2>/dev/null || echo 'inactive'" 2>/dev/null || echo "unreachable")
 if [[ "$VPN_STATUS" == "active" ]]; then
   check_status "VPN service" "OK" "running"
 else
@@ -256,7 +265,7 @@ else
 fi
 
 # Check VPN IP
-VPN_IP=$(ssh "${STAGING_USER}@${STAGING_HOST}" "curl -sS --max-time 10 https://api.ipify.org 2>/dev/null || echo 'FAILED'" 2>/dev/null || echo "UNREACHABLE")
+VPN_IP=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "curl -sS --max-time 10 https://api.ipify.org 2>/dev/null || echo 'FAILED'" 2>/dev/null || echo "UNREACHABLE")
 if [[ "$VPN_IP" == "$EXPECTED_VPN_IP" ]]; then
   check_status "VPN IP address" "OK" "$VPN_IP"
 else
@@ -268,7 +277,7 @@ else
 fi
 
 # Check VPN interface
-TUN0_EXISTS=$(ssh "${STAGING_USER}@${STAGING_HOST}" "ip addr show tun0 >/dev/null 2>&1 && echo 'yes' || echo 'no'" 2>/dev/null || echo "unknown")
+TUN0_EXISTS=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "ip addr show tun0 >/dev/null 2>&1 && echo 'yes' || echo 'no'" 2>/dev/null || echo "unknown")
 if [[ "$TUN0_EXISTS" == "yes" ]]; then
   check_status "VPN interface (tun0)" "OK" "exists"
 else
@@ -279,7 +288,7 @@ echo ""
 echo -e "${BLUE}=== ngrok Tunnel ===${NC}"
 
 # Check ngrok service status
-NGROK_STATUS=$(ssh "${STAGING_USER}@${STAGING_HOST}" "sudo systemctl is-active ${STAGING_NGROK_SERVICE} 2>/dev/null || true" 2>/dev/null | head -n 1 || true)
+NGROK_STATUS=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "sudo systemctl is-active ${STAGING_NGROK_SERVICE} 2>/dev/null || true" 2>/dev/null | head -n 1 || true)
 if [[ -z "$NGROK_STATUS" ]]; then NGROK_STATUS="unreachable"; fi
 if [[ "$NGROK_STATUS" == "active" ]]; then
   check_status "ngrok service" "OK" "running"
@@ -288,7 +297,7 @@ else
 fi
 
 # Check ngrok tunnel API
-NGROK_TUNNELS=$(ssh "${STAGING_USER}@${STAGING_HOST}" "curl -sS --max-time 5 http://localhost:4040/api/tunnels 2>/dev/null || echo 'FAILED'" 2>/dev/null || echo "UNREACHABLE")
+NGROK_TUNNELS=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "curl -sS --max-time 5 http://localhost:4040/api/tunnels 2>/dev/null || echo 'FAILED'" 2>/dev/null || echo "UNREACHABLE")
 if echo "$NGROK_TUNNELS" | grep -q "taliahub.com" 2>/dev/null; then
   check_status "ngrok tunnel" "OK" "taliahub.com active"
 elif [[ "$NGROK_TUNNELS" == "FAILED" ]] || [[ "$NGROK_TUNNELS" == "UNREACHABLE" ]]; then
@@ -325,7 +334,7 @@ check_port_remote() {
   local port="$1"
   local label="$2"
   local port_open="false"
-  port_open=$(ssh "${STAGING_USER}@${STAGING_HOST}" "if command -v ss >/dev/null 2>&1; then ss -ltn | awk '{print \$4}' | grep -qE ':${port}$' && echo true || echo false; elif command -v lsof >/dev/null 2>&1; then lsof -ti :${port} >/dev/null 2>&1 && echo true || echo false; else echo false; fi" 2>/dev/null || echo "false")
+  port_open=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "if command -v ss >/dev/null 2>&1; then ss -ltn | awk '{print \$4}' | grep -qE ':${port}$' && echo true || echo false; elif command -v lsof >/dev/null 2>&1; then lsof -ti :${port} >/dev/null 2>&1 && echo true || echo false; else echo false; fi" 2>/dev/null || echo "false")
   if [[ "$port_open" == "true" ]]; then
     check_status "${label} port :${port}" "OK" "listening"
   else
@@ -338,7 +347,7 @@ check_port_remote 4000 "GraphQL"
 check_port_remote 8000 "Supabase Kong"
 
 # Postgres may not be exposed on host; validate mapping and health instead
-DB_MAPPING=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml port supabase-db 5432 2>/dev/null || echo ''" 2>/dev/null || echo "")
+DB_MAPPING=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml port supabase-db 5432 2>/dev/null || echo ''" 2>/dev/null || echo "")
 if [[ -n "$DB_MAPPING" ]] && ! echo "$DB_MAPPING" | grep -qE '(:0)$'; then
   DB_HOST_PORT="${DB_MAPPING##*:}"
   check_port_remote "${DB_HOST_PORT}" "Postgres host port"
@@ -346,7 +355,7 @@ else
   check_status "Postgres port exposure" "OK" "not exposed on host"
 fi
 
-DB_HEALTH=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml exec -T supabase-db pg_isready -U postgres >/dev/null 2>&1 && echo ok || echo fail" 2>/dev/null || echo "fail")
+DB_HEALTH=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml exec -T supabase-db pg_isready -U postgres >/dev/null 2>&1 && echo ok || echo fail" 2>/dev/null || echo "fail")
 if [[ "$DB_HEALTH" == "ok" ]]; then
   check_status "Postgres health" "OK" "pg_isready"
 else
@@ -354,7 +363,7 @@ else
 fi
 
 # Check UI service
-UI_CODE=$(ssh "${STAGING_USER}@${STAGING_HOST}" "curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo '000'" 2>/dev/null || echo "000")
+UI_CODE=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:5173/ 2>/dev/null || echo '000'" 2>/dev/null || echo "000")
 if [[ "$UI_CODE" == "200" ]]; then
   check_status "UI service" "OK" "HTTP 200"
 else
@@ -362,7 +371,7 @@ else
 fi
 
 # Check GraphQL service
-GQL_CODE=$(ssh "${STAGING_USER}@${STAGING_HOST}" "curl -sS -o /dev/null -w '%{http_code}' --max-time 3 -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ __typename }\"}' 2>/dev/null || echo '000'" 2>/dev/null || echo "000")
+GQL_CODE=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "curl -sS -o /dev/null -w '%{http_code}' --max-time 3 -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ __typename }\"}' 2>/dev/null || echo '000'" 2>/dev/null || echo "000")
 if [[ "$GQL_CODE" == "200" ]]; then
   check_status "GraphQL service" "OK" "HTTP 200"
 else
@@ -370,7 +379,7 @@ else
 fi
 
 # Check GraphQL schema compatibility for Admin Lite
-SCHEMA_CHECK=$(ssh "${STAGING_USER}@${STAGING_HOST}" "curl -sS -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ databaseTables { tableName actualDataRange { min max } lastError } }\"}' 2>/dev/null" 2>/dev/null || echo "FAILED")
+SCHEMA_CHECK=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "curl -sS --max-time 25 -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ databaseTables { tableName actualDataRange { min max } lastError } }\"}' 2>/dev/null" 2>/dev/null || echo "FAILED")
 if [[ "$SCHEMA_CHECK" == "FAILED" ]]; then
   check_status "Admin Lite schema" "FAIL" "could not query GraphQL"
 elif echo "$SCHEMA_CHECK" | grep -q '"errors"'; then
@@ -380,7 +389,7 @@ else
 fi
 
 # Check databaseTables data presence
-TABLE_COUNT=$(ssh "${STAGING_USER}@${STAGING_HOST}" "curl -sS -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ databaseTables { tableName } }\"}' 2>/dev/null | grep -o '\"tableName\"' | wc -l || echo '0'" 2>/dev/null || echo "0")
+TABLE_COUNT=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "curl -sS --max-time 15 -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ databaseTables { tableName } }\"}' 2>/dev/null | grep -o '\"tableName\"' | wc -l || echo '0'" 2>/dev/null || echo "0")
 if [[ "$TABLE_COUNT" -gt 0 ]]; then
   check_status "Database tables" "OK" "${TABLE_COUNT} tables"
 else
@@ -388,7 +397,7 @@ else
 fi
 
 # Check Docker services
-DOCKER_PS=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml ps --format json 2>/dev/null | jq -r '.[] | select(.State != \"running\") | .Name' | head -5" 2>/dev/null || echo "ERROR")
+DOCKER_PS=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml ps --format json 2>/dev/null | jq -r '.[] | select(.State != \"running\") | .Name' | head -5" 2>/dev/null || echo "ERROR")
 if [[ -z "$DOCKER_PS" ]] || [[ "$DOCKER_PS" == "ERROR" ]]; then
   check_status "Docker services" "OK" "all running"
 else
@@ -396,8 +405,8 @@ else
 fi
 
 # Check expected vs running services (no extras, no missing)
-EXPECTED_SERVICES=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml config --services 2>/dev/null | tr '\n' ' '" 2>/dev/null || echo "")
-RUNNING_SERVICES=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml ps --services --status running 2>/dev/null | tr '\n' ' '" 2>/dev/null || echo "")
+EXPECTED_SERVICES=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml config --services 2>/dev/null | tr '\n' ' '" 2>/dev/null || echo "")
+RUNNING_SERVICES=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && docker compose -f docker-compose.staging.yml ps --services --status running 2>/dev/null | tr '\n' ' '" 2>/dev/null || echo "")
 
 missing_services=""
 for svc in $EXPECTED_SERVICES; do
@@ -467,7 +476,7 @@ else
 fi
 
 # Staging checkout on host (reference only; runtime is Docker)
-STAGING_HEAD=$(ssh "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && git rev-parse --short HEAD 2>/dev/null || echo 'unknown'" 2>/dev/null || echo "unknown")
+STAGING_HEAD=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "cd '${STAGING_DIR}' && git rev-parse --short HEAD 2>/dev/null || echo 'unknown'" 2>/dev/null || echo "unknown")
 check_status "Staging git" "OK" "HEAD ${STAGING_HEAD} (on-disk ref)"
 
 if [[ "$TEST_AZURE" == "true" ]]; then
@@ -475,11 +484,11 @@ if [[ "$TEST_AZURE" == "true" ]]; then
   echo -e "${BLUE}=== Azure Synapse Connectivity ===${NC}"
   
   # Test Azure connection via GraphQL
-  AZURE_STATUS=$(ssh "${STAGING_USER}@${STAGING_HOST}" "curl -sS --max-time 10 -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ synapseConnectionStatus { online error } }\"}' 2>/dev/null | jq -r '.data.synapseConnectionStatus.online // false' 2>/dev/null || echo 'false'" 2>/dev/null || echo "false")
+  AZURE_STATUS=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "curl -sS --max-time 10 -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ synapseConnectionStatus { online error } }\"}' 2>/dev/null | jq -r '.data.synapseConnectionStatus.online // false' 2>/dev/null || echo 'false'" 2>/dev/null || echo "false")
   if [[ "$AZURE_STATUS" == "true" ]]; then
     check_status "Azure Synapse" "OK" "connected"
   else
-    AZURE_ERROR=$(ssh "${STAGING_USER}@${STAGING_HOST}" "curl -sS --max-time 10 -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ synapseConnectionStatus { error } }\"}' 2>/dev/null | jq -r '.data.synapseConnectionStatus.error // \"unknown\"' 2>/dev/null || echo 'unknown'" 2>/dev/null || echo "unknown")
+    AZURE_ERROR=$(ssh "${STAGING_SSH_OPTS[@]}" "${STAGING_USER}@${STAGING_HOST}" "curl -sS --max-time 10 -X POST http://127.0.0.1:4000/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ synapseConnectionStatus { error } }\"}' 2>/dev/null | jq -r '.data.synapseConnectionStatus.error // \"unknown\"' 2>/dev/null || echo 'unknown'" 2>/dev/null || echo "unknown")
     check_status "Azure Synapse" "WARN" "not connected${AZURE_ERROR:+ - $AZURE_ERROR}"
   fi
 fi

@@ -4,7 +4,7 @@ import { synapseSyncService, isSynapseSyncDisabled } from '../../services/synaps
 import { configService } from '../../services/config-service.js';
 
 /** Must match SCRIPT_VERSION in scripts/validate (same string token; bump both when the cross-check contract changes). */
-export const VALIDATE_SCRIPT_DOC_VERSION = 'ops-4';
+export const VALIDATE_SCRIPT_DOC_VERSION = 'ops-5';
 
 type Importance = 'REQUIRED' | 'CONDITIONAL' | 'OPTIONAL';
 
@@ -40,6 +40,30 @@ async function synapseRuntimeCheck(): Promise<{ online: boolean; error: string |
   } catch (e: any) {
     return { online: false, error: e?.message || 'Unknown error' };
   }
+}
+
+/** Caps Synapse probe time for instanceConnectionProfile so validate/UI do not block on warehouse TCP (often ~10–30s when VPN is off). */
+const INSTANCE_PROFILE_SYNAPSE_BUDGET_MS = (() => {
+  const raw = Number.parseInt(process.env.TALIA_INSTANCE_PROFILE_SYNAPSE_MS || '4000', 10);
+  if (Number.isFinite(raw)) {
+    return Math.min(60000, Math.max(500, raw));
+  }
+  return 4000;
+})();
+
+async function synapseRuntimeCheckBudgeted(): Promise<{ online: boolean; error: string | null }> {
+  const ms = INSTANCE_PROFILE_SYNAPSE_BUDGET_MS;
+  return Promise.race([
+    synapseRuntimeCheck(),
+    new Promise<{ online: boolean; error: string | null }>((resolve) => {
+      setTimeout(() => {
+        resolve({
+          online: false,
+          error: `Synapse probe exceeded ${ms}ms (warehouse slow or unreachable — VPN, firewall, or TALIA_SYNAPSE_SYNC_DISABLED=1)`,
+        });
+      }, ms);
+    }),
+  ]);
 }
 
 function buildEnvRows(synapseSyncDisabled: boolean) {
@@ -166,7 +190,7 @@ export const instanceConnectionQueryResolvers = {
       supabaseRuntimeCheck(),
       synapseSyncDisabled
         ? Promise.resolve({ online: false, error: null as string | null })
-        : synapseRuntimeCheck(),
+        : synapseRuntimeCheckBudgeted(),
       configService.getEnvironment().catch(() => null),
     ]);
 

@@ -487,7 +487,8 @@ const AdminAccessManager = () => {
         {!message && !error && usersError ? <span className="admin-access__error">User error: {usersError}</span> : null}
       </div>
 
-      <div className="admin-access__grid">
+      <div className="admin-access__main-fill">
+        <div className="admin-access__grid">
         <section className="admin-access__panel">
           <header className="admin-access__panel-header">
             <h3>Focus Catalogue</h3>
@@ -622,6 +623,7 @@ const AdminAccessManager = () => {
           </header>
           <div className="admin-access__table" ref={matrixTableElRef} />
         </section>
+        </div>
       </div>
 
       {usersLoading ? <div className="admin-access__loading">Loading user previews...</div> : null}

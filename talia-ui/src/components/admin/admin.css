@@ -82,6 +82,114 @@
   min-height: 0;
   height: 100%;
   overflow: hidden;
+  /* Match nested talia-report shells (e.g. Talia Users tab) so Themes / Focus share the same surface. */
+  background: var(--theme-bg-solid);
+  color: var(--theme-text-primary);
+}
+
+/* Stretch admin-access + grid so catalogue / editor cards fill the main area (Focus Access + Themes). */
+.admin-dashboard-panel__content > .admin-access {
+  flex: 1;
+  min-height: 0;
+}
+
+.admin-dashboard-panel__content > .admin-access > .admin-access__main-fill {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-dashboard-panel__content > .admin-access > .admin-access__main-fill > .admin-access__grid {
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.admin-dashboard-panel__content > .admin-access > .admin-access__main-fill > .admin-access__loading:only-child {
+  margin: auto;
+}
+
+/* Only scrollable data regions consume remaining card height — not editor forms. */
+.admin-dashboard-panel__content > .admin-access .admin-access__panel > .admin-access__panel-body,
+.admin-dashboard-panel__content > .admin-access .admin-access__panel > .admin-access__table {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.admin-dashboard-panel__content > .admin-access .admin-access__panel > .admin-access__table {
+  overflow: hidden;
+}
+
+/* Editor card: keep form compact at the top; scroll internally only if needed. */
+.admin-dashboard-panel__content > .admin-access .admin-access__panel--editor {
+  min-height: 0;
+}
+
+.admin-dashboard-panel__content > .admin-access .admin-access__panel--editor > .admin-access__form,
+.admin-dashboard-panel__content > .admin-access .admin-access__panel--editor > .admin-access__empty {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow: auto;
+  align-self: stretch;
+  align-content: start;
+}
+
+/* Inputs / selects match chrome used elsewhere (theme-glass), not bare transparent fields. */
+.admin-dashboard-panel .admin-access__input,
+.admin-dashboard-panel .admin-access__textarea,
+.admin-dashboard-panel .admin-access__select {
+  background: var(--theme-glass);
+  border-color: var(--theme-border-light);
+}
+
+.admin-access__panel-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  padding: 0 var(--theme-component-padding-sm);
+}
+
+.admin-access__themes-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--theme-font-size-sm);
+}
+
+.admin-access__themes-table th,
+.admin-access__themes-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--theme-border-light);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.admin-access__themes-table th {
+  font-size: var(--theme-font-size-xs);
+  color: var(--theme-text-secondary);
+  font-weight: 600;
+}
+
+.admin-access__themes-table tbody tr {
+  cursor: pointer;
+}
+
+.admin-access__themes-table tbody tr[aria-selected='true'] {
+  background: color-mix(in srgb, var(--theme-accent) 18%, transparent);
+}
+
+.admin-access__themes-table tbody tr:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: -2px;
+}
+
+.admin-access__themes-table .admin-access__themes-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
 }
 
 .admin-access-denied {

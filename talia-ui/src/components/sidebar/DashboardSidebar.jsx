@@ -83,19 +83,22 @@ function DashboardSidebar({
     setCalloutsVisible,
     gameSoundEnabled,
     setGameSoundEnabled,
+    defaultDisplayCurrency,
+    setDefaultDisplayCurrency,
+    appearanceDbLoaded,
     appearanceProfiles,
     activeAppearanceProfileId,
     applyAppearanceProfile,
     saveAppearanceProfile,
+    appearanceStyleSelectOptions,
+    appearanceStyleSelectValue,
+    applyAppearanceStyleSelectKey,
     bgColor,
-    setBgColor,
     headerLogoUrl,
     setHeaderLogoUrl,
     headerLogoVisible,
     setHeaderLogoVisible,
-    taliaUiThemeKeys,
     mergedTaliaUiThemes,
-    resolveThemeDefaultHeaderLogoForTheme,
     customBackgroundHex,
     setCustomBackgroundHex,
   } = useTheme();
@@ -612,45 +615,24 @@ function DashboardSidebar({
               <div className="dashboard-form-hint">Scales spacing for shared component elements and cards across reports.</div>
             </div>
             <div className="dashboard-form-group">
-              <label className="dashboard-form-label">UI theme</label>
-              <div style={{ display: 'flex', gap: 'var(--theme-component-gap-sm)', flexWrap: 'wrap', marginTop: 'var(--theme-component-gap-xs)' }}>
-                {taliaUiThemeKeys.map((key) => {
-                  const meta = mergedTaliaUiThemes[key];
-                  if (!meta) return null;
-                  const selected = !customBackgroundHex && bgColor === key;
-                  const lightSwatch = meta.palette === 'light';
-                  return (
-                  <button
-                    key={key}
-                    type="button"
-                    title={meta.label}
-                    onClick={() => {
-                      setCustomBackgroundHex('');
-                      setBgColor(key);
-                      const def = resolveThemeDefaultHeaderLogoForTheme(key);
-                      if (def && !String(headerLogoUrl || '').trim()) {
-                        setHeaderLogoUrl(def);
-                      }
-                    }}
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 6,
-                      border: selected
-                        ? (lightSwatch ? '2px solid #2563eb' : '2px solid rgba(255,255,255,0.85)')
-                        : (lightSwatch ? '2px solid rgba(15,23,42,0.14)' : '2px solid rgba(255,255,255,0.15)'),
-                      background: meta.swatch,
-                      cursor: 'pointer',
-                      boxShadow: selected
-                        ? (lightSwatch ? '0 0 0 1px rgba(37,99,235,0.35)' : '0 0 0 1px rgba(255,255,255,0.3)')
-                        : 'none',
-                      transition: 'border-color 0.15s, box-shadow 0.15s',
-                    }}
-                  />
-                  );
-                })}
+              <label className="dashboard-form-label" htmlFor="talia-sidebar-style-select">
+                Style / theme
+              </label>
+              <select
+                id="talia-sidebar-style-select"
+                className="dashboard-form-input"
+                value={appearanceStyleSelectValue}
+                onChange={applyAppearanceStyleSelectKey}
+              >
+                {appearanceStyleSelectOptions.map((opt) => (
+                  <option key={opt.key} value={opt.key}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <div className="dashboard-form-hint">
+                Same options as the header visibility (eye) Style menu: saved appearance profiles first, then all palette themes from the registry.
               </div>
-              <div className="dashboard-form-hint">Includes light themes (Porcelain, Linen) for bright backgrounds. Celestyal can fill a default logo if the logo field is empty.</div>
               <label className="dashboard-form-label" htmlFor="talia-custom-bg-color" style={{ marginTop: 'var(--theme-component-gap-md)' }}>
                 Background color
               </label>
@@ -885,6 +867,26 @@ function DashboardSidebar({
               <div className="dashboard-form-hint">Global setting for arcade sound effects (Pong, Breakout, Space Invaders, Pac-Man, Asteroids, Moon Lander).</div>
             </div>
             <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Default display currency</label>
+              <select
+                className="dashboard-form-input"
+                value={defaultDisplayCurrency}
+                onChange={(event) => setDefaultDisplayCurrency(event.target.value)}
+              >
+                <option value="USD">USD — US dollar</option>
+                <option value="EUR">EUR — Euro</option>
+                <option value="GBP">GBP — British pound</option>
+                <option value="AUD">AUD — Australian dollar</option>
+                <option value="NZD">NZD — New Zealand dollar</option>
+                <option value="CAD">CAD — Canadian dollar</option>
+                <option value="JPY">JPY — Japanese yen</option>
+                <option value="CHF">CHF — Swiss franc</option>
+              </select>
+              <div className="dashboard-form-hint">
+                Used when a price has no currency code, and to choose which published-rate rows to prefer when several currencies exist (e.g. sailing overview minimum fare).
+              </div>
+            </div>
+            <div className="dashboard-form-group">
               <label className="dashboard-form-label">Panel Details</label>
               <label className="dashboard-form-checkbox">
                 <input
@@ -952,12 +954,14 @@ function DashboardSidebar({
                   <button
                     type="button"
                     className="dashboard-btn dashboard-btn--small"
-                    disabled={!appearanceProfileName.trim()}
+                    disabled={!appearanceDbLoaded}
                     onClick={() => {
-                      const savedId = saveAppearanceProfile(appearanceProfileName);
+                      const trimmed = appearanceProfileName.trim();
+                      const fallback = `New appearance ${new Date().toISOString().slice(0, 19)}`;
+                      const name = trimmed || fallback;
+                      const savedId = saveAppearanceProfile(name);
                       if (savedId) {
-                        const saved = appearanceProfiles.find((entry) => entry.id === savedId);
-                        setAppearanceProfileName(saved?.name || appearanceProfileName.trim());
+                        setAppearanceProfileName(trimmed || name);
                       }
                     }}
                   >
@@ -966,10 +970,16 @@ function DashboardSidebar({
                   <button
                     type="button"
                     className="dashboard-btn dashboard-btn--small"
-                    disabled={!activeAppearanceProfileId || !appearanceProfileName.trim()}
+                    disabled={!appearanceDbLoaded || !activeAppearanceProfileId}
                     onClick={() => {
                       if (!activeAppearanceProfileId) return;
-                      saveAppearanceProfile(appearanceProfileName, { profileId: activeAppearanceProfileId });
+                      const selected = appearanceProfiles.find((entry) => entry.id === activeAppearanceProfileId);
+                      const trimmed = appearanceProfileName.trim();
+                      const fallback =
+                        (selected?.name && String(selected.name).trim())
+                        || `Profile ${activeAppearanceProfileId.slice(-6)}`;
+                      saveAppearanceProfile(trimmed || fallback, { profileId: activeAppearanceProfileId });
+                      setAppearanceProfileName(trimmed || fallback);
                     }}
                   >
                     Update Selected

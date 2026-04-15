@@ -65,6 +65,17 @@ const GLOBAL_DURATION_OPTIONS = [
   { key: '3-4', label: '3 & 4' }
 ];
 
+const GLOBAL_DISPLAY_CURRENCY_OPTIONS = [
+  { key: 'USD', label: 'USD' },
+  { key: 'EUR', label: 'EUR' },
+  { key: 'GBP', label: 'GBP' },
+  { key: 'AUD', label: 'AUD' },
+  { key: 'NZD', label: 'NZD' },
+  { key: 'CAD', label: 'CAD' },
+  { key: 'JPY', label: 'JPY' },
+  { key: 'CHF', label: 'CHF' },
+];
+
 const toIsoDate = (value) => {
   const date = value instanceof Date ? value : new Date(value);
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
@@ -225,8 +236,10 @@ const StatusBar = ({
 }) => {
   const {
     appearanceProfiles,
-    activeAppearanceProfileId,
     applyAppearanceProfile,
+    appearanceStyleSelectOptions,
+    appearanceStyleSelectValue,
+    applyAppearanceStyleSelectKey,
     panelTitlesVisible,
     setPanelTitlesVisible,
     actionsVisible,
@@ -238,7 +251,17 @@ const StatusBar = ({
     setCalloutsVisible,
     headerLogoUrl,
     headerLogoVisible,
+    defaultDisplayCurrency,
+    setDefaultDisplayCurrency,
   } = useTheme();
+
+  const displayCurrencyOptions = useMemo(() => {
+    const cur = String(defaultDisplayCurrency || '').trim().toUpperCase();
+    if (cur && !GLOBAL_DISPLAY_CURRENCY_OPTIONS.some((o) => o.key === cur)) {
+      return [...GLOBAL_DISPLAY_CURRENCY_OPTIONS, { key: cur, label: cur }];
+    }
+    return GLOBAL_DISPLAY_CURRENCY_OPTIONS;
+  }, [defaultDisplayCurrency]);
 
   const resolvedHeaderLogoSrc = useMemo(() => {
     if (!headerLogoVisible) return '';
@@ -563,23 +586,6 @@ const StatusBar = ({
     setViewScope(next);
   };
 
-  const handleTableLayoutToggle = () => {
-    const next = tableLayoutMode === 'width' ? 'data' : 'width';
-    setTableLayoutMode(next);
-    window.__taliaTableLayoutMode = next;
-    try {
-      window.localStorage?.setItem?.(TABLE_LAYOUT_STORAGE_KEY, next);
-    } catch (error) {
-      reportActionFailure(`Failed to persist table layout mode "${next}": ${error?.message || 'Unknown error'}`);
-    }
-    window.dispatchEvent(
-      new CustomEvent(DASHBOARD_TABLE_LAYOUT_EVENT, {
-        detail: { mode: next },
-      })
-    );
-    userActivityTracker.recordHeaderAction('table-layout-toggle', { status: next });
-  };
-
   const handleTableLayoutSelect = (mode) => {
     if (mode !== 'data' && mode !== 'width') return;
     const next = mode;
@@ -672,11 +678,34 @@ const StatusBar = ({
     setGlobalDuration(next);
   };
 
+  const handleGlobalDisplayCurrencyChange = (nextValue) => {
+    const raw = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value;
+    const next = String(raw || '').trim().toUpperCase();
+    if (!next || !displayCurrencyOptions.some((option) => option.key === next)) return;
+    userActivityTracker.recordHeaderAction('global-display-currency', { status: next });
+    setDefaultDisplayCurrency(next);
+  };
+
   const handleAppearanceProfileChange = (nextValue) => {
     const next = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value;
     if (!next) return;
     userActivityTracker.recordHeaderAction('appearance-profile', { status: next });
     applyAppearanceProfile(next);
+  };
+
+  const styleMenuUsesProfiles = appearanceProfiles.length > 0;
+  const styleSelectOptions = appearanceStyleSelectOptions;
+  const styleSelectValue = appearanceStyleSelectValue;
+
+  const handleStyleVisibilityChange = (nextValue) => {
+    const next = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value;
+    if (!next || !styleSelectOptions.some((o) => o.key === next)) return;
+    if (appearanceProfiles.some((p) => p.id === next)) {
+      handleAppearanceProfileChange(next);
+      return;
+    }
+    userActivityTracker.recordHeaderAction('palette-theme', { status: next });
+    applyAppearanceStyleSelectKey(next);
   };
 
   const getActivePanelTarget = () => {
@@ -1049,6 +1078,17 @@ const StatusBar = ({
           } else if (Object.prototype.hasOwnProperty.call(criteria, 'includeNonRealSailings')) {
             setActiveOnly(criteria.includeNonRealSailings !== true);
           }
+          const savedCurrency = typeof criteria.defaultDisplayCurrency === 'string'
+            ? criteria.defaultDisplayCurrency.trim().toUpperCase()
+            : '';
+          if (/^[A-Z]{3}$/.test(savedCurrency)) {
+            try {
+              Intl.NumberFormat('en-US', { style: 'currency', currency: savedCurrency, maximumFractionDigits: 0 }).format(1);
+              setDefaultDisplayCurrency(savedCurrency);
+            } catch {
+              // ignore invalid currency in profile
+            }
+          }
         }
       } catch (error) {
         reportActionFailure(`Failed to load header criteria: ${error?.message || 'Unknown error'}`);
@@ -1069,6 +1109,7 @@ const StatusBar = ({
       durationKey: globalDuration,
       activeOnly,
       includeNonRealSailings,
+      defaultDisplayCurrency: String(defaultDisplayCurrency || '').trim().toUpperCase() || 'USD',
       ...range
     };
     window.__taliaGlobalCriteria = criteria;
@@ -1077,7 +1118,7 @@ const StatusBar = ({
         detail: criteria,
       })
     );
-  }, [globalDateRange, globalDuration, activeOnly]);
+  }, [globalDateRange, globalDuration, activeOnly, defaultDisplayCurrency]);
 
   useEffect(() => {
     if (!profileCriteriaHydrated) return undefined;
@@ -1091,6 +1132,8 @@ const StatusBar = ({
         durationKey: globalDuration,
         activeOnly,
         includeNonRealSailings: !activeOnly,
+        defaultDisplayCurrency: String(defaultDisplayCurrency || '').trim().toUpperCase() || 'USD',
+        ...resolveDateRange(globalDateRange),
       };
       saveUserProfileState({
         patch: { globalCriteria: currentCriteria },
@@ -1105,7 +1148,7 @@ const StatusBar = ({
         criteriaSaveTimerRef.current = null;
       }
     };
-  }, [profileCriteriaHydrated, globalDateRange, globalDuration, activeOnly]);
+  }, [profileCriteriaHydrated, globalDateRange, globalDuration, activeOnly, defaultDisplayCurrency]);
 
   useEffect(() => {
     enforceDashboardUiState({ dispatchEvents: true });
@@ -1323,6 +1366,17 @@ const StatusBar = ({
                         autoCloseMs={menuDisappearMs}
                       />
                     </label>
+                    <label className="status-bar__header-range" title="Default currency for prices when missing or when choosing among published-rate rows">
+                      <span className="status-bar__header-range-label">Curr</span>
+                      <HeaderCriteriaMenuSelect
+                        id="status-bar-global-display-currency"
+                        options={displayCurrencyOptions}
+                        value={defaultDisplayCurrency}
+                        onChange={handleGlobalDisplayCurrencyChange}
+                        aria-label="Default display currency"
+                        autoCloseMs={menuDisappearMs}
+                      />
+                    </label>
                     <label className="status-bar__header-toggle" htmlFor="status-bar-active-only" title="Show active sailings only">
                       <input
                         id="status-bar-active-only"
@@ -1438,19 +1492,30 @@ const StatusBar = ({
               role="menu"
               aria-label="Visibility controls"
             >
-              {appearanceProfiles.length > 0 && (
-                <label className="status-bar__header-range" title="Apply a saved appearance profile">
+              {styleSelectOptions.length > 0 && (
+                <div
+                  className="status-bar__header-range"
+                  title={
+                    styleMenuUsesProfiles
+                      ? 'Saved appearance profiles first, then all palette themes (built-in + registry)'
+                      : 'Built-in palette themes plus any keys from the UI theme registry'
+                  }
+                >
                   <span className="status-bar__header-range-label">Style</span>
                   <HeaderCriteriaMenuSelect
                     id="status-bar-appearance-profile-visibility"
                     wide
-                    options={appearanceProfiles.map((profile) => ({ key: profile.id, label: profile.name }))}
-                    value={activeAppearanceProfileId}
-                    onChange={handleAppearanceProfileChange}
-                    aria-label="Appearance profile selector"
+                    options={styleSelectOptions}
+                    value={styleSelectValue}
+                    onChange={handleStyleVisibilityChange}
+                    aria-label={
+                      styleMenuUsesProfiles
+                        ? 'Appearance profiles and palette themes'
+                        : 'Palette theme selector'
+                    }
                     autoCloseMs={menuDisappearMs}
                   />
-                </label>
+                </div>
               )}
               <button
                 type="button"

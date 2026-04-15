@@ -1,12 +1,8 @@
 /**
- * Theme Context Provider
- * 
- * Provides theme values to components. The actual styling is done via
- * CSS variables in /src/styles/theme.css. This context provides:
- * - JavaScript access to theme values (for charts/config logic when needed)
- * - Font size/family settings (user-adjustable)
- * 
- * Components should apply styling via CSS classes and CSS variables.
+ * ThemeProvider / useTheme — presentation (CSS tokens) only: fonts, colours, palette, named appearance profiles.
+ * A USER has a ROLE (auth / sidebar admin UI); an ADMIN may define appearance profiles. FOCUS is layout of
+ * components only — unrelated to this module. Persistence: GraphQL `appearanceSettings` → Supabase
+ * `config_setting`. Global criteria: `talia:dashboard.globalCriteria`.
  */
 
 /* eslint-disable react-refresh/only-export-components */
@@ -14,6 +10,17 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import theme from '../config/themes';
 import { initChartDefaults } from '../lib/chartConfig';
 import { trackedFetchGraphql } from '../services/data/trackedGraphql';
+import {
+  APPEARANCE_SETTINGS_QUERY,
+  SAVE_APPEARANCE_PROFILES_MUTATION,
+  SAVE_APPEARANCE_SETTINGS_MUTATION,
+  TALIA_APPEARANCE_SETTINGS_UPDATED_EVENT,
+} from '../graphql/taliaAppearanceOperations';
+import {
+  TALIA_UI_THEME_REGISTRY_QUERY,
+  TALIA_UI_THEME_REGISTRY_UPDATED_EVENT,
+} from '../graphql/taliaUiThemeRegistryOperations';
+import { resolveTaliaAppearanceUserId } from '../lib/resolveTaliaAppearanceUserId';
 import { useSupabaseAuth } from './SupabaseAuthContext.jsx';
 import {
   TALIA_UI_THEME_KEYS,
@@ -23,50 +30,6 @@ import {
 } from '../themes/taliaUiThemes';
 
 const ThemeContext = createContext();
-const APPEARANCE_SETTINGS_QUERY = `
-  query AppearanceSettings($userId: String) {
-    appearanceSettings(userId: $userId) {
-      settings
-      profiles {
-        id
-        name
-        settings
-        updatedAt
-      }
-      activeProfileId
-    }
-  }
-`;
-
-const SAVE_APPEARANCE_SETTINGS_MUTATION = `
-  mutation SaveAppearanceSettings($settings: JSON!, $activeProfileId: String, $userId: String) {
-    saveAppearanceSettings(settings: $settings, activeProfileId: $activeProfileId, userId: $userId) {
-      settings
-      activeProfileId
-    }
-  }
-`;
-
-const SAVE_APPEARANCE_PROFILES_MUTATION = `
-  mutation SaveAppearanceProfiles($profiles: JSON!, $userId: String) {
-    saveAppearanceProfiles(profiles: $profiles, userId: $userId) {
-      id
-      name
-      settings
-      updatedAt
-    }
-  }
-`;
-
-const TALIA_UI_THEME_REGISTRY_QUERY = `
-  query TaliaUiThemeRegistry {
-    taliaUiThemeRegistry {
-      themes
-      assets
-    }
-  }
-`;
-
 const LEGACY_APPEARANCE_MIGRATE_PREFIX = 'taliaAppearanceMigrated:';
 
 /** Old App.jsx sidebar used `fontSettings.theme` with default/dark/light — not Talia bg ids. */
@@ -75,6 +38,45 @@ const LEGACY_APP_THEME_TO_BG = Object.freeze({
   dark: 'midnight',
   light: 'porcelain',
 });
+
+const inferLocaleDefaultCurrency = () => {
+  try {
+    const region = Intl.DateTimeFormat().resolvedOptions().region;
+    if (!region || typeof region !== 'string') return 'USD';
+    const map = {
+      AU: 'AUD',
+      GB: 'GBP',
+      NZ: 'NZD',
+      CA: 'CAD',
+      JP: 'JPY',
+      CH: 'CHF',
+      US: 'USD',
+    };
+    if (map[region]) return map[region];
+    const euro = new Set([
+      'AT', 'BE', 'CY', 'EE', 'FI', 'FR', 'DE', 'GR', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL',
+      'PT', 'SK', 'SI', 'ES',
+    ]);
+    if (euro.has(region)) return 'EUR';
+  } catch {
+    // ignore
+  }
+  return 'USD';
+};
+
+const normalizeDefaultDisplayCurrency = (raw, fallback = 'USD') => {
+  const fb = typeof fallback === 'string' && /^[A-Z]{3}$/i.test(fallback)
+    ? fallback.toUpperCase()
+    : 'USD';
+  const s = typeof raw === 'string' ? raw.trim().toUpperCase() : '';
+  if (!/^[A-Z]{3}$/.test(s)) return fb;
+  try {
+    Intl.NumberFormat('en-US', { style: 'currency', currency: s, maximumFractionDigits: 0 }).format(1);
+    return s;
+  } catch {
+    return fb;
+  }
+};
 
 const hexToRgb = (hex) => {
   if (typeof hex !== 'string') return null;
@@ -201,9 +203,7 @@ export const useTheme = () => {
  */
 export const ThemeProvider = ({ children }) => {
   const { user, loading: authLoading } = useSupabaseAuth();
-  const rawTaliaId = user?.taliaUserId ?? user?.talia_user_id;
-  const appearanceUserId =
-    rawTaliaId != null && rawTaliaId !== '' ? String(rawTaliaId) : null;
+  const appearanceUserId = resolveTaliaAppearanceUserId(user);
 
   const [fontSize, setFontSize] = useState(10);
   const [fontFamily, setFontFamily] = useState('Inter');
@@ -239,6 +239,18 @@ export const ThemeProvider = ({ children }) => {
   );
   const [calloutsVisible, setCalloutsVisible] = useState(true);
   const [gameSoundEnabled, setGameSoundEnabled] = useState(true);
+  const [defaultDisplayCurrency, setDefaultDisplayCurrencyState] = useState(() =>
+    normalizeDefaultDisplayCurrency(undefined, inferLocaleDefaultCurrency())
+  );
+
+  const setDefaultDisplayCurrency = useCallback((next) => {
+    setDefaultDisplayCurrencyState(
+      normalizeDefaultDisplayCurrency(
+        typeof next === 'string' ? next : String(next ?? ''),
+        inferLocaleDefaultCurrency()
+      )
+    );
+  }, []);
 
   const [appearanceProfiles, setAppearanceProfiles] = useState([]);
   const [activeAppearanceProfileId, setActiveAppearanceProfileId] = useState('');
@@ -330,10 +342,11 @@ export const ThemeProvider = ({ children }) => {
     sidebarDisplayMode,
     calloutsVisible,
     gameSoundEnabled,
+    defaultDisplayCurrency,
     headerLogoUrl,
     headerLogoVisible,
     customBackgroundHex,
-  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, headerLogoUrl, headerLogoVisible, customBackgroundHex]);
+  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, defaultDisplayCurrency, headerLogoUrl, headerLogoVisible, customBackgroundHex]);
 
   const applyAppearanceSettings = (settings) => {
     if (!settings || typeof settings !== 'object') return false;
@@ -405,14 +418,19 @@ export const ThemeProvider = ({ children }) => {
     if (Object.prototype.hasOwnProperty.call(settings, 'gameSoundEnabled')) {
       setGameSoundEnabled(settings.gameSoundEnabled !== false);
     }
+    if (Object.prototype.hasOwnProperty.call(settings, 'defaultDisplayCurrency')) {
+      setDefaultDisplayCurrencyState(
+        normalizeDefaultDisplayCurrency(settings.defaultDisplayCurrency, inferLocaleDefaultCurrency())
+      );
+    }
     return true;
   };
 
   const applyAppearanceProfile = (profileId) => {
     const profile = appearanceProfiles.find((entry) => entry.id === profileId);
-    if (!profile?.settings) return false;
-    const applied = applyAppearanceSettings(profile.settings);
-    if (!applied) return false;
+    if (!profile) return false;
+    const s = profile.settings && typeof profile.settings === 'object' ? profile.settings : {};
+    applyAppearanceSettings(s);
     setActiveAppearanceProfileId(profile.id);
     return true;
   };
@@ -441,6 +459,30 @@ export const ThemeProvider = ({ children }) => {
     setActiveAppearanceProfileId(profileId);
     return profileId;
   };
+
+  /** Same ordered list as the header Style menu: saved profiles first, then palette theme keys. */
+  const appearanceStyleSelectOptions = useMemo(() => {
+    const paletteOpts = taliaUiThemeKeysOrdered.map((key) => ({
+      key,
+      label: mergedTaliaUiThemes[key]?.label || key,
+    }));
+    if (appearanceProfiles.length === 0) return paletteOpts;
+    return [...appearanceProfiles.map((p) => ({ key: p.id, label: p.name })), ...paletteOpts];
+  }, [appearanceProfiles, mergedTaliaUiThemes, taliaUiThemeKeysOrdered]);
+
+  const appearanceStyleSelectValue = useMemo(() => {
+    if (activeAppearanceProfileId && appearanceProfiles.some((p) => p.id === activeAppearanceProfileId)) {
+      return activeAppearanceProfileId;
+    }
+    if (
+      bgColor
+      && (Object.prototype.hasOwnProperty.call(mergedTaliaUiThemes, bgColor)
+        || taliaUiThemeKeysOrdered.includes(bgColor))
+    ) {
+      return bgColor;
+    }
+    return appearanceStyleSelectOptions[0]?.key || '';
+  }, [activeAppearanceProfileId, appearanceProfiles, bgColor, mergedTaliaUiThemes, taliaUiThemeKeysOrdered, appearanceStyleSelectOptions]);
 
   useEffect(() => {
     if (authLoading) return undefined;
@@ -472,6 +514,7 @@ export const ThemeProvider = ({ children }) => {
     setSidebarDisplayMode(normalizeSidebarDisplayMode(undefined, 'panel'));
     setCalloutsVisible(true);
     setGameSoundEnabled(true);
+    setDefaultDisplayCurrencyState(normalizeDefaultDisplayCurrency(undefined, inferLocaleDefaultCurrency()));
     setAppearanceProfiles([]);
     setActiveAppearanceProfileId('');
     setBgColorState('midnight');
@@ -486,20 +529,21 @@ export const ThemeProvider = ({ children }) => {
     let cancelled = false;
     if (authLoading) return undefined;
 
-    if (appearanceUserId == null) {
-      setAppearanceDbLoaded(true);
-      return undefined;
-    }
-
     const loadAppearanceSettings = async () => {
       const userId = appearanceUserId;
+      const appearanceVariables =
+        userId != null && String(userId).trim() !== '' ? { userId: String(userId) } : {};
+      const loadPurpose =
+        userId != null && String(userId).trim() !== ''
+          ? `Load appearance settings for Talia user ${userId}`
+          : 'Load global appearance settings (no Talia user id on session yet)';
       try {
         const [appearanceData, registryData] = await Promise.all([
           trackedFetchGraphql({
             query: APPEARANCE_SETTINGS_QUERY,
-            variables: { userId },
+            variables: appearanceVariables,
             component: 'ThemeContext',
-            purpose: `Load appearance settings for Talia user ${userId}`,
+            purpose: loadPurpose,
             tableName: 'config_setting'
           }),
           trackedFetchGraphql({
@@ -522,25 +566,32 @@ export const ThemeProvider = ({ children }) => {
         if (dbHasSettings) {
           applyAppearanceSettings(payload.settings);
         }
-        if (Array.isArray(payload?.profiles) && payload.profiles.length > 0) {
-          setAppearanceProfiles(
-            payload.profiles
-              .filter((entry) => entry?.id && entry?.name)
-              .map((entry) => ({
-                id: entry.id,
-                name: entry.name,
-                settings: entry.settings || {},
-                updatedAt: entry.updatedAt || new Date().toISOString()
-              }))
-          );
+        if (Array.isArray(payload?.profiles)) {
+          if (payload.profiles.length > 0) {
+            setAppearanceProfiles(
+              payload.profiles
+                .filter((entry) => entry?.id)
+                .map((entry) => ({
+                  id: entry.id,
+                  name: String(entry.name || '').trim() || `Profile ${String(entry.id).slice(-6)}`,
+                  settings: entry.settings && typeof entry.settings === 'object' ? entry.settings : {},
+                  updatedAt: entry.updatedAt || new Date().toISOString()
+                }))
+            );
+          } else {
+            setAppearanceProfiles([]);
+          }
         }
         if (typeof payload?.activeProfileId === 'string' && payload.activeProfileId) {
           setActiveAppearanceProfileId(payload.activeProfileId);
         }
 
-        const migrateKey = `${LEGACY_APPEARANCE_MIGRATE_PREFIX}${userId}`;
+        const migrateKey =
+          userId != null && String(userId).trim() !== ''
+            ? `${LEGACY_APPEARANCE_MIGRATE_PREFIX}${userId}`
+            : null;
         const dbHasProfiles = Array.isArray(payload?.profiles) && payload.profiles.length > 0;
-        if (!sessionStorage.getItem(migrateKey)) {
+        if (migrateKey && !sessionStorage.getItem(migrateKey)) {
           try {
             const layoutRaw = localStorage.getItem('taliaLayout');
             const parsedLayout = layoutRaw ? JSON.parse(layoutRaw) : {};
@@ -630,6 +681,74 @@ export const ThemeProvider = ({ children }) => {
   }, [authLoading, appearanceUserId]);
 
   useEffect(() => {
+    const refreshRegistry = async () => {
+      try {
+        const registryData = await trackedFetchGraphql({
+          query: TALIA_UI_THEME_REGISTRY_QUERY,
+          component: 'ThemeContext',
+          purpose: 'Refresh UI theme registry after admin update',
+          tableName: 'config_setting',
+        });
+        const reg = registryData?.taliaUiThemeRegistry;
+        setThemeRegistryFromDb({
+          themes: reg?.themes && typeof reg.themes === 'object' ? reg.themes : {},
+          assets: reg?.assets && typeof reg.assets === 'object' ? reg.assets : {},
+        });
+      } catch (err) {
+        console.warn('[ThemeContext] Theme registry refresh failed:', err);
+      }
+    };
+    window.addEventListener(TALIA_UI_THEME_REGISTRY_UPDATED_EVENT, refreshRegistry);
+    return () => {
+      window.removeEventListener(TALIA_UI_THEME_REGISTRY_UPDATED_EVENT, refreshRegistry);
+    };
+  }, []);
+
+  useEffect(() => {
+    const normalizeProfilesFromPayload = (raw) => {
+      if (!Array.isArray(raw) || raw.length === 0) return [];
+      return raw
+        .filter((entry) => entry?.id)
+        .map((entry) => ({
+          id: entry.id,
+          name: String(entry.name || '').trim() || `Profile ${String(entry.id).slice(-6)}`,
+          settings: entry.settings && typeof entry.settings === 'object' ? entry.settings : {},
+          updatedAt: entry.updatedAt || new Date().toISOString(),
+        }));
+    };
+
+    const refreshAppearanceProfiles = async () => {
+      try {
+        const userId = appearanceUserId;
+        const appearanceVariables =
+          userId != null && String(userId).trim() !== '' ? { userId: String(userId) } : {};
+        const appearanceData = await trackedFetchGraphql({
+          query: APPEARANCE_SETTINGS_QUERY,
+          variables: appearanceVariables,
+          component: 'ThemeContext',
+          purpose: 'Refresh appearance profiles after admin update',
+          tableName: 'config_setting',
+        });
+        const payload = appearanceData?.appearanceSettings;
+        setAppearanceProfiles(normalizeProfilesFromPayload(payload?.profiles || []));
+        const aid = payload?.activeProfileId;
+        if (typeof aid === 'string' && aid) {
+          setActiveAppearanceProfileId(aid);
+        } else if (aid === null || aid === '') {
+          setActiveAppearanceProfileId('');
+        }
+      } catch (err) {
+        console.warn('[ThemeContext] Appearance profiles refresh failed:', err);
+      }
+    };
+
+    window.addEventListener(TALIA_APPEARANCE_SETTINGS_UPDATED_EVENT, refreshAppearanceProfiles);
+    return () => {
+      window.removeEventListener(TALIA_APPEARANCE_SETTINGS_UPDATED_EVENT, refreshAppearanceProfiles);
+    };
+  }, [appearanceUserId]);
+
+  useEffect(() => {
     if (!appearanceDbLoaded) return undefined;
     if (!Object.prototype.hasOwnProperty.call(mergedTaliaUiThemes, bgColor)) {
       setBgColorState('midnight');
@@ -638,22 +757,23 @@ export const ThemeProvider = ({ children }) => {
   }, [appearanceDbLoaded, mergedTaliaUiThemes, bgColor]);
 
   useEffect(() => {
-    if (!appearanceDbLoaded || !appearanceUserId) return undefined;
+    if (!appearanceDbLoaded) return undefined;
     if (saveSettingsTimerRef.current) {
       clearTimeout(saveSettingsTimerRef.current);
     }
     saveSettingsTimerRef.current = setTimeout(async () => {
-      const userId = appearanceUserId;
       try {
         await trackedFetchGraphql({
           query: SAVE_APPEARANCE_SETTINGS_MUTATION,
           variables: {
             settings: buildCurrentAppearanceSettings(),
             activeProfileId: activeAppearanceProfileId || null,
-            userId
+            userId: appearanceUserId ?? null,
           },
           component: 'ThemeContext',
-          purpose: `Persist appearance settings for Talia user ${userId}`,
+          purpose: appearanceUserId
+            ? `Persist appearance settings for Talia user ${appearanceUserId}`
+            : 'Persist global appearance settings (no Talia user id)',
           tableName: 'config_setting'
         });
       } catch (error) {
@@ -665,24 +785,25 @@ export const ThemeProvider = ({ children }) => {
         clearTimeout(saveSettingsTimerRef.current);
       }
     };
-  }, [appearanceDbLoaded, appearanceUserId, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, customBackgroundHex, headerLogoUrl, headerLogoVisible, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, activeAppearanceProfileId]);
+  }, [appearanceDbLoaded, appearanceUserId, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, customBackgroundHex, headerLogoUrl, headerLogoVisible, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, defaultDisplayCurrency, activeAppearanceProfileId]);
 
   useEffect(() => {
-    if (!appearanceDbLoaded || !appearanceUserId) return undefined;
+    if (!appearanceDbLoaded) return undefined;
     if (saveProfilesTimerRef.current) {
       clearTimeout(saveProfilesTimerRef.current);
     }
     saveProfilesTimerRef.current = setTimeout(async () => {
-      const userId = appearanceUserId;
       try {
         await trackedFetchGraphql({
           query: SAVE_APPEARANCE_PROFILES_MUTATION,
           variables: {
             profiles: appearanceProfiles,
-            userId
+            userId: appearanceUserId ?? null,
           },
           component: 'ThemeContext',
-          purpose: `Persist appearance profiles for Talia user ${userId}`,
+          purpose: appearanceUserId
+            ? `Persist appearance profiles for Talia user ${appearanceUserId}`
+            : 'Persist global appearance profiles (no Talia user id)',
           tableName: 'config_setting'
         });
       } catch (error) {
@@ -970,6 +1091,29 @@ export const ThemeProvider = ({ children }) => {
 
   }, [fontSize, selectedFont, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor, customBackgroundHex, menuDisappearMs, mergedTaliaUiThemes]);
 
+  const applyAppearanceStyleSelectKey = (rawNext) => {
+    const key =
+      typeof rawNext === 'string'
+        ? rawNext
+        : String(rawNext?.target?.value ?? rawNext ?? '').trim();
+    if (!key || !appearanceStyleSelectOptions.some((o) => o.key === key)) return;
+    const profile = appearanceProfiles.find((p) => p.id === key);
+    if (profile) {
+      const s = profile.settings && typeof profile.settings === 'object' ? profile.settings : {};
+      applyAppearanceSettings(s);
+      setActiveAppearanceProfileId(profile.id);
+      return;
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(mergedTaliaUiThemes, key)
+      || taliaUiThemeKeysOrdered.includes(key)
+    ) {
+      setActiveAppearanceProfileId('');
+      setCustomBackgroundHex('');
+      setBgColor(key);
+    }
+  };
+
   // Context value - provide theme and font settings
   const value = {
     // Theme object (for components that need JS access to colors)
@@ -1052,13 +1196,19 @@ export const ThemeProvider = ({ children }) => {
     setCalloutsVisible,
     gameSoundEnabled,
     setGameSoundEnabled,
+    defaultDisplayCurrency,
+    setDefaultDisplayCurrency,
 
     // Appearance profiles
+    appearanceDbLoaded,
     appearanceProfiles,
     activeAppearanceProfileId,
     setActiveAppearanceProfileId,
     saveAppearanceProfile,
     applyAppearanceProfile,
+    appearanceStyleSelectOptions,
+    appearanceStyleSelectValue,
+    applyAppearanceStyleSelectKey,
 
     // UI theme (persisted as bgColor) + optional header logo (any theme)
     bgColor,

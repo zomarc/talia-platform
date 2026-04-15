@@ -55,6 +55,7 @@ export const SupabaseAuthProvider = ({ children }) => {
       email: devEntry.email,
       name: devEntry.name,
       talia_user_id: devEntry.talia_user_id,
+      taliaUserId: devEntry.talia_user_id,
       role,
       taliaUser: {
         id: devEntry.id,
@@ -88,6 +89,7 @@ export const SupabaseAuthProvider = ({ children }) => {
       email: target.email,
       name: target.name,
       talia_user_id: target.talia_user_id,
+      taliaUserId: target.talia_user_id,
       role: target.role,
       taliaUser: {
         id: target.id,

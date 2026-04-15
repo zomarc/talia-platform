@@ -918,13 +918,33 @@ const saveStoredGameScore = async (gameId: string, userId: string, score: number
 const normalizeAppearanceProfiles = (raw: any): Array<{ id: string; name: string; settings: any; updatedAt: string }> => {
   if (!Array.isArray(raw)) return [];
   return raw
-    .map((entry: any) => ({
-      id: String(entry?.id || '').trim(),
-      name: String(entry?.name || '').trim(),
-      settings: entry?.settings || {},
-      updatedAt: entry?.updatedAt || new Date().toISOString()
-    }))
+    .map((entry: any) => {
+      const id = String(entry?.id || '').trim();
+      const nameRaw = String(entry?.name || '').trim();
+      const name = nameRaw || (id ? `Profile ${id.slice(-6)}` : '');
+      return {
+        id,
+        name,
+        settings: entry?.settings && typeof entry.settings === 'object' ? entry.settings : {},
+        updatedAt: entry?.updatedAt || new Date().toISOString()
+      };
+    })
     .filter((entry) => entry.id && entry.name);
+};
+
+/** Union global + per-user profile lists (same id: user row wins). Empty per-user array must not hide global profiles. */
+const mergeAppearanceProfileLists = (
+  globalList: Array<{ id: string; name: string; settings: any; updatedAt: string }>,
+  userList: Array<{ id: string; name: string; settings: any; updatedAt: string }>
+) => {
+  const map = new Map<string, { id: string; name: string; settings: any; updatedAt: string }>();
+  for (const p of globalList) {
+    if (p.id) map.set(p.id, p);
+  }
+  for (const p of userList) {
+    if (p.id) map.set(p.id, p);
+  }
+  return Array.from(map.values());
 };
 
 const mapAppearanceSettingsPayload = (settings: any, profiles: any, activeProfileId: any) => ({
@@ -2331,7 +2351,7 @@ export const resolvers = {
         const globalProfilesNorm = normalizeAppearanceProfiles(globalProfiles);
         const profiles =
           userProfiles !== undefined && userProfiles !== null
-            ? userProfilesNorm
+            ? mergeAppearanceProfileLists(globalProfilesNorm, userProfilesNorm)
             : globalProfilesNorm;
         const activeProfileId =
           userActive !== undefined && userActive !== null

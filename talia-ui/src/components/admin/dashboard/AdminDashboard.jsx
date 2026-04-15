@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import UserMappingTable from '../users/UserMappingTable';
 import TaliaUserTable from '../users/TaliaUserTable';
 import AdminAccessManager from './AdminAccessManager';
+import AdminThemesPanel from './AdminThemesPanel';
 import AdminLogsPanel from '../logs/AdminLogsPanel';
 import { useTaliaFocusManagement } from '../../../hooks/useTaliaFocusManagement';
 import '../admin.css';
@@ -31,7 +32,7 @@ const AdminDashboard = ({ skipAuth = false }) => {
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Admin Dashboard</h2>
-          <p className="talia-report__subtitle">Focus access, users, and mappings</p>
+          <p className="talia-report__subtitle">Focus access, users, mappings, themes, and logs</p>
         </div>
         <div className="talia-report__header-right admin-dashboard-panel__identity">
           <span>{taliaUser?.email || 'Unknown user'}</span>
@@ -48,6 +49,9 @@ const AdminDashboard = ({ skipAuth = false }) => {
         <button className={`admin-tab ${activeTab === 'mapping' ? 'admin-tab-active' : ''}`} onClick={() => setActiveTab('mapping')}>
           User Mappings
         </button>
+        <button className={`admin-tab ${activeTab === 'themes' ? 'admin-tab-active' : ''}`} onClick={() => setActiveTab('themes')}>
+          Themes
+        </button>
         <button className={`admin-tab ${activeTab === 'logs' ? 'admin-tab-active' : ''}`} onClick={() => setActiveTab('logs')}>
           Logs
         </button>
@@ -57,6 +61,7 @@ const AdminDashboard = ({ skipAuth = false }) => {
         {activeTab === 'access' && <AdminAccessManager />}
         {activeTab === 'users' && <TaliaUserTable />}
         {activeTab === 'mapping' && <UserMappingTable />}
+        {activeTab === 'themes' && <AdminThemesPanel />}
         {activeTab === 'logs' && <AdminLogsPanel />}
       </main>
     </div>

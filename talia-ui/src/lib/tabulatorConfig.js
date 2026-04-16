@@ -106,7 +106,13 @@ const fitLastColumn = (table) => {
 const applyLayoutModeToTable = (table) => {
   if (!table) return;
   const mode = getGlobalTableLayoutMode();
-  const nextLayout = mode === TABLE_LAYOUT_DATA ? 'fitDataTable' : 'fitDataStretch';
+  const currentLayout = table?.options?.layout;
+  const nextLayout =
+    mode === TABLE_LAYOUT_DATA
+      ? 'fitDataTable'
+      : currentLayout === 'fitDataStretch'
+        ? 'fitDataStretch'
+        : 'fitColumns';
   try {
     const meta = tableMeta.get(table);
     const isBuilt = meta?.isBuilt === true;
@@ -135,7 +141,7 @@ const applyLayoutModeToTable = (table) => {
     }
     table.layoutRefresh?.(true);
     table.redraw?.(true);
-    if (mode !== TABLE_LAYOUT_DATA) {
+    if (nextLayout === 'fitDataStretch') {
       fitLastColumn(table);
     }
   } catch {
@@ -251,22 +257,26 @@ export const initTabulator = async () => {
 export const getTabulatorOptions = (options = {}) => {
   ensureLayoutListenerBound();
 
-  const requestedLayout = options.layout === 'fitDataFill' ? 'fitDataStretch' : options.layout;
-  const globalMode = options.enforceGlobalLayout === false ? null : getGlobalTableLayoutMode();
-  const effectiveLayout = globalMode === TABLE_LAYOUT_DATA
-    ? 'fitDataTable'
-    : (requestedLayout || 'fitDataStretch');
+  const rawLayout = options.layout;
+  const requestedLayout = rawLayout === 'fitDataFill' ? undefined : rawLayout;
+  const ignoreGlobalLayout = options.enforceGlobalLayout === false;
+  const globalMode = ignoreGlobalLayout ? null : getGlobalTableLayoutMode();
+  const effectiveLayout = ignoreGlobalLayout
+    ? (requestedLayout || 'fitColumns')
+    : globalMode === TABLE_LAYOUT_DATA
+      ? 'fitDataTable'
+      : (requestedLayout || 'fitColumns');
   const sourceColumns = Array.isArray(options.columns) ? cloneColumnDefs(options.columns) : null;
   let processedColumns = sourceColumns ? cloneColumnDefs(sourceColumns) : null;
   if (
     processedColumns
     && processedColumns.length > 0
     && options.disableLastColumnGrow !== true
-    && globalMode !== TABLE_LAYOUT_DATA
+    && effectiveLayout !== 'fitDataTable'
   ) {
     processedColumns = applyLastColumnGrow(processedColumns);
   }
-  if (processedColumns && globalMode === TABLE_LAYOUT_DATA) {
+  if (processedColumns && effectiveLayout === 'fitDataTable') {
     processedColumns = stripFixedWidths(processedColumns);
   }
 
@@ -283,8 +293,8 @@ export const getTabulatorOptions = (options = {}) => {
 
   const withLastColumnFit = (userCallback) => function (...args) {
     registerTableInstance(this, sourceColumns);
-    const mode = getGlobalTableLayoutMode();
-    const shouldFillLastColumn = disableLastColumnFill !== true && mode !== TABLE_LAYOUT_DATA;
+    const layoutName = this?.options?.layout;
+    const shouldFillLastColumn = disableLastColumnFill !== true && layoutName === 'fitDataStretch';
     if (shouldFillLastColumn) {
       fitLastColumn(this);
     } else {
@@ -312,7 +322,7 @@ export const getTabulatorOptions = (options = {}) => {
  * Default Tabulator options
  */
 export const DEFAULT_TABULATOR_OPTIONS = {
-  layout: 'fitDataFill',
+  layout: 'fitColumns',
   reactiveData: false,
   height: '100%',
   selectableRows: 1,

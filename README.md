@@ -17,11 +17,15 @@ cd talia-ui && npm run dev
 
 ### Deploy to Staging
 ```bash
-# UI bundle only (fast)
+# UI bundle only (fast): local `npm run build` + dist over scp into nginx — no full-repo tarball by default
 ./scripts/deploy-to-staging.sh --ui-only
 
-# UI + GraphQL image rebuild + schema guard
-./scripts/deploy-to-staging.sh --full
+# MVP hot-sync build (header + endpoints match Azure): cd talia-ui && npm run build:mvp
+# Same but also sync the whole tree (rare; non-interactive needs DEPLOY_EXPLICIT_INCLUDE_CODE_ARCHIVE=1 too):
+#   DEPLOY_INCLUDE_CODE_ARCHIVE=1 DEPLOY_EXPLICIT_INCLUDE_CODE_ARCHIVE=1 STAGING_DEPLOY_CONFIRM_TOKEN=DEPLOY_UI_ONLY ./scripts/deploy-to-staging.sh --ui-only
+
+# UI + GraphQL image rebuild + schema guard (run interactively and pick full stack, or non-interactive):
+# STAGING_DEPLOY_CONFIRM_TOKEN=DEPLOY_FULL_STACK DEPLOY_EXPLICIT_FULL_STACK=1 ./scripts/deploy-to-staging.sh --full
 ```
 
 Deploys use **your local tree** → tarball/scp → staging host (see `docs/ENVIRONMENTS-AND-DEPLOY.md`).

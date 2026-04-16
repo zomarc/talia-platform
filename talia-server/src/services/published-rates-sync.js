@@ -3,19 +3,45 @@ const CURRENT_STATE_TABLE = 'published_rates_current_state';
 const TARGET_TABLE = 'published_rates_changes';
 const SNAPSHOT_COLUMN = 'SNAPSHOT_DATE';
 
+/** Max |delta| treated as unchanged for money fields (warehouse / JS float noise). */
+const PUBLISHED_RATES_MONEY_EPS = 0.02;
+
+function normalizeKeyDate(value) {
+  if (value == null || value === '') return 'NULL';
+  try {
+    const d = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(d.getTime())) return 'NULL';
+    return d.toISOString().split('T')[0];
+  } catch {
+    return 'NULL';
+  }
+}
+
 /**
- * Generate a unique key for a published rate record
- * Key format: sail_code|cabin_category|rate_type|promo_name
- * Works with both raw Synapse rows and transformed state objects
+ * Generate a unique key for a published rate record (sellable price line).
+ * Format: sail_code|cabin_category|rate_type|promo_name|departure_date|ship_code|currency_code
+ * See docs/PUBLISHED_RATES_HISTORY.md
  */
 function getPublishedRateKey(row) {
-  // Handle both raw rows and transformed rows
   const sailCode = row.SAIL_CODE || row.sail_code || 'NULL';
   const cabinCategory = row.CABIN_CATEGORY || row.cabin_category || 'NULL';
   const rateType = row.RATE_TYPE || row.rate_type || 'NULL';
   const promoName = row.PROMO_NAME || row.promo_name || 'NULL';
-  
-  return `${sailCode}|${cabinCategory}|${rateType}|${promoName}`;
+  const departureRaw = row.DEPARTURE_DATE ?? row.departure_date ?? null;
+  const departure = normalizeKeyDate(departureRaw);
+  const shipCode = row.SHIP_CODE || row.ship_code || 'NULL';
+  const currency = row.CURRENCY_CODE || row.currency_code || 'NULL';
+
+  return `${sailCode}|${cabinCategory}|${rateType}|${promoName}|${departure}|${shipCode}|${currency}`;
+}
+
+function moneyFieldChanged(prev, next) {
+  const a = prev == null || prev === '' ? null : Number(prev);
+  const b = next == null || next === '' ? null : Number(next);
+  if (a == null && b == null) return false;
+  if (a == null || b == null) return true;
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return String(prev) !== String(next);
+  return Math.abs(a - b) > PUBLISHED_RATES_MONEY_EPS;
 }
 
 /**
@@ -186,25 +212,26 @@ function processChangesBatch(batch, currentState) {
 
     // Only store a change if there's a previous state AND something changed
     if (previous) {
-      const hasChange = 
-        previous.fare_per_person !== transformed.fare_per_person ||
-        previous.port_taxes_services !== transformed.port_taxes_services ||
-        previous.extra_adult !== transformed.extra_adult ||
-        previous.extra_child !== transformed.extra_child ||
-        previous.discount !== transformed.discount ||
-        previous.promo_type !== transformed.promo_type ||
-        previous.region !== transformed.region;
+      const hasChange =
+        moneyFieldChanged(previous.fare_per_person, transformed.fare_per_person) ||
+        moneyFieldChanged(previous.port_taxes_services, transformed.port_taxes_services) ||
+        moneyFieldChanged(previous.extra_adult, transformed.extra_adult) ||
+        moneyFieldChanged(previous.extra_child, transformed.extra_child) ||
+        moneyFieldChanged(previous.discount, transformed.discount) ||
+        (previous.promo_type ?? null) !== (transformed.promo_type ?? null) ||
+        (previous.region ?? null) !== (transformed.region ?? null);
 
       if (hasChange) {
         // Remove updated_at from changes (it's only for current_state table)
         const { updated_at, ...changeData } = transformed;
         changes.push({
           ...changeData,
-          fare_per_person_delta: (transformed.fare_per_person || 0) - (previous.fare_per_person || 0),
-          port_taxes_services_delta: (transformed.port_taxes_services || 0) - (previous.port_taxes_services || 0),
-          extra_adult_delta: (transformed.extra_adult || 0) - (previous.extra_adult || 0),
-          extra_child_delta: (transformed.extra_child || 0) - (previous.extra_child || 0),
-          discount_delta: (transformed.discount || 0) - (previous.discount || 0),
+          fare_per_person_delta: (Number(transformed.fare_per_person) || 0) - (Number(previous.fare_per_person) || 0),
+          port_taxes_services_delta:
+            (Number(transformed.port_taxes_services) || 0) - (Number(previous.port_taxes_services) || 0),
+          extra_adult_delta: (Number(transformed.extra_adult) || 0) - (Number(previous.extra_adult) || 0),
+          extra_child_delta: (Number(transformed.extra_child) || 0) - (Number(previous.extra_child) || 0),
+          discount_delta: (Number(transformed.discount) || 0) - (Number(previous.discount) || 0),
           created_at: new Date().toISOString()
         });
       }
@@ -222,14 +249,25 @@ function processChangesBatch(batch, currentState) {
  * Insert changes into published_rates_changes table
  * Exported for use by sync service batching wrapper
  */
+function dedupeChangesByRateKeyAndSnapshot(changes) {
+  const map = new Map();
+  for (const row of changes) {
+    const k = `${row.rate_key}|${row.snapshot_date}`;
+    map.set(k, row);
+  }
+  return Array.from(map.values());
+}
+
 export async function insertPublishedRatesChanges(supabaseClient, changes, logger = null) {
   if (changes.length === 0) return;
+
+  const deduped = dedupeChangesByRateKeyAndSnapshot(changes);
 
   // Pure data insertion - logging handled by sync service
   const batchSize = 1000;
 
-  for (let i = 0; i < changes.length; i += batchSize) {
-    const batch = changes.slice(i, i + batchSize);
+  for (let i = 0; i < deduped.length; i += batchSize) {
+    const batch = deduped.slice(i, i + batchSize);
     const { error } = await supabaseClient.from(TARGET_TABLE).insert(batch);
     if (error) {
       throw new Error(`Failed to insert published rate change batch: ${error.message}`);

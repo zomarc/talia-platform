@@ -93,7 +93,7 @@ which psql
 
 ## When backups jump to hundreds of MB
 
-`backup-db.sh` / `supabase db dump --local` dumps **every** schema and **all** row data. The usual cause of a **~30MB → ~400MB+** jump is **`public.published_rates_changes`**: it stores one row per detected published-rate change during syncs and can reach **tens of millions of rows**. That table is audit/history; **`published_rates_current_state`** holds the latest snapshot for comparisons.
+`backup-db.sh` / `supabase db dump --local` dumps **every** schema and **all** row data. The usual cause of a **~30MB → ~400MB+** jump is **`public.published_rates_changes`**: it stores one row per detected published-rate change during syncs and can reach **tens of millions of rows**. That table is audit/history; **`published_rates_current_state`** holds the latest snapshot for comparisons. Operational notes (indexes, optional retention deletes, partitioning): see the repo doc `talia/docs/PUBLISHED_RATES_RETENTION.md`.
 
 **Inspect locally (sizes + exact row count):**
 ```bash

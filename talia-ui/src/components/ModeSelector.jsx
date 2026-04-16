@@ -13,17 +13,48 @@ import { canAccessPrivilegedPanels, normalizeRole } from '../utils/roleUtils';
 import { getTaliaVersionDisplayLabel } from '../config/taliaVersion';
 import '../styles/mode-selector.css';
 
+const resolveEnvSourceLabel = () => {
+  const raw =
+    import.meta.env.VITE_ENVIRONMENT ||
+    (import.meta.env.DEV ? 'local' : 'production');
+  return String(raw || 'local').toLowerCase();
+};
+
+const normalizeInstanceLabel = (value) => {
+  const s = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '');
+  return s || null;
+};
+
 const ModeSelector = ({ currentMode, onModeChange }) => {
   const [showDevDropdown, setShowDevDropdown] = useState(false);
-  const [source, setSource] = useState('local');
+  const [source, setSource] = useState(() => resolveEnvSourceLabel());
   const [userRole, setUserRole] = useState(() => normalizeRole(GraphQLUtils.getUserRole() || 'USER'));
 
-  // Deploy label: set VITE_ENVIRONMENT at build (staging | mvp | local). Avoid defaulting to "staging" on every production build.
+  // Prefer talia-instance.json (stamped at deploy pack time) so the header matches the host you
+  // deployed to, even if VITE_ENVIRONMENT was baked for another target (e.g. same dist to MVP).
   useEffect(() => {
-    const envSource =
-      import.meta.env.VITE_ENVIRONMENT ||
-      (import.meta.env.DEV ? 'local' : 'production');
-    setSource(envSource);
+    let cancelled = false;
+    const rawBase = import.meta.env.BASE_URL || '/';
+    const lead = rawBase.startsWith('/') ? rawBase : `/${rawBase}`;
+    const prefix = lead.endsWith('/') ? lead : `${lead}/`;
+    const path = `${prefix}talia-instance.json`.replace(/([^:]\/)\/+/g, '$1');
+    const url = new URL(path, window.location.origin).href;
+
+    fetch(url, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data || typeof data.deployTarget !== 'string') return;
+        const fromManifest = normalizeInstanceLabel(data.deployTarget);
+        if (fromManifest) setSource(fromManifest);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -41,7 +72,7 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
   }, []);
   const versionLabel = getTaliaVersionDisplayLabel();
 
-
+  const sourceClassKey = ['local', 'staging', 'mvp', 'production'].includes(source) ? source : 'unknown';
 
   const isDevMode = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_MODE === 'true';
   const canOpenPrivileged = canAccessPrivilegedPanels(userRole);
@@ -114,7 +145,7 @@ const ModeSelector = ({ currentMode, onModeChange }) => {
         <div className="mode-selector__info">
           <div className="mode-selector__source">
             <span className="mode-selector__source-label">Source:</span>
-            <span className={`mode-selector__source-value mode-selector__source-value--${source}`}>
+            <span className={`mode-selector__source-value mode-selector__source-value--${sourceClassKey}`}>
               {source}
             </span>
           </div>

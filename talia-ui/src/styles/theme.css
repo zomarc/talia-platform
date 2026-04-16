@@ -1,6 +1,10 @@
 /**
  * Application Theme - Single Consistent Design
- * 
+ *
+ * Style/theme baseline: default CSS variables for first paint. ThemeContext.jsx may override
+ * many of these on document.documentElement (user appearance settings).
+ * Focus (panel layouts) and global criteria (message bus) are separate — see docs/APPEARANCE-VS-DASHBOARD-STATE.md.
+ *
  * This file defines THE application theme. All colors, fonts, and spacing
  * are defined here as CSS variables. Components should use these variables
  * for consistent styling across the entire application.

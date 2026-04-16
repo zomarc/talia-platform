@@ -715,6 +715,8 @@ export const typeDefs = `#graphql
     package_name: String
     package_type: String
     geog_area_code: String
+    departure_date_from: String
+    departure_date_to: String
     include_non_real_sailings: Boolean
     query_column: String
     query_value: String

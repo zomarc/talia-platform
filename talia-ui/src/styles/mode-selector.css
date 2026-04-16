@@ -373,6 +373,14 @@ body > .mode-selector .mode-selector__container,
   color: var(--theme-error);
 }
 
+.mode-selector__source-value--mvp {
+  color: var(--theme-accent);
+}
+
+.mode-selector__source-value--unknown {
+  color: var(--theme-text-secondary);
+}
+
 .mode-selector__version {
   display: flex;
   align-items: baseline;

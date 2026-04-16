@@ -1,6 +1,10 @@
 /**
- * Focus Panel Styles
- * Externalized styles for focus panel components.
+ * Styles for registry report components (src/components/focus-panels/).
+ *
+ * “Focus” in the product = panel layout only — not this stylesheet name.
+ * Style/theme = appearance — baseline vars in theme.css, overrides from ThemeContext.
+ * Global criteria = bus — not defined here.
+ * See docs/APPEARANCE-VS-DASHBOARD-STATE.md.
  */
 
 /* ============================================================================
@@ -60,6 +64,46 @@
 }
 
 /* ============================================================================
+   Published Rates (Tabulator)
+   ============================================================================ */
+
+.published-rates {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size);
+}
+
+.published-rates__content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.published-rates__data-details {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.published-rates__table {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+/* ============================================================================
    Published Rates Grid
    ============================================================================ */
 
@@ -112,6 +156,25 @@
   margin: var(--theme-component-padding-xs) var(--theme-component-padding-md);
   padding: var(--theme-component-padding-sm) var(--theme-component-padding-md);
   font-size: var(--theme-font-size-sm);
+}
+
+.published-rates-grid__main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.published-rates-grid__data-details {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  gap: var(--theme-component-gap-sm);
 }
 
 .published-rates-grid__select-label {
@@ -4018,44 +4081,155 @@
 }
 
 /* ============================================================================
-   Sailing Overview
+   Sailing Overview — compact glance layout (minimal chrome)
    ============================================================================ */
 
-.sailing-overview__layout {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--theme-component-gap-md);
-  padding: var(--theme-card-padding);
-  height: 100%;
+.sailing-overview .talia-report__header.sailing-overview__header {
+  padding-block: 2px;
+  padding-inline: var(--theme-component-padding-xs);
+  min-height: 26px;
+}
+
+.sailing-overview .talia-report__header.sailing-overview__header .talia-report__title {
+  font-size: var(--theme-font-size-sm);
+  font-weight: 600;
+}
+
+.sailing-overview__compact {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   min-height: 0;
+  padding: 2px 4px 4px;
 }
 
-.sailing-overview__map-card {
-  grid-column: 1 / -1;
+.sailing-overview__summary {
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
-.sailing-overview__layout--focused {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+.sailing-overview__line {
+  font-size: var(--theme-font-size-sm);
+  line-height: 1.25;
+  color: var(--theme-text-secondary);
+  min-width: 0;
 }
 
-.sailing-overview__layout--focused .talia-card {
-  min-height: 0;
-  height: 100%;
+.sailing-overview__line--primary {
+  font-size: var(--theme-font-size);
+  font-weight: 600;
+  color: var(--theme-fg);
+  letter-spacing: 0.02em;
+}
+
+.sailing-overview__line--route {
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-muted);
+}
+
+.sailing-overview__line--package {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-secondary);
+}
+
+.sailing-overview__line--codes {
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--theme-text-muted);
+  opacity: 0.95;
+}
+
+.sailing-overview__line--related {
+  font-size: 11px;
+  color: var(--theme-text-muted);
+}
+
+.sailing-overview__line--competitor {
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-secondary);
+}
+
+.sailing-overview__dot {
+  display: inline-block;
+  margin: 0 0.35em;
+  opacity: 0.45;
+  font-weight: 400;
+  user-select: none;
+}
+
+.sailing-overview__price-block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  margin-top: 3px;
+}
+
+.sailing-overview__price {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--theme-fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.sailing-overview__price--pending {
+  font-weight: 400;
+  opacity: 0.55;
+}
+
+.sailing-overview__price-meta {
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--theme-text-muted);
+}
+
+.sailing-overview__note {
+  font-size: 11px;
+  color: var(--theme-warning, #c9a227);
+  margin-top: 2px;
 }
 
 .sailing-overview__map-wrap {
-  height: var(--theme-map-height);
-  min-height: 0;
-  border: 1px solid var(--theme-border);
-  border-radius: 6px;
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100px;
+  margin-top: 4px;
+  border-radius: 4px;
   overflow: hidden;
-  background: var(--theme-bg-solid);
+  background: var(--theme-border);
+  position: relative;
+  isolation: isolate;
 }
 
 .sailing-overview__leaflet {
   width: 100%;
   height: 100%;
+  border-radius: 4px;
+}
+
+.sailing-overview__empty.talia-empty {
+  padding: 8px 6px;
+  align-items: flex-start;
+}
+
+.sailing-overview__empty .talia-empty__message {
+  margin: 0;
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-muted);
+}
+
+@media (max-width: 520px) {
+  .sailing-overview__price-block {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
 }
 
 .published-rates-grid--focused .published-rates-grid__current,
@@ -4069,12 +4243,6 @@
 .published-rates-grid__details-panel.talia-card--expandable .published-rates-grid__details-header,
 .published-rates-grid__history.talia-card--expandable .published-rates-grid__section-header {
   padding-right: 34px;
-}
-
-@media (max-width: 980px) {
-  .sailing-overview__layout {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* ============================================================================

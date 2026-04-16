@@ -1511,9 +1511,17 @@ class SynapseSyncService {
         
         // Always filter by Departure_Date range (dataset requirement)
         whereClause = `${departureDateColumn} >= '${dateRange.from}' AND ${departureDateColumn} <= '${dateRange.to}'`;
-        
-        // For incremental syncs, also filter by snapshot date
-        if (!isInitialLoad && lastProcessedSnapshotDate) {
+
+        // Published rates: first Talia load should not replay every historical SNAPSHOT_DATE in the
+        // departure window (one change row per snapshot transition). Scope to latest warehouse publish
+        // for that same departure slice only. Incremental runs use SNAPSHOT_DATE > last_processed.
+        if (metadataConfig.syncType === 'published_rates' && isInitialLoad) {
+          whereClause += ` AND CAST(${snapshotDateColumn} AS DATE) = (
+            SELECT CAST(MAX(${snapshotDateColumn}) AS DATE)
+            FROM ${runtime.source}
+            WHERE ${departureDateColumn} >= '${dateRange.from}' AND ${departureDateColumn} <= '${dateRange.to}'
+          )`;
+        } else if (!isInitialLoad && lastProcessedSnapshotDate) {
           const datePart = lastProcessedSnapshotDate.split('T')[0]; // Extract date part from ISO datetime
           whereClause += ` AND ${snapshotDateColumn} > '${datePart}'`;
         }

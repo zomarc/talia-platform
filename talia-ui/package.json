@@ -7,10 +7,13 @@
   "scripts": {
     "dev": "vite --port 5173 --strictPort",
     "build": "vite build",
+    "build:staging": "bash ../scripts/build-ui-staging.sh",
+    "build:mvp": "bash ../scripts/build-ui-mvp.sh",
     "lint": "eslint .",
     "check:standards": "node ./scripts/check-component-standards.mjs && node ./scripts/check-data-boundary.mjs",
     "check:standards:strict": "node ./scripts/check-component-standards.mjs --strict && node ./scripts/check-data-boundary.mjs --strict",
     "verify:arcade": "node ./scripts/verify-arcade-panels.mjs",
+    "verify:theme-pack": "node ./scripts/verify-theme-export-pack.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

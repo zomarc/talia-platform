@@ -1,6 +1,6 @@
 /**
  * Published Rates Grid Container
- * Listens to sail selection and fetches published rates history for one sailing.
+ * Listens to sail selection and loads published rate lines (current warehouse snapshot per rate_key).
  */
 
 import React from 'react';
@@ -10,8 +10,9 @@ import PanelDataState from '../../shared/PanelDataState';
 import { extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
 const PublishedRatesGridContainer = ({ panelInstanceId, panelComponentId }) => {
+  // Use current_state (same as Published Rates). published_rates_changes is sparse (audit log only).
   const { data, loading, error, refetch, context } = useTableDataWithContext({
-    tableName: 'published_rates_changes',
+    tableName: 'published_rates_current_state',
     eventName: SAIL_SELECT_EVENT,
     panelInstanceId,
     panelComponentId,
@@ -75,13 +76,7 @@ const PublishedRatesGridContainer = ({ panelInstanceId, panelComponentId }) => {
       }
       onRetry={selectedSailCode ? refetch : null}
     >
-      <PublishedRatesGridPresenter
-        data={normalizedData}
-        selectedSailCode={selectedSailCode}
-        onRefresh={refetch}
-        panelInstanceId={panelInstanceId}
-        panelComponentId={panelComponentId}
-      />
+      <PublishedRatesGridPresenter data={normalizedData} selectedSailCode={selectedSailCode} />
     </PanelDataState>
   );
 };

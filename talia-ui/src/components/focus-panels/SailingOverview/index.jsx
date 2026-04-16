@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import SailingOverviewPresenter from './SailingOverviewPresenter';
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { useTheme } from '../../../contexts/ThemeContext.jsx';
 import { getFieldValue, pickFirst } from '../../shared/utils/dataAccess';
 
 const GRAPHQL_URL = '/api/graphql';
@@ -52,39 +53,52 @@ const fetchPublishedRates = async (sailCode) => {
   return result.data?.tableData || [];
 };
 
-const extractPriceSummary = (rows) => {
+const rowCurrencyCode = (row) =>
+  String(pickFirst(getFieldValue(row, 'currency_code'), getFieldValue(row, 'currency')) || '')
+    .trim()
+    .toUpperCase();
+
+const extractPriceSummary = (rows, preferredCurrencyCode) => {
   if (!rows || rows.length === 0) {
     return { value: null, currency: null, source: null, lookedUpAt: null, rowsCount: 0 };
   }
 
-  const values = rows
-    .map((row) => pickFirst(
-      getFieldValue(row, 'fare_per_person'),
-      getFieldValue(row, 'total_rate_pp'),
-      getFieldValue(row, 'totalRatePP'),
-      getFieldValue(row, 'price'),
-      getFieldValue(row, 'current_price')
-    ))
-    .map((value) => {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : null;
-    })
-    .filter((value) => value !== null);
+  const pref = String(preferredCurrencyCode || '').trim().toUpperCase();
 
-  if (values.length === 0) {
+  const scored = rows
+    .map((row) => {
+      const raw = pickFirst(
+        getFieldValue(row, 'fare_per_person'),
+        getFieldValue(row, 'total_rate_pp'),
+        getFieldValue(row, 'totalRatePP'),
+        getFieldValue(row, 'price'),
+        getFieldValue(row, 'current_price')
+      );
+      const parsed = Number(raw);
+      const value = Number.isFinite(parsed) ? parsed : null;
+      const currency = rowCurrencyCode(row) || null;
+      return { row, value, currency };
+    })
+    .filter((entry) => entry.value !== null);
+
+  if (scored.length === 0) {
     return { value: null, currency: null, source: null, lookedUpAt: null, rowsCount: rows.length };
   }
 
-  const currency = pickFirst(
-    getFieldValue(rows[0], 'currency_code'),
-    getFieldValue(rows[0], 'currency')
-  );
-  const lookups = rows
-    .map((row) => pickFirst(
-      getFieldValue(row, 'updated_at'),
-      getFieldValue(row, 'last_updated'),
-      getFieldValue(row, 'modified_at'),
-      getFieldValue(row, 'effective_date')
+  let pool = scored;
+  if (pref && scored.some((entry) => entry.currency === pref)) {
+    pool = scored.filter((entry) => entry.currency === pref);
+  }
+
+  const best = pool.reduce((acc, cur) => (cur.value < acc.value ? cur : acc));
+  const currency = best.currency || pref || null;
+
+  const lookups = pool
+    .map((entry) => pickFirst(
+      getFieldValue(entry.row, 'updated_at'),
+      getFieldValue(entry.row, 'last_updated'),
+      getFieldValue(entry.row, 'modified_at'),
+      getFieldValue(entry.row, 'effective_date')
     ))
     .map((value) => {
       const timestamp = Date.parse(String(value || ''));
@@ -93,7 +107,7 @@ const extractPriceSummary = (rows) => {
     .filter((value) => value !== null);
 
   return {
-    value: Math.min(...values),
+    value: best.value,
     currency: currency || null,
     source: 'published rates',
     lookedUpAt: lookups.length ? new Date(Math.max(...lookups)).toISOString() : null,
@@ -102,6 +116,7 @@ const extractPriceSummary = (rows) => {
 };
 
 const SailingOverviewContainer = () => {
+  const { defaultDisplayCurrency } = useTheme();
   const [eventDetail, setEventDetail] = useState(null);
   const [priceInfo, setPriceInfo] = useState({
     loading: false,
@@ -165,7 +180,7 @@ const SailingOverviewContainer = () => {
       try {
         const rows = await fetchPublishedRates(sailCode);
         if (cancelled || activeFetchRef.current !== fetchId) return;
-        const summary = extractPriceSummary(rows);
+        const summary = extractPriceSummary(rows, defaultDisplayCurrency);
         setPriceInfo({
           loading: false,
           error: null,
@@ -190,7 +205,7 @@ const SailingOverviewContainer = () => {
     return () => {
       cancelled = true;
     };
-  }, [sailCode]);
+  }, [sailCode, defaultDisplayCurrency]);
 
   return (
     <SailingOverviewPresenter

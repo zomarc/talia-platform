@@ -24,6 +24,12 @@ import { REPORT_PANEL_PAUSE_EVENT, REPORT_REFRESH_EVENT } from '../../components
 const GRAPHQL_URL = '/api/graphql';
 const DEFAULT_CACHE_TTL_MS = 15000;
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
+
+/** Sail + departure window merged into GraphQL filters (bounded queries). */
+const PUBLISHED_RATES_TABLES_SERVER_DATE_BOUNDS = new Set([
+  'published_rates_changes',
+  'published_rates_current_state'
+]);
 const inflightRequestCache = new Map();
 const responseCache = new Map();
 
@@ -310,6 +316,16 @@ export const useTableDataWithContext = ({
       ...(currentFilters || {}),
       ...getServerGlobalFilters()
     };
+
+    if (PUBLISHED_RATES_TABLES_SERVER_DATE_BOUNDS.has(tableNameRef.current)) {
+      const globalDates = getGlobalDateFilters();
+      if (globalDates?.dateFrom && effectiveFilters.departure_date_from == null) {
+        effectiveFilters.departure_date_from = globalDates.dateFrom;
+      }
+      if (globalDates?.dateTo && effectiveFilters.departure_date_to == null) {
+        effectiveFilters.departure_date_to = globalDates.dateTo;
+      }
+    }
 
     // Prevent concurrent fetches
     if (fetchingRef.current) {
@@ -688,6 +704,15 @@ export const useTableDataWithContext = ({
       setData(applyGlobalCriteria(rawDataRef.current));
 
       const includeNonRealNext = event?.detail?.includeNonRealSailings === true;
+
+      if (PUBLISHED_RATES_TABLES_SERVER_DATE_BOUNDS.has(tableNameRef.current)) {
+        lastIncludeNonRealRef.current = includeNonRealNext;
+        lastFiltersRef.current = null;
+        const currentFilters = context ? extractFiltersRef.current(context) : null;
+        fetchDataRef.current(currentFilters);
+        return;
+      }
+
       if (includeNonRealNext === lastIncludeNonRealRef.current) {
         return;
       }

@@ -10,7 +10,7 @@
 #   ./scripts/validate start-core | stop-core
 #   ./scripts/validate external-on | external-off
 #   ./scripts/validate comprehensive      # Full validate-staging.sh (slow)
-#   ./scripts/validate deploy-themes-db   # Upsert UI themes (+ optional Talia id 1000 appearance) to staging DB only
+#   ./scripts/validate deploy-themes-db   # Upsert UI themes + focus definitions → staging and/or MVP DB (no code deploy)
 #   ./scripts/validate deploy-mvp         # Deploy to MVP (Azure); uses scripts/deploy-to-mvp.sh
 #
 set -euo pipefail
@@ -80,6 +80,9 @@ MVP_KONG_PORT="${MVP_KONG_PORT:-54321}"
 MVP_UI_URL="${MVP_UI_URL:-http://${MVP_UI_HOST}:${MVP_UI_PORT}}"
 MVP_GRAPHQL_URL="${MVP_GRAPHQL_URL:-http://${MVP_UI_HOST}:${MVP_GRAPHQL_PORT}/graphql}"
 MVP_SUPABASE_URL="${MVP_SUPABASE_URL:-http://${MVP_UI_HOST}:${MVP_KONG_PORT}/}"
+# Do not default MVP anon to staging — wrong project and often sb_publishable_* (PostgREST returns 401 / JWSError).
+MVP_SUPABASE_ANON_KEY="${MVP_SUPABASE_ANON_KEY:-${MVP_UI_SUPABASE_ANON_KEY:-}}"
+MVP_SUPABASE_SERVICE_ROLE_KEY="${MVP_SUPABASE_SERVICE_ROLE_KEY:-}"
 # SSH used when Kong is UP on the VM but host ports are not reachable from the validate machine (e.g. Azure NSG).
 MVP_SSH_USER="${MVP_SSH_USER:-azureuser}"
 MVP_SSH_HOST="${MVP_SSH_HOST:-${MVP_UI_HOST:-}}"
@@ -1854,9 +1857,11 @@ reboot_staging_emergency() {
   run_command "ssh ${STAGING_SSH_BASE_OPTS} ${STAGING_SSH_TARGET} \"sudo nohup bash -lc 'sleep 2; /sbin/reboot' >/tmp/talia-reboot.log 2>&1 < /dev/null & echo REBOOT_SCHEDULED\"" "Schedule remote reboot on staging host" "20"
 }
 
-deploy_ui_themes_db_to_staging() {
+# Upserts ui_appearance keys (theme registry + optional per-user rows) and merges public.focuses
+# from local Supabase into the chosen remote(s). No application code deploy.
+sync_ui_themes_and_focus_definitions_db() {
   if $IS_ON_STAGING; then
-    echo -e "${YELLOW}Run UI theme DB sync from your local dev machine, not on staging.${NC}"
+    echo -e "${YELLOW}Run this sync from your local dev machine, not on the staging host.${NC}"
     return 1
   fi
 
@@ -1864,11 +1869,56 @@ deploy_ui_themes_db_to_staging() {
     echo -e "${RED}Missing sync script: ${SCRIPT_DIR}/sync-ui-themes-to-staging.sh${NC}"
     return 1
   fi
+  if [[ ! -f "${SCRIPT_DIR}/sync-focus-definitions-to-target.sh" ]]; then
+    echo -e "${RED}Missing sync script: ${SCRIPT_DIR}/sync-focus-definitions-to-target.sh${NC}"
+    return 1
+  fi
 
   echo ""
-  echo -e "${BOLD}Sync UI themes to staging (database only)${NC}"
-  echo -e "  ${DIM}Upserts ${GREEN}theme_registry${NC} and ${GREEN}theme_asset_overrides${NC} from local Supabase → staging.${NC}"
-  echo -e "  ${DIM}Does not deploy code, reset data, or change other tables.${NC}"
+  echo -e "${BOLD}Sync UI themes + focus definitions (database only)${NC}"
+  echo -e "  ${DIM}Themes:${NC} upserts ${GREEN}theme_registry${NC}, ${GREEN}theme_asset_overrides${NC} (${GREEN}config_setting${NC} ui_appearance)."
+  echo -e "  ${DIM}Focuses:${NC} merges all rows in ${GREEN}public.focuses${NC} by id (omits ${DIM}created_by${NC} for cross-env safety)."
+  echo -e "  ${DIM}Does not deploy code, run migrations, or touch unrelated tables.${NC}"
+  echo ""
+  echo -e "${BOLD}Target:${NC}"
+  echo -e "  ${GREEN}1)${NC} LAN staging — ${DIM}${STAGING_SUPABASE_URL}${NC}"
+  if [[ -n "${MVP_SSH_HOST:-}" && -n "${MVP_UI_HOST:-}" ]]; then
+    echo -e "  ${GREEN}2)${NC} MVP (Azure) — ${DIM}${MVP_SUPABASE_URL}${NC}"
+    echo -e "  ${GREEN}3)${NC} Both — staging first, then MVP"
+  else
+    echo -e "  ${DIM}2) MVP — set MVP_SSH_HOST and MVP_UI_HOST in targets.env${NC}"
+  fi
+  echo -e "  ${YELLOW}0)${NC} Cancel"
+  echo ""
+  echo -n -e "${BOLD}Choice: ${NC}"
+  read -r dest_choice
+
+  local targets_list=()
+  case "$dest_choice" in
+    1|staging)
+      targets_list=("staging")
+      ;;
+    2|mvp)
+      if [[ -z "${MVP_SSH_HOST:-}" || -z "${MVP_UI_HOST:-}" ]]; then
+        echo -e "${RED}MVP is not configured (need MVP_SSH_HOST and MVP_UI_HOST).${NC}"
+        return 1
+      fi
+      targets_list=("mvp")
+      ;;
+    3|both)
+      if [[ -z "${MVP_SSH_HOST:-}" || -z "${MVP_UI_HOST:-}" ]]; then
+        echo -e "${RED}MVP is not configured; use option 1 for staging only.${NC}"
+        return 1
+      fi
+      targets_list=("staging" "mvp")
+      ;;
+    0|q|cancel|"") return 0 ;;
+    *)
+      echo -e "${RED}Invalid choice${NC}"
+      return 1
+      ;;
+  esac
+
   echo ""
   echo -n -e "Also sync saved appearance for default dev Talia id ${GREEN}1000${NC} (settings + profiles + active profile id)? [y/N]: "
   read -r sync_u1
@@ -1877,17 +1927,53 @@ deploy_ui_themes_db_to_staging() {
     y|Y|yes|YES) sync_ids="1000" ;;
   esac
 
-  export TARGET_SUPABASE_URL="${STAGING_SUPABASE_URL}"
-  export TARGET_SUPABASE_KEY="${STAGING_SUPABASE_SERVICE_ROLE_KEY:-$STAGING_SUPABASE_ANON_KEY}"
   export SOURCE_SUPABASE_URL="${SOURCE_SUPABASE_URL:-$LOCAL_SUPABASE_URL}"
   export SYNC_APPEARANCE_USER_IDS="${sync_ids}"
 
-  echo ""
-  echo -e "${DIM}Source: ${SOURCE_SUPABASE_URL}${NC}"
-  echo -e "${DIM}Target: ${TARGET_SUPABASE_URL}${NC}"
-  echo ""
+  local t
+  for t in "${targets_list[@]}"; do
+    local tgt_url tgt_key label
+    if [[ "$t" == "staging" ]]; then
+      tgt_url="${STAGING_SUPABASE_URL}"
+      tgt_key="${STAGING_SUPABASE_SERVICE_ROLE_KEY:-$STAGING_SUPABASE_ANON_KEY}"
+      label="staging"
+    else
+      tgt_url="${MVP_SUPABASE_URL}"
+      tgt_key="${MVP_SUPABASE_SERVICE_ROLE_KEY:-}"
+      if [[ -z "$tgt_key" ]]; then
+        tgt_key="${MVP_SUPABASE_ANON_KEY:-}"
+      fi
+      if [[ -z "$tgt_key" ]]; then
+        echo -e "${RED}MVP database sync needs a Supabase API key from the MVP stack (not staging).${NC}"
+        echo -e "${YELLOW}Set ${BOLD}MVP_SUPABASE_SERVICE_ROLE_KEY${NC} in ${CONFIG_FILE/#$HOME/~} (recommended).${NC}"
+        echo "  On the MVP host, copy SUPABASE_SERVICE_ROLE_KEY from the compose env file (JWT, usually starts with eyJ), e.g.:"
+        echo "    ssh ${MVP_SSH_USER}@${MVP_SSH_HOST} \"grep '^SUPABASE_SERVICE_ROLE_KEY=' ${MVP_APP_DIR:-/home/${MVP_SSH_USER}/talia-docker}/.env.staging\""
+        return 1
+      fi
+      if [[ "$tgt_key" == sb_publishable_* ]]; then
+        echo -e "${RED}MVP sync cannot use a publishable browser key (sb_publishable_*). PostgREST expects a JWT (service_role or anon from the MVP .env).${NC}"
+        echo -e "${YELLOW}Add MVP_SUPABASE_SERVICE_ROLE_KEY to targets.env — see comments above MVP_KONG_PORT in that file.${NC}"
+        return 1
+      fi
+      label="mvp"
+    fi
+    export TARGET_SUPABASE_URL="${tgt_url}"
+    export TARGET_SUPABASE_KEY="${tgt_key}"
 
-  bash "${SCRIPT_DIR}/sync-ui-themes-to-staging.sh"
+    echo ""
+    echo -e "${BOLD}── ${label}${NC} ${DIM}(themes + focuses)${NC}"
+    echo -e "${DIM}Source: ${SOURCE_SUPABASE_URL}${NC}"
+    echo -e "${DIM}Target: ${TARGET_SUPABASE_URL}${NC}"
+    echo ""
+
+    bash "${SCRIPT_DIR}/sync-ui-themes-to-staging.sh" || return $?
+    bash "${SCRIPT_DIR}/sync-focus-definitions-to-target.sh" || return $?
+    echo -e "${GREEN}✓ ${label}: themes + focus definitions synced${NC}"
+  done
+}
+
+deploy_ui_themes_db_to_staging() {
+  sync_ui_themes_and_focus_definitions_db
 }
 
 deploy_to_staging_from_local() {
@@ -1903,16 +1989,19 @@ deploy_to_staging_from_local() {
 
   echo ""
   echo -e "${BOLD}Deploy to staging (local sync):${NC}"
-  echo -e "  ${GREEN}1)${NC} UI-only (recommended)"
-  echo -e "  ${GREEN}2)${NC} Full stack"
+  echo -e "  ${DIM}Default policy: UI-only paths unless you explicitly pick full stack.${NC}"
+  echo -e "  ${GREEN}1)${NC} UI-only — local vite build, then copy into nginx (restarts ui container)"
+  echo -e "  ${GREEN}5)${NC} UI hot sync — existing ${DIM}talia-ui/dist${NC} (run ${DIM}npm run build:staging${NC} in talia-ui first for LAN staging; deploy stamps instance label)"
+  echo -e "  ${YELLOW}2)${NC} Full stack — GraphQL + UI rebuild + schema guard ${DIM}(only when you mean it)${NC}"
   echo -e "  ${GREEN}3)${NC} Scripts + config only"
-  echo -e "  ${GREEN}4)${NC} UI themes → staging DB only (safe upsert; no app deploy)"
+  echo -e "  ${GREEN}4)${NC} UI themes + focus definitions → DB (staging / MVP / both; no app deploy)"
   echo -e "  ${YELLOW}0)${NC} Back"
   echo ""
   echo -n -e "${BOLD}Choice: ${NC}"
   read -r choice
 
-  local mode token timeout_sec label
+  local mode token timeout_sec label deploy_xtra
+  deploy_xtra=""
   case "$choice" in
     1|ui|ui-only)
       mode="--ui-only"
@@ -1920,9 +2009,16 @@ deploy_to_staging_from_local() {
       timeout_sec="900"
       label="ui-only"
       ;;
+    5|ui-hot|hot|hot-sync)
+      mode="--ui-hot"
+      token="DEPLOY_UI_ONLY"
+      timeout_sec="420"
+      label="ui-hot-sync"
+      ;;
     2|full)
       mode="--full"
       token="DEPLOY_FULL_STACK"
+      deploy_xtra="DEPLOY_EXPLICIT_FULL_STACK=1 "
       timeout_sec="1800"
       label="full"
       ;;
@@ -1945,7 +2041,7 @@ deploy_to_staging_from_local() {
       ;;
   esac
 
-  run_command "cd \"${ROOT_DIR}\" && STAGING_DEPLOY_CONFIRM_TOKEN=${token} ./scripts/deploy-to-staging.sh ${mode}" "Deploy to staging via local sync (${label})" "$timeout_sec"
+  run_command "cd \"${ROOT_DIR}\" && ${deploy_xtra}STAGING_DEPLOY_CONFIRM_TOKEN=${token} ./scripts/deploy-to-staging.sh ${mode}" "Deploy to staging via local sync (${label})" "$timeout_sec"
 }
 
 deploy_to_mvp_from_local() {
@@ -1966,19 +2062,22 @@ deploy_to_mvp_from_local() {
 
   echo ""
   echo -e "${BOLD}Deploy to MVP (Azure) — ${MVP_SSH_HOST}${NC}"
-  echo -e "  ${DIM}These scripts sync built artifacts over SSH and restart containers.${NC}"
+  echo -e "  ${DIM}These scripts sync built artifacts over SSH.${NC}"
   echo -e "  ${DIM}They do not drop databases or run destructive DB resets.${NC}"
-  echo -e "  ${YELLOW}Full stack${NC} updates GraphQL + UI containers (still no intentional data deletion)."
+  echo -e "  ${DIM}Default policy: UI-only unless you explicitly pick full stack.${NC}"
   echo ""
-  echo -e "  ${GREEN}1)${NC} UI-only (fast; static bundle into nginx container)"
-  echo -e "  ${GREEN}2)${NC} Full stack (GraphQL dist + UI dist + schema guard on host)"
+  echo -e "  ${GREEN}1)${NC} UI-only — local build + copy into nginx (restarts ui)"
+  echo -e "  ${GREEN}5)${NC} UI hot sync — existing ${DIM}talia-ui/dist${NC} only (use ${DIM}npm run build:mvp${NC} in talia-ui first so endpoints + header match MVP)"
+  echo -e "  ${YELLOW}2)${NC} Full stack — GraphQL + UI + schema guard ${DIM}(only when you mean it)${NC}"
   echo -e "  ${GREEN}3)${NC} Scripts + config only (no container restarts)"
+  echo -e "  ${GREEN}4)${NC} UI themes + focus definitions → DB (staging / MVP / both; no app deploy)"
   echo -e "  ${YELLOW}0)${NC} Back"
   echo ""
   echo -n -e "${BOLD}Choice: ${NC}"
   read -r choice
 
-  local mode token timeout_sec label
+  local mode token timeout_sec label deploy_xtra
+  deploy_xtra=""
   case "$choice" in
     1|ui|ui-only)
       mode="--ui-only"
@@ -1986,9 +2085,16 @@ deploy_to_mvp_from_local() {
       timeout_sec="900"
       label="ui-only"
       ;;
+    5|ui-hot|hot|hot-sync)
+      mode="--ui-hot"
+      token="DEPLOY_UI_ONLY"
+      timeout_sec="420"
+      label="ui-hot-sync"
+      ;;
     2|full)
       mode="--full"
       token="DEPLOY_FULL_STACK"
+      deploy_xtra="DEPLOY_EXPLICIT_FULL_STACK=1 "
       timeout_sec="1800"
       label="full"
       ;;
@@ -1997,6 +2103,10 @@ deploy_to_mvp_from_local() {
       token="DEPLOY_SCRIPTS_ONLY"
       timeout_sec="300"
       label="scripts+config"
+      ;;
+    4|themes-db|themes|ui-themes-db|appearance-db)
+      deploy_ui_themes_db_to_staging
+      return $?
       ;;
     0|back|q|quit|exit)
       return 0
@@ -2007,7 +2117,7 @@ deploy_to_mvp_from_local() {
       ;;
   esac
 
-  run_command "cd \"${ROOT_DIR}\" && STAGING_DEPLOY_CONFIRM_TOKEN=${token} ./scripts/deploy-to-mvp.sh ${mode}" "Deploy to MVP via ${SCRIPT_DIR}/deploy-to-mvp.sh (${label})" "$timeout_sec"
+  run_command "cd \"${ROOT_DIR}\" && ${deploy_xtra}STAGING_DEPLOY_CONFIRM_TOKEN=${token} ./scripts/deploy-to-mvp.sh ${mode}" "Deploy to MVP via ${SCRIPT_DIR}/deploy-to-mvp.sh (${label})" "$timeout_sec"
 }
 
 check_mvp_services_remote() {
@@ -3263,7 +3373,9 @@ handle_cli() {
     external-off|stop-external) stop_external_everywhere ;;
     deploy|deploy-staging) deploy_to_staging_from_local ;;
     deploy-mvp|deploy-mvp-azure) deploy_to_mvp_from_local ;;
-    deploy-themes-db|sync-ui-themes-staging) deploy_ui_themes_db_to_staging ;;
+    deploy-themes-db|sync-ui-themes-staging|sync-themes-focus|sync-ui-themes-focus)
+      sync_ui_themes_and_focus_definitions_db
+      ;;
     reboot-staging|reboot) reboot_staging_emergency ;;
     comprehensive) run_comprehensive_check ;;
     status|summary) print_quick_targets_summary ;;
@@ -3280,9 +3392,9 @@ Talia validate — quick overview by default; heavy checks only from the menu or
   $0 db-disk                      Postgres size + top 5 public tables for current target
   $0 external-on                  ngrok → current target (TTY: type ENABLE_NGROK_EXTERNAL; else TALIA_CONFIRM_NGROK=...)
   $0 external-off                 stop all ngrok (Cloudflare unavailable page)
-  $0 deploy-staging               local-sync deploy to staging (ui/full/scripts/themes-db prompt)
-  $0 deploy-mvp                   deploy to MVP Azure host from scripts/config/targets.env (ui/full/scripts prompt)
-  $0 deploy-themes-db             upsert theme_registry + assets (and optional Talia id 1000 appearance) local → staging DB only
+  $0 deploy-staging               local-sync deploy to staging (default UI paths; full stack only if you pick it)
+  $0 deploy-mvp                   deploy to MVP (same; wide modes require explicit flags inside the script)
+  $0 deploy-themes-db             upsert themes + focus rows from local Supabase → staging and/or MVP (no code deploy)
   $0 reboot-staging               emergency reboot of staging host (confirmation required)
   $0 comprehensive                full repo validation (slow)
   $0 status                       full probe + transcript; refreshes ~/.talia-validate-last-summary.{txt,state}

@@ -45,6 +45,14 @@ export const buildTableDataQueryResolvers = ({
           query = query.eq('geog_area_code', filters.geog_area_code);
           console.log(`[tableData] Applied filter: geog_area_code = ${filters.geog_area_code}`);
         }
+        if (filters.departure_date_from) {
+          query = query.gte('departure_date', filters.departure_date_from);
+          console.log(`[tableData] Applied filter: departure_date >= ${filters.departure_date_from}`);
+        }
+        if (filters.departure_date_to) {
+          query = query.lte('departure_date', filters.departure_date_to);
+          console.log(`[tableData] Applied filter: departure_date <= ${filters.departure_date_to}`);
+        }
         if (filters.query_column && filters.query_value !== undefined && filters.query_value !== null && String(filters.query_value).trim() !== '') {
           const column = String(filters.query_column).trim();
           const value = String(filters.query_value).trim();
@@ -77,6 +85,13 @@ export const buildTableDataQueryResolvers = ({
           query = query.neq('is_active', 'N').neq('is_fake', 'Y');
           console.log('[tableData] Applied default real-sailing filter for master_sail (exclude is_active=N, is_fake=Y)');
         }
+      }
+
+      if (tableName === 'published_rates_changes') {
+        query = query.order('snapshot_date', { ascending: false }).order('id', { ascending: false });
+      }
+      if (tableName === 'published_rates_current_state') {
+        query = query.order('snapshot_date', { ascending: false }).order('rate_key', { ascending: true });
       }
 
       query = query.limit(expandedLimit);

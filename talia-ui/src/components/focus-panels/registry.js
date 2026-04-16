@@ -148,7 +148,7 @@ export const componentRegistry = {
     title: 'Published Rates Grid',
     description: 'Promo-filtered cabin grid with price history for selected sailing',
     props: {},
-    dataRequirements: 'Requires GraphQL connection to published_rates_changes table',
+    dataRequirements: 'GraphQL tableData on published_rates_current_state (same source as Published Rates)',
     events: {
       emits: [],
       respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]

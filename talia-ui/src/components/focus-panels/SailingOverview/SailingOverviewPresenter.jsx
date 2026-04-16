@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet';
-import LoadingSpinner from '../../shared/LoadingSpinner';
-import SubpanelExpandButton from '../../shared/SubpanelExpandButton';
+import { useTheme } from '../../../contexts/ThemeContext.jsx';
 import { getFieldValue, pickFirst } from '../../shared/utils/dataAccess';
-import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
 import { formatDayMon } from '../../../lib/dateFormat';
 import {
   LEAFLET_ENGLISH_TILE_ATTRIBUTION,
@@ -36,7 +34,7 @@ const MapFitBounds = ({ points }) => {
       map.setView(bounds[0], 5, { animate: false });
       return;
     }
-    map.fitBounds(bounds, { padding: [24, 24], maxZoom: 6, animate: false });
+    map.fitBounds(bounds, { padding: [16, 16], maxZoom: 6, animate: false });
   }, [map, points]);
 
   return null;
@@ -52,11 +50,11 @@ const formatDateRange = (startDateValue, sailDays) => {
   const startDate = new Date(startDateValue);
   const endDate = new Date(startDate.getTime() + days * 24 * 60 * 60 * 1000);
   const end = formatDayMon(endDate, null);
-  return `${start} - ${end}`;
+  return `${start} – ${end}`;
 };
 
 const formatCurrency = (value, currency) => {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return 'Not available';
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return null;
   const amount = Number(value);
   if (currency) {
     try {
@@ -65,7 +63,7 @@ const formatCurrency = (value, currency) => {
         currency,
         maximumFractionDigits: 0
       }).format(amount);
-    } catch (error) {
+    } catch {
       return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(amount)} ${currency}`;
     }
   }
@@ -140,7 +138,7 @@ const extractCompetitorInfo = (sailing) => {
 };
 
 const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
-  const { expandedKey, toggleExpandedKey } = useSubpanelExpansion(null);
+  const { defaultDisplayCurrency } = useTheme();
   const sailCode = pickFirst(
     getFieldValue(sailing, 'sail_code'),
     getFieldValue(eventDetail, 'sail_code')
@@ -163,9 +161,11 @@ const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
     getFieldValue(sailing, 'parent_sail_code')
   );
 
-  const route = portFrom && portTo ? `${portFrom} to ${portTo}` : pickFirst(portFrom, portTo);
+  const route =
+    portFrom && portTo
+      ? `${portFrom} → ${portTo}`
+      : pickFirst(portFrom, portTo);
   const dateRange = formatDateRange(sailDateFrom, sailDays);
-  const lastUpdated = eventDetail?.timestamp ? new Date(eventDetail.timestamp).toLocaleString() : null;
 
   const fallbackPrice = useMemo(() => extractSailingPrice(sailing), [sailing]);
   const competitorInfo = useMemo(() => extractCompetitorInfo(sailing), [sailing]);
@@ -191,175 +191,190 @@ const SailingOverviewPresenter = ({ sailing, eventDetail, priceInfo }) => {
   const polylinePoints = routePoints.map((point) => [point.lat, point.lon]);
 
   const resolvedPriceValue = priceInfo?.value ?? fallbackPrice.value;
-  const resolvedPriceCurrency = priceInfo?.currency ?? fallbackPrice.currency;
+  const resolvedPriceCurrency = pickFirst(
+    priceInfo?.currency,
+    fallbackPrice.currency,
+    defaultDisplayCurrency
+  );
   const resolvedPriceSource = priceInfo?.value
     ? priceInfo?.source
     : fallbackPrice.value
       ? fallbackPrice.source
       : null;
-  const priceRowsLabel = priceInfo?.rowsCount ? `${priceInfo.rowsCount} rates checked` : null;
-  const priceUpdatedLabel = priceInfo?.lookedUpAt ? formatDate(priceInfo.lookedUpAt) : null;
-  const isSectionVisible = (sectionKey) => !expandedKey || expandedKey === sectionKey;
+  const priceLineParts = [
+    resolvedPriceSource,
+    priceInfo?.rowsCount != null ? `${priceInfo.rowsCount} rates` : null,
+    priceInfo?.lookedUpAt ? formatDate(priceInfo.lookedUpAt) : null
+  ].filter(Boolean);
+
+  const primaryParts = [sailCode, sailId, shipName].filter(Boolean);
+  const routeParts = [route, dateRange, sailDays ? `${sailDays}d` : null].filter(Boolean);
+  const codesLine = [packageType, geogArea].filter(Boolean).join(' · ');
+
+  const priceText =
+    resolvedPriceValue != null && !priceInfo?.loading
+      ? formatCurrency(resolvedPriceValue, resolvedPriceCurrency)
+      : null;
+
+  const competitorRateText =
+    competitorInfo.hasData && competitorInfo.rate
+      ? formatCurrency(
+          competitorInfo.rate,
+          pickFirst(competitorInfo.currency, defaultDisplayCurrency)
+        )
+      : null;
+
+  const srSummary = sailing
+    ? [
+        sailCode && `Sail code ${sailCode}`,
+        sailId && `Sail id ${sailId}`,
+        shipName && `Ship ${shipName}`,
+        route && `Route ${route.replace(' → ', ' to ')}`,
+        dateRange && `Dates ${dateRange}`,
+        sailDays && `Duration ${sailDays} days`,
+        packageName && `Package ${packageName}`,
+        packageType && `Package type ${packageType}`,
+        geogArea && `Area ${geogArea}`,
+        relatedSailing && `Related sailing ${relatedSailing}`,
+        priceText && `Current price ${priceText}`,
+        resolvedPriceSource && `Price source ${resolvedPriceSource}`,
+        competitorInfo.hasData
+          ? `Competitor ${[competitorInfo.name, competitorRateText].filter(Boolean).join(' ')}`
+          : null
+      ]
+        .filter(Boolean)
+        .join('. ')
+    : '';
 
   return (
-    <div className="talia-report sailing-overview" role="region" aria-label="Sailing overview">
-      <header className="talia-report__header">
-        <div>
-          <h2 className="talia-report__title">Sailing Overview</h2>
-          <p className="talia-report__subtitle">Quick summary for the selected sailing event</p>
-        </div>
-        <div className="talia-event-meta__chips" aria-label="Selected sailing">
-          <span className="talia-event-meta__chip">Sail: {sailCode || 'None'}</span>
-          {shipName && (
-            <span className="talia-event-meta__chip talia-event-meta__chip--secondary">
-              {shipName}
-            </span>
-          )}
-        </div>
+    <div
+      className="talia-report sailing-overview"
+      role="region"
+      aria-labelledby="sailing-overview-title"
+    >
+      <header className="talia-report__header sailing-overview__header">
+        <h2 id="sailing-overview-title" className="talia-report__title">
+          Sailing overview
+        </h2>
       </header>
 
       <main className="talia-report__content sailing-overview__content">
         {!sailing ? (
-          <div className="talia-empty" role="status">
-            <span className="talia-empty__icon" aria-hidden="true">i</span>
-            <h3 className="talia-empty__title">No sailing selected</h3>
-            <p className="talia-empty__message">Select a sailing to see the overview panel.</p>
+          <div className="talia-empty sailing-overview__empty" role="status">
+            <p className="talia-empty__message">Select a sailing.</p>
           </div>
         ) : (
-          <div className={`sailing-overview__layout ${expandedKey ? 'sailing-overview__layout--focused' : ''}`}>
-            {isSectionVisible('details') && (
-            <div className={`talia-card talia-card--expandable ${expandedKey === 'details' ? 'talia-card--expanded' : ''}`}>
-              <SubpanelExpandButton
-                className="talia-card__expand-toggle"
-                expanded={expandedKey === 'details'}
-                onToggle={() => toggleExpandedKey('details')}
-                label="sailing details"
-              />
-              <div className="talia-card__header">
-                <h3 className="talia-card__title">Sailing Details</h3>
-              </div>
-              <div className="talia-meta talia-meta--stacked">
-                <span><strong>Sail Code:</strong> {sailCode || 'Not available'}</span>
-                <span><strong>Sail ID:</strong> {sailId || 'Not available'}</span>
-                <span><strong>Route:</strong> {route || 'Not available'}</span>
-                <span><strong>Dates:</strong> {dateRange || 'Not available'}</span>
-                <span><strong>Duration:</strong> {sailDays ? `${sailDays} days` : 'Not available'}</span>
-                <span><strong>Package:</strong> {packageName || 'Not available'}</span>
-                <span><strong>Package Type:</strong> {packageType || 'Not available'}</span>
-                <span><strong>Geographic Area:</strong> {geogArea || 'Not available'}</span>
-                <span><strong>Related Sailing:</strong> {relatedSailing || 'Not available'}</span>
-              </div>
-            </div>
-            )}
+          <div className="sailing-overview__compact">
+            <span className="talia-sr-only">{srSummary}</span>
 
-            {isSectionVisible('pricing') && (
-            <div className={`talia-card talia-card--expandable ${expandedKey === 'pricing' ? 'talia-card--expanded' : ''}`}>
-              <SubpanelExpandButton
-                className="talia-card__expand-toggle"
-                expanded={expandedKey === 'pricing'}
-                onToggle={() => toggleExpandedKey('pricing')}
-                label="pricing and competition"
-              />
-              <div className="talia-card__header">
-                <h3 className="talia-card__title">Pricing and Competition</h3>
-              </div>
-
-              {priceInfo?.loading ? (
-                <LoadingSpinner message="Loading price..." fullScreen={false} size="small" />
-              ) : (
-                <div className="talia-metric sailing-overview__metric">
-                  <span className="talia-metric__label">Current Price</span>
-                  <span className="talia-metric__value">
-                    {formatCurrency(resolvedPriceValue, resolvedPriceCurrency)}
-                  </span>
-                  <span className="talia-metric__change">
-                    {resolvedPriceSource ? `Source: ${resolvedPriceSource}` : 'Source: Not available'}
-                  </span>
-                  <span className="talia-metric__change">
-                    {priceRowsLabel || 'Rates checked: none'}
-                    {priceUpdatedLabel ? ` | Updated: ${priceUpdatedLabel}` : ''}
-                  </span>
+            <div className="sailing-overview__summary">
+              {primaryParts.length > 0 && (
+                <div className="sailing-overview__line sailing-overview__line--primary">
+                  {primaryParts.map((part, i) => (
+                    <React.Fragment key={`p-${i}-${String(part)}`}>
+                      {i > 0 && <span className="sailing-overview__dot" aria-hidden="true">·</span>}
+                      <span>{part}</span>
+                    </React.Fragment>
+                  ))}
                 </div>
               )}
 
-              {priceInfo?.error && (
-                <div className="talia-meta talia-meta--stacked">
-                  <span>Price lookup failed. Using available sailing data if present.</span>
+              {routeParts.length > 0 && (
+                <div className="sailing-overview__line sailing-overview__line--route">
+                  {routeParts.map((part, i) => (
+                    <React.Fragment key={`r-${i}-${String(part)}`}>
+                      {i > 0 && <span className="sailing-overview__dot" aria-hidden="true">·</span>}
+                      <span>{part}</span>
+                    </React.Fragment>
+                  ))}
                 </div>
               )}
 
-              <div className="talia-meta">
-                <span><strong>Availability:</strong> Coming soon</span>
+              {packageName ? (
+                <div className="sailing-overview__line sailing-overview__line--package" title={packageName}>
+                  {packageName}
+                </div>
+              ) : null}
+
+              {codesLine ? (
+                <div className="sailing-overview__line sailing-overview__line--codes">{codesLine}</div>
+              ) : null}
+
+              {relatedSailing ? (
+                <div className="sailing-overview__line sailing-overview__line--related">
+                  <span aria-hidden="true">↳</span> {relatedSailing}
+                </div>
+              ) : null}
+
+              <div
+                className="sailing-overview__price-block"
+                aria-busy={priceInfo?.loading ? true : undefined}
+              >
+                {priceInfo?.loading ? (
+                  <span className="sailing-overview__price sailing-overview__price--pending">…</span>
+                ) : priceText ? (
+                  <span className="sailing-overview__price">{priceText}</span>
+                ) : null}
+                {priceLineParts.length > 0 && !priceInfo?.loading ? (
+                  <span className="sailing-overview__price-meta">{priceLineParts.join(' · ')}</span>
+                ) : null}
               </div>
+
+              {priceInfo?.error ? (
+                <div className="sailing-overview__note" role="status">
+                  Price lookup failed; sailing fare may still apply.
+                </div>
+              ) : null}
 
               {competitorInfo.hasData ? (
-                <div className="talia-meta talia-meta--stacked">
-                  <span><strong>Competitor:</strong> {competitorInfo.name || 'Competitor'}</span>
-                  <span>
-                    <strong>Competitor Rate:</strong>{' '}
-                    {competitorInfo.rate
-                      ? formatCurrency(competitorInfo.rate, competitorInfo.currency)
-                      : 'Not available'}
-                  </span>
+                <div className="sailing-overview__line sailing-overview__line--competitor">
+                  {competitorInfo.name || 'Competitor'}
+                  {competitorRateText ? (
+                    <>
+                      <span className="sailing-overview__dot" aria-hidden="true">·</span>
+                      {competitorRateText}
+                    </>
+                  ) : null}
                 </div>
-              ) : (
-                <div className="talia-meta talia-meta--stacked">
-                  <span><strong>Competitor:</strong> Not available</span>
-                </div>
-              )}
+              ) : null}
             </div>
-            )}
 
-            {isSectionVisible('map') && (
-            <div className={`talia-card talia-card--expandable sailing-overview__map-card ${expandedKey === 'map' ? 'talia-card--expanded' : ''}`}>
-              <SubpanelExpandButton
-                className="talia-card__expand-toggle"
-                expanded={expandedKey === 'map'}
-                onToggle={() => toggleExpandedKey('map')}
-                label="itinerary map"
-              />
-              <div className="talia-card__header">
-                <h3 className="talia-card__title">Itinerary Map</h3>
-              </div>
-              <div className="sailing-overview__map-wrap">
-                <MapContainer center={[37.9838, 23.7275]} zoom={4} className="sailing-overview__leaflet" zoomControl>
-                  <LeafletResizeObserver />
-                  <TileLayer
-                    attribution={LEAFLET_ENGLISH_TILE_ATTRIBUTION}
-                    url={LEAFLET_ENGLISH_TILE_URL}
-                  />
-                  <MapFitBounds points={routePoints} />
-                  {polylinePoints.length > 1 && (
-                    <Polyline positions={polylinePoints} color="#4da3ff" weight={3} opacity={0.85} />
-                  )}
-                  {routePoints.map((point, index) => (
-                    <CircleMarker
-                      key={`${point.label}-${index}`}
-                      center={[point.lat, point.lon]}
-                      radius={index === 0 ? 7 : 6}
-                      pathOptions={{
-                        color: index === 0 ? '#4caf50' : '#9ec6ff',
-                        fillColor: index === 0 ? '#4caf50' : '#9ec6ff',
-                        fillOpacity: 0.9,
-                        weight: 1,
-                      }}
-                    >
-                      <Tooltip>{`${index + 1}. ${point.name}`}</Tooltip>
-                      <Popup>
-                        <div>
-                          <strong>{point.name}</strong>
-                        </div>
-                      </Popup>
-                    </CircleMarker>
-                  ))}
-                </MapContainer>
-              </div>
+            <div className="sailing-overview__map-wrap">
+              <MapContainer center={[37.9838, 23.7275]} zoom={4} className="sailing-overview__leaflet" zoomControl>
+                <LeafletResizeObserver />
+                <TileLayer
+                  attribution={LEAFLET_ENGLISH_TILE_ATTRIBUTION}
+                  url={LEAFLET_ENGLISH_TILE_URL}
+                />
+                <MapFitBounds points={routePoints} />
+                {polylinePoints.length > 1 && (
+                  <Polyline positions={polylinePoints} color="#4da3ff" weight={3} opacity={0.85} />
+                )}
+                {routePoints.map((point, index) => (
+                  <CircleMarker
+                    key={`${point.label}-${index}`}
+                    center={[point.lat, point.lon]}
+                    radius={index === 0 ? 7 : 6}
+                    pathOptions={{
+                      color: index === 0 ? '#4caf50' : '#9ec6ff',
+                      fillColor: index === 0 ? '#4caf50' : '#9ec6ff',
+                      fillOpacity: 0.9,
+                      weight: 1,
+                    }}
+                  >
+                    <Tooltip>{`${index + 1}. ${point.name}`}</Tooltip>
+                    <Popup>
+                      <div>
+                        <strong>{point.name}</strong>
+                      </div>
+                    </Popup>
+                  </CircleMarker>
+                ))}
+              </MapContainer>
             </div>
-            )}
           </div>
         )}
       </main>
-
     </div>
   );
 };

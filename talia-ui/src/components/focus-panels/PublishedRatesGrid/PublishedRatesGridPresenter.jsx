@@ -5,7 +5,6 @@
 
 import React from 'react';
 import SubpanelExpandButton from '../../shared/SubpanelExpandButton';
-import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
 import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
 import { formatDayMon } from '../../../lib/dateFormat';
 
@@ -40,25 +39,12 @@ const RATE_TYPE_CLASS = {
 
 const getRateTypeClass = (rateType) => RATE_TYPE_CLASS[rateType] || 'published-rates-grid__sparkline-path--other';
 
-const PublishedRatesGridPresenter = ({
-  data,
-  selectedSailCode,
-  panelInstanceId,
-  panelComponentId,
-}) => {
+const PublishedRatesGridPresenter = ({ data, selectedSailCode }) => {
   const { expandedKey, toggleExpandedKey } = useSubpanelExpansion(null);
   const [selectedPromo, setSelectedPromo] = React.useState(ALL_PROMOS);
   const [selectedRateType, setSelectedRateType] = React.useState(ALL_RATE_TYPES);
   const [selectedCurrency, setSelectedCurrency] = React.useState(ALL_CURRENCIES);
-  const [showDetails] = usePanelDetailsVisibility({
-    panelInstanceId,
-    panelComponentId: panelComponentId || 'published-rates-grid',
-  });
   const [selectedCabin, setSelectedCabin] = React.useState(null);
-
-  React.useEffect(() => {
-    if (!showDetails) setSelectedCabin(null);
-  }, [showDetails]);
 
   const promoOptions = React.useMemo(() => {
     const promos = new Set();
@@ -354,32 +340,34 @@ const PublishedRatesGridPresenter = ({
         Use filter selections to narrow promo, rate type, and currency. Toggle Callouts from the header eye menu or Appearance settings when you want a cleaner view.
       </section>
 
-      {showDetails && sailDetails && (
-        <section className="published-rates-grid__details">
-          <div className="published-rates-grid__detail">
-            <span className="published-rates-grid__detail-label">Ship</span>
-            <span>{sailDetails.shipCode || 'N/A'}</span>
-          </div>
-          <div className="published-rates-grid__detail">
-            <span className="published-rates-grid__detail-label">Departure</span>
-            <span>{formatDateLabel(sailDetails.departureDate)}</span>
-          </div>
-          <div className="published-rates-grid__detail">
-            <span className="published-rates-grid__detail-label">Sail Days</span>
-            <span>{sailDetails.sailDays || 'N/A'}</span>
-          </div>
-          <div className="published-rates-grid__detail">
-            <span className="published-rates-grid__detail-label">Package</span>
-            <span>{sailDetails.packageName || 'N/A'}</span>
-          </div>
-          <div className="published-rates-grid__detail">
-            <span className="published-rates-grid__detail-label">Region</span>
-            <span>{sailDetails.region || 'N/A'}</span>
-          </div>
-        </section>
-      )}
+      <main className="talia-report__content published-rates-grid__main">
+        <div className="published-rates-grid__data-details">
+          {sailDetails && (
+            <section className="published-rates-grid__details">
+              <div className="published-rates-grid__detail">
+                <span className="published-rates-grid__detail-label">Ship</span>
+                <span>{sailDetails.shipCode || 'N/A'}</span>
+              </div>
+              <div className="published-rates-grid__detail">
+                <span className="published-rates-grid__detail-label">Departure</span>
+                <span>{formatDateLabel(sailDetails.departureDate)}</span>
+              </div>
+              <div className="published-rates-grid__detail">
+                <span className="published-rates-grid__detail-label">Sail Days</span>
+                <span>{sailDetails.sailDays || 'N/A'}</span>
+              </div>
+              <div className="published-rates-grid__detail">
+                <span className="published-rates-grid__detail-label">Package</span>
+                <span>{sailDetails.packageName || 'N/A'}</span>
+              </div>
+              <div className="published-rates-grid__detail">
+                <span className="published-rates-grid__detail-label">Region</span>
+                <span>{sailDetails.region || 'N/A'}</span>
+              </div>
+            </section>
+          )}
 
-      {isSectionVisible('latest-prices') && (
+          {isSectionVisible('latest-prices') && (
       <section className={`published-rates-grid__current talia-card--expandable ${expandedKey === 'latest-prices' ? 'talia-card--expanded' : ''}`}>
         <SubpanelExpandButton
           className="talia-card__expand-toggle"
@@ -438,7 +426,7 @@ const PublishedRatesGridPresenter = ({
       </section>
       )}
 
-      {showDetails && selectedCabin && isSectionVisible('cabin-details') && (
+          {selectedCabin && isSectionVisible('cabin-details') && (
         <section className={`published-rates-grid__details-panel talia-card--expandable ${expandedKey === 'cabin-details' ? 'talia-card--expanded' : ''}`}>
           <SubpanelExpandButton
             className="talia-card__expand-toggle"
@@ -496,7 +484,7 @@ const PublishedRatesGridPresenter = ({
         </section>
       )}
 
-      {showDetails && isSectionVisible('price-history') && (
+          {isSectionVisible('price-history') && (
         <section className={`published-rates-grid__history talia-card--expandable ${expandedKey === 'price-history' ? 'talia-card--expanded' : ''}`}>
           <SubpanelExpandButton
             className="talia-card__expand-toggle"
@@ -550,7 +538,9 @@ const PublishedRatesGridPresenter = ({
             </table>
           </div>
         </section>
-      )}
+          )}
+        </div>
+      </main>
     </div>
   );
 };

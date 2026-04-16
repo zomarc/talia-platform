@@ -3,11 +3,12 @@
 # Only your local working tree is shipped; no remote git pull on MVP. Configure MVP_* in scripts/config/targets.env.
 #
 # Usage:
-#   ./scripts/deploy-to-mvp.sh [--ui-only|--graphql-only|--full|--scripts-only|--dry-run]
+#   ./scripts/deploy-to-mvp.sh [--ui-only|--ui-hot|--graphql-only|--full|--scripts-only|--dry-run]
 #
-# Non-interactive (same tokens as deploy-to-staging.sh):
-#   STAGING_DEPLOY_CONFIRM_TOKEN=DEPLOY_FULL_STACK ./scripts/deploy-to-mvp.sh --full
-#   STAGING_DEPLOY_CONFIRM_TOKEN=DEPLOY_GRAPHQL_ONLY ./scripts/deploy-to-mvp.sh --graphql-only
+# Non-interactive (same tokens + explicit flags as deploy-to-staging.sh; never widen scope by accident):
+#   STAGING_DEPLOY_CONFIRM_TOKEN=DEPLOY_UI_ONLY ./scripts/deploy-to-mvp.sh --ui-only
+#   STAGING_DEPLOY_CONFIRM_TOKEN=DEPLOY_FULL_STACK DEPLOY_EXPLICIT_FULL_STACK=1 ./scripts/deploy-to-mvp.sh --full
+#   STAGING_DEPLOY_CONFIRM_TOKEN=DEPLOY_GRAPHQL_ONLY DEPLOY_EXPLICIT_GRAPHQL_ONLY=1 ./scripts/deploy-to-mvp.sh --graphql-only
 #
 # Azure user often needs sudo for docker; override if your MVP user is in the docker group:
 #   DEPLOY_DOCKER_COMPOSE="docker compose" ./scripts/deploy-to-mvp.sh --full
@@ -50,9 +51,6 @@ export STAGING_UI_ENABLE_DEV_MODE="${STAGING_UI_ENABLE_DEV_MODE:-${MVP_UI_ENABLE
 # UI banner: show "mvp" in ModeSelector / Data Management (not "staging")
 export DEPLOY_TARGET_LABEL=mvp
 export VITE_ENVIRONMENT="${VITE_ENVIRONMENT:-mvp}"
-
-# ui-only: skip multi-minute code tarball by default (dist build + docker cp is enough for UI refresh)
-export DEPLOY_SKIP_CODE_ARCHIVE="${DEPLOY_SKIP_CODE_ARCHIVE:-1}"
 
 # Optional: isolate archive paths if you deploy staging and MVP from the same laptop in parallel
 export LOCAL_ARCHIVE="${LOCAL_ARCHIVE:-/tmp/talia-mvp-code-sync.tar.gz}"

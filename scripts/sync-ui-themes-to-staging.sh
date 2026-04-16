@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Non-destructive sync: copy ui_appearance theme registry + optional per-user appearance
-# rows from a source Supabase (local) to a target (staging). Only upserts listed keys;
+# rows from a source Supabase (local) to a target (staging, MVP, etc.). Only upserts listed keys;
 # no table drops, truncates, or unrelated data changes.
 #
 # Env (typical: source from talia-server/.env, target from your staging env):
@@ -35,7 +35,7 @@ if [[ -f "${ROOT_DIR}/talia-server/.env" ]]; then
 fi
 
 if [[ -z "${TARGET_SUPABASE_URL}" || -z "${TARGET_SUPABASE_KEY}" ]]; then
-  echo "TARGET_SUPABASE_URL and TARGET_SUPABASE_KEY must be set for staging." >&2
+  echo "TARGET_SUPABASE_URL and TARGET_SUPABASE_KEY must be set (staging or MVP Kong + key)." >&2
   echo "SOURCE defaults from talia-server/.env when present." >&2
   exit 1
 fi

@@ -20,7 +20,7 @@
     "sync-ships": "node sync-cli.js sync-table ships",
     "sync-cabin": "node sync-cli.js sync-table cabinAvailability",
     "sync-reservations": "node sync-cli.js sync-table reservations",
-    "sync-rates": "node sync-cli.js sync-table publishedRates",
+    "sync-rates": "node sync-cli.js sync-table publishedRates --use-active-date-range",
     "sync-occupancy": "node sync-cli.js sync-table sailByCabinOccupancy",
     "sync-masterSail": "node sync-cli.js sync-table masterSail",
     "sync-reservationChanges": "node sync-cli.js sync-table reservationChanges",

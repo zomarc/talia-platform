@@ -64,10 +64,7 @@ const PublishedRatesContainer = ({ panelInstanceId, panelComponentId }) => {
       }
       onRetry={refetch}
     >
-      <PublishedRatesPresenter 
-        data={transformedData} 
-        selectedSailCode={selectedSailCode}
-      />
+      <PublishedRatesPresenter data={transformedData} selectedSailCode={selectedSailCode} />
     </PanelDataState>
   );
 };

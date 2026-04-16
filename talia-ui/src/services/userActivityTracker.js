@@ -50,7 +50,10 @@ const normalizeCriteria = (criteria) => {
     durationKey: criteria.durationKey || 'all',
     activeOnly: criteria.activeOnly !== false,
     dateFrom: criteria.dateFrom || '',
-    dateTo: criteria.dateTo || ''
+    dateTo: criteria.dateTo || '',
+    defaultDisplayCurrency: typeof criteria.defaultDisplayCurrency === 'string'
+      ? criteria.defaultDisplayCurrency.trim().toUpperCase()
+      : null,
   };
 };
 

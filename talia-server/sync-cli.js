@@ -17,6 +17,65 @@ function resolveDataset(explicitDataset) {
   return dataset;
 }
 
+/** First positional argv token that matches a configured dataset name (skips --flags). */
+function resolveDatasetFromArgv(argv) {
+  const datasetNames = new Set(synapseSyncService.listDatasets().map((d) => d.name));
+  for (const token of argv.slice(4)) {
+    if (token.startsWith('--')) continue;
+    if (token.includes('=')) continue;
+    if (datasetNames.has(token)) return token;
+  }
+  return resolveDataset(undefined);
+}
+
+function parseCliDateRange(argv) {
+  let from;
+  let to;
+  for (const a of argv) {
+    if (a.startsWith('--date-from=')) from = a.slice('--date-from='.length);
+    if (a.startsWith('--date-to=')) to = a.slice('--date-to='.length);
+  }
+  if (from && to) {
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(from) || !dateRegex.test(to)) {
+      throw new Error('Invalid --date-from / --date-to (expected YYYY-MM-DD).');
+    }
+    if (from > to) {
+      throw new Error('--date-from must be on or before --date-to.');
+    }
+    return { from, to };
+  }
+  if (from || to) {
+    throw new Error('Provide both --date-from=YYYY-MM-DD and --date-to=YYYY-MM-DD, or neither.');
+  }
+  return null;
+}
+
+async function buildSyncTableOverrides(argv) {
+  const forceFullSync = argv.includes('--force-full-sync');
+  let dateRangeOverride = parseCliDateRange(argv);
+
+  if (!dateRangeOverride && argv.includes('--use-active-date-range')) {
+    const { configService } = await import('./src/services/config-service.js');
+    const active = await configService.getActiveDateRange('synapse_default');
+    if (active?.date_from && active?.date_to) {
+      dateRangeOverride = { from: active.date_from, to: active.date_to };
+      console.log(
+        `📅 Using active integration date range (synapse_default): ${dateRangeOverride.from} → ${dateRangeOverride.to}`
+      );
+    } else {
+      console.warn(
+        '⚠️  --use-active-date-range set but no active integration_date_range found; using dataset / env defaults.'
+      );
+    }
+  }
+
+  return {
+    forceFullSync,
+    ...(dateRangeOverride ? { dateRangeOverride } : {})
+  };
+}
+
 // Helper function to display help
 function showHelp() {
   console.log(`
@@ -39,9 +98,19 @@ EXAMPLES:
   node sync-cli.js sync-all
   node sync-cli.js sync-all sept-dec-2025
   node sync-cli.js sync-table reservations sept-dec-2025
+  node sync-cli.js sync-table publishedRates --use-active-date-range --force-full-sync
   node sync-cli.js sync-dataset sept-dec-2025
   node sync-cli.js status
   node sync-cli.js test-connection sept-dec-2025
+
+  sync-table flags (after table / dataset):
+    --force-full-sync           Ignore last_processed snapshot (full republish for derived tables)
+    --use-active-date-range     Use integration_date_range synapse_default (same as GraphQL syncTable)
+    --date-from=YYYY-MM-DD      Explicit window (requires --date-to=); overrides integration range
+    --date-to=YYYY-MM-DD
+    Dataset name is optional; if omitted, flags can follow the table name immediately.
+
+  Env: SYNC_DATE_RANGE_FROM + SYNC_DATE_RANGE_TO still override everything if both are set.
 
 🔒 SECURITY: ONE-WAY SYNC ONLY (Synapse → Supabase)
     `);
@@ -137,14 +206,17 @@ async function main() {
         }
 
         try {
-          const dataset = resolveDataset(arg2);
-          // Check for --force-full-sync flag
-          const forceFullSync = process.argv.includes('--force-full-sync');
-          
-          console.log(`🔄 Syncing table: ${arg1} (dataset: ${dataset}${forceFullSync ? ', full sync' : ''})`);
-          
+          const dataset = resolveDatasetFromArgv(process.argv);
+          const overrides = await buildSyncTableOverrides(process.argv);
+          const parts = [`dataset: ${dataset}`];
+          if (overrides.forceFullSync) parts.push('full sync');
+          if (overrides.dateRangeOverride) {
+            parts.push(`date ${overrides.dateRangeOverride.from} → ${overrides.dateRangeOverride.to}`);
+          }
+          console.log(`🔄 Syncing table: ${arg1} (${parts.join(', ')})`);
+
           // Note: Terminal scripts work independently - concurrency is handled by sync service
-          const tableResult = await synapseSyncService.syncTable(arg1, dataset, { forceFullSync });
+          const tableResult = await synapseSyncService.syncTable(arg1, dataset, overrides);
 
           if (tableResult.success) {
             const changesMsg = tableResult.changesDetected !== undefined 

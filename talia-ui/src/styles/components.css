@@ -998,15 +998,18 @@
   font-weight: 600;
 }
 
-.sailing-overview .talia-report__content {
-  padding: var(--theme-padding-md);
-  overflow: auto;
+.sailing-overview.talia-report {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
-/* Removed: .sailing-overview .talia-card override -- inherits from generic .talia-card */
-
-.sailing-overview__metric {
-  margin-bottom: var(--theme-padding-sm);
+.sailing-overview .talia-report__content {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 2px 4px 4px;
+  overflow: hidden;
 }
 
 .talia-pill {

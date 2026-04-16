@@ -3,8 +3,8 @@
 ## Quick Reference
 
 ### Deployment Policy (Default)
-- **Default and expected**: direct local -> staging deployment on LAN.
-- **When user says "deploy to staging"**: use `deploy-to-staging.sh` (local tree → tarball/SSH), not remote git pull on the server.
+- **Default and expected**: direct local -> staging deployment on LAN, **UI-only scope** unless you explicitly pass `--full` or other flags.
+- **When user says "deploy to staging"**: use `deploy-to-staging.sh` (local tree → tarball/SSH), not remote git pull on the server. Do **not** widen to full stack unless they clearly asked for GraphQL rebuild + schema guard.
 - **Any non-default method**: stop and get explicit confirmation first.
 
 ### Deploy Code to Staging
@@ -47,8 +47,7 @@ ssh zomarc@192.168.1.120 "cd ~/talia-docker && \
 
 Deploys code changes to staging server.
 
-**Non-interactive** (automation): `STAGING_DEPLOY_CONFIRM_TOKEN=DEPLOY_UI_ONLY ./scripts/deploy-to-staging.sh --ui-only`  
-(or `DEPLOY_FULL_STACK` with `--full`). Must match the deploy mode.
+**Non-interactive** (automation / `./validate` deploy): set `STAGING_DEPLOY_CONFIRM_TOKEN` to the token for the mode. **Full stack** and **GraphQL-only** also require an explicit second flag so nothing “wide” runs by accident: `DEPLOY_EXPLICIT_FULL_STACK=1` or `DEPLOY_EXPLICIT_GRAPHQL_ONLY=1`. UI-only / UI-hot / scripts-only need only the matching token.
 
 **Features:**
 - Automatically restarts all services in correct order

@@ -623,11 +623,7 @@ const AdminThemesPanel = () => {
           />
         </div>
         {!loading && !error ? (
-          <details
-            className="admin-access__window-toggle"
-            style={{ marginTop: '10px', maxWidth: '960px' }}
-            defaultOpen
-          >
+          <details className="admin-access__window-toggle" style={{ marginTop: '10px', maxWidth: '960px' }}>
             <summary className="admin-access__hint" style={{ cursor: 'pointer', userSelect: 'none' }}>
               Paste JSON instead of file (same validation as Load JSON…)
             </summary>

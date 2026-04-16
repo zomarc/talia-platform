@@ -258,6 +258,8 @@ export const ThemeProvider = ({ children }) => {
   const [themeRegistryFromDb, setThemeRegistryFromDb] = useState({ themes: {}, assets: {} });
   const saveSettingsTimerRef = useRef(null);
   const saveProfilesTimerRef = useRef(null);
+  /** Bumped when profiles are (re)loaded from the server so stale debounced saves cannot overwrite admin import / API writes. */
+  const appearanceProfilesServerEpochRef = useRef(0);
 
   const mergedTaliaUiThemes = useMemo(
     () => mergeTaliaUiThemesFromDb(TALIA_UI_THEMES, themeRegistryFromDb.themes),
@@ -530,6 +532,11 @@ export const ThemeProvider = ({ children }) => {
     if (authLoading) return undefined;
 
     const loadAppearanceSettings = async () => {
+      appearanceProfilesServerEpochRef.current += 1;
+      if (saveProfilesTimerRef.current) {
+        clearTimeout(saveProfilesTimerRef.current);
+        saveProfilesTimerRef.current = null;
+      }
       const userId = appearanceUserId;
       const appearanceVariables =
         userId != null && String(userId).trim() !== '' ? { userId: String(userId) } : {};
@@ -718,6 +725,11 @@ export const ThemeProvider = ({ children }) => {
     };
 
     const refreshAppearanceProfiles = async () => {
+      appearanceProfilesServerEpochRef.current += 1;
+      if (saveProfilesTimerRef.current) {
+        clearTimeout(saveProfilesTimerRef.current);
+        saveProfilesTimerRef.current = null;
+      }
       try {
         const userId = appearanceUserId;
         const appearanceVariables =
@@ -792,8 +804,10 @@ export const ThemeProvider = ({ children }) => {
     if (saveProfilesTimerRef.current) {
       clearTimeout(saveProfilesTimerRef.current);
     }
+    const epochAtArm = appearanceProfilesServerEpochRef.current;
     saveProfilesTimerRef.current = setTimeout(async () => {
       try {
+        if (appearanceProfilesServerEpochRef.current !== epochAtArm) return;
         await trackedFetchGraphql({
           query: SAVE_APPEARANCE_PROFILES_MUTATION,
           variables: {

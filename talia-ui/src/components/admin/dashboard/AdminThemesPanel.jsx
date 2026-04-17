@@ -590,12 +590,24 @@ const AdminThemesPanel = () => {
       if (deleteReview.kind === 'profile') {
         const next = profiles.filter((p) => p.id !== deleteReview.id);
         await persistProfiles(next);
-        setMessage('Saved.');
+        setMessage('Profile removed.');
+        await load();
       } else {
+        const key = deleteReview.key;
+        if (!dbThemes[key]) {
+          setMessage(
+            deleteReview.isBuiltIn
+              ? 'This built-in palette has no saved row in the theme registry on this instance — the list already matches app defaults; nothing was removed from the database.'
+              : 'That palette id is not present in the saved registry (nothing to delete).'
+          );
+          setDeleteReview(null);
+          return;
+        }
         const next = cloneThemes(dbThemes);
-        delete next[deleteReview.key];
+        delete next[key];
         await persistPalettes(next);
-        setMessage('Saved.');
+        setMessage('Registry updated.');
+        await load();
       }
       setDeleteReview(null);
     } catch (e) {
@@ -873,7 +885,7 @@ const AdminThemesPanel = () => {
                           Cancel
                         </button>
                         <button type="button" className="talia-btn" onClick={handleConfirmDelete} disabled={saveBusy}>
-                          {saveBusy ? 'Deleting…' : 'Delete'}
+                          {saveBusy ? 'Deleting…' : 'Confirm delete'}
                         </button>
                       </div>
                     </div>

@@ -54,8 +54,9 @@
 .admin-tab-active {
   color: var(--theme-text-primary);
   border-color: var(--theme-border-light);
-  border-bottom-color: var(--theme-panel-bg);
-  background: var(--theme-panel-bg);
+  /* Match admin content surface (.admin-dashboard-panel__content uses --theme-bg-solid), not --theme-panel-bg, or the active tab reads as a wrong “light strip”. */
+  border-bottom-color: var(--theme-bg-solid);
+  background: var(--theme-bg-solid);
 }
 
 .admin-content {
@@ -154,6 +155,21 @@
   padding: 0 var(--theme-component-padding-sm);
 }
 
+.admin-access__import-phase {
+  margin-bottom: var(--theme-component-gap-sm);
+  padding: var(--theme-component-padding-sm);
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--theme-accent) 55%, var(--theme-border-light));
+  background: color-mix(in srgb, var(--theme-accent) 12%, transparent);
+  font-size: var(--theme-font-size-sm);
+  line-height: 1.45;
+}
+
+.admin-access__themes-paste {
+  padding: 0 var(--theme-component-padding-sm);
+  margin-bottom: var(--theme-component-gap-xs);
+}
+
 .admin-access__import-review {
   margin-bottom: var(--theme-component-gap-sm);
   padding: var(--theme-component-padding-sm);
@@ -216,44 +232,6 @@
   margin: 0 0 6px;
   font-size: var(--theme-font-size-sm);
   color: var(--theme-text-primary);
-}
-
-.admin-access__themes-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--theme-font-size-sm);
-}
-
-.admin-access__themes-table th,
-.admin-access__themes-table td {
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--theme-border-light);
-  text-align: left;
-  vertical-align: middle;
-}
-
-.admin-access__themes-table th {
-  font-size: var(--theme-font-size-xs);
-  color: var(--theme-text-secondary);
-  font-weight: 600;
-}
-
-.admin-access__themes-table tbody tr {
-  cursor: pointer;
-}
-
-.admin-access__themes-table tbody tr[aria-selected='true'] {
-  background: color-mix(in srgb, var(--theme-accent) 18%, transparent);
-}
-
-.admin-access__themes-table tbody tr:focus-visible {
-  outline: 2px solid var(--theme-accent);
-  outline-offset: -2px;
-}
-
-.admin-access__themes-table .admin-access__themes-id {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
 }
 
 .admin-access-denied {

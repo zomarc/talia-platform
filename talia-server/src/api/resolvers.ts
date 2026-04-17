@@ -2373,6 +2373,53 @@ export const resolvers = {
       }
     },
 
+    appearanceProfileBuckets: async (parent: any, args: any) => {
+      const uid = args.userId || null;
+      try {
+        if (!uid) {
+          const [globalProfiles, globalActive] = await Promise.all([
+            configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('profiles', null)),
+            configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('active_profile_id', null))
+          ]);
+          return {
+            globalProfiles: normalizeAppearanceProfiles(globalProfiles),
+            userProfiles: [],
+            activeProfileId: typeof globalActive === 'string' ? globalActive : null
+          };
+        }
+
+        const [globalProfiles, globalActive, userProfilesRaw, userActive] = await Promise.all([
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('profiles', null)),
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('active_profile_id', null)),
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('profiles', uid)),
+          configService.getSetting(APPEARANCE_SETTINGS_CATEGORY, appearanceKey('active_profile_id', uid))
+        ]);
+
+        const userProfilesNorm = normalizeAppearanceProfiles(userProfilesRaw);
+        const activeProfileId =
+          userActive !== undefined && userActive !== null
+            ? typeof userActive === 'string'
+              ? userActive
+              : null
+            : typeof globalActive === 'string'
+              ? globalActive
+              : null;
+
+        return {
+          globalProfiles: normalizeAppearanceProfiles(globalProfiles),
+          userProfiles: userProfilesNorm,
+          activeProfileId
+        };
+      } catch (error: any) {
+        console.error('Error getting appearance profile buckets:', error);
+        return {
+          globalProfiles: [],
+          userProfiles: [],
+          activeProfileId: null
+        };
+      }
+    },
+
     taliaUiThemeRegistry: async () => {
       try {
         const [themes, assets] = await Promise.all([

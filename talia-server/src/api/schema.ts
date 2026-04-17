@@ -88,6 +88,13 @@ export const typeDefs = `#graphql
     activeProfileId: String
   }
 
+  # Raw global vs per-user profile rows (admin / Theme tools). Merged list = user overrides global by id.
+  type AppearanceProfileBuckets {
+    globalProfiles: [AppearanceProfile!]!
+    userProfiles: [AppearanceProfile!]!
+    activeProfileId: String
+  }
+
   type TaliaUiThemeRegistryPayload {
     themes: JSON!
     assets: JSON!
@@ -1205,6 +1212,7 @@ export const typeDefs = `#graphql
     # Talia Configuration (database-backed)
     taliaConfig: TaliaConfigSummary!
     appearanceSettings(userId: String): AppearanceSettings!
+    appearanceProfileBuckets(userId: String): AppearanceProfileBuckets!
     taliaUiThemeRegistry: TaliaUiThemeRegistryPayload!
     userProfileState(userId: String): JSON
     gameScore(gameId: String!, userId: String): GameScore!

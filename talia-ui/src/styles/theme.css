@@ -31,6 +31,8 @@
   
   /* Foreground/text colors */
   --theme-fg: #bcc9db;
+  /* Admin + legacy panels use --theme-text-primary; keep in sync with --theme-fg (ThemeContext updates --theme-fg on :root). */
+  --theme-text-primary: var(--theme-fg);
   --theme-text-secondary: rgba(188, 201, 219, 0.78);
   --theme-text-muted: rgba(188, 201, 219, 0.6);
 

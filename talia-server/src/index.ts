@@ -71,7 +71,19 @@ async function startServer() {
     origin: '*',
     credentials: true
   }));
-  app.use(compression({ threshold: 1024 }));
+  // compression() buffers small chunks — breaks SSE (btop + sync). Skip for streaming routes.
+  app.use(
+    compression({
+      threshold: 1024,
+      filter: (req: { path?: string }, res: unknown) => {
+        const p = req.path || '';
+        if (p.startsWith('/api/btop/stream') || p.startsWith('/api/sync/stream')) {
+          return false;
+        }
+        return compression.filter(req, res as Parameters<typeof compression.filter>[1]);
+      }
+    })
+  );
 
   app.use(express.json());
 

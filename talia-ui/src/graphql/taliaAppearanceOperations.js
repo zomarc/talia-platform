@@ -18,6 +18,26 @@ export const APPEARANCE_SETTINGS_QUERY = `
   }
 `;
 
+export const APPEARANCE_PROFILE_BUCKETS_QUERY = `
+  query AppearanceProfileBuckets($userId: String) {
+    appearanceProfileBuckets(userId: $userId) {
+      globalProfiles {
+        id
+        name
+        settings
+        updatedAt
+      }
+      userProfiles {
+        id
+        name
+        settings
+        updatedAt
+      }
+      activeProfileId
+    }
+  }
+`;
+
 export const SAVE_APPEARANCE_SETTINGS_MUTATION = `
   mutation SaveAppearanceSettings($settings: JSON!, $activeProfileId: String, $userId: String) {
     saveAppearanceSettings(settings: $settings, activeProfileId: $activeProfileId, userId: $userId) {

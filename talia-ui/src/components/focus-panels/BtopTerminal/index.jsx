@@ -61,8 +61,9 @@ const BtopTerminal = ({ theme: propTheme, mode = 'data' }) => {
     const cols = terminal.cols;
     const rows = terminal.rows;
 
-    // Connect to SSE endpoint for btop output with terminal dimensions
-    const sseUrl = `/api/btop/stream?cols=${cols}&rows=${rows}`;
+    // Same-origin URL must respect Vite base (e.g. /celestyal/) so nginx can route to graphql-server:4001.
+    const sseBase = new URL(import.meta.env.BASE_URL || '/', window.location.origin).href;
+    const sseUrl = new URL(`api/btop/stream?cols=${cols}&rows=${rows}`, sseBase).href;
     const eventSource = new EventSource(sseUrl);
 
     eventSource.onopen = () => {
@@ -134,7 +135,8 @@ const BtopTerminal = ({ theme: propTheme, mode = 'data' }) => {
         terminalInstanceRef.current.dispose();
       }
     };
-  }, [theme, isConnected]);
+    // Do not depend on isConnected: onopen sets it true and would dispose this effect + kill EventSource.
+  }, [theme]);
 
   return (
     <div className="btop-terminal">

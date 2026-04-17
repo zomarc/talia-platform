@@ -232,7 +232,6 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
         sideExpandTimerRef.current = null;
       }
       const sideGroupIds = getGroupIdsInSameVisualSide(dockviewApi, currentGroupId);
-      let appliedSideIsolation = false;
       if (sideGroupIds && sideGroupIds.size > 0) {
         const visibilitySnapshot = {};
         (dockviewApi?.groups || []).forEach((group) => {
@@ -251,20 +250,23 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
           group?.api?.setVisible?.(typeof originalVisible === 'boolean' ? originalVisible : true);
         });
         currentPanelApi?.setActive?.();
-        appliedSideIsolation = true;
-      } else {
-        layoutCycleRef.current.originalVisibility = null;
-        layoutCycleRef.current.panelId = null;
-        reportLayoutFailure(`Layout action failed: cannot isolate side groups for panel "${targetPanelId}".`);
-      }
-      if (appliedSideIsolation) {
         setLayoutCycleState(1);
         sideExpandTimerRef.current = window.setTimeout(() => {
           setLayoutCycleState((previous) => (previous === 1 ? 3 : previous));
           sideExpandTimerRef.current = null;
         }, SIDE_EXPAND_DECISION_TIMEOUT_MS);
       } else {
-        setLayoutCycleState(0);
+        // Only one visible group, stacked layout, or geometry not split left/right (e.g. Admin full width):
+        // side isolation is impossible — use Dockview maximize directly instead of an error banner.
+        layoutCycleRef.current.originalVisibility = null;
+        layoutCycleRef.current.panelId = targetPanelId;
+        if (dockviewApi?.hasMaximizedGroup?.() && !currentPanelApi?.isMaximized?.()) {
+          dockviewApi?.exitMaximizedGroup?.();
+        }
+        if (!currentPanelApi?.isMaximized?.()) {
+          currentPanelApi?.maximize?.();
+        }
+        setLayoutCycleState(2);
       }
     } else if (layoutCycleState === 1) {
       if (sideExpandTimerRef.current) {

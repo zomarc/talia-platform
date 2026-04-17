@@ -154,32 +154,6 @@
   padding: 0 var(--theme-component-padding-sm);
 }
 
-.admin-dashboard-panel__content > .admin-access .admin-access__panel-body.admin-access__panel-body--tabulator {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.admin-access__panel-body--tabulator > .admin-access__themes-tabulator {
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-}
-
-.admin-access__themes-tabulator {
-  min-height: var(--theme-table-min-height, 240px);
-  min-width: 0;
-}
-
-.admin-access__themes-tabulator .tabulator {
-  background: transparent;
-  font-size: var(--theme-font-size-sm);
-}
-
-.admin-access__themes-tabulator .tabulator-row.admin-access__themes-row--selected {
-  background: color-mix(in srgb, var(--theme-accent) 18%, transparent);
-}
-
 .admin-access__import-review {
   margin-bottom: var(--theme-component-gap-sm);
   padding: var(--theme-component-padding-sm);

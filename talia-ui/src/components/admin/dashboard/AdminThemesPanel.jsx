@@ -4,7 +4,6 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import {
   APPEARANCE_SETTINGS_QUERY,
@@ -173,11 +172,6 @@ const AdminThemesPanel = () => {
   const [importReview, setImportReview] = useState(null);
   const [deleteReview, setDeleteReview] = useState(null);
 
-  const themesTableHostRef = useRef(null);
-  const themesTableRef = useRef(null);
-  const selectedRowKeyRef = useRef(null);
-  selectedRowKeyRef.current = selectedRowKey;
-
   const mergedPalettes = useMemo(() => mergeTaliaUiThemesFromDb(TALIA_UI_THEMES, dbThemes), [dbThemes]);
 
   const unifiedRows = useMemo(() => {
@@ -196,9 +190,6 @@ const AdminThemesPanel = () => {
     }));
     return [...profileRows, ...paletteRows];
   }, [profiles, dbThemes, mergedPalettes]);
-
-  const unifiedRowsRef = useRef(unifiedRows);
-  unifiedRowsRef.current = unifiedRows;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -264,70 +255,6 @@ const AdminThemesPanel = () => {
     const row = unifiedRows.find((r) => r.rowKey === selectedRowKey);
     setEditorLabel(row?.displayName || '');
   }, [selectedRowKey, unifiedRows]);
-
-  useEffect(() => {
-    if (loading || error) return;
-    let cancelled = false;
-    const run = async () => {
-      if (!themesTableHostRef.current || themesTableRef.current) return;
-      const Tabulator = await initTabulator();
-      if (cancelled || !themesTableHostRef.current) return;
-      themesTableRef.current = new Tabulator(themesTableHostRef.current, {
-        ...getTabulatorOptions({
-          layout: 'fitColumns',
-          enforceGlobalLayout: false,
-          selectableRows: false,
-          // Pixels, not '100%': host sits under .panel-body, not .panel > .admin-access__table, so
-          // percentage height often collapses to 0 and every row is clipped (empty catalogue).
-          height: 480,
-          data: [],
-          columns: [
-            { title: 'Style id', field: 'styleId', width: 200, cssClass: 'admin-access__themes-cell-id' },
-            { title: 'Display name', field: 'displayName', headerFilter: 'input', minWidth: 140 },
-            { title: 'Kind', field: 'origin', width: 170, headerFilter: 'input' },
-          ],
-          rowFormatter: (row) => {
-            const el = row.getElement();
-            const key = row.getData()?.rowKey;
-            if (key && key === selectedRowKeyRef.current) {
-              el.classList.add('admin-access__themes-row--selected');
-            } else {
-              el.classList.remove('admin-access__themes-row--selected');
-            }
-          },
-        }),
-      });
-      themesTableRef.current.on('rowClick', (_e, row) => {
-        const data = row.getData();
-        if (data?.rowKey) setSelectedRowKey(data.rowKey);
-      });
-      themesTableRef.current.setData(unifiedRowsRef.current);
-      requestAnimationFrame(() => themesTableRef.current?.redraw?.(true));
-    };
-    run();
-    return () => {
-      cancelled = true;
-      if (themesTableRef.current) {
-        try {
-          themesTableRef.current.destroy();
-        } catch {
-          // noop
-        }
-        themesTableRef.current = null;
-      }
-    };
-  }, [loading, error]);
-
-  useEffect(() => {
-    if (!themesTableRef.current || loading || error) return;
-    themesTableRef.current.setData(unifiedRows);
-    requestAnimationFrame(() => themesTableRef.current?.redraw?.(true));
-  }, [unifiedRows, loading, error]);
-
-  useEffect(() => {
-    if (!themesTableRef.current || loading || error) return;
-    themesTableRef.current.redraw(true);
-  }, [selectedRowKey, loading, error]);
 
   const persistPalettes = async (nextThemes, nextAssets) => {
     const assetsPayload = nextAssets !== undefined ? nextAssets : dbAssets;
@@ -864,13 +791,38 @@ const AdminThemesPanel = () => {
                 <h3>Style Catalogue</h3>
                 <span className="admin-access__hint">Profiles first, then palettes — matches the Style menu.</span>
               </header>
-              <div className="admin-access__panel-body admin-access__panel-body--tabulator">
-                <div
-                  ref={themesTableHostRef}
-                  className="admin-access__table admin-access__themes-tabulator"
-                  role="grid"
-                  aria-label="Style catalogue"
-                />
+              <div className="admin-access__panel-body">
+                <table className="admin-access__themes-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Style id</th>
+                      <th scope="col">Display name</th>
+                      <th scope="col">Kind</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unifiedRows.map((row) => (
+                      <tr
+                        key={row.rowKey}
+                        onClick={() => setSelectedRowKey(row.rowKey)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setSelectedRowKey(row.rowKey);
+                          }
+                        }}
+                        role="row"
+                        aria-label={`${row.displayName} (${row.styleId})`}
+                        aria-selected={selectedRowKey === row.rowKey}
+                        tabIndex={0}
+                      >
+                        <td className="admin-access__themes-id">{row.styleId}</td>
+                        <td>{row.displayName}</td>
+                        <td>{row.origin}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </section>
 

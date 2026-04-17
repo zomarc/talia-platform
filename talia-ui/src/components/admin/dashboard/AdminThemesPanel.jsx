@@ -274,9 +274,12 @@ const AdminThemesPanel = () => {
       if (cancelled || !themesTableHostRef.current) return;
       themesTableRef.current = new Tabulator(themesTableHostRef.current, {
         ...getTabulatorOptions({
-          layout: 'fitDataFill',
+          layout: 'fitColumns',
+          enforceGlobalLayout: false,
           selectableRows: false,
-          height: '100%',
+          // Pixels, not '100%': host sits under .panel-body, not .panel > .admin-access__table, so
+          // percentage height often collapses to 0 and every row is clipped (empty catalogue).
+          height: 480,
           data: [],
           columns: [
             { title: 'Style id', field: 'styleId', width: 200, cssClass: 'admin-access__themes-cell-id' },

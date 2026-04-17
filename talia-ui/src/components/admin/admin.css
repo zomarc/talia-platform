@@ -160,8 +160,13 @@
   overflow: hidden;
 }
 
+.admin-access__panel-body--tabulator > .admin-access__themes-tabulator {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
 .admin-access__themes-tabulator {
-  flex: 1;
   min-height: var(--theme-table-min-height, 240px);
   min-width: 0;
 }

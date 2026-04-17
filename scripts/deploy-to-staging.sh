@@ -329,6 +329,7 @@ echo -e "${BLUE}  (This script will not expand to full stack or other modes unle
         fi
         echo -e "${BLUE}   Measuring paths to archive…${NC}"
         du -sh "${_tar_paths[@]}" 2>/dev/null || true
+        echo -e "${DIM}   (Sizes above are full trees on disk. The tarball omits node_modules, dist, local DB backup dumps, logs, and .env — it does not ship Postgres volume data.)${NC}"
         echo -e "${BLUE}   Compressing (can take 1–5 min on a laptop; progress lines every ~12s)…${NC}"
         rm -f "$LOCAL_ARCHIVE"
         tar -czf "$LOCAL_ARCHIVE" \
@@ -337,6 +338,13 @@ echo -e "${BLUE}  (This script will not expand to full stack or other modes unle
           --exclude='talia-server/node_modules' \
           --exclude='talia-ui/dist' \
           --exclude='talia-server/dist' \
+          --exclude='talia-server/backups' \
+          --exclude='talia-server/archive' \
+          --exclude='talia-server/server.log' \
+          --exclude='talia-server/.env' \
+          --exclude='talia-server/.env.old' \
+          --exclude='talia-server/.env.updated' \
+          --exclude='talia-ui/.env' \
           --exclude='.DS_Store' \
           "${_tar_paths[@]}" &
         _tar_pid=$!

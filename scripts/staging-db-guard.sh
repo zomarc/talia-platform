@@ -3,6 +3,8 @@
 # Staging database schema guard:
 # - verifies required tables exist before deployment is considered healthy
 # - applies targeted table-specific migrations if required tables are missing
+# - ensures talia_config.setting INSERT + sequence grants (theme/appearance admin)
+#   are present — Docker image updates do not replay SQL; this runs against the DB volume.
 #
 # Usage:
 #   ./scripts/staging-db-guard.sh
@@ -44,6 +46,18 @@ record_migration() {
   docker compose -f "$COMPOSE_FILE" exec -T supabase-db \
     psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 \
     -c "INSERT INTO public.schema_migrations(name) VALUES ('${migration_name}') ON CONFLICT (name) DO NOTHING;" < /dev/null
+}
+
+# Run SQL even if schema_migrations already lists it (e.g. volume restored without grants).
+force_apply_migration_file() {
+  local file="$1"
+  local name
+  name="$(basename "$file")"
+  echo "  ➜ Applying (repair) $name"
+  docker cp "$file" "${DB_CONTAINER}:/tmp/${name}"
+  docker compose -f "$COMPOSE_FILE" exec -T supabase-db \
+    psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "/tmp/${name}" < /dev/null
+  record_migration "$name"
 }
 
 apply_migration_file() {
@@ -126,6 +140,30 @@ done
 if [ "${#missing_after[@]}" -gt 0 ]; then
   echo "❌ Required tables still missing after remediation: ${missing_after[*]}"
   exit 1
+fi
+
+# Idempotent GRANTs: not tied to "missing tables". VM Postgres state survives image redeploys.
+SEQUENCE_GRANTS_MIGRATION="20260416130000_talia_config_setting_insert_sequence_grants.sql"
+seq_path="${MIGRATIONS_DIR}/${SEQUENCE_GRANTS_MIGRATION}"
+if [ -f "$seq_path" ]; then
+  grants_ok="$(
+    docker compose -f "$COMPOSE_FILE" exec -T supabase-db \
+      psql -U "$DB_USER" -d "$DB_NAME" -tAc "
+        SELECT CASE
+          WHEN to_regclass('talia_config.setting_id_seq') IS NULL THEN '0'
+          WHEN has_sequence_privilege('authenticated', 'talia_config.setting_id_seq', 'USAGE')
+           AND has_sequence_privilege('service_role', 'talia_config.setting_id_seq', 'USAGE') THEN '1'
+          ELSE '0'
+        END;
+      " < /dev/null | tr -d '[:space:]'
+  )"
+  if [ "$grants_ok" != "1" ]; then
+    echo "🧩 talia_config.setting_id_seq grants missing or incomplete — applying ${SEQUENCE_GRANTS_MIGRATION}"
+    force_apply_migration_file "$seq_path"
+  elif [ "$(applied_migration "$SEQUENCE_GRANTS_MIGRATION")" != "1" ]; then
+    echo "🧩 Recording ${SEQUENCE_GRANTS_MIGRATION} in schema_migrations (grants already OK)"
+    record_migration "$SEQUENCE_GRANTS_MIGRATION"
+  fi
 fi
 
 echo "✅ Schema guard passed"

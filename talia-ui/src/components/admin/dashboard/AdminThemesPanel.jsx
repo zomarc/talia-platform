@@ -4,6 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import {
   APPEARANCE_SETTINGS_QUERY,
@@ -82,6 +83,75 @@ const orderedPaletteKeys = (dbThemes) => {
   return ordered;
 };
 
+/** Parse JSON into a concrete import plan (no side effects). */
+function buildImportPlan(raw) {
+  const parsed = parseThemeExportPack(raw);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+  const { pack, importMode } = parsed;
+  const themesIn =
+    pack.themes && typeof pack.themes === 'object' && !Array.isArray(pack.themes) ? pack.themes : {};
+  const assetsIn =
+    pack.assets && typeof pack.assets === 'object' && !Array.isArray(pack.assets) ? pack.assets : {};
+  const app = pack.appearance || {};
+  const profilesIn = Array.isArray(app.profiles) ? app.profiles : [];
+  const settingsIn =
+    app.settings && typeof app.settings === 'object' && !Array.isArray(app.settings) ? app.settings : {};
+  const activeIn =
+    typeof app.activeProfileId === 'string' && app.activeProfileId.trim() !== ''
+      ? app.activeProfileId.trim()
+      : null;
+  const humanKind =
+    importMode === 'mergeProfile'
+      ? `named profile “${String(pack.profile?.name || pack.profile?.id || '').trim() || 'profile'}”`
+      : importMode === 'mergePalette'
+        ? `palette “${String(pack.exportedPaletteKey || '').trim()}”`
+        : 'full theme catalogue';
+  const modeLabel =
+    importMode === 'mergeProfile'
+      ? 'Merge named profile'
+      : importMode === 'mergePalette'
+        ? 'Merge palette overrides'
+        : 'Replace full catalogue';
+  if (
+    importMode === 'mergePalette' &&
+    Object.keys(themesIn).length === 0 &&
+    Object.keys(assetsIn).length === 0
+  ) {
+    return { ok: false, error: 'Pack has no palette data to merge.' };
+  }
+  return {
+    ok: true,
+    plan: {
+      importMode,
+      pack,
+      themesIn,
+      assetsIn,
+      profilesIn,
+      settingsIn,
+      activeIn,
+      humanKind,
+      modeLabel,
+    },
+  };
+}
+
+function enhanceConfigSaveError(message) {
+  const m = String(message || '');
+  if (/setting_id_seq|permission denied for sequence/i.test(m)) {
+    return `${m} — Apply migration talia-server/supabase/migrations/20260416130000_talia_config_setting_insert_sequence_grants.sql on this Supabase (INSERT on talia_config.setting + USAGE on talia_config.setting_id_seq for authenticated).`;
+  }
+  return m;
+}
+
+const IMPORT_REVIEW_COPY = {
+  fullReplace:
+    'Replace this instance’s theme registry, asset overrides, and appearance (profiles + settings) with the contents of this file.',
+  mergeProfile:
+    'Adds the named profile (new id if that id already exists) and merges any bundled palette overrides. Does not change global appearance settings or active profile.',
+  mergePalette:
+    'Merges palette overrides from this file into this instance’s theme registry (existing keys are updated; others are kept).',
+};
+
 const AdminThemesPanel = () => {
   const { user } = useSupabaseAuth();
   const appearanceUserId = resolveTaliaAppearanceUserId(user);
@@ -99,6 +169,14 @@ const AdminThemesPanel = () => {
   const [importPaste, setImportPaste] = useState('');
   /** Short status line while a JSON import is running (read → validate → save → reload). */
   const [importPhase, setImportPhase] = useState('');
+  /** Parsed pack waiting for in-page confirmation (replaces window.confirm). */
+  const [importReview, setImportReview] = useState(null);
+  const [deleteReview, setDeleteReview] = useState(null);
+
+  const themesTableHostRef = useRef(null);
+  const themesTableRef = useRef(null);
+  const selectedRowKeyRef = useRef(null);
+  selectedRowKeyRef.current = selectedRowKey;
 
   const mergedPalettes = useMemo(() => mergeTaliaUiThemesFromDb(TALIA_UI_THEMES, dbThemes), [dbThemes]);
 
@@ -118,6 +196,9 @@ const AdminThemesPanel = () => {
     }));
     return [...profileRows, ...paletteRows];
   }, [profiles, dbThemes, mergedPalettes]);
+
+  const unifiedRowsRef = useRef(unifiedRows);
+  unifiedRowsRef.current = unifiedRows;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -183,6 +264,67 @@ const AdminThemesPanel = () => {
     const row = unifiedRows.find((r) => r.rowKey === selectedRowKey);
     setEditorLabel(row?.displayName || '');
   }, [selectedRowKey, unifiedRows]);
+
+  useEffect(() => {
+    if (loading || error) return;
+    let cancelled = false;
+    const run = async () => {
+      if (!themesTableHostRef.current || themesTableRef.current) return;
+      const Tabulator = await initTabulator();
+      if (cancelled || !themesTableHostRef.current) return;
+      themesTableRef.current = new Tabulator(themesTableHostRef.current, {
+        ...getTabulatorOptions({
+          layout: 'fitDataFill',
+          selectableRows: false,
+          height: '100%',
+          data: [],
+          columns: [
+            { title: 'Style id', field: 'styleId', width: 200, cssClass: 'admin-access__themes-cell-id' },
+            { title: 'Display name', field: 'displayName', headerFilter: 'input', minWidth: 140 },
+            { title: 'Kind', field: 'origin', width: 170, headerFilter: 'input' },
+          ],
+          rowFormatter: (row) => {
+            const el = row.getElement();
+            const key = row.getData()?.rowKey;
+            if (key && key === selectedRowKeyRef.current) {
+              el.classList.add('admin-access__themes-row--selected');
+            } else {
+              el.classList.remove('admin-access__themes-row--selected');
+            }
+          },
+        }),
+      });
+      themesTableRef.current.on('rowClick', (_e, row) => {
+        const data = row.getData();
+        if (data?.rowKey) setSelectedRowKey(data.rowKey);
+      });
+      themesTableRef.current.setData(unifiedRowsRef.current);
+      requestAnimationFrame(() => themesTableRef.current?.redraw?.(true));
+    };
+    run();
+    return () => {
+      cancelled = true;
+      if (themesTableRef.current) {
+        try {
+          themesTableRef.current.destroy();
+        } catch {
+          // noop
+        }
+        themesTableRef.current = null;
+      }
+    };
+  }, [loading, error]);
+
+  useEffect(() => {
+    if (!themesTableRef.current || loading || error) return;
+    themesTableRef.current.setData(unifiedRows);
+    requestAnimationFrame(() => themesTableRef.current?.redraw?.(true));
+  }, [unifiedRows, loading, error]);
+
+  useEffect(() => {
+    if (!themesTableRef.current || loading || error) return;
+    themesTableRef.current.redraw(true);
+  }, [selectedRowKey, loading, error]);
 
   const persistPalettes = async (nextThemes, nextAssets) => {
     const assetsPayload = nextAssets !== undefined ? nextAssets : dbAssets;
@@ -301,66 +443,21 @@ const AdminThemesPanel = () => {
   const handlePickImportFile = useCallback(() => {
     setMessage('');
     setImportPhase('');
+    setImportReview(null);
     importFileRef.current?.click();
   }, []);
 
-  /**
-   * @param {{ sourceLabel?: string, onPhase?: (s: string) => void }} [opts] — file name; optional progress callback
-   * @returns {Promise<{ applied: boolean }>} applied false = parse error, user cancel, or empty palette pack
-   */
-  const runImportFromParsed = async (raw, opts = {}) => {
-    const { sourceLabel, onPhase } = opts;
-    const parsed = parseThemeExportPack(raw);
-    if (!parsed.ok) {
-      onPhase?.('');
-      setMessage(parsed.error);
-      return { applied: false };
-    }
-    const { pack, importMode } = parsed;
-    const themesIn =
-      pack.themes && typeof pack.themes === 'object' && !Array.isArray(pack.themes) ? pack.themes : {};
-    const assetsIn =
-      pack.assets && typeof pack.assets === 'object' && !Array.isArray(pack.assets) ? pack.assets : {};
-    const app = pack.appearance || {};
-    const profilesIn = Array.isArray(app.profiles) ? app.profiles : [];
-    const settingsIn =
-      app.settings && typeof app.settings === 'object' && !Array.isArray(app.settings) ? app.settings : {};
-    const activeIn =
-      typeof app.activeProfileId === 'string' && app.activeProfileId.trim() !== ''
-        ? app.activeProfileId.trim()
-        : null;
-
-    const confirmFull =
-      'Replace this instance’s theme registry, asset overrides, and appearance (profiles + settings) with the contents of this file?';
-    const confirmProfile =
-      'Merge this pack into this instance? It adds the named profile (new id if that id already exists) and merges any bundled palette overrides. It does not change global appearance settings or active profile.';
-    const confirmPalette =
-      'Merge palette overrides from this file into this instance’s theme registry (existing keys are updated; others are kept)?';
-
-    const humanKind =
-      importMode === 'mergeProfile'
-        ? `named profile “${String(pack.profile?.name || pack.profile?.id || '').trim() || 'profile'}”`
-        : importMode === 'mergePalette'
-          ? `palette “${String(pack.exportedPaletteKey || '')}”`
-          : 'full theme catalogue';
-    onPhase?.(`Validated theme pack: ${humanKind}. Confirm the dialog to save…`);
+  /** Apply a validated plan (after in-page confirmation). */
+  const executeImportPlan = async (plan, opts = {}) => {
+    const { onPhase, sourceLabel } = opts;
+    const { importMode, pack, themesIn, assetsIn, profilesIn, settingsIn, activeIn } = plan;
 
     if (importMode === 'fullReplace') {
-      if (!window.confirm(confirmFull)) {
-        onPhase?.('');
-        setMessage('Import cancelled — no changes saved.');
-        return { applied: false };
-      }
       onPhase?.('Saving theme registry and appearance…');
       await persistPalettes(cloneThemes(themesIn), { ...assetsIn });
       await persistProfiles(normalizeProfiles(profilesIn));
       await persistAppearanceSettings(settingsIn, activeIn);
     } else if (importMode === 'mergeProfile') {
-      if (!window.confirm(confirmProfile)) {
-        onPhase?.('');
-        setMessage('Import cancelled — no changes saved.');
-        return { applied: false };
-      }
       const hasRegistryPatch = Object.keys(themesIn).length > 0 || Object.keys(assetsIn).length > 0;
       if (hasRegistryPatch) {
         onPhase?.('Merging palette overrides into this instance…');
@@ -374,16 +471,6 @@ const AdminThemesPanel = () => {
       const mergedProfiles = appendMergedProfile(profiles, incoming);
       await persistProfiles(mergedProfiles);
     } else if (importMode === 'mergePalette') {
-      if (!window.confirm(confirmPalette)) {
-        onPhase?.('');
-        setMessage('Import cancelled — no changes saved.');
-        return { applied: false };
-      }
-      if (Object.keys(themesIn).length === 0 && Object.keys(assetsIn).length === 0) {
-        onPhase?.('');
-        setMessage('Pack has no palette data to merge.');
-        return { applied: false };
-      }
       onPhase?.('Merging palette into theme registry…');
       await persistPalettes(
         { ...cloneThemes(dbThemes), ...cloneThemes(themesIn) },
@@ -396,7 +483,31 @@ const AdminThemesPanel = () => {
     onPhase?.('');
     const doneDetail = sourceLabel ? ` (${sourceLabel})` : '';
     setMessage(`Import complete${doneDetail}. Reload the app or open Style to verify.`);
-    return { applied: true };
+  };
+
+  const handleCancelImport = useCallback(() => {
+    setImportReview(null);
+    setImportPhase('');
+    setMessage('');
+  }, []);
+
+  const handleConfirmImport = async () => {
+    if (!importReview) return;
+    setSaveBusy(true);
+    setMessage('');
+    try {
+      await executeImportPlan(importReview.plan, {
+        onPhase: setImportPhase,
+        sourceLabel: importReview.sourceLabel,
+      });
+      setImportReview(null);
+      setImportPaste('');
+    } catch (e) {
+      setImportPhase('');
+      setMessage(enhanceConfigSaveError(e?.message || 'Import failed'));
+    } finally {
+      setSaveBusy(false);
+    }
   };
 
   const handleImportFile = async (event) => {
@@ -405,6 +516,7 @@ const AdminThemesPanel = () => {
     if (!file) return;
     setSaveBusy(true);
     setMessage('');
+    setImportReview(null);
     setImportPhase('Reading file…');
     try {
       const text = await file.text();
@@ -421,13 +533,19 @@ const AdminThemesPanel = () => {
         );
         return;
       }
-      await runImportFromParsed(raw, { sourceLabel: file.name, onPhase: setImportPhase });
+      const built = buildImportPlan(raw);
+      if (!built.ok) {
+        setImportPhase('');
+        setMessage(built.error);
+        return;
+      }
+      setImportReview({ plan: built.plan, sourceLabel: file.name });
+      setImportPhase(`Validated — ${built.plan.humanKind}. Review below, then Apply import.`);
     } catch (e) {
       setImportPhase('');
-      setMessage(e?.message || 'Import failed');
+      setMessage(enhanceConfigSaveError(e?.message || 'Import failed'));
     } finally {
       setSaveBusy(false);
-      setImportPhase('');
     }
   };
 
@@ -437,8 +555,8 @@ const AdminThemesPanel = () => {
       setMessage('Paste JSON into the box first.');
       return;
     }
-    setSaveBusy(true);
     setMessage('');
+    setImportReview(null);
     setImportPhase('Parsing pasted JSON…');
     try {
       let raw;
@@ -453,17 +571,17 @@ const AdminThemesPanel = () => {
         );
         return;
       }
-      const { applied } = await runImportFromParsed(raw, {
-        sourceLabel: 'pasted JSON',
-        onPhase: setImportPhase,
-      });
-      if (applied) setImportPaste('');
+      const built = buildImportPlan(raw);
+      if (!built.ok) {
+        setImportPhase('');
+        setMessage(built.error);
+        return;
+      }
+      setImportReview({ plan: built.plan, sourceLabel: 'Pasted JSON' });
+      setImportPhase(`Validated — ${built.plan.humanKind}. Review below, then Apply import.`);
     } catch (e) {
       setImportPhase('');
-      setMessage(e?.message || 'Import failed');
-    } finally {
-      setSaveBusy(false);
-      setImportPhase('');
+      setMessage(enhanceConfigSaveError(e?.message || 'Import failed'));
     }
   };
 
@@ -496,50 +614,62 @@ const AdminThemesPanel = () => {
       }
       setMessage('Saved.');
     } catch (e) {
-      setMessage(e?.message || 'Save failed');
+      setMessage(enhanceConfigSaveError(e?.message || 'Save failed'));
     } finally {
       setSaveBusy(false);
     }
   };
 
-  const handleRemove = async () => {
+  const handleRemoveClick = () => {
     const parsed = parseRowKey(selectedRowKey);
     if (!parsed) return;
 
     if (parsed.kind === 'profile') {
       const row = profiles.find((p) => p.id === parsed.id);
       const nm = row?.name || parsed.id;
-      if (!window.confirm(`Delete named profile "${nm}"? Users lose this preset from the Style list.`)) return;
-      setSaveBusy(true);
-      setMessage('');
-      try {
-        const next = profiles.filter((p) => p.id !== parsed.id);
-        await persistProfiles(next);
-        setMessage('Saved.');
-      } catch (e) {
-        setMessage(e?.message || 'Delete failed');
-      } finally {
-        setSaveBusy(false);
-      }
+      setDeleteReview({
+        kind: 'profile',
+        id: parsed.id,
+        name: nm,
+        detail: 'Users lose this preset from the Style list.',
+      });
       return;
     }
 
     const key = parsed.key;
     const isBuiltIn = TALIA_UI_THEME_KEYS.includes(key);
-    const confirmText = isBuiltIn
-      ? `Remove all registry overrides for palette "${key}"? The default name and colours return.`
-      : `Permanently delete registry palette "${key}"? Saved appearances that reference this id may fall back.`;
-    if (!window.confirm(confirmText)) return;
+    setDeleteReview({
+      kind: 'palette',
+      key,
+      isBuiltIn,
+      detail: isBuiltIn
+        ? 'The default name and colours return.'
+        : 'Saved appearances that reference this id may fall back.',
+    });
+  };
 
+  const handleCancelDelete = useCallback(() => {
+    setDeleteReview(null);
+  }, []);
+
+  const handleConfirmDelete = async () => {
+    if (!deleteReview) return;
     setSaveBusy(true);
     setMessage('');
     try {
-      const next = cloneThemes(dbThemes);
-      delete next[key];
-      await persistPalettes(next);
-      setMessage('Saved.');
+      if (deleteReview.kind === 'profile') {
+        const next = profiles.filter((p) => p.id !== deleteReview.id);
+        await persistProfiles(next);
+        setMessage('Saved.');
+      } else {
+        const next = cloneThemes(dbThemes);
+        delete next[deleteReview.key];
+        await persistPalettes(next);
+        setMessage('Saved.');
+      }
+      setDeleteReview(null);
     } catch (e) {
-      setMessage(e?.message || 'Delete failed');
+      setMessage(enhanceConfigSaveError(e?.message || 'Delete failed'));
     } finally {
       setSaveBusy(false);
     }
@@ -582,8 +712,9 @@ const AdminThemesPanel = () => {
                 <code>{THEME_EXPORT_ROOT_KEY}</code>).
               </li>
               <li>
-                Elsewhere: Admin → Themes → <strong>Load JSON…</strong> → pick the file → confirm. That instance
-                merges or replaces from the file shape (no separate API keys).
+                Elsewhere: Admin → Themes → <strong>Load JSON…</strong> → pick the file → review the summary on
+                this page → <strong>Apply import</strong>. That instance merges or replaces from the file shape (no
+                separate API keys).
               </li>
             </ol>
             <p className="admin-access__hint" style={{ margin: 0, lineHeight: 1.5 }}>
@@ -677,6 +808,41 @@ const AdminThemesPanel = () => {
             <strong>Import progress</strong> — {importPhase}
           </div>
         ) : null}
+        {importReview ? (
+          <div className="admin-access__import-review" role="region" aria-label="Confirm theme import">
+            <h3 className="admin-access__import-review-title">Confirm import</h3>
+            <dl className="admin-access__import-review-dl">
+              <div>
+                <dt>Source</dt>
+                <dd>{importReview.sourceLabel}</dd>
+              </div>
+              <div>
+                <dt>Action</dt>
+                <dd>{importReview.plan.modeLabel}</dd>
+              </div>
+              <div>
+                <dt>Detected</dt>
+                <dd>{importReview.plan.humanKind}</dd>
+              </div>
+            </dl>
+            <p className="admin-access__hint admin-access__import-review-detail">
+              {IMPORT_REVIEW_COPY[importReview.plan.importMode]}
+            </p>
+            <div className="admin-access__actions admin-access__import-review-actions">
+              <button type="button" className="talia-btn" onClick={handleCancelImport} disabled={saveBusy}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="talia-btn talia-btn--primary"
+                onClick={handleConfirmImport}
+                disabled={saveBusy}
+              >
+                {saveBusy ? 'Applying…' : 'Apply import'}
+              </button>
+            </div>
+          </div>
+        ) : null}
         {message ? <span className="admin-access__message">{message}</span> : null}
         {!message && error ? <span className="admin-access__error">Error: {error}</span> : null}
       </div>
@@ -695,38 +861,13 @@ const AdminThemesPanel = () => {
                 <h3>Style Catalogue</h3>
                 <span className="admin-access__hint">Profiles first, then palettes — matches the Style menu.</span>
               </header>
-              <div className="admin-access__panel-body">
-                <table className="admin-access__themes-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">Style id</th>
-                      <th scope="col">Display name</th>
-                      <th scope="col">Kind</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {unifiedRows.map((row) => (
-                      <tr
-                        key={row.rowKey}
-                        onClick={() => setSelectedRowKey(row.rowKey)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            setSelectedRowKey(row.rowKey);
-                          }
-                        }}
-                        role="row"
-                        aria-label={`${row.displayName} (${row.styleId})`}
-                        aria-selected={selectedRowKey === row.rowKey}
-                        tabIndex={0}
-                      >
-                        <td className="admin-access__themes-id">{row.styleId}</td>
-                        <td>{row.displayName}</td>
-                        <td>{row.origin}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="admin-access__panel-body admin-access__panel-body--tabulator">
+                <div
+                  ref={themesTableHostRef}
+                  className="admin-access__table admin-access__themes-tabulator"
+                  role="grid"
+                  aria-label="Style catalogue"
+                />
               </div>
             </section>
 
@@ -760,19 +901,42 @@ const AdminThemesPanel = () => {
                       ? 'Profiles are saved in appearance settings (same as “Save As New” in the sidebar). Renaming updates the Style list for everyone in this config scope.'
                       : 'Palette rows live in the Talia UI theme registry (colours / gradients). Renaming only changes the menu label unless you remove overrides.'}
                   </p>
-                  <div className="admin-access__actions">
-                    <button
-                      type="button"
-                      className="talia-btn talia-btn--primary"
-                      onClick={handleSaveLabel}
-                      disabled={saveBusy}
-                    >
-                      {saveBusy ? 'Saving…' : 'Save display name'}
-                    </button>
-                    <button type="button" className="talia-btn" onClick={handleRemove} disabled={saveBusy}>
-                      {removeButtonLabel}
-                    </button>
-                  </div>
+                  {deleteReview ? (
+                    <div className="admin-access__delete-review" role="region" aria-label="Confirm delete">
+                      <p className="admin-access__delete-review-lead">
+                        <strong>
+                          {deleteReview.kind === 'profile'
+                            ? `Delete named profile “${deleteReview.name}”?`
+                            : deleteReview.isBuiltIn
+                              ? `Remove all registry overrides for palette “${deleteReview.key}”?`
+                              : `Permanently delete registry palette “${deleteReview.key}”?`}
+                        </strong>
+                      </p>
+                      <p className="admin-access__hint">{deleteReview.detail}</p>
+                      <div className="admin-access__actions">
+                        <button type="button" className="talia-btn" onClick={handleCancelDelete} disabled={saveBusy}>
+                          Cancel
+                        </button>
+                        <button type="button" className="talia-btn" onClick={handleConfirmDelete} disabled={saveBusy}>
+                          {saveBusy ? 'Deleting…' : 'Delete'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="admin-access__actions">
+                      <button
+                        type="button"
+                        className="talia-btn talia-btn--primary"
+                        onClick={handleSaveLabel}
+                        disabled={saveBusy}
+                      >
+                        {saveBusy ? 'Saving…' : 'Save display name'}
+                      </button>
+                      <button type="button" className="talia-btn" onClick={handleRemoveClick} disabled={saveBusy}>
+                        {removeButtonLabel}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </section>

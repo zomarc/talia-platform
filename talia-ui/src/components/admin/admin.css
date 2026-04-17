@@ -154,6 +154,91 @@
   padding: 0 var(--theme-component-padding-sm);
 }
 
+.admin-dashboard-panel__content > .admin-access .admin-access__panel-body.admin-access__panel-body--tabulator {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.admin-access__themes-tabulator {
+  flex: 1;
+  min-height: var(--theme-table-min-height, 240px);
+  min-width: 0;
+}
+
+.admin-access__themes-tabulator .tabulator {
+  background: transparent;
+  font-size: var(--theme-font-size-sm);
+}
+
+.admin-access__themes-tabulator .tabulator-row.admin-access__themes-row--selected {
+  background: color-mix(in srgb, var(--theme-accent) 18%, transparent);
+}
+
+.admin-access__import-review {
+  margin-bottom: var(--theme-component-gap-sm);
+  padding: var(--theme-component-padding-sm);
+  border-radius: 8px;
+  border: 1px solid var(--theme-border-light);
+  background: var(--theme-panel-bg);
+}
+
+.admin-access__import-review-title {
+  margin: 0 0 10px;
+  font-size: var(--theme-font-size-base);
+  color: var(--theme-text-primary);
+}
+
+.admin-access__import-review-dl {
+  margin: 0 0 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.admin-access__import-review-dl > div {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  font-size: var(--theme-font-size-sm);
+}
+
+.admin-access__import-review-dl dt {
+  margin: 0;
+  color: var(--theme-text-secondary);
+  font-size: var(--theme-font-size-xs);
+  font-weight: 600;
+}
+
+.admin-access__import-review-dl dd {
+  margin: 0;
+  color: var(--theme-text-primary);
+  word-break: break-word;
+}
+
+.admin-access__import-review-detail {
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+
+.admin-access__import-review-actions {
+  margin: 0;
+}
+
+.admin-access__delete-review {
+  margin-top: var(--theme-component-gap-xs);
+  padding: var(--theme-component-padding-sm);
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--theme-error, #f87171) 45%, var(--theme-border-light));
+  background: color-mix(in srgb, var(--theme-error, #f87171) 8%, transparent);
+}
+
+.admin-access__delete-review-lead {
+  margin: 0 0 6px;
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-primary);
+}
+
 .admin-access__themes-table {
   width: 100%;
   border-collapse: collapse;

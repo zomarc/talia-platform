@@ -515,8 +515,8 @@ else
   fi
 fi
 
-if [ \"$DEPLOY_MODE\" = \"full\" ]; then
-  echo '🗄️ Running schema guard (apply + verify required tables)...'
+if [ \"$DEPLOY_MODE\" = \"full\" ] || [ \"$DEPLOY_MODE\" = \"graphql-only\" ]; then
+  echo '🗄️ Running schema guard (DB volume: required tables + talia_config grants; images alone do not apply SQL)...'
   bash ./scripts/staging-db-guard.sh
 fi
 

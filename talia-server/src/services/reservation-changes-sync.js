@@ -5,25 +5,64 @@ const SYNC_TYPE = 'reservation_changes';
 const CURRENT_STATE_TABLE = 'reservation_current_state';
 const CHANGES_TABLE = 'reservation_changes';
 const SNAPSHOT_COLUMN = 'Snapshot_Date';
+const ACTIVE_RES_SOURCE = 'stg.RES_HEADER';
+const ACTIVE_RES_ID_COLUMN = 'RES_ID';
+const ACTIVE_RES_SAIL_FROM_COLUMN = 'SAIL_DATE_FROM';
+const ACTIVE_RES_SAIL_TO_COLUMN = 'SAIL_DATE_TO';
+
+const resolveReservationSourceColumns = (source = '') => {
+  const normalized = String(source || '').toLowerCase();
+  if (normalized.includes('fact_reservation_daily')) {
+    return {
+      resId: 'Res_ID',
+      sailFromDate: 'Sail_From_Date',
+      sailToDate: 'Sail_To_Date',
+      snapshotDate: 'Snapshot_Date',
+      sailCode: 'Sail_code',
+      agencyId: 'Agency_ID',
+      groupId: 'Group_ID',
+      guestCount: 'Guest_Count'
+    };
+  }
+  return {
+    resId: 'RES_ID',
+    sailFromDate: 'SAIL_DATE_FROM',
+    sailToDate: 'SAIL_DATE_TO',
+    snapshotDate: 'Snapshot_Date',
+    sailCode: 'SAIL_CODE',
+    agencyId: 'AGENCY_ID',
+    groupId: 'GROUP_ID',
+    guestCount: 'RES_GUEST_COUNT'
+  };
+};
+
+const buildActiveResIdsQuery = (dateRange) => `
+  SELECT DISTINCT ${ACTIVE_RES_ID_COLUMN} AS RES_ID
+  FROM ${ACTIVE_RES_SOURCE}
+  WHERE ${ACTIVE_RES_SAIL_FROM_COLUMN} >= '${dateRange.from}'
+    AND ${ACTIVE_RES_SAIL_FROM_COLUMN} <= '${dateRange.to}'
+`;
+
+const getRowField = (row, keys = []) => {
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null) return row[key];
+  }
+  return null;
+};
 
 /**
  * Wrapper to load current state for reservation changes
  * First gets active reservation IDs from Synapse, then loads current state
  * Exported for use by sync service batching wrapper
  */
-export async function loadReservationChangesCurrentState(supabaseClient, synapseConfig, dateRange, logger = null) {
+export async function loadReservationChangesCurrentState(supabaseClient, synapseConfig, dateRange, source = 'stg.RES_HEADER', logger = null) {
   // Pure data loading - logging handled by sync service
   
-  // Get reservation IDs for sailings within the date range from stg.RES_HEADER
+  // Get reservation IDs for sailings within the date range from configured source
   const pool = await sql.connect(synapseConfig);
   
   try {
-    const activeResQuery = `
-      SELECT DISTINCT RES_ID
-      FROM stg.RES_HEADER
-      WHERE SAIL_DATE_FROM >= '${dateRange.from}'
-        AND SAIL_DATE_FROM <= '${dateRange.to}'
-    `;
+    const activeResQuery = buildActiveResIdsQuery(dateRange);
     
     const activeResResult = await pool.request().query(activeResQuery);
     const activeResIds = activeResResult.recordset.map(row => row.RES_ID).filter(Boolean);
@@ -190,6 +229,62 @@ export async function updateReservationChangesCurrentState(supabaseClient, updat
   }
 }
 
+async function backfillMissingCurrentStateFromReservations(supabaseClient, activeResIds, currentState, logger = null) {
+  if (!Array.isArray(activeResIds) || !activeResIds.length) return 0;
+
+  const missingResIds = activeResIds.filter((resId) => !currentState.has(resId));
+  if (!missingResIds.length) return 0;
+
+  logger?.info(`🧩 Backfilling current state for ${missingResIds.length.toLocaleString()} reservations with no snapshot state in range...`);
+
+  // Keep chunks small to avoid Supabase GET URI limits on large IN lists.
+  const chunkSize = 200;
+  const seedRows = [];
+
+  for (let i = 0; i < missingResIds.length; i += chunkSize) {
+    const chunk = missingResIds.slice(i, i + chunkSize);
+    const { data, error } = await supabaseClient
+      .from('reservation')
+      .select('res_id, sail_code, agency_id, guest_count, sail_from_date')
+      .in('res_id', chunk);
+
+    if (error) {
+      throw new Error(`Failed to backfill reservation_current_state from reservation: ${error.message}`);
+    }
+
+    for (const row of data || []) {
+      if (!row?.res_id) continue;
+      const snapshotDate = row.sail_from_date
+        ? new Date(row.sail_from_date).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
+      seedRows.push({
+        res_id: row.res_id,
+        snapshot_date: snapshotDate,
+        sail_code: row.sail_code || null,
+        agency_id: row.agency_id || null,
+        group_id: null,
+        guest_count: row.guest_count != null ? Number(row.guest_count) : null,
+        updated_at: new Date().toISOString()
+      });
+    }
+  }
+
+  if (!seedRows.length) return 0;
+
+  await updateReservationChangesCurrentState(supabaseClient, seedRows, logger);
+  for (const state of seedRows) {
+    currentState.set(state.res_id, {
+      snapshot_date: state.snapshot_date,
+      sail_code: state.sail_code,
+      agency_id: state.agency_id,
+      group_id: state.group_id,
+      guest_count: state.guest_count
+    });
+  }
+
+  return seedRows.length;
+}
+
 /**
  * Process a batch of snapshots and detect changes compared to current state
  * Returns { changes: [], updatedStates: [] }
@@ -216,19 +311,24 @@ export function processReservationChangesBatch(batch, currentState, supabaseClie
   // First pass: Process all rows sequentially to detect changes correctly
   // (We need to process chronologically to detect intermediate changes)
   for (const row of sorted) {
-    const resId = row.RES_ID;
-    const snapshotDate = row.Snapshot_Date ? new Date(row.Snapshot_Date).toISOString().split('T')[0] : null;
+    const resId = getRowField(row, ['RES_ID', 'Res_ID']);
+    const snapshotRaw = getRowField(row, ['Snapshot_Date', 'SNAPSHOT_DATE']);
+    const snapshotDate = snapshotRaw ? new Date(snapshotRaw).toISOString().split('T')[0] : null;
+    const sourceSailCode = getRowField(row, ['SAIL_CODE', 'Sail_code']);
 
     // Get sail_code from local reservation table (pre-loaded in sailCodeMap)
-    const sailCode = sailCodeMap.get(resId) || null;
+    const sailCode = sourceSailCode || sailCodeMap.get(resId) || null;
 
     const current = {
       snapshot_date: snapshotDate,
       res_id: resId,
       sail_code: sailCode, // From local reservation table
-      agency_id: row.AGENCY_ID || null,
-      group_id: row.GROUP_ID || null,
-      guest_count: row.RES_GUEST_COUNT ? parseFloat(row.RES_GUEST_COUNT) : null,
+      agency_id: getRowField(row, ['AGENCY_ID', 'Agency_ID']),
+      group_id: getRowField(row, ['GROUP_ID', 'Group_ID']),
+      guest_count: (() => {
+        const raw = getRowField(row, ['RES_GUEST_COUNT', 'Guest_Count']);
+        return raw != null ? parseFloat(raw) : null;
+      })(),
     };
 
     const previous = currentState.get(resId);
@@ -272,21 +372,26 @@ export function processReservationChangesBatch(batch, currentState, supabaseClie
   // This prevents adding 50,000 states when we only have ~590 unique reservations
   const latestStatePerReservation = new Map();
   for (const row of sorted) {
-    const resId = row.RES_ID;
-    const snapshotDate = row.Snapshot_Date ? new Date(row.Snapshot_Date).toISOString().split('T')[0] : null;
+    const resId = getRowField(row, ['RES_ID', 'Res_ID']);
+    const snapshotRaw = getRowField(row, ['Snapshot_Date', 'SNAPSHOT_DATE']);
+    const snapshotDate = snapshotRaw ? new Date(snapshotRaw).toISOString().split('T')[0] : null;
     
     const existing = latestStatePerReservation.get(resId);
     if (!existing || new Date(snapshotDate) > new Date(existing.snapshot_date)) {
       // Get sail_code from local reservation table (pre-loaded in sailCodeMap)
-      const sailCode = sailCodeMap.get(resId) || null;
+      const sourceSailCode = getRowField(row, ['SAIL_CODE', 'Sail_code']);
+      const sailCode = sourceSailCode || sailCodeMap.get(resId) || null;
       
       latestStatePerReservation.set(resId, {
         res_id: resId,
         snapshot_date: snapshotDate,
         sail_code: sailCode, // From local reservation table
-        agency_id: row.AGENCY_ID || null,
-        group_id: row.GROUP_ID || null,
-        guest_count: row.RES_GUEST_COUNT ? parseFloat(row.RES_GUEST_COUNT) : null,
+        agency_id: getRowField(row, ['AGENCY_ID', 'Agency_ID']),
+        group_id: getRowField(row, ['GROUP_ID', 'Group_ID']),
+        guest_count: (() => {
+          const raw = getRowField(row, ['RES_GUEST_COUNT', 'Guest_Count']);
+          return raw != null ? parseFloat(raw) : null;
+        })(),
         updated_at: new Date().toISOString()
       });
     }
@@ -470,15 +575,16 @@ export async function syncReservationChanges({
   // Logging handled by sync service
   await cleanupOldReservations(supabaseClient, dateRange, logger);
 
-  // STEP 5: Get reservation IDs for sailings within the date range from stg.RES_HEADER
+  // STEP 5: Get reservation IDs for sailings within the date range from configured source
   // Logging handled by sync service
   let pool = await sql.connect(synapseConfig);
+  const sourceColumns = resolveReservationSourceColumns(source);
   
-  // First, check if there's any data in RES_HEADER at all
+  // First, check if there's any data in source at all
   const testQuery = `
-    SELECT TOP 5 RES_ID, SAIL_DATE_FROM, SAIL_DATE_TO
-    FROM stg.RES_HEADER
-    ORDER BY SAIL_DATE_FROM DESC
+    SELECT TOP 5 ${ACTIVE_RES_ID_COLUMN} AS RES_ID, ${ACTIVE_RES_SAIL_FROM_COLUMN} AS SAIL_DATE_FROM, ${ACTIVE_RES_SAIL_TO_COLUMN} AS SAIL_DATE_TO
+    FROM ${ACTIVE_RES_SOURCE}
+    ORDER BY ${ACTIVE_RES_SAIL_FROM_COLUMN} DESC
   `;
   try {
     const testResult = await pool.request().query(testQuery);
@@ -490,12 +596,7 @@ export async function syncReservationChanges({
     logger?.warn(`⚠️  Could not query RES_HEADER sample data: ${testError.message}`);
   }
   
-  const activeResQuery = `
-    SELECT DISTINCT RES_ID
-    FROM stg.RES_HEADER
-    WHERE SAIL_DATE_FROM >= '${dateRange.from}'
-      AND SAIL_DATE_FROM <= '${dateRange.to}'
-  `;
+  const activeResQuery = buildActiveResIdsQuery(dateRange);
   
   logger?.info(`🔍 Querying for active reservations: ${activeResQuery}`);
   const activeResResult = await pool.request().query(activeResQuery);
@@ -534,7 +635,7 @@ export async function syncReservationChanges({
   // Use the exported wrapper function that handles getting activeResIds
   // Logging handled by sync service
   // This may take time, so we close the previous connection and create a new one after
-  const currentState = await loadReservationChangesCurrentState(supabaseClient, synapseConfig, dateRange, logger);
+  const currentState = await loadReservationChangesCurrentState(supabaseClient, synapseConfig, dateRange, source, logger);
 
   // STEP 7: Recreate connection for processing snapshots
   // Connection may have timed out while loading current state, so create fresh connection
@@ -545,6 +646,8 @@ export async function syncReservationChanges({
   const allChanges = [];
   const allUpdatedStates = [];
   let totalProcessed = 0;
+  let totalChangesDetected = 0;
+  let backfilledStateCount = 0;
   let maxSnapshotDate = null; // Track actual max snapshot date processed
   const columnsSql = columns.join(', ');
   
@@ -568,8 +671,8 @@ export async function syncReservationChanges({
       // CRITICAL: Only process snapshots for reservations within sailing date range
       const dateCol = dateColumn.replace(/\[/g, '').replace(/\]/g, '');
       const whereClause = isInitialLoad
-        ? `rhs.[${dateCol}] >= '${processFrom}' AND rhs.[${dateCol}] <= '${processTo}' AND rhs.RES_ID IN (${resIdsList})`
-        : `rhs.[${dateCol}] > '${processFrom}' AND rhs.[${dateCol}] <= '${processTo}' AND rhs.RES_ID IN (${resIdsList})`;
+        ? `rhs.[${dateCol}] >= '${processFrom}' AND rhs.[${dateCol}] <= '${processTo}' AND rhs.[${sourceColumns.resId}] IN (${resIdsList})`
+        : `rhs.[${dateCol}] > '${processFrom}' AND rhs.[${dateCol}] <= '${processTo}' AND rhs.[${sourceColumns.resId}] IN (${resIdsList})`;
       
 
       // Count query needs to use the same alias and WHERE clause
@@ -631,7 +734,7 @@ export async function syncReservationChanges({
         }
 
         // Load sail_code from local reservation table for all res_ids in this batch
-        const resIdsInBatch = [...new Set(batch.map(row => row.RES_ID))];
+        const resIdsInBatch = [...new Set(batch.map(row => getRowField(row, ['RES_ID', 'Res_ID'])).filter(Boolean))];
         const sailCodeMap = new Map();
         
         if (resIdsInBatch.length > 0) {
@@ -654,14 +757,16 @@ export async function syncReservationChanges({
         }
 
         const { changes, updatedStates } = processReservationChangesBatch(batch, currentState, supabaseClient, sailCodeMap, logger);
+        totalChangesDetected += changes.length;
         allChanges.push(...changes);
         allUpdatedStates.push(...updatedStates);
         totalProcessed += batch.length;
         
         // Track the maximum Snapshot_Date from this batch
         for (const row of batch) {
-          if (row.Snapshot_Date) {
-            const snapshotDate = new Date(row.Snapshot_Date);
+          const snapshotRaw = getRowField(row, ['Snapshot_Date', 'SNAPSHOT_DATE']);
+          if (snapshotRaw) {
+            const snapshotDate = new Date(snapshotRaw);
             if (!maxSnapshotDate || snapshotDate > maxSnapshotDate) {
               maxSnapshotDate = snapshotDate;
             }
@@ -711,9 +816,25 @@ export async function syncReservationChanges({
     if (allUpdatedStates.length > 0) {
       logger?.info(`💾 Updating final ${allUpdatedStates.length.toLocaleString()} state records...`);
       await updateReservationChangesCurrentState(supabaseClient, allUpdatedStates, logger);
+      for (const state of allUpdatedStates) {
+        currentState.set(state.res_id, {
+          snapshot_date: state.snapshot_date,
+          sail_code: state.sail_code,
+          agency_id: state.agency_id,
+          group_id: state.group_id,
+          guest_count: state.guest_count
+        });
+      }
     }
+
+    backfilledStateCount = await backfillMissingCurrentStateFromReservations(
+      supabaseClient,
+      activeResIds,
+      currentState,
+      logger
+    );
     
-    logger?.info(`✅ Completed processing: ${totalProcessed.toLocaleString()} snapshot rows, ${allChanges.length.toLocaleString()} changes detected`);
+    logger?.info(`✅ Completed processing: ${totalProcessed.toLocaleString()} snapshot rows, ${totalChangesDetected.toLocaleString()} changes detected`);
 
     // STEP 8: Update metadata
     // Use the actual max snapshot date processed, or fallback to lastProcessedSnapshotDate if no data
@@ -745,7 +866,7 @@ export async function syncReservationChanges({
       finalProcessedSnapshotDate,
       latestAvailableSnapshotDate || finalProcessedSnapshotDate,
       totalProcessed,
-      allChanges.length,
+      totalChangesDetected,
       duration,
       dataset
     );
@@ -753,9 +874,9 @@ export async function syncReservationChanges({
     return {
       success: true,
       recordsProcessed: totalProcessed,
-      changesDetected: allChanges.length,
+      changesDetected: totalChangesDetected,
       duration: duration,
-      message: `Processed ${totalProcessed.toLocaleString()} snapshot rows, detected ${allChanges.length} changes`
+      message: `Processed ${totalProcessed.toLocaleString()} snapshot rows, detected ${totalChangesDetected} changes, backfilled ${backfilledStateCount.toLocaleString()} current-state rows`
     };
   } catch (error) {
     // Even on error, try to update metadata

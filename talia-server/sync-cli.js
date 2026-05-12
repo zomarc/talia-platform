@@ -54,25 +54,27 @@ function parseCliDateRange(argv) {
 async function buildSyncTableOverrides(argv) {
   const forceFullSync = argv.includes('--force-full-sync');
   let dateRangeOverride = parseCliDateRange(argv);
+  let rangeSource = dateRangeOverride ? 'CLI override' : null;
 
-  if (!dateRangeOverride && argv.includes('--use-active-date-range')) {
+  if (!dateRangeOverride) {
     const { configService } = await import('./src/services/config-service.js');
     const active = await configService.getActiveDateRange('synapse_default');
     if (active?.date_from && active?.date_to) {
       dateRangeOverride = { from: active.date_from, to: active.date_to };
-      console.log(
-        `📅 Using active integration date range (synapse_default): ${dateRangeOverride.from} → ${dateRangeOverride.to}`
-      );
+      rangeSource = 'active integration date range (synapse_default)';
     } else {
-      console.warn(
-        '⚠️  --use-active-date-range set but no active integration_date_range found; using dataset / env defaults.'
+      throw new Error(
+        'No date range provided and no active integration_date_range found for synapse_default. ' +
+        'Set an active range in Data Management or pass --date-from and --date-to.'
       );
     }
   }
 
+  console.log(`📅 Using ${rangeSource}: ${dateRangeOverride.from} → ${dateRangeOverride.to}`);
+
   return {
     forceFullSync,
-    ...(dateRangeOverride ? { dateRangeOverride } : {})
+    dateRangeOverride
   };
 }
 
@@ -98,17 +100,19 @@ EXAMPLES:
   node sync-cli.js sync-all
   node sync-cli.js sync-all sept-dec-2025
   node sync-cli.js sync-table reservations sept-dec-2025
-  node sync-cli.js sync-table publishedRates --use-active-date-range --force-full-sync
+  node sync-cli.js sync-table publishedRates --force-full-sync
+  node sync-cli.js sync-dataset sept-dec-2025 --date-from=2025-09-01 --date-to=2026-12-31
   node sync-cli.js sync-dataset sept-dec-2025
   node sync-cli.js status
   node sync-cli.js test-connection sept-dec-2025
 
   sync-table flags (after table / dataset):
     --force-full-sync           Ignore last_processed snapshot (full republish for derived tables)
-    --use-active-date-range     Use integration_date_range synapse_default (same as GraphQL syncTable)
-    --date-from=YYYY-MM-DD      Explicit window (requires --date-to=); overrides integration range
+    --date-from=YYYY-MM-DD      Explicit window (requires --date-to=)
     --date-to=YYYY-MM-DD
     Dataset name is optional; if omitted, flags can follow the table name immediately.
+    If no explicit date range is supplied, CLI uses active integration_date_range synapse_default.
+    If active range is missing, sync command fails fast.
 
   Env: SYNC_DATE_RANGE_FROM + SYNC_DATE_RANGE_TO still override everything if both are set.
 
@@ -155,7 +159,8 @@ async function main() {
         try {
           const dataset = resolveDataset(arg1);
           console.log(`🚀 Starting full data sync for dataset "${dataset}"...`);
-          const result = await synapseSyncService.syncDataset(dataset);
+          const overrides = await buildSyncTableOverrides(process.argv);
+          const result = await synapseSyncService.syncDataset(dataset, overrides);
           if (result.success) {
             console.log('\n🎉 Full dataset sync completed successfully!');
             process.exit(0);
@@ -180,9 +185,10 @@ async function main() {
           process.exit(1);
         }
 
+        const overrides = await buildSyncTableOverrides(process.argv);
         console.log(`🚀 Starting dataset sync for "${arg1}"...`);
         {
-          const result = await synapseSyncService.syncDataset(arg1);
+          const result = await synapseSyncService.syncDataset(arg1, overrides);
           if (result.success) {
             console.log('\n🎉 Dataset sync completed successfully!');
             process.exit(0);

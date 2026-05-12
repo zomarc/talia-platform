@@ -667,9 +667,26 @@ class SynapseSyncService {
     console.log(`✅ Replace strategy applied on ${table}`);
   }
 
-  transformData(transformKey, data) {
+  transformData(transformKey, data, context = {}) {
     console.log(`🔄 Transforming ${data.length} records for ${transformKey}...`);
     const currentTime = new Date().toISOString();
+    const getField = (row, keys, fallback = null) => {
+      for (const key of keys) {
+        if (row[key] !== undefined && row[key] !== null) return row[key];
+      }
+      return fallback;
+    };
+    const toDateOnly = (value) => {
+      if (!value) return null;
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return parsed.toISOString().split('T')[0];
+    };
+    const toNumber = (value) => {
+      if (value === null || value === undefined || value === '') return null;
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    };
 
     switch (transformKey) {
       case 'ships':
@@ -701,44 +718,54 @@ class SynapseSyncService {
 
       case 'reservations':
         return data.map(row => ({
-          res_id: row.RES_ID,
-          res_status: row.RES_STATUS,
-          source_code: row.SOURCE_CODE || null,
-          res_probability: row.PROBABILITY || null,
-          pax_type: null, // Not available in RES_HEADER
-          pax_status: null, // Not available in RES_HEADER
-          ship: row.SHIP_CODE || null,
-          sail_code: null, // May need to derive from SAIL_DATE_FROM or join with master_sail
-          sail_duration: null, // May need to calculate from SAIL_DATE_FROM and SAIL_DATE_TO
-          sail_from_date: row.SAIL_DATE_FROM ? new Date(row.SAIL_DATE_FROM).toISOString().split('T')[0] : null,
-          sail_to_date: row.SAIL_DATE_TO ? new Date(row.SAIL_DATE_TO).toISOString().split('T')[0] : null,
-          agency_id: row.AGENCY_ID || null,
-          sec_agency_id: row.SEC_AGENCY_ID || null,
-          agency_channel: null, // Not available in RES_HEADER
-          agency_country_code: null, // Not available in RES_HEADER
-          agency_market: null, // Not available in RES_HEADER
-          cabin_type: null, // Not available in RES_HEADER
-          cabin_category: row.CABIN_CATEGORY || null,
-          ticket_type: null, // Not available in RES_HEADER
-          promo_code: null, // Not available in RES_HEADER
-          currency: row.CURRENCY_CODE || null,
-          currency_rate: row.CURRENCY_RATE || null,
-          guest_count: row.RES_GUEST_COUNT || null,
-          foc_guest_count: null, // Not available in RES_HEADER
-          gross_published_fare: null, // Not available in RES_HEADER (may be in SNAPSHOT)
-          gross_selling_fare: null, // Not available in RES_HEADER (may be in SNAPSHOT)
-          net_selling_fare: null, // Not available in RES_HEADER (may be in SNAPSHOT)
-          cruise_fare_comm: null, // Not available in RES_HEADER (may be in SNAPSHOT)
-          published_discount: null, // Not available in RES_HEADER
-          promotional_discounts: null, // Not available in RES_HEADER
-          total_discounts: null, // Not available in RES_HEADER
-          gross_ticket_revenue: null, // Not available in RES_HEADER (may be in SNAPSHOT)
-          net_ticket_revenue: null, // Not available in RES_HEADER (may be in SNAPSHOT)
-          net_invoice_revenue: null, // Not available in RES_HEADER (may be in SNAPSHOT)
-          gross_ticket_revenue_eur: null, // Not available in RES_HEADER
-          net_ticket_revenue_eur: null, // Not available in RES_HEADER
-          net_invoice_revenue_eur: null, // Not available in RES_HEADER
-          total_discounts_eur: null, // Not available in RES_HEADER
+          // Enrich with foundation reservation attributes when available.
+          // This keeps current stg.RES_HEADER ingestion while reliably filling sail metadata.
+          ...(context.reservationEnrichmentMap?.get(getField(row, ['RES_ID', 'Res_ID'])) || {}),
+          res_id: getField(row, ['RES_ID', 'Res_ID']),
+          res_status: getField(row, ['RES_STATUS', 'Res_Status']) || null,
+          source_code: getField(row, ['SOURCE_CODE', 'Source_Code']) || null,
+          res_probability: toNumber(getField(row, ['PROBABILITY', 'Res_Probability'])),
+          pax_type: getField(row, ['PAX_TYPE', 'Pax_Type']) || null,
+          pax_status: getField(row, ['PAX_STATUS', 'Pax_Status']) || null,
+          ship: getField(row, ['SHIP_CODE', 'Ship']) || null,
+          sail_code: getField(row, ['SAIL_CODE', 'Sail_code']) || context.reservationEnrichmentMap?.get(getField(row, ['RES_ID', 'Res_ID']))?.sail_code || null,
+          sail_duration: toNumber(getField(row, ['SAIL_DURATION', 'Sail_Duration'])) ?? context.reservationEnrichmentMap?.get(getField(row, ['RES_ID', 'Res_ID']))?.sail_duration ?? (
+            getField(row, ['SAIL_DATE_FROM', 'Sail_From_Date']) && getField(row, ['SAIL_DATE_TO', 'Sail_To_Date'])
+              ? Math.max(0, Math.round(
+                (new Date(getField(row, ['SAIL_DATE_TO', 'Sail_To_Date'])).getTime() - new Date(getField(row, ['SAIL_DATE_FROM', 'Sail_From_Date'])).getTime())
+                / (1000 * 60 * 60 * 24)
+              ))
+              : null
+          ),
+          sail_from_date: toDateOnly(getField(row, ['SAIL_DATE_FROM', 'Sail_From_Date'])),
+          sail_to_date: toDateOnly(getField(row, ['SAIL_DATE_TO', 'Sail_To_Date'])),
+          agency_id: toNumber(getField(row, ['AGENCY_ID', 'Agency_ID'])),
+          sec_agency_id: toNumber(getField(row, ['SEC_AGENCY_ID', 'Sec_Agency_ID'])),
+          agency_channel: getField(row, ['AGENCY_CHANNEL', 'Agency_Channel']) || null,
+          agency_country_code: getField(row, ['AGENCY_COUNTRY_CODE', 'Agency_Country_Code']) || null,
+          agency_market: getField(row, ['AGENCY_MARKET', 'Agency_Market']) || null,
+          cabin_type: getField(row, ['CABIN_TYPE', 'Cabin_Type']) || null,
+          cabin_category: getField(row, ['CABIN_CATEGORY', 'Cabin_Category']) || null,
+          ticket_type: getField(row, ['TICKET_TYPE', 'Ticket_Type']) || null,
+          promo_code: getField(row, ['PROMO_CODE', 'Promo_Code']) || null,
+          currency: getField(row, ['CURRENCY_CODE', 'Currency']) || null,
+          currency_rate: toNumber(getField(row, ['CURRENCY_RATE', 'Currency_Rate'])),
+          guest_count: toNumber(getField(row, ['RES_GUEST_COUNT', 'Guest_Count'])),
+          foc_guest_count: toNumber(getField(row, ['FOC_GUEST_COUNT', 'FOC_Guest_Count'])),
+          gross_published_fare: toNumber(getField(row, ['GROSS_PUBLISHED_FARE', 'GrossPublishedFare'])),
+          gross_selling_fare: toNumber(getField(row, ['GROSS_SELLING_FARE', 'GrossSellingFare'])),
+          net_selling_fare: toNumber(getField(row, ['NET_SELLING_FARE', 'NetSellingFare'])),
+          cruise_fare_comm: toNumber(getField(row, ['CRUISE_FARE_COMM', 'CruiseFareComm'])),
+          published_discount: toNumber(getField(row, ['PUBLISHED_DISCOUNT', 'PublishedDiscount'])),
+          promotional_discounts: toNumber(getField(row, ['PROMOTIONAL_DISCOUNTS', 'PromotionalDiscounts'])),
+          total_discounts: toNumber(getField(row, ['TOTAL_DISCOUNTS', 'TotalDiscounts'])),
+          gross_ticket_revenue: toNumber(getField(row, ['GROSS_TICKET_REVENUE', 'GrossTicketRevenue'])),
+          net_ticket_revenue: toNumber(getField(row, ['NET_TICKET_REVENUE', 'NetTicketRevenue'])),
+          net_invoice_revenue: toNumber(getField(row, ['NET_INVOICE_REVENUE', 'NetInvoiceRevenue'])),
+          gross_ticket_revenue_eur: toNumber(getField(row, ['GROSS_TICKET_REVENUE_EUR', 'GrossTicketRevenueEUR'])),
+          net_ticket_revenue_eur: toNumber(getField(row, ['NET_TICKET_REVENUE_EUR', 'NetTicketRevenueEUR'])),
+          net_invoice_revenue_eur: toNumber(getField(row, ['NET_INVOICE_REVENUE_EUR', 'NetInvoiceRevenueEUR'])),
+          total_discounts_eur: toNumber(getField(row, ['TOTAL_DISCOUNTS_EUR', 'TotalDiscountsEUR'])),
           created_at: currentTime
         }));
 
@@ -843,6 +870,49 @@ class SynapseSyncService {
         console.warn(`⚠️  No transformation defined for key: ${transformKey}`);
         return data;
     }
+  }
+
+  async loadReservationFoundationEnrichment(pool, resIds = []) {
+    const enrichment = new Map();
+    const normalizedResIds = [...new Set((resIds || []).map(id => Number(id)).filter(Number.isFinite))];
+    if (!normalizedResIds.length) {
+      return enrichment;
+    }
+
+    // Keep IN lists conservative for Synapse parser/perf stability.
+    const chunkSize = 2000;
+    for (let i = 0; i < normalizedResIds.length; i += chunkSize) {
+      const chunk = normalizedResIds.slice(i, i + chunkSize);
+      const inClause = chunk.join(', ');
+      const query = `
+        WITH latest AS (
+          SELECT
+            frd.Res_ID,
+            frd.Sail_code,
+            frd.Sail_Duration,
+            ROW_NUMBER() OVER (
+              PARTITION BY frd.Res_ID
+              ORDER BY frd.Snapshot_Date DESC
+            ) AS rn
+          FROM fou.FACT_RESERVATION_DAILY frd
+          WHERE frd.Res_ID IN (${inClause})
+        )
+        SELECT Res_ID, Sail_code, Sail_Duration
+        FROM latest
+        WHERE rn = 1
+      `;
+
+      const result = await pool.request().query(query);
+      for (const row of result.recordset || []) {
+        if (!row?.Res_ID) continue;
+        enrichment.set(Number(row.Res_ID), {
+          sail_code: row.Sail_code || null,
+          sail_duration: row.Sail_Duration != null ? Number(row.Sail_Duration) : null
+        });
+      }
+    }
+
+    return enrichment;
   }
 
   async insertData(tableName, data, logger = null) {
@@ -995,7 +1065,16 @@ class SynapseSyncService {
         });
       }
 
-      const transformedData = this.transformData(runtime.transformKey, rawData);
+      let transformContext = {};
+      if (runtime.transformKey === 'reservations' && !String(runtime.source || '').toLowerCase().includes('fact_reservation_daily')) {
+        const resIds = rawData.map(row => row.RES_ID).filter(Boolean);
+        transformContext = {
+          reservationEnrichmentMap: await this.loadReservationFoundationEnrichment(pool, resIds)
+        };
+        logger?.info(`📌 Loaded fou enrichment for ${transformContext.reservationEnrichmentMap.size.toLocaleString()} reservations`);
+      }
+
+      const transformedData = this.transformData(runtime.transformKey, rawData, transformContext);
       logger?.info(`🔄 Transformed ${transformedData.length} records`);
       
       // Emit progress for transformation
@@ -1279,7 +1358,16 @@ class SynapseSyncService {
           break;
         }
 
-        const transformedBatch = this.transformData(runtime.transformKey, batchData);
+        let transformContext = {};
+        if (runtime.transformKey === 'reservations' && !String(runtime.source || '').toLowerCase().includes('fact_reservation_daily')) {
+          const resIds = batchData.map(row => row.RES_ID).filter(Boolean);
+          transformContext = {
+            reservationEnrichmentMap: await this.loadReservationFoundationEnrichment(pool, resIds)
+          };
+          logger?.info(`📌 Batch ${batchNumber}: loaded fou enrichment for ${transformContext.reservationEnrichmentMap.size.toLocaleString()} reservations`);
+        }
+
+        const transformedBatch = this.transformData(runtime.transformKey, batchData, transformContext);
         await this.insertData(runtime.targetTable, transformedBatch, logger);
 
         totalProcessed += batchData.length;
@@ -2150,7 +2238,7 @@ class SynapseSyncService {
     }
   }
 
-  async syncDataset(datasetName = this.defaultDataset) {
+  async syncDataset(datasetName = this.defaultDataset, runtimeOverrides = {}) {
     if (!datasetName) {
       throw new Error('No dataset specified and no default dataset available.');
     }
@@ -2181,7 +2269,7 @@ class SynapseSyncService {
 
     for (const tableName of tableOrder) {
       console.log(`\n${'='.repeat(60)}`);
-      const result = await this.syncTable(tableName, datasetName);
+      const result = await this.syncTable(tableName, datasetName, runtimeOverrides);
       results.push(result);
 
       if (result.success) {
@@ -2218,8 +2306,8 @@ class SynapseSyncService {
     };
   }
 
-  async syncAllTables() {
-    return this.syncDataset(this.defaultDataset);
+  async syncAllTables(runtimeOverrides = {}) {
+    return this.syncDataset(this.defaultDataset, runtimeOverrides);
   }
 
   async testTableQuery(tableName, datasetName = this.defaultDataset) {

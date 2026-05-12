@@ -24,12 +24,20 @@ const formatCurrency = (value, currency) => {
   if (!Number.isFinite(amount)) return '—';
   try {
     if (currency) {
-      return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+      }).format(amount);
     }
   } catch {
     // Ignore currency format errors and fall back to number.
   }
-  return new Intl.NumberFormat('en-US').format(amount);
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(amount);
 };
 
 const RATE_TYPE_CLASS = {
@@ -232,8 +240,8 @@ const PublishedRatesGridPresenter = ({ data, selectedSailCode }) => {
       .filter((entry) => entry.points.length > 0);
     if (series.length === 0) return null;
 
-    const width = 96;
-    const height = 28;
+    const width = 128;
+    const height = 34;
     const padding = 3;
     const values = series.flatMap((entry) => entry.points.map((point) => point.value));
     const min = Math.min(...values);
@@ -425,15 +433,20 @@ const PublishedRatesGridPresenter = ({ data, selectedSailCode }) => {
                 className={`published-rates-grid__current-card ${selectedCabin === cabin ? 'published-rates-grid__current-card--active' : ''}`}
                 onClick={() => setSelectedCabin(cabin)}
               >
-                <div className="published-rates-grid__current-label">{cabin}</div>
-                <div className="published-rates-grid__current-value">
-                  {displayCell ? formatCurrency(displayCell.value, displayCell.currency) : '—'}
+                <div className="published-rates-grid__current-top">
+                  <div className="published-rates-grid__current-label">{cabin}</div>
+                  <div className="published-rates-grid__current-value">
+                    {displayCell ? formatCurrency(displayCell.value, displayCell.currency) : '—'}
+                  </div>
                 </div>
-                <div className="published-rates-grid__current-meta">
-                  {displayCell?.rateType || 'Rate N/A'}
-                  {isFallback ? ' • Last available' : ''}
+                <div className="published-rates-grid__current-bottom">
+                  <div className="published-rates-grid__sparkline-wrap">
+                    {renderSparkline(seriesByRateType, visibleRateTypes)}
+                    <div className="published-rates-grid__current-meta published-rates-grid__current-meta--overlay">
+                      {displayCell?.rateType || 'Rate N/A'}
+                    </div>
+                  </div>
                 </div>
-                {renderSparkline(seriesByRateType, visibleRateTypes)}
               </button>
             );
           })}

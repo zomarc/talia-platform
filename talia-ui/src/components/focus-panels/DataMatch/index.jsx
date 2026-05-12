@@ -17,7 +17,10 @@ const DataMatchContainer = ({ panelInstanceId, panelComponentId }) => {
     date_to: null
   });
 
-  const { data, loading, error, refetch } = useDataMatch(filters);
+  const { data, loading, error, refetch } = useDataMatch(filters, {
+    panelInstanceId,
+    panelComponentId
+  });
 
   // Handle loading state
   if (loading) {

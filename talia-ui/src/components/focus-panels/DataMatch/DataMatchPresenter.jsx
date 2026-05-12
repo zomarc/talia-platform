@@ -21,6 +21,41 @@ const GROUP_HEADERS = [
   (value, count) => `<span class="data-match-group data-match-group--month">${value} (${count})</span>`,
 ];
 
+const parseMatchValue = (value) => {
+  if (!value || typeof value !== 'string') return { match: 0, missing: 0 };
+  const parts = value.split('/');
+  if (parts.length !== 2) return { match: 0, missing: 0 };
+  return {
+    match: Number.parseInt(parts[0], 10) || 0,
+    missing: Number.parseInt(parts[1], 10) || 0
+  };
+};
+
+const formatMatchTooltip = (tableName, value) => {
+  const { match, missing } = parseMatchValue(value);
+  const status = match > 0 && missing === 0
+    ? 'Complete'
+    : match === 0 && missing > 0
+      ? 'Missing'
+      : match > 0 && missing > 0
+        ? 'Partial'
+        : 'No records';
+  const readableTable = String(tableName || '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+  return `${readableTable}: ${match} matching, ${missing} missing (${status})`;
+};
+
+const formatTableTitle = (tableName) => {
+  const readable = String(tableName || '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+  const words = readable.split(/\s+/).filter(Boolean);
+  if (words.length <= 2) return readable;
+  const splitIndex = Math.ceil(words.length / 2);
+  return `${words.slice(0, splitIndex).join(' ')}\n${words.slice(splitIndex).join(' ')}`;
+};
+
 const DataMatchPresenter = ({ data, filters, onFiltersChange, panelInstanceId, panelComponentId }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
@@ -73,31 +108,28 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, panelInstanceId, p
       {
         title: 'Ship Code',
         field: 'ship_code',
-        width: 100,
-        headerFilter: 'list',
-        headerFilterParams: {
-          valuesLookup: true,
-          autocomplete: true
-        },
+        width: 92,
+        minWidth: 92,
+        maxWidth: 92,
+        headerSort: false,
         frozen: true
       },
       {
         title: 'Month',
         field: 'month_name',
-        width: 120,
-        headerFilter: 'list',
-        headerFilterParams: {
-          valuesLookup: true,
-          autocomplete: true
-        },
+        width: 94,
+        minWidth: 94,
+        maxWidth: 94,
+        headerSort: false,
         frozen: true
       },
       {
         title: 'Departure Date',
         field: 'departure_date',
-        width: 120,
-        headerFilter: 'input',
-        headerFilterPlaceholder: 'YYYY-MM-DD',
+        width: 112,
+        minWidth: 112,
+        maxWidth: 112,
+        headerSort: false,
         formatter: (cell) => {
           const value = cell.getValue();
           if (!value) return '';
@@ -108,32 +140,32 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, panelInstanceId, p
       {
         title: 'Sail Code',
         field: 'sail_code',
-        width: 120,
-        headerFilter: 'input',
+        width: 116,
+        minWidth: 116,
+        maxWidth: 116,
+        headerSort: false,
         frozen: true
       }
     ];
 
     // Add columns for each table (combined match/missing format)
     const tableColumns = data.tables.map(tableName => ({
-      title: tableName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      title: formatTableTitle(tableName),
       field: tableName,
       hozAlign: 'center',
-      widthGrow: 1, // Auto-resize to fill available width
-      minWidth: 100, // Minimum width to ensure readability
-      headerFilter: 'input',
+      width: 116,
+      minWidth: 116,
+      maxWidth: 116,
+      headerWordWrap: true,
+      headerSort: false,
+      headerTooltip: tableName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      tooltip: (_event, cell) => formatMatchTooltip(tableName, cell?.getValue?.()),
       formatter: (cell) => {
         try {
           const value = cell.getValue();
           if (!value || typeof value !== 'string') return '<span>0/0</span>';
-          
-          const parts = value.split('/');
-          if (parts.length !== 2) return `<span>${value}</span>`;
-          
-          const match = parseInt(parts[0]) || 0;
-          const missing = parseInt(parts[1]) || 0;
-          
-          // Determine color based on match/missing counts
+          const { match, missing } = parseMatchValue(value);
+
           let cellClass;
           if (match > 0 && missing === 0) {
             cellClass = 'data-match__count-chip data-match__count-chip--ok';
@@ -144,22 +176,11 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, panelInstanceId, p
           } else {
             cellClass = 'data-match__count-chip';
           }
-          
           return `<span class="${cellClass}">${value}</span>`;
         } catch (e) {
           console.warn('[DataMatch] Error in formatter:', e);
           const value = cell.getValue();
           return `<span>${value || '0/0'}</span>`;
-        }
-      },
-      sorter: (a, b) => {
-        // Sort by match count (first number)
-        try {
-          const aMatch = parseInt(a.split('/')[0]) || 0;
-          const bMatch = parseInt(b.split('/')[0]) || 0;
-          return aMatch - bMatch;
-        } catch {
-          return 0;
         }
       }
     }));
@@ -241,10 +262,10 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, panelInstanceId, p
         instanceRef.current = new Tabulator(tableRef.current, {
           data: transformedData,
           columns: columns,
-          layout: 'fitDataFill',
+          // Keep Data Match in content-driven sizing mode (do not force global width-fit mode).
+          layout: 'fitDataTable',
+          enforceGlobalLayout: false,
           height: '100%',
-          headerFilterLiveFilter: true,
-          headerFilterLiveFilterDelay: 300,
           selectableRows: 1, // Single row selection
           groupBy: GROUP_BY, // Group by ship_code first, then month_name
           groupHeader: GROUP_HEADERS,
@@ -253,10 +274,6 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, panelInstanceId, p
           pagination: true,
           paginationSize: 50,
           paginationSizeSelector: [25, 50, 100, 200],
-          initialSort: [
-            { column: 'ship_code', dir: 'asc' },
-            { column: 'departure_date', dir: 'asc' }
-          ],
           frozenRows: 0,
           frozenColumns: 4 // Ship Code, Month, Departure Date, Sail Code
         });

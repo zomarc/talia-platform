@@ -4371,25 +4371,35 @@
   font-weight: 500;
   padding: max(1px, calc(var(--theme-component-padding-xs) - 1px)) var(--theme-component-padding-sm);
   border-radius: 3px;
+  color: var(--theme-fg);
+  background: transparent;
 }
 
 .data-match__count-chip--ok {
-  background-color: rgba(76, 175, 80, 0.2);
-  color: #4caf50;
+  background-color: rgba(76, 175, 80, 0.24);
 }
 
 .data-match__count-chip--warn {
-  background-color: rgba(255, 152, 0, 0.2);
-  color: #ff9800;
+  background-color: rgba(255, 152, 0, 0.22);
 }
 
 .data-match__count-chip--error {
-  background-color: rgba(244, 67, 54, 0.2);
-  color: #f44336;
+  background-color: rgba(244, 67, 54, 0.24);
 }
 
 .data-match__group-meta {
   color: var(--theme-text-muted);
+}
+
+.data-match-table .tabulator-col .tabulator-col-title {
+  white-space: pre-line;
+  line-height: 1.1;
+  font-size: var(--theme-font-size-xs);
+  text-align: left;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* ============================================================================

@@ -5311,3 +5311,199 @@
     grid-template-columns: 1fr;
   }
 }
+
+.reservation-current-state {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+
+.reservation-current-state__table {
+  min-height: 240px;
+  flex: 1 1 auto;
+}
+
+.reservation-current-state__details {
+  padding: var(--theme-space-md, 12px);
+  border: 1px solid var(--theme-border, rgba(255, 255, 255, 0.16));
+  border-radius: 10px;
+  background: var(--theme-bg-elevated, rgba(255, 255, 255, 0.03));
+  max-height: 360px;
+  overflow: auto;
+}
+
+.reservation-current-state__details-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.reservation-current-state__details-heading {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reservation-current-state__details-title {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.reservation-current-state__details-subtitle,
+.reservation-current-state__details-empty,
+.reservation-current-state__history-meta {
+  margin: 0;
+  color: var(--talia-text-muted, rgba(214, 220, 255, 0.75));
+  font-size: 12px;
+}
+
+.reservation-current-state__details-card {
+  margin-top: 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.reservation-current-state__details-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.reservation-current-state__details-grid {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 4px 8px;
+}
+
+.reservation-current-state__details-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.reservation-current-state__details-inline-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.reservation-current-state__details-select {
+  min-width: 180px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--theme-fg, #fff);
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.reservation-current-state__details-key {
+  color: var(--talia-text-muted, rgba(214, 220, 255, 0.75));
+  font-size: 12px;
+}
+
+.reservation-current-state__details-value {
+  font-size: 12px;
+}
+
+.reservation-current-state__history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.reservation-current-state__history-item {
+  display: block;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.reservation-current-state__history-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.reservation-current-state__history-date {
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 68px;
+}
+
+.reservation-current-state__history-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.reservation-current-state__history-date--muted {
+  font-weight: 400;
+  color: var(--talia-text-muted, rgba(214, 220, 255, 0.72));
+}
+
+.reservation-current-state__res-id-cell {
+  margin-right: 6px;
+}
+
+.reservation-current-state__history-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 1;
+  background: var(--theme-accent-light, rgba(102, 141, 255, 0.25));
+  color: var(--theme-fg, #fff);
+  border: 1px solid var(--theme-border, rgba(255, 255, 255, 0.2));
+}
+
+.reservation-current-state__history-count--1 {
+  background: rgba(130, 136, 148, 0.45);
+}
+
+.reservation-current-state__history-count--2 {
+  background: rgba(205, 169, 45, 0.55);
+}
+
+.reservation-current-state__history-count--3 {
+  background: rgba(215, 158, 31, 0.68);
+}
+
+.reservation-current-state__history-count--4 {
+  background: rgba(223, 138, 24, 0.82);
+}
+
+.reservation-current-state__history-count--5 {
+  background: rgba(234, 122, 16, 0.96);
+}
+
+.reservation-current-state__reservation-id {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 8px;
+  margin-left: 4px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}

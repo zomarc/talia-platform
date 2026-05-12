@@ -223,7 +223,7 @@ const SailingSummaryPresenter = ({ data }) => {
         instanceRef.current = new Tabulator(tableRef.current, {
           data: aggregatedData,
           columns,
-          layout: "fitDataFill",
+          layout: "fitDataTable",
           height: "100%",
           selectableRows: 1,
           headerFilterLiveFilter: true,

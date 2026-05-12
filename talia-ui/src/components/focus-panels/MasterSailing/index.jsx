@@ -33,16 +33,31 @@ const MasterSailingContainer = ({ panelInstanceId, panelComponentId }) => {
     limit: 4000,
   });
 
+  const {
+    data: reservationCurrentStateRows,
+    loading: reservationLoading,
+    error: reservationError,
+    refetch: refetchReservations,
+  } = useTableDataWithContext({
+    tableName: 'reservation_current_state',
+    eventName: null,
+    panelInstanceId,
+    panelComponentId,
+    contextMapper: () => null,
+    limit: 150000,
+  });
+
   const mergedRows = useMemo(
-    () => buildMasterSailingRows(masterSailRows, inventoryRows),
-    [masterSailRows, inventoryRows]
+    () => buildMasterSailingRows(masterSailRows, inventoryRows, reservationCurrentStateRows),
+    [masterSailRows, inventoryRows, reservationCurrentStateRows]
   );
 
-  const loading = masterLoading || inventoryLoading;
-  const error = masterError || inventoryError;
+  const loading = masterLoading || inventoryLoading || reservationLoading;
+  const error = masterError || inventoryError || reservationError;
   const handleRefresh = () => {
     refetchMasterSail();
     refetchInventory();
+    refetchReservations();
   };
 
   return (

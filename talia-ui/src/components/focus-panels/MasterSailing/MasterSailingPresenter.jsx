@@ -24,8 +24,7 @@ const FILTER_FIELDS = [
   ['sail_days', 'Duration'],
   ['package_name', 'Package'],
   ['package_type', 'Type'],
-  ['port_from', 'From'],
-  ['port_to', 'To'],
+  ['route', 'Route'],
 ];
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -73,8 +72,7 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
     sail_days: '',
     package_name: '',
     package_type: '',
-    port_from: '',
-    port_to: '',
+    route: '',
   });
   const filterOptions = useMemo(() => Object.fromEntries(
     FILTER_FIELDS.map(([field]) => [field, buildSelectValues(data || [], field)])
@@ -116,15 +114,24 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
       headerSort: false,
     },
     {
-      field: 'port_from',
-      title: 'From',
-      width: estimateColumnWidth(data || [], 'port_from', 'From', 72, 180),
+      field: 'route',
+      title: 'Route',
+      width: estimateColumnWidth(data || [], 'route', 'Route', 90, 180),
       headerSort: false,
     },
     {
-      field: 'port_to',
-      title: 'To',
-      width: estimateColumnWidth(data || [], 'port_to', 'To', 72, 180),
+      field: 'guests',
+      title: 'Guests',
+      hozAlign: 'right',
+      width: estimateColumnWidth(data || [], 'guests', 'Guests', 80, 120),
+      formatter: (cell) => {
+        const value = Number.parseFloat(cell.getValue());
+        if (!Number.isFinite(value)) return '0';
+        return value.toLocaleString('en-US', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        });
+      },
       headerSort: false,
     }
   ]), [data]);

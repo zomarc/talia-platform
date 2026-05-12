@@ -262,9 +262,7 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, panelInstanceId, p
         instanceRef.current = new Tabulator(tableRef.current, {
           data: transformedData,
           columns: columns,
-          // Keep Data Match in content-driven sizing mode (do not force global width-fit mode).
           layout: 'fitDataTable',
-          enforceGlobalLayout: false,
           height: '100%',
           selectableRows: 1, // Single row selection
           groupBy: GROUP_BY, // Group by ship_code first, then month_name

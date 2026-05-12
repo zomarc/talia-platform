@@ -13,9 +13,19 @@ import DirectSourceRequestPresenter from './DirectSourceRequestPresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 
 // Default external GraphQL endpoint
 const DEFAULT_GRAPHQL_ENDPOINT = 'https://thaliatest.b2b.celestyal.com:3000/graphql';
+
+const DATA_SOURCE_QUERY = `
+  query DirectSourceDataSources {
+    dataSources {
+      sourceName
+      connectionConfig
+    }
+  }
+`;
 
 // Default query template - availableVoyages
 // Note: The Celestyal B2B API expects DateTime type for effectiveDate and Date type for date ranges
@@ -164,6 +174,35 @@ const DirectSourceRequestContainer = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadEndpoint = async () => {
+      try {
+        const data = await trackedFetchGraphql({
+          query: DATA_SOURCE_QUERY,
+          component: 'DirectSourceRequest',
+          purpose: 'Load direct source endpoint',
+          tableName: 'data_source',
+        });
+        const sources = data?.dataSources || [];
+        const directSource = sources.find((source) => source.sourceName === 'celestyal_b2b_api');
+        const endpoint = directSource?.connectionConfig?.endpoint || DEFAULT_GRAPHQL_ENDPOINT;
+        if (!cancelled) {
+          setQueryInfo((prev) => ({
+            ...prev,
+            endpoint,
+          }));
+        }
+      } catch (err) {
+        console.warn('[DirectSourceRequest] Failed to load data source config:', err?.message || err);
+      }
+    };
+    loadEndpoint();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Fetch data from external GraphQL endpoint
   const fetchData = useCallback(async (variables) => {
     if (!mountedRef.current) return;
@@ -172,41 +211,32 @@ const DirectSourceRequestContainer = () => {
     setError(null);
 
     const startTime = Date.now();
+    const endpoint = queryInfo?.endpoint || DEFAULT_GRAPHQL_ENDPOINT;
 
     try {
-      console.log('[DirectSourceRequest] Fetching from:', DEFAULT_GRAPHQL_ENDPOINT);
+      console.log('[DirectSourceRequest] Fetching from:', endpoint);
       console.log('[DirectSourceRequest] Variables:', variables);
 
-      const response = await fetch(DEFAULT_GRAPHQL_ENDPOINT, {
-        method: 'POST',
+      const result = await trackedFetchGraphql({
+        url: endpoint,
+        query: DEFAULT_QUERY,
+        variables: {
+          effectiveDate: variables.effectiveDate,
+          startDateFrom: variables.startDateFrom,
+          startDateTo: variables.startDateTo
+        },
+        component: 'DirectSourceRequest',
+        purpose: 'Fetch external availability',
+        tableName: 'availableVoyages',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({
-          query: DEFAULT_QUERY,
-          variables: {
-            effectiveDate: variables.effectiveDate,
-            startDateFrom: variables.startDateFrom,
-            startDateTo: variables.startDateTo
-          }
-        })
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const result = await response.json();
 
       if (!mountedRef.current) return;
 
-      if (result.errors) {
-        console.error('[DirectSourceRequest] GraphQL errors:', result.errors);
-        throw new Error(result.errors[0].message);
-      }
-
-      const voyages = result.data?.availableVoyages || [];
+      const voyages = result?.availableVoyages || [];
       console.log('[DirectSourceRequest] Received', voyages.length, 'voyages');
 
       // Flatten the data for table display
@@ -262,7 +292,7 @@ const DirectSourceRequestContainer = () => {
         setLoading(false);
       }
     }
-  }, []);
+  }, [queryInfo?.endpoint]);
 
   // Flatten nested voyage data for Tabulator display
   const matchesSelectedSail = (selectedSailCode, record) => {

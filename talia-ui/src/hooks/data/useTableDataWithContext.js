@@ -20,6 +20,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import queryTracker from '../../services/data/queryTracker';
 import { SAIL_SELECT_EVENT } from '../../lib/eventBus';
 import { REPORT_PANEL_PAUSE_EVENT, REPORT_REFRESH_EVENT } from '../../components/dockview/eventConstants';
+import { normalizeGlobalDateRangeKey } from '../../lib/globalDateRange';
 
 const GRAPHQL_URL = '/api/graphql';
 const DEFAULT_CACHE_TTL_MS = 15000;
@@ -71,6 +72,43 @@ const getServerGlobalFilters = () => {
   };
 };
 
+const resolveSelectedSailCodeFromDetail = (detail) => {
+  if (!detail) return null;
+  if (typeof detail === 'string') {
+    const normalized = detail.trim();
+    return normalized || null;
+  }
+  if (typeof detail !== 'object') return null;
+  const candidate = detail.sail_code || detail.Sail_Code || detail.row_data?.sail_code || detail.row_data?.Sail_Code || null;
+  if (candidate == null) return null;
+  const normalized = String(candidate).trim();
+  return normalized || null;
+};
+
+export const resolveSelectedSailCode = (context, criteria = null) => {
+  const fromContext = resolveSelectedSailCodeFromDetail(context);
+  if (fromContext) return fromContext;
+  const effectiveCriteria = criteria || null;
+  const fromCriteria = resolveSelectedSailCodeFromDetail(effectiveCriteria?.selectedSailing?.detail || effectiveCriteria?.selectedSailing || effectiveCriteria?.selectedSailCode || null);
+  return fromCriteria || null;
+};
+
+const normalizeSelectionContextDetail = (detail) => {
+  if (!detail) return null;
+  if (typeof detail === 'string') {
+    const normalized = detail.trim();
+    return normalized ? { sail_code: normalized } : null;
+  }
+  if (typeof detail !== 'object') return null;
+  const sailCode = resolveSelectedSailCodeFromDetail(detail);
+  if (!sailCode) return detail;
+  if (detail.sail_code === sailCode) return detail;
+  return {
+    ...detail,
+    sail_code: sailCode
+  };
+};
+
 const DATE_FIELD_CANDIDATES = [
   'sail_date_from',
   'sail_date',
@@ -79,6 +117,14 @@ const DATE_FIELD_CANDIDATES = [
   'from_date',
   'vacation_date',
   'master_voyage_departure_date'
+];
+const END_DATE_FIELD_CANDIDATES = [
+  'sail_date_to',
+  'end_date',
+  'to_date',
+  'return_date',
+  'disembark_date',
+  'master_voyage_end_date'
 ];
 const DURATION_FIELD_CANDIDATES = [
   'sail_days',
@@ -108,6 +154,37 @@ const getRowDateValue = (row) => {
     if (Number.isFinite(parsed)) return parsed;
   }
   return null;
+};
+
+const getRowDateValueFromCandidates = (row, candidates) => {
+  if (!row || typeof row !== 'object') return null;
+  for (const field of candidates) {
+    const value = row[field];
+    if (!value) continue;
+    const parsed = Date.parse(String(value));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+};
+
+const getRowDateRange = (row) => {
+  const startTs = getRowDateValueFromCandidates(row, DATE_FIELD_CANDIDATES);
+  if (!Number.isFinite(startTs)) return null;
+  const endCandidate = getRowDateValueFromCandidates(row, END_DATE_FIELD_CANDIDATES);
+  return {
+    startTs,
+    endTs: Number.isFinite(endCandidate) ? endCandidate : startTs
+  };
+};
+
+const getRangeModeFromCriteria = (criteria) => {
+  if (!criteria || typeof criteria !== 'object') return 'future';
+  if (criteria.rangeMode === 'future' || criteria.rangeMode === 'past') {
+    return criteria.rangeMode;
+  }
+  const normalizedKey = normalizeGlobalDateRangeKey(criteria.rangeKey);
+  if (normalizedKey.startsWith('-') || normalizedKey === 'all_past') return 'past';
+  return 'future';
 };
 
 const getDurationSet = (durationKey) => {
@@ -143,7 +220,12 @@ const getRowDurationValue = (row) => {
   return null;
 };
 
-const applyGlobalDateCriteria = (rows) => {
+const applyGlobalDateCriteria = (rows, context = null) => {
+  // Explicit sail selection should always win over global date windows.
+  if (resolveSelectedSailCode(context)) {
+    return rows;
+  }
+  const criteria = window.__taliaGlobalCriteria || null;
   const globalDateFilters = getGlobalDateFilters();
   if (!globalDateFilters) return rows;
 
@@ -152,14 +234,21 @@ const applyGlobalDateCriteria = (rows) => {
   const hasMin = Number.isFinite(minTs);
   const hasMax = Number.isFinite(maxTs);
   if (!hasMin && !hasMax) return rows;
+  const todayStartTs = Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
+  const todayEndTs = Date.parse(`${new Date().toISOString().slice(0, 10)}T23:59:59Z`);
+  const rangeMode = getRangeModeFromCriteria(criteria);
+  const includeInProgress = criteria?.includeInProgress === true && rangeMode === 'future';
 
   return (rows || []).filter((row) => {
     const rowTs = getRowDateValue(row);
     // Keep rows with no recognized date field to avoid over-filtering non-date datasets.
     if (!Number.isFinite(rowTs)) return true;
-    if (hasMin && rowTs < minTs) return false;
-    if (hasMax && rowTs > maxTs) return false;
-    return true;
+    const inWindow = (!hasMin || rowTs >= minTs) && (!hasMax || rowTs <= maxTs);
+    if (inWindow) return true;
+    if (!includeInProgress) return false;
+    const rowRange = getRowDateRange(row);
+    if (!rowRange) return false;
+    return rowRange.startTs <= todayEndTs && rowRange.endTs >= todayStartTs;
   });
 };
 
@@ -215,7 +304,9 @@ const applyRealSailingCriteria = (rows) => {
   });
 };
 
-const applyGlobalCriteria = (rows) => applyRealSailingCriteria(applyGlobalDurationCriteria(applyGlobalDateCriteria(rows)));
+const applyGlobalCriteria = (rows, context = null) => (
+  applyRealSailingCriteria(applyGlobalDurationCriteria(applyGlobalDateCriteria(rows, context)))
+);
 
 const isPanelPaused = (panelInstanceId, panelComponentId) => {
   const state = window.__taliaPanelPauseState || {};
@@ -317,7 +408,11 @@ export const useTableDataWithContext = ({
       ...getServerGlobalFilters()
     };
 
-    if (PUBLISHED_RATES_TABLES_SERVER_DATE_BOUNDS.has(tableNameRef.current)) {
+    const hasExplicitSailSelection = Boolean(
+      resolveSelectedSailCode(currentFilters) || resolveSelectedSailCode(contextRef.current)
+    );
+
+    if (PUBLISHED_RATES_TABLES_SERVER_DATE_BOUNDS.has(tableNameRef.current) && !hasExplicitSailSelection) {
       const globalDates = getGlobalDateFilters();
       if (globalDates?.dateFrom && effectiveFilters.departure_date_from == null) {
         effectiveFilters.departure_date_from = globalDates.dateFrom;
@@ -357,7 +452,7 @@ export const useTableDataWithContext = ({
       const cached = responseCache.get(requestKey);
       if (cached && cached.expiresAt > now) {
         rawDataRef.current = cached.data || [];
-        setData(applyGlobalCriteria(rawDataRef.current));
+          setData(applyGlobalCriteria(rawDataRef.current, contextRef.current));
         setLoading(false);
         setError(null);
         fetchingRef.current = false;
@@ -444,7 +539,7 @@ export const useTableDataWithContext = ({
         return;
       }
       rawDataRef.current = loadedData || [];
-      setData(applyGlobalCriteria(rawDataRef.current));
+      setData(applyGlobalCriteria(rawDataRef.current, contextRef.current));
     } catch (err) {
       console.error('[useTableDataWithContext] Error:', err);
       setError(err);
@@ -510,10 +605,12 @@ export const useTableDataWithContext = ({
         if (eventNameRef.current === SAIL_SELECT_EVENT) {
           const lastSailEvent = window.lastSailSelectEvent || null;
           if (lastSailEvent && lastSailEvent.detail) {
-            const newFilters = extractFiltersRef.current(lastSailEvent.detail);
+            const normalizedDetail = normalizeSelectionContextDetail(lastSailEvent.detail);
+            const newFilters = extractFiltersRef.current(normalizedDetail);
             if (newFilters) {
               console.log('[useTableDataWithContext] Found lastSailSelectEvent on mount:', newFilters);
-              setContext(lastSailEvent.detail);
+              contextRef.current = normalizedDetail;
+              setContext(normalizedDetail);
               fetchDataRef.current(newFilters);
               hasCheckedContextRef.current = true;
               return;
@@ -547,15 +644,22 @@ export const useTableDataWithContext = ({
 
     // Create handlers that use refs
     const handleEvent = (event) => {
+      const eventDetail = event.detail;
+      const normalizedDetail = normalizeSelectionContextDetail(eventDetail);
       if (pausedRef.current) {
+        contextRef.current = normalizedDetail;
+        setContext(normalizedDetail);
         pendingRefreshOnResumeRef.current = true;
+        if (event.type === SAIL_SELECT_EVENT) {
+          window.lastSailSelectEvent = { type: SAIL_SELECT_EVENT, detail: normalizedDetail };
+        }
         return;
       }
-      const eventDetail = event.detail;
       console.log(`[useTableDataWithContext] Received event: ${event.type}`, eventDetail);
 
-      const newFilters = extractFiltersRef.current(eventDetail);
-      setContext(eventDetail);
+      const newFilters = extractFiltersRef.current(normalizedDetail);
+      contextRef.current = normalizedDetail;
+      setContext(normalizedDetail);
       fetchDataRef.current(newFilters);
       
       // Store for context restoration (for sail events)
@@ -566,10 +670,16 @@ export const useTableDataWithContext = ({
 
     const handleClearEvent = () => {
       if (pausedRef.current) {
+        contextRef.current = null;
+        setContext(null);
         pendingRefreshOnResumeRef.current = true;
+        if (currentEventName === SAIL_SELECT_EVENT) {
+          window.lastSailSelectEvent = null;
+        }
         return;
       }
       console.log(`[useTableDataWithContext] Received clear event`);
+      contextRef.current = null;
       setContext(null);
       lastFiltersRef.current = null; // Reset filters so we can fetch again
       if (fetchWithoutContextRef.current) {
@@ -651,10 +761,12 @@ export const useTableDataWithContext = ({
           if (eventNameRef.current === SAIL_SELECT_EVENT) {
             const lastSailEvent = window.lastSailSelectEvent || null;
             if (lastSailEvent && lastSailEvent.detail) {
-              const newFilters = extractFiltersRef.current(lastSailEvent.detail);
+              const normalizedDetail = normalizeSelectionContextDetail(lastSailEvent.detail);
+              const newFilters = extractFiltersRef.current(normalizedDetail);
               if (newFilters) {
                 console.log('[useTableDataWithContext] Found lastSailSelectEvent in listener setup:', newFilters);
-                setContext(lastSailEvent.detail);
+                contextRef.current = normalizedDetail;
+                setContext(normalizedDetail);
                 fetchDataRef.current(newFilters);
                 hasCheckedContextRef.current = true;
                 return;
@@ -701,14 +813,15 @@ export const useTableDataWithContext = ({
         pendingRefreshOnResumeRef.current = true;
         return;
       }
-      setData(applyGlobalCriteria(rawDataRef.current));
+      setData(applyGlobalCriteria(rawDataRef.current, contextRef.current));
 
       const includeNonRealNext = event?.detail?.includeNonRealSailings === true;
 
       if (PUBLISHED_RATES_TABLES_SERVER_DATE_BOUNDS.has(tableNameRef.current)) {
         lastIncludeNonRealRef.current = includeNonRealNext;
         lastFiltersRef.current = null;
-        const currentFilters = context ? extractFiltersRef.current(context) : null;
+        const currentContext = contextRef.current;
+        const currentFilters = currentContext ? extractFiltersRef.current(currentContext) : null;
         fetchDataRef.current(currentFilters);
         return;
       }
@@ -719,12 +832,13 @@ export const useTableDataWithContext = ({
       lastIncludeNonRealRef.current = includeNonRealNext;
       // Force a refetch so the backend non-real filter is applied/removed.
       lastFiltersRef.current = null;
-      const currentFilters = context ? extractFiltersRef.current(context) : null;
+      const currentContext = contextRef.current;
+      const currentFilters = currentContext ? extractFiltersRef.current(currentContext) : null;
       fetchDataRef.current(currentFilters);
     };
     window.addEventListener(DASHBOARD_GLOBAL_CRITERIA_EVENT, handleGlobalCriteriaChange);
     return () => window.removeEventListener(DASHBOARD_GLOBAL_CRITERIA_EVENT, handleGlobalCriteriaChange);
-  }, [context]);
+  }, []);
 
   useEffect(() => {
     const handlePanelRefresh = (event) => {
@@ -744,13 +858,14 @@ export const useTableDataWithContext = ({
         (thisInstance && targetInstance === thisInstance)
       );
       if (!isGlobal && !isMatch) return;
-      const currentFilters = context ? extractFiltersRef.current(context) : null;
+      const currentContext = contextRef.current;
+      const currentFilters = currentContext ? extractFiltersRef.current(currentContext) : null;
       lastFiltersRef.current = null;
       fetchDataRef.current(currentFilters, { force: true, bypassCache: true });
     };
     window.addEventListener(REPORT_REFRESH_EVENT, handlePanelRefresh);
     return () => window.removeEventListener(REPORT_REFRESH_EVENT, handlePanelRefresh);
-  }, [context]);
+  }, []);
 
   useEffect(() => {
     const handlePauseChanged = (event) => {
@@ -782,10 +897,11 @@ export const useTableDataWithContext = ({
       pendingRefreshOnResumeRef.current = true;
       return;
     }
-    const currentFilters = context ? extractFiltersRef.current(context) : null;
+    const currentContext = contextRef.current;
+    const currentFilters = currentContext ? extractFiltersRef.current(currentContext) : null;
     lastFiltersRef.current = null;
     fetchDataRef.current(currentFilters, { force: true, bypassCache: true });
-  }, [context]);
+  }, []);
 
   return {
     data,

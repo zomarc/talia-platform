@@ -309,6 +309,34 @@ class GraphQLFocusService {
         settings: comp.settings || null,
         dataSource: comp.dataSource || null
       }));
+
+      const dockviewLayoutToPreserve =
+        focusData.layoutData?.dockviewLayout && typeof focusData.layoutData.dockviewLayout === 'object'
+          ? focusData.layoutData.dockviewLayout
+          : null;
+
+      let componentsToSend = components;
+      if (componentsToSend.length === 0 && dockviewLayoutToPreserve) {
+        componentsToSend = [
+          {
+            type: 'TABLE',
+            position: { x: 0, y: 0, width: 6, height: 4 },
+            settings: { _dockviewLayout: dockviewLayoutToPreserve },
+            dataSource: null
+          }
+        ];
+      } else if (dockviewLayoutToPreserve) {
+        componentsToSend = components.map((comp, index) => {
+          const settings = { ...(comp.settings || {}) };
+          if (index === 0) {
+            settings._dockviewLayout = dockviewLayoutToPreserve;
+          }
+          return {
+            ...comp,
+            settings: Object.keys(settings).length > 0 ? settings : null
+          };
+        });
+      }
       
       // Map focusData to FocusInput format expected by GraphQL schema
       const input = {
@@ -318,7 +346,7 @@ class GraphQLFocusService {
         role: normalizedRole,
         assignedRoles: normalizedAssignedRoles,
         assignedUserId: focusData.assignedUserId || null,
-        components: components,
+        components: componentsToSend,
         isPublic: focusData.isPublic ?? focusData.isStandard ?? false
       };
       
@@ -500,9 +528,12 @@ class GraphQLFocusService {
         console.error('❌ GraphQL mutation errors:', errors);
         throw new Error(`GraphQL mutation failed: ${errors.map(e => e.message).join(', ')}`);
       }
+      if (!data || data.deleteFocus !== true) {
+        throw new Error('Delete focus failed: server did not confirm removal.');
+      }
       
       console.log(`✅ Deleted focus: ${focusId}`);
-      return data?.deleteFocus || true;
+      return true;
     } catch (error) {
       console.error('❌ Error deleting focus via GraphQL:', error);
       return false;

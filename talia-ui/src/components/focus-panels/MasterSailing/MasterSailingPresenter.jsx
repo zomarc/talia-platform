@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
-import { emitSailClear, emitSailSelect } from '../../../lib/eventBus';
+import { emitSailSelect } from '../../../lib/eventBus';
 import { formatDayMon, formatMonYear } from '../../../lib/dateFormat';
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 
@@ -64,6 +64,7 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
   const didApplyInitialGroupOpenRef = useRef(false);
   const suppressMonthAutoOpenRef = useRef(false);
   const tableBuiltRef = useRef(false);
+  const suppressClearOnRefreshRef = useRef(false);
   const pendingGroupActionRef = useRef(null);
   const groupCycleDepthRef = useRef(1);
   const [filters, setFilters] = useState({
@@ -261,7 +262,11 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
         });
 
         instanceRef.current.on('rowDeselected', () => {
-          emitSailClear({ timestamp: new Date().toISOString() });
+          if (suppressClearOnRefreshRef.current) return;
+          const hasSelectedRows = (instanceRef.current?.getSelectedData?.() || []).length > 0;
+          if (hasSelectedRows) return;
+          // Do not emit clear on deselect side-effects (e.g. data refresh); selection context is retained
+          // until another explicit sail select event occurs.
         });
 
         instanceRef.current.on('groupClick', (_event, group) => {
@@ -292,6 +297,7 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
   useEffect(() => {
     if (!instanceRef.current || !tableBuiltRef.current) return;
     try {
+      suppressClearOnRefreshRef.current = true;
       instanceRef.current.replaceData(data || []);
       if (!didApplyInitialGroupOpenRef.current) {
         openFirstMonthOnly();
@@ -299,6 +305,10 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
       }
     } catch (error) {
       console.warn('[MasterSailing] Failed to update table data:', error);
+    } finally {
+      window.setTimeout(() => {
+        suppressClearOnRefreshRef.current = false;
+      }, 0);
     }
   }, [data, openFirstMonthOnly]);
 

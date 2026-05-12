@@ -445,7 +445,10 @@ const ShipTrackerMapPresenter = ({
             Current position, weather, occupancy, and route history for both ships
           </p>
         </div>
-        <div className="ship-tracker-map__header-actions talia-report__actions talia-report-filters">
+      </div>
+
+      <div className="ship-tracker-map__filters talia-report-filters">
+        <div className="ship-tracker-map__header-actions">
           <label className="ship-tracker-map__ship-filter-label" htmlFor="ship-tracker-ship-select">
             Ship
           </label>
@@ -536,9 +539,15 @@ const ShipTrackerMapPresenter = ({
         </div>
       </div>
 
+      <div className="ship-tracker-map__note talia-callout" role="note">
+        AIS stream status is reported in <strong>Data Management → Instance &amp; connections</strong>.
+        If a ship has no MMSI, use public sources like MarineTraffic, VesselFinder, or MyShipTracking,
+        then update the <code>ship_tracking_target</code> table (Talia config) so AIS data can attach to that ship.
+      </div>
+
       {livePositionsError && (
-        <div className="ship-tracker-map__note">
-          AIS feed unavailable. No live positions available.
+        <div className="ship-tracker-map__note ship-tracker-map__note--error" role="alert">
+          {livePositionsError.message || 'AIS feed unavailable.'}
         </div>
       )}
       <div className="ship-tracker-map__section-header">

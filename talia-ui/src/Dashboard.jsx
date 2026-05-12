@@ -7,7 +7,6 @@ import { GraphQLUtils } from "./lib/apolloClient";
 // Focus Management Integration
 import { useFocusManagement } from "./hooks/useFocusManagement";
 import useDashboardSidebar from "./hooks/useDashboardSidebar";
-import graphQLFocusService from "./services/GraphQLFocusService";
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT, emitSailClear, emitSailSelect } from "./lib/eventBus";
 // Admin Components
 import { UserMappingTable, TaliaUserTable } from "./components/admin";
@@ -89,7 +88,6 @@ console.log('🔧 Dockview imported:', !!DockviewReact);
 const SELECT_EVENT = SAIL_SELECT_EVENT;   // payload: one record
 const CLEAR_EVENT = SAIL_CLEAR_EVENT;     // clear selection
 const DASHBOARD_SAVE_CURRENT_FOCUS_EVENT = 'talia:dashboard.saveCurrentFocus';
-const SAVED_FOCUS_KEY = 'talia-current-focus';
 
 function emitSelect(record) {
   if (record) {
@@ -860,7 +858,9 @@ function Dashboard({ user }) {
     focuses: taliaFocuses,
     loading: focusLoading,
     error: focusError,
-    updateFocus: updateTaliaFocus
+    updateFocus: updateTaliaFocus,
+    refreshFocuses,
+    selectFocus
   } = useFocusManagement();
   
   // Get role from user or localStorage (normalized)
@@ -1039,6 +1039,23 @@ function Dashboard({ user }) {
   // Focus navigation state - now using database focus system
   const [currentFocus, setCurrentFocus] = useState(null);
 
+  // If the active focus row disappears (e.g. admin delete), drop persisted id so restore does not loop on a missing focus.
+  useEffect(() => {
+    if (focusLoading) return;
+    if (!currentFocus || typeof currentFocus !== 'string') return;
+    const id = currentFocus;
+    if (!Array.isArray(taliaFocuses)) return;
+    const stillExists = taliaFocuses.some((f) => f?.id === id);
+    if (!stillExists) {
+      setCurrentFocus(null);
+      selectFocus?.(null);
+      saveUserProfileState({ patch: { lastFocusId: null }, component: 'Dashboard' }).catch(() => {
+        // best effort only
+      });
+      setStatusMessage('The saved focus is no longer available. Select a focus from the sidebar.');
+    }
+  }, [taliaFocuses, currentFocus, focusLoading, selectFocus]);
+
   // Role-based focus filtering function is now defined outside the component
   const [userRole, setUserRole] = useState(normalizedUserRole);
 
@@ -1059,19 +1076,27 @@ function Dashboard({ user }) {
 
     console.log('🔄 Loading focus layout from database:', focusId);
     
-    // Reload focuses from database to ensure we have the latest data
     try {
-      const refreshedFocuses = await graphQLFocusService.getFocusesForRole(normalizedUserRole || 'ADMIN');
-      // Try to find by ID first, then by name (for backward compatibility)
-      let focus = refreshedFocuses.find(f => f.id === focusId);
-      if (!focus) {
-        // Try finding by name (case-insensitive)
-        focus = refreshedFocuses.find(f => f.name.toLowerCase() === focusId.toLowerCase());
+      const findFocus = (list) => {
+        if (!Array.isArray(list)) return null;
+        // Try to find by ID first, then by name (for backward compatibility)
+        let focus = list.find((f) => f.id === focusId);
+        if (!focus) {
+          focus = list.find((f) => f.name?.toLowerCase?.() === focusId.toLowerCase());
+        }
+        return focus || null;
+      };
+
+      let focus = findFocus(taliaFocuses);
+      if (!focus && typeof refreshFocuses === 'function') {
+        const refreshed = await refreshFocuses();
+        focus = findFocus(refreshed || taliaFocuses);
       }
       
       if (!focus) {
         // Don't show error alert - just log and return gracefully
-        const errorMsg = `Focus with ID/name "${focusId}" not found in database. Available focuses: ${refreshedFocuses.map(f => f.name).join(', ')}`;
+        const available = Array.isArray(taliaFocuses) ? taliaFocuses.map((f) => f.name).join(', ') : '';
+        const errorMsg = `Focus with ID/name "${focusId}" not found in database. Available focuses: ${available}`;
         console.warn('⚠️', errorMsg);
         // Don't throw error - allow app to continue
         return null;
@@ -1122,7 +1147,7 @@ function Dashboard({ user }) {
       alert(errorMsg);
       throw new Error(errorMsg);
     }
-  }, [normalizedUserRole]);
+  }, [normalizedUserRole, taliaFocuses, refreshFocuses]);
 
   // Focus change handler
   const handleFocusChange = useCallback(async (focusId) => {
@@ -1135,11 +1160,7 @@ function Dashboard({ user }) {
         return;
       }
       setCurrentFocus(loadedFocusId);
-      try {
-        window.localStorage?.setItem?.(SAVED_FOCUS_KEY, loadedFocusId);
-      } catch {
-        // no-op
-      }
+      selectFocus?.(loadedFocusId);
       saveUserProfileState({
         patch: { lastFocusId: loadedFocusId },
         component: 'Dashboard'
@@ -1151,7 +1172,7 @@ function Dashboard({ user }) {
       // Error is already shown to user in loadFocusLayout
       // Don't fall back - let the error stand
     }
-  }, [loadFocusLayout]);
+  }, [loadFocusLayout, selectFocus]);
 
   const cycleFocus = useCallback(async () => {
     if (!Array.isArray(taliaFocuses) || taliaFocuses.length === 0) {
@@ -1229,11 +1250,6 @@ function Dashboard({ user }) {
           hour: '2-digit',
           minute: '2-digit',
         });
-        try {
-          window.localStorage?.setItem?.(SAVED_FOCUS_KEY, focusId);
-        } catch {
-          // no-op
-        }
         saveUserProfileState({
           patch: { lastFocusId: focusId },
           component: 'Dashboard'
@@ -1528,16 +1544,9 @@ function Dashboard({ user }) {
 
     loadUserProfileState({ component: 'Dashboard' })
       .then((profileState) => {
-        let profileFocusId = typeof profileState?.lastFocusId === 'string'
+        const profileFocusId = typeof profileState?.lastFocusId === 'string'
           ? profileState.lastFocusId
           : '';
-        if (!profileFocusId) {
-          try {
-            profileFocusId = window.localStorage?.getItem?.(SAVED_FOCUS_KEY) || '';
-          } catch {
-            profileFocusId = '';
-          }
-        }
         const preferredFocusId = profileFocusId;
 
         if (!preferredFocusId) {
@@ -1546,14 +1555,9 @@ function Dashboard({ user }) {
         }
 
         setCurrentFocus(preferredFocusId);
+        selectFocus?.(preferredFocusId);
         pendingPersistedFocusIdRef.current = preferredFocusId;
         persistedFocusAppliedRef.current = false;
-        try {
-          window.localStorage?.setItem?.(SAVED_FOCUS_KEY, preferredFocusId);
-        } catch {
-          reportLayoutRestoreFailure('Failed to persist restored focus id.');
-        }
-
         handleFocusChange(preferredFocusId).catch((error) => {
           reportLayoutRestoreFailure(`Failed to restore persisted focus layout for "${preferredFocusId}".`, error);
         });

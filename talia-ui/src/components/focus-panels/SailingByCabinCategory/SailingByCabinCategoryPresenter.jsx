@@ -18,8 +18,9 @@ const columns = [
  * @param {Object} props
  * @param {Array} props.data - Table rows
  * @param {Object|null} props.context - Selection context
+ * @param {string|null} props.selectedSailCode - Canonical selected sail code
  */
-const SailingByCabinCategoryPresenter = ({ data, context }) => {
+const SailingByCabinCategoryPresenter = ({ data, context, selectedSailCode }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const [recordCount, setRecordCount] = useState(data?.length || 0);
@@ -63,7 +64,7 @@ const SailingByCabinCategoryPresenter = ({ data, context }) => {
     setRecordCount(data?.length || 0);
   }, [data]);
 
-  const contextLabel = context?.sail_code || context?.row_data?.sail_code || (typeof context === 'string' ? context : null);
+  const contextLabel = selectedSailCode || context?.sail_code || context?.row_data?.sail_code || (typeof context === 'string' ? context : null);
 
   return (
     <div className="talia-report" role="region" aria-label="Cabin category occupancy">

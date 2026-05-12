@@ -15,6 +15,7 @@ import {
   setGlobalReportDetailsVisible,
   clearPanelReportDetailsOverrides,
 } from "../../services/panelDetailsState";
+import TaliaTooltip from "../shared/TaliaTooltip";
 
 const FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderFiltersVisible';
 const TABLE_LAYOUT_STORAGE_KEY = 'taliaTableLayoutMode';
@@ -360,41 +361,46 @@ function DashboardSidebar({
           <div className={`dashboard-section__content ${expandedSections.reports ? 'dashboard-section__content--expanded' : ''}`}>
             <div className="dashboard-section__group">
               <div className="dashboard-section__subtitle">Profile Tools (3 goals)</div>
-              <button
-                className="dashboard-btn"
-                onClick={() => onAddPanel('booking-profile', 'Real booking profile (+ YoY)', { reportId: 'booking-profile', includeComparison: false })}
-                title="Goal ① REAL: trends from bookings; select a sail in the table. Toggle YoY via the next button or panel params."
-              >
-                ① Real profile
-              </button>
-              <button
-                className="dashboard-btn"
-                onClick={() => onAddPanel('booking-profile', 'Real booking profile + YoY', { reportId: 'booking-profile', includeComparison: true })}
-                title="Goal ① REAL with year-over-year comparison (prior sail auto-derived unless you set previousYearSailCode in params)"
-              >
-                ① Real + YoY
-              </button>
-              <button
-                className="dashboard-btn"
-                onClick={() => onAddPanel('booking-target-data-simple', 'TARGET only (imported)', { reportId: 'booking-target-data-simple' })}
-                title="Goal ② TARGET: curve from Data Management import (booking_targets_supplied)"
-              >
-                ② Imported targets
-              </button>
-              <button
-                className="dashboard-btn"
-                onClick={() => onAddPanel('booking-combined-data-simple', 'Overlay: REAL + TARGET + MODEL', { reportId: 'booking-combined-data-simple' })}
-                title="Overlay REAL, imported TARGET, BUDGET, and inventory MODEL on one chart"
-              >
-                Overlay (all streams)
-              </button>
-              <button
-                className="dashboard-btn"
-                onClick={() => onAddPanel('booking-target-profile-editor-simple', 'MODEL profile editor (graph)', { reportId: 'booking-target-profile-editor-simple' })}
-                title="Goal ③ MODEL: drag points / edit table, save consolidated curve on inventory item"
-              >
-                ③ Model editor (graph)
-              </button>
+              <TaliaTooltip content="Goal ① REAL: trends from bookings; select a sail in the table. Toggle YoY via the next button or panel params." placement="bottom-left" delayMs={180}>
+                <button
+                  className="dashboard-btn"
+                  onClick={() => onAddPanel('booking-profile', 'Real booking profile (+ YoY)', { reportId: 'booking-profile', includeComparison: false })}
+                >
+                  ① Real profile
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Goal ① REAL with year-over-year comparison (prior sail auto-derived unless you set previousYearSailCode in params)" placement="bottom-left" delayMs={180}>
+                <button
+                  className="dashboard-btn"
+                  onClick={() => onAddPanel('booking-profile', 'Real booking profile + YoY', { reportId: 'booking-profile', includeComparison: true })}
+                >
+                  ① Real + YoY
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Goal ② TARGET: curve from Data Management import (booking_targets_supplied)" placement="bottom-left" delayMs={180}>
+                <button
+                  className="dashboard-btn"
+                  onClick={() => onAddPanel('booking-target-data-simple', 'TARGET only (imported)', { reportId: 'booking-target-data-simple' })}
+                >
+                  ② Imported targets
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Overlay REAL, imported TARGET, BUDGET, and inventory MODEL on one chart" placement="bottom-left" delayMs={180}>
+                <button
+                  className="dashboard-btn"
+                  onClick={() => onAddPanel('booking-combined-data-simple', 'Overlay: REAL + TARGET + MODEL', { reportId: 'booking-combined-data-simple' })}
+                >
+                  Overlay (all streams)
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Goal ③ MODEL: drag points / edit table, save consolidated curve on inventory item" placement="bottom-left" delayMs={180}>
+                <button
+                  className="dashboard-btn"
+                  onClick={() => onAddPanel('booking-target-profile-editor-simple', 'MODEL profile editor (graph)', { reportId: 'booking-target-profile-editor-simple' })}
+                >
+                  ③ Model editor (graph)
+                </button>
+              </TaliaTooltip>
             </div>
             {Object.entries(reportGroups).sort(([a], [b]) => a.localeCompare(b)).map(([category, reports]) => (
               <div key={category} className="dashboard-section__group">
@@ -403,14 +409,14 @@ function DashboardSidebar({
                   const reportLabel = report.legacy ? `${report.title} (Legacy)` : report.title;
                   const reportDescription = report.legacy ? `${report.description || ''} Legacy component.` : report.description;
                   return (
-                    <button
-                      key={report.panelId}
-                      className="dashboard-btn"
-                      onClick={() => onAddPanel(report.panelId, reportLabel, { reportId: report.panelId })}
-                      title={reportDescription}
-                    >
-                      {reportLabel}
-                    </button>
+                    <TaliaTooltip key={`report-tip-${report.panelId}`} content={reportDescription} placement="bottom-left" delayMs={180}>
+                      <button
+                        className="dashboard-btn"
+                        onClick={() => onAddPanel(report.panelId, reportLabel, { reportId: report.panelId })}
+                      >
+                        {reportLabel}
+                      </button>
+                    </TaliaTooltip>
                   );
                 })}
               </div>
@@ -475,14 +481,15 @@ function DashboardSidebar({
                   onChange={(event) => setGroupColorIntensity(Number(event.target.value))}
                   className="dashboard-form-input dashboard-form-input--range dashboard-form-input--range-inline"
                 />
-                <input
-                  type="color"
-                  className="dashboard-form-color-input"
-                  value={groupColorHex}
-                  onChange={(event) => setGroupColorHex(event.target.value)}
-                  title="Select group row color"
-                  aria-label="Group row color"
-                />
+                <TaliaTooltip content="Select group row color" placement="bottom-left" delayMs={180}>
+                  <input
+                    type="color"
+                    className="dashboard-form-color-input"
+                    value={groupColorHex}
+                    onChange={(event) => setGroupColorHex(event.target.value)}
+                    aria-label="Group row color"
+                  />
+                </TaliaTooltip>
               </div>
               <div className="dashboard-form-hint">Controls how visible grouped table row shading appears.</div>
             </div>
@@ -498,14 +505,15 @@ function DashboardSidebar({
                   onChange={(event) => setRowColorIntensity(Number(event.target.value))}
                   className="dashboard-form-input dashboard-form-input--range dashboard-form-input--range-inline"
                 />
-                <input
-                  type="color"
-                  className="dashboard-form-color-input"
-                  value={rowHoverColorHex}
-                  onChange={(event) => setRowHoverColorHex(event.target.value)}
-                  title="Select row hover color"
-                  aria-label="Row hover color"
-                />
+                <TaliaTooltip content="Select row hover color" placement="bottom-left" delayMs={180}>
+                  <input
+                    type="color"
+                    className="dashboard-form-color-input"
+                    value={rowHoverColorHex}
+                    onChange={(event) => setRowHoverColorHex(event.target.value)}
+                    aria-label="Row hover color"
+                  />
+                </TaliaTooltip>
               </div>
               <div className="dashboard-form-hint">Controls data-row hover highlight intensity.</div>
             </div>
@@ -521,14 +529,15 @@ function DashboardSidebar({
                   onChange={(event) => setOddRowIntensity(Number(event.target.value))}
                   className="dashboard-form-input dashboard-form-input--range dashboard-form-input--range-inline"
                 />
-                <input
-                  type="color"
-                  className="dashboard-form-color-input"
-                  value={oddRowColorHex}
-                  onChange={(event) => setOddRowColorHex(event.target.value)}
-                  title="Select odd row color"
-                  aria-label="Odd row color"
-                />
+                <TaliaTooltip content="Select odd row color" placement="bottom-left" delayMs={180}>
+                  <input
+                    type="color"
+                    className="dashboard-form-color-input"
+                    value={oddRowColorHex}
+                    onChange={(event) => setOddRowColorHex(event.target.value)}
+                    aria-label="Odd row color"
+                  />
+                </TaliaTooltip>
               </div>
               <div className="dashboard-form-hint">Controls odd-row striping intensity in data tables.</div>
             </div>
@@ -544,14 +553,15 @@ function DashboardSidebar({
                   onChange={(event) => setEvenRowIntensity(Number(event.target.value))}
                   className="dashboard-form-input dashboard-form-input--range dashboard-form-input--range-inline"
                 />
-                <input
-                  type="color"
-                  className="dashboard-form-color-input"
-                  value={evenRowColorHex}
-                  onChange={(event) => setEvenRowColorHex(event.target.value)}
-                  title="Select even row color"
-                  aria-label="Even row color"
-                />
+                <TaliaTooltip content="Select even row color" placement="bottom-left" delayMs={180}>
+                  <input
+                    type="color"
+                    className="dashboard-form-color-input"
+                    value={evenRowColorHex}
+                    onChange={(event) => setEvenRowColorHex(event.target.value)}
+                    aria-label="Even row color"
+                  />
+                </TaliaTooltip>
               </div>
               <div className="dashboard-form-hint">Controls even-row striping intensity in data tables.</div>
             </div>
@@ -567,14 +577,15 @@ function DashboardSidebar({
                   onChange={(event) => setTableHeaderIntensity(Number(event.target.value))}
                   className="dashboard-form-input dashboard-form-input--range dashboard-form-input--range-inline"
                 />
-                <input
-                  type="color"
-                  className="dashboard-form-color-input"
-                  value={tableHeaderColorHex}
-                  onChange={(event) => setTableHeaderColorHex(event.target.value)}
-                  title="Select table header color"
-                  aria-label="Table header color"
-                />
+                <TaliaTooltip content="Select table header color" placement="bottom-left" delayMs={180}>
+                  <input
+                    type="color"
+                    className="dashboard-form-color-input"
+                    value={tableHeaderColorHex}
+                    onChange={(event) => setTableHeaderColorHex(event.target.value)}
+                    aria-label="Table header color"
+                  />
+                </TaliaTooltip>
               </div>
               <div className="dashboard-form-hint">Controls Tabulator header background for all tables globally.</div>
             </div>
@@ -590,14 +601,15 @@ function DashboardSidebar({
                   onChange={(event) => setCardColorIntensity(Number(event.target.value))}
                   className="dashboard-form-input dashboard-form-input--range dashboard-form-input--range-inline"
                 />
-                <input
-                  type="color"
-                  className="dashboard-form-color-input"
-                  value={cardColorHex}
-                  onChange={(event) => setCardColorHex(event.target.value)}
-                  title="Select card color"
-                  aria-label="Card color"
-                />
+                <TaliaTooltip content="Select card color" placement="bottom-left" delayMs={180}>
+                  <input
+                    type="color"
+                    className="dashboard-form-color-input"
+                    value={cardColorHex}
+                    onChange={(event) => setCardColorHex(event.target.value)}
+                    aria-label="Card color"
+                  />
+                </TaliaTooltip>
               </div>
               <div className="dashboard-form-hint">Controls card and elevated panel background intensity.</div>
             </div>
@@ -645,15 +657,16 @@ function DashboardSidebar({
                   marginTop: 'var(--theme-component-gap-xs)',
                 }}
               >
-                <input
-                  id="talia-custom-bg-color"
-                  type="color"
-                  className="dashboard-form-color-input dashboard-form-color-input--large"
-                  value={backgroundColorPickerValue}
-                  onChange={(event) => setCustomBackgroundHex(event.target.value)}
-                  aria-label="Pick custom background color"
-                  title="Custom background (overrides preset gradient)"
-                />
+                <TaliaTooltip content="Custom background (overrides preset gradient)" placement="bottom-left" delayMs={180}>
+                  <input
+                    id="talia-custom-bg-color"
+                    type="color"
+                    className="dashboard-form-color-input dashboard-form-color-input--large"
+                    value={backgroundColorPickerValue}
+                    onChange={(event) => setCustomBackgroundHex(event.target.value)}
+                    aria-label="Pick custom background color"
+                  />
+                </TaliaTooltip>
                 <button
                   type="button"
                   className="dashboard-form-button"
@@ -873,6 +886,7 @@ function DashboardSidebar({
                 value={defaultDisplayCurrency}
                 onChange={(event) => setDefaultDisplayCurrency(event.target.value)}
               >
+                <option value="ALL">All currencies</option>
                 <option value="USD">USD — US dollar</option>
                 <option value="EUR">EUR — Euro</option>
                 <option value="GBP">GBP — British pound</option>

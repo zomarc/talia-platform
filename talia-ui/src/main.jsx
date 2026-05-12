@@ -18,6 +18,7 @@ import './styles/status-bar.css'     // Status bar styles
 import AppWithAuth from './AppWithAuth.jsx'
 import StatusBar from './components/shared/StatusBar.jsx'
 import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext.jsx';
+import { FocusManagementProvider } from './contexts/FocusManagementProvider.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
 import { applyTheme, DEFAULT_THEME } from './config/themes.js';
 import { initChartDefaults } from './lib/chartConfig.js';
@@ -272,7 +273,9 @@ if (!root) {
     reactRoot.render(
       <SupabaseAuthProvider>
         <ThemeProvider>
-          <DevSwitcher />
+          <FocusManagementProvider>
+            <DevSwitcher />
+          </FocusManagementProvider>
         </ThemeProvider>
       </SupabaseAuthProvider>
     );

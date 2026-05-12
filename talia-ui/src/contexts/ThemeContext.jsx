@@ -28,6 +28,7 @@ import {
   mergeTaliaUiThemesFromDb,
   resolveThemeDefaultHeaderLogoUrl,
 } from '../themes/taliaUiThemes';
+import { DASHBOARD_TABLE_LAYOUT_EVENT } from '../components/dockview/eventConstants';
 
 const ThemeContext = createContext();
 const LEGACY_APPEARANCE_MIGRATE_PREFIX = 'taliaAppearanceMigrated:';
@@ -69,6 +70,7 @@ const normalizeDefaultDisplayCurrency = (raw, fallback = 'USD') => {
     ? fallback.toUpperCase()
     : 'USD';
   const s = typeof raw === 'string' ? raw.trim().toUpperCase() : '';
+  if (s === 'ALL') return 'ALL';
   if (!/^[A-Z]{3}$/.test(s)) return fb;
   try {
     Intl.NumberFormat('en-US', { style: 'currency', currency: s, maximumFractionDigits: 0 }).format(1);
@@ -120,6 +122,10 @@ const normalizeSidebarAutoCloseMs = (value, fallback = 8000) => {
 
 const normalizeSidebarDisplayMode = (value, fallback = 'panel') => (
   value === 'overlay' ? 'overlay' : fallback
+);
+
+const normalizeTableLayoutMode = (value, fallback = 'width') => (
+  value === 'data' ? 'data' : fallback
 );
 
 /** @deprecated Import from `../themes/taliaUiThemes` */
@@ -242,6 +248,19 @@ export const ThemeProvider = ({ children }) => {
   const [defaultDisplayCurrency, setDefaultDisplayCurrencyState] = useState(() =>
     normalizeDefaultDisplayCurrency(undefined, inferLocaleDefaultCurrency())
   );
+  const [tableLayoutMode, setTableLayoutModeState] = useState(() => {
+    try {
+      const inMemory = window?.__taliaTableLayoutMode;
+      if (inMemory === 'data' || inMemory === 'width') return inMemory;
+      const saved = window?.localStorage?.getItem?.('taliaTableLayoutMode');
+      return normalizeTableLayoutMode(saved, 'width');
+    } catch {
+      return 'width';
+    }
+  });
+  const setTableLayoutMode = useCallback((next) => {
+    setTableLayoutModeState(normalizeTableLayoutMode(next, 'width'));
+  }, []);
 
   const setDefaultDisplayCurrency = useCallback((next) => {
     setDefaultDisplayCurrencyState(
@@ -345,10 +364,11 @@ export const ThemeProvider = ({ children }) => {
     calloutsVisible,
     gameSoundEnabled,
     defaultDisplayCurrency,
+    tableLayoutMode,
     headerLogoUrl,
     headerLogoVisible,
     customBackgroundHex,
-  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, defaultDisplayCurrency, headerLogoUrl, headerLogoVisible, customBackgroundHex]);
+  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, defaultDisplayCurrency, tableLayoutMode, headerLogoUrl, headerLogoVisible, customBackgroundHex]);
 
   const applyAppearanceSettings = (settings) => {
     if (!settings || typeof settings !== 'object') return false;
@@ -424,6 +444,9 @@ export const ThemeProvider = ({ children }) => {
       setDefaultDisplayCurrencyState(
         normalizeDefaultDisplayCurrency(settings.defaultDisplayCurrency, inferLocaleDefaultCurrency())
       );
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'tableLayoutMode')) {
+      setTableLayoutModeState(normalizeTableLayoutMode(settings.tableLayoutMode, 'width'));
     }
     return true;
   };
@@ -517,6 +540,7 @@ export const ThemeProvider = ({ children }) => {
     setCalloutsVisible(true);
     setGameSoundEnabled(true);
     setDefaultDisplayCurrencyState(normalizeDefaultDisplayCurrency(undefined, inferLocaleDefaultCurrency()));
+    setTableLayoutModeState('width');
     setAppearanceProfiles([]);
     setActiveAppearanceProfileId('');
     setBgColorState('midnight');
@@ -797,7 +821,21 @@ export const ThemeProvider = ({ children }) => {
         clearTimeout(saveSettingsTimerRef.current);
       }
     };
-  }, [appearanceDbLoaded, appearanceUserId, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, customBackgroundHex, headerLogoUrl, headerLogoVisible, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, defaultDisplayCurrency, activeAppearanceProfileId]);
+  }, [appearanceDbLoaded, appearanceUserId, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, customBackgroundHex, headerLogoUrl, headerLogoVisible, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, defaultDisplayCurrency, tableLayoutMode, activeAppearanceProfileId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const nextMode = normalizeTableLayoutMode(tableLayoutMode, 'width');
+    window.__taliaTableLayoutMode = nextMode;
+    try {
+      window.localStorage?.setItem?.('taliaTableLayoutMode', nextMode);
+    } catch {
+      // ignore storage failures
+    }
+    window.dispatchEvent(new CustomEvent(DASHBOARD_TABLE_LAYOUT_EVENT, {
+      detail: { mode: nextMode },
+    }));
+  }, [tableLayoutMode]);
 
   useEffect(() => {
     if (!appearanceDbLoaded) return undefined;
@@ -1212,6 +1250,8 @@ export const ThemeProvider = ({ children }) => {
     setGameSoundEnabled,
     defaultDisplayCurrency,
     setDefaultDisplayCurrency,
+    tableLayoutMode,
+    setTableLayoutMode,
 
     // Appearance profiles
     appearanceDbLoaded,

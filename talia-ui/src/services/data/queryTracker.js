@@ -35,6 +35,7 @@ class QueryTracker {
       status: 'pending',
       duration: null,
       responseSize: null,
+      rowCount: null,
       error: null
     };
 
@@ -54,8 +55,21 @@ class QueryTracker {
       if (result.error) {
         queryRecord.error = result.error.message || String(result.error);
       } else {
-        const responseString = JSON.stringify(result.data || result);
+        const payload = result.data || result;
+        const responseString = JSON.stringify(payload);
         queryRecord.responseSize = new Blob([responseString]).size;
+        if (Array.isArray(payload)) {
+          queryRecord.rowCount = payload.length;
+        } else if (payload && typeof payload === 'object') {
+          if (Array.isArray(payload.tableData)) {
+            queryRecord.rowCount = payload.tableData.length;
+          } else {
+            const firstArray = Object.values(payload).find((value) => Array.isArray(value));
+            if (Array.isArray(firstArray)) {
+              queryRecord.rowCount = firstArray.length;
+            }
+          }
+        }
       }
 
       this.notifyListeners();

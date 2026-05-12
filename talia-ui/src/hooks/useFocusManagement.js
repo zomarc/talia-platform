@@ -1,42 +1,41 @@
 /**
- * useFocusManagement - Compatibility wrapper hook
- * Maps useTaliaFocusManagement to the expected interface used by components
+ * useFocusManagement — compatibility API mapped from {@link FocusManagementContext}.
  */
 
-import { useTaliaFocusManagement } from './useTaliaFocusManagement';
+import { useContext } from 'react';
+import { FocusManagementContext } from '../contexts/focusManagementContext';
 
 export const useFocusManagement = () => {
-  const taliaHook = useTaliaFocusManagement();
+  const taliaHook = useContext(FocusManagementContext);
+  if (taliaHook == null) {
+    throw new Error('useFocusManagement must be used within FocusManagementProvider.');
+  }
 
-  // Map Talia hook properties to expected interface
   return {
-    // State - map property names
     focuses: taliaHook.taliaFocuses || [],
     currentFocus: taliaHook.currentTaliaFocus,
     loading: taliaHook.loading,
     error: taliaHook.error,
     fallbackMode: !taliaHook.taliaFocuses || taliaHook.taliaFocuses.length === 0,
-    
-    // Actions - map method names
+
     loadFocus: taliaHook.loadTaliaFocus,
+    refreshFocuses: taliaHook.loadTaliaFocuses,
+    selectFocus: taliaHook.selectTaliaFocusById,
     createFocus: taliaHook.createTaliaFocus,
     updateFocus: taliaHook.updateTaliaFocus,
     deleteFocus: taliaHook.deleteTaliaFocus,
     toggleFavorite: taliaHook.toggleFavorite,
-    
-    // Computed values
+
     favoriteFocuses: taliaHook.favoriteFocuses || [],
-    recentlyUsedFocuses: [], // TODO: Implement recently used focuses
+    recentlyUsedFocuses: [],
     canCreateFocus: taliaHook.canCreateFocus,
-    
-    // Initialize standard focuses (placeholder - may need implementation)
+
     initializeStandardFocuses: async () => {
       console.log('initializeStandardFocuses called - using Talia focuses');
       await taliaHook.loadTaliaFocuses();
       return true;
     },
-    
-    // Expose Talia-specific properties for components that need them
+
     taliaUserId: taliaHook.taliaUserId,
     taliaUser: taliaHook.taliaUser,
     isAdmin: taliaHook.isAdmin
@@ -44,6 +43,3 @@ export const useFocusManagement = () => {
 };
 
 export default useFocusManagement;
-
-
-

@@ -776,9 +776,10 @@ const AdminThemesPanel = () => {
         <div className="admin-access__intro">
           <h2 className="admin-access__title">Themes Management</h2>
           <p className="admin-access__subtitle">
-            Same catalogue as the header / sidebar <strong>Style</strong> menu. Export / Load JSON to move items
-            between instances (root key <code>{THEME_EXPORT_ROOT_KEY}</code>). Select a row in the catalogue, then
-            edit or import.
+            Same catalogue as the header / sidebar <strong>Style</strong> menu: named <strong>appearance profiles</strong>{' '}
+            first, then <strong>palette</strong> (registry) themes. Export / Load JSON to move items between instances
+            (root key <code>{THEME_EXPORT_ROOT_KEY}</code>). See <code>talia-ui/docs/TALIA_UI_GLOSSARY.md</code> for
+            naming. Select a row in the catalogue, then edit or import.
           </p>
         </div>
         <div className="admin-access__create">

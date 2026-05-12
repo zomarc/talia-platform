@@ -10,6 +10,7 @@ import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 import queryTracker from '../../../services/data/queryTracker';
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { useTheme } from '../../../contexts/ThemeContext';
 
 const DOT_SAIL_SELECT_EVENT = 'talia.sail.select';
 const GRAPHQL_URL = '/api/graphql';
@@ -17,8 +18,14 @@ const REPORT_PANEL_ID = 'competitor-pricing';
 const REPORT_CONTEXT_EVENT = 'talia:report.contextChanged';
 const DASHBOARD_VIEW_SCOPE_EVENT = 'talia:dashboard.viewScope';
 
-const DEFAULT_FILTERS = {
-  currency: 'EUR',
+const resolveCurrencyFilterFromGlobal = (defaultDisplayCurrency) => {
+  const normalized = String(defaultDisplayCurrency || '').trim().toUpperCase();
+  if (!normalized || normalized === 'ALL') return null;
+  return normalized;
+};
+
+const buildDefaultFilters = (defaultDisplayCurrency) => ({
+  currency: resolveCurrencyFilterFromGlobal(defaultDisplayCurrency),
   duration: null,
   destination: null,
   cabinType: 'ALL',
@@ -28,7 +35,7 @@ const DEFAULT_FILTERS = {
   market: null,
   primaryCruiseLine: null,
   secondaryCruiseLine: 'ALL'
-};
+});
 
 const normalizeString = (value) => String(value || '').trim().toLowerCase();
 
@@ -150,7 +157,8 @@ const fetchInventoryItems = async ({ sailCode, referenceSailCode, shipCode }) =>
 };
 
 const CompetitorPricingContainer = ({ theme, panelInstanceId, panelComponentId }) => {
-  const [filters, setFilters] = React.useState(DEFAULT_FILTERS);
+  const { defaultDisplayCurrency } = useTheme();
+  const [filters, setFilters] = React.useState(() => buildDefaultFilters(defaultDisplayCurrency));
   const [pendingContextFilter, setPendingContextFilter] = React.useState(null);
   const [viewScope, setViewScope] = React.useState(() => window.__taliaViewScope === 'wide' ? 'wide' : 'local');
 
@@ -175,6 +183,21 @@ const CompetitorPricingContainer = ({ theme, panelInstanceId, panelComponentId }
       console.warn('[CompetitorPricing] Failed to publish report context:', err);
     }
   }, []);
+
+  React.useEffect(() => {
+    const nextCurrency = resolveCurrencyFilterFromGlobal(defaultDisplayCurrency);
+    setFilters((prev) => ({ ...prev, currency: nextCurrency }));
+  }, [defaultDisplayCurrency]);
+
+  React.useEffect(() => {
+    if (!filters.currency || !Array.isArray(data) || data.length === 0) return;
+    const hasCurrency = data.some(
+      (row) => String(row?.currency || '').trim().toUpperCase() === String(filters.currency).trim().toUpperCase()
+    );
+    if (!hasCurrency) {
+      setFilters((prev) => ({ ...prev, currency: null }));
+    }
+  }, [data, filters.currency]);
 
   React.useEffect(() => {
     const handleScopeChange = (event) => {

@@ -4661,6 +4661,16 @@
   padding: 6px 10px;
 }
 
+.ship-tracker-map__note--error {
+  color: var(--theme-error);
+  background: var(--theme-error-light);
+  border-color: var(--theme-error);
+}
+
+.ship-tracker-map__filters {
+  margin: 8px 0 6px;
+}
+
 .ship-tracker-map__timeline {
   display: flex;
   flex-direction: column;

@@ -7,6 +7,7 @@ import React from 'react';
 import SubpanelExpandButton from '../../shared/SubpanelExpandButton';
 import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
 import { formatDayMon } from '../../../lib/dateFormat';
+import { useTheme } from '../../../contexts/ThemeContext';
 
 const ALL_PROMOS = 'All Promos';
 const ALL_RATE_TYPES = 'All Rate Types';
@@ -41,6 +42,7 @@ const getRateTypeClass = (rateType) => RATE_TYPE_CLASS[rateType] || 'published-r
 
 const PublishedRatesGridPresenter = ({ data, selectedSailCode }) => {
   const { expandedKey, toggleExpandedKey } = useSubpanelExpansion(null);
+  const { defaultDisplayCurrency } = useTheme();
   const [selectedPromo, setSelectedPromo] = React.useState(ALL_PROMOS);
   const [selectedRateType, setSelectedRateType] = React.useState(ALL_RATE_TYPES);
   const [selectedCurrency, setSelectedCurrency] = React.useState(ALL_CURRENCIES);
@@ -91,6 +93,19 @@ const PublishedRatesGridPresenter = ({ data, selectedSailCode }) => {
       setSelectedCurrency(currencyOptions[0] || ALL_CURRENCIES);
     }
   }, [currencyOptions, selectedCurrency]);
+
+  React.useEffect(() => {
+    const normalized = String(defaultDisplayCurrency || '').trim().toUpperCase();
+    if (normalized === 'ALL') {
+      setSelectedCurrency(ALL_CURRENCIES);
+      return;
+    }
+    if (normalized && currencyOptions.includes(normalized)) {
+      setSelectedCurrency(normalized);
+      return;
+    }
+    setSelectedCurrency(ALL_CURRENCIES);
+  }, [defaultDisplayCurrency, currencyOptions]);
 
   const filteredData = React.useMemo(() => {
     let rows = data;

@@ -444,14 +444,47 @@ export class SupabaseDataService {
   // Delete a focus
   async deleteFocus(id) {
     try {
+      const focusId =
+        typeof id === 'string' && id.trim() !== '' && !Number.isNaN(Number(id))
+          ? Number(id)
+          : id;
+      const { error: prefError } = await this.client
+        .from('user_focus_preferences')
+        .delete()
+        .eq('focus_id', focusId);
+
+      if (prefError) {
+        if (prefError.code === 'PGRST205') {
+          console.warn('Supabase missing user_focus_preferences; skipping preference delete.');
+        } else {
+          console.error('Supabase delete error for user_focus_preferences:', prefError);
+          throw prefError;
+        }
+      }
+
       const { error } = await this.client
         .from('focuses')
         .delete()
-        .eq('id', id);
+        .eq('id', focusId);
       
       if (error) {
         console.error('Supabase delete error for focus:', error);
         throw error;
+      }
+
+      const { data: remaining, error: verifyError } = await this.client
+        .from('focuses')
+        .select('id')
+        .eq('id', focusId)
+        .limit(1);
+
+      if (verifyError) {
+        console.error('Supabase verify delete error for focus:', verifyError);
+        throw verifyError;
+      }
+
+      if (remaining && remaining.length > 0) {
+        throw new Error(`Focus ${focusId} still exists after delete.`);
       }
       
       return true;

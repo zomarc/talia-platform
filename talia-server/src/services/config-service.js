@@ -224,6 +224,28 @@ class ConfigService {
   }
 
   /**
+   * Update data source connection config
+   */
+  async updateDataSourceConnection(sourceName, connectionConfig) {
+    const { data, error } = await supabase
+      .from(this.tables.dataSource)
+      .update({
+        connection_config: connectionConfig || {},
+        updated_at: new Date().toISOString()
+      })
+      .eq('source_name', sourceName)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating data source connection:', error);
+      throw new Error(`Failed to update data source connection: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  /**
    * Get application settings
    */
   async getSettings(category = null) {

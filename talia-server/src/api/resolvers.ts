@@ -13,7 +13,7 @@ import { SyncOperation } from '../services/sync-operation.js';
 import { syncEventEmitter } from '../services/sync-event-emitter.js';
 import { getDateRangeConfigSummary, getDateRange } from '../config/date-range-config.js';
 import { configService } from '../services/config-service.js';
-import { aisLiveService } from '../services/ais-live-service.js';
+import { shipPositionService } from '../services/ship-position-service.js';
 import {
   getAvailableSyncConfigTableNames,
   getDateColumnsForTable,
@@ -50,6 +50,52 @@ const canEditTaliaIntel = (context: any) => {
   const r = normalizeUserRole(context?.user?.role);
   if (r === 'SUPER_USER' || r === 'SUPERUSER') return true;
   return hasPermission(r, 'MANAGER');
+};
+
+const canManageInstanceConfig = (context: any) => {
+  const r = normalizeUserRole(context?.user?.role);
+  return r === 'SUPER_USER' || r === 'SUPERUSER' || hasPermission(r, 'ADMIN');
+};
+
+const SENSITIVE_CONFIG_KEY_PATTERN = /(password|secret|token|api[_-]?key|apikey|bearer|authorization|credential)/i;
+
+const redactConnectionConfig = (value: any): any => {
+  if (Array.isArray(value)) {
+    return value.map(redactConnectionConfig);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entryValue]) => [
+      key,
+      SENSITIVE_CONFIG_KEY_PATTERN.test(key) ? '[redacted]' : redactConnectionConfig(entryValue)
+    ])
+  );
+};
+
+const mergeConnectionConfigUpdate = (existing: any, updates: any): any => {
+  const base = existing && typeof existing === 'object' && !Array.isArray(existing) ? existing : {};
+  const patch = updates && typeof updates === 'object' && !Array.isArray(updates) ? updates : {};
+  const merged: any = { ...base };
+  Object.entries(patch).forEach(([key, value]) => {
+    if (value === '[redacted]') {
+      return;
+    }
+    if (
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      base[key] &&
+      typeof base[key] === 'object' &&
+      !Array.isArray(base[key])
+    ) {
+      merged[key] = mergeConnectionConfigUpdate(base[key], value);
+      return;
+    }
+    merged[key] = value;
+  });
+  return merged;
 };
 
 const currentUserKey = (context: any) =>
@@ -690,11 +736,36 @@ const mapDbFocusToGraphQL = (dbFocus: any) => {
   };
 };
 
+// Hoist Dockview JSON from the first component (GraphQL transport) into layout_data.dockviewLayout,
+// matching updateFocus so createFocus persists full layouts.
+const layoutDataFromFocusComponentsInput = (rawComponents: any[]) => {
+  let components: any[];
+  try {
+    components = Array.isArray(rawComponents) ? JSON.parse(JSON.stringify(rawComponents)) : [];
+  } catch {
+    components = [];
+  }
+
+  const layoutData: any = { components };
+
+  if (components.length > 0 && components[0]?.settings?._dockviewLayout) {
+    const dockviewLayout = components[0].settings._dockviewLayout;
+    delete components[0].settings._dockviewLayout;
+    const rest = components[0].settings;
+    if (rest && typeof rest === 'object' && Object.keys(rest).length === 0) {
+      components[0].settings = null;
+    }
+    if (dockviewLayout) {
+      layoutData.dockviewLayout = dockviewLayout;
+    }
+  }
+
+  return layoutData;
+};
+
 // Helper function to map GraphQL FocusInput to database format
 const mapGraphQLFocusToDb = (input: any, createdBy?: string) => {
-  const layoutData = {
-    components: input.components || []
-  };
+  const layoutData = layoutDataFromFocusComponentsInput(input.components || []);
   
   const assignedRoles = input.assignedRoles || (input.role ? [input.role] : []);
   
@@ -718,6 +789,8 @@ const THEME_ASSET_OVERRIDES_SETTING_KEY = 'theme_asset_overrides';
 const USER_PROFILE_CATEGORY = 'ui_profile';
 const GAME_SETTINGS_CATEGORY = 'ui_game';
 const DEFAULT_GAME_ID = 'breakout';
+const INTEGRATIONS_CATEGORY = 'integrations';
+const AIS_PROVIDER_SETTING_KEY = 'ais_provider_keys';
 
 const appearanceKey = (base: string, userId?: string | null) =>
   userId ? `${base}:${userId}` : base;
@@ -730,6 +803,36 @@ const normalizeUserId = (value: any) => String(value || 'dev-user-1').trim();
 const userProfileStateKey = (userId: string) => `state:${normalizeUserId(userId)}`;
 
 const gameScoreKey = (gameId: string, userId: string) => `score:${normalizeGameId(gameId)}:${normalizeUserId(userId)}`;
+
+const normalizeIntegrationValue = (value: any) => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const trimmed = String(value).trim();
+  return trimmed ? trimmed : null;
+};
+
+const mapIntegrationSettings = (raw: any) => {
+  const config = raw && typeof raw === 'object' ? raw : {};
+  return {
+    aisstreamApiKeyPresent: Boolean(config.aisstreamApiKey),
+    aishubUsername: config.aishubUsername || null,
+    vesselfinderApiKeyPresent: Boolean(config.vesselfinderApiKey),
+    marinetrafficApiKeyPresent: Boolean(config.marinetrafficApiKey),
+  };
+};
+
+const mapDataSourceToGraphQL = (s: any) => ({
+  id: s.id,
+  sourceName: s.source_name,
+  displayName: s.display_name,
+  sourceType: s.source_type,
+  isActive: s.is_active,
+  isAvailable: s.is_available,
+  healthStatus: s.health_status,
+  lastHealthCheck: s.last_health_check,
+  description: s.description,
+  connectionConfig: redactConnectionConfig(s.connection_config || {})
+});
 
 const mapBreakoutScorePayload = (raw: any, userId: string) => {
   const normalized = raw && typeof raw === 'object' ? raw : {};
@@ -1620,11 +1723,13 @@ export const resolvers = {
           return {
             shipCode,
             shipName: tracking?.ship_name || inventory?.ship_name || defaultNameFor(shipCode),
-            mmsi: tracking?.mmsi || inventory?.mmsi || null
+            mmsi: tracking?.mmsi || inventory?.mmsi || null,
+            imoNumber: tracking?.imo_number || inventory?.imo_number || null,
+            regionScope: tracking?.region_scope || []
           };
         });
 
-        return aisLiveService.getLiveShipPositions(shipConfigs as any);
+        return await shipPositionService.getLiveShipPositions(shipConfigs as any);
       } catch (error) {
         console.error('Error fetching live ship positions:', error);
         return [];
@@ -2318,6 +2423,19 @@ export const resolvers = {
       }
     },
 
+    integrationSettings: async () => {
+      try {
+        const settings = await configService.getSetting(
+          INTEGRATIONS_CATEGORY,
+          AIS_PROVIDER_SETTING_KEY
+        );
+        return mapIntegrationSettings(settings);
+      } catch (error: any) {
+        console.error('Error getting integration settings:', error);
+        throw new Error(`Failed to get integration settings: ${error.message}`);
+      }
+    },
+
     appearanceSettings: async (parent: any, args: any) => {
       const uid = args.userId || null;
       try {
@@ -2635,17 +2753,7 @@ export const resolvers = {
     dataSources: async () => {
       try {
         const sources = await configService.getDataSources();
-        return sources.map((s: any) => ({
-          id: s.id,
-          sourceName: s.source_name,
-          displayName: s.display_name,
-          sourceType: s.source_type,
-          isActive: s.is_active,
-          isAvailable: s.is_available,
-          healthStatus: s.health_status,
-          lastHealthCheck: s.last_health_check,
-          description: s.description
-        }));
+        return sources.map(mapDataSourceToGraphQL);
       } catch (error: any) {
         console.error('Error getting data sources:', error);
         throw new Error(`Failed to get data sources: ${error.message}`);
@@ -3634,6 +3742,74 @@ export const resolvers = {
       } catch (error: any) {
         console.error('Error setting default date range:', error);
         throw new Error(`Failed to set default date range: ${error.message}`);
+      }
+    },
+
+    saveIntegrationSettings: async (parent: any, args: any, context: any) => {
+      const { input } = args;
+      try {
+        if (!canManageInstanceConfig(context)) {
+          throw new Error('Only ADMIN may update integration settings');
+        }
+        const currentRaw = await configService.getSetting(
+          INTEGRATIONS_CATEGORY,
+          AIS_PROVIDER_SETTING_KEY
+        );
+        const current = currentRaw && typeof currentRaw === 'object' ? currentRaw : {};
+        const next = {
+          ...current,
+        };
+
+        const aisstreamApiKey = normalizeIntegrationValue(input?.aisstreamApiKey);
+        const aishubUsername = normalizeIntegrationValue(input?.aishubUsername);
+        const vesselfinderApiKey = normalizeIntegrationValue(input?.vesselfinderApiKey);
+        const marinetrafficApiKey = normalizeIntegrationValue(input?.marinetrafficApiKey);
+
+        if (aisstreamApiKey !== undefined) next.aisstreamApiKey = aisstreamApiKey;
+        if (aishubUsername !== undefined) next.aishubUsername = aishubUsername;
+        if (vesselfinderApiKey !== undefined) next.vesselfinderApiKey = vesselfinderApiKey;
+        if (marinetrafficApiKey !== undefined) next.marinetrafficApiKey = marinetrafficApiKey;
+
+        await configService.upsertSetting(
+          INTEGRATIONS_CATEGORY,
+          AIS_PROVIDER_SETTING_KEY,
+          next,
+          {
+            displayName: 'AIS Provider Keys',
+            description: 'API keys and usernames for AIS providers (instance-scoped)',
+            isEditable: true,
+          }
+        );
+
+        shipPositionService.invalidateCache();
+
+        return mapIntegrationSettings(next);
+      } catch (error: any) {
+        console.error('Error saving integration settings:', error);
+        throw new Error(`Failed to save integration settings: ${error.message}`);
+      }
+    },
+
+    updateDataSourceConnection: async (parent: any, args: any, context: any) => {
+      const { sourceName, connectionConfig } = args;
+      try {
+        if (!canManageInstanceConfig(context)) {
+          throw new Error('Only ADMIN may update data source connections');
+        }
+        const sources = await configService.getDataSources();
+        const existing = sources.find((source: any) => source.source_name === sourceName);
+        const nextConnectionConfig = mergeConnectionConfigUpdate(
+          existing?.connection_config || {},
+          connectionConfig || {}
+        );
+        const result = await configService.updateDataSourceConnection(
+          sourceName,
+          nextConnectionConfig
+        );
+        return mapDataSourceToGraphQL(result);
+      } catch (error: any) {
+        console.error('Error updating data source connection:', error);
+        throw new Error(`Failed to update data source connection: ${error.message}`);
       }
     },
 

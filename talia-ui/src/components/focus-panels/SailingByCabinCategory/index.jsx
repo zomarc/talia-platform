@@ -20,6 +20,8 @@ const SailingByCabinCategory = ({ panelInstanceId, panelComponentId }) => {
     limit: 1000
   });
 
+  const selectedSailCode = context?.sail_code || context?.row_data?.sail_code || (typeof context === 'string' ? context : null);
+
   useEffect(() => {
     if (data && data.length > 0 && !loading) {
       const query = `
@@ -27,9 +29,7 @@ const SailingByCabinCategory = ({ panelInstanceId, panelComponentId }) => {
           tableData(tableName: $tableName, limit: $limit, filters: $filters)
         }
       `;
-      const filters = context
-        ? { sail_code: context.sail_code || context.row_data?.sail_code || (typeof context === 'string' ? context : null) }
-        : {};
+      const filters = selectedSailCode ? { sail_code: selectedSailCode } : {};
       const trackQuery = queryTracker.trackQuery({
         query,
         variables: { tableName: 'sail_by_cabin_occupancy', limit: 1000, filters },
@@ -38,7 +38,7 @@ const SailingByCabinCategory = ({ panelInstanceId, panelComponentId }) => {
       });
       trackQuery({ data });
     }
-  }, [data, context, loading]);
+  }, [data, loading, selectedSailCode]);
 
   if (loading) {
     return <LoadingSpinner message="Loading cabin occupancy data..." />;
@@ -61,7 +61,7 @@ const SailingByCabinCategory = ({ panelInstanceId, panelComponentId }) => {
     );
   }
 
-  return <SailingByCabinCategoryPresenter data={data} context={context} />;
+  return <SailingByCabinCategoryPresenter data={data} context={context} selectedSailCode={selectedSailCode} />;
 };
 
 export default SailingByCabinCategory;

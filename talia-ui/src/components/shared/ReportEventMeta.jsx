@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import queryTracker from '../../services/data/queryTracker';
+import TaliaTooltip from './TaliaTooltip';
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
 
 const formatList = (items = []) => {
@@ -7,6 +8,62 @@ const formatList = (items = []) => {
     return ['—'];
   }
   return items;
+};
+
+const normalizeList = (items = []) => (
+  (Array.isArray(items) ? items : [])
+    .map((item) => String(item || '').trim())
+    .filter((item) => item && item !== '—')
+);
+
+const compactEventLabel = (value) => {
+  const text = String(value || '').trim();
+  if (!text || text === '—') return '—';
+  if (text.includes(':')) {
+    return text.split(':').slice(1).join(':') || text;
+  }
+  if (text.includes('.')) {
+    return text.split('.').slice(1).join('.') || text;
+  }
+  return text;
+};
+
+const formatFlowTimestamp = (ts) => {
+  if (!Number.isFinite(Number(ts))) return '--:--:--.---';
+  const date = new Date(Number(ts));
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  const ss = String(date.getSeconds()).padStart(2, '0');
+  const msec = String(date.getMilliseconds()).padStart(3, '0');
+  return `${hh}:${mm}:${ss}.${msec}`;
+};
+
+const buildComponentVisibilitySummary = () => {
+  const root = typeof document !== 'undefined' ? document.documentElement : null;
+  const style = root?.dataset?.taliaUiTheme || root?.dataset?.taliaBgColor || 'default';
+  const controls = window.__taliaControlsVisible === true ? 'on' : 'off';
+  const filters = window.__taliaFiltersVisible === true ? 'on' : 'off';
+  const details = window.__taliaGlobalReportDetailsVisible === false ? 'off' : 'on';
+  const fit = window.__taliaTableLayoutMode === 'data' ? 'data' : 'width';
+  return [
+    `style: ${style}`,
+    `controls: ${controls}`,
+    `filters: ${filters}`,
+    `details: ${details}`,
+    `fit: ${fit}`
+  ].join(' | ');
+};
+
+const resolveCycleForTimestamp = (cycleHistory, tsMs) => {
+  if (!Array.isArray(cycleHistory) || cycleHistory.length === 0) return null;
+  const ordered = [...cycleHistory].sort((a, b) => a.startTs - b.startTs);
+  let selected = null;
+  ordered.forEach((cycle) => {
+    if (Number.isFinite(Number(tsMs)) && cycle.startTs <= tsMs) {
+      selected = cycle;
+    }
+  });
+  return selected || ordered[ordered.length - 1] || null;
 };
 
 const copyText = async (text) => {
@@ -54,15 +111,23 @@ const getStoredEvents = () => {
     snapshots.push(window.latestEvent);
   }
   if (window.lastSailSelectEvent?.type) {
+    const detailTimestamp = window.lastSailSelectEvent?.detail?.timestamp;
     snapshots.push({
       name: window.lastSailSelectEvent.type,
       detail: window.lastSailSelectEvent.detail || null,
-      timestamp: new Date().toISOString(),
+      timestamp: typeof detailTimestamp === 'string' && detailTimestamp ? detailTimestamp : new Date().toISOString(),
       source: 'window.lastSailSelectEvent'
     });
   }
 
   return snapshots;
+};
+
+const toSnapshotTimestampMs = (snapshot) => {
+  const raw = snapshot?.timestamp;
+  if (!raw) return 0;
+  const parsed = Date.parse(String(raw));
+  return Number.isFinite(parsed) ? parsed : 0;
 };
 
 const getGlobalCriteriaSnapshot = () => {
@@ -84,12 +149,16 @@ const resolveEventSnapshot = (eventName) => {
   }
 
   const snapshots = getStoredEvents();
-  const exact = snapshots.find((entry) => entry?.name === eventName);
-  if (exact) return exact;
+  const exactMatches = snapshots.filter((entry) => entry?.name === eventName);
+  if (exactMatches.length) {
+    return exactMatches.sort((a, b) => toSnapshotTimestampMs(b) - toSnapshotTimestampMs(a))[0];
+  }
 
   const aliasByDot = eventName.replace(/:/g, '.');
   const aliasByColon = eventName.replace(/\./g, ':');
-  return snapshots.find((entry) => entry?.name === aliasByDot || entry?.name === aliasByColon) || null;
+  const aliasMatches = snapshots.filter((entry) => entry?.name === aliasByDot || entry?.name === aliasByColon);
+  if (!aliasMatches.length) return null;
+  return aliasMatches.sort((a, b) => toSnapshotTimestampMs(b) - toSnapshotTimestampMs(a))[0];
 };
 
 const formatEventText = (snapshot, eventName) => {
@@ -245,6 +314,28 @@ const collectPerformanceHistory = (sources = []) => {
     .map((entry) => Number(entry.duration || 0));
 };
 
+const getLatestRelatedQuery = (sources = [], allQueriesInput = null) => {
+  const sourceNames = (sources || []).filter((item) => item && item !== '—');
+  if (!sourceNames.length) return null;
+  const allQueries = Array.isArray(allQueriesInput) ? allQueriesInput : queryTracker.getQueries();
+  let latest = null;
+  sourceNames.forEach((sourceName) => {
+    const snapshot = resolveSourceSnapshot(sourceName, allQueries);
+    const candidate = snapshot?.relatedQueries?.[0] || null;
+    if (!candidate) return;
+    if (!latest) {
+      latest = candidate;
+      return;
+    }
+    const candidateTs = Date.parse(String(candidate.timestamp || ''));
+    const latestTs = Date.parse(String(latest.timestamp || ''));
+    if (Number.isFinite(candidateTs) && (!Number.isFinite(latestTs) || candidateTs > latestTs)) {
+      latest = candidate;
+    }
+  });
+  return latest;
+};
+
 const formatPerformanceText = (rows = [], phases = { networkMs: 0, loadingMs: 0, displayMs: 0 }) => {
   if (!rows.length) return 'Performance: No component-scoped sources were declared for this report.';
   const totalLatest = rows.reduce((sum, row) => sum + row.latestMs, 0);
@@ -272,14 +363,26 @@ const formatPerformanceText = (rows = [], phases = { networkMs: 0, loadingMs: 0,
 };
 
 const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
-  const emitList = formatList(emits);
-  const respondList = formatList(respondsTo);
-  const sourceList = formatList(sources);
+  const emitItems = useMemo(() => normalizeList(emits), [emits]);
+  const respondItems = useMemo(() => normalizeList(respondsTo), [respondsTo]);
+  const sourceItems = useMemo(() => normalizeList(sources), [sources]);
+  const emitList = useMemo(() => formatList(emitItems), [emitItems]);
+  const respondList = useMemo(() => formatList(respondItems), [respondItems]);
+  const sourceList = useMemo(() => formatList(sourceItems), [sourceItems]);
   const [copyStatus, setCopyStatus] = useState('');
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedSource, setSelectedSource] = useState(null);
   const [showPerformance, setShowPerformance] = useState(false);
+  const [showFlow, setShowFlow] = useState(false);
+  const [showCurrentCycleOnly, setShowCurrentCycleOnly] = useState(false);
   const [queryVersion, setQueryVersion] = useState(0);
+  const [eventVersion, setEventVersion] = useState(0);
+  const [flowEntries, setFlowEntries] = useState([]);
+  const [activeFlowId, setActiveFlowId] = useState(null);
+  const seenDataFlowSignalsRef = useRef(new Set());
+  const flowSequenceRef = useRef(0);
+  const flowCycleRef = useRef(0);
+  const flowCycleHistoryRef = useRef([]);
   const [criteriaPerf, setCriteriaPerf] = useState({ applyMs: 0, timestamp: null, count: 0 });
   const [displayPerfMs, setDisplayPerfMs] = useState(0);
   const copyPayload = useMemo(() => (
@@ -298,7 +401,7 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
 
   const selectedSnapshot = useMemo(
     () => (selectedEvent ? resolveEventSnapshot(selectedEvent) : null),
-    [selectedEvent]
+    [selectedEvent, eventVersion]
   );
   const selectedEventText = useMemo(
     () => (selectedEvent ? formatEventText(selectedSnapshot, selectedEvent) : ''),
@@ -313,12 +416,12 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
     [selectedSource, selectedSourceSnapshot]
   );
   const performanceRows = useMemo(
-    () => collectSourcePerformance(sourceList.filter((item) => item !== '—')),
-    [sourceList, queryVersion]
+    () => collectSourcePerformance(sourceItems),
+    [sourceItems, queryVersion]
   );
   const performanceHistory = useMemo(
-    () => collectPerformanceHistory(sourceList.filter((item) => item !== '—')),
-    [sourceList, queryVersion]
+    () => collectPerformanceHistory(sourceItems),
+    [sourceItems, queryVersion]
   );
   const networkPerfMs = useMemo(
     () => performanceRows.reduce((sum, row) => sum + row.latestMs, 0),
@@ -365,19 +468,253 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
   const totalPerformanceMs = useMemo(() => (
     networkPerfMs + loadingPerfMs + displayPerfMs
   ), [networkPerfMs, loadingPerfMs, displayPerfMs]);
-  const popoverTitle = showPerformance ? 'Performance' : (selectedSource ? 'Source Details' : 'Event Message');
+  const flowEntriesLatestFirst = useMemo(
+    () => [...flowEntries].sort((a, b) => b.seq - a.seq),
+    [flowEntries]
+  );
+  const currentCycleId = useMemo(() => {
+    const latestWithCycle = flowEntriesLatestFirst.find((entry) => Number.isFinite(Number(entry?.cycleId)));
+    return latestWithCycle?.cycleId || null;
+  }, [flowEntriesLatestFirst]);
+  const visibleFlowEntries = useMemo(() => {
+    if (!showCurrentCycleOnly || !currentCycleId) return flowEntriesLatestFirst;
+    return flowEntriesLatestFirst.filter((entry) => entry?.cycleId === currentCycleId);
+  }, [flowEntriesLatestFirst, showCurrentCycleOnly, currentCycleId]);
+  const groupedFlowByCycle = useMemo(() => {
+    const groups = new Map();
+    flowEntriesLatestFirst.forEach((entry) => {
+      const key = entry.cycleId ? `cycle-${entry.cycleId}` : 'background';
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          cycleId: entry.cycleId || null,
+          lane: entry.cycleId ? 'cycle' : 'background',
+          entries: []
+        });
+      }
+      groups.get(key).entries.push(entry);
+    });
+    return Array.from(groups.values()).sort((a, b) => {
+      const aSeq = a.entries[0]?.seq || 0;
+      const bSeq = b.entries[0]?.seq || 0;
+      return bSeq - aSeq;
+    });
+  }, [flowEntriesLatestFirst]);
+  const flowBarSummary = useMemo(() => {
+    if (!visibleFlowEntries.length) {
+      return {
+        eventCount: 0,
+        dataCount: 0,
+        lifecycleCount: 0,
+        latest: 'No flow',
+        segments: [
+          { key: 'event', label: 'E', value: 0, percentage: 33.3, showLabel: true },
+          { key: 'data', label: 'D', value: 0, percentage: 33.3, showLabel: true },
+          { key: 'update', label: 'U', value: 0, percentage: 33.4, showLabel: true }
+        ]
+      };
+    }
+    const recent = visibleFlowEntries.slice(0, 8);
+    const counts = recent.reduce((acc, entry) => {
+      const key = entry?.type || 'note';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const latestText = String(recent[0]?.text || '').replace(/^\.\.\s*/, '').trim();
+    const compactLatest = latestText.length > 28 ? `${latestText.slice(0, 28)}...` : latestText;
+    const eventCount = counts.event || 0;
+    const dataCount = counts.data || 0;
+    const lifecycleCount = counts.lifecycle || 0;
+    const total = Math.max(1, eventCount + dataCount + lifecycleCount);
+    const segments = [
+      { key: 'event', label: 'E', value: eventCount, percentage: (eventCount / total) * 100 },
+      { key: 'data', label: 'D', value: dataCount, percentage: (dataCount / total) * 100 },
+      { key: 'update', label: 'U', value: lifecycleCount, percentage: (lifecycleCount / total) * 100 }
+    ].map((segment) => ({
+      ...segment,
+      percentage: Math.max(segment.percentage, segment.value > 0 ? 10 : 0),
+      showLabel: segment.value > 0
+    }));
+    return {
+      eventCount,
+      dataCount,
+      lifecycleCount,
+      latest: compactLatest,
+      segments
+    };
+  }, [visibleFlowEntries]);
+  const activeFlowEntry = useMemo(
+    () => visibleFlowEntries.find((entry) => entry.id === activeFlowId) || visibleFlowEntries[0] || null,
+    [visibleFlowEntries, activeFlowId]
+  );
+  const flowText = useMemo(() => {
+    if (!activeFlowEntry) return 'Flow: No activity captured yet.';
+    if (activeFlowEntry.type === 'event' && activeFlowEntry.eventName) {
+      const snapshot = resolveEventSnapshot(activeFlowEntry.eventName);
+      if (snapshot) {
+        return formatEventText(snapshot, activeFlowEntry.eventName);
+      }
+    }
+    return activeFlowEntry.fullText || activeFlowEntry.text || 'Flow: No activity captured yet.';
+  }, [activeFlowEntry, eventVersion]);
+  const flowExportText = useMemo(() => {
+    if (!flowEntriesLatestFirst.length) return 'Flow: No activity captured yet.';
+    const lines = groupedFlowByCycle.flatMap((group) => {
+      const heading = group.cycleId
+        ? `--- Cycle ${group.cycleId} ---`
+        : '--- Background / pre-cycle ---';
+      const rows = group.entries.map((entry) => (
+        `#${entry.seq} ${entry.timeLabel || formatFlowTimestamp(entry.ts)} ${entry.text}`
+      ));
+      return [heading, ...rows, ''];
+    });
+    const detailCandidates = [];
+    if (activeFlowEntry) detailCandidates.push(activeFlowEntry);
+    flowEntriesLatestFirst.slice(0, 4).forEach((entry) => {
+      if (!detailCandidates.some((candidate) => candidate.id === entry.id)) {
+        detailCandidates.push(entry);
+      }
+    });
+    const details = detailCandidates.map((entry) => {
+      let detailText = entry.fullText || entry.text || '';
+      if (entry.type === 'event' && entry.eventName) {
+        const snapshot = resolveEventSnapshot(entry.eventName);
+        if (snapshot) {
+          detailText = formatEventText(snapshot, entry.eventName);
+        }
+      }
+      return [
+        `## #${entry.seq} ${entry.timeLabel || formatFlowTimestamp(entry.ts)} ${entry.text}`,
+        detailText
+      ].join('\n');
+    });
+    return [
+      'FLOW - lifecycle/event flow',
+      '',
+      ...lines,
+      '',
+      '--- Details (current/recent) ---',
+      '',
+      ...details
+    ].join('\n');
+  }, [flowEntriesLatestFirst, groupedFlowByCycle, activeFlowEntry, eventVersion]);
+  const popoverTitle = showFlow
+    ? `FLOW - lifecycle/event flow${showCurrentCycleOnly && currentCycleId ? ` (C${currentCycleId})` : ''}${activeFlowEntry?.seq ? ` (#${activeFlowEntry.seq})` : ''}`
+    : (showPerformance
+      ? `PERF - load (${Math.round(totalPerformanceMs)}ms)`
+      : (selectedSource
+        ? `SOURCE - ${selectedSource}`
+        : `EVENT - ${selectedEvent || 'none'}`));
   const popoverName = showPerformance
-    ? `Panel load timing (${Math.round(totalPerformanceMs)}ms)`
-    : (selectedSource || selectedEvent || 'Select an event or source');
-  const popoverBody = showPerformance
-    ? performanceSummaryText
-    : (selectedSource ? selectedSourceText : (selectedEventText || 'Select an event or source to view details.'));
-  const hasSelection = Boolean(selectedEvent || selectedSource || showPerformance);
+    ? `PERF - load (${Math.round(totalPerformanceMs)}ms)`
+    : (showFlow ? 'FLOW - lifecycle/event flow' : (selectedSource || selectedEvent || 'Select an event or source'));
+  const popoverBody = showFlow
+    ? flowText
+    : (showPerformance
+      ? performanceSummaryText
+      : (selectedSource ? selectedSourceText : (selectedEventText || 'Select an event or source to view details.')));
+  const hasSelection = Boolean(selectedEvent || selectedSource || showPerformance || showFlow);
 
   useEffect(() => {
-    const unsubscribe = queryTracker.subscribe(() => {
+    if (!visibleFlowEntries.length) {
+      setActiveFlowId(null);
+      return;
+    }
+    if (!activeFlowId || !visibleFlowEntries.some((entry) => entry.id === activeFlowId)) {
+      setActiveFlowId(visibleFlowEntries[0].id);
+    }
+  }, [visibleFlowEntries, activeFlowId]);
+
+  const appendFlowEntry = React.useCallback((entry) => {
+    const raw = typeof entry === 'string' ? { text: entry } : (entry || {});
+    const text = String(raw.text || '').trim();
+    if (!text) return;
+    setFlowEntries((current) => {
+      const nowTs = Date.now();
+      const seq = ++flowSequenceRef.current;
+      const cycleId = Number.isFinite(Number(raw.cycleId)) ? Number(raw.cycleId) : (flowCycleRef.current || null);
+      const isLifecycleStartup = (raw.type || 'note') === 'lifecycle'
+        && (text === 'Component opened' || text.startsWith('using events') || text === 'component rendered');
+      const nextEntry = {
+        id: `${nowTs}-${Math.random().toString(36).slice(2, 7)}`,
+        seq,
+        cycleId,
+        ts: nowTs,
+        timeLabel: formatFlowTimestamp(nowTs),
+        type: raw.type || 'note',
+        eventName: raw.eventName || null,
+        devReplay: false,
+        text,
+        fullText: raw.fullText || text
+      };
+      if (isLifecycleStartup) {
+        const alreadySeenStartup = current.some((item) => (
+          item.type === 'lifecycle'
+          && (item.text === text)
+          && (item.cycleId == null)
+        ));
+        if (alreadySeenStartup) {
+          nextEntry.devReplay = true;
+          nextEntry.fullText = `${nextEntry.fullText}\n(dev replay / StrictMode remount)`;
+        }
+      }
+      const next = [...current, nextEntry];
+      return next.slice(-30);
+    });
+  }, []);
+
+  useEffect(() => {
+    const accepted = respondItems;
+    const acceptedLabel = accepted.length ? accepted.join(' ') : '—';
+    appendFlowEntry({ type: 'lifecycle', cycleId: null, text: 'Component opened' });
+    appendFlowEntry({ type: 'lifecycle', cycleId: null, text: `using events: ${acceptedLabel}` });
+    window.requestAnimationFrame(() => {
+      appendFlowEntry({
+        type: 'lifecycle',
+        cycleId: null,
+        text: 'component rendered',
+        fullText: `component rendered\n${buildComponentVisibilitySummary()}`
+      });
+    });
+  }, [appendFlowEntry, respondItems]);
+
+  useEffect(() => {
+    const unsubscribe = queryTracker.subscribe((queries) => {
       const startedAt = performance.now();
       setQueryVersion((current) => current + 1);
+      const latestQuery = getLatestRelatedQuery(sourceItems, queries);
+      const isCompleted = latestQuery?.status === 'success' || latestQuery?.status === 'error';
+      if (isCompleted) {
+        const queryStartTs = Date.parse(String(latestQuery.timestamp || ''));
+        const matchedCycle = resolveCycleForTimestamp(flowCycleHistoryRef.current, queryStartTs);
+        const rowCount = Number.isFinite(Number(latestQuery?.rowCount)) ? Number(latestQuery.rowCount) : null;
+        const rowText = rowCount !== null ? ` (${rowCount} rows)` : '';
+        const signal = `${latestQuery.id}:${latestQuery.status}:${rowText}`;
+        if (!seenDataFlowSignalsRef.current.has(signal)) {
+          seenDataFlowSignalsRef.current.add(signal);
+          if (seenDataFlowSignalsRef.current.size > 300) {
+            seenDataFlowSignalsRef.current.clear();
+          }
+          appendFlowEntry({
+            type: 'data',
+            cycleId: matchedCycle?.id || null,
+            text: latestQuery.status === 'error'
+              ? 'data failed'
+              : `data retrieved${rowText}`,
+            fullText: latestQuery
+              ? `${latestQuery.status === 'error' ? 'data failed' : `data retrieved${rowText}`}\nQuery: ${latestQuery.purpose || 'Data fetch'}`
+              : (latestQuery.status === 'error' ? 'data failed' : `data retrieved${rowText}`)
+          });
+          if (matchedCycle) {
+            appendFlowEntry({
+              type: 'lifecycle',
+              cycleId: matchedCycle.id,
+              text: 'component rendered (post-data)',
+              fullText: `component rendered (post-data)\nCycle: ${matchedCycle.id}\n${buildComponentVisibilitySummary()}`
+            });
+          }
+        }
+      }
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
           setDisplayPerfMs(Math.max(0, performance.now() - startedAt));
@@ -385,7 +722,58 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
       });
     });
     return unsubscribe;
-  }, []);
+  }, [appendFlowEntry, sourceItems]);
+
+  useEffect(() => {
+    const eventNames = Array.from(new Set(
+      [...emitList, ...respondList]
+        .map((name) => String(name || '').trim())
+        .filter((name) => name && name !== '—')
+    ));
+    if (!eventNames.length) return undefined;
+
+    const subscribedNames = Array.from(new Set(
+      eventNames.flatMap((name) => {
+        const alt = name.includes(':') ? name.replace(/:/g, '.') : name.replace(/\./g, ':');
+        return [name, alt];
+      })
+    ));
+
+    const handleEventActivity = (event) => {
+      const eventName = String(event?.type || '').trim();
+      if (!eventName) return;
+      const cycleId = ++flowCycleRef.current;
+      flowCycleHistoryRef.current.push({
+        id: cycleId,
+        startTs: Date.now(),
+        eventName
+      });
+      if (flowCycleHistoryRef.current.length > 120) {
+        flowCycleHistoryRef.current = flowCycleHistoryRef.current.slice(-120);
+      }
+      setEventVersion((current) => current + 1);
+      appendFlowEntry({
+        type: 'event',
+        cycleId,
+        eventName,
+        text: `event received: ${compactEventLabel(eventName)}`,
+        fullText: `event received: ${eventName}`
+      });
+      window.requestAnimationFrame(() => {
+        appendFlowEntry({
+          type: 'lifecycle',
+          cycleId,
+          text: 'component updated',
+          fullText: `component updated\n${buildComponentVisibilitySummary()}`
+        });
+      });
+    };
+
+    subscribedNames.forEach((name) => window.addEventListener(name, handleEventActivity));
+    return () => {
+      subscribedNames.forEach((name) => window.removeEventListener(name, handleEventActivity));
+    };
+  }, [appendFlowEntry, emitList, respondList]);
 
   useEffect(() => {
     const handleGlobalCriteria = () => {
@@ -408,57 +796,68 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
   }, []);
 
   const handleCopyEvent = async () => {
-    if (!popoverBody) return;
-    const success = await copyText(popoverBody);
-    setCopyStatus(success ? (selectedSource ? 'Source copied' : 'Event copied') : 'Copy failed');
+    const textToCopy = showFlow ? flowExportText : popoverBody;
+    if (!textToCopy) return;
+    const success = await copyText(textToCopy);
+    setCopyStatus(success ? (selectedSource ? 'Source copied' : (showFlow ? 'Flow copied' : 'Event copied')) : 'Copy failed');
     window.setTimeout(() => setCopyStatus(''), 1500);
   };
 
   return (
     <div className="talia-event-meta" role="note" aria-label="Report event contract">
       <div className="talia-event-meta__summary-line">
+        {emitItems.length > 0 && (
         <div className="talia-event-meta__group">
-          <span className="talia-event-meta__label">Emits</span>
+          <span className="talia-event-meta__label">Out</span>
           <div className="talia-event-meta__chips">
-            {emitList.map((eventName) => (
-              <button
-                key={`emit-${eventName}`}
-                type="button"
-                className={`talia-event-meta__chip ${selectedEvent === eventName ? 'talia-event-meta__chip--selected' : ''}`}
-                onClick={() => {
-                  setSelectedSource(null);
-                  setShowPerformance(false);
-                  setSelectedEvent((current) => (current === eventName ? null : eventName));
-                }}
-                title={`View payload for ${eventName}`}
-              >
-                {eventName}
-              </button>
+            {emitItems.map((eventName) => (
+              <TaliaTooltip key={`emit-tip-${eventName}`} content={eventName} placement="bottom-left" delayMs={180}>
+                <button
+                  key={`emit-${eventName}`}
+                  type="button"
+                  className={`talia-event-meta__chip ${selectedEvent === eventName ? 'talia-event-meta__chip--selected' : ''}`}
+                  onClick={() => {
+                    setSelectedSource(null);
+                    setShowFlow(false);
+                    setShowPerformance(false);
+                    setSelectedEvent((current) => (current === eventName ? null : eventName));
+                  }}
+                  aria-label={`Emits ${eventName}`}
+                >
+                  <span className="talia-event-meta__chip-text">{compactEventLabel(eventName)}</span>
+                </button>
+              </TaliaTooltip>
             ))}
           </div>
         </div>
+        )}
+        {respondItems.length > 0 && (
         <div className="talia-event-meta__group">
-          <span className="talia-event-meta__label">Accepts</span>
+          <span className="talia-event-meta__label">In</span>
           <div className="talia-event-meta__chips">
-            {respondList.map((eventName) => (
-              <button
-                key={`respond-${eventName}`}
-                type="button"
-                className={`talia-event-meta__chip talia-event-meta__chip--secondary ${selectedEvent === eventName ? 'talia-event-meta__chip--selected' : ''}`}
-                onClick={() => {
-                  setSelectedSource(null);
-                  setShowPerformance(false);
-                  setSelectedEvent((current) => (current === eventName ? null : eventName));
-                }}
-                title={`View payload for ${eventName}`}
-              >
-                {eventName}
-              </button>
+            {respondItems.map((eventName) => (
+              <TaliaTooltip key={`respond-tip-${eventName}`} content={eventName} placement="bottom-left" delayMs={180}>
+                <button
+                  key={`respond-${eventName}`}
+                  type="button"
+                  className={`talia-event-meta__chip talia-event-meta__chip--secondary ${selectedEvent === eventName ? 'talia-event-meta__chip--selected' : ''}`}
+                  onClick={() => {
+                    setSelectedSource(null);
+                    setShowFlow(false);
+                    setShowPerformance(false);
+                    setSelectedEvent((current) => (current === eventName ? null : eventName));
+                  }}
+                  aria-label={`Accepts ${eventName}`}
+                >
+                  <span className="talia-event-meta__chip-text">{compactEventLabel(eventName)}</span>
+                </button>
+              </TaliaTooltip>
             ))}
           </div>
         </div>
+        )}
         <div className="talia-event-meta__group">
-          <span className="talia-event-meta__label">Sources</span>
+          <span className="talia-event-meta__label">Src</span>
           <div className="talia-event-meta__chips">
             {sourceList.map((sourceName) => (
               <button
@@ -467,6 +866,7 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
                 className={`talia-event-meta__chip talia-event-meta__chip--source ${selectedSource === sourceName ? 'talia-event-meta__chip--selected' : ''}`}
                 onClick={() => {
                   setSelectedEvent(null);
+                  setShowFlow(false);
                   setShowPerformance(false);
                   setSelectedSource((current) => (current === sourceName ? null : sourceName));
                 }}
@@ -479,33 +879,68 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
           </div>
         </div>
         <div className="talia-event-meta__group talia-event-meta__group--performance">
-          <span className="talia-event-meta__label">Performance</span>
-          <button
-            type="button"
-            className={`talia-event-meta__perf-bar ${showPerformance ? 'talia-event-meta__perf-bar--selected' : ''}`}
-            onClick={() => {
-              setSelectedEvent(null);
-              setSelectedSource(null);
-              setShowPerformance((current) => !current);
-            }}
-            title="View panel timing summary"
-          >
-            {phaseSegments.map((phase) => {
-              return (
-                <span
-                  key={`perf-${phase.key}`}
-                  className={`talia-event-meta__perf-segment talia-event-meta__perf-segment--${phase.key}`}
-                  style={{ width: `${phase.percentage}%` }}
-                  title={`${phase.label}: ${Math.round(phase.value)}ms`}
-                >
-                  <span className="talia-event-meta__perf-segment-label">
-                    {phase.label.charAt(0)}
+          <div className="talia-event-meta__metrics-stack">
+            <TaliaTooltip content={`N = Network, L = Loading, D = Display. Total ${Math.round(totalPerformanceMs)}ms`} placement="bottom-left" delayMs={260}>
+              <button
+                type="button"
+                className={`talia-event-meta__perf-bar ${showPerformance ? 'talia-event-meta__perf-bar--selected' : ''}`}
+                onClick={() => {
+                  setSelectedEvent(null);
+                  setSelectedSource(null);
+                  setShowFlow(false);
+                  setShowPerformance((current) => !current);
+                }}
+                aria-label={`Performance bar. N network, L loading, D display. Total ${Math.round(totalPerformanceMs)} milliseconds`}
+              >
+                {phaseSegments.map((phase) => {
+                  return (
+                    <span
+                      key={`perf-${phase.key}`}
+                      className={`talia-event-meta__perf-segment talia-event-meta__perf-segment--${phase.key}`}
+                      style={{ width: `${phase.percentage}%` }}
+                    >
+                      <span className="talia-event-meta__perf-segment-label">
+                        {phase.label.charAt(0)}
+                      </span>
+                    </span>
+                  );
+                })}
+                <span className="talia-event-meta__perf-label">{Math.round(totalPerformanceMs)}ms</span>
+              </button>
+            </TaliaTooltip>
+            <TaliaTooltip content={`E = Events (${flowBarSummary.eventCount}), D = Data (${flowBarSummary.dataCount}), U = Updates (${flowBarSummary.lifecycleCount})`} placement="bottom-left" delayMs={260}>
+              <button
+                type="button"
+                className={`talia-event-meta__perf-bar talia-event-meta__perf-bar--flow ${showFlow ? 'talia-event-meta__perf-bar--selected' : ''}`}
+                onClick={() => {
+                  setSelectedEvent(null);
+                  setSelectedSource(null);
+                  setShowPerformance(false);
+                  setShowFlow((current) => !current);
+                }}
+                aria-label={`Flow bar. E events ${flowBarSummary.eventCount}, D data ${flowBarSummary.dataCount}, U updates ${flowBarSummary.lifecycleCount}`}
+              >
+                <span className="talia-event-meta__flow-inline">
+                  <span className="talia-event-meta__flow-segments" aria-hidden="true">
+                    {flowBarSummary.segments.map((segment) => (
+                      <span
+                        key={`flow-segment-${segment.key}`}
+                        className={`talia-event-meta__flow-segment talia-event-meta__flow-segment--${segment.key}`}
+                        style={{ width: `${segment.percentage}%` }}
+                      >
+                        {segment.showLabel && (
+                          <span className="talia-event-meta__flow-segment-label">
+                            {segment.label}{segment.value}
+                          </span>
+                        )}
+                      </span>
+                    ))}
                   </span>
                 </span>
-              );
-            })}
-            <span className="talia-event-meta__perf-label">{Math.round(totalPerformanceMs)}ms</span>
-          </button>
+                <span className="talia-event-meta__perf-label">FLOW</span>
+              </button>
+            </TaliaTooltip>
+          </div>
         </div>
       </div>
       {hasSelection && (
@@ -513,15 +948,25 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
           <div className="talia-event-meta__popover-header">
             <span className="talia-event-meta__label">{popoverTitle}</span>
             <div className="talia-event-meta__actions">
+              {showFlow && (
+                <button
+                  type="button"
+                  className={`talia-event-meta__copy-btn ${showCurrentCycleOnly ? 'talia-event-meta__copy-btn--active' : ''}`}
+                  onClick={() => setShowCurrentCycleOnly((current) => !current)}
+                  title="Filter flow to current cycle"
+                >
+                  {showCurrentCycleOnly ? 'All Cycles' : 'Current Cycle'}
+                </button>
+              )}
               <button type="button" className="talia-event-meta__copy-btn" onClick={handleCopySources}>
                 Copy Contract
               </button>
-              {(selectedEvent || selectedSource || showPerformance) && (
+              {(selectedEvent || selectedSource || showPerformance || showFlow) && (
                 <button type="button" className="talia-event-meta__copy-btn" onClick={handleCopyEvent}>
-                  {selectedSource ? 'Copy Details' : (showPerformance ? 'Copy Summary' : 'Copy Event')}
+                  {selectedSource ? 'Copy Details' : (showPerformance ? 'Copy Summary' : (showFlow ? 'Copy Flow' : 'Copy Event'))}
                 </button>
               )}
-              {(selectedEvent || selectedSource || showPerformance) && (
+              {(selectedEvent || selectedSource || showPerformance || showFlow) && (
                 <button
                   type="button"
                   className="talia-event-meta__copy-btn"
@@ -529,6 +974,8 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
                     setSelectedEvent(null);
                     setSelectedSource(null);
                     setShowPerformance(false);
+                    setShowFlow(false);
+                    setShowCurrentCycleOnly(false);
                   }}
                 >
                   Close
@@ -537,45 +984,69 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
             </div>
           </div>
           {copyStatus && <span className="talia-event-meta__copy-status">{copyStatus}</span>}
-          <div className="talia-event-meta__popover-event">{popoverName}</div>
-          {showPerformance ? (
+          {(showPerformance || showFlow) ? (
             <div className="talia-event-meta__perf-detail">
-              <div className="talia-event-meta__perf-chart" role="img" aria-label="Performance timing chart">
-                <div className="talia-event-meta__perf-chart-bars">
-                  {[
-                    { key: 'network', label: 'N', value: networkPerfMs },
-                    { key: 'loading', label: 'L', value: loadingPerfMs },
-                    { key: 'display', label: 'D', value: displayPerfMs },
-                  ].map((phase) => (
-                    <div key={phase.key} className="talia-event-meta__perf-phase-row">
-                      <span className="talia-event-meta__perf-phase-label">{phase.label}</span>
-                      <div className="talia-event-meta__perf-phase-track">
-                        <span
-                          className={`talia-event-meta__perf-phase-fill talia-event-meta__perf-phase-fill--${phase.key}`}
-                          style={{ width: `${Math.min(100, (phase.value / Math.max(totalPerformanceMs, 1)) * 100)}%` }}
-                        />
+              {!showFlow && (
+                <div className="talia-event-meta__perf-chart" role="img" aria-label="Performance timing chart">
+                  <div className="talia-event-meta__perf-chart-bars">
+                    {[
+                      { key: 'network', label: 'N', value: networkPerfMs },
+                      { key: 'loading', label: 'L', value: loadingPerfMs },
+                      { key: 'display', label: 'D', value: displayPerfMs },
+                    ].map((phase) => (
+                      <div key={phase.key} className="talia-event-meta__perf-phase-row">
+                        <span className="talia-event-meta__perf-phase-label">{phase.label}</span>
+                        <div className="talia-event-meta__perf-phase-track">
+                          <span
+                            className={`talia-event-meta__perf-phase-fill talia-event-meta__perf-phase-fill--${phase.key}`}
+                            style={{ width: `${Math.min(100, (phase.value / Math.max(totalPerformanceMs, 1)) * 100)}%` }}
+                          />
+                        </div>
+                        <span className="talia-event-meta__perf-phase-ms">{Math.round(phase.value)}ms</span>
                       </div>
-                      <span className="talia-event-meta__perf-phase-ms">{Math.round(phase.value)}ms</span>
-                    </div>
+                    ))}
+                  </div>
+                  <div className="talia-event-meta__perf-timeline">
+                    {performanceHistory.length > 0 ? performanceHistory.map((duration, index) => {
+                      const maxDuration = Math.max(...performanceHistory, 1);
+                      const height = Math.max(14, (duration / maxDuration) * 48);
+                      return (
+                        <span
+                          key={`perf-point-${index}`}
+                          className="talia-event-meta__perf-point"
+                          style={{ height: `${height}px` }}
+                          title={`Query ${performanceHistory.length - index}: ${Math.round(duration)}ms`}
+                        />
+                      );
+                    }) : (
+                      <span className="talia-event-meta__perf-empty">No timeline samples</span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {showFlow && (
+                <div className="talia-event-meta__flow-list" role="list" aria-label="Event flow list">
+                  {visibleFlowEntries.length === 0 && (
+                    <div className="talia-event-meta__flow-empty">No flow entries yet.</div>
+                  )}
+                  {visibleFlowEntries.map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      role="listitem"
+                      className={`talia-event-meta__flow-item ${activeFlowEntry?.id === entry.id ? 'talia-event-meta__flow-item--active' : ''} ${entry.devReplay ? 'talia-event-meta__flow-item--dev' : ''} ${currentCycleId && entry.cycleId === currentCycleId ? 'talia-event-meta__flow-item--current-cycle' : ''}`}
+                      onClick={() => setActiveFlowId(entry.id)}
+                      title={entry.fullText || entry.text}
+                    >
+                      <span className="talia-event-meta__flow-dot" aria-hidden="true" />
+                      <span className="talia-event-meta__flow-cycle">{entry.cycleId ? `C${entry.cycleId}` : 'BG'}</span>
+                      <span className="talia-event-meta__flow-seq">#{entry.seq}</span>
+                      <span className="talia-event-meta__flow-text">{entry.text}</span>
+                      <span className="talia-event-meta__flow-time">{entry.timeLabel || formatFlowTimestamp(entry.ts)}</span>
+                    </button>
                   ))}
                 </div>
-                <div className="talia-event-meta__perf-timeline">
-                  {performanceHistory.length > 0 ? performanceHistory.map((duration, index) => {
-                    const maxDuration = Math.max(...performanceHistory, 1);
-                    const height = Math.max(14, (duration / maxDuration) * 48);
-                    return (
-                      <span
-                        key={`perf-point-${index}`}
-                        className="talia-event-meta__perf-point"
-                        style={{ height: `${height}px` }}
-                        title={`Query ${performanceHistory.length - index}: ${Math.round(duration)}ms`}
-                      />
-                    );
-                  }) : (
-                    <span className="talia-event-meta__perf-empty">No timeline samples</span>
-                  )}
-                </div>
-              </div>
+              )}
               <pre className="talia-event-meta__popover-body talia-event-meta__popover-body--perf">{popoverBody}</pre>
             </div>
           ) : (

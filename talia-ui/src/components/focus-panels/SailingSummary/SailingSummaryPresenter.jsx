@@ -6,7 +6,7 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { initTabulator } from '../../../lib/tabulatorConfig';
-import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 import { formatDayMon } from '../../../lib/dateFormat';
 
 // Function to aggregate sailing data at sail level
@@ -57,6 +57,7 @@ const SailingSummaryPresenter = ({ data }) => {
   const instanceRef = useRef(null);
   const [tableInitialized, setTableInitialized] = useState(false);
   const lastDataRef = useRef(null);
+  const suppressClearOnRefreshRef = useRef(false);
 
   // Aggregate data at sail level
   const aggregatedData = useMemo(() => {
@@ -237,6 +238,7 @@ const SailingSummaryPresenter = ({ data }) => {
             try { row?.select?.(); } catch { /* noop */ }
           },
           rowSelectionChanged: (selectedData) => {
+            if (suppressClearOnRefreshRef.current) return;
             const rec = selectedData && selectedData[0];
             if (rec) {
               console.log("[SailingSummary] Row selected:", rec);
@@ -244,13 +246,6 @@ const SailingSummaryPresenter = ({ data }) => {
                 detail: {
                   sail_code: rec.sail_code,
                   row_data: rec,
-                  timestamp: new Date().toISOString()
-                }
-              }));
-            } else {
-              console.log("[SailingSummary] Row deselected");
-              window.dispatchEvent(new CustomEvent(SAIL_CLEAR_EVENT, {
-                detail: {
                   timestamp: new Date().toISOString()
                 }
               }));
@@ -292,10 +287,15 @@ const SailingSummaryPresenter = ({ data }) => {
 
     try {
       console.log('[SailingSummary] Updating table data:', aggregatedData.length, 'records');
+      suppressClearOnRefreshRef.current = true;
       instanceRef.current.replaceData(aggregatedData);
       lastDataRef.current = currentDataStr;
     } catch (e) {
       console.warn('[SailingSummary] Error updating data:', e);
+    } finally {
+      window.setTimeout(() => {
+        suppressClearOnRefreshRef.current = false;
+      }, 0);
     }
   }, [aggregatedData, tableInitialized]);
 

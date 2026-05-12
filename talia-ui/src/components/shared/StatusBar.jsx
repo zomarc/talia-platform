@@ -33,28 +33,25 @@ import {
 } from '../../services/panelDetailsState';
 import { enforceDashboardUiState } from '../../services/dashboardUiState';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useFocusManagement } from '../../hooks/useFocusManagement';
 import { DEFAULT_HEADER_LOGO_SRC, resolveAppPublicUrl } from '../../lib/headerLogoAsset';
+import { GLOBAL_DATE_RANGE_OPTIONS, normalizeGlobalDateRangeKey, resolveGlobalDateRange } from '../../lib/globalDateRange';
+import { extractSailCodeFromEvent, SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../lib/eventBus';
 import userActivityTracker from '../../services/userActivityTracker';
 import { loadUserProfileState, saveUserProfileState } from '../../services/data/userProfileState';
+import TaliaTooltip from './TaliaTooltip';
 // CSS imported globally in main.jsx
 const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
 const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';
 const FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderFiltersVisible';
 const DASHBOARD_CYCLE_FOCUS_EVENT = 'talia:dashboard.cycleFocus';
 const DASHBOARD_SELECT_FOCUS_EVENT = 'talia:dashboard.selectFocus';
-const DASHBOARD_FOCUS_STATE_EVENT = 'talia:dashboard.focusState';
 const DASHBOARD_SAVE_CURRENT_FOCUS_EVENT = 'talia:dashboard.saveCurrentFocus';
 const DASHBOARD_VIEW_SCOPE_EVENT = 'talia:dashboard.viewScope';
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
 const TABLE_LAYOUT_STORAGE_KEY = 'taliaTableLayoutMode';
+const TEST_DEFAULT_GLOBAL_RANGE_KEY = 'all_future';
 
-const GLOBAL_DATE_RANGE_OPTIONS = [
-  { key: 'all', label: 'All' },
-  { key: '30d', label: '30d' },
-  { key: '60d', label: '60d' },
-  { key: '120d', label: '120d' },
-  { key: '6m', label: '6m' }
-];
 const GLOBAL_DURATION_OPTIONS = [
   { key: 'all', label: 'All' },
   { key: '7', label: '7' },
@@ -66,6 +63,7 @@ const GLOBAL_DURATION_OPTIONS = [
 ];
 
 const GLOBAL_DISPLAY_CURRENCY_OPTIONS = [
+  { key: 'ALL', label: 'All' },
   { key: 'USD', label: 'USD' },
   { key: 'EUR', label: 'EUR' },
   { key: 'GBP', label: 'GBP' },
@@ -76,35 +74,23 @@ const GLOBAL_DISPLAY_CURRENCY_OPTIONS = [
   { key: 'CHF', label: 'CHF' },
 ];
 
-const toIsoDate = (value) => {
-  const date = value instanceof Date ? value : new Date(value);
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
-  return date.toISOString().slice(0, 10);
-};
-
-const resolveDateRange = (rangeKey) => {
-  if (rangeKey === 'all') {
-    return {
-      dateFrom: '',
-      dateTo: ''
-    };
+const normalizePersistedSailing = (raw) => {
+  if (raw == null) return null;
+  if (typeof raw === 'string') {
+    const sailCode = raw.trim();
+    return sailCode ? { sailCode, detail: { sail_code: sailCode } } : null;
   }
+  if (typeof raw !== 'object') return null;
 
-  const now = new Date();
-  const end = new Date(now);
-  let start = new Date(now);
-
-  if (rangeKey === '6m') {
-    start.setMonth(start.getMonth() - 6);
-  } else {
-    const days = Number.parseInt(String(rangeKey || '').replace('d', ''), 10);
-    const safeDays = Number.isFinite(days) && days > 0 ? days : 30;
-    start.setDate(start.getDate() - safeDays);
-  }
-
+  const detail = raw.detail && typeof raw.detail === 'object'
+    ? raw.detail
+    : raw;
+  const sailCode = extractSailCodeFromEvent(detail) || raw.sailCode || null;
+  if (!sailCode) return null;
   return {
-    dateFrom: toIsoDate(start),
-    dateTo: toIsoDate(end)
+    sailCode: String(sailCode),
+    detail,
+    capturedAt: raw.capturedAt || detail?.timestamp || null
   };
 };
 
@@ -253,7 +239,19 @@ const StatusBar = ({
     headerLogoVisible,
     defaultDisplayCurrency,
     setDefaultDisplayCurrency,
+    tableLayoutMode: themeTableLayoutMode,
+    setTableLayoutMode: setThemeTableLayoutMode,
   } = useTheme();
+
+  const { focuses: canonicalFocuses, currentFocus: currentFocusObject } = useFocusManagement();
+  const catalogFocusOptions = useMemo(
+    () =>
+      Array.isArray(canonicalFocuses)
+        ? canonicalFocuses.filter((focus) => focus?.id).map((focus) => ({ id: focus.id, name: focus.name || focus.id }))
+        : [],
+    [canonicalFocuses]
+  );
+  const currentFocusId = currentFocusObject?.id || '';
 
   const displayCurrencyOptions = useMemo(() => {
     const cur = String(defaultDisplayCurrency || '').trim().toUpperCase();
@@ -297,20 +295,21 @@ const StatusBar = ({
   const [detailsVisible, setDetailsVisible] = useState(() => getGlobalReportDetailsVisible());
   const [viewScope, setViewScope] = useState(() => window.__taliaViewScope === 'wide' ? 'wide' : 'local');
   const [globalDateRange, setGlobalDateRange] = useState(() => {
-    const saved = window.__taliaGlobalCriteria?.rangeKey;
-    return GLOBAL_DATE_RANGE_OPTIONS.some((option) => option.key === saved) ? saved : '30d';
+    return TEST_DEFAULT_GLOBAL_RANGE_KEY;
   });
   const [globalDuration, setGlobalDuration] = useState(() => {
     const saved = window.__taliaGlobalCriteria?.durationKey;
     return GLOBAL_DURATION_OPTIONS.some((option) => option.key === saved) ? saved : 'all';
   });
-  const [focusOptions, setFocusOptions] = useState(() => {
-    const options = window.__taliaFocusState?.focuses;
-    return Array.isArray(options) ? options.filter((focus) => focus?.id) : [];
-  });
-  const [selectedFocusId, setSelectedFocusId] = useState(() => window.__taliaFocusState?.currentFocusId || '');
+  const [globalSailSelection, setGlobalSailSelection] = useState(() => (
+    normalizePersistedSailing(
+      window.__taliaGlobalCriteria?.selectedSailing || window.lastSailSelectEvent?.detail || null
+    )
+  ));
+  const [focusOptions, setFocusOptions] = useState([]);
+  const [selectedFocusId, setSelectedFocusId] = useState(currentFocusId);
   const [lastFocusId, setLastFocusId] = useState('');
-  const currentFocusRef = useRef(window.__taliaFocusState?.currentFocusId || '');
+  const currentFocusRef = useRef(currentFocusId);
   const [showSaveFocusConfirm, setShowSaveFocusConfirm] = useState(false);
   const [activeOnly, setActiveOnly] = useState(() => {
     const saved = window.__taliaGlobalCriteria;
@@ -591,19 +590,29 @@ const StatusBar = ({
     const next = mode;
     if (next === tableLayoutMode) return;
     setTableLayoutMode(next);
-    window.__taliaTableLayoutMode = next;
-    try {
-      window.localStorage?.setItem?.(TABLE_LAYOUT_STORAGE_KEY, next);
-    } catch (error) {
-      reportActionFailure(`Failed to persist table layout mode "${next}": ${error?.message || 'Unknown error'}`);
+    if (typeof setThemeTableLayoutMode === 'function') {
+      setThemeTableLayoutMode(next);
+    } else {
+      window.__taliaTableLayoutMode = next;
+      try {
+        window.localStorage?.setItem?.(TABLE_LAYOUT_STORAGE_KEY, next);
+      } catch (error) {
+        reportActionFailure(`Failed to persist table layout mode "${next}": ${error?.message || 'Unknown error'}`);
+      }
+      window.dispatchEvent(
+        new CustomEvent(DASHBOARD_TABLE_LAYOUT_EVENT, {
+          detail: { mode: next },
+        })
+      );
     }
-    window.dispatchEvent(
-      new CustomEvent(DASHBOARD_TABLE_LAYOUT_EVENT, {
-        detail: { mode: next },
-      })
-    );
     userActivityTracker.recordHeaderAction('table-layout-toggle', { status: next });
   };
+
+  useEffect(() => {
+    if (themeTableLayoutMode === 'data' || themeTableLayoutMode === 'width') {
+      setTableLayoutMode(themeTableLayoutMode);
+    }
+  }, [themeTableLayoutMode]);
 
   const closeOtherTopLevelGroups = (groupToKeep) => {
     if (groupToKeep !== 'advanced') setEventsVisible(false);
@@ -665,7 +674,9 @@ const StatusBar = ({
   };
 
   const handleGlobalDateRangeChange = (nextValue) => {
-    const next = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value;
+    const next = normalizeGlobalDateRangeKey(
+      typeof nextValue === 'string' ? nextValue : nextValue?.target?.value
+    );
     if (!GLOBAL_DATE_RANGE_OPTIONS.some((option) => option.key === next)) return;
     userActivityTracker.recordHeaderAction('global-date-range', { status: next });
     setGlobalDateRange(next);
@@ -998,26 +1009,21 @@ const StatusBar = ({
   }, []);
 
   useEffect(() => {
-    const handleFocusState = (event) => {
-      const options = event?.detail?.focuses;
-      const currentFocusId = event?.detail?.currentFocusId;
-      if (Array.isArray(options)) {
-        setFocusOptions(options.filter((focus) => focus?.id));
-      }
-      if (
-        currentFocusId
-        && currentFocusRef.current
-        && currentFocusRef.current !== currentFocusId
-      ) {
-        setLastFocusId(currentFocusRef.current);
-      }
-      currentFocusRef.current = currentFocusId || '';
-      setSelectedFocusId(currentFocusId || '');
-      setShowSaveFocusConfirm(false);
-    };
-    window.addEventListener(DASHBOARD_FOCUS_STATE_EVENT, handleFocusState);
-    return () => window.removeEventListener(DASHBOARD_FOCUS_STATE_EVENT, handleFocusState);
-  }, []);
+    setFocusOptions(catalogFocusOptions);
+  }, [catalogFocusOptions]);
+
+  useEffect(() => {
+    if (
+      currentFocusId
+      && currentFocusRef.current
+      && currentFocusRef.current !== currentFocusId
+    ) {
+      setLastFocusId(currentFocusRef.current);
+    }
+    currentFocusRef.current = currentFocusId || '';
+    setSelectedFocusId(currentFocusId || '');
+    setShowSaveFocusConfirm(false);
+  }, [currentFocusId]);
 
   useEffect(() => {
     if (!lastFocusId) return;
@@ -1065,11 +1071,9 @@ const StatusBar = ({
         window.__taliaUserProfileState = profileState || {};
         const criteria = profileState?.globalCriteria;
         if (criteria && typeof criteria === 'object') {
-          const nextRange = typeof criteria.rangeKey === 'string' ? criteria.rangeKey : '';
+          const nextRange = TEST_DEFAULT_GLOBAL_RANGE_KEY;
           const nextDuration = typeof criteria.durationKey === 'string' ? criteria.durationKey : '';
-          if (GLOBAL_DATE_RANGE_OPTIONS.some((option) => option.key === nextRange)) {
-            setGlobalDateRange(nextRange);
-          }
+          setGlobalDateRange(nextRange);
           if (GLOBAL_DURATION_OPTIONS.some((option) => option.key === nextDuration)) {
             setGlobalDuration(nextDuration);
           }
@@ -1081,13 +1085,21 @@ const StatusBar = ({
           const savedCurrency = typeof criteria.defaultDisplayCurrency === 'string'
             ? criteria.defaultDisplayCurrency.trim().toUpperCase()
             : '';
-          if (/^[A-Z]{3}$/.test(savedCurrency)) {
+          if (savedCurrency === 'ALL') {
+            setDefaultDisplayCurrency(savedCurrency);
+          } else if (/^[A-Z]{3}$/.test(savedCurrency)) {
             try {
               Intl.NumberFormat('en-US', { style: 'currency', currency: savedCurrency, maximumFractionDigits: 0 }).format(1);
               setDefaultDisplayCurrency(savedCurrency);
             } catch {
               // ignore invalid currency in profile
             }
+          }
+          const savedSailing = normalizePersistedSailing(
+            criteria.selectedSailing || criteria.selectedSail || criteria.selectedSailCode || null
+          );
+          if (savedSailing) {
+            setGlobalSailSelection(savedSailing);
           }
         }
       } catch (error) {
@@ -1102,16 +1114,45 @@ const StatusBar = ({
   }, []);
 
   useEffect(() => {
-    const range = resolveDateRange(globalDateRange);
+    const handleSailSelect = (event) => {
+      const next = normalizePersistedSailing(event?.detail);
+      if (!next) return;
+      setGlobalSailSelection(next);
+    };
+    const handleSailClear = () => {
+      setGlobalSailSelection(null);
+    };
+    window.addEventListener(SAIL_SELECT_EVENT, handleSailSelect);
+    window.addEventListener(SAIL_CLEAR_EVENT, handleSailClear);
+    return () => {
+      window.removeEventListener(SAIL_SELECT_EVENT, handleSailSelect);
+      window.removeEventListener(SAIL_CLEAR_EVENT, handleSailClear);
+    };
+  }, []);
+
+  useEffect(() => {
+    const range = resolveGlobalDateRange(globalDateRange || TEST_DEFAULT_GLOBAL_RANGE_KEY);
     const includeNonRealSailings = !activeOnly;
     const criteria = {
-      rangeKey: globalDateRange,
+      rangeKey: range.rangeKey,
       durationKey: globalDuration,
       activeOnly,
       includeNonRealSailings,
       defaultDisplayCurrency: String(defaultDisplayCurrency || '').trim().toUpperCase() || 'USD',
       ...range
     };
+    if (globalSailSelection) {
+      const selectedSailing = {
+        sailCode: globalSailSelection.sailCode,
+        detail: globalSailSelection.detail,
+        capturedAt: globalSailSelection.capturedAt || new Date().toISOString(),
+      };
+      criteria.selectedSailCode = selectedSailing.sailCode;
+      criteria.selectedSailing = selectedSailing;
+    } else {
+      criteria.selectedSailCode = null;
+      criteria.selectedSailing = null;
+    }
     window.__taliaGlobalCriteria = criteria;
     window.dispatchEvent(
       new CustomEvent(DASHBOARD_GLOBAL_CRITERIA_EVENT, {
@@ -1119,6 +1160,21 @@ const StatusBar = ({
       })
     );
   }, [globalDateRange, globalDuration, activeOnly, defaultDisplayCurrency]);
+
+  useEffect(() => {
+    if (!window.__taliaGlobalCriteria || typeof window.__taliaGlobalCriteria !== 'object') return;
+    if (globalSailSelection) {
+      window.__taliaGlobalCriteria.selectedSailCode = globalSailSelection.sailCode;
+      window.__taliaGlobalCriteria.selectedSailing = {
+        sailCode: globalSailSelection.sailCode,
+        detail: globalSailSelection.detail,
+        capturedAt: globalSailSelection.capturedAt || new Date().toISOString(),
+      };
+      return;
+    }
+    window.__taliaGlobalCriteria.selectedSailCode = null;
+    window.__taliaGlobalCriteria.selectedSailing = null;
+  }, [globalSailSelection]);
 
   useEffect(() => {
     if (!profileCriteriaHydrated) return undefined;
@@ -1133,7 +1189,7 @@ const StatusBar = ({
         activeOnly,
         includeNonRealSailings: !activeOnly,
         defaultDisplayCurrency: String(defaultDisplayCurrency || '').trim().toUpperCase() || 'USD',
-        ...resolveDateRange(globalDateRange),
+        ...resolveGlobalDateRange(globalDateRange),
       };
       saveUserProfileState({
         patch: { globalCriteria: currentCriteria },
@@ -1148,7 +1204,7 @@ const StatusBar = ({
         criteriaSaveTimerRef.current = null;
       }
     };
-  }, [profileCriteriaHydrated, globalDateRange, globalDuration, activeOnly, defaultDisplayCurrency]);
+  }, [profileCriteriaHydrated, globalDateRange, globalDuration, activeOnly, defaultDisplayCurrency, globalSailSelection]);
 
   useEffect(() => {
     enforceDashboardUiState({ dispatchEvents: true });
@@ -1225,40 +1281,43 @@ const StatusBar = ({
         <div className="status-bar__leading">
           {currentMode === 'app' && (
             <>
-              <button
-                type="button"
-                className="status-bar__header-btn status-bar__sidebar-toggle"
-                onClick={handleSidebarToggle}
-                title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-                aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-              >
-                {sidebarCollapsed ? '☰' : '◧'}
-              </button>
-              <span className="status-bar__leading-separator" aria-hidden="true" />
-              <div className="status-bar__quick-actions">
+              <TaliaTooltip content={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'} placement="bottom-left" delayMs={180}>
                 <button
                   type="button"
-                  className={`status-bar__header-btn status-bar__header-btn--criteria ${criteriaVisible ? 'status-bar__header-btn--active' : ''}`}
-                  onClick={handleCriteriaToggle}
-                  title={criteriaVisible ? 'Hide global criteria controls' : 'Show global criteria controls'}
-                  aria-label={criteriaVisible ? 'Hide global criteria controls' : 'Show global criteria controls'}
+                  className="status-bar__header-btn status-bar__sidebar-toggle"
+                  onClick={handleSidebarToggle}
+                  aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
                 >
-                  <span className="status-bar__icon-search" aria-hidden="true">🔍</span>
+                  {sidebarCollapsed ? '☰' : '◧'}
                 </button>
+              </TaliaTooltip>
+              <span className="status-bar__leading-separator" aria-hidden="true" />
+              <div className="status-bar__quick-actions">
+                <TaliaTooltip content={criteriaVisible ? 'Hide global criteria controls' : 'Show global criteria controls'} placement="bottom-left" delayMs={180}>
+                  <button
+                    type="button"
+                    className={`status-bar__header-btn status-bar__header-btn--criteria ${criteriaVisible ? 'status-bar__header-btn--active' : ''}`}
+                    onClick={handleCriteriaToggle}
+                    aria-label={criteriaVisible ? 'Hide global criteria controls' : 'Show global criteria controls'}
+                  >
+                    <span className="status-bar__icon-search" aria-hidden="true">🔍</span>
+                  </button>
+                </TaliaTooltip>
                 {hasAdvancedControls && (
                   <div className="status-bar__focus-controls" ref={focusControlsRef}>
-                    <button
-                      type="button"
-                      className={`status-bar__header-btn status-bar__header-btn--focus-top ${focusControlsOpen ? 'status-bar__header-btn--active' : ''}`}
-                      onClick={handleFocusTopClick}
-                      onDoubleClick={handleFocusTopDoubleClick}
-                      title={focusControlsOpen
-                        ? 'Focus selector open (double-click for next focus)'
-                        : 'Open focus selector (double-click for next focus)'}
-                      aria-label="Focus controls"
-                    >
-                      ◎
-                    </button>
+                    <TaliaTooltip content={focusControlsOpen
+                      ? 'Focus selector open (double-click for next focus)'
+                      : 'Open focus selector (double-click for next focus)'} placement="bottom-left" delayMs={180}>
+                      <button
+                        type="button"
+                        className={`status-bar__header-btn status-bar__header-btn--focus-top ${focusControlsOpen ? 'status-bar__header-btn--active' : ''}`}
+                        onClick={handleFocusTopClick}
+                        onDoubleClick={handleFocusTopDoubleClick}
+                        aria-label="Focus controls"
+                      >
+                        ◎
+                      </button>
+                    </TaliaTooltip>
                   </div>
                 )}
               </div>
@@ -1271,28 +1330,31 @@ const StatusBar = ({
                     role="group"
                     aria-label="Focus controls"
                   >
-                    <button
-                      type="button"
-                      className="status-bar__header-btn status-bar__header-btn--focus-prev"
-                      onClick={handleSwitchFocus}
-                      title={lastFocusId ? `Switch to ${lastFocusId}` : 'Switch to last focus'}
-                      aria-label="Switch focus"
-                      disabled={!lastFocusId}
-                    >
-                      Switch
-                    </button>
-                    <button
-                      type="button"
-                      className="status-bar__header-btn status-bar__header-btn--focus-next"
-                      onClick={handleCycleFocus}
-                      title="Move to next focus"
-                      aria-label="Next focus"
-                    >
-                      Next
-                    </button>
+                    <TaliaTooltip content={lastFocusId ? `Switch to ${lastFocusId}` : 'Switch to last focus'} placement="bottom-left" delayMs={180}>
+                      <button
+                        type="button"
+                        className="status-bar__header-btn status-bar__header-btn--focus-prev"
+                        onClick={handleSwitchFocus}
+                        aria-label="Switch focus"
+                        disabled={!lastFocusId}
+                      >
+                        Switch
+                      </button>
+                    </TaliaTooltip>
+                    <TaliaTooltip content="Move to next focus" placement="bottom-left" delayMs={180}>
+                      <button
+                        type="button"
+                        className="status-bar__header-btn status-bar__header-btn--focus-next"
+                        onClick={handleCycleFocus}
+                        aria-label="Next focus"
+                      >
+                        Next
+                      </button>
+                    </TaliaTooltip>
                     {focusOptions.length > 0 && (
                       <div className="status-bar__focus-control">
-                        <label className="status-bar__header-range" title="Quick focus selector">
+                        <TaliaTooltip content="Quick focus selector" placement="bottom-left" delayMs={180}>
+                        <label className="status-bar__header-range">
                           <span className="status-bar__header-range-label">Focus</span>
                           <HeaderCriteriaMenuSelect
                             id="status-bar-quick-focus"
@@ -1304,17 +1366,19 @@ const StatusBar = ({
                             autoCloseMs={menuDisappearMs}
                           />
                         </label>
+                        </TaliaTooltip>
                         {selectedFocusId && (
                           <div className="status-bar__focus-save">
-                            <button
-                              type="button"
-                              className="status-bar__header-btn status-bar__header-btn--focus-save"
-                              title="Save current focus"
-                              aria-label="Save current focus"
-                              onClick={handleSaveFocusAction}
-                            >
-                              💾
-                            </button>
+                            <TaliaTooltip content="Save current focus" placement="bottom-left" delayMs={180}>
+                              <button
+                                type="button"
+                                className="status-bar__header-btn status-bar__header-btn--focus-save"
+                                aria-label="Save current focus"
+                                onClick={handleSaveFocusAction}
+                              >
+                                💾
+                              </button>
+                            </TaliaTooltip>
                             {showSaveFocusConfirm && (
                               <div className="status-bar__inline-confirm" role="group" aria-label="Confirm save current focus">
                                 <button
@@ -1344,7 +1408,8 @@ const StatusBar = ({
                 <>
                   <span className="status-bar__leading-separator" aria-hidden="true" />
                   <div className={`status-bar__criteria ${autoCloseFading.criteria ? 'status-bar__auto-close-fade' : ''}`}>
-                    <label className="status-bar__header-range" title="Global date range applied across reports">
+                    <TaliaTooltip content="Global date range applied across reports" placement="bottom-left" delayMs={180}>
+                    <label className="status-bar__header-range">
                       <span className="status-bar__header-range-label">Date</span>
                       <HeaderCriteriaMenuSelect
                         id="status-bar-global-date-range"
@@ -1355,7 +1420,9 @@ const StatusBar = ({
                         autoCloseMs={menuDisappearMs}
                       />
                     </label>
-                    <label className="status-bar__header-range" title="Global duration criteria applied across reports">
+                    </TaliaTooltip>
+                    <TaliaTooltip content="Global duration criteria applied across reports" placement="bottom-left" delayMs={180}>
+                    <label className="status-bar__header-range">
                       <span className="status-bar__header-range-label">Dur</span>
                       <HeaderCriteriaMenuSelect
                         id="status-bar-global-duration"
@@ -1366,7 +1433,9 @@ const StatusBar = ({
                         autoCloseMs={menuDisappearMs}
                       />
                     </label>
-                    <label className="status-bar__header-range" title="Default currency for prices when missing or when choosing among published-rate rows">
+                    </TaliaTooltip>
+                    <TaliaTooltip content="Default currency for prices when missing or when choosing among published-rate rows" placement="bottom-left" delayMs={180}>
+                    <label className="status-bar__header-range">
                       <span className="status-bar__header-range-label">Curr</span>
                       <HeaderCriteriaMenuSelect
                         id="status-bar-global-display-currency"
@@ -1377,7 +1446,9 @@ const StatusBar = ({
                         autoCloseMs={menuDisappearMs}
                       />
                     </label>
-                    <label className="status-bar__header-toggle" htmlFor="status-bar-active-only" title="Show active sailings only">
+                    </TaliaTooltip>
+                    <TaliaTooltip content="Show active sailings only" placement="bottom-left" delayMs={180}>
+                    <label className="status-bar__header-toggle" htmlFor="status-bar-active-only">
                       <input
                         id="status-bar-active-only"
                         type="checkbox"
@@ -1388,7 +1459,9 @@ const StatusBar = ({
                       />
                       <span className="status-bar__header-range-label">Active</span>
                     </label>
-                    <label className="status-bar__header-toggle" htmlFor="status-bar-view-scope-wide" title="Switch between local and wide dashboard scope">
+                    </TaliaTooltip>
+                    <TaliaTooltip content="Switch between local and wide dashboard scope" placement="bottom-left" delayMs={180}>
+                    <label className="status-bar__header-toggle" htmlFor="status-bar-view-scope-wide">
                       <input
                         id="status-bar-view-scope-wide"
                         type="checkbox"
@@ -1399,6 +1472,7 @@ const StatusBar = ({
                       />
                       <span className="status-bar__header-range-label">Wide</span>
                     </label>
+                    </TaliaTooltip>
                   </div>
                 </>
               )}
@@ -1434,11 +1508,13 @@ const StatusBar = ({
           )}
 
           {currentMode === 'data' && dataStatus && (
-            <div className="status-bar__item" title="Global data range and last sync">
-              <span className="status-bar__label">Data:</span>
-              <span className="status-bar__value">Range {dataRangeText}</span>
-              <span className="status-bar__timestamp">Last Sync {dataLastSyncText}</span>
-            </div>
+            <TaliaTooltip content="Global data range and last sync" placement="bottom-left" delayMs={180}>
+              <div className="status-bar__item">
+                <span className="status-bar__label">Data:</span>
+                <span className="status-bar__value">Range {dataRangeText}</span>
+                <span className="status-bar__timestamp">Last Sync {dataLastSyncText}</span>
+              </div>
+            </TaliaTooltip>
           )}
         </div>
 
@@ -1448,10 +1524,10 @@ const StatusBar = ({
               {currentMode === 'app' && hasAdvancedControls && (
                 <div className="status-bar__events">
                   {currentEventSummary && (
+                    <TaliaTooltip content="Click to view details" placement="bottom-left" delayMs={180}>
                     <div
                       className="status-bar__item status-bar__item--clickable"
                       onClick={() => setShowDetails(!showDetails)}
-                      title="Click to view details"
                     >
                       <span className="status-bar__label">Current Event:</span>
                       <span className="status-bar__value">
@@ -1461,12 +1537,13 @@ const StatusBar = ({
                       <span className="status-bar__timestamp">{currentEventSummary.timestamp}</span>
                       <span className="status-bar__expand">{showDetails ? '▲' : '▼'}</span>
                     </div>
+                    </TaliaTooltip>
                   )}
                   {persistedEventSummary && (
+                    <TaliaTooltip content="Click to view details" placement="bottom-left" delayMs={180}>
                     <div
                       className="status-bar__item status-bar__item--clickable"
                       onClick={() => setShowDetails(!showDetails)}
-                      title="Click to view details"
                     >
                       <span className="status-bar__label">Persisted:</span>
                       <span className="status-bar__value">
@@ -1475,6 +1552,7 @@ const StatusBar = ({
                       </span>
                       <span className="status-bar__timestamp">{persistedEventSummary.timestamp}</span>
                     </div>
+                    </TaliaTooltip>
                   )}
                 </div>
               )}
@@ -1493,158 +1571,172 @@ const StatusBar = ({
               aria-label="Visibility controls"
             >
               {styleSelectOptions.length > 0 && (
-                <div
-                  className="status-bar__header-range"
-                  title={
+                <TaliaTooltip
+                  content={
                     styleMenuUsesProfiles
                       ? 'Saved appearance profiles first, then all palette themes (built-in + registry)'
                       : 'Built-in palette themes plus any keys from the UI theme registry'
                   }
+                  placement="bottom-left"
+                  delayMs={180}
                 >
-                  <span className="status-bar__header-range-label">Style</span>
-                  <HeaderCriteriaMenuSelect
-                    id="status-bar-appearance-profile-visibility"
-                    wide
-                    options={styleSelectOptions}
-                    value={styleSelectValue}
-                    onChange={handleStyleVisibilityChange}
-                    aria-label={
-                      styleMenuUsesProfiles
-                        ? 'Appearance profiles and palette themes'
-                        : 'Palette theme selector'
-                    }
-                    autoCloseMs={menuDisappearMs}
-                  />
-                </div>
+                  <div className="status-bar__header-range">
+                    <span className="status-bar__header-range-label">Style</span>
+                    <HeaderCriteriaMenuSelect
+                      id="status-bar-appearance-profile-visibility"
+                      wide
+                      options={styleSelectOptions}
+                      value={styleSelectValue}
+                      onChange={handleStyleVisibilityChange}
+                      aria-label={
+                        styleMenuUsesProfiles
+                          ? 'Appearance profiles and palette themes'
+                          : 'Palette theme selector'
+                      }
+                      autoCloseMs={menuDisappearMs}
+                    />
+                  </div>
+                </TaliaTooltip>
               )}
-              <button
-                type="button"
-                role="menuitemcheckbox"
-                aria-checked={controlsVisible}
-                className={`status-bar__visibility-option ${controlsVisible ? 'status-bar__visibility-option--active' : ''}`}
-                onClick={handleControlsToggle}
-                title="Show or hide the top-level controls strip"
-              >
-                <span>Controls</span>
-                {controlsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
-              </button>
-              <button
-                type="button"
-                role="menuitemcheckbox"
-                aria-checked={filtersVisible}
-                className={`status-bar__visibility-option ${filtersVisible ? 'status-bar__visibility-option--active' : ''}`}
-                onClick={handleFiltersToggle}
-                title="Show or hide filter rows on all reports"
-              >
-                <span>Filters</span>
-                {filtersVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
-              </button>
-              <button
-                type="button"
-                role="menuitemcheckbox"
-                aria-checked={calloutsVisible}
-                className={`status-bar__visibility-option ${calloutsVisible ? 'status-bar__visibility-option--active' : ''}`}
-                onClick={handleCalloutsToggle}
-                title="Show or hide informational callouts across all reports"
-              >
-                <span>Callouts</span>
-                {calloutsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
-              </button>
-              <button
-                type="button"
-                role="menuitemcheckbox"
-                aria-checked={actionsVisible}
-                className={`status-bar__visibility-option ${actionsVisible ? 'status-bar__visibility-option--active' : ''}`}
-                onClick={handleActionsToggle}
-                title="Show or hide panel action sections across all reports"
-              >
-                <span>Actions</span>
-                {actionsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
-              </button>
-              <button
-                type="button"
-                role="menuitemcheckbox"
-                aria-checked={panelTitlesVisible}
-                className={`status-bar__visibility-option ${panelTitlesVisible ? 'status-bar__visibility-option--active' : ''}`}
-                onClick={handlePanelTitlesToggle}
-                title="Show or hide panel titles globally"
-              >
-                <span>Titles</span>
-                {panelTitlesVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
-              </button>
-              <button
-                type="button"
-                role="menuitemcheckbox"
-                aria-checked={detailsVisible}
-                className={`status-bar__visibility-option ${detailsVisible ? 'status-bar__visibility-option--active' : ''}`}
-                onClick={handleDetailsToggle}
-                title="Show or hide data details on all report panels"
-              >
-                <span>Details</span>
-                {detailsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
-              </button>
-              <button
-                type="button"
-                role="menuitemradio"
-                aria-checked={tableLayoutMode === 'width'}
-                className={`status-bar__visibility-option ${tableLayoutMode === 'width' ? 'status-bar__visibility-option--active' : ''}`}
-                onClick={() => handleTableLayoutSelect('width')}
-                title="Use width-fit table layout"
-              >
-                <span>Fit Width</span>
-                {tableLayoutMode === 'width' ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
-              </button>
-              <button
-                type="button"
-                role="menuitemradio"
-                aria-checked={tableLayoutMode === 'data'}
-                className={`status-bar__visibility-option ${tableLayoutMode === 'data' ? 'status-bar__visibility-option--active' : ''}`}
-                onClick={() => handleTableLayoutSelect('data')}
-                title="Use data-fit table layout"
-              >
-                <span>Fit Data</span>
-                {tableLayoutMode === 'data' ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
-              </button>
+              <TaliaTooltip content="Show or hide the top-level controls strip" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={controlsVisible}
+                  className={`status-bar__visibility-option ${controlsVisible ? 'status-bar__visibility-option--active' : ''}`}
+                  onClick={handleControlsToggle}
+                >
+                  <span>Controls</span>
+                  {controlsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Show or hide filter rows on all reports" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={filtersVisible}
+                  className={`status-bar__visibility-option ${filtersVisible ? 'status-bar__visibility-option--active' : ''}`}
+                  onClick={handleFiltersToggle}
+                >
+                  <span>Filters</span>
+                  {filtersVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Show or hide informational callouts across all reports" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={calloutsVisible}
+                  className={`status-bar__visibility-option ${calloutsVisible ? 'status-bar__visibility-option--active' : ''}`}
+                  onClick={handleCalloutsToggle}
+                >
+                  <span>Callouts</span>
+                  {calloutsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Show or hide panel action sections across all reports" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={actionsVisible}
+                  className={`status-bar__visibility-option ${actionsVisible ? 'status-bar__visibility-option--active' : ''}`}
+                  onClick={handleActionsToggle}
+                >
+                  <span>Actions</span>
+                  {actionsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Show or hide panel titles globally" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={panelTitlesVisible}
+                  className={`status-bar__visibility-option ${panelTitlesVisible ? 'status-bar__visibility-option--active' : ''}`}
+                  onClick={handlePanelTitlesToggle}
+                >
+                  <span>Titles</span>
+                  {panelTitlesVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Show or hide data details on all report panels" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={detailsVisible}
+                  className={`status-bar__visibility-option ${detailsVisible ? 'status-bar__visibility-option--active' : ''}`}
+                  onClick={handleDetailsToggle}
+                >
+                  <span>Details</span>
+                  {detailsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Use width-fit table layout" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={tableLayoutMode === 'width'}
+                  className={`status-bar__visibility-option ${tableLayoutMode === 'width' ? 'status-bar__visibility-option--active' : ''}`}
+                  onClick={() => handleTableLayoutSelect('width')}
+                >
+                  <span>Fit Width</span>
+                  {tableLayoutMode === 'width' ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Use data-fit table layout" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={tableLayoutMode === 'data'}
+                  className={`status-bar__visibility-option ${tableLayoutMode === 'data' ? 'status-bar__visibility-option--active' : ''}`}
+                  onClick={() => handleTableLayoutSelect('data')}
+                >
+                  <span>Fit Data</span>
+                  {tableLayoutMode === 'data' ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                </button>
+              </TaliaTooltip>
             </div>
           )}
           {currentMode === 'app' && (
             <div className="status-bar__visibility-controls" ref={visibilityControlsRef}>
-              <button
-                type="button"
-                className={`status-bar__header-btn status-bar__header-btn--visibility ${visibilityControlsOpen ? 'status-bar__header-btn--active' : ''}`}
-                onClick={handleVisibilityToggle}
-                title={visibilityControlsOpen ? 'Hide visibility controls' : 'Show visibility controls'}
-                aria-label={visibilityControlsOpen ? 'Hide visibility controls' : 'Show visibility controls'}
-              >
-                👁
-              </button>
+              <TaliaTooltip content={visibilityControlsOpen ? 'Hide visibility controls' : 'Show visibility controls'} placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  className={`status-bar__header-btn status-bar__header-btn--visibility ${visibilityControlsOpen ? 'status-bar__header-btn--active' : ''}`}
+                  onClick={handleVisibilityToggle}
+                  aria-label={visibilityControlsOpen ? 'Hide visibility controls' : 'Show visibility controls'}
+                >
+                  👁
+                </button>
+              </TaliaTooltip>
             </div>
           )}
           {currentMode === 'app' && (
+            <TaliaTooltip content={refreshButtonTitle} placement="bottom-left" delayMs={180}>
+              <button
+                type="button"
+                className={`status-bar__header-btn ${refreshPhase !== 'active' ? 'status-bar__header-btn--active' : ''}`}
+                onClick={handleGlobalRefreshCycle}
+                aria-label={refreshButtonTitle}
+                disabled={refreshPhase === 'cooldown'}
+              >
+                {refreshButtonLabel}
+              </button>
+            </TaliaTooltip>
+          )}
+          <TaliaTooltip content={eventsVisible ? 'Hide advanced header controls' : 'Show advanced header controls'} placement="bottom-left" delayMs={180}>
             <button
               type="button"
-              className={`status-bar__header-btn ${refreshPhase !== 'active' ? 'status-bar__header-btn--active' : ''}`}
-              onClick={handleGlobalRefreshCycle}
-              title={refreshButtonTitle}
-              aria-label={refreshButtonTitle}
-              disabled={refreshPhase === 'cooldown'}
+              className={`status-bar__header-btn status-bar__header-btn--advanced ${eventsVisible ? 'status-bar__header-btn--active' : ''}`}
+              onClick={handleEventsToggle}
+              aria-label={eventsVisible ? 'Hide advanced header controls' : 'Show advanced header controls'}
             >
-              {refreshButtonLabel}
+              <span className="status-bar__icon-graph" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
             </button>
-          )}
-          <button
-            type="button"
-            className={`status-bar__header-btn status-bar__header-btn--advanced ${eventsVisible ? 'status-bar__header-btn--active' : ''}`}
-            onClick={handleEventsToggle}
-            title={eventsVisible ? 'Hide advanced header controls' : 'Show advanced header controls'}
-            aria-label={eventsVisible ? 'Hide advanced header controls' : 'Show advanced header controls'}
-          >
-            <span className="status-bar__icon-graph" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </span>
-          </button>
+          </TaliaTooltip>
         </div>
 
       </div>
@@ -1689,99 +1781,108 @@ const StatusBar = ({
                   aria-label="Data Management range end"
                 />
               </label>
-              <button
-                type="button"
-                className="status-bar__header-btn"
-                onClick={handleDataMgmtSaveRange}
-                disabled={dataMgmtState.rangeSaving}
-                title="Save integration date range"
-                aria-label="Save integration date range"
-              >
-                {dataMgmtState.rangeSaving ? '⏳' : '✓'}
-              </button>
+              <TaliaTooltip content="Save integration date range" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  className="status-bar__header-btn"
+                  onClick={handleDataMgmtSaveRange}
+                  disabled={dataMgmtState.rangeSaving}
+                  aria-label="Save integration date range"
+                >
+                  {dataMgmtState.rangeSaving ? '⏳' : '✓'}
+                </button>
+              </TaliaTooltip>
             </>
           )}
           {showDataAdminActions && (
             <>
-              <button
-                type="button"
-                className="status-bar__header-btn"
-                onClick={() => handleDataMgmtTableAction('status')}
-                title="Status for selected table"
-                aria-label="Status for selected table"
-                disabled={!dataMgmtState.selectedTable}
-              >
-                🧾
-              </button>
-              <button
-                type="button"
-                className="status-bar__header-btn"
-                onClick={() => handleDataMgmtTableAction('review')}
-                title="Review selected table rows"
-                aria-label="Review selected table rows"
-                disabled={!dataMgmtState.selectedTable}
-              >
-                👁️
-              </button>
-              <button
-                type="button"
-                className="status-bar__header-btn"
-                onClick={() => handleDataMgmtTableAction('sync')}
-                title="Sync selected table"
-                aria-label="Sync selected table"
-                disabled={!dataMgmtState.selectedTable}
-              >
-                🔄
-              </button>
-              <button
-                type="button"
-                className="status-bar__header-btn"
-                onClick={() => handleDataMgmtTableAction('full')}
-                title="Full update selected table"
-                aria-label="Full update selected table"
-                disabled={!dataMgmtState.selectedTable}
-              >
-                ⚡
-              </button>
-              <button
-                type="button"
-                className={`status-bar__header-btn ${dataMgmtState.bulkSyncing && dataMgmtState.bulkMode === 'sync' ? 'status-bar__header-btn--active' : ''}`}
-                onClick={() => handleDataMgmtSyncAll('sync')}
-                disabled={dataMgmtState.bulkSyncing}
-                title="Sync all configured tables"
-                aria-label="Sync all configured tables"
-              >
-                ↻
-              </button>
-              <button
-                type="button"
-                className={`status-bar__header-btn ${dataMgmtState.bulkSyncing && dataMgmtState.bulkMode === 'full' ? 'status-bar__header-btn--active' : ''}`}
-                onClick={() => handleDataMgmtSyncAll('full')}
-                disabled={dataMgmtState.bulkSyncing}
-                title="Full update all configured tables"
-                aria-label="Full update all configured tables"
-              >
-                ⚡
-              </button>
-              <button
-                type="button"
-                className="status-bar__header-btn"
-                onClick={handleDataMgmtBackup}
-                disabled={dataMgmtState.backupLoading}
-                title="Backup tools"
-                aria-label="Backup tools"
-              >
-                {dataMgmtState.backupLoading ? '⏳' : '💾'}
-              </button>
-              <button
-                type="button"
-                className="status-bar__header-btn"
-                onClick={handleDataMgmtRefresh}
-                title="Refresh Data Management state"
-                aria-label="Refresh Data Management state"
-              >
-                ⟳
-              </button>
+              <TaliaTooltip content="Status for selected table" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  className="status-bar__header-btn"
+                  onClick={() => handleDataMgmtTableAction('status')}
+                  aria-label="Status for selected table"
+                  disabled={!dataMgmtState.selectedTable}
+                >
+                  🧾
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Review selected table rows" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  className="status-bar__header-btn"
+                  onClick={() => handleDataMgmtTableAction('review')}
+                  aria-label="Review selected table rows"
+                  disabled={!dataMgmtState.selectedTable}
+                >
+                  👁️
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Sync selected table" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  className="status-bar__header-btn"
+                  onClick={() => handleDataMgmtTableAction('sync')}
+                  aria-label="Sync selected table"
+                  disabled={!dataMgmtState.selectedTable}
+                >
+                  🔄
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Full update selected table" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  className="status-bar__header-btn"
+                  onClick={() => handleDataMgmtTableAction('full')}
+                  aria-label="Full update selected table"
+                  disabled={!dataMgmtState.selectedTable}
+                >
+                  ⚡
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Sync all configured tables" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  className={`status-bar__header-btn ${dataMgmtState.bulkSyncing && dataMgmtState.bulkMode === 'sync' ? 'status-bar__header-btn--active' : ''}`}
+                  onClick={() => handleDataMgmtSyncAll('sync')}
+                  disabled={dataMgmtState.bulkSyncing}
+                  aria-label="Sync all configured tables"
+                >
+                  ↻
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Full update all configured tables" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  className={`status-bar__header-btn ${dataMgmtState.bulkSyncing && dataMgmtState.bulkMode === 'full' ? 'status-bar__header-btn--active' : ''}`}
+                  onClick={() => handleDataMgmtSyncAll('full')}
+                  disabled={dataMgmtState.bulkSyncing}
+                  aria-label="Full update all configured tables"
+                >
+                  ⚡
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Backup tools" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  className="status-bar__header-btn"
+                  onClick={handleDataMgmtBackup}
+                  disabled={dataMgmtState.backupLoading}
+                  aria-label="Backup tools"
+                >
+                  {dataMgmtState.backupLoading ? '⏳' : '💾'}
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Refresh Data Management state" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  className="status-bar__header-btn"
+                  onClick={handleDataMgmtRefresh}
+                  aria-label="Refresh Data Management state"
+                >
+                  ⟳
+                </button>
+              </TaliaTooltip>
             </>
           )}
         </div>
@@ -1792,13 +1893,14 @@ const StatusBar = ({
         <div className="status-bar__details">
           <div className="status-bar__details-header">
             <span className="status-bar__details-title">Event Details</span>
-            <button 
-              className="status-bar__details-close"
-              onClick={() => setShowDetails(false)}
-              title="Close"
-            >
-              ×
-            </button>
+            <TaliaTooltip content="Close" placement="bottom-left" delayMs={180}>
+              <button 
+                className="status-bar__details-close"
+                onClick={() => setShowDetails(false)}
+              >
+                ×
+              </button>
+            </TaliaTooltip>
           </div>
           
           <div className="status-bar__details-content">

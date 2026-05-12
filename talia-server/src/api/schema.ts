@@ -915,6 +915,7 @@ export const typeDefs = `#graphql
     healthStatus: String
     lastHealthCheck: String
     description: String
+    connectionConfig: JSON
   }
   
   type TaliaConfigSummary {
@@ -923,6 +924,13 @@ export const typeDefs = `#graphql
     dateRanges: [IntegrationDateRange!]!
     dataSources: [DataSource!]!
     settings: JSON
+  }
+
+  type IntegrationSettings {
+    aisstreamApiKeyPresent: Boolean!
+    aishubUsername: String
+    vesselfinderApiKeyPresent: Boolean!
+    marinetrafficApiKeyPresent: Boolean!
   }
 
   enum EnvKeyImportance {
@@ -969,6 +977,13 @@ export const typeDefs = `#graphql
     nodeRuntimeVersion: String!
     """Ops validate menu token (same value as SCRIPT_VERSION in scripts/validate)."""
     validateScriptDocVersion: String!
+  }
+
+  input IntegrationSettingsInput {
+    aisstreamApiKey: String
+    aishubUsername: String
+    vesselfinderApiKey: String
+    marinetrafficApiKey: String
   }
   
   input IntegrationDateRangeInput {
@@ -1211,6 +1226,7 @@ export const typeDefs = `#graphql
 
     # Talia Configuration (database-backed)
     taliaConfig: TaliaConfigSummary!
+    integrationSettings: IntegrationSettings!
     appearanceSettings(userId: String): AppearanceSettings!
     appearanceProfileBuckets(userId: String): AppearanceProfileBuckets!
     taliaUiThemeRegistry: TaliaUiThemeRegistryPayload!
@@ -1258,6 +1274,8 @@ export const typeDefs = `#graphql
     updateIntegrationDateRange(id: Int!, input: IntegrationDateRangeInput!): IntegrationDateRange!
     createIntegrationDateRange(input: IntegrationDateRangeInput!): IntegrationDateRange!
     setDefaultDateRange(id: Int!): IntegrationDateRange!
+    updateDataSourceConnection(sourceName: String!, connectionConfig: JSON!): DataSource!
+    saveIntegrationSettings(input: IntegrationSettingsInput!): IntegrationSettings!
     saveAppearanceSettings(settings: JSON!, activeProfileId: String, userId: String): AppearanceSettings!
     saveAppearanceProfiles(profiles: JSON!, userId: String): [AppearanceProfile!]!
     saveTaliaUiThemeRegistry(themes: JSON, assets: JSON): TaliaUiThemeRegistryPayload!

@@ -8,7 +8,7 @@
  * 1. Copy this folder and rename it to your component name
  * 2. Replace "Template" with your component name throughout
  * 3. Update tableName to match your database table
- * 4. Update eventName if listening to different events (default: 'talia:sail.select')
+ * 4. Update eventName if listening to different events (default: SAIL_SELECT_EVENT)
  * 5. Update contextMapper to extract the correct filter fields from event detail
  * 6. Update the presenter props to match your data structure
  */
@@ -18,14 +18,14 @@ import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithCon
 import TemplatePresenter from './TemplatePresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
-import { extractSailCodeFromEvent } from '../../../lib/eventBus';
+import { extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 const TemplateContainer = ({ panelInstanceId, panelComponentId }) => {
   console.log('[TemplateContainer] Component rendering');
   
   // Use reusable hook for context-based data fetching with server-side filtering
   const { data, loading, error, refetch, context } = useTableDataWithContext({
     tableName: 'your_table_name', // TODO: Replace with your table name
-    eventName: 'talia:sail.select', // TODO: Update if listening to different events
+    eventName: SAIL_SELECT_EVENT, // TODO: Update if listening to different events
     contextMapper: (detail) => {
       // TODO: Extract filter fields from event detail
       // Example: Extract sail_code for filtering

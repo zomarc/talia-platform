@@ -3,6 +3,13 @@ import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig
 import { useFocusManagement } from '../../../hooks/useFocusManagement';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import taliaUserService from '../../../services/TaliaUserService';
+import {
+  buildFocusExportPack,
+  buildCreateFocusPayloadFromPack,
+  parseFocusExportPack,
+  parseFocusPackJsonFileText
+} from '../../../lib/taliaFocusExportPack';
+import { slugifyExportFilenamePart } from '../../../lib/taliaThemeExportPack';
 
 const ROLE_ORDER = ['GUEST', 'USER', 'MANAGER', 'ADMIN'];
 const ROLE_LEVEL = { GUEST: 0, USER: 1, MANAGER: 2, ADMIN: 3 };
@@ -101,7 +108,8 @@ const AdminAccessManager = () => {
     loading,
     error,
     createFocus,
-    updateFocus
+    updateFocus,
+    deleteFocus
   } = useFocusManagement();
   const { devUsers = [] } = useSupabaseAuth();
 
@@ -115,6 +123,15 @@ const AdminAccessManager = () => {
   const [createBusy, setCreateBusy] = useState(false);
   const [matrixBusy, setMatrixBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [deleteReview, setDeleteReview] = useState(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [importReview, setImportReview] = useState(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importName, setImportName] = useState('');
+  const [importClearUser, setImportClearUser] = useState(true);
+  const [focusTableReady, setFocusTableReady] = useState(false);
+  const [matrixTableReady, setMatrixTableReady] = useState(false);
+  const importFileRef = useRef(null);
 
   const focusTableRef = useRef(null);
   const focusTableElRef = useRef(null);
@@ -253,6 +270,9 @@ const AdminAccessManager = () => {
         const data = row.getData();
         if (data?.id) setSelectedFocusId(data.id);
       });
+
+      focusTableRef.current.setData(focusRows || []);
+      setFocusTableReady(true);
     };
     init();
     return () => {
@@ -265,13 +285,14 @@ const AdminAccessManager = () => {
         }
         focusTableRef.current = null;
       }
+      setFocusTableReady(false);
     };
   }, []);
 
   useEffect(() => {
-    if (!focusTableRef.current) return;
+    if (!focusTableReady || !focusTableRef.current) return;
     focusTableRef.current.setData(focusRows || []);
-  }, [focusRows]);
+  }, [focusRows, focusTableReady]);
 
   useEffect(() => {
     let cancelled = false;
@@ -335,6 +356,9 @@ const AdminAccessManager = () => {
           ]
         })
       });
+
+      matrixTableRef.current.setData(matrixRows || []);
+      setMatrixTableReady(true);
     };
     init();
     return () => {
@@ -347,13 +371,14 @@ const AdminAccessManager = () => {
         }
         matrixTableRef.current = null;
       }
+      setMatrixTableReady(false);
     };
   }, []);
 
   useEffect(() => {
-    if (!matrixTableRef.current) return;
+    if (!matrixTableReady || !matrixTableRef.current) return;
     matrixTableRef.current.setData(matrixRows || []);
-  }, [matrixRows]);
+  }, [matrixRows, matrixTableReady]);
 
   const handleEditorTypeChange = useCallback((nextType) => {
     const upperType = normalizeType(nextType);
@@ -453,13 +478,142 @@ const AdminAccessManager = () => {
     }
   }, [createFocus, createName]);
 
+  const handleExportSelected = useCallback(() => {
+    if (!selectedFocus) {
+      setMessage('Select a focus to export.');
+      return;
+    }
+    setMessage('');
+    try {
+      const pack = buildFocusExportPack(selectedFocus);
+      const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `talia-focus-${slugifyExportFilenamePart(selectedFocus.name)}.json`;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setMessage('Focus exported.');
+    } catch (exportError) {
+      setMessage(exportError?.message || 'Export failed.');
+    }
+  }, [selectedFocus]);
+
+  const handlePickImportFile = useCallback(() => {
+    setMessage('');
+    importFileRef.current?.click?.();
+  }, []);
+
+  const handleImportFileChange = useCallback((event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setMessage('');
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const raw = parseFocusPackJsonFileText(String(reader.result || ''));
+        const parsed = parseFocusExportPack(raw);
+        if (!parsed.ok) {
+          setMessage(parsed.error || 'Invalid focus pack.');
+          return;
+        }
+        const focusName = String(parsed.pack.focus?.name || '').trim() || 'Imported focus';
+        setImportName(`${focusName} (imported)`);
+        setImportClearUser(true);
+        setImportReview({ packRoot: parsed.pack });
+      } catch (readError) {
+        setMessage(readError?.message || 'Could not read JSON file.');
+      }
+    };
+    reader.onerror = () => setMessage('Could not read file.');
+    reader.readAsText(file, 'UTF-8');
+  }, []);
+
+  const handleCancelImport = useCallback(() => {
+    setImportReview(null);
+    setImportName('');
+    setImportBusy(false);
+  }, []);
+
+  const handleConfirmImport = useCallback(async () => {
+    if (!importReview?.packRoot) return;
+    const trimmed = importName.trim();
+    if (!trimmed) {
+      setMessage('Enter a name for the imported focus.');
+      return;
+    }
+    let finalName = trimmed;
+    if ((focuses || []).some((f) => f.name === finalName)) {
+      finalName = `${trimmed} (${Date.now()})`;
+    }
+    setImportBusy(true);
+    setMessage('');
+    try {
+      const payload = buildCreateFocusPayloadFromPack(importReview.packRoot, {
+        name: finalName,
+        clearAssignedUserId: importClearUser
+      });
+      const ok = await createFocus(payload);
+      if (ok) {
+        setMessage(`Imported focus as “${finalName}”.`);
+        setImportReview(null);
+        setImportName('');
+      } else {
+        setMessage('Import failed (createFocus returned false).');
+      }
+    } catch (importError) {
+      setMessage(importError?.message || 'Import failed.');
+    } finally {
+      setImportBusy(false);
+    }
+  }, [importReview, importName, importClearUser, createFocus, focuses]);
+
+  const handleRequestDelete = useCallback(() => {
+    if (!selectedFocus) {
+      setMessage('Select a focus to delete.');
+      return;
+    }
+    setMessage('');
+    setDeleteReview({ id: selectedFocus.id, name: selectedFocus.name || selectedFocus.id });
+  }, [selectedFocus]);
+
+  const handleCancelDelete = useCallback(() => {
+    setDeleteReview(null);
+    setDeleteBusy(false);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteReview?.id) return;
+    setDeleteBusy(true);
+    setMessage('');
+    try {
+      const ok = await deleteFocus(deleteReview.id);
+      if (ok) {
+        setMessage(`Deleted focus “${deleteReview.name}”.`);
+        setDeleteReview(null);
+      } else {
+        setMessage('Delete failed.');
+      }
+    } catch (deleteError) {
+      setMessage(deleteError?.message || 'Delete failed.');
+    } finally {
+      setDeleteBusy(false);
+    }
+  }, [deleteReview, deleteFocus]);
+
   return (
     <div className="admin-access">
       <div className="admin-access__top">
         <div className="admin-access__intro">
           <h2 className="admin-access__title">Focus Access Management</h2>
           <p className="admin-access__subtitle">
-            Manage focus names, assignment type, and role/user visibility from one place.
+            Manage focus names, assignment type, and role/user visibility from one place. Export / Import JSON moves
+            layout and metadata to a new focus id (USER assigns: clear Talia user id unless you remap on this instance).
+            Naming: <code>talia-ui/docs/TALIA_UI_GLOSSARY.md</code>.
           </p>
         </div>
         <div className="admin-access__create">
@@ -478,6 +632,30 @@ const AdminAccessManager = () => {
           >
             {createBusy ? 'Creating...' : 'Create Focus'}
           </button>
+          <button
+            className="talia-btn"
+            type="button"
+            disabled={loading || !selectedFocus}
+            onClick={handleExportSelected}
+          >
+            Export JSON
+          </button>
+          <button
+            className="talia-btn"
+            type="button"
+            disabled={loading || importBusy}
+            onClick={handlePickImportFile}
+          >
+            Import JSON
+          </button>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept="application/json,.json"
+            style={{ display: 'none' }}
+            aria-hidden="true"
+            onChange={handleImportFileChange}
+          />
         </div>
       </div>
 
@@ -486,6 +664,51 @@ const AdminAccessManager = () => {
         {!message && error ? <span className="admin-access__error">Focus error: {error}</span> : null}
         {!message && !error && usersError ? <span className="admin-access__error">User error: {usersError}</span> : null}
       </div>
+
+      {importReview ? (
+        <section className="admin-access__panel admin-access__panel--full" style={{ marginBottom: 12 }}>
+          <header className="admin-access__panel-header">
+            <h3>Confirm focus import</h3>
+          </header>
+          <div className="admin-access__form" style={{ padding: '0 1rem 1rem' }}>
+            <p className="admin-access__hint">
+              Creates a new focus row (new id). For USER-type packs, Talia user ids from another instance are not
+              portable—clear assignment unless you remap locally.
+            </p>
+            <label className="admin-access__field">
+              <span>Name for new focus</span>
+              <input
+                className="admin-access__input"
+                type="text"
+                value={importName}
+                onChange={(event) => setImportName(event.target.value)}
+                autoComplete="off"
+              />
+            </label>
+            <label className="admin-access__field admin-access__check">
+              <input
+                type="checkbox"
+                checked={importClearUser}
+                onChange={(event) => setImportClearUser(event.target.checked)}
+              />
+              <span>Clear assigned user on USER-type import</span>
+            </label>
+            <div className="admin-access__actions">
+              <button type="button" className="talia-btn" onClick={handleCancelImport} disabled={importBusy}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="talia-btn talia-btn--primary"
+                onClick={handleConfirmImport}
+                disabled={importBusy}
+              >
+                {importBusy ? 'Importing…' : 'Import as new focus'}
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <div className="admin-access__main-fill">
         <div className="admin-access__grid">
@@ -602,16 +825,41 @@ const AdminAccessManager = () => {
                 </label>
               ) : null}
 
-              <div className="admin-access__actions">
-                <button
-                  className="talia-btn talia-btn--primary"
-                  type="button"
-                  disabled={saveBusy || loading}
-                  onClick={handleSaveFocus}
-                >
-                  {saveBusy ? 'Saving...' : 'Save Focus'}
-                </button>
-              </div>
+              {deleteReview ? (
+                <div className="admin-access__delete-review" role="region" aria-label="Confirm delete focus">
+                  <p className="admin-access__delete-review-lead">
+                    <strong>Delete focus “{deleteReview.name}”?</strong> This removes the row, Dockview layout, and
+                    user preference rows pointing at it.
+                  </p>
+                  <div className="admin-access__actions">
+                    <button type="button" className="talia-btn" onClick={handleCancelDelete} disabled={deleteBusy}>
+                      Cancel
+                    </button>
+                    <button type="button" className="talia-btn" onClick={handleConfirmDelete} disabled={deleteBusy}>
+                      {deleteBusy ? 'Deleting…' : 'Confirm delete'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="admin-access__actions">
+                  <button
+                    className="talia-btn talia-btn--primary"
+                    type="button"
+                    disabled={saveBusy || loading}
+                    onClick={handleSaveFocus}
+                  >
+                    {saveBusy ? 'Saving...' : 'Save Focus'}
+                  </button>
+                  <button
+                    className="talia-btn"
+                    type="button"
+                    disabled={loading || deleteBusy}
+                    onClick={handleRequestDelete}
+                  >
+                    Delete focus…
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </section>

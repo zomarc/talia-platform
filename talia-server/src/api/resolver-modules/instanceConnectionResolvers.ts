@@ -2,6 +2,7 @@ import { createRequire } from 'module';
 import { supabaseDataService } from '../../services/supabase.js';
 import { synapseSyncService, isSynapseSyncDisabled } from '../../services/synapse-sync.js';
 import { configService } from '../../services/config-service.js';
+import { shipPositionService } from '../../services/ship-position-service.js';
 
 /** Must match SCRIPT_VERSION in scripts/validate (same string token; bump both when the cross-check contract changes). */
 export const VALIDATE_SCRIPT_DOC_VERSION = 'ops-5';
@@ -44,11 +45,15 @@ async function synapseRuntimeCheck(): Promise<{ online: boolean; error: string |
 
 /** Caps Synapse probe time for instanceConnectionProfile so validate/UI do not block on warehouse TCP (often ~10–30s when VPN is off). */
 const INSTANCE_PROFILE_SYNAPSE_BUDGET_MS = (() => {
-  const raw = Number.parseInt(process.env.TALIA_INSTANCE_PROFILE_SYNAPSE_MS || '4000', 10);
+  const fallback = process.env.NODE_ENV === 'development' ? 12000 : 4000;
+  const raw = Number.parseInt(
+    process.env.TALIA_INSTANCE_PROFILE_SYNAPSE_MS || String(fallback),
+    10
+  );
   if (Number.isFinite(raw)) {
     return Math.min(60000, Math.max(500, raw));
   }
-  return 4000;
+  return fallback;
 })();
 
 async function synapseRuntimeCheckBudgeted(): Promise<{ online: boolean; error: string | null }> {
@@ -120,6 +125,42 @@ function buildEnvRows(synapseSyncDisabled: boolean) {
       importance: 'OPTIONAL',
       whenRequired: null,
       note: 'Set to 1 on MVP/staging when you only use backups (no live warehouse sync).',
+    },
+    {
+      key: 'AISSTREAM_API_KEY',
+      scope: 'graphql-server',
+      label: 'AISStream API key (public AIS)',
+      sensitive: true,
+      importance: 'OPTIONAL',
+      whenRequired: null,
+      note: 'Prefer Data Management → Integration settings. Env is fallback only.',
+    },
+    {
+      key: 'AISHUB_USERNAME',
+      scope: 'graphql-server',
+      label: 'AISHub username (contributor AIS)',
+      sensitive: false,
+      importance: 'OPTIONAL',
+      whenRequired: null,
+      note: 'Prefer Data Management → Integration settings. Rate limited to 1 request/min.',
+    },
+    {
+      key: 'VESSELFINDER_API_KEY',
+      scope: 'graphql-server',
+      label: 'VesselFinder API key',
+      sensitive: true,
+      importance: 'OPTIONAL',
+      whenRequired: null,
+      note: 'Prefer Data Management → Integration settings.',
+    },
+    {
+      key: 'MARINETRAFFIC_API_KEY',
+      scope: 'graphql-server',
+      label: 'MarineTraffic API key',
+      sensitive: true,
+      importance: 'OPTIONAL',
+      whenRequired: null,
+      note: 'Prefer Data Management → Integration settings.',
     },
     {
       key: 'AZURE_SYNAPSE_SERVER',
@@ -196,6 +237,7 @@ export const instanceConnectionQueryResolvers = {
 
     const supabaseUrl = process.env.SUPABASE_URL || 'http://127.0.0.1:54321';
     const sc = synapseSyncService.synapseConfig;
+    const providerTargets = await shipPositionService.getProviderTargets({ connectAisStream: false });
 
     const dataTargets = [
       {
@@ -220,6 +262,7 @@ export const instanceConnectionQueryResolvers = {
           ? 'TALIA_SYNAPSE_SYNC_DISABLED — warehouse not probed (typical for backup-only instances)'
           : synapseCheck.error,
       },
+      ...providerTargets,
     ];
 
     const envKeys = buildEnvRows(synapseSyncDisabled);

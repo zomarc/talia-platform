@@ -68,13 +68,12 @@ const CompetitorPricingFilters = ({
           onChange={(e) => handleFilterChange('currency', e.target.value)}
           className="competitor-filters__input"
         >
+          <option value="">All currencies</option>
           {currencies.length > 0 ? (
             currencies.map(curr => (
               <option key={curr} value={curr}>{curr}</option>
             ))
-          ) : (
-            <option value="">Loading...</option>
-          )}
+          ) : null}
         </select>
       </div>
 

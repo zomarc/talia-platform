@@ -30,6 +30,14 @@ import { metadataQueryResolvers } from './resolver-modules/metadataResolvers.js'
 import { buildTableCatalogQueryResolvers } from './resolver-modules/tableCatalogResolvers.js';
 import { buildTableDataQueryResolvers } from './resolver-modules/tableDataResolvers.js';
 import { TALIA_INTEL_PROFILE_SCOPE, TALIA_SYSTEM_OWNER_KEY } from '../constants/taliaIntel.js';
+import { getStgDomainCatalog, getStgQualityBaselineQueries } from '../config/stg-domain-catalog.js';
+import { getCanonicalDataContracts } from '../config/canonical-data-contracts.js';
+import { getExternalFeedContracts } from '../config/external-feed-contracts.js';
+import {
+  buildCurrentVsTarget,
+  buildExternalFeedStatuses,
+  buildPricingInventoryRecommendations
+} from '../services/talia-intel-service.js';
 
 // Helper function to check user permissions
 const hasPermission = (userRole: string, requiredRole: string): boolean => {
@@ -58,6 +66,9 @@ const canManageInstanceConfig = (context: any) => {
 };
 
 const SENSITIVE_CONFIG_KEY_PATTERN = /(password|secret|token|api[_-]?key|apikey|bearer|authorization|credential)/i;
+const SEAWARE_READ_SOURCE = 'celestyal_b2b_api_read';
+const SEAWARE_WRITE_SOURCE = 'celestyal_b2b_api_write';
+const SEAWARE_LEGACY_SOURCE = 'celestyal_b2b_api';
 
 const redactConnectionConfig = (value: any): any => {
   if (Array.isArray(value)) {
@@ -96,6 +107,11 @@ const mergeConnectionConfigUpdate = (existing: any, updates: any): any => {
     merged[key] = value;
   });
   return merged;
+};
+
+const isUatEndpoint = (value: any): boolean => {
+  const endpoint = String(value || '').toLowerCase();
+  return endpoint.includes('uat.b2b.celestyal.com');
 };
 
 const currentUserKey = (context: any) =>
@@ -2911,6 +2927,41 @@ export const resolvers = {
       }
     },
 
+    currentVsTarget: async (parent: any, args: any) => {
+      const { sailCode, representativePriorYearSailCode } = args || {};
+      try {
+        return await buildCurrentVsTarget(supabaseDataService, sailCode, {
+          representativeSailCode: representativePriorYearSailCode || null
+        });
+      } catch (error) {
+        console.error('Error building current vs target payload:', error);
+        throw error;
+      }
+    },
+
+    bookingRecommendations: async (parent: any, args: any) => {
+      const { sailCode, representativePriorYearSailCode } = args || {};
+      try {
+        const currentVsTarget = await buildCurrentVsTarget(supabaseDataService, sailCode, {
+          representativeSailCode: representativePriorYearSailCode || null
+        });
+        return await buildPricingInventoryRecommendations(
+          supabaseDataService,
+          sailCode,
+          currentVsTarget
+        );
+      } catch (error) {
+        console.error('Error building booking recommendations:', error);
+        throw error;
+      }
+    },
+
+    stgDomainSourceCatalog: async () => getStgDomainCatalog(),
+    stgQualityBaselineQueries: async () => getStgQualityBaselineQueries(),
+    canonicalDataContracts: async () => getCanonicalDataContracts(),
+    externalFeedContracts: async () => getExternalFeedContracts(),
+    externalFeedStatus: async () => buildExternalFeedStatuses(supabaseDataService),
+
     competitorPricing: async (parent: any, args: any) => {
       const { filters = {} } = args;
       try {
@@ -3802,6 +3853,21 @@ export const resolvers = {
           existing?.connection_config || {},
           connectionConfig || {}
         );
+
+        // Guardrail: writes must not target business UAT unless explicitly allowed.
+        const isWriteSource =
+          sourceName === SEAWARE_WRITE_SOURCE ||
+          (sourceName === SEAWARE_LEGACY_SOURCE &&
+            String(nextConnectionConfig?.mode || '').toLowerCase() === 'write');
+        if (isWriteSource && isUatEndpoint(nextConnectionConfig?.endpoint)) {
+          const allowUatWrite = Boolean(nextConnectionConfig?.allowUatWrite);
+          if (!allowUatWrite) {
+            throw new Error(
+              'Write endpoint cannot target UAT. Use Dedicated Talia Seaware endpoint or set allowUatWrite=true explicitly.'
+            );
+          }
+        }
+
         const result = await configService.updateDataSourceConnection(
           sourceName,
           nextConnectionConfig

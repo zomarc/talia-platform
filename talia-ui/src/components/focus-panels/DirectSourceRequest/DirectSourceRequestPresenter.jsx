@@ -8,7 +8,7 @@
  */
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { initTabulator } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { formatDayMon } from '../../../lib/dateFormat';
 
 const DirectSourceRequestPresenter = ({ 
@@ -158,6 +158,7 @@ const DirectSourceRequestPresenter = ({
   ];
 
   const context = queryInfo?.variables?._context || {};
+  const validation = queryInfo?.validation || null;
   const selectedSailCode = context?.sailCode || null;
   const selectedSailDate = context?.sailDate || null;
   const rangeDaysBefore = context?.rangeDaysBefore;
@@ -235,10 +236,9 @@ const DirectSourceRequestPresenter = ({
           instanceRef.current.destroy();
         }
 
-        instanceRef.current = new Tabulator(tableRef.current, {
+        instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
           data: data,
           columns: columns,
-          layout: "fitDataFill",
           height: "100%",
           selectableRows: 1,
           headerFilterLiveFilter: true,
@@ -275,7 +275,7 @@ const DirectSourceRequestPresenter = ({
               }));
             }
           },
-        });
+        }));
 
         console.log('[DirectSourceRequest] Table initialized with', data.length, 'records');
         lastDataRef.current = data ? JSON.stringify(data) : null;
@@ -289,15 +289,22 @@ const DirectSourceRequestPresenter = ({
 
     return () => {
       cancelled = true;
+    };
+  }, [data, tableInitialized]);
+
+  // Destroy table only on component unmount.
+  useEffect(() => {
+    return () => {
       if (instanceRef.current) {
         try {
           instanceRef.current.destroy();
         } catch (e) {
           console.warn('[DirectSourceRequest] Error destroying table:', e);
         }
+        instanceRef.current = null;
       }
     };
-  }, [data?.length]);
+  }, []);
 
   // Update table data when data changes
   useEffect(() => {
@@ -363,7 +370,10 @@ const DirectSourceRequestPresenter = ({
           )}
         </div>
         <div className="direct-source__header-right">
-          <span className="direct-source__source">{queryInfo?.endpoint || 'No endpoint'}</span>
+          <span className="direct-source__source">
+            {queryInfo?.endpointSource ? `[${queryInfo.endpointSource}] ` : ''}
+            {queryInfo?.endpoint || 'No endpoint'}
+          </span>
           <button
             onClick={() => setShowQueryDetails(!showQueryDetails)}
             className="direct-source__button"
@@ -379,6 +389,16 @@ const DirectSourceRequestPresenter = ({
         <div className="direct-source__summary-card">
           <div className="direct-source__summary-label">Sail Code</div>
           <div className="direct-source__summary-value">{selectedSailCode || '—'}</div>
+          {validation?.status === 'matched' && (
+            <div className="direct-source__summary-meta">
+              Validated against sail.select: {validation.matchedRows} rows matched
+            </div>
+          )}
+          {validation?.status === 'no_match' && (
+            <div className="direct-source__summary-meta" style={{ color: 'var(--theme-error, #c0392b)' }}>
+              Validation failed: no direct rows matched selected sail
+            </div>
+          )}
           {availabilitySummary.matchedCount > 0 && (
             <div className="direct-source__summary-meta">
               {availabilitySummary.matchedCount.toLocaleString()} matches in data
@@ -441,6 +461,22 @@ const DirectSourceRequestPresenter = ({
             <span className="direct-source__context-label">Executed:</span>
             <span className="direct-source__context-value">
               {new Date(queryInfo.lastExecuted).toLocaleTimeString()}
+            </span>
+          </div>
+        )}
+        {Number.isFinite(queryInfo?.retryCount) && (
+          <div className="direct-source__context-item">
+            <span className="direct-source__context-label">Retries:</span>
+            <span className="direct-source__context-value">{queryInfo.retryCount}</span>
+          </div>
+        )}
+        {queryInfo?.parity && (
+          <div className="direct-source__context-item">
+            <span className="direct-source__context-label">Parity:</span>
+            <span className="direct-source__context-value">
+              {queryInfo.parity.error
+                ? `error (${queryInfo.parity.error})`
+                : `rows ${queryInfo.parity.directRows}/${queryInfo.parity.localRows}, Δavail ${queryInfo.parity.availableDelta}`}
             </span>
           </div>
         )}

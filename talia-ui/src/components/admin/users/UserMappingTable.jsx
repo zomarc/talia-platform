@@ -65,7 +65,6 @@ const UserMappingTable = () => {
       if (!Tabulator || cancelled || !tableElRef.current) return;
       tableRef.current = new Tabulator(tableElRef.current, {
         ...getTabulatorOptions({
-          layout: 'fitDataFill',
           selectableRows: false,
           height: '100%',
           data: [],

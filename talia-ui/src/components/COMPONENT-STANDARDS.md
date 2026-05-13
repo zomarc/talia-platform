@@ -143,16 +143,18 @@ const MyComponent = () => {
 ### Tables: Tabulator
 
 - **Always use Tabulator** for table components
-- Use `lib/tabulatorConfig.js` for initialization
+- Use `lib/tabulatorConfig.js` (`initTabulator` + `getTabulatorOptions`) for initialization
 - Follow patterns in `components/focus-panels/_TEMPLATE/TemplatePresenter.jsx`
 
 **Key Patterns:**
 - Initialize table once when data is ready
 - Update table data using `replaceData()` when data changes
+- Always create instances with `new Tabulator(..., getTabulatorOptions({ ... }))`
 - Use `selectableRows: 1` for single row selection
 - Use `headerFilter: "list"` with `autocomplete: true` for dropdown filters
 - Emit events on row selection: `talia:componentname.select`
 - For grouped tables that need tab-header controls, set `supportsGroupActions: true` in `registry.js` and register presenter actions in `window.__taliaPanelGroupActions`
+- Do not hardcode table `layout` in panel code unless you intentionally opt out with `enforceGlobalLayout: false`
 
 **Grouped Tab Header Controls (optional):**
 - Use only when the panel has Tabulator grouping and users need global expand/collapse
@@ -165,7 +167,7 @@ const MyComponent = () => {
 
 **Example:**
 ```jsx
-import { initTabulator } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 
 const MyTable = ({ data }) => {
   const tableRef = useRef(null);
@@ -174,12 +176,12 @@ const MyTable = ({ data }) => {
   useEffect(() => {
     const initTable = async () => {
       const Tabulator = await initTabulator();
-      instanceRef.current = new Tabulator(tableRef.current, {
+      instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
         data: data,
         columns: columns,
         selectableRows: 1,
         // ... other config
-      });
+      }));
     };
     initTable();
   }, []);
@@ -270,20 +272,20 @@ const MyChart = ({ data }) => {
 
 ### Framework Usage
 
-- **Use frameworks as-is** - no custom wrappers
+- **Use frameworks as-is** through project-shared adapters already established in this repo
 - **No additional complexity layers** - use frameworks directly
 - **Follow framework documentation** - use official patterns
 
 ### What NOT to Do
 
-- ❌ Do not create custom wrappers around Tabulator, Chart.js, or Dockview
+- ❌ Do not create new custom wrappers around Tabulator, Chart.js, or Dockview
 - ❌ Do not override framework methods or properties
 - ❌ Do not add abstraction layers between components and frameworks
 - ❌ Do not create "helper" functions that duplicate framework functionality
 
 ### What TO Do
 
-- ✅ Use frameworks directly in components
+- ✅ Use `tabulatorConfig` as the single shared Tabulator entry point
 - ✅ Follow framework documentation patterns
 - ✅ Use framework features as intended
 - ✅ Create utility functions only for data transformation, not framework wrapping

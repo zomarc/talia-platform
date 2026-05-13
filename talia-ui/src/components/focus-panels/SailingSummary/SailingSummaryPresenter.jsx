@@ -5,7 +5,7 @@
  */
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { initTabulator } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 import { formatDayMon } from '../../../lib/dateFormat';
 
@@ -220,10 +220,9 @@ const SailingSummaryPresenter = ({ data }) => {
           }
         ];
 
-        instanceRef.current = new Tabulator(tableRef.current, {
+        instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
           data: aggregatedData,
           columns,
-          layout: "fitDataTable",
           height: "100%",
           selectableRows: 1,
           headerFilterLiveFilter: true,
@@ -251,7 +250,7 @@ const SailingSummaryPresenter = ({ data }) => {
               }));
             }
           },
-        });
+        }));
 
         console.log('[SailingSummary] Table initialized with', aggregatedData.length, 'aggregated records');
         lastDataRef.current = aggregatedData ? JSON.stringify(aggregatedData) : null;

@@ -13,7 +13,7 @@
  */
 
 import React, { useRef, useEffect } from 'react';
-import { initTabulator } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { formatDayMon } from '../../../lib/dateFormat';
 
 const SELECT_EVENT = 'talia:publishedRates.select';
@@ -193,10 +193,9 @@ const PublishedRatesPresenter = ({ data, selectedSailCode }) => {
           }
         }
 
-        instanceRef.current = new Tabulator(tableRef.current, {
+        instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
           data: data || [],
           columns: PUBLISHED_RATES_TABULATOR_COLUMNS,
-          layout: 'fitDataFill',
           initialSort: [
             { column: 'SNAPSHOT_DATE', dir: 'desc' },
             { column: 'DEPARTURE_DATE', dir: 'asc' }
@@ -208,7 +207,7 @@ const PublishedRatesPresenter = ({ data, selectedSailCode }) => {
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,
           pagination: false
-        });
+        }));
 
         instanceRef.current.on('rowClick', (e, row) => {
           try {

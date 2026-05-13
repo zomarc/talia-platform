@@ -20,19 +20,39 @@ const tableInstances = new Set();
 let hasBoundLayoutListener = false;
 const tableMeta = new WeakMap();
 let wrappedTabulatorClass = null;
-const dragTracker = {
-  active: false,
-  moved: false,
-  startX: 0,
-  startY: 0,
-};
 
 const isBrowser = () => typeof window !== 'undefined';
 
+const stripFixedWidths = (columns = []) => {
+  if (!Array.isArray(columns)) return columns;
+  return columns.map((column) => {
+    if (!column || typeof column !== 'object') return column;
+    const next = { ...column };
+    if (Object.prototype.hasOwnProperty.call(next, 'width')) {
+      delete next.width;
+    }
+    if (Array.isArray(next.columns)) {
+      next.columns = stripFixedWidths(next.columns);
+    }
+    return next;
+  });
+};
+
 const getGlobalTableLayoutMode = () => {
-  if (!isBrowser()) return TABLE_LAYOUT_DATA;
-  // Platform default: always use Tabulator data-driven sizing.
-  return TABLE_LAYOUT_DATA;
+  if (!isBrowser()) return TABLE_LAYOUT_WIDTH;
+  const inMemory = window.__taliaTableLayoutMode;
+  if (inMemory === TABLE_LAYOUT_DATA || inMemory === TABLE_LAYOUT_WIDTH) {
+    return inMemory;
+  }
+  try {
+    const saved = window.localStorage?.getItem?.(TABLE_LAYOUT_STORAGE_KEY);
+    if (saved === TABLE_LAYOUT_DATA || saved === TABLE_LAYOUT_WIDTH) {
+      return saved;
+    }
+  } catch {
+    // no-op
+  }
+  return TABLE_LAYOUT_WIDTH;
 };
 
 const setGlobalTableLayoutMode = (mode) => {
@@ -46,37 +66,42 @@ const setGlobalTableLayoutMode = (mode) => {
   }
 };
 
+const refreshTableLayout = (table) => {
+  if (!table) return;
+  table.layoutRefresh?.(true);
+  table.redraw?.(true);
+  if (isBrowser()) {
+    window.requestAnimationFrame(() => {
+      table.layoutRefresh?.(true);
+      table.redraw?.(true);
+    });
+  }
+};
+
 const applyLayoutModeToTable = (table) => {
   if (!table) return;
   const mode = getGlobalTableLayoutMode();
-  const currentLayout = table?.options?.layout;
-  const nextLayout =
-    mode === TABLE_LAYOUT_DATA
-      ? 'fitDataTable'
-      : currentLayout === 'fitDataStretch'
-        ? 'fitDataStretch'
-        : 'fitColumns';
+  const nextLayout = mode === TABLE_LAYOUT_DATA ? 'fitDataTable' : 'fitColumns';
   try {
     const meta = tableMeta.get(table);
-    const isBuilt = meta?.isBuilt === true;
+    const ready = meta?.isBuilt === true || table?.initialized === true;
     if (meta) {
       meta.lastAppliedMode = mode;
-    }
-
-    if (!isBuilt) {
-      if (table.options) {
-        table.options.layout = nextLayout;
+      if (ready) {
+        meta.isBuilt = true;
       }
-      return;
     }
-
     if (typeof table.setOption === 'function') {
       table.setOption('layout', nextLayout);
     } else if (table.options) {
       table.options.layout = nextLayout;
     }
-    table.layoutRefresh?.(true);
-    table.redraw?.(true);
+    if (!ready) {
+      return;
+    }
+    // Tabulator keeps an active layout mode in module state; re-init after mode option change.
+    table.modules?.layout?.initialize?.();
+    refreshTableLayout(table);
   } catch {
     // no-op
   }
@@ -85,45 +110,16 @@ const applyLayoutModeToTable = (table) => {
 const ensureLayoutListenerBound = () => {
   if (!isBrowser() || hasBoundLayoutListener) return;
   hasBoundLayoutListener = true;
-  const reflowAllTables = () => {
+  const applyAllTables = () => {
     tableInstances.forEach((table) => applyLayoutModeToTable(table));
   };
   window.addEventListener(DASHBOARD_TABLE_LAYOUT_EVENT, (event) => {
     const mode = event?.detail?.mode;
     setGlobalTableLayoutMode(mode);
-    reflowAllTables();
+    applyAllTables();
   });
   window.addEventListener('resize', () => {
-    reflowAllTables();
-  });
-  // Re-apply layout after drag-resize gestures only (not regular clicks).
-  window.addEventListener('mousedown', (event) => {
-    dragTracker.active = true;
-    dragTracker.moved = false;
-    dragTracker.startX = Number(event?.clientX || 0);
-    dragTracker.startY = Number(event?.clientY || 0);
-  });
-  window.addEventListener('mousemove', (event) => {
-    if (!dragTracker.active) return;
-    const x = Number(event?.clientX || 0);
-    const y = Number(event?.clientY || 0);
-    if (Math.abs(x - dragTracker.startX) > 6 || Math.abs(y - dragTracker.startY) > 6) {
-      dragTracker.moved = true;
-    }
-  });
-  window.addEventListener('mouseup', () => {
-    if (dragTracker.active && dragTracker.moved) {
-      reflowAllTables();
-    }
-    dragTracker.active = false;
-    dragTracker.moved = false;
-  });
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-      requestAnimationFrame(() => {
-        reflowAllTables();
-      });
-    }
+    applyAllTables();
   });
 };
 
@@ -156,15 +152,22 @@ const getWrappedTabulatorClass = () => {
       super(element, processed);
 
       registerTableInstance(this, baseColumns);
+      const meta = tableMeta.get(this);
+      if (meta && this.initialized === true) {
+        meta.isBuilt = true;
+      }
       // Apply layout mode immediately so newly opened reports honor global mode.
       applyLayoutModeToTable(this);
 
       this.on?.('tableBuilt', () => {
-        const meta = tableMeta.get(this);
-        if (meta) {
-          meta.isBuilt = true;
+        const currentMeta = tableMeta.get(this);
+        if (currentMeta) {
+          currentMeta.isBuilt = true;
         }
         applyLayoutModeToTable(this);
+      });
+      this.on?.('groupVisibilityChanged', () => {
+        refreshTableLayout(this);
       });
       this.on?.('tableDestroyed', () => {
         tableInstances.delete(this);
@@ -198,26 +201,15 @@ export const getTabulatorOptions = (options = {}) => {
     ? (requestedLayout || 'fitColumns')
     : globalMode === TABLE_LAYOUT_DATA
       ? 'fitDataTable'
-      : (requestedLayout || 'fitColumns');
-  const sourceColumns = Array.isArray(options.columns) ? [...options.columns] : null;
+      : 'fitColumns';
+  const rawColumns = Array.isArray(options.columns) ? [...options.columns] : null;
+  const sourceColumns = ignoreGlobalLayout ? rawColumns : stripFixedWidths(rawColumns);
 
   const {
     enforceGlobalLayout,
     layout,
-    tableBuilt,
-    dataLoaded,
-    dataChanged,
     ...restOptions
   } = options;
-
-  const withLayoutRefresh = (userCallback) => function (...args) {
-    registerTableInstance(this, sourceColumns);
-    this?.layoutRefresh?.(true);
-    this?.redraw?.(true);
-    if (typeof userCallback === 'function') {
-      userCallback.apply(this, args);
-    }
-  };
 
   return {
     ...DEFAULT_TABULATOR_OPTIONS,
@@ -226,9 +218,6 @@ export const getTabulatorOptions = (options = {}) => {
     ...(sourceColumns ? { columns: sourceColumns } : {}),
     __taliaProcessedOptions: true,
     __taliaBaseColumns: sourceColumns ? [...sourceColumns] : null,
-    tableBuilt: withLayoutRefresh(tableBuilt),
-    dataLoaded: withLayoutRefresh(dataLoaded),
-    dataChanged: withLayoutRefresh(dataChanged)
   };
 };
 

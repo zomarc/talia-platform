@@ -329,7 +329,6 @@ const TaliaUserTable = () => {
 
       tableRef.current = new Tabulator(tableElRef.current, {
         ...getTabulatorOptions({
-          layout: 'fitDataFill',
           selectableRows: 1,
           height: '100%',
           data: [],
@@ -400,7 +399,6 @@ const TaliaUserTable = () => {
 
       detailTableRef.current = new Tabulator(detailTableElRef.current, {
         ...getTabulatorOptions({
-          layout: 'fitDataFill',
           selectableRows: false,
           height: '100%',
           groupBy: ['dateGroup', 'hourGroup'],

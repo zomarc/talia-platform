@@ -253,7 +253,6 @@ const AdminAccessManager = () => {
 
       focusTableRef.current = new Tabulator(focusTableElRef.current, {
         ...getTabulatorOptions({
-          layout: 'fitDataFill',
           selectableRows: 1,
           height: '100%',
           data: [],
@@ -303,7 +302,6 @@ const AdminAccessManager = () => {
 
       matrixTableRef.current = new Tabulator(matrixTableElRef.current, {
         ...getTabulatorOptions({
-          layout: 'fitDataFill',
           selectableRows: false,
           height: '100%',
           data: [],

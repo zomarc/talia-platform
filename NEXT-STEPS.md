@@ -114,8 +114,8 @@ tail -f /tmp/talia-ui.log
 
 - **Component Standards**: `talia-ui/src/components/COMPONENT-STANDARDS.md`
 - **Implementation Summary**: `APP-MODE-FIX-COMPLETE.md`
-- **Development Workflow**: `DEVELOPMENT-WORKFLOW.md`
-- **Quick Reference**: `QUICK-REFERENCE.md`
+- **Development Workflow**: `docs/DEVELOPMENT-WORKFLOW.md`
+- **Docs Hub**: `docs/README.md`
 
 ## 🎯 Key Features Now Available
 

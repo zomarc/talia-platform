@@ -1259,11 +1259,53 @@
   border-radius: 999px;
 }
 
+.talia-event-meta__chip--source-labeled {
+  gap: 4px;
+  padding: 1px 6px 1px 5px;
+  height: 19px;
+  min-width: 64px;
+  justify-content: flex-start;
+}
+
 .talia-event-meta__source-icon {
   font-size: 8px;
   letter-spacing: 0.2px;
   font-weight: 700;
   line-height: 1;
+}
+
+.talia-event-meta__source-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 60%, transparent);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.2px;
+  text-transform: uppercase;
+  background: color-mix(in srgb, var(--theme-bg-solid) 78%, transparent);
+  color: var(--theme-text-secondary);
+}
+
+.talia-event-meta__source-badge--direct {
+  color: var(--theme-accent);
+  border-color: color-mix(in srgb, var(--theme-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--theme-accent) 14%, transparent);
+}
+
+.talia-event-meta__source-badge--integrated {
+  color: var(--theme-success);
+  border-color: color-mix(in srgb, var(--theme-success) 45%, transparent);
+  background: color-mix(in srgb, var(--theme-success) 14%, transparent);
+}
+
+.talia-event-meta__source-badge--local {
+  color: var(--theme-warning, #b08a00);
+  border-color: color-mix(in srgb, var(--theme-warning, #b08a00) 45%, transparent);
+  background: color-mix(in srgb, var(--theme-warning, #b08a00) 16%, transparent);
 }
 
 .talia-event-meta__chip--selected {

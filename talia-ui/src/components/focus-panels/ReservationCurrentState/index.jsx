@@ -4,12 +4,12 @@
  * Uses useTableDataWithContext for server-side filtering based on event bus context
  */
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import ReservationCurrentStatePresenter from './ReservationCurrentStatePresenter';
 import PanelDataState from '../../shared/PanelDataState';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { CABIN_CLEAR_EVENT, CABIN_SELECT_EVENT, extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
 const isCancelledStatus = (value) => {
   const normalized = String(value || '').trim().toUpperCase();
@@ -18,6 +18,7 @@ const isCancelledStatus = (value) => {
 
 const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId }) => {
   const { theme } = useTheme();
+  const [selectedCabinCategory, setSelectedCabinCategory] = useState(null);
   
   console.log('[ReservationCurrentStateContainer] Component rendering');
   
@@ -103,6 +104,22 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
   });
 
   const selectedSailCode = context?.sail_code || context?.row_data?.sail_code || (typeof context === 'string' ? context : null);
+  useEffect(() => {
+    const onCabinSelect = (event) => {
+      const cabinCategory = event?.detail?.cabin_category || event?.detail?.row_data?.cabinCategoryCode || null;
+      setSelectedCabinCategory(cabinCategory ? String(cabinCategory) : null);
+    };
+    const onCabinClear = () => {
+      setSelectedCabinCategory(null);
+    };
+    window.addEventListener(CABIN_SELECT_EVENT, onCabinSelect);
+    window.addEventListener(CABIN_CLEAR_EVENT, onCabinClear);
+    return () => {
+      window.removeEventListener(CABIN_SELECT_EVENT, onCabinSelect);
+      window.removeEventListener(CABIN_CLEAR_EVENT, onCabinClear);
+    };
+  }, []);
+
   const data = useMemo(() => {
     const currentRows = Array.isArray(currentStateRows) ? currentStateRows : [];
     const reservations = Array.isArray(reservationRows) ? reservationRows : [];
@@ -161,8 +178,11 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
       return !currentIds.has(String(row.res_id));
     });
 
-    return [...mergedRows, ...reservationOnlyRows];
-  }, [currentStateRows, reservationRows, sailReservationChangeRows]);
+    const allRows = [...mergedRows, ...reservationOnlyRows];
+    if (!selectedCabinCategory) return allRows;
+    const normalized = String(selectedCabinCategory).toLowerCase();
+    return allRows.filter((row) => String(row?.cabin_category || '').toLowerCase() === normalized);
+  }, [currentStateRows, reservationRows, sailReservationChangeRows, selectedCabinCategory]);
 
   const loading = currentStateLoading || reservationLoading || sailReservationChangeLoading;
   const error = currentStateError || reservationError || reservationHistoryError || sailReservationChangeError;
@@ -257,7 +277,9 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
       empty={!data || data.length === 0}
       emptyMessage={
         selectedSailCode
-          ? `No reservations found for sail code: ${selectedSailCode}`
+          ? (selectedCabinCategory
+            ? `No reservations found for sail ${selectedSailCode} and cabin ${selectedCabinCategory}`
+            : `No reservations found for sail code: ${selectedSailCode}`)
           : 'No reservation data available'
       }
       onRetry={handleRefresh}
@@ -271,6 +293,7 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
         selectedReservationId={selectedReservationId}
         selectedReservationRecord={selectedReservationRecord}
         historyLoading={reservationHistoryLoading}
+        selectedCabinCategory={selectedCabinCategory}
         panelInstanceId={panelInstanceId}
         panelComponentId={panelComponentId}
       />

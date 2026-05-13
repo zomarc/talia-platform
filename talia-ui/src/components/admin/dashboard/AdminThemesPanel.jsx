@@ -382,7 +382,6 @@ const AdminThemesPanel = () => {
 
       catalogueTableRef.current = new Tabulator(catalogueTableElRef.current, {
         ...getTabulatorOptions({
-          layout: 'fitDataFill',
           selectableRows: 1,
           height: '100%',
           data: [],

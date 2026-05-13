@@ -5,6 +5,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
+import uiPackageJson from '../../../../package.json';
 
 const INSTANCE_PROFILE_QUERY = `
   query InstanceConnectionProfile {
@@ -84,6 +85,8 @@ const SAVE_INTEGRATION_SETTINGS_MUTATION = `
 
 const scopeOrder = ['graphql-server', 'docker-compose', 'ui-build'];
 const importanceRank = { REQUIRED: 0, CONDITIONAL: 1, OPTIONAL: 2 };
+const TABULATOR_VERSION = uiPackageJson?.dependencies?.['tabulator-tables'] || '—';
+const DOCKVIEW_VERSION = uiPackageJson?.dependencies?.dockview || '—';
 
 function vitePresent(name) {
   const v = import.meta.env[name];
@@ -99,7 +102,8 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
   const [sourceSaveError, setSourceSaveError] = useState(null);
   const [sourceSaveStatus, setSourceSaveStatus] = useState(null);
   const [sourceSaving, setSourceSaving] = useState(false);
-  const [directEndpointDraft, setDirectEndpointDraft] = useState('');
+  const [directReadEndpointDraft, setDirectReadEndpointDraft] = useState('');
+  const [directWriteEndpointDraft, setDirectWriteEndpointDraft] = useState('');
   const [integrationDraft, setIntegrationDraft] = useState({
     aisstreamApiKey: '',
     aishubUsername: '',
@@ -112,7 +116,8 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
   const [gqlChecks, setGqlChecks] = useState({
     local: { checked: false, online: true, detail: 'Status pending.' },
     browser: { checked: false, online: true, detail: 'Status pending.' },
-    external: { checked: false, online: true, detail: 'Status pending.' },
+    externalRead: { checked: false, online: true, detail: 'Status pending.' },
+    externalWrite: { checked: false, online: true, detail: 'Status pending.' },
   });
 
   const load = useCallback(async () => {
@@ -142,18 +147,30 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
     load();
   }, [load]);
 
-  const directSource = dataSources.find((source) => source.sourceName === 'celestyal_b2b_api');
+  const directReadSource =
+    dataSources.find((source) => source.sourceName === 'celestyal_b2b_api_read')
+    || dataSources.find((source) => source.sourceName === 'celestyal_b2b_api');
+  const directWriteSource =
+    dataSources.find((source) => source.sourceName === 'celestyal_b2b_api_write')
+    || dataSources.find((source) => source.sourceName === 'celestyal_b2b_api');
   const localGraphqlAddress = 'http://127.0.0.1:4000/api/graphql';
   const browserGraphqlAddress =
     import.meta.env.VITE_GRAPHQL_ENDPOINT ||
     (typeof window !== 'undefined' ? `${window.location.origin}/api/graphql` : '');
-  const externalGraphqlAddress = directSource?.connectionConfig?.endpoint || '';
+  const externalReadGraphqlAddress = directReadSource?.connectionConfig?.endpoint || '';
+  const externalWriteGraphqlAddress = directWriteSource?.connectionConfig?.endpoint || '';
 
   useEffect(() => {
-    if (!directSource) return;
-    const endpoint = directSource.connectionConfig?.endpoint || '';
-    setDirectEndpointDraft(endpoint);
-  }, [directSource]);
+    if (!directReadSource) return;
+    const endpoint = directReadSource.connectionConfig?.endpoint || '';
+    setDirectReadEndpointDraft(endpoint);
+  }, [directReadSource]);
+
+  useEffect(() => {
+    if (!directWriteSource) return;
+    const endpoint = directWriteSource.connectionConfig?.endpoint || '';
+    setDirectWriteEndpointDraft(endpoint);
+  }, [directWriteSource]);
 
   useEffect(() => {
     setIntegrationDraft((prev) => ({
@@ -200,16 +217,20 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
       ...prev,
       local: { checked: false, online: true, detail: 'Status pending.' },
       browser: { checked: false, online: true, detail: 'Status pending.' },
-      external: { checked: false, online: true, detail: 'Status pending.' },
+      externalRead: { checked: false, online: true, detail: 'Status pending.' },
+      externalWrite: { checked: false, online: true, detail: 'Status pending.' },
     }));
     probeGraphqlEndpoint(localGraphqlAddress, 'local');
     probeGraphqlEndpoint(browserGraphqlAddress, 'browser');
-    probeGraphqlEndpoint(externalGraphqlAddress, 'external');
-  }, [browserGraphqlAddress, externalGraphqlAddress, localGraphqlAddress, probeGraphqlEndpoint]);
+    probeGraphqlEndpoint(externalReadGraphqlAddress, 'externalRead');
+    probeGraphqlEndpoint(externalWriteGraphqlAddress, 'externalWrite');
+  }, [browserGraphqlAddress, externalReadGraphqlAddress, externalWriteGraphqlAddress, localGraphqlAddress, probeGraphqlEndpoint]);
 
-  const handleSaveDirectEndpoint = useCallback(async () => {
-    if (!directSource) return;
-    const nextEndpoint = directEndpointDraft.trim();
+  const handleSaveDirectEndpoint = useCallback(async (mode) => {
+    const source = mode === 'write' ? directWriteSource : directReadSource;
+    const draft = mode === 'write' ? directWriteEndpointDraft : directReadEndpointDraft;
+    if (!source) return;
+    const nextEndpoint = draft.trim();
     setSourceSaveError(null);
     setSourceSaveStatus(null);
     if (!nextEndpoint) {
@@ -219,23 +240,24 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
     setSourceSaving(true);
     try {
       const payload = {
-        ...(directSource.connectionConfig || {}),
+        ...(source.connectionConfig || {}),
         endpoint: nextEndpoint,
+        mode,
       };
       const data = await trackedFetchGraphql({
         query: UPDATE_DATA_SOURCE_MUTATION,
         variables: {
-          sourceName: directSource.sourceName,
+          sourceName: source.sourceName,
           connectionConfig: payload,
         },
         component: 'InstanceConnectionPanel',
-        purpose: 'Update direct source endpoint',
+        purpose: `Update direct source endpoint (${mode})`,
         tableName: 'data_source',
       });
-      setSourceSaveStatus('Direct source endpoint updated.');
+      setSourceSaveStatus(`Direct source ${mode} endpoint updated.`);
       setDataSources((prev) =>
         prev.map((source) =>
-          source.sourceName === directSource.sourceName
+          source.sourceName === data?.updateDataSourceConnection?.sourceName
             ? data?.updateDataSourceConnection || source
             : source
         )
@@ -245,7 +267,7 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
     } finally {
       setSourceSaving(false);
     }
-  }, [directEndpointDraft, directSource]);
+  }, [directReadEndpointDraft, directReadSource, directWriteEndpointDraft, directWriteSource]);
 
   const handleSaveIntegrationSettings = useCallback(async () => {
     setIntegrationError(null);
@@ -450,11 +472,18 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
         'browser'
       ),
       makeTarget(
-        'graphql_external_source',
-        'Celestyal B2B GraphQL',
-        'Direct source for availability panels',
-        externalGraphqlAddress,
-        'external'
+        'graphql_external_source_read',
+        'Celestyal B2B GraphQL (READ)',
+        'Direct source for availability panels (recommended: UAT)',
+        externalReadGraphqlAddress,
+        'externalRead'
+      ),
+      makeTarget(
+        'graphql_external_source_write',
+        'Celestyal B2B GraphQL (WRITE)',
+        'Direct source for write operations (recommended: Dedicated Talia)',
+        externalWriteGraphqlAddress,
+        'externalWrite'
       ),
     ].filter((target) => target.address);
   })();
@@ -554,6 +583,14 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
                   <div>
                     <dt>UI VITE_BUILD_TIME</dt>
                     <dd>{import.meta.env.VITE_BUILD_TIME || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>UI Tabulator package</dt>
+                    <dd>{TABULATOR_VERSION}</dd>
+                  </div>
+                  <div>
+                    <dt>UI DockView package</dt>
+                    <dd>{DOCKVIEW_VERSION}</dd>
                   </div>
                 </dl>
               </div>
@@ -704,39 +741,64 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
           </section>
 
           <section className="dm-instance-profile__section">
-            <h4 className="dm-instance-profile__h4">External GraphQL source</h4>
+            <h4 className="dm-instance-profile__h4">External GraphQL sources</h4>
             <div className="talia-card dm-instance-target dm-instance-target--skipped">
               <div className="dm-instance-target__header">
                 <span className="dm-instance-target__label">
-                  {directSource?.displayName || 'Celestyal B2B GraphQL'}
+                  {directReadSource?.displayName || 'Celestyal B2B GraphQL'}
                 </span>
-                <span className="dm-instance-target__role">Direct source for availability panels</span>
+                <span className="dm-instance-target__role">Split read/write Seaware endpoints</span>
               </div>
               <div className="dm-instance-target__body">
                 <div className="admin-form-row">
-                  <label className="admin-label" htmlFor="dm-direct-source-endpoint">
-                    Endpoint
+                  <label className="admin-label" htmlFor="dm-direct-source-endpoint-read">
+                    Read endpoint (availability/query)
                   </label>
                   <input
-                    id="dm-direct-source-endpoint"
+                    id="dm-direct-source-endpoint-read"
                     type="text"
                     className="admin-input"
-                    value={directEndpointDraft}
-                    onChange={(event) => setDirectEndpointDraft(event.target.value)}
+                    value={directReadEndpointDraft}
+                    onChange={(event) => setDirectReadEndpointDraft(event.target.value)}
                     placeholder="https://example.com/graphql"
-                    disabled={!directSource || sourceSaving}
+                    disabled={!directReadSource || sourceSaving}
                   />
                 </div>
                 <div className="dm-integration-footer">
                   <button
                     type="button"
                     className="dm-primary-button"
-                    onClick={handleSaveDirectEndpoint}
-                    disabled={!directSource || sourceSaving}
+                    onClick={() => handleSaveDirectEndpoint('read')}
+                    disabled={!directReadSource || sourceSaving}
                   >
-                    {sourceSaving ? 'Saving…' : 'Save endpoint'}
+                    {sourceSaving ? 'Saving…' : 'Save read endpoint'}
                   </button>
-                  {sourceSaveStatus && (
+                </div>
+
+                <div className="admin-form-row" style={{ marginTop: 12 }}>
+                  <label className="admin-label" htmlFor="dm-direct-source-endpoint-write">
+                    Write endpoint (mutations)
+                  </label>
+                  <input
+                    id="dm-direct-source-endpoint-write"
+                    type="text"
+                    className="admin-input"
+                    value={directWriteEndpointDraft}
+                    onChange={(event) => setDirectWriteEndpointDraft(event.target.value)}
+                    placeholder="https://example.com/graphql"
+                    disabled={!directWriteSource || sourceSaving}
+                  />
+                </div>
+                <div className="dm-integration-footer">
+                  <button
+                    type="button"
+                    className="dm-primary-button"
+                    onClick={() => handleSaveDirectEndpoint('write')}
+                    disabled={!directWriteSource || sourceSaving}
+                  >
+                    {sourceSaving ? 'Saving…' : 'Save write endpoint'}
+                  </button>
+                  {sourceSaveStatus && !sourceSaveError && (
                     <span className="dm-instance-profile__hint dm-integration-footer__status">
                       {sourceSaveStatus}
                     </span>
@@ -747,9 +809,9 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
                     {sourceSaveError}
                   </div>
                 )}
-                {!directSource && (
+                {!directReadSource && !directWriteSource && (
                   <div className="dm-instance-profile__hint">
-                    Data source <strong>celestyal_b2b_api</strong> is not registered on this instance.
+                    Data sources <strong>celestyal_b2b_api_read</strong> / <strong>celestyal_b2b_api_write</strong> are not registered on this instance.
                   </div>
                 )}
               </div>

@@ -5,7 +5,7 @@
  */
 
 import React, { useRef, useEffect, useMemo } from 'react';
-import { initTabulator } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 
 /**
  * Helper function to generate heatmap level based on value.
@@ -114,15 +114,14 @@ const DemandHeatmapPresenter = ({ data, months }) => {
         await new Promise((r) => requestAnimationFrame(() => r()));
 
         // Create Tabulator instance
-        instanceRef.current = new TabGlobal(tableRef.current, {
+        instanceRef.current = new TabGlobal(tableRef.current, getTabulatorOptions({
           data: data,
           columns: columns,
-          layout: 'fitDataFill',
           reactiveData: false,
           height: '100%',
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,
-        });
+        }));
 
         initializedRef.current = true;
         console.log('[DemandHeatmap] Tabulator initialized successfully');

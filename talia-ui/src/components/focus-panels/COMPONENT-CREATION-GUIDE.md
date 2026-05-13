@@ -11,7 +11,7 @@ src/
 │   ├── tabulator-theme.css # Tabulator styling via CSS vars
 │   └── components.css      # Shared component classes
 ├── lib/
-│   ├── tabulatorConfig.js  # Tabulator initialization
+│   ├── tabulatorConfig.js  # Shared Tabulator wrapper + global fit mode wiring
 │   ├── chartConfig.js      # Chart.js defaults
 │   └── dataTypes/          # Shared formatters
 └── components/focus-panels/
@@ -121,15 +121,13 @@ const YourReportPresenter = ({ data, onRefresh }) => {
     const init = async () => {
       const Tabulator = await initTabulator();
       
-      instanceRef.current = new Tabulator(tableRef.current, {
-        ...getTabulatorOptions(),
+      instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
         data: data,
         columns: columns,
         pagination: true,
         paginationSize: 50,
-        a11y: true, // Enable accessibility
         dataLoaded: (data) => setRecordCount(data.length)
-      });
+      }));
       
       setInitialized(true);
       setRecordCount(data.length);
@@ -322,6 +320,8 @@ const chart = new Chart(ctx, {
 - Keep presenters pure (no data fetching)
 - Include ARIA labels and roles
 - Handle loading/error/empty states using shared panel patterns (`PanelDataState`, `LoadingSpinner`, `ErrorMessage`)
+- Use `initTabulator()` + `getTabulatorOptions(...)` for every Tabulator table
+- Let global fit mode control table layout (`Fit Width`/`Fit Data` from header controls)
 
 ### DON'T
 - Use inline styles
@@ -330,6 +330,8 @@ const chart = new Chart(ctx, {
 - Mix data fetching with UI rendering
 - Skip accessibility attributes
 - Add new raw `fetch('/api/graphql')` or direct `apolloClient.query/mutate` calls in feature components/services without `trackedGraphql` wrappers
+- Hardcode `layout` in presenters unless you intentionally opt out with `enforceGlobalLayout: false`
+- Add manual resize/layout workaround logic in component code (`window.resize`, custom redraw loops)
 
 ## GraphQL Tracking Standard
 

@@ -917,6 +917,33 @@
   color: var(--theme-error);
 }
 
+.direct-availability__callout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 8px 0;
+  padding: 2px 0 6px 0;
+}
+
+.direct-availability__callout-item {
+  font-size: var(--theme-font-size-xs);
+  color: var(--theme-text-secondary);
+}
+
+.direct-availability__callout-item--warning {
+  color: var(--theme-danger, #c0392b);
+  font-weight: 600;
+}
+
+.direct-availability__table-container {
+  padding: 0;
+}
+
+.direct-availability .tabulator {
+  border-radius: 0;
+}
+
 /* ============================================================================
    Context Row Monitor
    ============================================================================ */

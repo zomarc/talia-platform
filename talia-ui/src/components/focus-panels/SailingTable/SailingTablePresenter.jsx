@@ -10,7 +10,7 @@
  */
 
 import React, { useRef, useEffect } from 'react';
-import { initTabulator } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { emitSailClear, emitSailSelect } from '../../../lib/eventBus';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { gql } from '@apollo/client';
@@ -74,7 +74,7 @@ const SailingTablePresenter = ({ data }) => {
 
   // Column definitions using Tabulator's native features
   // NOTE: Using valuesLookup:true lets Tabulator automatically generate filter options
-  // NOTE: Using Tabulator's layout:"fitDataFill" handles all column sizing automatically!
+  // NOTE: Global fit mode from tabulatorConfig controls final layout mode.
   const columns = [
     { 
       field: "sail_id", 
@@ -196,10 +196,9 @@ const SailingTablePresenter = ({ data }) => {
           instanceRef.current.destroy();
         }
 
-        instanceRef.current = new Tabulator(tableRef.current, {
+        instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
           data: data,
           columns: columns,
-          layout: "fitDataFill",
           initialSort: [
             { column: "sail_date_from", dir: "desc" }
           ],
@@ -210,7 +209,7 @@ const SailingTablePresenter = ({ data }) => {
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,
           pagination: false
-        });
+        }));
 
         // Register event listeners using Tabulator's .on() method
         instanceRef.current.on("rowClick", (e, row) => {

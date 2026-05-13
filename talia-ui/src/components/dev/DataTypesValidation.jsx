@@ -9,7 +9,7 @@
  */
 
 import React, { useRef, useEffect, useState } from 'react';
-import { initTabulator } from '../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions } from '../../lib/tabulatorConfig';
 import { Currency, Percentage, DateType, Number } from '../../lib/dataTypes';
 import '../../styles/dev-components.css';
 
@@ -210,17 +210,16 @@ const DataTypesValidation = () => {
           instanceRef.current.destroy();
         }
 
-        instanceRef.current = new Tabulator(tableRef.current, {
+        instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
           data: testData,
           columns: columns,
-          layout: 'fitDataFill',
           initialSort: [{ column: 'id', dir: 'asc' }],
           height: '100%',
           resizableColumns: true,
           movableColumns: true,
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300
-        });
+        }));
 
         console.log('[DataTypesValidation] ✓ Table initialized with data types');
         setValidationResults(prev => ({

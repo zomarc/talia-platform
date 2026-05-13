@@ -5,7 +5,7 @@
  */
 
 import React, { useRef, useEffect, useMemo, useCallback } from 'react';
-import { initTabulator } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { emitSailClear, emitSailSelect, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 import { formatDayMon, formatMonYear } from '../../../lib/dateFormat';
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
@@ -259,10 +259,9 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, panelInstanceId, p
           instanceRef.current.destroy();
         }
 
-        instanceRef.current = new Tabulator(tableRef.current, {
+        instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
           data: transformedData,
           columns: columns,
-          layout: 'fitDataTable',
           height: '100%',
           selectableRows: 1, // Single row selection
           groupBy: GROUP_BY, // Group by ship_code first, then month_name
@@ -274,7 +273,7 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, panelInstanceId, p
           paginationSizeSelector: [25, 50, 100, 200],
           frozenRows: 0,
           frozenColumns: 4 // Ship Code, Month, Departure Date, Sail Code
-        });
+        }));
 
         instanceRef.current.on('tableBuilt', () => {
           tableBuiltRef.current = true;

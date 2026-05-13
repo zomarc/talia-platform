@@ -10,7 +10,7 @@
  */
 
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-import { initTabulator } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import {
   createPerformanceFormatter,
   createDeltaFormatter,
@@ -661,10 +661,9 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, panelInstanceId, panelC
           instanceRef.current.destroy();
         }
 
-        instanceRef.current = new Tabulator(tableRef.current, {
+        instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
           data: data,
           columns: columns,
-          layout: "fitDataFill",
           initialSort: [
             { column: "accMonth", dir: "asc" },
             { column: "voyageCode", dir: "asc" }
@@ -695,7 +694,7 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, panelInstanceId, panelC
               }));
             }
           },
-        });
+        }));
 
         instanceRef.current.on('tableBuilt', () => {
           tableBuiltRef.current = true;

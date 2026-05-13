@@ -10,7 +10,7 @@
  */
 
 import React, { useMemo, useRef, useEffect, useState } from 'react';
-import { initTabulator } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { formatDayMon } from '../../../lib/dateFormat';
 import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
 import ReportDataDetails from '../../shared/ReportDataDetails';
@@ -194,10 +194,9 @@ const ReservationCurrentStatePresenter = ({
           instanceRef.current.destroy();
         }
 
-        instanceRef.current = new Tabulator(tableRef.current, {
+        instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
           data: data,
           columns: columns,
-          layout: "fitDataTable",
           initialSort: [
             { column: "sail_from_date", dir: "desc" }
           ],
@@ -208,7 +207,7 @@ const ReservationCurrentStatePresenter = ({
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,
           pagination: false
-        });
+        }));
 
         // Register event listeners using Tabulator's .on() method
         instanceRef.current.on("rowClick", (e, row) => {

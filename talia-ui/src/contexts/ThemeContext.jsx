@@ -28,7 +28,9 @@ import {
   mergeTaliaUiThemesFromDb,
   resolveThemeDefaultHeaderLogoUrl,
 } from '../themes/taliaUiThemes';
-import { DASHBOARD_TABLE_LAYOUT_EVENT } from '../components/dockview/eventConstants';
+import {
+  DASHBOARD_TABLE_LAYOUT_EVENT,
+} from '../components/dockview/eventConstants';
 
 const ThemeContext = createContext();
 const LEGACY_APPEARANCE_MIGRATE_PREFIX = 'taliaAppearanceMigrated:';

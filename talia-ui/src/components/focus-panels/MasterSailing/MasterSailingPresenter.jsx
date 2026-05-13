@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { initTabulator } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { emitSailSelect } from '../../../lib/eventBus';
 import { formatDayMon, formatMonYear } from '../../../lib/dateFormat';
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
@@ -218,10 +218,9 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
           instanceRef.current.destroy();
         }
 
-        instanceRef.current = new Tabulator(tableRef.current, {
+        instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
           data,
           columns,
-          layout: 'fitDataFill',
           initialSort: [{ column: 'sail_date_from', dir: 'asc' }],
           height: '100%',
           selectableRows: 1,
@@ -233,7 +232,7 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
           groupBy: GROUP_BY,
           groupStartOpen: [true, true],
           groupHeader: groupHeaders,
-        });
+        }));
 
         instanceRef.current.on('tableBuilt', () => {
           tableBuiltRef.current = true;

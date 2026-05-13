@@ -1,5 +1,7 @@
 export const SAIL_SELECT_EVENT = 'talia:sail.select';
 export const SAIL_CLEAR_EVENT = 'talia:sail.clear';
+export const CABIN_SELECT_EVENT = 'talia:cabin.select';
+export const CABIN_CLEAR_EVENT = 'talia:cabin.clear';
 
 export const extractSailCodeFromEvent = (detail) => (
   detail?.sail_code ||
@@ -24,5 +26,23 @@ export const emitSailClear = (detail = {}) => {
     window.dispatchEvent(new CustomEvent(SAIL_CLEAR_EVENT, { detail }));
   } catch (error) {
     console.warn('[eventBus] emitSailClear failed', error);
+  }
+};
+
+export const emitCabinSelect = (detail) => {
+  try {
+    window.lastCabinSelectEvent = { type: CABIN_SELECT_EVENT, detail };
+    window.dispatchEvent(new CustomEvent(CABIN_SELECT_EVENT, { detail }));
+  } catch (error) {
+    console.warn('[eventBus] emitCabinSelect failed', error);
+  }
+};
+
+export const emitCabinClear = (detail = {}) => {
+  try {
+    window.lastCabinSelectEvent = null;
+    window.dispatchEvent(new CustomEvent(CABIN_CLEAR_EVENT, { detail }));
+  } catch (error) {
+    console.warn('[eventBus] emitCabinClear failed', error);
   }
 };

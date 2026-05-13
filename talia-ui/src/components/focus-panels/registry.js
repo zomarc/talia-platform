@@ -39,6 +39,7 @@ import BtopTerminal from './BtopTerminal';
 import MasterVoyagePerformanceSummaryContainer from './MasterVoyagePerformanceSummary';
 import VoyageReportContainer from './VoyageReport';
 import DirectSourceRequestContainer from './DirectSourceRequest';
+import DirectAvailabilityContainer from './DirectAvailability';
 import ContextRowMonitor from './ContextRowMonitor';
 import DataManagementPanel from './DataManagement';
 import TestWorkbenchPanel from './TestWorkbench';
@@ -51,6 +52,8 @@ const publishedRatesSelect = 'talia:publishedRates.select';
 const publishedRatesClear = 'talia:publishedRates.clear';
 const reservationSelect = 'talia:reservation.select';
 const reservationClear = 'talia:reservation.clear';
+const cabinSelect = 'talia:cabin.select';
+const cabinClear = 'talia:cabin.clear';
 const directSourceSelect = 'talia:directsource.select';
 const sailSelectDotEvent = 'talia.sail.select';
 const voyageReportSelect = 'talia:voyagereport.select';
@@ -322,7 +325,7 @@ export const componentRegistry = {
     dataRequirements: 'Requires GraphQL connection to reservations endpoint. Reacts to talia:sail.select events.',
     events: {
       emits: [reservationSelect, reservationClear],
-      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, cabinSelect, cabinClear]
     },
     showInReports: true,
     filePath: 'src/components/focus-panels/ReservationCurrentState/index.jsx'
@@ -677,6 +680,24 @@ export const componentRegistry = {
     },
     showInReports: true,
     filePath: 'src/components/focus-panels/DirectSourceRequest/index.jsx'
+  },
+  DirectAvailability: {
+    component: DirectAvailabilityContainer,
+    panelId: 'direct-availability',
+    category: 'External',
+    title: 'Direct Availability',
+    description: 'Compact current availability for selected sailing from direct Seaware query',
+    usesMockData: false,
+    props: {
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Queries external GraphQL endpoint using sail.select context and shows only selected-sail rows',
+    events: {
+      emits: [cabinSelect, cabinClear],
+      respondsTo: [SAIL_SELECT_EVENT]
+    },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/DirectAvailability/index.jsx'
   },
   AdminDashboard: {
     component: AdminDashboard,

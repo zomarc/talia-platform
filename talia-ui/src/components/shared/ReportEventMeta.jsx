@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import queryTracker from '../../services/data/queryTracker';
 import TaliaTooltip from './TaliaTooltip';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
+import { isAdmin as isAdminRole } from '../../utils/roleUtils';
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
+const DASHBOARD_TABLE_LAYOUT_EVENT = 'talia:dashboard.tableLayout';
 
 const formatList = (items = []) => {
   if (!items || items.length === 0) {
@@ -362,13 +365,50 @@ const formatPerformanceText = (rows = [], phases = { networkMs: 0, loadingMs: 0,
   ].join('\n');
 };
 
+const resolveSourceDataMode = (sourceName = '') => {
+  const text = String(sourceName || '').toLowerCase();
+  if (!text) return 'LOCAL';
+
+  if (
+    text.includes('seaware')
+    || text.includes('availablevoyages')
+    || text.includes('celestyal_b2b')
+    || text.includes('direct source')
+    || text.includes('b2b')
+  ) {
+    return 'DIRECT';
+  }
+
+  if (
+    text.includes('supabase')
+    || text.includes('stg.')
+    || text.includes('fou.')
+    || text.includes('dwh.')
+    || text.includes('tabledata')
+    || text.includes('reservation')
+    || text.includes('master_sail')
+    || text.includes('published_rates')
+    || text.includes('cabin_availability')
+    || text.includes('synapse')
+    || text.includes('warehouse')
+    || text.includes('integrat')
+    || text.includes('snapshot')
+  ) {
+    return 'INTEGRATED';
+  }
+
+  return 'LOCAL';
+};
+
 const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
+  const { user } = useSupabaseAuth();
   const emitItems = useMemo(() => normalizeList(emits), [emits]);
   const respondItems = useMemo(() => normalizeList(respondsTo), [respondsTo]);
   const sourceItems = useMemo(() => normalizeList(sources), [sources]);
   const emitList = useMemo(() => formatList(emitItems), [emitItems]);
   const respondList = useMemo(() => formatList(respondItems), [respondItems]);
   const sourceList = useMemo(() => formatList(sourceItems), [sourceItems]);
+  const showAdminSourceBadge = useMemo(() => isAdminRole(user?.role), [user?.role]);
   const [copyStatus, setCopyStatus] = useState('');
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedSource, setSelectedSource] = useState(null);
@@ -795,6 +835,22 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
     return () => window.removeEventListener(DASHBOARD_GLOBAL_CRITERIA_EVENT, handleGlobalCriteria);
   }, []);
 
+  useEffect(() => {
+    const handleTableLayoutChange = (event) => {
+      const mode = String(event?.detail?.mode || '').toLowerCase() === 'data' ? 'data' : 'width';
+      appendFlowEntry({
+        type: 'lifecycle',
+        cycleId: null,
+        text: `appearance updated: fit ${mode}`,
+        fullText: `appearance updated: fit ${mode}\n${buildComponentVisibilitySummary()}`
+      });
+      setQueryVersion((current) => current + 1);
+      setEventVersion((current) => current + 1);
+    };
+    window.addEventListener(DASHBOARD_TABLE_LAYOUT_EVENT, handleTableLayoutChange);
+    return () => window.removeEventListener(DASHBOARD_TABLE_LAYOUT_EVENT, handleTableLayoutChange);
+  }, [appendFlowEntry]);
+
   const handleCopyEvent = async () => {
     const textToCopy = showFlow ? flowExportText : popoverBody;
     if (!textToCopy) return;
@@ -859,11 +915,13 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
         <div className="talia-event-meta__group">
           <span className="talia-event-meta__label">Src</span>
           <div className="talia-event-meta__chips">
-            {sourceList.map((sourceName) => (
+            {sourceList.map((sourceName) => {
+              const sourceMode = resolveSourceDataMode(sourceName);
+              return (
               <button
                 key={`source-${sourceName}`}
                 type="button"
-                className={`talia-event-meta__chip talia-event-meta__chip--source ${selectedSource === sourceName ? 'talia-event-meta__chip--selected' : ''}`}
+                className={`talia-event-meta__chip talia-event-meta__chip--source ${showAdminSourceBadge ? 'talia-event-meta__chip--source-labeled' : ''} ${selectedSource === sourceName ? 'talia-event-meta__chip--selected' : ''}`}
                 onClick={() => {
                   setSelectedEvent(null);
                   setShowFlow(false);
@@ -874,8 +932,17 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
                 aria-label={`Source ${sourceName}`}
               >
                 <span className="talia-event-meta__source-icon" aria-hidden="true">{getSourceIconText(sourceName)}</span>
+                {showAdminSourceBadge && (
+                  <span
+                    className={`talia-event-meta__source-badge talia-event-meta__source-badge--${sourceMode.toLowerCase()}`}
+                    aria-label={`Data mode ${sourceMode}`}
+                  >
+                    {sourceMode}
+                  </span>
+                )}
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
         <div className="talia-event-meta__group talia-event-meta__group--performance">

@@ -25,6 +25,8 @@ This file defines the authoritative documentation set for active development.
 
 - `talia-ui/IMPLEMENTATION-GUIDE.md` - migration/reference context
 - `talia-ui/archive/docs/old-implementation/*` - historical implementations
+- `docs/archive/legacy-root-docs/*` - historical root-level status/milestone docs
+- `docs/archive/legacy-plans/*` - historical planning artifacts
 
 ## Policy
 

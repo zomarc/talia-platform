@@ -17,13 +17,28 @@ import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 
 // Default external GraphQL endpoint
 const DEFAULT_GRAPHQL_ENDPOINT = 'https://thaliatest.b2b.celestyal.com:3000/graphql';
+const REQUEST_TIMEOUT_MS = 15000;
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 700;
 
 const DATA_SOURCE_QUERY = `
   query DirectSourceDataSources {
     dataSources {
       sourceName
+      displayName
       connectionConfig
     }
+  }
+`;
+
+const DIRECT_SOURCE_READ_NAMES = [
+  'celestyal_b2b_api_read',
+  'celestyal_b2b_api',
+];
+
+const LOCAL_PARITY_QUERY = `
+  query DirectSourceParity($sailCode: String!) {
+    tableData(tableName: "cabin_availability", limit: 5000, filters: { sail_code: $sailCode })
   }
 `;
 
@@ -87,6 +102,26 @@ const DirectSourceRequestContainer = () => {
 
   const RANGE_DAYS_BEFORE = 14;
   const RANGE_DAYS_AFTER = 14;
+
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const toIsoDate = (value) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toISOString().split('T')[0];
+  };
+
+  const normalizeDirectSourceVariables = useCallback((input) => {
+    const now = new Date();
+    const from = toIsoDate(input?.startDateFrom) || toIsoDate(now);
+    const to = toIsoDate(input?.startDateTo) || toIsoDate(shiftDate(now, 28));
+    return {
+      ...input,
+      effectiveDate: input?.effectiveDate || now.toISOString(),
+      startDateFrom: from,
+      startDateTo: to
+    };
+  }, []);
 
   // State
   const [data, setData] = useState(null);
@@ -185,12 +220,16 @@ const DirectSourceRequestContainer = () => {
           tableName: 'data_source',
         });
         const sources = data?.dataSources || [];
-        const directSource = sources.find((source) => source.sourceName === 'celestyal_b2b_api');
+        const directSource =
+          DIRECT_SOURCE_READ_NAMES
+            .map((name) => sources.find((source) => source.sourceName === name))
+            .find(Boolean) || null;
         const endpoint = directSource?.connectionConfig?.endpoint || DEFAULT_GRAPHQL_ENDPOINT;
         if (!cancelled) {
           setQueryInfo((prev) => ({
             ...prev,
             endpoint,
+            endpointSource: directSource?.sourceName || 'default',
           }));
         }
       } catch (err) {
@@ -212,27 +251,46 @@ const DirectSourceRequestContainer = () => {
 
     const startTime = Date.now();
     const endpoint = queryInfo?.endpoint || DEFAULT_GRAPHQL_ENDPOINT;
+    const normalizedVariables = normalizeDirectSourceVariables(variables);
 
     try {
       console.log('[DirectSourceRequest] Fetching from:', endpoint);
-      console.log('[DirectSourceRequest] Variables:', variables);
+      console.log('[DirectSourceRequest] Variables:', normalizedVariables);
 
-      const result = await trackedFetchGraphql({
-        url: endpoint,
-        query: DEFAULT_QUERY,
-        variables: {
-          effectiveDate: variables.effectiveDate,
-          startDateFrom: variables.startDateFrom,
-          startDateTo: variables.startDateTo
-        },
-        component: 'DirectSourceRequest',
-        purpose: 'Fetch external availability',
-        tableName: 'availableVoyages',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      });
+      let result = null;
+      let lastError = null;
+      let attempts = 0;
+      while (attempts <= MAX_RETRIES) {
+        try {
+          attempts += 1;
+          result = await Promise.race([
+            trackedFetchGraphql({
+              url: endpoint,
+              query: DEFAULT_QUERY,
+              variables: {
+                effectiveDate: normalizedVariables.effectiveDate,
+                startDateFrom: normalizedVariables.startDateFrom,
+                startDateTo: normalizedVariables.startDateTo
+              },
+              component: 'DirectSourceRequest',
+              purpose: 'Fetch external availability',
+              tableName: 'availableVoyages',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+              },
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout after ${REQUEST_TIMEOUT_MS}ms`)), REQUEST_TIMEOUT_MS))
+          ]);
+          lastError = null;
+          break;
+        } catch (error) {
+          lastError = error;
+          if (attempts > MAX_RETRIES) break;
+          await delay(RETRY_DELAY_MS * attempts);
+        }
+      }
+      if (lastError) throw lastError;
 
       if (!mountedRef.current) return;
 
@@ -240,12 +298,35 @@ const DirectSourceRequestContainer = () => {
       console.log('[DirectSourceRequest] Received', voyages.length, 'voyages');
 
       // Flatten the data for table display
-      const flattenedData = flattenVoyageData(voyages, variables?._context?.sailCode);
+      const flattenedData = flattenVoyageData(voyages, normalizedVariables?._context?.sailCode);
       console.log('[DirectSourceRequest] Flattened to', flattenedData.length, 'records');
+      const selectedSailCode = normalizedVariables?._context?.sailCode || null;
+      const matchedRows = selectedSailCode
+        ? flattenedData.filter((row) => row?.isSelectedSail)
+        : flattenedData;
+      const displayRows = selectedSailCode ? matchedRows : flattenedData;
+      const validation = selectedSailCode
+        ? {
+            status: matchedRows.length > 0 ? 'matched' : 'no_match',
+            selectedSailCode,
+            matchedRows: matchedRows.length,
+            totalRows: flattenedData.length
+          }
+        : {
+            status: 'no_selection',
+            selectedSailCode: null,
+            matchedRows: flattenedData.length,
+            totalRows: flattenedData.length
+          };
 
       // If no data and this wasn't already a fallback query, retry with next 4 weeks
-      // Only fallback if the original query was based on persisted context dates (not default)
-      if (flattenedData.length === 0 && !variables._isFallback && variables._context?.source === 'persisted-event') {
+      // Only fallback if no selected sail code is present; otherwise keep strict sail validation.
+      if (
+        flattenedData.length === 0 &&
+        !normalizedVariables._isFallback &&
+        normalizedVariables._context?.source === 'persisted-event' &&
+        !selectedSailCode
+      ) {
         console.log('[DirectSourceRequest] No data for context dates, falling back to next 4 weeks');
         const today = new Date();
         const fourWeeksLater = new Date(today);
@@ -256,7 +337,7 @@ const DirectSourceRequestContainer = () => {
           startDateFrom: today.toISOString().split('T')[0],
           startDateTo: fourWeeksLater.toISOString().split('T')[0],
           _context: {
-            ...(variables._context || {}),
+            ...(normalizedVariables._context || {}),
             fallbackReason: 'No data for original date range - showing next 4 weeks',
             rangeDaysBefore: 0,
             rangeDaysAfter: 28,
@@ -272,13 +353,43 @@ const DirectSourceRequestContainer = () => {
         return;
       }
 
-      setData(flattenedData);
+      let parity = null;
+      const paritySailCode = normalizedVariables?._context?.sailCode || null;
+      if (paritySailCode) {
+        try {
+          const parityPayload = await trackedFetchGraphql({
+            query: LOCAL_PARITY_QUERY,
+            variables: { sailCode: paritySailCode },
+            component: 'DirectSourceRequest',
+            purpose: 'Parity check against synced availability',
+            tableName: 'cabin_availability'
+          });
+          const rows = Array.isArray(parityPayload?.tableData) ? parityPayload.tableData : [];
+          const localAvailable = rows.reduce((sum, row) => sum + Number(row?.available_cabins || 0), 0);
+          const directAvailable = displayRows.reduce((sum, row) => sum + Number(row?.availableCabins || 0), 0);
+          parity = {
+            sailCode: paritySailCode,
+            directRows: displayRows.length,
+            localRows: rows.length,
+            directAvailable,
+            localAvailable,
+            availableDelta: directAvailable - localAvailable
+          };
+        } catch (parityError) {
+          parity = { sailCode: paritySailCode, error: parityError?.message || String(parityError) };
+        }
+      }
+
+      setData(displayRows);
       setQueryInfo(prev => ({
         ...prev,
-        variables,
+        variables: normalizedVariables,
         lastExecuted: new Date().toISOString(),
         executionTime: Date.now() - startTime,
-        recordCount: flattenedData.length
+        recordCount: displayRows.length,
+        retryCount: attempts - 1,
+        parity,
+        validation
       }));
 
     } catch (err) {
@@ -292,7 +403,7 @@ const DirectSourceRequestContainer = () => {
         setLoading(false);
       }
     }
-  }, [queryInfo?.endpoint]);
+  }, [normalizeDirectSourceVariables, queryInfo?.endpoint]);
 
   // Flatten nested voyage data for Tabulator display
   const matchesSelectedSail = (selectedSailCode, record) => {

@@ -1196,6 +1196,8 @@ export const typeDefs = `#graphql
     targetProfile(id: ID!): TargetProfile
     bookingTargetsSupplied(sailCode: String): [BookingTargetSupplied!]!
     targetMappingConfigs: [TargetMappingConfig!]!
+    currentVsTarget(sailCode: String!, representativePriorYearSailCode: String): JSON!
+    bookingRecommendations(sailCode: String!, representativePriorYearSailCode: String): JSON!
     
     # Data Debugging
     dataDebugInfo: DataDebugResponse!
@@ -1239,6 +1241,11 @@ export const typeDefs = `#graphql
     integrationDateRanges: [IntegrationDateRange!]!
     integrationDateRange(id: Int!): IntegrationDateRange
     dataSources: [DataSource!]!
+    stgDomainSourceCatalog: JSON!
+    stgQualityBaselineQueries: JSON!
+    canonicalDataContracts: JSON!
+    externalFeedContracts: JSON!
+    externalFeedStatus: JSON!
     
     # Legacy queries (for backward compatibility)
     books: [Book!]!

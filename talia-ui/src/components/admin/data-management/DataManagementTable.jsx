@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { initTabulator } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { formatDayMon } from '../../../lib/dateFormat';
 
 const dayMs = 1000 * 60 * 60 * 24;
@@ -152,10 +152,9 @@ const DataManagementTable = ({
         try { instanceRef.current.destroy(); } catch { /* noop */ }
       }
 
-      instanceRef.current = new Tabulator(hostRef.current, {
+      instanceRef.current = new Tabulator(hostRef.current, getTabulatorOptions({
         data: rows,
         index: 'tableName',
-        layout: 'fitDataFill',
         height: '100%',
         selectableRows: 1,
         movableColumns: true,
@@ -233,7 +232,7 @@ const DataManagementTable = ({
           rowEl.classList.remove('dm-row--synced', 'dm-row--outdated', 'dm-row--never', 'dm-row--empty', 'dm-row--default', 'dm-row--syncing', 'dm-row--blocked');
           rowEl.classList.add(getRowVariantClass(rowData));
         },
-      });
+      }));
 
       instanceRef.current.on('rowClick', (_event, row) => {
         const rowData = row?.getData?.();

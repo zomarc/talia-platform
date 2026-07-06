@@ -23,6 +23,7 @@ const tableAliasToConfigMap = {
 };
 
 const tableDateColumns = {
+  agency: [],
   ship: [],
   ship_cabin: [],
   cabin_availability: ['snapshot_date'],

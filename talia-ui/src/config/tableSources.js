@@ -6,6 +6,12 @@
 // Mapping of Supabase table names to Azure Synapse sources
 // Based on sync.config.json from talia-server
 export const tableSources = {
+  agency: {
+    source: 'dwh.Dim_Agency',
+    type: 'direct',
+    dateColumns: [],
+    syncType: 'agency'
+  },
   ship: {
     source: 'dwh.Dim_Ship',
     type: 'direct',

@@ -724,6 +724,11 @@ export const typeDefs = `#graphql
     geog_area_code: String
     departure_date_from: String
     departure_date_to: String
+    agency_id: Float
+    market: String
+    agency_type: String
+    country_code: String
+    status: String
     include_non_real_sailings: Boolean
     query_column: String
     query_value: String

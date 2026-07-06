@@ -1,6 +1,66 @@
 {
   "defaultDataset": "sept-dec-2025",
   "tables": {
+    "agency": {
+      "type": "direct",
+      "source": "dwh.Dim_Agency",
+      "target": "agency",
+      "columns": [
+        "Parent_Agency_Id",
+        "Consortium_Id",
+        "Agency_Id",
+        "Agency_Name",
+        "Iata_Number",
+        "Clia_Number",
+        "Is_Domestic",
+        "Is_Internal",
+        "Is_Gsa",
+        "Consortium_Type",
+        "Is_Consortium",
+        "Agency_Type",
+        "Brand",
+        "Default_Currency",
+        "Use_Dflt_Consortium",
+        "Bc_Type_Id",
+        "Taxpayer_Type",
+        "Taxpayer_Number",
+        "Contact_Name",
+        "Web_Address",
+        "Office_Code",
+        "Ag_Entity_Type",
+        "Agency_Code",
+        "Fpr_At_Gross",
+        "Valid_Currencies",
+        "Market",
+        "Address_Line1",
+        "Address_City",
+        "State_Code",
+        "Zip",
+        "Country_Code",
+        "Country",
+        "Status",
+        "Sfdc_Id",
+        "Sfdc_Parent_Id",
+        "Sfdc_Owner_Id",
+        "Sfdc_Owner_Name",
+        "Sfdc_Cm_Name",
+        "Sfdc_Vp_Name",
+        "Sfdc_Id_Link",
+        "Is_Web",
+        "Commission",
+        "Inherit_Parent_Commission",
+        "Is_Market_Standard"
+      ],
+      "transformKey": "agency",
+      "isLargeDataset": true,
+      "rowNumberOrder": [
+        "Agency_Id"
+      ],
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "id"
+      }
+    },
     "ships": {
       "type": "direct",
       "source": "dwh.Dim_Ship",
@@ -254,6 +314,7 @@
     "sept-dec-2025": {
       "description": "Core sailing, reservation, and change data for September through December 2025",
       "tableSequence": [
+        "agency",
         "ships",
         "masterSail",
         "cabinAvailability",
@@ -265,6 +326,12 @@
         "competitor"
       ],
       "tables": {
+        "agency": {
+          "replace": {
+            "strategy": "delete-all",
+            "column": "id"
+          }
+        },
         "ships": {
           "replace": {
             "strategy": "delete-all",
@@ -400,12 +467,19 @@
     "sept-dec-2024": {
       "description": "Previous year data for year-over-year comparison (September through December 2024)",
       "tableSequence": [
+        "agency",
         "ships",
         "masterSail",
         "reservations",
         "reservationChanges"
       ],
       "tables": {
+        "agency": {
+          "replace": {
+            "strategy": "delete-all",
+            "column": "id"
+          }
+        },
         "ships": {
           "replace": {
             "strategy": "delete-all",

@@ -700,6 +700,55 @@ class SynapseSyncService {
           created_at: currentTime
         }));
 
+      case 'agency':
+        return data.map(row => ({
+          parent_agency_id: toNumber(getField(row, ['Parent_Agency_Id', 'PARENT_AGENCY_ID'])),
+          consortium_id: toNumber(getField(row, ['Consortium_Id', 'CONSORTIUM_ID'])),
+          agency_id: toNumber(getField(row, ['Agency_Id', 'AGENCY_ID'])),
+          agency_name: getField(row, ['Agency_Name', 'AGENCY_NAME']) || null,
+          iata_number: getField(row, ['Iata_Number', 'IATA_NUMBER']) || null,
+          clia_number: getField(row, ['Clia_Number', 'CLIA_NUMBER']) || null,
+          is_domestic: getField(row, ['Is_Domestic', 'IS_DOMESTIC']) || null,
+          is_internal: getField(row, ['Is_Internal', 'IS_INTERNAL']) || null,
+          is_gsa: getField(row, ['Is_Gsa', 'IS_GSA']) || null,
+          consortium_type: getField(row, ['Consortium_Type', 'CONSORTIUM_TYPE']) || null,
+          is_consortium: getField(row, ['Is_Consortium', 'IS_CONSORTIUM']) || null,
+          agency_type: getField(row, ['Agency_Type', 'AGENCY_TYPE']) || null,
+          brand: getField(row, ['Brand', 'BRAND']) || null,
+          default_currency: getField(row, ['Default_Currency', 'DEFAULT_CURRENCY']) || null,
+          use_dflt_consortium: getField(row, ['Use_Dflt_Consortium', 'USE_DFLT_CONSORTIUM']) || null,
+          bc_type_id: toNumber(getField(row, ['Bc_Type_Id', 'BC_TYPE_ID'])),
+          taxpayer_type: getField(row, ['Taxpayer_Type', 'TAXPAYER_TYPE']) || null,
+          taxpayer_number: getField(row, ['Taxpayer_Number', 'TAXPAYER_NUMBER']) || null,
+          contact_name: getField(row, ['Contact_Name', 'CONTACT_NAME']) || null,
+          web_address: getField(row, ['Web_Address', 'WEB_ADDRESS']) || null,
+          office_code: getField(row, ['Office_Code', 'OFFICE_CODE']) || null,
+          ag_entity_type: getField(row, ['Ag_Entity_Type', 'AG_ENTITY_TYPE']) || null,
+          agency_code: getField(row, ['Agency_Code', 'AGENCY_CODE']) || null,
+          fpr_at_gross: getField(row, ['Fpr_At_Gross', 'FPR_AT_GROSS']) || null,
+          valid_currencies: getField(row, ['Valid_Currencies', 'VALID_CURRENCIES']) || null,
+          market: getField(row, ['Market', 'MARKET']) || null,
+          address_line1: getField(row, ['Address_Line1', 'ADDRESS_LINE1']) || null,
+          address_city: getField(row, ['Address_City', 'ADDRESS_CITY']) || null,
+          state_code: getField(row, ['State_Code', 'STATE_CODE']) || null,
+          zip: getField(row, ['Zip', 'ZIP']) || null,
+          country_code: getField(row, ['Country_Code', 'COUNTRY_CODE']) || null,
+          country: getField(row, ['Country', 'COUNTRY']) || null,
+          status: getField(row, ['Status', 'STATUS']) || null,
+          sfdc_id: getField(row, ['Sfdc_Id', 'SFDC_ID']) || null,
+          sfdc_parent_id: getField(row, ['Sfdc_Parent_Id', 'SFDC_PARENT_ID']) || null,
+          sfdc_owner_id: getField(row, ['Sfdc_Owner_Id', 'SFDC_OWNER_ID']) || null,
+          sfdc_owner_name: getField(row, ['Sfdc_Owner_Name', 'SFDC_OWNER_NAME']) || null,
+          sfdc_cm_name: getField(row, ['Sfdc_Cm_Name', 'SFDC_CM_NAME']) || null,
+          sfdc_vp_name: getField(row, ['Sfdc_Vp_Name', 'SFDC_VP_NAME']) || null,
+          sfdc_id_link: getField(row, ['Sfdc_Id_Link', 'SFDC_ID_LINK']) || null,
+          is_web: toNumber(getField(row, ['Is_Web', 'IS_WEB'])),
+          commission: toNumber(getField(row, ['Commission', 'COMMISSION'])),
+          inherit_parent_commission: toNumber(getField(row, ['Inherit_Parent_Commission', 'INHERIT_PARENT_COMMISSION'])),
+          is_market_standard: toNumber(getField(row, ['Is_Market_Standard', 'IS_MARKET_STANDARD'])),
+          created_at: currentTime
+        }));
+
       case 'cabinAvailability':
         return data.map(row => ({
           snapshot_date: row.Snapshot_Date,

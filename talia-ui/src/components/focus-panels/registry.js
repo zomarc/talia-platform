@@ -40,6 +40,7 @@ import MasterVoyagePerformanceSummaryContainer from './MasterVoyagePerformanceSu
 import VoyageReportContainer from './VoyageReport';
 import DirectSourceRequestContainer from './DirectSourceRequest';
 import DirectAvailabilityContainer from './DirectAvailability';
+import AgencyContainer from './Agency';
 import ContextRowMonitor from './ContextRowMonitor';
 import DataManagementPanel from './DataManagement';
 import TestWorkbenchPanel from './TestWorkbench';
@@ -52,6 +53,8 @@ const publishedRatesSelect = 'talia:publishedRates.select';
 const publishedRatesClear = 'talia:publishedRates.clear';
 const reservationSelect = 'talia:reservation.select';
 const reservationClear = 'talia:reservation.clear';
+const agencySelect = 'talia:agency.select';
+const agencyClear = 'talia:agency.clear';
 const cabinSelect = 'talia:cabin.select';
 const cabinClear = 'talia:cabin.clear';
 const directSourceSelect = 'talia:directsource.select';
@@ -113,6 +116,22 @@ export const componentRegistry = {
     },
     showInReports: true,
     filePath: 'src/components/focus-panels/SimpleTable/index.jsx'
+  },
+  Agency: {
+    component: AgencyContainer,
+    panelId: 'agency-directory',
+    category: 'Tables',
+    title: 'Agency Directory',
+    description: 'Travel agency dimension from dwh.Dim_Agency with market, type, country, and status filters',
+    props: {},
+    dataRequirements: 'Requires agency table synced from dwh.Dim_Agency. Responds to reservation selection.',
+    events: {
+      emits: [agencySelect, agencyClear],
+      respondsTo: [reservationSelect]
+    },
+    supportsRefresh: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/Agency/index.jsx'
   },
   KPICards: {
     component: KPICards,

@@ -26,7 +26,7 @@ export const buildTableCatalogQueryResolvers = ({
       } : { min: null, max: null };
 
       const knownTables = [
-        'ship', 'cabin_availability', 'reservation', 'master_sail',
+        'agency', 'ship', 'cabin_availability', 'reservation', 'master_sail',
         'sail_by_cabin_occupancy', 'reservation_changes', 'reservation_current_state',
         'reservation_promotion', 'published_rates', 'published_rates_changes',
         'published_rates_current_state', 'competitor', 'competitor_current_state',

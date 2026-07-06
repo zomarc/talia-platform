@@ -10,7 +10,9 @@ export const buildTableDataQueryResolvers = ({
     try {
       const includeNonRealSailings = filters?.include_non_real_sailings === true;
       const baseLimit = Number.isFinite(Number(limit)) ? Number(limit) : 100;
-      const expandedLimit = includeNonRealSailings ? baseLimit : Math.min(Math.max(baseLimit * 3, baseLimit), 5000);
+      const expandedLimit = tableName === 'agency'
+        ? Math.min(Math.max(baseLimit, 100), 50000)
+        : (includeNonRealSailings ? baseLimit : Math.min(Math.max(baseLimit * 3, baseLimit), 5000));
 
       let query = supabaseDataService.client
         .from(tableName)
@@ -53,6 +55,26 @@ export const buildTableDataQueryResolvers = ({
           query = query.lte('departure_date', filters.departure_date_to);
           console.log(`[tableData] Applied filter: departure_date <= ${filters.departure_date_to}`);
         }
+        if (filters.agency_id !== undefined && filters.agency_id !== null && String(filters.agency_id).trim() !== '') {
+          query = query.eq('agency_id', filters.agency_id);
+          console.log(`[tableData] Applied filter: agency_id = ${filters.agency_id}`);
+        }
+        if (filters.market) {
+          query = query.eq('market', filters.market);
+          console.log(`[tableData] Applied filter: market = ${filters.market}`);
+        }
+        if (filters.agency_type) {
+          query = query.eq('agency_type', filters.agency_type);
+          console.log(`[tableData] Applied filter: agency_type = ${filters.agency_type}`);
+        }
+        if (filters.country_code) {
+          query = query.eq('country_code', filters.country_code);
+          console.log(`[tableData] Applied filter: country_code = ${filters.country_code}`);
+        }
+        if (filters.status) {
+          query = query.eq('status', filters.status);
+          console.log(`[tableData] Applied filter: status = ${filters.status}`);
+        }
         if (filters.query_column && filters.query_value !== undefined && filters.query_value !== null && String(filters.query_value).trim() !== '') {
           const column = String(filters.query_column).trim();
           const value = String(filters.query_value).trim();
@@ -92,6 +114,9 @@ export const buildTableDataQueryResolvers = ({
       }
       if (tableName === 'published_rates_current_state') {
         query = query.order('snapshot_date', { ascending: false }).order('rate_key', { ascending: true });
+      }
+      if (tableName === 'agency') {
+        query = query.order('agency_name', { ascending: true });
       }
 
       query = query.limit(expandedLimit);

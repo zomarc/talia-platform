@@ -3,6 +3,27 @@ export const SAIL_CLEAR_EVENT = 'talia:sail.clear';
 export const CABIN_SELECT_EVENT = 'talia:cabin.select';
 export const CABIN_CLEAR_EVENT = 'talia:cabin.clear';
 
+export const AGENCY_SELECT_EVENT = 'talia:agency.select';
+export const AGENCY_CLEAR_EVENT = 'talia:agency.clear';
+
+export const emitAgencySelect = (detail) => {
+  try {
+    window.lastAgencySelectEvent = { type: AGENCY_SELECT_EVENT, detail };
+    window.dispatchEvent(new CustomEvent(AGENCY_SELECT_EVENT, { detail }));
+  } catch (error) {
+    console.warn('[eventBus] emitAgencySelect failed', error);
+  }
+};
+
+export const emitAgencyClear = (detail = {}) => {
+  try {
+    window.lastAgencySelectEvent = null;
+    window.dispatchEvent(new CustomEvent(AGENCY_CLEAR_EVENT, { detail }));
+  } catch (error) {
+    console.warn('[eventBus] emitAgencyClear failed', error);
+  }
+};
+
 export const extractSailCodeFromEvent = (detail) => (
   detail?.sail_code ||
   detail?.Sail_Code ||

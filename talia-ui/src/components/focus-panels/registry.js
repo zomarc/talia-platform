@@ -41,6 +41,7 @@ import VoyageReportContainer from './VoyageReport';
 import DirectSourceRequestContainer from './DirectSourceRequest';
 import DirectAvailabilityContainer from './DirectAvailability';
 import AgencyContainer from './Agency';
+import ProjectSummaryContainer from './ProjectSummary';
 import ContextRowMonitor from './ContextRowMonitor';
 import DataManagementPanel from './DataManagement';
 import TestWorkbenchPanel from './TestWorkbench';
@@ -132,6 +133,19 @@ export const componentRegistry = {
     supportsRefresh: true,
     showInReports: true,
     filePath: 'src/components/focus-panels/Agency/index.jsx'
+  },
+  ProjectSummary: {
+    component: ProjectSummaryContainer,
+    panelId: 'project-summary',
+    category: 'Reports',
+    title: 'Project Summary',
+    description: 'Latest executive overview (architecture, achievements, next steps) stored in the database and rendered in-app',
+    props: {},
+    dataRequirements: 'Requires project_summary table; published via scripts/generate-executive-overview-pdf.sh (validate option 14)',
+    events: { emits: [], respondsTo: [] },
+    supportsRefresh: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/ProjectSummary/index.jsx'
   },
   KPICards: {
     component: KPICards,

@@ -17,6 +17,8 @@ Use this page as the entry point for all active development documentation.
 - `docs/ENVIRONMENTS-AND-DEPLOY.md` - local, staging (MiniPC), MVP (Azure), backups, version labels
 - `docs/AZURE-STAGING.md` - Azure Ubuntu VM + Docker staging runbook
 - `docs/CHANGELOG.md` - tracked changes and release notes
+- `EXECUTIVE-OVERVIEW.md` - architecture & achievements (markdown)
+- `docs/EXECUTIVE-OVERVIEW.html` - branded Celestyal presentation (logo + theme colors)
 
 ## Standards and Direction
 

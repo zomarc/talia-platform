@@ -12,13 +12,14 @@
 #   ./scripts/validate comprehensive      # Full validate-staging.sh (slow)
 #   ./scripts/validate deploy-themes-db   # Upsert UI themes + focus definitions → staging and/or MVP DB (no code deploy)
 #   ./scripts/validate deploy-mvp         # Deploy to MVP (Azure); uses scripts/deploy-to-mvp.sh
+#   ./scripts/validate executive-overview-pdf   # Regenerate docs/EXECUTIVE-OVERVIEW.pdf from branded HTML
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Monotonic ops token (not a calendar stamp). Bump when validate menu behavior or Instance & keys cross-check changes.
-SCRIPT_VERSION="ops-5"
+SCRIPT_VERSION="ops-6"
 CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
 if [[ -f "${CONFIG_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -1475,6 +1476,7 @@ print_menu() {
   echo -e "  ${GREEN}11)${NC} Summary notes ${DIM}(paths: ${VALIDATE_SUMMARY_PROBE_STATE_FILE/#$HOME/~} · ${VALIDATE_SUMMARY_CACHE_FILE/#$HOME/~})${NC}"
   echo -e "  ${GREEN}12)${NC} Full validation / gateway detail (slower)"
   echo -e "  ${GREEN}13)${NC} Emergency reboot staging server"
+  echo -e "  ${GREEN}14)${NC} Generate executive overview PDF ${DIM}(docs/EXECUTIVE-OVERVIEW.pdf)${NC}"
   echo -e "  ${DIM}91)${NC} ${DIM}Legacy: enable external (ngrok) for remembered target — same confirmation as (5)${NC}"
   echo ""
   echo -e "  ${YELLOW}0)${NC} Exit"
@@ -3292,6 +3294,10 @@ handle_remote_menu_legacy() {
   esac
 }
 
+generate_executive_overview_pdf() {
+  run_script "generate-executive-overview-pdf.sh"
+}
+
 handle_remote_menu() {
   local choice="$1"
 
@@ -3336,6 +3342,9 @@ handle_remote_menu() {
     13|reboot|reboot-staging)
       reboot_staging_emergency
       ;;
+    14|executive-overview|executive-overview-pdf|overview-pdf|generate-executive-overview)
+      generate_executive_overview_pdf
+      ;;
     # Legacy numeric / names (older validate menu)
     91|remembered-external|enable-remembered-external)
       enable_remembered_target_external
@@ -3377,6 +3386,9 @@ handle_cli() {
       sync_ui_themes_and_focus_definitions_db
       ;;
     reboot-staging|reboot) reboot_staging_emergency ;;
+    executive-overview-pdf|executive-overview|overview-pdf|generate-executive-overview)
+      generate_executive_overview_pdf
+      ;;
     comprehensive) run_comprehensive_check ;;
     status|summary) print_quick_targets_summary ;;
     last-summary|show-last-summary|cached-summary) print_cached_quick_targets_summary ;;
@@ -3396,6 +3408,7 @@ Talia validate — quick overview by default; heavy checks only from the menu or
   $0 deploy-mvp                   deploy to MVP (same; wide modes require explicit flags inside the script)
   $0 deploy-themes-db             upsert themes + focus rows from local Supabase → staging and/or MVP (no code deploy)
   $0 reboot-staging               emergency reboot of staging host (confirmation required)
+  $0 executive-overview-pdf       regenerate docs/EXECUTIVE-OVERVIEW.pdf from docs/EXECUTIVE-OVERVIEW.html
   $0 comprehensive                full repo validation (slow)
   $0 status                       full probe + transcript; refreshes ~/.talia-validate-last-summary.{txt,state}
   $0 last-summary                 live header + snapshot body (light HTTP on header; run status first for data)

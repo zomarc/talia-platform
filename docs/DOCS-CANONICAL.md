@@ -13,6 +13,8 @@ This file defines the authoritative documentation set for active development.
 - `docs/ENVIRONMENTS-AND-DEPLOY.md` - local vs staging vs MVP, local deploys, backups, version pitfalls
 - `docs/AZURE-STAGING.md` - Azure VM + Docker staging (Bicep, Caddy, env files)
 - `docs/QUICK-START-GUIDE.md` - quick startup and verification
+- `EXECUTIVE-OVERVIEW.md` - top-level architecture, achievements, and environment summary (presentation page)
+- `docs/EXECUTIVE-OVERVIEW.html` - branded Celestyal HTML presentation (logo + Mediterranean theme)
 
 ## Canonical UI Standards (Authoritative for `talia-ui`)
 

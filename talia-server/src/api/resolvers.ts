@@ -26,6 +26,7 @@ import { userMutationResolvers, userQueryResolvers } from './resolver-modules/us
 import { statusQueryResolvers } from './resolver-modules/statusResolvers.js';
 import { instanceConnectionQueryResolvers } from './resolver-modules/instanceConnectionResolvers.js';
 import { refreshQueryResolvers } from './resolver-modules/refreshResolvers.js';
+import { projectSummaryQueryResolvers } from './resolver-modules/projectSummaryResolvers.js';
 import { metadataQueryResolvers } from './resolver-modules/metadataResolvers.js';
 import { buildTableCatalogQueryResolvers } from './resolver-modules/tableCatalogResolvers.js';
 import { buildTableDataQueryResolvers } from './resolver-modules/tableDataResolvers.js';
@@ -2244,6 +2245,7 @@ export const resolvers = {
     ...statusQueryResolvers,
     ...instanceConnectionQueryResolvers,
     ...metadataQueryResolvers,
+    ...projectSummaryQueryResolvers,
     ...tableCatalogQueryResolvers,
     ...tableDataQueryResolvers,
 

@@ -35,6 +35,10 @@ See [`docs/AZURE-STAGING.md`](docs/AZURE-STAGING.md) (Bicep VM, Docker install, 
 
 ## Documentation
 
+### Platform overview
+- [`EXECUTIVE-OVERVIEW.md`](EXECUTIVE-OVERVIEW.md) - architecture, achievements, environments (markdown)
+- [`docs/EXECUTIVE-OVERVIEW.html`](docs/EXECUTIVE-OVERVIEW.html) - **branded presentation** (Celestyal logo & colors)
+
 ### Canonical Docs
 - `docs/DIRECTIVE.md` - mandatory coding and styling rules
 - `docs/DOCS-CANONICAL.md` - authoritative documentation map

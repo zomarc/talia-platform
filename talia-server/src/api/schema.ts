@@ -1190,6 +1190,9 @@ export const typeDefs = `#graphql
     
     # Data Refresh Metadata
     refreshMetadata(dataSource: String!): RefreshMetadata
+
+    # Project Summary (latest executive overview HTML for in-app display)
+    projectSummaryLatest: ProjectSummary
     
     # Booking Profile
     bookingProfile(sailCode: String!): BookingProfile
@@ -1448,6 +1451,17 @@ export const typeDefs = `#graphql
 
   # JSON scalar type for flexible data
   scalar JSON
+
+  # Project Summary — versioned executive overview document
+  type ProjectSummary {
+    id: ID!
+    title: String!
+    version: String
+    format: String!
+    content: String!
+    sourcePath: String
+    generatedAt: String
+  }
 
   # Data Debugging Types
   type DataDebugOverview {

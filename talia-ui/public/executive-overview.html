@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Talia Platform — Executive Overview</title>
+  <style>
+    :root {
+      --bg-deep: #262320;
+      --bg-solid: #34302c;
+      --bg-card: #3a3530;
+      --accent: #0d9488;
+      --accent-soft: rgba(13, 148, 136, 0.18);
+      --sun: #d4a574;
+      --future: #a78bfa;
+      --text: #e8ddd0;
+      --text-secondary: rgba(232, 221, 208, 0.82);
+      --text-muted: rgba(232, 221, 208, 0.58);
+      --border: rgba(232, 213, 184, 0.14);
+      --font: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: var(--font);
+      color: var(--text);
+      background: var(--bg-solid);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .doc { max-width: 100%; }
+
+    .doc-page {
+      padding: 1rem 1.25rem;
+      min-height: 100vh;
+    }
+
+    /* —— Page 1: Cover —— */
+    .hero {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 2px solid var(--accent);
+      margin-bottom: 1.5rem;
+    }
+
+    .hero__mark { flex-shrink: 0; width: 64px; height: 64px; }
+    .hero__text { flex: 1; min-width: 0; }
+
+    .hero__eyebrow {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--sun);
+      margin: 0 0 0.25rem;
+    }
+
+    .hero__title {
+      margin: 0;
+      font-size: 2rem;
+      font-weight: 650;
+      color: #fff;
+      letter-spacing: -0.02em;
+    }
+
+    .hero__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.65rem;
+    }
+
+    .pill {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.28rem 0.65rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--accent-soft);
+      color: #b8f0e8;
+    }
+
+    .pill--muted {
+      background: rgba(255, 250, 240, 0.06);
+      color: var(--text-secondary);
+    }
+
+    h2 {
+      font-size: 1.05rem;
+      font-weight: 650;
+      color: var(--sun);
+      margin: 0 0 0.75rem;
+      letter-spacing: 0.02em;
+    }
+
+    .summary-box {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-card);
+      padding: 1.25rem 1.5rem;
+    }
+
+    .summary-box p {
+      margin: 0 0 1rem;
+      font-size: 1.02rem;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .summary-box p:last-child { margin-bottom: 0; }
+
+    .summary-points {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem 2rem;
+    }
+
+    .summary-points li {
+      position: relative;
+      padding-left: 1rem;
+      font-size: 0.92rem;
+      color: var(--text-secondary);
+    }
+
+    .summary-points li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.55em;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .summary-points li strong { color: #fff; }
+
+    /* —— Architecture page —— */
+    .arch-intro {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      margin: 0 0 0.75rem;
+    }
+
+    .arch-diagram {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-deep);
+      padding: 0.35rem;
+      text-align: center;
+    }
+
+    .arch-diagram svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-height: 74vh;
+      margin: 0 auto;
+    }
+
+    .arch-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.25rem;
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .arch-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+
+    .arch-legend i {
+      display: inline-block;
+      width: 11px;
+      height: 11px;
+      border-radius: 2px;
+      border: 2px solid;
+    }
+
+    .arch-legend i.talia { border-color: var(--accent); background: var(--accent-soft); }
+    .arch-legend i.external { border-color: var(--sun); background: rgba(212, 165, 116, 0.12); }
+    .arch-legend i.env { border-color: rgba(232, 213, 184, 0.35); background: rgba(255, 250, 240, 0.04); }
+    .arch-legend i.future { border-color: var(--future); background: rgba(167, 139, 250, 0.14); border-style: dashed; }
+
+    /* —— Lists —— */
+    .card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-card);
+      padding: 1.1rem 1.35rem;
+    }
+
+    .item-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      columns: 2;
+      column-gap: 2rem;
+    }
+
+    .item-list li {
+      position: relative;
+      padding-left: 1.25rem;
+      margin-bottom: 0.55rem;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      break-inside: avoid;
+    }
+
+    .item-list li strong { color: #fff; font-weight: 600; }
+
+    .item-list li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.5em;
+      width: 7px;
+      height: 7px;
+      border-radius: 2px;
+      background: var(--accent);
+    }
+
+    .next-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .next-list li {
+      position: relative;
+      padding: 0.65rem 0 0.65rem 1.5rem;
+      font-size: 0.95rem;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .next-list li:last-child { border-bottom: none; }
+
+    .next-list li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 1rem;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--sun);
+    }
+
+    .next-list li strong { color: #fff; }
+
+    .footer {
+      margin-top: 1rem;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .footer strong { color: var(--accent); }
+
+    /* —— Print: 4 edge-to-edge landscape pages —— */
+    @page { size: A4 landscape; margin: 0; }
+
+    @media print {
+      html, body {
+        background: var(--bg-solid) !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      .doc-page {
+        min-height: 0;
+        height: 210mm;
+        max-height: 210mm;
+        overflow: hidden;
+        padding: 9mm 12mm;
+        page-break-after: always;
+        break-after: page;
+      }
+
+      .doc-page:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+
+      .hero { margin-bottom: 1rem; padding-bottom: 0.85rem; }
+      .hero__title { font-size: 1.75rem; }
+      .summary-box { padding: 1rem 1.25rem; }
+      .summary-box p { font-size: 0.95rem; margin-bottom: 0.75rem; }
+      .summary-points { gap: 0.35rem 1.5rem; }
+      .summary-points li { font-size: 0.85rem; }
+
+      .arch-diagram { border: 1px solid var(--border); padding: 0.25rem; }
+      .arch-diagram svg { max-height: 172mm; width: 100%; }
+
+      .item-list { columns: 2; }
+      .item-list li { font-size: 0.84rem; margin-bottom: 0.5rem; }
+      .next-list li { font-size: 0.9rem; padding: 0.6rem 0 0.6rem 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="doc">
+
+    <!-- PAGE 1: Logo · Header · Executive Summary -->
+    <div class="doc-page page-cover">
+      <header class="hero">
+        <svg class="hero__mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+          <circle cx="36" cy="14" r="5" fill="#d4a574"/>
+          <path d="M6 30c6-4 12-4 18 0s12 4 18 0" stroke="#0d9488" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M4 36c8-5 16-5 24 0s16 5 24 0" stroke="#0f766e" stroke-width="2" stroke-linecap="round" opacity="0.88"/>
+        </svg>
+        <div class="hero__text">
+          <p class="hero__eyebrow">Celestyal · Revenue &amp; Inventory Intelligence</p>
+          <h1 class="hero__title">Talia Platform</h1>
+          <div class="hero__meta">
+            <span class="pill">UI 0.2.1</span>
+            <span class="pill pill--muted">Server 0.2.0</span>
+            <span class="pill pill--muted">July 2026 · Alpha</span>
+          </div>
+        </div>
+      </header>
+
+      <h2>Executive summary</h2>
+      <div class="summary-box">
+        <p>
+          <strong>Talia</strong> is Celestyal's revenue and inventory intelligence platform. It connects the
+          Azure Synapse data lake to an interactive analytics workspace where commercial, revenue, and
+          operations teams explore sailing schedules, pricing, reservations, agencies, and competitor
+          intelligence — through customizable dashboards with linked cross-filtering.
+        </p>
+        <p>
+          Data flows one way from Synapse into a local Supabase serving layer; the React UI queries a
+          GraphQL API. The same Docker stack runs on a developer laptop, a LAN staging MiniPC, and an
+          Azure MVP VM — deployed from the laptop via tarball scripts.
+        </p>
+        <ul class="summary-points">
+          <li><strong>Source:</strong> Azure Synapse (dwh · stg · fou)</li>
+          <li><strong>Serving:</strong> Supabase Postgres + GraphQL API</li>
+          <li><strong>Presentation:</strong> React · Dockview · Tabulator · Chart.js</li>
+          <li><strong>Environments:</strong> Local · Staging · MVP · taliahub.com</li>
+          <li><strong>Status:</strong> Alpha — client demo ready on staging</li>
+          <li><strong>Next horizon:</strong> talia-engine intelligence layer (planned)</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- PAGE 2: Architecture -->
+    <div class="doc-page page-arch">
+      <h2>High-level architecture</h2>
+      <p class="arch-intro">
+        Teal = Talia components · Gold = external systems · Grey = deployment hosts · Violet = planned (talia-engine).
+        Solid arrows = runtime requests · Dashed = sync, deploy, or planned.
+      </p>
+      <div class="arch-diagram" role="img" aria-label="Talia platform architecture diagram">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 820" font-family="Segoe UI, system-ui, sans-serif">
+          <defs>
+            <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#0d9488"/>
+            </marker>
+            <marker id="arr-gold" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#d4a574"/>
+            </marker>
+            <marker id="arr-future" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#a78bfa"/>
+            </marker>
+          </defs>
+
+          <!-- band labels -->
+          <text x="16" y="22" fill="#d4a574" font-size="10" font-weight="600" letter-spacing="1">EXTERNAL — PEOPLE &amp; ACCESS</text>
+          <text x="16" y="92" fill="#d4a574" font-size="10" font-weight="600" letter-spacing="1">EXTERNAL — SERVICES &amp; DATA SOURCES</text>
+          <text x="16" y="198" fill="#e8ddd0" font-size="10" font-weight="600" letter-spacing="1">DEPLOYMENT HOSTS</text>
+          <text x="16" y="288" fill="#0d9488" font-size="10" font-weight="600" letter-spacing="1">TALIA — APPLICATION LAYER</text>
+          <text x="16" y="462" fill="#a78bfa" font-size="10" font-weight="600" letter-spacing="1">TALIA — INTELLIGENCE (PLANNED)</text>
+          <text x="16" y="560" fill="#0d9488" font-size="10" font-weight="600" letter-spacing="1">TALIA — SUPABASE DATA PLATFORM</text>
+          <text x="16" y="700" fill="#0d9488" font-size="10" font-weight="600" letter-spacing="1">TALIA — OPS &amp; TOOLING</text>
+
+          <!-- external people -->
+          <rect x="24" y="32" width="200" height="44" rx="6" fill="#403830" stroke="#d4a574" stroke-width="1.5"/>
+          <text x="124" y="50" fill="#e8ddd0" font-size="11" font-weight="600" text-anchor="middle">Business users</text>
+          <text x="124" y="66" fill="#a89888" font-size="9" text-anchor="middle">Browser · dashboards · reports</text>
+
+          <rect x="240" y="32" width="200" height="44" rx="6" fill="#403830" stroke="#d4a574" stroke-width="1.5"/>
+          <text x="340" y="50" fill="#e8ddd0" font-size="11" font-weight="600" text-anchor="middle">Developers / ops</text>
+          <text x="340" y="66" fill="#a89888" font-size="9" text-anchor="middle">Laptop · validate · deploy scripts</text>
+
+          <!-- external services -->
+          <rect x="24" y="102" width="130" height="52" rx="6" fill="#403830" stroke="#d4a574" stroke-width="1.5"/>
+          <text x="89" y="122" fill="#e8ddd0" font-size="10" font-weight="600" text-anchor="middle">ngrok + DNS</text>
+          <text x="89" y="136" fill="#a89888" font-size="8" text-anchor="middle">taliahub.com</text>
+          <text x="89" y="148" fill="#a89888" font-size="8" text-anchor="middle">celestyal.taliahub.com</text>
+
+          <rect x="164" y="102" width="150" height="52" rx="6" fill="#403830" stroke="#d4a574" stroke-width="1.5"/>
+          <text x="239" y="122" fill="#e8ddd0" font-size="10" font-weight="600" text-anchor="middle">Azure Synapse</text>
+          <text x="239" y="136" fill="#a89888" font-size="8" text-anchor="middle">Data lake · dwh / stg / fou</text>
+          <text x="239" y="148" fill="#a89888" font-size="8" text-anchor="middle">VPN egress from hosts</text>
+
+          <rect x="324" y="102" width="130" height="52" rx="6" fill="#403830" stroke="#d4a574" stroke-width="1.5"/>
+          <text x="389" y="122" fill="#e8ddd0" font-size="10" font-weight="600" text-anchor="middle">Google APIs</text>
+          <text x="389" y="136" fill="#a89888" font-size="8" text-anchor="middle">Search · Trends · OAuth</text>
+
+          <rect x="464" y="102" width="130" height="52" rx="6" fill="#403830" stroke="#d4a574" stroke-width="1.5"/>
+          <text x="529" y="122" fill="#e8ddd0" font-size="10" font-weight="600" text-anchor="middle">Competitor intel</text>
+          <text x="529" y="136" fill="#a89888" font-size="8" text-anchor="middle">Market pricing feeds</text>
+
+          <rect x="604" y="102" width="130" height="52" rx="6" fill="#403830" stroke="#d4a574" stroke-width="1.5"/>
+          <text x="669" y="122" fill="#e8ddd0" font-size="10" font-weight="600" text-anchor="middle">Ship tracking</text>
+          <text x="669" y="136" fill="#a89888" font-size="8" text-anchor="middle">AIS / position feeds</text>
+
+          <rect x="744" y="102" width="152" height="52" rx="6" fill="#403830" stroke="#d4a574" stroke-width="1.5"/>
+          <text x="820" y="122" fill="#e8ddd0" font-size="10" font-weight="600" text-anchor="middle">Azure cloud</text>
+          <text x="820" y="136" fill="#a89888" font-size="8" text-anchor="middle">MVP VM · optional Caddy TLS</text>
+
+          <!-- deployment hosts -->
+          <rect x="24" y="208" width="200" height="56" rx="6" fill="#353230" stroke="rgba(232,213,184,0.35)" stroke-width="1.5"/>
+          <text x="124" y="228" fill="#e8ddd0" font-size="11" font-weight="600" text-anchor="middle">Local dev</text>
+          <text x="124" y="244" fill="#a89888" font-size="9" text-anchor="middle">localhost · npm run dev</text>
+          <text x="124" y="256" fill="#a89888" font-size="9" text-anchor="middle">Supabase CLI + Docker</text>
+
+          <rect x="240" y="208" width="200" height="56" rx="6" fill="#353230" stroke="rgba(232,213,184,0.35)" stroke-width="1.5"/>
+          <text x="340" y="228" fill="#e8ddd0" font-size="11" font-weight="600" text-anchor="middle">Staging (MiniPC)</text>
+          <text x="340" y="244" fill="#a89888" font-size="9" text-anchor="middle">192.168.1.120 · Docker Compose</text>
+          <text x="340" y="256" fill="#a89888" font-size="9" text-anchor="middle">ngrok → taliahub.com</text>
+
+          <rect x="456" y="208" width="200" height="56" rx="6" fill="#353230" stroke="rgba(232,213,184,0.35)" stroke-width="1.5"/>
+          <text x="556" y="228" fill="#e8ddd0" font-size="11" font-weight="600" text-anchor="middle">MVP (Azure VM)</text>
+          <text x="556" y="244" fill="#a89888" font-size="9" text-anchor="middle">Same Docker stack</text>
+          <text x="556" y="256" fill="#a89888" font-size="9" text-anchor="middle">Public IP · tarball deploy</text>
+
+          <rect x="672" y="208" width="224" height="56" rx="6" fill="#353230" stroke="rgba(232,213,184,0.35)" stroke-width="1.5"/>
+          <text x="784" y="228" fill="#e8ddd0" font-size="11" font-weight="600" text-anchor="middle">Monorepo (source)</text>
+          <text x="784" y="244" fill="#a89888" font-size="9" text-anchor="middle">talia-ui · talia-server · scripts</text>
+          <text x="784" y="256" fill="#a89888" font-size="9" text-anchor="middle">sync.config.json · docs/</text>
+
+          <!-- talia-ui -->
+          <rect x="24" y="298" width="420" height="140" rx="8" fill="rgba(13,148,136,0.08)" stroke="#0d9488" stroke-width="2"/>
+          <text x="40" y="318" fill="#5eead4" font-size="12" font-weight="700">talia-ui</text>
+          <text x="110" y="318" fill="#a89888" font-size="9">React 19 · Vite · nginx (staging)</text>
+
+          <rect x="40" y="328" width="115" height="36" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="97" y="350" fill="#e8ddd0" font-size="9" text-anchor="middle">Dockview layouts</text>
+
+          <rect x="165" y="328" width="115" height="36" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="222" y="350" fill="#e8ddd0" font-size="9" text-anchor="middle">Dashboard views</text>
+
+          <rect x="290" y="328" width="115" height="36" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="347" y="350" fill="#e8ddd0" font-size="9" text-anchor="middle">Tabulator · Chart.js</text>
+
+          <rect x="40" y="372" width="115" height="36" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="97" y="394" fill="#e8ddd0" font-size="9" text-anchor="middle">Apollo Client</text>
+
+          <rect x="165" y="372" width="115" height="36" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="222" y="394" fill="#e8ddd0" font-size="9" text-anchor="middle">Event bus / criteria</text>
+
+          <rect x="290" y="372" width="115" height="36" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="347" y="394" fill="#e8ddd0" font-size="9" text-anchor="middle">Admin · Data Mgmt</text>
+
+          <text x="40" y="424" fill="#a89888" font-size="8">Proxies /api/graphql → talia-server (backend not exposed on staging external URL)</text>
+
+          <!-- talia-server -->
+          <rect x="476" y="298" width="420" height="140" rx="8" fill="rgba(13,148,136,0.08)" stroke="#0d9488" stroke-width="2"/>
+          <text x="492" y="318" fill="#5eead4" font-size="12" font-weight="700">talia-server</text>
+          <text x="580" y="318" fill="#a89888" font-size="9">Apollo GraphQL · TypeScript</text>
+
+          <rect x="492" y="328" width="115" height="36" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="549" y="350" fill="#e8ddd0" font-size="9" text-anchor="middle">GraphQL API :4000</text>
+
+          <rect x="617" y="328" width="115" height="36" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="674" y="350" fill="#e8ddd0" font-size="9" text-anchor="middle">tableData + resolvers</text>
+
+          <rect x="742" y="328" width="138" height="36" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="811" y="350" fill="#e8ddd0" font-size="9" text-anchor="middle">SSE sync stream :4001</text>
+
+          <rect x="492" y="372" width="175" height="36" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="579" y="394" fill="#e8ddd0" font-size="9" text-anchor="middle">synapse-sync · sync.config.json</text>
+
+          <rect x="677" y="372" width="203" height="36" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="778" y="394" fill="#e8ddd0" font-size="9" text-anchor="middle">External feeds · Google · competitor · AIS</text>
+
+          <!-- UI → server (curved) -->
+          <path d="M444,368 Q460,350 476,368" fill="none" stroke="#0d9488" stroke-width="2" marker-end="url(#arr)"/>
+          <text x="448" y="356" fill="#0d9488" font-size="8">GraphQL</text>
+
+          <!-- talia-engine (planned) -->
+          <rect x="170" y="472" width="580" height="78" rx="8" fill="rgba(167,139,250,0.08)" stroke="#a78bfa" stroke-width="2" stroke-dasharray="6 4"/>
+          <text x="186" y="492" fill="#c4b5fd" font-size="12" font-weight="700">talia-engine</text>
+          <text x="272" y="492" fill="#a89888" font-size="9">Intelligence &amp; AI layer · planned</text>
+
+          <rect x="186" y="504" width="128" height="34" rx="4" fill="#332f3d" stroke="#a78bfa" stroke-width="1" stroke-dasharray="4 3"/>
+          <text x="250" y="525" fill="#e8ddd0" font-size="8.5" text-anchor="middle">Demand forecasting</text>
+
+          <rect x="322" y="504" width="128" height="34" rx="4" fill="#332f3d" stroke="#a78bfa" stroke-width="1" stroke-dasharray="4 3"/>
+          <text x="386" y="525" fill="#e8ddd0" font-size="8.5" text-anchor="middle">Price optimization</text>
+
+          <rect x="458" y="504" width="128" height="34" rx="4" fill="#332f3d" stroke="#a78bfa" stroke-width="1" stroke-dasharray="4 3"/>
+          <text x="522" y="525" fill="#e8ddd0" font-size="8.5" text-anchor="middle">Anomaly detection</text>
+
+          <rect x="594" y="504" width="140" height="34" rx="4" fill="#332f3d" stroke="#a78bfa" stroke-width="1" stroke-dasharray="4 3"/>
+          <text x="664" y="525" fill="#e8ddd0" font-size="8.5" text-anchor="middle">Recommendations &amp; alerts</text>
+
+          <!-- server → engine (planned, curved) -->
+          <path d="M686,438 Q690,456 664,472" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr-future)"/>
+          <text x="700" y="460" fill="#a78bfa" font-size="8">planned</text>
+
+          <!-- engine → supabase (planned, curved) -->
+          <path d="M460,550 Q460,559 460,568" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr-future)"/>
+
+          <!-- supabase platform -->
+          <rect x="24" y="568" width="872" height="110" rx="8" fill="rgba(13,148,136,0.06)" stroke="#0d9488" stroke-width="2"/>
+          <text x="40" y="588" fill="#5eead4" font-size="12" font-weight="700">Supabase stack (Docker)</text>
+
+          <rect x="40" y="598" width="95" height="32" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="87" y="618" fill="#e8ddd0" font-size="8" text-anchor="middle">PostgreSQL</text>
+
+          <rect x="145" y="598" width="80" height="32" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="185" y="618" fill="#e8ddd0" font-size="8" text-anchor="middle">Kong :54321</text>
+
+          <rect x="235" y="598" width="80" height="32" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="275" y="618" fill="#e8ddd0" font-size="8" text-anchor="middle">GoTrue Auth</text>
+
+          <rect x="325" y="598" width="80" height="32" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="365" y="618" fill="#e8ddd0" font-size="8" text-anchor="middle">PostgREST</text>
+
+          <rect x="415" y="598" width="80" height="32" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="455" y="618" fill="#e8ddd0" font-size="8" text-anchor="middle">Realtime</text>
+
+          <rect x="505" y="598" width="80" height="32" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="545" y="618" fill="#e8ddd0" font-size="8" text-anchor="middle">Storage</text>
+
+          <rect x="595" y="598" width="80" height="32" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="635" y="618" fill="#e8ddd0" font-size="8" text-anchor="middle">Studio :54323</text>
+
+          <rect x="685" y="598" width="80" height="32" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="725" y="618" fill="#e8ddd0" font-size="8" text-anchor="middle">pg-meta</text>
+
+          <rect x="775" y="598" width="105" height="32" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="827" y="618" fill="#e8ddd0" font-size="8" text-anchor="middle">imgproxy</text>
+
+          <text x="40" y="652" fill="#a89888" font-size="8">App tables: master_sail · reservation · agency · published_rates · competitor · themes · focuses · sync metadata</text>
+
+          <!-- server → supabase read/write (curved, right channel) -->
+          <path d="M810,438 Q846,503 810,568" fill="none" stroke="#0d9488" stroke-width="2" marker-end="url(#arr)"/>
+          <text x="822" y="505" fill="#0d9488" font-size="8">read/write</text>
+
+          <!-- synapse batch sync → server (curved) -->
+          <path d="M239,154 Q360,290 579,372" fill="none" stroke="#d4a574" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr-gold)"/>
+          <text x="360" y="250" fill="#d4a574" font-size="8">batch sync (CLI / GraphQL)</text>
+
+          <!-- synapse → supabase (curved, left channel) -->
+          <path d="M239,154 Q80,360 90,568" fill="none" stroke="#d4a574" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr-gold)"/>
+
+          <!-- users → ngrok (curved) -->
+          <path d="M124,76 Q102,89 89,102" fill="none" stroke="#d4a574" stroke-width="1.5" marker-end="url(#arr-gold)"/>
+          <!-- ngrok → staging (curved) -->
+          <path d="M89,154 Q210,172 340,208" fill="none" stroke="#d4a574" stroke-width="1.5" marker-end="url(#arr-gold)"/>
+          <!-- users → local (curved) -->
+          <path d="M124,76 Q112,140 124,208" fill="none" stroke="#d4a574" stroke-width="1.5" marker-end="url(#arr-gold)"/>
+          <!-- dev deploy (curved, dashed) -->
+          <path d="M340,76 Q362,140 340,208" fill="none" stroke="#d4a574" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arr-gold)"/>
+          <text x="348" y="150" fill="#d4a574" font-size="8">tarball deploy</text>
+
+          <!-- ops tooling -->
+          <rect x="24" y="708" width="872" height="88" rx="8" fill="rgba(13,148,136,0.06)" stroke="#0d9488" stroke-width="1.5"/>
+          <rect x="40" y="724" width="150" height="32" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="115" y="744" fill="#e8ddd0" font-size="8" text-anchor="middle">scripts/validate (ops-5)</text>
+
+          <rect x="200" y="724" width="150" height="32" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="275" y="744" fill="#e8ddd0" font-size="8" text-anchor="middle">deploy-to-staging / mvp</text>
+
+          <rect x="360" y="724" width="130" height="32" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="425" y="744" fill="#e8ddd0" font-size="8" text-anchor="middle">sync-cli · datasets</text>
+
+          <rect x="500" y="724" width="130" height="32" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="565" y="744" fill="#e8ddd0" font-size="8" text-anchor="middle">targets.env</text>
+
+          <rect x="640" y="724" width="240" height="32" rx="4" fill="#3a3530" stroke="#0d9488" stroke-width="1"/>
+          <text x="760" y="744" fill="#e8ddd0" font-size="8" text-anchor="middle">Instance &amp; keys · version cross-check UI</text>
+
+          <text x="40" y="778" fill="#a89888" font-size="8">External feeds (Google, competitor, AIS) are pulled by talia-server during sync or on-demand; results land in Supabase for panel queries.</text>
+        </svg>
+      </div>
+      <div class="arch-legend">
+        <span><i class="talia"></i> Talia component</span>
+        <span><i class="external"></i> External system</span>
+        <span><i class="env"></i> Deployment host</span>
+        <span><i class="future"></i> Planned (talia-engine)</span>
+        <span>— solid: runtime · dashed: sync / deploy / planned</span>
+      </div>
+    </div>
+
+    <!-- PAGE 3: Achievements -->
+    <div class="doc-page page-achievements">
+      <h2>What we have achieved</h2>
+      <div class="card">
+        <ul class="item-list">
+          <li><strong>Monorepo platform</strong> — independent talia-ui and GraphQL server with unified versioning.</li>
+          <li><strong>Supabase data platform</strong> — full Docker stack (Postgres, Kong, Auth, PostgREST, Realtime, Storage, Studio).</li>
+          <li><strong>Azure Synapse integration</strong> — config-driven sync of dimensions and facts from the data lake.</li>
+          <li><strong>Agency dimension</strong> — <code>dwh.Dim_Agency</code> (~40k agencies) with a filterable Agency Directory.</li>
+          <li><strong>Analytics workspace</strong> — Master Sailing, Published Rates, Reservation state, Competitor Pricing.</li>
+          <li><strong>Demand insight</strong> — heatmaps, booking profiles, KPI and revenue breakdowns.</li>
+          <li><strong>Dockview workspace</strong> — customizable, event-linked layouts with persistence.</li>
+          <li><strong>Library-first UI (0.2.1)</strong> — shared Tabulator config, global Fit Width/Data, grouped-row fix.</li>
+          <li><strong>External feeds</strong> — Google Search/Trends, competitor pricing, and ship AIS integration paths.</li>
+          <li><strong>Ops toolchain</strong> — <code>scripts/validate</code>, tarball deploy to staging and MVP, version cross-check.</li>
+          <li><strong>Multi-environment delivery</strong> — local, MiniPC staging, Azure MVP, and external demo via taliahub.com.</li>
+          <li><strong>Documentation stack</strong> — canonical index, archive policy, environment runbooks, executive overview.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- PAGE 4: Next steps -->
+    <div class="doc-page page-next">
+      <h2>Next steps</h2>
+      <div class="card">
+        <ul class="next-list">
+          <li><strong>talia-engine (intelligence layer)</strong> — introduce the platform's AI/analytics engine for demand forecasting, price optimization, anomaly detection, and recommendations.</li>
+          <li><strong>Deploy parity</strong> — push UI 0.2.1 and agency dimension to Azure MVP; align environment version matrix across all hosts.</li>
+          <li><strong>Release documentation</strong> — publish VERSION-0.2.1 release notes; retire stale root runbooks.</li>
+          <li><strong>Data expansion</strong> — onboard additional Synapse dimensions as business priorities emerge.</li>
+          <li><strong>Beta hardening</strong> — performance, auth, and operational readiness toward v1.0.0 production release.</li>
+        </ul>
+      </div>
+      <footer class="footer">
+        <strong>Talia Platform</strong> · Celestyal Cruises · July 2026
+      </footer>
+    </div>
+
+  </div>
+</body>
+</html>

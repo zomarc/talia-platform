@@ -322,6 +322,199 @@
   cursor: pointer;
 }
 
+.ms-explorer-panel .master-sailing-panel__actions {
+  grid-column: auto;
+}
+
+.ms-explorer-table .ms-explorer-row--day {
+  background: color-mix(in srgb, #1a2332 88%, transparent);
+}
+
+.ms-explorer-table .ms-explorer-row--day .tabulator-cell {
+  font-size: 0.82rem;
+  color: #9aa8bc;
+}
+
+.ms-explorer-segments {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 2px 0;
+}
+
+.ms-explorer-segments--empty {
+  color: #6b7688;
+  padding: 0;
+}
+
+.ms-explorer-segment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  border: 1px solid transparent;
+}
+
+.ms-explorer-segment__code {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.ms-explorer-segment__metrics {
+  opacity: 0.9;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ms-explorer-segment--active {
+  border-color: rgba(91, 159, 212, 0.3);
+  color: #b8c4d6;
+}
+
+.ms-explorer-segment--booking {
+  border-color: rgba(212, 168, 83, 0.5);
+  background: rgba(212, 168, 83, 0.1);
+  color: #d4a853;
+  font-weight: 600;
+}
+
+.ms-explorer-table .tabulator-cell {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+/* Ship × Day Berths */
+.ms-berth-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px 0;
+}
+
+.ms-berth-summary__card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(167, 179, 204, 0.25);
+  background: rgba(27, 32, 52, 0.55);
+}
+
+.ms-berth-summary__ship {
+  font-weight: 700;
+  color: #e6ebff;
+  margin-right: 4px;
+}
+
+.ms-berth-summary__metric {
+  font-size: 0.75rem;
+  color: #9aa8bc;
+}
+
+.ms-berth-summary__metric strong {
+  color: #cdd7ea;
+  font-variant-numeric: tabular-nums;
+}
+
+.ms-berth-sails {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.ms-berth-sail {
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  border: 1px solid rgba(91, 159, 212, 0.3);
+  color: #b8c4d6;
+  font-variant-numeric: tabular-nums;
+}
+
+.ms-berth-sail--empty {
+  color: #6b7688;
+}
+
+.ms-berth-occ {
+  display: inline-block;
+  min-width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.ms-berth-occ--full { color: #e06666; }
+.ms-berth-occ--high { color: #d4a853; }
+.ms-berth-occ--mid { color: #7fb2e0; }
+.ms-berth-occ--low { color: #7c8ba0; }
+
+/* Canonical selection link (inventory_item reference) */
+.ms-berth-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(91, 159, 212, 0.2);
+}
+
+.ms-berth-selection__label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #7c8ba0;
+}
+
+.ms-berth-selection__chip {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(91, 159, 212, 0.16);
+  border: 1px solid rgba(91, 159, 212, 0.4);
+  color: #cfe0f2;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ms-berth-selection__hint {
+  font-size: 0.7rem;
+  color: #6b7688;
+  font-style: italic;
+}
+
+.ms-berth-selection__clear {
+  margin-left: auto;
+  padding: 2px 10px;
+}
+
+.ms-berth-table .ms-berth-row--voyage {
+  background: color-mix(in srgb, #5b9fd4 14%, transparent);
+  box-shadow: inset 3px 0 0 0 #5b9fd4;
+}
+
+.ms-berth-sail--voyage {
+  border-color: rgba(91, 159, 212, 0.75);
+  background: rgba(91, 159, 212, 0.18);
+  color: #cfe0f2;
+  font-weight: 600;
+}
+
+.ms-berth-voyage-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5b9fd4;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
 /* Master Voyage Performance Summary - layout only */
 .master-voyage-performance-summary-panel {
   min-height: 0;

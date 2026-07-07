@@ -15,6 +15,7 @@ test('buildMasterSailingRows maps reference code from inventory_item', () => {
     {
       sail_code: 'SEG-001',
       reference_sail_code: 'MASTER-900',
+      sailing_role: 'master',
     },
   ];
 
@@ -34,6 +35,7 @@ test('buildMasterSailingRows falls back to sail_code when mapping missing', () =
       sail_date_from: '2026-04-02',
       ship_name: 'Celestyal Journey',
       ship_code: 'JRN',
+      is_main: 1,
     },
   ];
 

@@ -1,8 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
+import { setInventoryItems } from '../../../services/data/inventoryReferenceService';
 import PanelDataState from '../../shared/PanelDataState';
 import MasterSailingPresenter from './MasterSailingPresenter';
 import { buildMasterSailingRows } from './masterSailingTransform';
+
+const MASTER_SAIL_FILTERS = { is_main: 1 };
+const INVENTORY_FILTERS = { is_operational: true };
 
 const MasterSailingContainer = ({ panelInstanceId, panelComponentId }) => {
   const {
@@ -16,7 +20,8 @@ const MasterSailingContainer = ({ panelInstanceId, panelComponentId }) => {
     panelInstanceId,
     panelComponentId,
     contextMapper: () => null,
-    limit: 2000,
+    filters: MASTER_SAIL_FILTERS,
+    limit: 500,
   });
 
   const {
@@ -30,7 +35,8 @@ const MasterSailingContainer = ({ panelInstanceId, panelComponentId }) => {
     panelInstanceId,
     panelComponentId,
     contextMapper: () => null,
-    limit: 4000,
+    filters: INVENTORY_FILTERS,
+    limit: 2000,
   });
 
   const {
@@ -46,6 +52,12 @@ const MasterSailingContainer = ({ panelInstanceId, panelComponentId }) => {
     contextMapper: () => null,
     limit: 150000,
   });
+
+  useEffect(() => {
+    if (inventoryRows && inventoryRows.length > 0) {
+      setInventoryItems(inventoryRows);
+    }
+  }, [inventoryRows]);
 
   const mergedRows = useMemo(
     () => buildMasterSailingRows(masterSailRows, inventoryRows, reservationCurrentStateRows),

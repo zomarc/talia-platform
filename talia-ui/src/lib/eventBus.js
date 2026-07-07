@@ -1,7 +1,44 @@
+import {
+  enrichSelectionDetail,
+  ensureInventoryIndex,
+  isInventoryIndexReady,
+} from '../services/data/inventoryReferenceService';
+
 export const SAIL_SELECT_EVENT = 'talia:sail.select';
 export const SAIL_CLEAR_EVENT = 'talia:sail.clear';
+export const SHIP_SELECT_EVENT = 'talia:ship.select';
+export const SHIP_CLEAR_EVENT = 'talia:ship.clear';
 export const CABIN_SELECT_EVENT = 'talia:cabin.select';
 export const CABIN_CLEAR_EVENT = 'talia:cabin.clear';
+
+/**
+ * Dispatch a selection event after translating it through the canonical
+ * inventory_item layer. Every sail/ship selection carries reference_sail_code,
+ * ship_code, ship_name, sail_codes[] and a canonical_scope for listeners.
+ * If the index is not primed yet, we dispatch immediately and re-dispatch once
+ * the translation becomes available (so no click is ever dropped).
+ */
+const dispatchCanonicalSelection = (type, rawDetail, lastEventKey) => {
+  const detail = enrichSelectionDetail(rawDetail);
+  window[lastEventKey] = { type, detail };
+  window.dispatchEvent(new CustomEvent(type, { detail }));
+
+  if (!isInventoryIndexReady()) {
+    ensureInventoryIndex()
+      .then(() => {
+        const enriched = enrichSelectionDetail(rawDetail);
+        const gainedScope = enriched?.canonical_scope
+          && (enriched.ship_code !== detail?.ship_code
+            || enriched.reference_sail_code !== detail?.reference_sail_code);
+        if (gainedScope) {
+          window[lastEventKey] = { type, detail: enriched };
+          window.dispatchEvent(new CustomEvent(type, { detail: enriched }));
+        }
+      })
+      .catch(() => { /* noop */ });
+  }
+  return detail;
+};
 
 export const AGENCY_SELECT_EVENT = 'talia:agency.select';
 export const AGENCY_CLEAR_EVENT = 'talia:agency.clear';
@@ -31,11 +68,43 @@ export const extractSailCodeFromEvent = (detail) => (
   (typeof detail === 'string' ? detail : null)
 );
 
+export const extractShipCodeFromEvent = (detail) => {
+  if (!detail) return null;
+  if (typeof detail === 'string') {
+    const normalized = detail.trim();
+    return normalized || null;
+  }
+  const candidate = detail.ship_code
+    || detail.Ship_Code
+    || detail.row_data?.ship_code
+    || detail.row_data?.Ship_Code
+    || null;
+  if (candidate == null) return null;
+  const normalized = String(candidate).trim();
+  return normalized || null;
+};
+
+export const emitShipSelect = (detail) => {
+  try {
+    dispatchCanonicalSelection(SHIP_SELECT_EVENT, detail, 'lastShipSelectEvent');
+  } catch (error) {
+    console.warn('[eventBus] emitShipSelect failed', error);
+  }
+};
+
+export const emitShipClear = (detail = {}) => {
+  try {
+    window.lastShipSelectEvent = null;
+    window.dispatchEvent(new CustomEvent(SHIP_CLEAR_EVENT, { detail }));
+  } catch (error) {
+    console.warn('[eventBus] emitShipClear failed', error);
+  }
+};
+
 export const emitSailSelect = (detail) => {
   try {
-    // Persist last sail select for late listeners (app & test)
-    window.lastSailSelectEvent = { type: SAIL_SELECT_EVENT, detail };
-    window.dispatchEvent(new CustomEvent(SAIL_SELECT_EVENT, { detail }));
+    // Translate through inventory_item, persist for late listeners, then dispatch.
+    dispatchCanonicalSelection(SAIL_SELECT_EVENT, detail, 'lastSailSelectEvent');
   } catch (error) {
     console.warn('[eventBus] emitSailSelect failed', error);
   }

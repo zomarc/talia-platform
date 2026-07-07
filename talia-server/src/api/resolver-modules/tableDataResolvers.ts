@@ -75,6 +75,19 @@ export const buildTableDataQueryResolvers = ({
           query = query.eq('status', filters.status);
           console.log(`[tableData] Applied filter: status = ${filters.status}`);
         }
+        if (filters.is_main !== undefined && filters.is_main !== null && String(filters.is_main).trim() !== '') {
+          query = query.eq('is_main', Number(filters.is_main));
+          console.log(`[tableData] Applied filter: is_main = ${filters.is_main}`);
+        }
+        if (filters.sailing_role) {
+          query = query.eq('sailing_role', filters.sailing_role);
+          console.log(`[tableData] Applied filter: sailing_role = ${filters.sailing_role}`);
+        }
+        if (filters.is_operational !== undefined && filters.is_operational !== null) {
+          const operational = filters.is_operational === true || String(filters.is_operational).toLowerCase() === 'true';
+          query = query.eq('is_operational', operational);
+          console.log(`[tableData] Applied filter: is_operational = ${operational}`);
+        }
         if (filters.query_column && filters.query_value !== undefined && filters.query_value !== null && String(filters.query_value).trim() !== '') {
           const column = String(filters.query_column).trim();
           const value = String(filters.query_value).trim();

@@ -379,6 +379,9 @@ export const typeDefs = `#graphql
     localKey: String!
     sailCode: String
     referenceSailCode: String
+    sailingRole: String
+    parentInventoryItemId: ID
+    isOperational: Boolean
     mmsi: String
     imoNumber: String
     shipCode: String
@@ -476,6 +479,8 @@ export const typeDefs = `#graphql
     localKey: String
     sailCode: String
     referenceSailCode: String
+    sailingRole: String
+    isOperational: Boolean
     mmsi: String
     shipCode: String
     masterSailId: Float
@@ -486,6 +491,9 @@ export const typeDefs = `#graphql
     id: ID
     sailCode: String
     referenceSailCode: String
+    sailingRole: String
+    parentInventoryItemId: ID
+    isOperational: Boolean
     mmsi: String
     imoNumber: String
     shipCode: String
@@ -730,6 +738,10 @@ export const typeDefs = `#graphql
     country_code: String
     status: String
     include_non_real_sailings: Boolean
+    is_main: Int
+    sailing_role: String
+    is_operational: Boolean
+    reference_sail_code: String
     query_column: String
     query_value: String
     query_operator: String

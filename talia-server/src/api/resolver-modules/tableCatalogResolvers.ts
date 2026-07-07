@@ -34,6 +34,8 @@ export const buildTableCatalogQueryResolvers = ({
         'ship_cabin', 'sync_metadata', 'focuses', 'google_trends_data',
         'google_trends_search_terms', 'data_refresh_metadata',
         'booking_targets_supplied', 'target_profiles', 'target_mapping_config',
+        'inventory_item', 'inventory_item_operational', 'sailing_master', 'sailing_hierarchy',
+        'inventory_status_by_day', 'ship_day_berth_status', 'sailing_physical_day_map',
         'inventory_item_profile_curve_point'
       ];
 

@@ -177,6 +177,55 @@ export const tableSources = {
     dateColumns: ['created_at', 'updated_at'],
     syncType: null
   },
+  inventory_item: {
+    source: null, // Talia canonical sailing mapping (refreshed from master_sail)
+    type: 'application',
+    dateColumns: ['created_at', 'updated_at'],
+    syncType: null,
+    loadMethod: 'Hierarchy refresh'
+  },
+  inventory_item_operational: {
+    source: null,
+    type: 'application',
+    dateColumns: ['created_at', 'updated_at'],
+    syncType: null,
+    loadMethod: 'View'
+  },
+  sailing_master: {
+    source: null,
+    type: 'application',
+    dateColumns: ['created_at', 'updated_at'],
+    syncType: null,
+    loadMethod: 'View'
+  },
+  sailing_hierarchy: {
+    source: null,
+    type: 'application',
+    dateColumns: [],
+    syncType: null,
+    loadMethod: 'View'
+  },
+  inventory_status_by_day: {
+    source: null,
+    type: 'application',
+    dateColumns: ['date', 'updated_at'],
+    syncType: null,
+    loadMethod: 'Derived sync'
+  },
+  ship_day_berth_status: {
+    source: null,
+    type: 'application',
+    dateColumns: ['date'],
+    syncType: null,
+    loadMethod: 'View (physical berths)'
+  },
+  sailing_physical_day_map: {
+    source: null,
+    type: 'application',
+    dateColumns: ['master_date_from', 'master_date_to', 'segment_date_from', 'segment_date_to'],
+    syncType: null,
+    loadMethod: 'View (selling map)'
+  },
   inventory_item_profile_curve_point: {
     source: null, // Application table - unified REAL/TARGET/BUDGET/MODEL curve points
     type: 'application',

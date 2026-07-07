@@ -13,6 +13,7 @@ Talia Platform v0.1.0 (Alpha) - System Architecture
 - [Authentication Flow](#authentication-flow)
 - [User Mapping System](#user-mapping-system)
 - [Revenue & Inventory Management](#revenue--inventory-management)
+- [Panel Selection Linking](#panel-selection-linking)
 - [Multi-Customer Considerations](#multi-customer-considerations)
 - [Technology Stack](#technology-stack)
 
@@ -408,6 +409,26 @@ class TaliaUserService {
 - Occupancy percentage
 - Average daily rate
 - Revenue per available cabin
+
+---
+
+## 🔗 Panel Selection Linking
+
+Talia separates the **physical** world (ships, berths, days) from the **selling**
+structure (master sailings, segments, sail codes). `inventory_item` is the canonical
+layer that ties them together, and it is the **single mechanism** for component-to-
+component selection linking.
+
+- Selections are emitted only via `emitSailSelect` / `emitShipSelect`
+  (`talia-ui/src/lib/eventBus.js`), which translate the selection through
+  `inventory_item.reference_sail_code` **at emit time**.
+- Every `talia:sail.select` / `talia:ship.select` event carries a canonical payload
+  (`reference_sail_code`, `ship_code`, `ship_name`, `sail_codes[]`, `canonical_scope`).
+- Listening panels refresh / filter on the canonical scope; they never re-derive
+  master↔segment or sail↔ship relationships themselves.
+
+**Full reference:** [`docs/CANONICAL-SELECTION-LINKING.md`](./CANONICAL-SELECTION-LINKING.md)
+(also enforced by `.cursor/rules/talia-canonical-selection-linking.mdc`).
 
 ---
 

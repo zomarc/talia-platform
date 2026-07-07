@@ -1443,6 +1443,17 @@ class SynapseSyncService {
         logger?.info(`ℹ️  Note: Run migration to populate sail_code in reservation table from master_sail`);
       }
 
+      if (runtime.tableName === 'masterSail' && totalProcessed > 0) {
+        const { error: hierarchyError } = await supabaseDataService.client.rpc(
+          'refresh_inventory_item_sailing_hierarchy'
+        );
+        if (hierarchyError) {
+          logger?.warn(`⚠️  Could not refresh inventory_item sailing hierarchy: ${hierarchyError.message}`);
+        } else {
+          logger?.info('🔗 Refreshed inventory_item sailing hierarchy from master_sail');
+        }
+      }
+
       const duration = Date.now() - startTime;
       // Logger automatically emits events via eventEmitter
       logger?.info(`✅ Sync completed for ${runtime.tableName} in ${duration}ms`);

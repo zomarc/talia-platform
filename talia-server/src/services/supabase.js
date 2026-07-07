@@ -1586,6 +1586,12 @@ export class SupabaseDataService {
       if (filters.reference_sail_code) {
         query = query.eq('reference_sail_code', filters.reference_sail_code);
       }
+      if (filters.sailing_role) {
+        query = query.eq('sailing_role', filters.sailing_role);
+      }
+      if (filters.is_operational !== undefined && filters.is_operational !== null) {
+        query = query.eq('is_operational', filters.is_operational);
+      }
       if (filters.mmsi) {
         query = query.eq('mmsi', String(filters.mmsi));
       }
@@ -1626,6 +1632,10 @@ export class SupabaseDataService {
         source_row_id: input.sourceRowId || null,
         metadata: input.metadata || {}
       };
+
+      if (input.sailingRole != null) payload.sailing_role = input.sailingRole;
+      if (input.parentInventoryItemId != null) payload.parent_inventory_item_id = input.parentInventoryItemId;
+      if (input.isOperational != null) payload.is_operational = input.isOperational;
 
       // If an explicit ID is provided, update this row directly
       if (input.id) {

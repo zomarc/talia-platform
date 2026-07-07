@@ -1,0 +1,388 @@
+import { buildMasterSailingRows } from '../MasterSailing/masterSailingTransform.js';
+
+const asArray = (value) => (Array.isArray(value) ? value : []);
+
+const toNumber = (value) => {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const toDateKey = (value) => {
+  if (!value) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+};
+
+const enumerateVoyageDates = (fromValue, toValue) => {
+  const from = toDateKey(fromValue);
+  const to = toDateKey(toValue) || from;
+  if (!from) return [];
+  const start = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${(to || from)}T00:00:00Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [from];
+  const dates = [];
+  for (let cursor = new Date(start); cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    dates.push(cursor.toISOString().slice(0, 10));
+  }
+  return dates;
+};
+
+const segmentActiveOnDate = (segment, dateKey) => {
+  const from = toDateKey(segment?.sail_date_from);
+  const to = toDateKey(segment?.sail_date_to) || from;
+  if (!from || !dateKey) return false;
+  return dateKey >= from && dateKey <= (to || from);
+};
+
+// ---------------------------------------------------------------------------
+// Selling structure: guest counts attributed to sail_code (reservations)
+// ---------------------------------------------------------------------------
+export const buildGuestsBySailCode = (reservationRows = []) => {
+  const map = new Map();
+  asArray(reservationRows).forEach((row) => {
+    const sailCode = String(row?.sail_code || '').trim();
+    if (!sailCode) return;
+    const guests = toNumber(row?.guest_count);
+    if (guests <= 0) return;
+    map.set(sailCode, (map.get(sailCode) || 0) + guests);
+  });
+  return map;
+};
+
+export const buildSegmentsByMaster = (hierarchyRows = []) => {
+  const segmentsByMaster = new Map();
+
+  asArray(hierarchyRows).forEach((row) => {
+    const masterCode = String(row?.master_sail_code || '').trim();
+    const segmentCode = String(row?.segment_sail_code || '').trim();
+    if (!masterCode || !segmentCode) return;
+    if (!segmentsByMaster.has(masterCode)) {
+      segmentsByMaster.set(masterCode, []);
+    }
+    segmentsByMaster.get(masterCode).push({
+      sail_code: segmentCode,
+      sail_date_from: row?.sail_date_from || null,
+      sail_date_to: row?.sail_date_to || null,
+      ship_code: row?.ship_code || null,
+      is_operational: row?.is_operational !== false,
+    });
+  });
+
+  return segmentsByMaster;
+};
+
+// ---------------------------------------------------------------------------
+// Physical layer: ship × sail_code × date berth facts (not summed across sail codes)
+// ---------------------------------------------------------------------------
+export const buildPhysicalBerthsBySailDate = (occupancyRows = []) => {
+  const index = new Map();
+
+  asArray(occupancyRows).forEach((row) => {
+    const shipCode = String(row?.ship_code || '').trim();
+    const sailCode = String(row?.sail_code || '').trim();
+    const dateKey = toDateKey(row?.sail_itinerary_date);
+    if (!shipCode || !sailCode || !dateKey) return;
+
+    const cabinCapacity = toNumber(row?.cabin_capacity);
+    const totalCabins = toNumber(row?.total_cabins);
+    const occupiedCabins = toNumber(row?.occupied_cabins);
+    const berthCapacity = cabinCapacity > 0 ? cabinCapacity * totalCabins : totalCabins;
+    const berthsOccupied = cabinCapacity > 0 ? cabinCapacity * occupiedCabins : occupiedCabins;
+    if (berthCapacity <= 0 && berthsOccupied <= 0) return;
+
+    const key = `${shipCode}|${sailCode}|${dateKey}`;
+    const existing = index.get(key) || {
+      ship_code: shipCode,
+      sail_code: sailCode,
+      date: dateKey,
+      berth_capacity: 0,
+      berths_occupied: 0,
+    };
+    existing.berth_capacity += berthCapacity;
+    existing.berths_occupied += berthsOccupied;
+    index.set(key, existing);
+  });
+
+  index.forEach((entry) => {
+    entry.berths_available = Math.max(0, entry.berth_capacity - entry.berths_occupied);
+  });
+
+  return index;
+};
+
+export const buildPhysicalBerthsFromShipDayRows = (shipDayRows = []) => {
+  const index = new Map();
+  asArray(shipDayRows).forEach((row) => {
+    const shipCode = String(row?.ship_code || '').trim();
+    const sailCode = String(row?.sail_code || '').trim();
+    const dateKey = toDateKey(row?.date);
+    if (!shipCode || !sailCode || !dateKey) return;
+    const key = `${shipCode}|${sailCode}|${dateKey}`;
+    index.set(key, {
+      ship_code: shipCode,
+      sail_code: sailCode,
+      date: dateKey,
+      berth_capacity: toNumber(row?.berth_capacity),
+      berths_occupied: toNumber(row?.berths_occupied),
+      berths_available: toNumber(row?.berths_available),
+    });
+  });
+  return index;
+};
+
+/**
+ * Physical berth snapshot for a voyage day.
+ * Uses the master sail_code occupancy (same ship/cabins) — never sums across segments.
+ */
+export const resolvePhysicalDay = ({
+  shipCode,
+  masterSailCode,
+  dateKey,
+  physicalBerthsIndex,
+}) => {
+  const key = `${shipCode}|${masterSailCode}|${dateKey}`;
+  const direct = physicalBerthsIndex.get(key);
+  if (direct && direct.berth_capacity > 0) {
+    return direct;
+  }
+  if (direct && direct.berths_occupied > 0) {
+    return direct;
+  }
+  return direct || {
+    ship_code: shipCode,
+    sail_code: masterSailCode,
+    date: dateKey,
+    berth_capacity: 0,
+    berths_occupied: 0,
+    berths_available: 0,
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Selling structure: segment guest attribution (informational, not physical totals)
+// ---------------------------------------------------------------------------
+export const buildSellingSegmentSummaries = ({
+  masterRow,
+  segments = [],
+  guestsBySailCode,
+}) => {
+  const masterCode = String(masterRow?.sail_code || '').trim();
+  const summaries = [];
+
+  segments.forEach((segment) => {
+    const guests = guestsBySailCode.get(segment.sail_code) || 0;
+    summaries.push({
+      sail_code: segment.sail_code,
+      guests,
+      is_booking: guests > 0,
+      is_active: true,
+      sail_date_from: segment.sail_date_from,
+      sail_date_to: segment.sail_date_to,
+      layer: 'selling',
+    });
+  });
+
+  const masterGuests = guestsBySailCode.get(masterCode) || 0;
+  if (masterGuests > 0 || summaries.length === 0) {
+    summaries.unshift({
+      sail_code: masterCode,
+      guests: masterGuests,
+      is_booking: masterGuests > 0,
+      is_active: true,
+      sail_date_from: masterRow?.sail_date_from,
+      sail_date_to: masterRow?.sail_date_to,
+      layer: 'selling',
+      is_master: true,
+    });
+  }
+
+  return summaries;
+};
+
+export const buildDayDetailsForMaster = ({
+  masterRow,
+  segments = [],
+  segmentSummaries = [],
+  physicalBerthsIndex,
+}) => {
+  const masterCode = String(masterRow?.sail_code || '').trim();
+  const shipCode = String(masterRow?.ship_code || '').trim();
+  const voyageDates = enumerateVoyageDates(masterRow?.sail_date_from, masterRow?.sail_date_to);
+
+  return voyageDates.map((dateKey, index) => {
+    const physical = resolvePhysicalDay({
+      shipCode,
+      masterSailCode: masterCode,
+      dateKey,
+      physicalBerthsIndex,
+    });
+
+    const activeSellingSegments = segmentSummaries.filter((summary) => {
+      if (summary.sail_code === masterCode && summary.is_master) return false;
+      const segmentMeta = segments.find((s) => s.sail_code === summary.sail_code);
+      return segmentMeta && segmentActiveOnDate(segmentMeta, dateKey);
+    });
+
+    return {
+      row_type: 'day',
+      row_key: `${masterCode}|${dateKey}`,
+      parent_sail_code: masterCode,
+      voyage_day_index: index + 1,
+      voyage_day_date: dateKey,
+      day_label: dateKey,
+      booked: Math.round(physical.berths_occupied),
+      capacity: Math.round(physical.berth_capacity),
+      available: Math.round(physical.berths_available),
+      physical_sail_code: physical.sail_code,
+      layer: 'physical',
+      contributing_segments: activeSellingSegments.map((summary) => ({
+        sail_code: summary.sail_code,
+        guests: summary.guests,
+        is_booking: summary.guests > 0,
+        is_active: true,
+        layer: 'selling',
+      })),
+      segment_sail_codes: activeSellingSegments.map((entry) => entry.sail_code),
+      departure_month_label: masterRow?.departure_month_label,
+      ship_group_label: masterRow?.ship_group_label,
+    };
+  });
+};
+
+const resolveMasterPhysicalTotals = ({
+  masterRow,
+  physicalBerthsIndex,
+  dayDetails,
+}) => {
+  const shipCode = String(masterRow?.ship_code || '').trim();
+  const masterCode = String(masterRow?.sail_code || '').trim();
+  const departureDate = toDateKey(masterRow?.sail_date_from);
+
+  const departurePhysical = departureDate
+    ? resolvePhysicalDay({
+      shipCode,
+      masterSailCode: masterCode,
+      dateKey: departureDate,
+      physicalBerthsIndex,
+    })
+    : null;
+
+  let peakCapacity = departurePhysical?.berth_capacity || 0;
+  let peakOccupied = departurePhysical?.berths_occupied || 0;
+
+  asArray(dayDetails).forEach((day) => {
+    peakCapacity = Math.max(peakCapacity, day.capacity || 0);
+    peakOccupied = Math.max(peakOccupied, day.booked || 0);
+  });
+
+  return {
+    total_capacity: Math.round(peakCapacity),
+    total_booked: Math.round(peakOccupied),
+    total_available: Math.max(0, Math.round(peakCapacity - peakOccupied)),
+    physical_source: 'ship_day_berths',
+    physical_sail_code: masterCode,
+  };
+};
+
+export const buildMasterSailingExplorerBundle = ({
+  masterSailRows,
+  inventoryItems,
+  reservationRows,
+  hierarchyRows,
+  occupancyRows,
+  shipDayBerthRows,
+}) => {
+  const masters = buildMasterSailingRows(masterSailRows, inventoryItems, reservationRows);
+  const segmentsByMaster = buildSegmentsByMaster(hierarchyRows);
+  const guestsBySailCode = buildGuestsBySailCode(reservationRows);
+  const physicalBerthsIndex = shipDayBerthRows?.length
+    ? buildPhysicalBerthsFromShipDayRows(shipDayBerthRows)
+    : buildPhysicalBerthsBySailDate(occupancyRows);
+  const dayDetailsByMaster = new Map();
+
+  const enrichedMasters = masters.map((masterRow) => {
+    const masterCode = String(masterRow?.sail_code || '').trim();
+    const segments = (segmentsByMaster.get(masterCode) || []).filter((segment) => segment.is_operational);
+    const segmentSummaries = buildSellingSegmentSummaries({
+      masterRow,
+      segments,
+      guestsBySailCode,
+    });
+    const dayDetails = buildDayDetailsForMaster({
+      masterRow,
+      segments,
+      segmentSummaries,
+      physicalBerthsIndex,
+    });
+    const physicalTotals = resolveMasterPhysicalTotals({
+      masterRow,
+      physicalBerthsIndex,
+      dayDetails,
+    });
+
+    dayDetailsByMaster.set(masterCode, dayDetails);
+
+    const selling_guests_total = segmentSummaries.reduce((sum, s) => sum + (s.guests || 0), 0);
+
+    return {
+      ...masterRow,
+      row_type: 'master',
+      row_key: masterCode,
+      total_booked: physicalTotals.total_booked,
+      total_capacity: physicalTotals.total_capacity,
+      total_available: physicalTotals.total_available,
+      occupancy_pct: physicalTotals.total_capacity > 0
+        ? (physicalTotals.total_booked / physicalTotals.total_capacity) * 100
+        : null,
+      selling_guests_total,
+      physical_sail_code: physicalTotals.physical_sail_code,
+      segment_codes: segments.map((segment) => segment.sail_code),
+      segment_summaries: segmentSummaries,
+      day_count: dayDetails.length,
+      is_expandable: dayDetails.length > 0,
+    };
+  });
+
+  return {
+    masters: enrichedMasters,
+    dayDetailsByMaster,
+  };
+};
+
+export const buildExplorerDisplayRows = (masters, dayDetailsByMaster, expandedMasters = new Set()) => {
+  const rows = [];
+  asArray(masters).forEach((masterRow) => {
+    const masterCode = String(masterRow?.sail_code || '').trim();
+    const isExpanded = expandedMasters.has(masterCode);
+    rows.push({
+      ...masterRow,
+      is_expanded: isExpanded,
+    });
+    if (isExpanded) {
+      const dayRows = dayDetailsByMaster.get(masterCode) || [];
+      dayRows.forEach((dayRow) => {
+        rows.push(dayRow);
+      });
+    }
+  });
+  return rows;
+};
+
+// Legacy exports for tests
+export const buildCapacityBySailCode = (occupancyRows = []) => {
+  const index = buildPhysicalBerthsBySailDate(occupancyRows);
+  const capacityBySail = new Map();
+  index.forEach((entry) => {
+    const existing = capacityBySail.get(entry.sail_code) || 0;
+    if (entry.berth_capacity > existing) {
+      capacityBySail.set(entry.sail_code, entry.berth_capacity);
+    }
+  });
+  return capacityBySail;
+};
+
+export const buildSegmentSummariesForMaster = buildSellingSegmentSummaries;

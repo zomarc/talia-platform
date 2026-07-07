@@ -1,5 +1,7 @@
 import SailingTableContainer from './SailingTable';
 import MasterSailingContainer from './MasterSailing';
+import MasterSailingExplorerContainer from './MasterSailingExplorer';
+import ShipDayBerthContainer from './ShipDayBerth';
 import SimpleTable from './SimpleTable';
 import KPICards from './KPICards';
 import PublishedRates from './PublishedRates';
@@ -48,7 +50,7 @@ import TestWorkbenchPanel from './TestWorkbench';
 import DataDebugView from '../TestPage/DataDebugView';
 import DataTypesValidation from '../dev/DataTypesValidation';
 import AdminDashboard from '../admin/dashboard/AdminDashboard';
-import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../lib/eventBus';
+import { SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, SHIP_SELECT_EVENT, SHIP_CLEAR_EVENT } from '../../lib/eventBus';
 
 const publishedRatesSelect = 'talia:publishedRates.select';
 const publishedRatesClear = 'talia:publishedRates.clear';
@@ -92,7 +94,7 @@ export const componentRegistry = {
     title: 'Master Sailing',
     description: 'Top-level grouped sailing selector (month, ship, master sail, sail code)',
     props: {},
-    dataRequirements: 'Requires master_sail and inventory_item (reference_sail_code)',
+    dataRequirements: 'Requires master_sail, inventory_item (sailing hierarchy), and reservation_current_state',
     events: {
       emits: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT],
       respondsTo: []
@@ -101,6 +103,40 @@ export const componentRegistry = {
     supportsGroupActions: true,
     showInReports: true,
     filePath: 'src/components/focus-panels/MasterSailing/index.jsx'
+  },
+  MasterSailingExplorer: {
+    component: MasterSailingExplorerContainer,
+    panelId: 'master-sailing-explorer',
+    category: 'Tables',
+    title: 'Master Sailing Explorer',
+    description: 'Master sailings with total booked/capacity and expandable day-by-day breakdown with sub-sailing highlights',
+    props: {},
+    dataRequirements: 'Requires master_sail, inventory_item, sailing_hierarchy, ship_day_berth_status (or sail_by_cabin_occupancy), and reservation_current_state',
+    events: {
+      emits: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT],
+      respondsTo: []
+    },
+    supportsRefresh: true,
+    supportsGroupActions: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/MasterSailingExplorer/index.jsx'
+  },
+  ShipDayBerth: {
+    component: ShipDayBerthContainer,
+    panelId: 'ship-day-berth',
+    category: 'Tables',
+    title: 'Ship × Day Berths',
+    description: 'Physical berth capacity, occupancy, and availability per ship and calendar day (operations grain, separate from selling structure)',
+    props: {},
+    dataRequirements: 'Requires ship_day_berth_status view, ship table, and inventory_item (canonical link). Resolves selections via inventory_item.reference_sail_code.',
+    events: {
+      emits: [],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, SHIP_SELECT_EVENT, SHIP_CLEAR_EVENT],
+    },
+    supportsRefresh: true,
+    supportsGroupActions: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/ShipDayBerth/index.jsx'
   },
   SimpleTable: {
     component: SimpleTable,

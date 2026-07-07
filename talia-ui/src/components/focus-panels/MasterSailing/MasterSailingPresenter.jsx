@@ -120,6 +120,13 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
       headerSort: false,
     },
     {
+      field: 'segment_count',
+      title: 'Segments',
+      hozAlign: 'center',
+      width: 88,
+      headerSort: false,
+    },
+    {
       field: 'guests',
       title: 'Guests',
       hozAlign: 'right',
@@ -260,8 +267,12 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
 
         instanceRef.current.on('rowSelected', (row) => {
           const rowData = row.getData();
+          const managementSailCode = rowData.reference_sail_code || rowData.sail_code;
           emitSailSelect({
-            sail_code: rowData.sail_code,
+            sail_code: managementSailCode,
+            reference_sail_code: managementSailCode,
+            segment_sail_code: rowData.sail_code,
+            sailing_role: rowData.sailing_role,
             row_data: rowData,
             timestamp: new Date().toISOString(),
           });

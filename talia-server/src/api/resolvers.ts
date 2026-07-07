@@ -138,6 +138,9 @@ const mapDbInventoryItemToGraphQL = (row: any) => ({
   localKey: row.local_key,
   sailCode: row.sail_code,
   referenceSailCode: row.reference_sail_code,
+  sailingRole: row.sailing_role,
+  parentInventoryItemId: row.parent_inventory_item_id,
+  isOperational: row.is_operational,
   mmsi: row.mmsi,
   imoNumber: row.imo_number,
   shipCode: row.ship_code,
@@ -1350,6 +1353,8 @@ export const resolvers = {
         if (filters.localKey) dbFilters.local_key = filters.localKey;
         if (filters.sailCode) dbFilters.sail_code = filters.sailCode;
         if (filters.referenceSailCode) dbFilters.reference_sail_code = filters.referenceSailCode;
+        if (filters.sailingRole) dbFilters.sailing_role = filters.sailingRole;
+        if (filters.isOperational != null) dbFilters.is_operational = filters.isOperational;
         if (filters.mmsi) dbFilters.mmsi = filters.mmsi;
         if (filters.shipCode) dbFilters.ship_code = filters.shipCode;
         if (filters.masterSailId != null) dbFilters.master_sail_id = filters.masterSailId;

@@ -2092,3 +2092,370 @@ button:focus-visible,
   color: #6b7280;
   text-align: left;
 }
+
+/* ============================================================================
+   Component Interaction Map
+   Summary-level view of the main panel-to-panel interactions
+   ============================================================================ */
+
+.talia-cim {
+  padding: var(--theme-component-padding-md);
+  overflow: auto;
+  gap: var(--theme-component-gap-md);
+}
+
+.talia-cim-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--theme-component-gap-md);
+  margin-bottom: var(--theme-component-gap-sm);
+}
+
+.talia-cim-stat {
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-muted);
+}
+
+.talia-cim-stat strong {
+  color: var(--theme-text);
+  font-size: 1.05rem;
+  margin-right: 4px;
+}
+
+.talia-cim-intro,
+.talia-cim-footnote {
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-muted);
+  line-height: 1.5;
+  margin: 0 0 var(--theme-component-gap-md) 0;
+  max-width: 70ch;
+}
+
+.talia-cim-footnote {
+  margin-top: var(--theme-component-gap-md);
+  margin-bottom: 0;
+  padding-top: var(--theme-component-gap-sm);
+  border-top: 1px solid var(--theme-border);
+}
+
+.talia-cim-intro code,
+.talia-cim-footnote code,
+.talia-cim-lane__event-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  background: color-mix(in srgb, var(--theme-text) 8%, transparent);
+  padding: 1px 5px;
+  border-radius: var(--theme-radius-sm);
+}
+
+.talia-cim-lanes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-component-gap-sm);
+}
+
+.talia-cim-lane {
+  display: grid;
+  grid-template-columns: 1fr minmax(180px, 220px) 1fr;
+  align-items: stretch;
+  gap: var(--theme-component-gap-sm);
+  padding: var(--theme-component-padding-sm);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  background: var(--theme-surface, transparent);
+}
+
+.talia-cim-lane--canonical {
+  border-color: color-mix(in srgb, #5b9fd4 55%, var(--theme-border));
+  background: color-mix(in srgb, #5b9fd4 8%, transparent);
+}
+
+.talia-cim-lane--incomplete {
+  border-style: dashed;
+}
+
+.talia-cim-lane__side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.talia-cim-lane__side--to {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.talia-cim-lane__side-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--theme-text-muted);
+}
+
+.talia-cim-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.talia-cim-lane__side--to .talia-cim-chips {
+  justify-content: flex-end;
+}
+
+.talia-cim-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  background: color-mix(in srgb, var(--theme-text) 8%, transparent);
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text);
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.talia-cim-chip--empty {
+  background: transparent;
+  border-style: dashed;
+  color: var(--theme-text-muted);
+  font-style: italic;
+}
+
+.talia-cim-lane__event {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 3px;
+  padding: 0 4px;
+}
+
+.talia-cim-lane__event-name {
+  font-size: var(--theme-font-size-sm);
+  font-weight: 600;
+  color: var(--theme-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.talia-cim-lane__arrow {
+  font-size: 1.1rem;
+  color: color-mix(in srgb, #5b9fd4 80%, var(--theme-text-muted));
+  line-height: 1;
+}
+
+.talia-cim-badge {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #5b9fd4 22%, transparent);
+  color: color-mix(in srgb, #5b9fd4 85%, var(--theme-text));
+  border: 1px solid color-mix(in srgb, #5b9fd4 55%, transparent);
+}
+
+.talia-cim-lane__note {
+  font-size: 0.66rem;
+  color: var(--theme-text-muted);
+  font-style: italic;
+}
+
+.talia-cim-lane__gap {
+  font-size: 0.66rem;
+  color: var(--theme-warning, #c88a2e);
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .talia-cim-lane {
+    grid-template-columns: 1fr;
+  }
+  .talia-cim-lane__side--to {
+    align-items: flex-start;
+    text-align: left;
+  }
+  .talia-cim-lane__side--to .talia-cim-chips {
+    justify-content: flex-start;
+  }
+}
+
+.talia-cim-modes {
+  display: inline-flex;
+  gap: 2px;
+}
+
+/* ---- Presentation mode (big-picture slide) ---- */
+
+.talia-cim-present {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--theme-component-gap-lg, 1.5rem);
+  min-height: 100%;
+  padding: var(--theme-component-padding-lg, 1.5rem);
+}
+
+.talia-cim-present__stage {
+  display: grid;
+  grid-template-columns: 1fr auto 1.1fr auto 1fr;
+  align-items: stretch;
+  gap: var(--theme-component-gap-sm);
+}
+
+.talia-cim-present__zone {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 1.1rem 1rem;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-md, 10px);
+  background: var(--theme-surface, transparent);
+}
+
+.talia-cim-present__zone--physical {
+  border-color: color-mix(in srgb, #5b9fd4 45%, var(--theme-border));
+  background: color-mix(in srgb, #5b9fd4 7%, transparent);
+}
+
+.talia-cim-present__zone--selling {
+  border-color: color-mix(in srgb, #d49a5b 45%, var(--theme-border));
+  background: color-mix(in srgb, #d49a5b 7%, transparent);
+}
+
+.talia-cim-present__zone--hub {
+  align-items: center;
+  text-align: center;
+  justify-content: center;
+  border-color: color-mix(in srgb, #7bc47f 55%, var(--theme-border));
+  background: color-mix(in srgb, #7bc47f 12%, transparent);
+  position: relative;
+}
+
+.talia-cim-present__hub-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #7bc47f 30%, transparent);
+  color: color-mix(in srgb, #4c8f52 90%, var(--theme-text));
+  border: 1px solid color-mix(in srgb, #7bc47f 55%, transparent);
+}
+
+.talia-cim-present__zone-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--theme-text);
+  letter-spacing: 0.2px;
+}
+
+.talia-cim-present__zone--hub .talia-cim-present__zone-title {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.05rem;
+}
+
+.talia-cim-present__zone-sub {
+  margin: 0;
+  font-size: var(--theme-font-size-sm);
+  color: var(--theme-text-muted);
+}
+
+.talia-cim-present__hub-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--theme-radius-sm);
+  background: color-mix(in srgb, #7bc47f 18%, transparent);
+  color: var(--theme-text);
+  border: 1px solid color-mix(in srgb, #7bc47f 40%, transparent);
+}
+
+.talia-cim-present__filter {
+  font-size: 0.72rem;
+  color: var(--theme-text-muted);
+}
+
+.talia-cim-present__filter code,
+.talia-cim-present__takeaway code,
+.talia-cim-present__hub-key + .talia-cim-present__zone-sub code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  background: color-mix(in srgb, var(--theme-text) 8%, transparent);
+  padding: 1px 5px;
+  border-radius: var(--theme-radius-sm);
+}
+
+.talia-cim-present__panels {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.talia-cim-present__group-label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--theme-text-muted);
+  margin-bottom: 3px;
+}
+
+.talia-cim-chip--driver {
+  background: color-mix(in srgb, var(--theme-text) 12%, transparent);
+  font-weight: 600;
+}
+
+.talia-cim-present__flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: color-mix(in srgb, #7bc47f 80%, var(--theme-text-muted));
+  padding: 0 2px;
+}
+
+.talia-cim-present__arrow {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.talia-cim-present__arrow--back {
+  opacity: 0.55;
+  font-size: 1.05rem;
+}
+
+.talia-cim-present__takeaway {
+  margin: 0;
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--theme-text);
+  max-width: 80ch;
+  align-self: center;
+}
+
+@media (max-width: 900px) {
+  .talia-cim-present__stage {
+    grid-template-columns: 1fr;
+  }
+  .talia-cim-present__flow {
+    flex-direction: row;
+  }
+}

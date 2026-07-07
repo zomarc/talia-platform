@@ -44,6 +44,7 @@ import DirectSourceRequestContainer from './DirectSourceRequest';
 import DirectAvailabilityContainer from './DirectAvailability';
 import AgencyContainer from './Agency';
 import ProjectSummaryContainer from './ProjectSummary';
+import ComponentInteractionMapContainer from './ComponentInteractionMap';
 import ContextRowMonitor from './ContextRowMonitor';
 import DataManagementPanel from './DataManagement';
 import TestWorkbenchPanel from './TestWorkbench';
@@ -182,6 +183,19 @@ export const componentRegistry = {
     supportsRefresh: true,
     showInReports: true,
     filePath: 'src/components/focus-panels/ProjectSummary/index.jsx'
+  },
+  ComponentInteractionMap: {
+    component: ComponentInteractionMapContainer,
+    panelId: 'component-interaction-map',
+    category: 'Reports',
+    title: 'Component Interaction Map',
+    description: 'Summary of the main panel-to-panel interactions (who emits / who responds), derived from the component registry. Highlights canonical selection linking via inventory_item.',
+    props: {},
+    dataRequirements: 'Reads the component registry event contracts (events.emits / events.respondsTo). No network fetch.',
+    events: { emits: [], respondsTo: [] },
+    supportsRefresh: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/ComponentInteractionMap/index.jsx'
   },
   KPICards: {
     component: KPICards,

@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { trackedFetchGraphql } from '../../services/data/trackedGraphql';
 import { REPORT_REFRESH_EVENT } from '../../components/dockview/eventConstants';
+import useReportPanelLoading from '../useReportPanelLoading';
 
 const GRAPHQL_URL = '/api/graphql';
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
@@ -62,6 +63,8 @@ export const useDataMatch = (filters = {}, options = {}) => {
     () => JSON.stringify(effectiveFilters),
     [effectiveFilters]
   );
+
+  useReportPanelLoading(panelInstanceId, panelComponentId, loading);
 
   const fetchData = useCallback(async () => {
     setLoading(true);

@@ -133,6 +133,24 @@
   color: color-mix(in srgb, var(--theme-text-muted) 85%, #ffffff);
 }
 
+.dashboard-dockview .talia-dv-tab__loading-indicator {
+  display: inline-block;
+  flex-shrink: 0;
+  width: calc(var(--theme-tab-header-font-size) + 2px);
+  height: calc(var(--theme-tab-header-font-size) + 2px);
+  margin-left: 4px;
+  margin-top: 1px;
+  border: 2px solid color-mix(in srgb, var(--theme-text-muted) 35%, transparent);
+  border-top-color: color-mix(in srgb, var(--theme-warning) 82%, #ffffff);
+  border-radius: 50%;
+  animation: talia-spin 0.8s linear infinite;
+  pointer-events: none;
+}
+
+.dashboard-dockview .talia-dv-tab--loading .dv-default-tab-content {
+  opacity: 0.82;
+}
+
 .dashboard-dockview .dv-tab,
 .dashboard-dockview .dv-tab .dv-tab-content,
 .dashboard-dockview .dv-default-tab-content {

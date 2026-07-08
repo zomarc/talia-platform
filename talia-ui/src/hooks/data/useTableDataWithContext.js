@@ -21,6 +21,7 @@ import queryTracker from '../../services/data/queryTracker';
 import { SAIL_SELECT_EVENT, SHIP_SELECT_EVENT } from '../../lib/eventBus';
 import { REPORT_PANEL_PAUSE_EVENT, REPORT_REFRESH_EVENT } from '../../components/dockview/eventConstants';
 import { normalizeGlobalDateRangeKey } from '../../lib/globalDateRange';
+import useReportPanelLoading from '../useReportPanelLoading';
 
 const GRAPHQL_URL = '/api/graphql';
 const DEFAULT_CACHE_TTL_MS = 15000;
@@ -356,6 +357,8 @@ export const useTableDataWithContext = ({
   const lastIncludeNonRealRef = useRef(window.__taliaGlobalCriteria?.includeNonRealSailings === true);
   const pausedRef = useRef(isPanelPaused(panelInstanceId, panelComponentId));
   const pendingRefreshOnResumeRef = useRef(false);
+
+  useReportPanelLoading(panelInstanceId, panelComponentId, loading);
   
   // Keep refs up to date
   useEffect(() => {

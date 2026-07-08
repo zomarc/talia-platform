@@ -5,6 +5,7 @@ import {
   REPORT_ACTIVE_PANEL_EVENT,
   REPORT_GROUP_ACTION_EVENT,
   REPORT_PANEL_PAUSE_EVENT,
+  REPORT_PANEL_LOADING_EVENT,
   REPORT_PANEL_LAYOUT_CYCLE_EVENT,
   REPORT_PANEL_TECHNICAL_META_EVENT,
 } from "./eventConstants";
@@ -12,6 +13,7 @@ import {
   resolveTechnicalMetaVisible,
   setPanelTechnicalMetaVisible,
 } from "../../services/panelTechnicalMetaState";
+import { resolvePanelLoading } from "../../services/panelLoadingState";
 
 const SIDE_EXPAND_DECISION_TIMEOUT_MS = 3000;
 
@@ -84,6 +86,7 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
   const [showCloseConfirm, setShowCloseConfirm] = React.useState(false);
   const [isPrimaryActive, setIsPrimaryActive] = React.useState(false);
   const [isPaused, setIsPaused] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(() => resolvePanelLoading(panelId, panelComponent));
   const reportLayoutFailure = React.useCallback((reason, extra = null) => {
     const message = String(reason || '').trim() || 'Layout action failed.';
     console.error(`[TaliaDockviewTab] ${message}`, extra || '');
@@ -125,6 +128,10 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
     setIsPaused(false);
   }, [panelId, panelComponent]);
 
+  const syncLoadingState = React.useCallback(() => {
+    setIsLoading(resolvePanelLoading(panelId, panelComponent));
+  }, [panelId, panelComponent]);
+
   // Keep tab icon/tooltip synced with Dockview maximize state.
   React.useEffect(() => {
     syncMaximizedState();
@@ -141,17 +148,31 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
   React.useEffect(() => {
     syncPrimaryActiveState();
     syncPausedState();
+    syncLoadingState();
     const handleActivePanelChanged = () => syncPrimaryActiveState();
     const handlePauseStateChanged = () => syncPausedState();
+    const handleLoadingStateChanged = (event) => {
+      const detail = event?.detail || {};
+      const targetPanelId = detail.panelInstanceId || null;
+      const targetPanelComponent = detail.panelComponentId || null;
+      const isMatch = (
+        (panelId && targetPanelId === panelId) ||
+        (panelComponent && targetPanelComponent === panelComponent)
+      );
+      if (!isMatch) return;
+      setIsLoading(detail.loading === true);
+    };
     window.addEventListener(REPORT_ACTIVE_PANEL_EVENT, handleActivePanelChanged);
     window.addEventListener(REPORT_PANEL_PAUSE_EVENT, handlePauseStateChanged);
+    window.addEventListener(REPORT_PANEL_LOADING_EVENT, handleLoadingStateChanged);
     window.addEventListener("pointerup", handleActivePanelChanged);
     return () => {
       window.removeEventListener(REPORT_ACTIVE_PANEL_EVENT, handleActivePanelChanged);
       window.removeEventListener(REPORT_PANEL_PAUSE_EVENT, handlePauseStateChanged);
+      window.removeEventListener(REPORT_PANEL_LOADING_EVENT, handleLoadingStateChanged);
       window.removeEventListener("pointerup", handleActivePanelChanged);
     };
-  }, [syncPausedState, syncPrimaryActiveState]);
+  }, [syncLoadingState, syncPausedState, syncPrimaryActiveState, panelComponent, panelId]);
   React.useEffect(() => {
     const handleEscape = (event) => {
       if (event.key === 'Escape') {
@@ -425,8 +446,15 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
   ].filter(Boolean).join(' ');
 
   return (
-    <div className={`talia-dv-tab ${isPrimaryActive ? "talia-dv-tab--primary-active" : ""}`}>
+    <div className={`talia-dv-tab ${isPrimaryActive ? "talia-dv-tab--primary-active" : ""} ${isLoading ? "talia-dv-tab--loading" : ""}`}>
       <DockviewDefaultTab {...props} hideClose />
+      {isLoading && (
+        <span
+          className="talia-dv-tab__loading-indicator"
+          title="Loading data"
+          aria-label="Loading data"
+        />
+      )}
       <span className={indicatorClassName} title={indicatorTitle} aria-label={indicatorTitle}>
         {indicatorSymbol}
       </span>

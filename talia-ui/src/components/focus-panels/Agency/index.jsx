@@ -51,6 +51,7 @@ const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
         onRefresh={refetch}
         panelInstanceId={panelInstanceId}
         panelComponentId={panelComponentId}
+        selectedAgencyId={selectedAgencyId}
       />
     </PanelDataState>
   );

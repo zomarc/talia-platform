@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { formatDayMon } from '../../../lib/dateFormat';
+import { filterDayRowsByScope } from './shipDayBerthTransform';
 
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 
@@ -57,28 +58,14 @@ const ShipDayBerthPresenter = ({
     () => new Set((selectedScope?.sail_codes || []).map((code) => String(code))),
     [selectedScope]
   );
-  const scopeShipCode = selectedScope?.ship_code || null;
+  const scopeShipCode = selectedScope?.ship_code
+    ? String(selectedScope.ship_code).trim()
+    : null;
 
-  const filteredRows = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    const rows = (dayRows || []).filter((row) => {
-      if (scopeShipCode && row.ship_code !== scopeShipCode) return false;
-      if (!term) return true;
-      const haystack = [
-        row.ship_name,
-        row.ship_code,
-        row.date,
-        ...(row.sail_codes || []),
-      ].join(' ').toLowerCase();
-      return haystack.includes(term);
-    });
-    // Annotate voyage membership so the row formatter can highlight in-voyage days.
-    return rows.map((row) => ({
-      ...row,
-      in_voyage: voyageSailCodes.size > 0
-        && (row.sail_codes || []).some((code) => voyageSailCodes.has(String(code))),
-    }));
-  }, [dayRows, search, scopeShipCode, voyageSailCodes]);
+  const filteredRows = useMemo(
+    () => filterDayRowsByScope(dayRows, selectedScope, search),
+    [dayRows, search, selectedScope]
+  );
 
   const filteredRowsRef = useRef(filteredRows);
   useEffect(() => {

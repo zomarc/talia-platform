@@ -1,13 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { buildInventoryReferenceIndex } from '../../../lib/inventoryReference.js';
 import {
   buildShipDayRows,
   buildShipDaySummaries,
   buildShipDayBerthBundle,
   buildShipNameMap,
+  filterDayRowsByScope,
   mapShipSelectToFilters,
+  resolveListenerScope,
   resolveShipSelectionLabel,
 } from './shipDayBerthTransform.js';
+
+const inventoryItems = [
+  { sail_code: 'CJ07260718', reference_sail_code: 'CJ07260718', ship_code: 'CJ', ship_name: 'Celestyal Journey', sailing_role: 'master' },
+  { sail_code: 'CJ07260719', reference_sail_code: 'CJ07260718', ship_code: 'CJ', ship_name: 'Celestyal Journey', sailing_role: 'segment' },
+];
+
+const inventoryIndex = buildInventoryReferenceIndex(inventoryItems);
 
 const shipRows = [
   { ship_code: 'CJ', ship_name: 'Celestyal Journey' },
@@ -79,4 +89,62 @@ test('resolveShipSelectionLabel resolves ship name from catalog', () => {
   const label = resolveShipSelectionLabel({ ship_code: 'CJ' }, shipRows);
   assert.equal(label.ship_code, 'CJ');
   assert.equal(label.ship_name, 'Celestyal Journey');
+});
+
+test('resolveListenerScope upgrades incomplete emitted canonical_scope via local index', () => {
+  const emittedDetail = {
+    sail_code: 'CJ07260719',
+    reference_sail_code: 'CJ07260719',
+    canonical_scope: {
+      reference_sail_code: 'CJ07260719',
+      ship_code: null,
+      ship_name: null,
+      sail_codes: ['CJ07260719'],
+      roles: [],
+      source: 'reference_only',
+    },
+  };
+
+  const scope = resolveListenerScope(emittedDetail, inventoryIndex);
+  assert.equal(scope.ship_code, 'CJ');
+  assert.equal(scope.ship_name, 'Celestyal Journey');
+  assert.deepEqual(scope.sail_codes, ['CJ07260718', 'CJ07260719']);
+  assert.equal(scope.source, 'inventory_reference');
+});
+
+test('filterDayRowsByScope filters to ship and marks voyage days', () => {
+  const dayRows = buildShipDayRows(berthRows, shipRows);
+  const scope = resolveListenerScope(
+    {
+      sail_code: 'CJ07260718',
+      reference_sail_code: 'CJ07260718',
+      canonical_scope: {
+        reference_sail_code: 'CJ07260718',
+        ship_code: 'CJ',
+        ship_name: 'Celestyal Journey',
+        sail_codes: ['CJ07260718', 'CJ07260719'],
+        roles: ['master', 'segment'],
+        source: 'inventory_reference',
+      },
+    },
+    inventoryIndex
+  );
+
+  const filtered = filterDayRowsByScope(dayRows, scope);
+  assert.ok(filtered.every((row) => row.ship_code === 'CJ'));
+  assert.equal(filtered.length, 3);
+
+  const voyageDays = filtered.filter((row) => row.in_voyage);
+  assert.equal(voyageDays.length, 3);
+  assert.deepEqual(voyageDays.map((row) => row.date), ['2026-07-18', '2026-07-19', '2026-07-25']);
+});
+
+test('filterDayRowsByScope filters ship.select to one ship', () => {
+  const dayRows = buildShipDayRows(berthRows, shipRows);
+  const scope = resolveListenerScope({ ship_code: 'CD' }, inventoryIndex);
+  const filtered = filterDayRowsByScope(dayRows, scope);
+
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0].ship_code, 'CD');
+  assert.equal(filtered[0].in_voyage, false);
 });

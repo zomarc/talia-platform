@@ -7,19 +7,23 @@ import {
 } from '../../../lib/eventBus';
 import {
   buildInventoryReferenceIndex,
-  resolveSelectionScope,
 } from '../../../lib/inventoryReference';
-import { setInventoryItems } from '../../../services/data/inventoryReferenceService';
+import {
+  getInventoryIndex,
+  onInventoryIndexChange,
+  setInventoryItems,
+} from '../../../services/data/inventoryReferenceService';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import PanelDataState from '../../shared/PanelDataState';
 import ShipDayBerthPresenter from './ShipDayBerthPresenter';
-import { buildShipDayBerthBundle } from './shipDayBerthTransform';
+import { buildShipDayBerthBundle, resolveListenerScope } from './shipDayBerthTransform';
 
 const INVENTORY_FILTERS = { is_operational: true };
 const DOT_SAIL_SELECT_EVENT = 'talia.sail.select';
 
 const ShipDayBerthContainer = ({ panelInstanceId, panelComponentId }) => {
   const [selectedScope, setSelectedScope] = useState(null);
+  const [sharedIndexEpoch, setSharedIndexEpoch] = useState(0);
 
   const {
     data: shipDayBerthRows,
@@ -70,6 +74,14 @@ const ShipDayBerthContainer = ({ panelInstanceId, panelComponentId }) => {
     [inventoryRows]
   );
 
+  const effectiveInventoryIndex = useMemo(() => {
+    const local = inventoryIndex;
+    const shared = getInventoryIndex();
+    const localSize = local?.byReference?.size || 0;
+    const sharedSize = shared?.byReference?.size || 0;
+    return localSize >= sharedSize ? local : shared;
+  }, [inventoryIndex, sharedIndexEpoch]);
+
   // Prime the shared canonical index so emitters can translate selections.
   useEffect(() => {
     if (inventoryRows && inventoryRows.length > 0) {
@@ -77,12 +89,20 @@ const ShipDayBerthContainer = ({ panelInstanceId, panelComponentId }) => {
     }
   }, [inventoryRows]);
 
-  // Respond to selections: prefer the emitter's canonical scope, fall back to local resolve.
+  // Re-resolve when another panel primes the shared inventory index.
+  useEffect(() => onInventoryIndexChange(() => {
+    setSharedIndexEpoch((epoch) => epoch + 1);
+  }), []);
+
+  // Respond to selections via the merged canonical scope contract.
   useEffect(() => {
-    const handleSelect = (event) => {
-      const scope = event?.detail?.canonical_scope
-        || resolveSelectionScope(event?.detail, inventoryIndex);
+    const applySelection = (detail) => {
+      const scope = resolveListenerScope(detail, effectiveInventoryIndex);
       setSelectedScope(scope);
+    };
+
+    const handleSelect = (event) => {
+      applySelection(event?.detail);
     };
     const handleClear = () => setSelectedScope(null);
 
@@ -94,15 +114,14 @@ const ShipDayBerthContainer = ({ panelInstanceId, panelComponentId }) => {
     // Re-resolve any persisted selection once inventory is available.
     const persisted = window.lastSailSelectEvent || window.lastShipSelectEvent || null;
     if (persisted?.detail) {
-      const scope = resolveSelectionScope(persisted.detail, inventoryIndex);
-      if (scope) setSelectedScope(scope);
+      applySelection(persisted.detail);
     }
 
     return () => {
       selectEvents.forEach((name) => window.removeEventListener(name, handleSelect));
       clearEvents.forEach((name) => window.removeEventListener(name, handleClear));
     };
-  }, [inventoryIndex]);
+  }, [effectiveInventoryIndex]);
 
   const bundle = useMemo(
     () => buildShipDayBerthBundle({ shipDayBerthRows, shipRows }),

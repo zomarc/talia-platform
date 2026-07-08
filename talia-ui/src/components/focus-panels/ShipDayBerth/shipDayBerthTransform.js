@@ -1,3 +1,5 @@
+import { resolveSelectionScope } from '../../../lib/inventoryReference.js';
+
 const asArray = (value) => (Array.isArray(value) ? value : []);
 
 const toNumber = (value) => {
@@ -25,6 +27,59 @@ export const mapShipSelectToFilters = (detail) => {
   const shipCode = resolveShipCodeFromDetail(detail);
   if (!shipCode) return null;
   return { ship_code: shipCode };
+};
+
+/**
+ * Resolve the best canonical scope for a listener: merge the emitter's
+ * canonical_scope with a local inventory_item index when the emitted scope
+ * is incomplete (e.g. reference_only without ship_code).
+ */
+export const resolveListenerScope = (detail, index = null) => {
+  if (!detail) return null;
+  const local = resolveSelectionScope(detail, index);
+  const emitted = detail?.canonical_scope || null;
+  if (!emitted) return local;
+  if (!local) return emitted;
+
+  const localHasShip = Boolean(local?.ship_code);
+  const emittedMissingShip = !emitted?.ship_code;
+  const localIsInventory = local?.source === 'inventory_reference';
+
+  if (localIsInventory || (localHasShip && emittedMissingShip)) {
+    return {
+      ...emitted,
+      ...local,
+      sail_codes: (local.sail_codes?.length ? local.sail_codes : emitted.sail_codes) || [],
+    };
+  }
+
+  return emitted;
+};
+
+/** Filter ship × day rows to a canonical scope and annotate voyage membership. */
+export const filterDayRowsByScope = (dayRows = [], scope = null, search = '') => {
+  const voyageSailCodes = new Set((scope?.sail_codes || []).map((code) => String(code)));
+  const scopeShipCode = scope?.ship_code ? String(scope.ship_code).trim() : null;
+  const term = String(search || '').trim().toLowerCase();
+
+  const rows = asArray(dayRows).filter((row) => {
+    const rowShipCode = String(row?.ship_code || '').trim();
+    if (scopeShipCode && rowShipCode !== scopeShipCode) return false;
+    if (!term) return true;
+    const haystack = [
+      row.ship_name,
+      row.ship_code,
+      row.date,
+      ...(row.sail_codes || []),
+    ].join(' ').toLowerCase();
+    return haystack.includes(term);
+  });
+
+  return rows.map((row) => ({
+    ...row,
+    in_voyage: voyageSailCodes.size > 0
+      && (row.sail_codes || []).some((code) => voyageSailCodes.has(String(code))),
+  }));
 };
 
 export const resolveShipSelectionLabel = (detail, shipRows = []) => {

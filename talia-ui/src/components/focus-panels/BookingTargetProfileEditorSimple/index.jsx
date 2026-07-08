@@ -643,7 +643,7 @@ const BookingTargetProfileEditorSimple = ({ panelInstanceId, panelComponentId })
   };
 
   return (
-    <div className="booking-simple booking-profile-editor-simple talia-report">
+    <div className="focus-panel talia-report booking-simple booking-profile-editor-simple" role="region" aria-label="Booking target profile editor">
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Booking Target Profile Editor</h2>
@@ -654,7 +654,7 @@ const BookingTargetProfileEditorSimple = ({ panelInstanceId, panelComponentId })
       </header>
       <BookingGoalCallout variant="MODEL" />
       {!canEditIntel && (
-        <div className="booking-simple__error booking-profile-editor-simple__read-only" role="status">
+        <div className="booking-simple__error booking-profile-editor-simple__read-only talia-callout" role="status">
           <strong>View only.</strong> REAL / TARGET / BUDGET / MODEL intelligence is owned by the Talia system (<code>talia</code>).
           Your role can explore curves; only <strong>Manager+</strong> or <strong>Super User</strong> can save changes.
         </div>
@@ -681,13 +681,15 @@ const BookingTargetProfileEditorSimple = ({ panelInstanceId, panelComponentId })
         </select>
 
         <input
-          className="booking-simple__input"
+          className="booking-simple__input talia-report-filters__input"
           value={profileName}
           placeholder="Profile name"
           onChange={(e) => setProfileName(e.target.value)}
           disabled={!canEditIntel}
         />
+      </div>
 
+      <div className="talia-report__actions-bar" aria-label="Booking target profile editor actions">
         <button type="button" className="talia-btn talia-btn--secondary" onClick={() => { refetch(); refetchUnified(); }} disabled={loading || unifiedLoading}>
           {(loading || unifiedLoading) ? 'Loading…' : 'Refresh Data'}
         </button>
@@ -757,16 +759,17 @@ const BookingTargetProfileEditorSimple = ({ panelInstanceId, panelComponentId })
         </div>
       )}
 
-      <div
-        ref={chartHostRef}
-        className={`booking-profile-editor-simple__chart-host ${showDataDetails ? '' : 'booking-profile-editor-simple__chart-host--grow'}`}
-      >
-        <div className="booking-profile-editor-simple__chart">
-          <canvas ref={setChartCanvas} />
+      <main className="talia-report__content">
+        <div
+          ref={chartHostRef}
+          className={`booking-profile-editor-simple__chart-host ${showDataDetails ? '' : 'booking-profile-editor-simple__chart-host--grow'}`}
+        >
+          <div className="booking-profile-editor-simple__chart">
+            <canvas ref={setChartCanvas} />
+          </div>
         </div>
-      </div>
 
-      <ReportDataDetails
+        <ReportDataDetails
         visible={showDataDetails}
         as="section"
         className="booking-profile-editor-simple__table-section"
@@ -786,6 +789,7 @@ const BookingTargetProfileEditorSimple = ({ panelInstanceId, panelComponentId })
           />
         </div>
       </ReportDataDetails>
+      </main>
     </div>
   );
 };

@@ -704,6 +704,14 @@
   color: var(--theme-warning);
 }
 
+.direct-source__callout-item--warning {
+  color: var(--theme-error, #c0392b);
+}
+
+.direct-source__context-bar--meta {
+  margin-bottom: 8px;
+}
+
 .direct-source__summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

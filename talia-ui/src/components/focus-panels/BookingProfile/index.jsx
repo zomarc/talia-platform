@@ -10,7 +10,7 @@ import BookingProfilePresenter from './BookingProfilePresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 
-const BookingProfileContainer = (props) => {
+const BookingProfileContainer = ({ panelInstanceId, panelComponentId, ...props }) => {
   const {
     sailCode: sailProp,
     includeComparison: includeComparisonProp = false,
@@ -118,13 +118,15 @@ const BookingProfileContainer = (props) => {
 
   // Render booking profile with data
   return (
-    <BookingProfilePresenter 
+    <BookingProfilePresenter
       data={data}
       sailCode={sailCode}
       theme={theme}
       onRefresh={refetch}
       includeBuildCurves={includeBuildCurves}
       includeComparison={includeComparison}
+      panelInstanceId={panelInstanceId}
+      panelComponentId={panelComponentId}
     />
   );
 };

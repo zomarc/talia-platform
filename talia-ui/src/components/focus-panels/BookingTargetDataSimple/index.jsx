@@ -7,12 +7,18 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useBookingTargetChart } from '../../../hooks/data/useBookingTargetChart';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
+import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import ReportDataDetails from '../../shared/ReportDataDetails';
 
 Chart.register(...registerables);
 
-const BookingTargetDataSimple = () => {
+const BookingTargetDataSimple = ({ panelInstanceId, panelComponentId }) => {
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
+  const [showDetails] = usePanelDetailsVisibility({
+    panelInstanceId,
+    panelComponentId: panelComponentId || 'booking-target-data-simple',
+  });
 
   const {
     sailCode,
@@ -63,7 +69,7 @@ const BookingTargetDataSimple = () => {
         maintainAspectRatio: false,
         animation: false,
         plugins: {
-          title: { display: true, text: `Business Target Curve ${sailCode ? `- ${sailCode}` : ''}` },
+          title: { display: false },
         },
       },
     });
@@ -76,34 +82,56 @@ const BookingTargetDataSimple = () => {
   }, [labels, data, sailCode]);
 
   const options = [...new Set([...(sailCode ? [sailCode] : []), ...(sailCodes || [])])];
+  const subtitle = [
+    sailCode || 'No sail selected',
+    targetDataDate ? `Target date: ${targetDataDate}` : null,
+    `${labels.length} weeks`,
+  ].filter(Boolean).join(' · ');
 
   return (
-    <div className="booking-simple">
+    <div className="focus-panel talia-report booking-simple" role="region" aria-label="Target booking data">
+      <header className="talia-report__header">
+        <div className="talia-report__header-left">
+          <h2 className="talia-report__title">TARGET Only (Business Provided)</h2>
+          <p className="talia-report__subtitle">{subtitle}</p>
+        </div>
+      </header>
+
       <BookingGoalCallout variant="TARGET" />
-      <div className="booking-simple__toolbar">
-        <input
-          className="booking-simple__input"
-          list="booking-target-simple-sails"
-          value={sailCode || ''}
-          placeholder="Enter/select sail code"
-          onChange={(e) => setSailCode(e.target.value?.trim() || null)}
-        />
-        <datalist id="booking-target-simple-sails">
-          {options.map((code) => (<option key={code} value={code} />))}
-        </datalist>
+
+      <div className="booking-simple__toolbar talia-report-filters">
+        <label className="talia-report-filters__group">
+          <span className="talia-report-filters__label">Sail code</span>
+          <input
+            className="talia-report-filters__input booking-simple__input"
+            list="booking-target-simple-sails"
+            value={sailCode || ''}
+            placeholder="Enter/select sail code"
+            onChange={(e) => setSailCode(e.target.value?.trim() || null)}
+          />
+          <datalist id="booking-target-simple-sails">
+            {options.map((code) => (<option key={code} value={code} />))}
+          </datalist>
+        </label>
+      </div>
+
+      <div className="talia-report__actions-bar" aria-label="Target booking data actions">
         <button type="button" className="talia-btn talia-btn--secondary" onClick={refetch} disabled={loading}>
           {loading ? 'Loading…' : 'Refresh'}
         </button>
-        {targetDataDate && (
-          <span className="booking-simple__meta">Target Data Date: {targetDataDate}</span>
-        )}
       </div>
-      {error && <div className="booking-simple__error">{error?.message || String(error)}</div>}
-      {!loading && labels.length === 0 ? (
-        <div className="focus-panel-empty">No business target data available for this sail.</div>
-      ) : (
-        <div className="booking-simple__chart"><canvas ref={chartRef} /></div>
-      )}
+
+      {error ? <div className="booking-simple__error">{error?.message || String(error)}</div> : null}
+
+      <main className="talia-report__content">
+        <ReportDataDetails visible={showDetails}>
+          {!loading && labels.length === 0 ? (
+            <div className="focus-panel-empty">No business target data available for this sail.</div>
+          ) : (
+            <div className="booking-simple__chart"><canvas ref={chartRef} /></div>
+          )}
+        </ReportDataDetails>
+      </main>
     </div>
   );
 };

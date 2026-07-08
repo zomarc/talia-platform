@@ -8,6 +8,8 @@ import { Chart, registerables } from 'chart.js';
 import { useBookingTargetChart } from '../../../hooks/data/useBookingTargetChart';
 import { useInventoryProfileSeriesBySail } from '../../../hooks/data/useInventoryProfileSeriesBySail';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
+import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import ReportDataDetails from '../../shared/ReportDataDetails';
 
 Chart.register(...registerables);
 const DASHBOARD_VIEW_SCOPE_EVENT = 'talia:dashboard.viewScope';
@@ -20,11 +22,15 @@ const sortLabels = (labels) => labels.sort((a, b) => {
   return (nb || 0) - (na || 0);
 });
 
-const BookingCombinedDataSimple = () => {
+const BookingCombinedDataSimple = ({ panelInstanceId, panelComponentId }) => {
   const [selectedProfileId, setSelectedProfileId] = useState(null);
   const [viewScope, setViewScope] = useState(() => (window.__taliaViewScope === 'wide' ? 'wide' : 'local'));
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
+  const [showDetails] = usePanelDetailsVisibility({
+    panelInstanceId,
+    panelComponentId: panelComponentId || 'booking-combined-data-simple',
+  });
 
   const {
     sailCode,
@@ -199,7 +205,7 @@ const BookingCombinedDataSimple = () => {
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
-        plugins: { title: { display: true, text: `Combined REAL/TARGET/BUDGET/MODEL ${sailCode ? `- ${sailCode}` : ''}` } },
+        plugins: { title: { display: false } },
       },
     });
 
@@ -209,55 +215,87 @@ const BookingCombinedDataSimple = () => {
   }, [labels, actualData, targetData, budgetData, modelData, sailCode]);
 
   const sailOptions = [...new Set([...(sailCode ? [sailCode] : []), ...(sailCodes || [])])];
+  const subtitle = [
+    sailCode || 'No sail selected',
+    `${labels.length} weeks`,
+    viewScope === 'wide' ? 'Wide scope' : 'Local scope',
+  ].filter(Boolean).join(' · ');
 
   return (
-    <div className="booking-simple">
+    <div className="focus-panel talia-report booking-simple" role="region" aria-label="Combined booking data">
+      <header className="talia-report__header">
+        <div className="talia-report__header-left">
+          <h2 className="talia-report__title">Combined REAL / TARGET / BUDGET / MODEL</h2>
+          <p className="talia-report__subtitle">{subtitle}</p>
+        </div>
+      </header>
+
       <BookingGoalCallout variant="COMBINED" />
-      <div className="booking-simple__toolbar">
-        <input
-          className="booking-simple__input"
-          list="booking-combined-simple-sails"
-          value={sailCode || ''}
-          placeholder="Enter/select sail code"
-          onChange={(e) => setSailCode(e.target.value?.trim() || null)}
-        />
-        <datalist id="booking-combined-simple-sails">
-          {sailOptions.map((code) => (<option key={code} value={code} />))}
-        </datalist>
 
-        <select
-          className="booking-simple__select"
-          value={selectedProfileId || ''}
-          onChange={(e) => setSelectedProfileId(e.target.value || null)}
+      <div className="booking-simple__toolbar talia-report-filters">
+        <label className="talia-report-filters__group">
+          <span className="talia-report-filters__label">Sail code</span>
+          <input
+            className="talia-report-filters__input booking-simple__input"
+            list="booking-combined-simple-sails"
+            value={sailCode || ''}
+            placeholder="Enter/select sail code"
+            onChange={(e) => setSailCode(e.target.value?.trim() || null)}
+          />
+          <datalist id="booking-combined-simple-sails">
+            {sailOptions.map((code) => (<option key={code} value={code} />))}
+          </datalist>
+        </label>
+
+        <label className="talia-report-filters__group">
+          <span className="talia-report-filters__label">MODEL profile</span>
+          <select
+            className="talia-report-filters__input booking-simple__select"
+            value={selectedProfileId || ''}
+            onChange={(e) => setSelectedProfileId(e.target.value || null)}
+          >
+            <option value="">No MODEL profile</option>
+            {modelOptions.map((model) => (<option key={model.id} value={model.id}>{model.label}</option>))}
+          </select>
+        </label>
+      </div>
+
+      <div className="talia-report__actions-bar" aria-label="Combined booking data actions">
+        <button
+          type="button"
+          className="talia-btn talia-btn--secondary"
+          onClick={() => { refetch(); refetchUnified(); }}
+          disabled={loading || unifiedLoading}
         >
-          <option value="">No MODEL profile</option>
-          {modelOptions.map((model) => (<option key={model.id} value={model.id}>{model.label}</option>))}
-        </select>
-
-        <button type="button" className="talia-btn talia-btn--secondary" onClick={() => { refetch(); refetchUnified(); }} disabled={loading || unifiedLoading}>
           {(loading || unifiedLoading) ? 'Loading…' : 'Refresh'}
         </button>
       </div>
 
-      <div className="booking-simple__meta-row">
-        {bookingProfileDate && <span>REAL date: {bookingProfileDate}</span>}
-        {targetDataDate && <span>TARGET date: {targetDataDate}</span>}
-        {selectedProfileId && <span>MODEL: selected</span>}
+      <div className="booking-simple__meta-row talia-callout" role="note">
+        {bookingProfileDate ? <span>REAL date: {bookingProfileDate}</span> : null}
+        {targetDataDate ? <span>TARGET date: {targetDataDate}</span> : null}
+        {selectedProfileId ? <span>MODEL: selected</span> : null}
         {byKind.BUDGET?.points?.length ? <span>BUDGET: loaded</span> : null}
-        <span>Scope: {viewScope === 'wide' ? 'Wide (time dependent)' : 'Local (direct sail)'}</span>
       </div>
 
-      {(error || unifiedError) && <div className="booking-simple__error">{error?.message || unifiedError?.message || String(error || unifiedError)}</div>}
-      {!error && !unifiedError && labels.length === 0 && (
+      {(error || unifiedError) ? (
+        <div className="booking-simple__error">{error?.message || unifiedError?.message || String(error || unifiedError)}</div>
+      ) : null}
+      {!error && !unifiedError && labels.length === 0 ? (
         <div className="booking-simple__error">
           No overlay points available for this sail under current Global Criteria. Select another sail or broaden criteria.
         </div>
-      )}
-      {!(loading || unifiedLoading) && labels.length === 0 ? (
-        <div className="focus-panel-empty">No combined data available for this sail.</div>
-      ) : (
-        <div className="booking-simple__chart"><canvas ref={chartRef} /></div>
-      )}
+      ) : null}
+
+      <main className="talia-report__content">
+        <ReportDataDetails visible={showDetails}>
+          {!(loading || unifiedLoading) && labels.length === 0 ? (
+            <div className="focus-panel-empty">No combined data available for this sail.</div>
+          ) : (
+            <div className="booking-simple__chart"><canvas ref={chartRef} /></div>
+          )}
+        </ReportDataDetails>
+      </main>
     </div>
   );
 };

@@ -136,6 +136,8 @@ const BookingTargetChartContainer = ({
       onSaveProfile={handleSaveProfile}
       profileSaving={profileSaving}
       profileError={profileError}
+      panelInstanceId={panelInstanceId}
+      panelComponentId={panelComponentId}
     />
   );
 };

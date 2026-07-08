@@ -10,6 +10,8 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { getChartColors, getSeriesColors } from '../../../lib/chartConfig';
 import { formatDayMon, formatDateTime } from '../../../lib/dateFormat';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
+import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import ReportDataDetails from '../../shared/ReportDataDetails';
 
 Chart.register(...registerables);
 
@@ -42,12 +44,18 @@ const BookingTargetChartPresenter = ({
   selectedProfileId,
   onSelectProfile,
   onSaveProfile,
-  profileSaving,
+  panelSaving,
   profileError,
+  panelInstanceId,
+  panelComponentId,
 }) => {
   const { theme, fontSize, fontFamily } = useTheme();
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
+  const [showDetails] = usePanelDetailsVisibility({
+    panelInstanceId,
+    panelComponentId: panelComponentId || 'booking-target-chart',
+  });
 
   const [metric, setMetric] = useState('bookings');
   const [chartType, setChartType] = useState('line');
@@ -244,8 +252,7 @@ const BookingTargetChartPresenter = ({
         plugins: {
           legend: { position: 'top' },
           title: {
-            display: true,
-            text: `Booking Target: ${sailCode || 'Select a sailing'}`,
+            display: false,
           },
           tooltip: {
             mode: 'index',
@@ -303,19 +310,33 @@ const BookingTargetChartPresenter = ({
     ]),
   ].sort();
 
+  const subtitle = [
+    sailCode || 'Select a sailing',
+    bookingProfileDate ? `Profile: ${formatDayMon(bookingProfileDate, '')}` : null,
+    targetDataDate ? `Target loaded: ${formatDateTime(targetDataDate)}` : null,
+    bookingData?.daysUntilSailing != null ? `${bookingData.daysUntilSailing} days until sailing` : null,
+  ].filter(Boolean).join(' · ');
+
   return (
-    <div className="booking-target-chart">
+    <div className="focus-panel talia-report booking-target-chart" role="region" aria-label="Booking target chart">
+      <header className="talia-report__header">
+        <div className="talia-report__header-left">
+          <h2 className="talia-report__title">Booking Target Chart</h2>
+          <p className="talia-report__subtitle">{subtitle}</p>
+        </div>
+      </header>
+
       <BookingGoalCallout variant="LEGACY_CHART" />
-      {/* Config bar */}
-      <div className="booking-target-chart__config">
+
+      <div className="booking-target-chart__config talia-report-filters">
         <div className="booking-target-chart__config-row">
-          <label className="booking-target-chart__label">
-            Sail / Group
+          <label className="booking-target-chart__label talia-report-filters__group">
+            <span className="talia-report-filters__label">Sail / Group</span>
             <span className="booking-target-chart__sail-control">
               <input
                 type="text"
                 list="booking-target-chart-sail-list"
-                className="booking-target-chart__input"
+                className="talia-report-filters__input booking-target-chart__input"
                 placeholder="e.g. CJ07250901"
                 value={sailCode || ''}
                 onChange={(e) => setSailCode(e.target.value?.trim() || null)}
@@ -330,10 +351,10 @@ const BookingTargetChartPresenter = ({
             </span>
           </label>
 
-          <label className="booking-target-chart__label">
-            Metric
+          <label className="booking-target-chart__label talia-report-filters__group">
+            <span className="talia-report-filters__label">Metric</span>
             <select
-              className="booking-target-chart__select"
+              className="talia-report-filters__input booking-target-chart__select"
               value={metric}
               onChange={(e) => setMetric(e.target.value)}
             >
@@ -345,10 +366,10 @@ const BookingTargetChartPresenter = ({
             </select>
           </label>
 
-          <label className="booking-target-chart__label">
-            Chart type
+          <label className="booking-target-chart__label talia-report-filters__group">
+            <span className="talia-report-filters__label">Chart type</span>
             <select
-              className="booking-target-chart__select"
+              className="talia-report-filters__input booking-target-chart__select"
               value={chartType}
               onChange={(e) => setChartType(e.target.value)}
             >
@@ -360,10 +381,10 @@ const BookingTargetChartPresenter = ({
             </select>
           </label>
 
-          <label className="booking-target-chart__label">
-            Local profile
+          <label className="booking-target-chart__label talia-report-filters__group">
+            <span className="talia-report-filters__label">Local profile</span>
             <select
-              className="booking-target-chart__select"
+              className="talia-report-filters__input booking-target-chart__select"
               value={selectedProfileId || ''}
               onChange={(e) => onSelectProfile?.(e.target.value || null)}
             >
@@ -373,142 +394,134 @@ const BookingTargetChartPresenter = ({
               ))}
             </select>
           </label>
-
-          <div className="booking-target-chart__actions">
-            {onRefresh && (
-              <button
-                type="button"
-                className="talia-btn talia-btn--secondary"
-                onClick={onRefresh}
-                disabled={loading}
-              >
-                {loading ? 'Loading…' : 'Refresh'}
-              </button>
-            )}
-          </div>
         </div>
       </div>
 
-      {/* Chart area */}
-      <div className="booking-target-chart__chart-wrap">
-        {error && (
-          <div className="booking-target-chart__error-banner">
-            {error?.message || String(error)}
-          </div>
-        )}
-        {loading && (
-          <div className="booking-target-chart__loading">Loading booking data…</div>
-        )}
-        {!loading && !labels.length && (
-          <div className="focus-panel-empty">
-            <p>
-              {!sailCode
-                ? 'Select a sailing from the table or dropdown to view the chart.'
-                : !hasActualData && !hasTargetData
-                  ? `No booking or target data for ${sailCode}. Import targets via Data Management, or ensure booking profile is available.`
-                  : 'No chart data available.'}
-            </p>
-          </div>
-        )}
-        {!loading && labels.length > 0 && (
-          <div className="booking-target-chart__canvas">
-            <canvas ref={chartRef} />
-          </div>
-        )}
-      </div>
-
-      {/* Summary if we have data */}
-      {bookingData && sailCode && !loading && (
-        <div className="booking-target-chart__summary">
-          <span>
-            {bookingData.shipName} • Sail: {formatDayMon(bookingData.sailDate, '')}
-          </span>
-          {bookingProfileDate && (
-            <span> • Booking profile date: {formatDayMon(bookingProfileDate, '')}</span>
-          )}
-          {targetDataDate && (
-            <span> • Target data loaded: {formatDateTime(targetDataDate)}</span>
-          )}
-          {bookingData.daysUntilSailing != null && (
-            <span> • {bookingData.daysUntilSailing} days until sailing</span>
-          )}
-        </div>
-      )}
-
-      {/* Local profile editor */}
-      <div className="booking-target-chart__editor">
-        <div className="booking-target-chart__editor-header">
-          <span className="booking-target-chart__editor-title">Local profile editor</span>
-          <span className="booking-target-chart__editor-subtitle">
-            Edit target points and save to local Talia profile store
-          </span>
-        </div>
-        <div className="booking-target-chart__editor-actions">
-          <input
-            className="booking-target-chart__input"
-            placeholder="Profile name"
-            value={profileName}
-            onChange={(e) => setProfileName(e.target.value)}
-          />
+      {onRefresh ? (
+        <div className="talia-report__actions-bar" aria-label="Booking target chart actions">
           <button
             type="button"
-            className="talia-btn talia-btn--primary"
-            disabled={profileSaving || !profileName || editableCurves.length === 0}
-            onClick={() => onSaveProfile?.({ profileName: profileName.trim(), curves: editableCurves })}
+            className="talia-btn talia-btn--secondary"
+            onClick={onRefresh}
+            disabled={loading}
           >
-            {profileSaving ? 'Saving…' : 'Save local profile'}
+            {loading ? 'Loading…' : 'Refresh'}
           </button>
         </div>
-        {profileError && (
-          <div className="booking-target-chart__error-banner">{profileError}</div>
-        )}
-        {editableCurves.length > 0 ? (
-          <div className="booking-target-chart__editor-table-wrap">
-            <table className="booking-target-chart__editor-table">
-              <thead>
-                <tr>
-                  <th>Week</th>
-                  <th>Target bookings</th>
-                  <th>Target guests</th>
-                </tr>
-              </thead>
-              <tbody>
-                {editableCurves.map((row, idx) => (
-                  <tr key={`${row.weekLabel}-${idx}`}>
-                    <td>{row.weekLabel}</td>
-                    <td>
-                      <input
-                        className="booking-target-chart__editor-number"
-                        type="number"
-                        value={row.targetBookings}
-                        onChange={(e) => {
-                          const next = [...editableCurves];
-                          next[idx] = { ...next[idx], targetBookings: Number(e.target.value || 0) };
-                          setEditableCurves(next);
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        className="booking-target-chart__editor-number"
-                        type="number"
-                        value={row.targetGuests}
-                        onChange={(e) => {
-                          const next = [...editableCurves];
-                          next[idx] = { ...next[idx], targetGuests: Number(e.target.value || 0) };
-                          setEditableCurves(next);
-                        }}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      ) : null}
+
+      <main className="talia-report__content">
+        <ReportDataDetails visible={showDetails}>
+          <div className="booking-target-chart__chart-wrap">
+            {error ? (
+              <div className="booking-target-chart__error-banner">
+                {error?.message || String(error)}
+              </div>
+            ) : null}
+            {loading ? (
+              <div className="booking-target-chart__loading">Loading booking data…</div>
+            ) : null}
+            {!loading && !labels.length ? (
+              <div className="focus-panel-empty">
+                <p>
+                  {!sailCode
+                    ? 'Select a sailing from the table or dropdown to view the chart.'
+                    : !hasActualData && !hasTargetData
+                      ? `No booking or target data for ${sailCode}. Import targets via Data Management, or ensure booking profile is available.`
+                      : 'No chart data available.'}
+                </p>
+              </div>
+            ) : null}
+            {!loading && labels.length > 0 ? (
+              <div className="booking-target-chart__canvas">
+                <canvas ref={chartRef} />
+              </div>
+            ) : null}
           </div>
-        ) : (
-          <div className="booking-target-chart__loading">No target points available to edit.</div>
-        )}
-      </div>
+
+          {bookingData && sailCode && !loading ? (
+            <div className="booking-target-chart__summary">
+              <span>
+                {bookingData.shipName} • Sail: {formatDayMon(bookingData.sailDate, '')}
+              </span>
+            </div>
+          ) : null}
+
+          <div className="booking-target-chart__editor">
+            <div className="booking-target-chart__editor-header">
+              <span className="booking-target-chart__editor-title">Local profile editor</span>
+              <span className="booking-target-chart__editor-subtitle">
+                Edit target points and save to local Talia profile store
+              </span>
+            </div>
+            <div className="booking-target-chart__editor-actions">
+              <input
+                className="booking-target-chart__input"
+                placeholder="Profile name"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+              />
+              <button
+                type="button"
+                className="talia-btn talia-btn--primary"
+                disabled={profileSaving || !profileName || editableCurves.length === 0}
+                onClick={() => onSaveProfile?.({ profileName: profileName.trim(), curves: editableCurves })}
+              >
+                {profileSaving ? 'Saving…' : 'Save local profile'}
+              </button>
+            </div>
+            {profileError ? (
+              <div className="booking-target-chart__error-banner">{profileError}</div>
+            ) : null}
+            {editableCurves.length > 0 ? (
+              <div className="booking-target-chart__editor-table-wrap">
+                <table className="booking-target-chart__editor-table">
+                  <thead>
+                    <tr>
+                      <th>Week</th>
+                      <th>Target bookings</th>
+                      <th>Target guests</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editableCurves.map((row, idx) => (
+                      <tr key={`${row.weekLabel}-${idx}`}>
+                        <td>{row.weekLabel}</td>
+                        <td>
+                          <input
+                            className="booking-target-chart__editor-number"
+                            type="number"
+                            value={row.targetBookings}
+                            onChange={(e) => {
+                              const next = [...editableCurves];
+                              next[idx] = { ...next[idx], targetBookings: Number(e.target.value || 0) };
+                              setEditableCurves(next);
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="booking-target-chart__editor-number"
+                            type="number"
+                            value={row.targetGuests}
+                            onChange={(e) => {
+                              const next = [...editableCurves];
+                              next[idx] = { ...next[idx], targetGuests: Number(e.target.value || 0) };
+                              setEditableCurves(next);
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="booking-target-chart__loading">No target points available to edit.</div>
+            )}
+          </div>
+        </ReportDataDetails>
+      </main>
     </div>
   );
 };

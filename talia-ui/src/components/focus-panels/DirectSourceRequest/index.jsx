@@ -84,7 +84,7 @@ const DEFAULT_QUERY = `query Availability($effectiveDate: DateTime!, $startDateF
   }
 }`;
 
-const DirectSourceRequestContainer = () => {
+const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => {
 
   // Get today's date in ISO format for defaults
   const getTodayISO = () => new Date().toISOString().split('T')[0];
@@ -738,18 +738,18 @@ const DirectSourceRequestContainer = () => {
 
   // Render presenter with data
   return (
-    <DirectSourceRequestPresenter 
+    <DirectSourceRequestPresenter
       data={data || []}
       onRefresh={handleRefresh}
       loading={loading}
       queryInfo={queryInfo}
-      persistedEvent={persistedEvent}
-      // Test mode props
       testMode={testMode}
       onToggleTestMode={handleToggleTestMode}
       manualDates={manualDates}
       onDateChange={handleDateChange}
       onTestQuery={handleTestQuery}
+      panelInstanceId={panelInstanceId}
+      panelComponentId={panelComponentId}
     />
   );
 };

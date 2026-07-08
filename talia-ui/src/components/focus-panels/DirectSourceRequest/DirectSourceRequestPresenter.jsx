@@ -1,88 +1,93 @@
 /**
  * Direct Source Request Presenter Component
- * 
+ *
  * Displays results from external GraphQL queries in a Tabulator table.
- * Shows query information, source endpoint, and execution details.
- * 
- * Pure UI component - receives data as props
+ * Uses standard talia-report shell vocabulary.
  */
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { formatDayMon } from '../../../lib/dateFormat';
+import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import ReportDataDetails from '../../shared/ReportDataDetails';
 
-const DirectSourceRequestPresenter = ({ 
-  data, 
+const DirectSourceRequestPresenter = ({
+  data,
   loading,
   queryInfo,
-  // Test mode props
+  onRefresh,
   testMode = false,
   onToggleTestMode,
   manualDates = {},
   onDateChange,
-  onTestQuery
+  onTestQuery,
+  panelInstanceId,
+  panelComponentId,
 }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const [tableInitialized, setTableInitialized] = useState(false);
   const [showQueryDetails, setShowQueryDetails] = useState(false);
   const lastDataRef = useRef(null);
+  const [showDetails] = usePanelDetailsVisibility({
+    panelInstanceId,
+    panelComponentId: panelComponentId || 'direct-source-request',
+  });
 
-  // Column definitions for availableVoyages data
   const columns = [
-    { 
-      title: "Package Code", 
-      field: "packageCode", 
+    {
+      title: 'Package Code',
+      field: 'packageCode',
       width: 120,
-      headerFilter: "input",
-      headerFilterPlaceholder: "Filter..."
+      headerFilter: 'input',
+      headerFilterPlaceholder: 'Filter...',
     },
-    { 
-      title: "Package Name", 
-      field: "packageName", 
+    {
+      title: 'Package Name',
+      field: 'packageName',
       widthGrow: 2,
-      headerFilter: "list",
+      headerFilter: 'list',
       headerFilterParams: {
         valuesLookup: true,
-        autocomplete: true
-      }
+        autocomplete: true,
+      },
     },
-    { 
-      title: "Sail Date", 
-      field: "sailDate",
+    {
+      title: 'Sail Date',
+      field: 'sailDate',
       width: 120,
-      sorter: "date",
+      sorter: 'date',
       formatter: (cell) => {
         const value = cell.getValue();
         if (!value) return 'N/A';
         return formatDayMon(value, 'N/A');
-      }
+      },
     },
-    { 
-      title: "Days", 
-      field: "sailDays", 
-      hozAlign: "center",
+    {
+      title: 'Days',
+      field: 'sailDays',
+      hozAlign: 'center',
       width: 80,
-      headerFilter: "number"
+      headerFilter: 'number',
     },
-    { 
-      title: "Cabin Category", 
-      field: "cabinCategoryCode", 
+    {
+      title: 'Cabin Category',
+      field: 'cabinCategoryCode',
       width: 130,
-      headerFilter: "list",
+      headerFilter: 'list',
       headerFilterParams: {
         valuesLookup: true,
-        autocomplete: true
-      }
+        autocomplete: true,
+      },
     },
-    { 
-      title: "Availability", 
-      field: "availabilityResult", 
+    {
+      title: 'Availability',
+      field: 'availabilityResult',
       width: 120,
-      headerFilter: "list",
+      headerFilter: 'list',
       headerFilterParams: {
         valuesLookup: true,
-        autocomplete: true
+        autocomplete: true,
       },
       formatter: (cell) => {
         const value = cell.getValue();
@@ -92,69 +97,69 @@ const DirectSourceRequestPresenter = ({
         else if (value === 'LIMITED') variant = 'limited';
         else if (value === 'SOLD_OUT' || value === 'UNAVAILABLE') variant = 'unavailable';
         return `<span class="direct-source__availability direct-source__availability--${variant}">${value}</span>`;
-      }
+      },
     },
-    { 
-      title: "Can Book", 
-      field: "canBookCabins", 
-      hozAlign: "center",
+    {
+      title: 'Can Book',
+      field: 'canBookCabins',
+      hozAlign: 'center',
       width: 100,
-      formatter: "tickCross",
-      headerFilter: "tickCross",
-      headerFilterParams: { tristate: true }
+      formatter: 'tickCross',
+      headerFilter: 'tickCross',
+      headerFilterParams: { tristate: true },
     },
-    { 
-      title: "Nested", 
-      field: "canBookNestedCabins", 
-      hozAlign: "center",
+    {
+      title: 'Nested',
+      field: 'canBookNestedCabins',
+      hozAlign: 'center',
       width: 90,
-      formatter: "tickCross",
-      headerFilterParams: { tristate: true }
+      formatter: 'tickCross',
+      headerFilterParams: { tristate: true },
     },
-    { 
-      title: "Total Cabins", 
-      field: "totalCabins", 
-      hozAlign: "right",
+    {
+      title: 'Total Cabins',
+      field: 'totalCabins',
+      hozAlign: 'right',
       width: 110,
-      headerFilter: "number",
+      headerFilter: 'number',
       formatter: (cell) => {
         const value = cell.getValue();
         return value ? value.toLocaleString() : '0';
-      }
+      },
     },
-    { 
-      title: "Available", 
-      field: "availableCabins", 
-      hozAlign: "right",
+    {
+      title: 'Available',
+      field: 'availableCabins',
+      hozAlign: 'right',
       width: 100,
-      headerFilter: "number",
+      headerFilter: 'number',
       formatter: (cell) => {
         const value = cell.getValue();
         return value ? value.toLocaleString() : '0';
-      }
+      },
     },
-    { 
-      title: "Absolute", 
-      field: "totalAvailableAbsolute", 
-      hozAlign: "right",
+    {
+      title: 'Absolute',
+      field: 'totalAvailableAbsolute',
+      hozAlign: 'right',
       width: 100,
-      headerFilter: "number",
+      headerFilter: 'number',
       formatter: (cell) => {
         const value = cell.getValue();
         return value ? value.toLocaleString() : '0';
-      }
+      },
     },
-    { 
-      title: "Weighted", 
-      field: "totalAvailableWeighted", 
-      hozAlign: "right",
+    {
+      title: 'Weighted',
+      field: 'totalAvailableWeighted',
+      hozAlign: 'right',
       width: 100,
-      headerFilter: "number",
+      headerFilter: 'number',
       formatter: (cell) => {
         const value = cell.getValue();
         return value !== null && value !== undefined ? value.toFixed(2) : '0.00';
-      }
-    }
+      },
+    },
   ];
 
   const context = queryInfo?.variables?._context || {};
@@ -173,7 +178,7 @@ const DirectSourceRequestPresenter = ({
         beforeCount: 0,
         afterCount: 0,
         selectedCount: 0,
-        matchedCount: 0
+        matchedCount: 0,
       };
     }
 
@@ -215,11 +220,10 @@ const DirectSourceRequestPresenter = ({
       beforeCount,
       afterCount,
       selectedCount,
-      matchedCount
+      matchedCount,
     };
   }, [data, selectedSailDate]);
 
-  // Initialize table
   useEffect(() => {
     if (!data || data.length === 0 || tableInitialized) return;
 
@@ -237,18 +241,16 @@ const DirectSourceRequestPresenter = ({
         }
 
         instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
-          data: data,
-          columns: columns,
-          height: "100%",
+          data,
+          columns,
+          height: '100%',
           selectableRows: 1,
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,
           pagination: true,
           paginationSize: 50,
           paginationSizeSelector: [25, 50, 100, 200],
-          initialSort: [
-            { column: "packageName", dir: "asc" }
-          ],
+          initialSort: [{ column: 'packageName', dir: 'asc' }],
           rowClick: (e, row) => {
             try { row?.select?.(); } catch { /* noop */ }
           },
@@ -264,20 +266,17 @@ const DirectSourceRequestPresenter = ({
           rowSelectionChanged: (selectedData) => {
             const rec = selectedData && selectedData[0];
             if (rec) {
-              console.log("[DirectSourceRequest] Row selected:", rec);
-              // Emit selection event for other components
-              window.dispatchEvent(new CustomEvent('talia:directsource.select', { 
+              window.dispatchEvent(new CustomEvent('talia:directsource.select', {
                 detail: {
                   source: 'DirectSourceRequest',
                   row_data: rec,
-                  timestamp: new Date().toISOString()
-                }
+                  timestamp: new Date().toISOString(),
+                },
               }));
             }
           },
         }));
 
-        console.log('[DirectSourceRequest] Table initialized with', data.length, 'records');
         lastDataRef.current = data ? JSON.stringify(data) : null;
         setTableInitialized(true);
       } catch (err) {
@@ -292,7 +291,6 @@ const DirectSourceRequestPresenter = ({
     };
   }, [data, tableInitialized]);
 
-  // Destroy table only on component unmount.
   useEffect(() => {
     return () => {
       if (instanceRef.current) {
@@ -306,7 +304,6 @@ const DirectSourceRequestPresenter = ({
     };
   }, []);
 
-  // Update table data when data changes
   useEffect(() => {
     if (!tableInitialized || !instanceRef.current || !data) return;
 
@@ -316,7 +313,6 @@ const DirectSourceRequestPresenter = ({
     }
 
     try {
-      console.log('[DirectSourceRequest] Updating table data:', data.length, 'records');
       instanceRef.current.replaceData(data);
       lastDataRef.current = currentDataStr;
     } catch (e) {
@@ -335,263 +331,272 @@ const DirectSourceRequestPresenter = ({
     return Number.isNaN(numberValue) ? '0' : numberValue.toLocaleString();
   };
 
-  // Format context info for display
   const getContextDisplay = () => {
     const ctx = queryInfo?.variables?._context || {};
-    
+
     if (testMode) {
       return 'Manual Date Selection';
     }
-    
+
     if (ctx.fallbackReason) {
-      return `Fallback: Next 4 Weeks`;
+      return 'Fallback: Next 4 Weeks';
     }
-    
+
     if (ctx.sailDate) {
       return `From Sail: ${formatDayMon(ctx.sailDate, '—')}`;
     }
-    
+
     if (ctx.source === 'persisted-event') {
       return 'From Selected Event';
     }
-    
+
     return 'Default Range';
   };
 
+  const endpointLabel = queryInfo?.endpointSource
+    ? `[${queryInfo.endpointSource}]`
+    : '';
+  const endpointSummary = queryInfo?.endpoint
+    ? `${endpointLabel} ${queryInfo.endpoint}`.trim()
+    : 'No endpoint';
+
+  const subtitleParts = [
+    `${data?.length || 0} results`,
+    queryInfo?.executionTime ? `${queryInfo.executionTime}ms` : null,
+    endpointLabel || null,
+  ].filter(Boolean);
+
+  const showValidationCallout = validation?.status === 'matched' || validation?.status === 'no_match';
+  const showFallbackCallout = Boolean(queryInfo?.variables?._context?.fallbackReason);
+  const showParityCallout = Boolean(queryInfo?.parity);
+
   return (
-    <div className="direct-source">
-      {/* Header */}
-      <div className="direct-source__header">
-        <div className="direct-source__header-left">
-          <h3 className="direct-source__title">Direct Source Request</h3>
-          <span className="direct-source__badge">{data?.length || 0} results</span>
-          {queryInfo?.executionTime && (
-            <span className="direct-source__stats">{queryInfo.executionTime}ms</span>
-          )}
+    <div className="focus-panel talia-report direct-source" role="region" aria-label="Direct source request">
+      <header className="talia-report__header">
+        <div className="talia-report__header-left">
+          <h2 className="talia-report__title">Direct Source Request</h2>
+          <p className="talia-report__subtitle">{subtitleParts.join(' · ')}</p>
         </div>
-        <div className="direct-source__header-right">
-          <span className="direct-source__source">
-            {queryInfo?.endpointSource ? `[${queryInfo.endpointSource}] ` : ''}
-            {queryInfo?.endpoint || 'No endpoint'}
-          </span>
-          <button
-            onClick={() => setShowQueryDetails(!showQueryDetails)}
-            className="direct-source__button"
-            title="Show/hide query details"
-          >
-            {showQueryDetails ? '▼' : '▶'} Query
-          </button>
-        </div>
-      </div>
+      </header>
 
-      {/* Summary Panel */}
-      <div className="direct-source__summary">
-        <div className="direct-source__summary-card">
-          <div className="direct-source__summary-label">Sail Code</div>
-          <div className="direct-source__summary-value">{selectedSailCode || '—'}</div>
-          {validation?.status === 'matched' && (
-            <div className="direct-source__summary-meta">
+      {showValidationCallout ? (
+        <div className="direct-source__callout talia-callout" role="note">
+          {validation?.status === 'matched' ? (
+            <span>
               Validated against sail.select: {validation.matchedRows} rows matched
-            </div>
-          )}
-          {validation?.status === 'no_match' && (
-            <div className="direct-source__summary-meta" style={{ color: 'var(--theme-error, #c0392b)' }}>
+              {validation.totalRows != null ? ` of ${validation.totalRows} total` : ''}
+            </span>
+          ) : (
+            <span className="direct-source__callout-item--warning">
               Validation failed: no direct rows matched selected sail
-            </div>
-          )}
-          {availabilitySummary.matchedCount > 0 && (
-            <div className="direct-source__summary-meta">
-              {availabilitySummary.matchedCount.toLocaleString()} matches in data
-            </div>
-          )}
-        </div>
-        <div className="direct-source__summary-card">
-          <div className="direct-source__summary-label">Sail Date</div>
-          <div className="direct-source__summary-value">{formatDateLabel(selectedSailDate)}</div>
-          {availabilitySummary.selectedCount > 0 && (
-            <div className="direct-source__summary-meta">
-              Selected day cabins: {formatNumber(availabilitySummary.selectedAvailable)}
-            </div>
-          )}
-        </div>
-        <div className="direct-source__summary-card">
-          <div className="direct-source__summary-label">Query Window</div>
-          <div className="direct-source__summary-value">
-            {queryInfo?.variables ? `${queryInfo.variables.startDateFrom} → ${queryInfo.variables.startDateTo}` : '—'}
-          </div>
-          {Number.isFinite(rangeDaysBefore) && Number.isFinite(rangeDaysAfter) && (
-            <div className="direct-source__summary-meta">
-              {rangeDaysBefore} days before / {rangeDaysAfter} days after
-            </div>
-          )}
-        </div>
-        <div className="direct-source__summary-card">
-          <div className="direct-source__summary-label">Availability</div>
-          <div className="direct-source__summary-value">
-            Before {formatNumber(availabilitySummary.beforeAvailable)} • After {formatNumber(availabilitySummary.afterAvailable)}
-          </div>
-          {(availabilitySummary.beforeCount > 0 || availabilitySummary.afterCount > 0) && (
-            <div className="direct-source__summary-meta">
-              {availabilitySummary.beforeCount + availabilitySummary.afterCount} rows around selection
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Context Bar */}
-      <div className="direct-source__context-bar">
-        <div className="direct-source__context-item">
-          <span className="direct-source__context-label">Context:</span>
-          <span className="direct-source__context-value">{getContextDisplay()}</span>
-        </div>
-        {queryInfo?.variables && (
-          <>
-            <div className="direct-source__context-item">
-              <span className="direct-source__context-label">From:</span>
-              <span className="direct-source__context-value">{queryInfo.variables.startDateFrom}</span>
-            </div>
-            <div className="direct-source__context-item">
-              <span className="direct-source__context-label">To:</span>
-              <span className="direct-source__context-value">{queryInfo.variables.startDateTo}</span>
-            </div>
-          </>
-        )}
-        {queryInfo?.lastExecuted && (
-          <div className="direct-source__context-item">
-            <span className="direct-source__context-label">Executed:</span>
-            <span className="direct-source__context-value">
-              {new Date(queryInfo.lastExecuted).toLocaleTimeString()}
+              {validation?.selectedSailCode ? ` (${validation.selectedSailCode})` : ''}
             </span>
-          </div>
-        )}
-        {Number.isFinite(queryInfo?.retryCount) && (
-          <div className="direct-source__context-item">
-            <span className="direct-source__context-label">Retries:</span>
-            <span className="direct-source__context-value">{queryInfo.retryCount}</span>
-          </div>
-        )}
-        {queryInfo?.parity && (
-          <div className="direct-source__context-item">
-            <span className="direct-source__context-label">Parity:</span>
-            <span className="direct-source__context-value">
-              {queryInfo.parity.error
-                ? `error (${queryInfo.parity.error})`
-                : `rows ${queryInfo.parity.directRows}/${queryInfo.parity.localRows}, Δavail ${queryInfo.parity.availableDelta}`}
-            </span>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      ) : null}
 
-      {/* Fallback Notice */}
-      {queryInfo?.variables?._context?.fallbackReason && (
-        <div className="direct-source__fallback">
-          <span className="direct-source__fallback-icon">ℹ️</span>
-          <span className="direct-source__fallback-text">
-            {queryInfo.variables._context.fallbackReason} - Showing next 4 weeks instead
+      {showFallbackCallout ? (
+        <div className="direct-source__callout talia-callout" role="note">
+          <span>{queryInfo.variables._context.fallbackReason} — showing next 4 weeks instead</span>
+        </div>
+      ) : null}
+
+      {showParityCallout ? (
+        <div className="direct-source__callout talia-callout" role="note">
+          <span className="direct-source__context-label">Parity:</span>
+          <span>
+            {queryInfo.parity.error
+              ? `error (${queryInfo.parity.error})`
+              : `rows ${queryInfo.parity.directRows}/${queryInfo.parity.localRows}, Δavail ${queryInfo.parity.availableDelta}`}
           </span>
         </div>
-      )}
+      ) : null}
 
-      {/* Test Mode Controls */}
-      <div className="direct-source__test-panel" data-active={testMode ? 'true' : 'false'}>
-        <div className="direct-source__test-header">
-          <label className="direct-source__test-toggle">
-            <input 
-              type="checkbox" 
-              checked={testMode}
-              onChange={onToggleTestMode}
-              className="direct-source__test-checkbox"
-            />
-            <span className="direct-source__test-label">
-              Test Mode - Manual Date Selection
-            </span>
-          </label>
-          {testMode && (
-            <span className="direct-source__test-note">
-              Override event context with manual dates
-            </span>
-          )}
-        </div>
-        
-        {testMode && (
-          <div className="direct-source__test-controls">
-            <div className="direct-source__test-input-group">
-              <label className="direct-source__test-input-label">Effective Date</label>
-              <input 
-                type="date"
-                value={manualDates.effectiveDate || ''}
-                onChange={(e) => onDateChange('effectiveDate', e.target.value)}
-                className="direct-source__test-input"
-              />
-            </div>
-            <div className="direct-source__test-input-group">
-              <label className="direct-source__test-input-label">Start Date</label>
-              <input 
-                type="date"
-                value={manualDates.startDate || ''}
-                onChange={(e) => onDateChange('startDate', e.target.value)}
-                className="direct-source__test-input"
-              />
-            </div>
-            <div className="direct-source__test-input-group">
-              <label className="direct-source__test-input-label">End Date</label>
-              <input 
-                type="date"
-                value={manualDates.endDate || ''}
-                onChange={(e) => onDateChange('endDate', e.target.value)}
-                className="direct-source__test-input"
-              />
-            </div>
-            <button 
-              onClick={onTestQuery}
-              disabled={loading}
-              className="direct-source__test-button"
-              data-loading={loading ? 'true' : 'false'}
-            >
-              {loading ? '...' : '▶'} Execute Test Query
-            </button>
-          </div>
-        )}
+      <div className="talia-report__controls" aria-label="Direct source request controls">
+        <span className="direct-source__source">{endpointSummary}</span>
+        <button
+          type="button"
+          className="talia-btn talia-btn--secondary"
+          onClick={() => setShowQueryDetails((prev) => !prev)}
+          title="Show/hide query details"
+        >
+          {showQueryDetails ? '▼' : '▶'} Query
+        </button>
+        <label className="direct-source__test-toggle">
+          <input
+            type="checkbox"
+            checked={testMode}
+            onChange={onToggleTestMode}
+            className="direct-source__test-checkbox"
+          />
+          <span className="direct-source__test-label">Test Mode</span>
+        </label>
       </div>
 
-      {/* Query Details Panel (collapsible) */}
-      {showQueryDetails && (
+      {testMode ? (
+        <div className="direct-source__filters talia-report-filters" aria-label="Test mode date filters">
+          <label className="talia-report-filters__group">
+            <span className="talia-report-filters__label">Effective Date</span>
+            <input
+              type="date"
+              value={manualDates.effectiveDate || ''}
+              onChange={(e) => onDateChange('effectiveDate', e.target.value)}
+              className="talia-report-filters__input"
+            />
+          </label>
+          <label className="talia-report-filters__group">
+            <span className="talia-report-filters__label">Start Date</span>
+            <input
+              type="date"
+              value={manualDates.startDate || ''}
+              onChange={(e) => onDateChange('startDate', e.target.value)}
+              className="talia-report-filters__input"
+            />
+          </label>
+          <label className="talia-report-filters__group">
+            <span className="talia-report-filters__label">End Date</span>
+            <input
+              type="date"
+              value={manualDates.endDate || ''}
+              onChange={(e) => onDateChange('endDate', e.target.value)}
+              className="talia-report-filters__input"
+            />
+          </label>
+          <span className="direct-source__test-note">Override event context with manual dates</span>
+        </div>
+      ) : null}
+
+      <div className="talia-report__actions-bar" aria-label="Direct source request actions">
+        {testMode ? (
+          <button
+            type="button"
+            className="talia-btn talia-btn--secondary"
+            onClick={onTestQuery}
+            disabled={loading}
+          >
+            {loading ? 'Querying…' : 'Execute Test Query'}
+          </button>
+        ) : onRefresh ? (
+          <button
+            type="button"
+            className="talia-btn talia-btn--secondary"
+            onClick={onRefresh}
+            disabled={loading}
+          >
+            {loading ? 'Querying…' : 'Query'}
+          </button>
+        ) : null}
+      </div>
+
+      {showQueryDetails ? (
         <div className="direct-source__query-panel">
-          <div className="direct-source__query-title">
-            GraphQL Query:
-          </div>
+          <div className="direct-source__query-title">GraphQL Query:</div>
           <pre className="direct-source__query-pre">{queryInfo?.query || 'No query'}</pre>
-          {queryInfo?.variables && (
+          {queryInfo?.variables ? (
             <>
-              <div className="direct-source__query-title direct-source__query-title--spaced">
-                Variables:
-              </div>
+              <div className="direct-source__query-title direct-source__query-title--spaced">Variables:</div>
               <pre className="direct-source__query-pre">
                 {JSON.stringify({
                   effectiveDate: queryInfo.variables.effectiveDate,
                   startDateFrom: queryInfo.variables.startDateFrom,
-                  startDateTo: queryInfo.variables.startDateTo
+                  startDateTo: queryInfo.variables.startDateTo,
                 }, null, 2)}
               </pre>
             </>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
 
-      {/* Table Container */}
-      <div className="direct-source__table-container">
-        {loading && (
-          <div className="direct-source__loading-overlay">
-            <div className="direct-source__loading-card">
-              Querying external source...
+      <main className="talia-report__content">
+        <ReportDataDetails visible={showDetails} className="direct-source__data-details">
+          <div className="direct-source__summary">
+            <div className="direct-source__summary-card">
+              <div className="direct-source__summary-label">Sail Code</div>
+              <div className="direct-source__summary-value">{selectedSailCode || '—'}</div>
+              {availabilitySummary.matchedCount > 0 ? (
+                <div className="direct-source__summary-meta">
+                  {availabilitySummary.matchedCount.toLocaleString()} matches in data
+                </div>
+              ) : null}
+            </div>
+            <div className="direct-source__summary-card">
+              <div className="direct-source__summary-label">Sail Date</div>
+              <div className="direct-source__summary-value">{formatDateLabel(selectedSailDate)}</div>
+              {availabilitySummary.selectedCount > 0 ? (
+                <div className="direct-source__summary-meta">
+                  Selected day cabins: {formatNumber(availabilitySummary.selectedAvailable)}
+                </div>
+              ) : null}
+            </div>
+            <div className="direct-source__summary-card">
+              <div className="direct-source__summary-label">Query Window</div>
+              <div className="direct-source__summary-value">
+                {queryInfo?.variables
+                  ? `${queryInfo.variables.startDateFrom} → ${queryInfo.variables.startDateTo}`
+                  : '—'}
+              </div>
+              {Number.isFinite(rangeDaysBefore) && Number.isFinite(rangeDaysAfter) ? (
+                <div className="direct-source__summary-meta">
+                  {rangeDaysBefore} days before / {rangeDaysAfter} days after
+                </div>
+              ) : null}
+            </div>
+            <div className="direct-source__summary-card">
+              <div className="direct-source__summary-label">Availability</div>
+              <div className="direct-source__summary-value">
+                Before {formatNumber(availabilitySummary.beforeAvailable)} • After {formatNumber(availabilitySummary.afterAvailable)}
+              </div>
+              {(availabilitySummary.beforeCount > 0 || availabilitySummary.afterCount > 0) ? (
+                <div className="direct-source__summary-meta">
+                  {availabilitySummary.beforeCount + availabilitySummary.afterCount} rows around selection
+                </div>
+              ) : null}
             </div>
           </div>
-        )}
-        <div 
-          ref={tableRef} 
-          className="direct-source__table-host"
-        />
-      </div>
+
+          <div className="direct-source__context-bar direct-source__context-bar--meta" aria-label="Query context metadata">
+            <div className="direct-source__context-item">
+              <span className="direct-source__context-label">Context:</span>
+              <span className="direct-source__context-value">{getContextDisplay()}</span>
+            </div>
+            {queryInfo?.variables ? (
+              <>
+                <div className="direct-source__context-item">
+                  <span className="direct-source__context-label">From:</span>
+                  <span className="direct-source__context-value">{queryInfo.variables.startDateFrom}</span>
+                </div>
+                <div className="direct-source__context-item">
+                  <span className="direct-source__context-label">To:</span>
+                  <span className="direct-source__context-value">{queryInfo.variables.startDateTo}</span>
+                </div>
+              </>
+            ) : null}
+            {queryInfo?.lastExecuted ? (
+              <div className="direct-source__context-item">
+                <span className="direct-source__context-label">Executed:</span>
+                <span className="direct-source__context-value">
+                  {new Date(queryInfo.lastExecuted).toLocaleTimeString()}
+                </span>
+              </div>
+            ) : null}
+            {Number.isFinite(queryInfo?.retryCount) ? (
+              <div className="direct-source__context-item">
+                <span className="direct-source__context-label">Retries:</span>
+                <span className="direct-source__context-value">{queryInfo.retryCount}</span>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="direct-source__table-container">
+            {loading ? (
+              <div className="direct-source__loading-overlay">
+                <div className="direct-source__loading-card">Querying external source...</div>
+              </div>
+            ) : null}
+            <div ref={tableRef} className="direct-source__table-host talia-table" role="grid" />
+          </div>
+        </ReportDataDetails>
+      </main>
     </div>
   );
 };

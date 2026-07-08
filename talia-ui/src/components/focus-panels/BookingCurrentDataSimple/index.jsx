@@ -7,12 +7,18 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useBookingTargetChart } from '../../../hooks/data/useBookingTargetChart';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
+import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import ReportDataDetails from '../../shared/ReportDataDetails';
 
 Chart.register(...registerables);
 
-const BookingCurrentDataSimple = () => {
+const BookingCurrentDataSimple = ({ panelInstanceId, panelComponentId }) => {
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
+  const [showDetails] = usePanelDetailsVisibility({
+    panelInstanceId,
+    panelComponentId: panelComponentId || 'booking-current-data-simple',
+  });
 
   const {
     sailCode,
@@ -58,7 +64,7 @@ const BookingCurrentDataSimple = () => {
         maintainAspectRatio: false,
         animation: false,
         plugins: {
-          title: { display: true, text: `Current Booking Profile ${sailCode ? `- ${sailCode}` : ''}` },
+          title: { display: false },
         },
       },
     });
@@ -70,29 +76,52 @@ const BookingCurrentDataSimple = () => {
     };
   }, [labels, data, sailCode]);
 
+  const subtitle = [
+    sailCode || 'No sail selected',
+    bookingProfileDate ? `Profile date: ${bookingProfileDate}` : null,
+    `${labels.length} weeks`,
+  ].filter(Boolean).join(' · ');
+
   return (
-    <div className="booking-simple">
+    <div className="focus-panel talia-report booking-simple" role="region" aria-label="Current booking data">
+      <header className="talia-report__header">
+        <div className="talia-report__header-left">
+          <h2 className="talia-report__title">REAL Only (Weeks-to-Sail)</h2>
+          <p className="talia-report__subtitle">{subtitle}</p>
+        </div>
+      </header>
+
       <BookingGoalCallout variant="REAL_SIMPLE" />
-      <div className="booking-simple__toolbar">
-        <input
-          className="booking-simple__input"
-          value={sailCode || ''}
-          placeholder="Enter sail code"
-          onChange={(e) => setSailCode(e.target.value?.trim() || null)}
-        />
+
+      <div className="booking-simple__toolbar talia-report-filters">
+        <label className="talia-report-filters__group">
+          <span className="talia-report-filters__label">Sail code</span>
+          <input
+            className="talia-report-filters__input booking-simple__input"
+            value={sailCode || ''}
+            placeholder="Enter sail code"
+            onChange={(e) => setSailCode(e.target.value?.trim() || null)}
+          />
+        </label>
+      </div>
+
+      <div className="talia-report__actions-bar" aria-label="Current booking data actions">
         <button type="button" className="talia-btn talia-btn--secondary" onClick={refetch} disabled={loading}>
           {loading ? 'Loading…' : 'Refresh'}
         </button>
-        {bookingProfileDate && (
-          <span className="booking-simple__meta">Profile Date: {bookingProfileDate}</span>
-        )}
       </div>
-      {error && <div className="booking-simple__error">{error?.message || String(error)}</div>}
-      {!loading && labels.length === 0 ? (
-        <div className="focus-panel-empty">No current booking curve data.</div>
-      ) : (
-        <div className="booking-simple__chart"><canvas ref={chartRef} /></div>
-      )}
+
+      {error ? <div className="booking-simple__error">{error?.message || String(error)}</div> : null}
+
+      <main className="talia-report__content">
+        <ReportDataDetails visible={showDetails}>
+          {!loading && labels.length === 0 ? (
+            <div className="focus-panel-empty">No current booking curve data.</div>
+          ) : (
+            <div className="booking-simple__chart"><canvas ref={chartRef} /></div>
+          )}
+        </ReportDataDetails>
+      </main>
     </div>
   );
 };

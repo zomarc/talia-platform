@@ -1,8 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
-import { emitSailSelect } from '../../../lib/eventBus';
+import { emitSailSelect, SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 import { formatDayMon, formatMonYear } from '../../../lib/dateFormat';
-import { buildExplorerDisplayRows } from './masterSailingExplorerTransform';
+import {
+  buildExplorerDisplayRows,
+  masterRowMatchesReference,
+  resolveSelectionReferenceCode,
+} from './masterSailingExplorerTransform';
 
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 
@@ -82,6 +86,10 @@ const MasterSailingExplorerPresenter = ({
   const didApplyInitialGroupOpenRef = useRef(false);
   const suppressMonthAutoOpenRef = useRef(false);
   const suppressClearOnRefreshRef = useRef(false);
+  const suppressSelectionRestoreRef = useRef(false);
+  const selectedReferenceRef = useRef(
+    resolveSelectionReferenceCode(typeof window !== 'undefined' ? window.lastSailSelectEvent?.detail : null)
+  );
   const pendingGroupActionRef = useRef(null);
   const groupCycleDepthRef = useRef(1);
   const [expandedMasters, setExpandedMasters] = useState(() => new Set());
@@ -315,6 +323,73 @@ const MasterSailingExplorerPresenter = ({
     maxDepth: GROUP_MAX_DEPTH,
   }), []);
 
+  const focusSelectedMaster = useCallback(() => {
+    const table = instanceRef.current;
+    const referenceCode = selectedReferenceRef.current;
+    if (!table || !tableBuiltRef.current || !referenceCode) return;
+
+    const monthGroups = table.getGroups?.() || [];
+    let targetRow = null;
+
+    monthGroups.forEach((monthGroup) => {
+      const shipGroups = monthGroup.getSubGroups?.() || [];
+      shipGroups.forEach((shipGroup) => {
+        const rows = shipGroup.getRows?.() || [];
+        const match = rows.find((row) => masterRowMatchesReference(row.getData?.(), referenceCode));
+        if (match) {
+          monthGroup.show?.();
+          shipGroup.show?.();
+          targetRow = match;
+        }
+      });
+    });
+
+    if (!targetRow) return;
+    try {
+      suppressSelectionRestoreRef.current = true;
+      table.deselectRow?.();
+      targetRow.select?.();
+    } catch { /* noop */ } finally {
+      window.setTimeout(() => {
+        suppressSelectionRestoreRef.current = false;
+      }, 0);
+    }
+  }, []);
+
+  const afterTableDataRefresh = useCallback((refreshPromise) => {
+    const apply = () => focusSelectedMaster();
+    if (refreshPromise && typeof refreshPromise.then === 'function') {
+      refreshPromise.then(apply).catch(apply);
+      return;
+    }
+    window.requestAnimationFrame(apply);
+  }, [focusSelectedMaster]);
+
+  useEffect(() => {
+    const handleSelect = (event) => {
+      const referenceCode = resolveSelectionReferenceCode(event?.detail);
+      selectedReferenceRef.current = referenceCode;
+      focusSelectedMaster();
+    };
+    const handleClear = () => {
+      selectedReferenceRef.current = null;
+      try { instanceRef.current?.deselectRow?.(); } catch { /* noop */ }
+    };
+
+    window.addEventListener(SAIL_SELECT_EVENT, handleSelect);
+    window.addEventListener(SAIL_CLEAR_EVENT, handleClear);
+
+    const persisted = resolveSelectionReferenceCode(window.lastSailSelectEvent?.detail);
+    if (persisted) {
+      selectedReferenceRef.current = persisted;
+    }
+
+    return () => {
+      window.removeEventListener(SAIL_SELECT_EVENT, handleSelect);
+      window.removeEventListener(SAIL_CLEAR_EVENT, handleClear);
+    };
+  }, [focusSelectedMaster]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -331,6 +406,7 @@ const MasterSailingExplorerPresenter = ({
         instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
           data: [],
           columns,
+          index: 'row_key',
           initialSort: [{ column: 'sail_date_from', dir: 'asc' }],
           height: '100%',
           selectableRows: 1,
@@ -352,9 +428,9 @@ const MasterSailingExplorerPresenter = ({
         instanceRef.current.on('tableBuilt', () => {
           tableBuiltRef.current = true;
           try {
-            instanceRef.current.replaceData(displayRowsRef.current || []);
+            afterTableDataRefresh(instanceRef.current.replaceData(displayRowsRef.current || []));
           } catch { /* noop */ }
-          if (!didApplyInitialGroupOpenRef.current) {
+          if (!didApplyInitialGroupOpenRef.current && !selectedReferenceRef.current) {
             openFirstMonthOnly();
             didApplyInitialGroupOpenRef.current = true;
           }
@@ -386,6 +462,7 @@ const MasterSailingExplorerPresenter = ({
           const rowData = row.getData();
           if (rowData?.row_type !== 'master') return;
           const managementSailCode = rowData.reference_sail_code || rowData.sail_code;
+          selectedReferenceRef.current = managementSailCode ? String(managementSailCode).trim() : null;
           emitSailSelect({
             sail_code: managementSailCode,
             reference_sail_code: managementSailCode,
@@ -394,6 +471,13 @@ const MasterSailingExplorerPresenter = ({
             row_data: rowData,
             timestamp: new Date().toISOString(),
           });
+        });
+
+        instanceRef.current.on('rowDeselected', () => {
+          if (suppressClearOnRefreshRef.current || suppressSelectionRestoreRef.current) return;
+          const hasSelectedRows = (instanceRef.current?.getSelectedData?.() || []).length > 0;
+          if (hasSelectedRows) return;
+          selectedReferenceRef.current = null;
         });
 
         instanceRef.current.on('groupClick', (_event, group) => {
@@ -417,6 +501,7 @@ const MasterSailingExplorerPresenter = ({
       }
     };
   }, [
+    afterTableDataRefresh,
     applyGroupDepth,
     collapseAllGroups,
     columns,
@@ -430,8 +515,8 @@ const MasterSailingExplorerPresenter = ({
     if (!instanceRef.current || !tableBuiltRef.current) return;
     try {
       suppressClearOnRefreshRef.current = true;
-      instanceRef.current.replaceData(displayRows || []);
-      if (!didApplyInitialGroupOpenRef.current) {
+      afterTableDataRefresh(instanceRef.current.replaceData(displayRows || []));
+      if (!didApplyInitialGroupOpenRef.current && !selectedReferenceRef.current) {
         openFirstMonthOnly();
         didApplyInitialGroupOpenRef.current = true;
       }
@@ -442,7 +527,7 @@ const MasterSailingExplorerPresenter = ({
         suppressClearOnRefreshRef.current = false;
       }, 0);
     }
-  }, [displayRows, openFirstMonthOnly]);
+  }, [afterTableDataRefresh, displayRows, openFirstMonthOnly]);
 
   useEffect(() => {
     if (!instanceRef.current) return;

@@ -353,6 +353,29 @@ export const buildMasterSailingExplorerBundle = ({
   };
 };
 
+/** Resolve the canonical reference sail code from a selection event detail. */
+export const resolveSelectionReferenceCode = (detail) => {
+  if (!detail) return null;
+  const code = detail.reference_sail_code
+    || detail.canonical_scope?.reference_sail_code
+    || detail.sail_code
+    || detail.row_data?.reference_sail_code
+    || detail.row_data?.sail_code
+    || null;
+  if (code == null) return null;
+  const normalized = String(code).trim();
+  return normalized || null;
+};
+
+/** True when a master explorer row matches the active reference selection. */
+export const masterRowMatchesReference = (row, referenceCode) => {
+  if (!referenceCode || row?.row_type !== 'master') return false;
+  const ref = String(referenceCode).trim();
+  const masterCode = String(row?.sail_code || '').trim();
+  const rowReference = String(row?.reference_sail_code || masterCode).trim();
+  return masterCode === ref || rowReference === ref;
+};
+
 export const buildExplorerDisplayRows = (masters, dayDetailsByMaster, expandedMasters = new Set()) => {
   const rows = [];
   asArray(masters).forEach((masterRow) => {

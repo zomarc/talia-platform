@@ -10,6 +10,7 @@ import {
   mapShipSelectToFilters,
   resolveListenerScope,
   resolveShipSelectionLabel,
+  scopeNeedsGroupExpansion,
 } from './shipDayBerthTransform.js';
 
 const inventoryItems = [
@@ -159,4 +160,24 @@ test('filterDayRowsByScope filters ship.select to one ship', () => {
   assert.equal(filtered.length, 1);
   assert.equal(filtered[0].ship_code, 'CD');
   assert.equal(filtered[0].in_voyage, false);
+});
+
+test('scopeNeedsGroupExpansion is true for sail and ship selections', () => {
+  const sailScope = resolveListenerScope(
+    {
+      sail_code: 'CJ07260718',
+      reference_sail_code: 'CJ07260718',
+      canonical_scope: {
+        reference_sail_code: 'CJ07260718',
+        ship_code: 'CJ',
+        sail_codes: ['CJ07260718', 'CJ07260719'],
+      },
+    },
+    inventoryIndex
+  );
+  const shipScope = resolveListenerScope({ ship_code: 'CJ' }, inventoryIndex);
+
+  assert.equal(scopeNeedsGroupExpansion(sailScope), true);
+  assert.equal(scopeNeedsGroupExpansion(shipScope), true);
+  assert.equal(scopeNeedsGroupExpansion(null), false);
 });

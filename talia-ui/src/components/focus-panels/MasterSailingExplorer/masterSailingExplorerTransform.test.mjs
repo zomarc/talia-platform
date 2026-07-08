@@ -7,7 +7,9 @@ import {
   buildExplorerDisplayRows,
   buildSellingSegmentSummaries,
   buildGuestsBySailCode,
+  masterRowMatchesReference,
   resolvePhysicalDay,
+  resolveSelectionReferenceCode,
 } from './masterSailingExplorerTransform.js';
 
 const occupancyFixture = [
@@ -101,4 +103,26 @@ test('resolvePhysicalDay uses master sail_code snapshot only', () => {
     physicalBerthsIndex: index,
   });
   assert.equal(physical.berths_occupied, 840);
+});
+
+test('resolveSelectionReferenceCode prefers reference_sail_code', () => {
+  assert.equal(
+    resolveSelectionReferenceCode({
+      sail_code: 'CJ07260719',
+      reference_sail_code: 'CJ07260718',
+      canonical_scope: { reference_sail_code: 'CJ07260718' },
+    }),
+    'CJ07260718'
+  );
+  assert.equal(
+    resolveSelectionReferenceCode({ row_data: { sail_code: 'CJ07260718' } }),
+    'CJ07260718'
+  );
+});
+
+test('masterRowMatchesReference matches master and reference sail codes', () => {
+  const master = { row_type: 'master', sail_code: 'CJ07260718', reference_sail_code: 'CJ07260718' };
+  assert.equal(masterRowMatchesReference(master, 'CJ07260718'), true);
+  assert.equal(masterRowMatchesReference({ row_type: 'day', sail_code: 'CJ07260718' }, 'CJ07260718'), false);
+  assert.equal(masterRowMatchesReference(master, 'OTHER'), false);
 });

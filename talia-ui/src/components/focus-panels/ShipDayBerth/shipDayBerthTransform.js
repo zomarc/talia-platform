@@ -60,6 +60,17 @@ const rowMatchesVoyage = (row, voyageSailCodes) => (
   (row.sail_codes || []).some((code) => voyageSailCodes.has(String(code)))
 );
 
+/** Whether a linked scope should auto-expand grouped rows in the presenter. */
+export const scopeNeedsGroupExpansion = (scope = null) => {
+  if (!scope) return false;
+  const hasVoyage = Boolean(
+    scope.reference_sail_code
+    || (scope.sail_codes?.length > 0)
+  );
+  const hasShip = Boolean(String(scope.ship_code || '').trim());
+  return hasVoyage || hasShip;
+};
+
 /** Filter ship × day rows to a canonical scope and annotate voyage membership. */
 export const filterDayRowsByScope = (dayRows = [], scope = null, search = '') => {
   const voyageSailCodes = new Set((scope?.sail_codes || []).map((code) => String(code)));

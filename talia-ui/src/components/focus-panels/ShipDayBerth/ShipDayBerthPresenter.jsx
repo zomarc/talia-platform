@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { formatDayMon } from '../../../lib/dateFormat';
-import { filterDayRowsByScope } from './shipDayBerthTransform';
+import { filterDayRowsByScope, scopeNeedsGroupExpansion } from './shipDayBerthTransform';
 
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 
@@ -169,36 +169,62 @@ const ShipDayBerthPresenter = ({
     maxDepth: GROUP_MAX_DEPTH,
   }), []);
 
-  // Focus the selected voyage: open its ship + months with voyage days, scroll into view.
-  const focusSelectedVoyage = useCallback(() => {
+  // Focus the linked scope: open ship/month groups and scroll voyage days into view.
+  const focusSelectedScope = useCallback(() => {
     const table = instanceRef.current;
-    if (!table || !tableBuiltRef.current) return;
-    if (voyageSailCodes.size === 0) return;
+    if (!table || !tableBuiltRef.current || !scopeNeedsGroupExpansion(selectedScope)) return;
 
-    const shipGroups = table.getGroups?.() || [];
-    let firstVoyageKey = null;
-    shipGroups.forEach((shipGroup) => {
-      shipGroup.show?.();
-      const monthGroups = shipGroup.getSubGroups?.() || [];
-      monthGroups.forEach((monthGroup) => {
-        const rows = monthGroup.getRows?.() || [];
-        const hasVoyage = rows.some((row) => row.getData?.()?.in_voyage);
-        if (hasVoyage) {
-          monthGroup.show?.();
-          if (!firstVoyageKey) {
-            const match = rows.find((row) => row.getData?.()?.in_voyage);
-            firstVoyageKey = match?.getData?.()?.row_key || null;
-          }
-        } else {
-          monthGroup.hide?.();
+    const run = () => {
+      const shipGroups = table.getGroups?.() || [];
+      let firstVoyageKey = null;
+      const restrictToVoyage = voyageSailCodes.size > 0;
+
+      shipGroups.forEach((shipGroup) => {
+        const monthGroups = shipGroup.getSubGroups?.() || [];
+        const shipRows = monthGroups.flatMap((monthGroup) => monthGroup.getRows?.() || []);
+        const matchesShip = !scopeShipCode
+          || shipRows.some((row) => String(row.getData?.()?.ship_code || '').trim() === scopeShipCode);
+
+        if (!matchesShip) {
+          shipGroup.hide?.();
+          return;
         }
-      });
-    });
 
-    if (firstVoyageKey) {
-      try { table.scrollToRow(firstVoyageKey, 'top', false); } catch { /* noop */ }
+        shipGroup.show?.();
+        monthGroups.forEach((monthGroup) => {
+          const rows = monthGroup.getRows?.() || [];
+          const hasVoyage = rows.some((row) => row.getData?.()?.in_voyage);
+          const shouldOpen = restrictToVoyage ? hasVoyage : rows.length > 0;
+          if (shouldOpen) {
+            monthGroup.show?.();
+            if (!firstVoyageKey) {
+              const match = restrictToVoyage
+                ? rows.find((row) => row.getData?.()?.in_voyage)
+                : rows[0];
+              firstVoyageKey = match?.getData?.()?.row_key || null;
+            }
+          } else {
+            monthGroup.hide?.();
+          }
+        });
+      });
+
+      if (firstVoyageKey) {
+        try { table.scrollToRow(firstVoyageKey, 'top', false); } catch { /* noop */ }
+      }
+    };
+
+    window.requestAnimationFrame(run);
+  }, [scopeShipCode, selectedScope, voyageSailCodes]);
+
+  const afterTableDataRefresh = useCallback((refreshPromise) => {
+    const apply = () => focusSelectedScope();
+    if (refreshPromise && typeof refreshPromise.then === 'function') {
+      refreshPromise.then(apply).catch(apply);
+      return;
     }
-  }, [voyageSailCodes]);
+    window.requestAnimationFrame(apply);
+  }, [focusSelectedScope]);
 
   useEffect(() => {
     let cancelled = false;
@@ -233,14 +259,13 @@ const ShipDayBerthPresenter = ({
 
         instanceRef.current.on('tableBuilt', () => {
           tableBuiltRef.current = true;
-          try { instanceRef.current.replaceData(filteredRowsRef.current || []); } catch { /* noop */ }
+          try { afterTableDataRefresh(instanceRef.current.replaceData(filteredRowsRef.current || [])); } catch { /* noop */ }
           const pendingAction = pendingGroupActionRef.current;
           if (typeof pendingAction === 'string' && pendingAction.startsWith('depth:')) {
             pendingGroupActionRef.current = null;
             const depth = Number.parseInt(pendingAction.split(':')[1], 10);
             applyGroupDepth(Number.isNaN(depth) ? 1 : depth);
           }
-          focusSelectedVoyage();
         });
       } catch (error) {
         console.error('[ShipDayBerth] Failed to initialize table:', error);
@@ -258,17 +283,21 @@ const ShipDayBerthPresenter = ({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [applyGroupDepth, columns]);
+  }, [afterTableDataRefresh, applyGroupDepth, columns]);
 
   useEffect(() => {
     if (!instanceRef.current || !tableBuiltRef.current) return;
     try {
-      instanceRef.current.replaceData(filteredRows || []);
-      focusSelectedVoyage();
+      afterTableDataRefresh(instanceRef.current.replaceData(filteredRows || []));
     } catch (error) {
       console.warn('[ShipDayBerth] Failed to update table data:', error);
     }
-  }, [filteredRows, focusSelectedVoyage]);
+  }, [afterTableDataRefresh, filteredRows]);
+
+  useEffect(() => {
+    if (!selectedScope || !tableBuiltRef.current) return;
+    focusSelectedScope();
+  }, [focusSelectedScope, selectedScope]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;

@@ -521,14 +521,6 @@ const MasterSailingExplorerPresenter = ({
             {masterCount} master sailings · physical berths by day · segments show selling guests
           </p>
         </div>
-        <div className="master-sailing-panel__actions">
-          <button type="button" className="talia-btn talia-btn--ghost" onClick={expandAllMasters}>
-            Expand all days
-          </button>
-          <button type="button" className="talia-btn talia-btn--ghost" onClick={collapseAllMasters}>
-            Collapse days
-          </button>
-        </div>
       </header>
       <div className="master-sailing-panel__filters talia-report-filters">
         {FILTER_FIELDS.map(([field, label]) => (
@@ -545,6 +537,14 @@ const MasterSailingExplorerPresenter = ({
             </select>
           </label>
         ))}
+      </div>
+      <div className="talia-report__controls" aria-label="Master sailing explorer controls">
+        <button type="button" className="talia-btn talia-btn--ghost" onClick={expandAllMasters}>
+          Expand all days
+        </button>
+        <button type="button" className="talia-btn talia-btn--ghost" onClick={collapseAllMasters}>
+          Collapse days
+        </button>
       </div>
       <div ref={tableRef} className="focus-panel__table master-sailing-table ms-explorer-table" />
     </div>

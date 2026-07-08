@@ -82,6 +82,16 @@
   background: var(--theme-bg-elevated);
 }
 
+.talia-report__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-component-gap-sm);
+  flex-wrap: wrap;
+  padding: var(--theme-component-padding-xs) var(--theme-component-padding-md);
+  border-bottom: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated);
+}
+
 /* Content area - minimal padding, let table breathe */
 .talia-report__content {
   flex: 1;
@@ -158,6 +168,11 @@
 
 .talia-actions-hidden .talia-report__actions-bar,
 .talia-actions-hidden .talia-report__actions:not(.talia-report-filters) {
+  display: none !important;
+}
+
+.talia-controls-hidden .talia-report__controls,
+.talia-controls-hidden .status-bar__criteria {
   display: none !important;
 }
 

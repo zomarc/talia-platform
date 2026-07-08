@@ -1,0 +1,39 @@
+---
+description: Standard report shell elements — Title, Filters, Actions, Callouts, Details
+globs: talia-ui/src/components/focus-panels/**/*
+alwaysApply: false
+---
+
+# Report Shell Vocabulary
+
+When building or editing focus-panel presenters, use the shared shell so StatusBar visibility toggles work globally.
+
+**Canonical doc:** `talia-ui/src/components/COMPONENT-STANDARDS.md` § Report Shell Vocabulary.
+
+## Shell order (inside `.talia-report`)
+
+1. `header.talia-report__header` — **Title** + **Subtitle** only
+2. `.talia-report-filters` — **Talia filters** (panel criteria row)
+3. `.talia-callout` — **Callouts** (0+)
+4. `.talia-report__actions-bar` — **Actions** (Refresh, Export)
+5. `main.talia-report__content` — **Content**; wrap tables in `ReportDataDetails` when Details (≣) applies
+
+## Naming traps
+
+| Term | Means | Does NOT mean |
+|------|-------|---------------|
+| **Talia filters** | `.talia-report-filters` row | Tabulator column filters |
+| **Column filters** | Tabulator `headerFilter` / `.tabulator-header-filter` | `.talia-report-filters` |
+| **Controls** | StatusBar global criteria strip (Date, Dur, …) | Panel filter inputs |
+| **Actions** | `.talia-report__actions-bar` | Filter dropdowns |
+| **Details** | `ReportDataDetails` / header ≣ | Tab ⓘ technical meta |
+
+## Required classes for toggles
+
+- Titles → `talia-report__header`, `talia-report__title`
+- Filters → `talia-report-filters`
+- Callouts → `talia-callout`
+- Actions → `talia-report__actions-bar` (not mixed into title or filter rows)
+- Column filters → Tabulator `headerFilter` only (no extra panel wrapper)
+
+Do not add panel-specific visibility toggles. Reference: `AgencyPresenter.jsx`, `PublishedRatesGridPresenter.jsx`.

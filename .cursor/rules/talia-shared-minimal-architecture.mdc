@@ -25,3 +25,11 @@ alwaysApply: true
 
 - Pass `panelInstanceId` and `panelComponentId` into panel containers/hooks that fetch data.
 - Refresh/event responses must remain panel-scoped and generic.
+
+## Report Shell Vocabulary
+
+Focus-panel presenters must use standard shell classes so global visibility toggles work. See `talia-ui/src/components/COMPONENT-STANDARDS.md` § Report Shell Vocabulary.
+
+- **Title/Subtitle** → `talia-report__header`; **Talia filters** → `talia-report-filters`; **Actions** → `talia-report__actions-bar`; **Callouts** → `talia-callout`; **Content** → `talia-report__content`.
+- **Column filters** = Tabulator `headerFilter` only. **Controls** = StatusBar global criteria strip — not panel filter rows.
+- Gate user data tables with `ReportDataDetails` for header **Details** (≣); tab ⓘ is technical meta only.

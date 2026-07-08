@@ -5,12 +5,13 @@ This document outlines the standards and patterns for building components in the
 ## Table of Contents
 
 1. [Component Structure](#component-structure)
-2. [Styling Guidelines](#styling-guidelines)
-3. [Data Fetching](#data-fetching)
-4. [State Management](#state-management)
-5. [Framework Usage](#framework-usage)
-6. [No Overrides Policy](#no-overrides-policy)
-7. [Component Template](#component-template)
+2. [Report Shell Vocabulary](#report-shell-vocabulary)
+3. [Styling Guidelines](#styling-guidelines)
+4. [Data Fetching](#data-fetching)
+5. [State Management](#state-management)
+6. [Framework Usage](#framework-usage)
+7. [No Overrides Policy](#no-overrides-policy)
+8. [Component Template](#component-template)
 
 ## Component Structure
 
@@ -44,6 +45,93 @@ const ComponentName = ({ data, theme, onRefresh }) => {
   - `components/dev/` - Development-only components
 
 - Use index files for exports when appropriate
+
+## Report Shell Vocabulary
+
+Every focus-panel report uses the same **shell elements**. Use the standard CSS classes so global header visibility toggles work without per-panel logic.
+
+**Do not call panel filter rows “Controls”.** In Talia vocabulary, **Controls** means the app header criteria strip (Date, Dur, Active, …), not `.talia-report-filters`.
+
+```
+┌─ .talia-report ─────────────────────────────────────────────┐
+│ header.talia-report__header          [Titles toggle]        │
+│   h2.talia-report__title  +  p.talia-report__subtitle     │
+├─────────────────────────────────────────────────────────────┤
+│ .talia-report-filters                  [Filters toggle]     │
+├─────────────────────────────────────────────────────────────┤
+│ .talia-callout (0+)                    [Callouts toggle]    │
+├─────────────────────────────────────────────────────────────┤
+│ .talia-report__actions-bar             [Actions toggle]     │
+├─────────────────────────────────────────────────────────────┤
+│ main.talia-report__content                                  │
+│   ReportDataDetails (Details toggle) → table/chart/map      │
+│   (.tabulator-header-filter = Column filters toggle)        │
+└─────────────────────────────────────────────────────────────┘
+
+StatusBar “Controls” = global criteria strip above panels (not in this diagram).
+```
+
+### Element reference
+
+| Shell element | What it is | Markup / class | Header toggle | Persisted |
+|---------------|------------|----------------|---------------|-----------|
+| **Title** | Panel name in report header | `header.talia-report__header` → `h2.talia-report__title` | **Titles** | Appearance profile `panelTitlesVisible` |
+| **Subtitle** | Metadata line under title (counts, source) | `p.talia-report__subtitle` (inside header; hidden with Title) | *(with Titles)* | — |
+| **Talia filters** | Panel-scoped criteria row (dropdowns, search) | `.talia-report-filters` (+ `__group`, `__label`, `__input`) | **Filters** | `localStorage` `taliaHeaderFiltersVisible` |
+| **Column filters** | Tabulator per-column header filters | `headerFilter` columns → `.tabulator-header-filter` | **Column filters** | `localStorage` `taliaHeaderTabulatorFiltersVisible` |
+| **Callout** | Informational note / guidance | `.talia-callout` | **Callouts** | Appearance profile `calloutsVisible` |
+| **Actions** | Panel operations (Refresh, Export, …) | `.talia-report__actions-bar` (preferred); legacy compact: `.talia-report__actions` in header | **Actions** | Appearance profile `actionsVisible` |
+| **Controls** | **App header** global criteria strip (Date, Dur, Active, Wide) and data-admin context bar — **not** panel shell | StatusBar `.status-bar__criteria`; root `talia-controls-hidden` | **Controls** | Appearance profile `controlsVisible` |
+| **Details** | User-facing extra data blocks (header ≣); gates table/chart mount | `ReportDataDetails` + `usePanelDetailsVisibility` | **Details** (≣ btn) | `localStorage` `taliaGlobalReportDetailsVisible` |
+| **Technical meta** | Dev/diagnostic block (dock tab ⓘ) | `ReportEventMeta` via `usePanelTechnicalMetaVisibility` | Tab ⓘ only | In-memory `__taliaPanelTechnicalMetaVisibility` |
+| **Content** | Primary body (table, chart, map) | `main.talia-report__content`; tables: `.talia-table` | — | — |
+
+### Root `<html>` classes (visibility)
+
+| Toggle | Class when hidden |
+|--------|-------------------|
+| Titles | `talia-panel-titles-hidden` |
+| Filters | `talia-filters-hidden` |
+| Column filters | `talia-tabulator-filters-hidden` |
+| Callouts | `talia-callouts-hidden` |
+| Actions | `talia-actions-hidden` |
+| Controls | `talia-controls-hidden` |
+
+Details use `ReportDataDetails` / `visible={showTable}` — not a root CSS class.
+
+### Standard shell markup order
+
+Follow **Agency** / **Published Rates** (filters → callout → actions → content). Reference: `AgencyPresenter.jsx`.
+
+```jsx
+<div className="focus-panel talia-report …" role="region" aria-label="…">
+  <header className="talia-report__header">
+    <div className="talia-report__header-left">
+      <h2 className="talia-report__title">…</h2>
+      <p className="talia-report__subtitle">…</p>
+    </div>
+  </header>
+
+  <div className="…-panel__filters talia-report-filters">…</div>
+
+  {showCallout ? <div className="…-panel__callout talia-callout" role="note">…</div> : null}
+
+  <div className="talia-report__actions-bar" aria-label="… actions">…</div>
+
+  <main className="talia-report__content">
+    <ReportDataDetails visible={showTable}>
+      <div ref={tableRef} className="talia-table" role="grid" />
+    </ReportDataDetails>
+  </main>
+</div>
+```
+
+- Put **Talia filters** in their own row — never mix into the title block (except legacy panels not yet migrated).
+- **Column filters** need no panel markup; set `headerFilter` on Tabulator columns.
+- Gate **Content** with `ReportDataDetails` when the panel supports header **Details** (≣).
+- Do **not** use header ≣ for technical meta; do **not** use tab ⓘ for user data tables.
+
+Events: `components/dockview/eventConstants.js` (`DASHBOARD_FILTER_VISIBILITY_EVENT`, `DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT`, `DASHBOARD_DETAILS_VISIBILITY_EVENT`, `REPORT_PANEL_TECHNICAL_META_EVENT`).
 
 ## Styling Guidelines
 
@@ -255,18 +343,12 @@ const MyChart = ({ data }) => {
 
 ### Reusable Panel Behaviors
 
-- **Header structure:** use `header.talia-report__header` for title/subtitle only (plus compact actions when required).
-- **Action section:** place panel actions in a dedicated `talia-report__actions-bar` row (separate from title and from filter rows).
-- **Panel filters:** place filter controls in a dedicated `talia-report-filters` row (or `talia-report__filters`) instead of mixing them into the title block.
-- **Informational callouts:** use `talia-callout` for optional guidance text so global Callouts visibility controls can show/hide it consistently.
-- **User data details (header ≣):** `hooks/usePanelDetailsVisibility.js` + `services/panelDetailsState.js` + **`components/shared/ReportDataDetails.jsx`**. Gate **entire** data-table regions with `<ReportDataDetails visible={showTable}>…</ReportDataDetails>` so Tabulator unmounts and no orphan headers remain (same pattern as Competitor Pricing). Header broadcasts `scope: 'all'` (persisted: `taliaGlobalReportDetailsVisible`). Optional in-panel overrides: `commitVisible(next)`. Use `respectGlobal: false` only where isolated (e.g. Data Management).
-- **Technical meta (tab ⓘ):** `hooks/usePanelTechnicalMetaVisibility.js` + `services/panelTechnicalMetaState.js` + `REPORT_PANEL_TECHNICAL_META_EVENT`. `ReportShell` shows `ReportEventMeta` only when this is on — **not** tied to header ≣.
-- **Do not** use the ⓘ event for end-user data tables; do not use header ≣ for technical meta.
-- **Within-report filter rows (Talia filters):** wrap controls in `talia-report-filters` (see `focus-panels.css`) so the header **Filters** toggle (`talia-filters-hidden` on `<html>`) shows/hides this panel filter bar consistently.
-- **Tabulator column header filters:** independent of Talia filter rows. The header **Column filters** toggle (`talia-tabulator-filters-hidden` on `<html>`) hides `.tabulator-header-filter` globally via `tabulator-theme.css`. No per-panel opt-in — any Tabulator table with `headerFilter` columns is covered automatically.
-- **Visibility controls:** platform visibility toggles govern section-level blocks (`Title` / `Actions` / `Filters` / `Column filters` / `Details` / `Callouts`) via shared root classes; do not create panel-specific toggle logic.
-- For sub-panel expand/collapse *inside* a report (e.g. cabin group), use `hooks/useSubpanelExpansion.js`.
-- Do not duplicate these patterns per component.
+See [Report Shell Vocabulary](#report-shell-vocabulary) for Title / Filter / Action / Callout / Details definitions and markup order.
+
+- **Details hook:** `hooks/usePanelDetailsVisibility.js` + `services/panelDetailsState.js` + `ReportDataDetails.jsx` — optional per-panel `commitVisible(next)`; `respectGlobal: false` only for isolated pages (e.g. Data Management).
+- **Technical meta:** `hooks/usePanelTechnicalMetaVisibility.js` + `services/panelTechnicalMetaState.js` — tab ⓘ only, not header ≣.
+- **Sub-panels:** expand/collapse inside a report (e.g. cabin group) → `hooks/useSubpanelExpansion.js`.
+- Do not duplicate visibility/toggle logic per component; use standard shell classes.
 
 ## No Overrides Policy
 

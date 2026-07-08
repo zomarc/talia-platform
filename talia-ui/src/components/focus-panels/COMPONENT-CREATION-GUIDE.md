@@ -143,27 +143,27 @@ const YourReportPresenter = ({ data, onRefresh }) => {
   return (
     <div className="talia-report" role="region" aria-label="Your Report">
       <header className="talia-report__header">
-        <div>
+        <div className="talia-report__header-left">
           <h2 className="talia-report__title">Report Title</h2>
           <p className="talia-report__subtitle">Description</p>
         </div>
-        <div className="talia-report__actions">
-          {onRefresh && (
-            <button className="talia-btn" onClick={onRefresh} aria-label="Refresh data">
-              ↻ Refresh
-            </button>
-          )}
-        </div>
       </header>
+
+      <div className="your-report__filters talia-report-filters" aria-label="Your report filters">
+        {/* Talia filters row — governed by header Filters toggle */}
+      </div>
+
+      <div className="talia-report__actions-bar" aria-label="Your report actions">
+        {onRefresh && (
+          <button type="button" className="talia-btn" onClick={onRefresh} aria-label="Refresh data">
+            ↻ Refresh
+          </button>
+        )}
+      </div>
 
       <main className="talia-report__content">
         <div ref={tableRef} className="talia-table" role="grid" aria-rowcount={recordCount} />
       </main>
-
-      <footer className="talia-report__footer">
-        <span>{recordCount.toLocaleString()} records</span>
-        <span>Last updated: {new Date().toLocaleDateString()}</span>
-      </footer>
     </div>
   );
 };
@@ -233,14 +233,19 @@ useEffect(() => {
 
 ## CSS Classes Reference
 
+Full shell vocabulary (Title, Filters, Actions, Callouts, Details, Controls vs Column filters): see [`COMPONENT-STANDARDS.md` § Report Shell Vocabulary](../COMPONENT-STANDARDS.md#report-shell-vocabulary).
+
 ### Report Structure
 - `.talia-report` - Main container
-- `.talia-report__header` - Header with title and actions
+- `.talia-report__header` - Title block (toggle: **Titles**)
 - `.talia-report__title` - Report title (h2)
-- `.talia-report__subtitle` - Subtitle/description
-- `.talia-report__actions` - Action buttons container
-- `.talia-report__content` - Main content area
-- `.talia-report__footer` - Footer with metadata
+- `.talia-report__subtitle` - Subtitle/metadata (hidden with title)
+- `.talia-report-filters` - Panel filter row (toggle: **Filters**); not the app **Controls** strip
+- `.talia-callout` - Informational note (toggle: **Callouts**)
+- `.talia-report__actions-bar` - Panel actions row (toggle: **Actions**)
+- `.talia-report__actions` - Legacy compact actions in header (prefer `__actions-bar`)
+- `.talia-report__content` - Main content (table/chart/map)
+- `.talia-report__footer` - Footer (usually hidden via CSS)
 
 ### Tables
 - `.talia-table` - Table wrapper

@@ -3,6 +3,7 @@
 
 import { ApolloClient, InMemoryCache, createHttpLink, gql } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
+import { normalizeRole } from '../utils/roleUtils.js';
 
 // Determine the GraphQL endpoint based on environment
 const getGraphQLEndpoint = () => {
@@ -400,10 +401,11 @@ export const GraphQLUtils = {
   // Headers forwarded to GraphQL server for auth context (role, identity).
   getRequestHeaders: () => {
     try {
-      const userRole =
+      const userRole = normalizeRole(
         localStorage.getItem('userRole') ||
         localStorage.getItem('devUserRole') ||
-        'GUEST';
+        'GUEST'
+      );
       const taliaUserId = localStorage.getItem('taliaUserId');
       const storedUserId = localStorage.getItem('userId') || 'anonymous';
       const userId =
@@ -427,8 +429,11 @@ export const GraphQLUtils = {
   // Extract user role from Apollo Client cache
   getUserRole: () => {
     try {
-      const userRole = localStorage.getItem('userRole');
-      return userRole || 'GUEST';
+      return normalizeRole(
+        localStorage.getItem('userRole') ||
+        localStorage.getItem('devUserRole') ||
+        'GUEST'
+      );
     } catch (error) {
       console.warn('Failed to get user role:', error);
       return 'GUEST';
@@ -438,7 +443,7 @@ export const GraphQLUtils = {
   // Set user context for GraphQL requests
   setUserContext: (user) => {
     try {
-      localStorage.setItem('userRole', user.role || 'GUEST');
+      localStorage.setItem('userRole', normalizeRole(user.role || 'GUEST'));
       localStorage.setItem('userId', user.id || 'anonymous');
       localStorage.setItem('userEmail', user.email || 'guest@celestyal.com');
       const tid = user.taliaUserId ?? user.talia_user_id;

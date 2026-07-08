@@ -44,6 +44,36 @@ const LOCAL_PARITY_QUERY = `
 
 // Default query template - availableVoyages
 // Note: The Celestyal B2B API expects DateTime type for effectiveDate and Date type for date ranges
+const buildQueryKey = (variables) => {
+  if (!variables) return null;
+  const ctx = variables._context || {};
+  if (ctx.testMode) {
+    return `test|${variables.startDateFrom || ''}|${variables.startDateTo || ''}|${variables.effectiveDate || ''}`;
+  }
+  return [
+    ctx.sailCode || '',
+    variables.startDateFrom || '',
+    variables.startDateTo || '',
+    ctx.source || 'default',
+  ].join('|');
+};
+
+const buildPersistedEventKey = (event) => {
+  if (!event?.detail) return null;
+  const detail = event.detail;
+  const rowData = detail.row_data || detail;
+  const sailCode = rowData.sail_code || rowData.Sail_Code || detail.sail_code || null;
+  const sailDate =
+    rowData.sail_date_from
+    || rowData.sail_date
+    || rowData.sailDate
+    || rowData.depart
+    || rowData.departure_date
+    || rowData.Sail_Date_From
+    || null;
+  return `${sailCode || ''}|${sailDate || ''}`;
+};
+
 const DEFAULT_QUERY = `query Availability($effectiveDate: DateTime!, $startDateFrom: Date!, $startDateTo: Date!) {
   availableVoyages(
     params: {
@@ -143,8 +173,21 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
     endDate: getDefaultEndDate()
   });
 
-  // Refs to prevent stale closures
+  // Refs to prevent stale closures and duplicate fetches
   const mountedRef = useRef(true);
+  const endpointRef = useRef(DEFAULT_GRAPHQL_ENDPOINT);
+  const fetchDataRef = useRef(null);
+  const lastFetchedQueryKeyRef = useRef(null);
+  const inFlightQueryKeyRef = useRef(null);
+  const hasHydratedRef = useRef(false);
+  const lastPersistedEventKeyRef = useRef(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Extract parameters from persisted event - DATE RANGES ONLY
   const extractQueryParams = useCallback((event) => {
@@ -225,6 +268,7 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
             .map((name) => sources.find((source) => source.sourceName === name))
             .find(Boolean) || null;
         const endpoint = directSource?.connectionConfig?.endpoint || DEFAULT_GRAPHQL_ENDPOINT;
+        endpointRef.current = endpoint;
         if (!cancelled) {
           setQueryInfo((prev) => ({
             ...prev,
@@ -243,15 +287,23 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
   }, []);
 
   // Fetch data from external GraphQL endpoint
-  const fetchData = useCallback(async (variables) => {
+  const fetchData = useCallback(async (variables, { force = false } = {}) => {
     if (!mountedRef.current) return;
+
+    const normalizedVariables = normalizeDirectSourceVariables(variables);
+    const queryKey = buildQueryKey(normalizedVariables);
+    if (!force && queryKey) {
+      if (inFlightQueryKeyRef.current === queryKey) return;
+      if (lastFetchedQueryKeyRef.current === queryKey) return;
+    }
+    inFlightQueryKeyRef.current = queryKey;
 
     setLoading(true);
     setError(null);
 
     const startTime = Date.now();
-    const endpoint = queryInfo?.endpoint || DEFAULT_GRAPHQL_ENDPOINT;
-    const normalizedVariables = normalizeDirectSourceVariables(variables);
+    const endpoint = endpointRef.current || DEFAULT_GRAPHQL_ENDPOINT;
+    let succeeded = false;
 
     try {
       console.log('[DirectSourceRequest] Fetching from:', endpoint);
@@ -348,6 +400,7 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
         
         // Retry with fallback dates
         if (mountedRef.current) {
+          inFlightQueryKeyRef.current = null;
           fetchData(fallbackVariables);
         }
         return;
@@ -391,6 +444,7 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
         parity,
         validation
       }));
+      succeeded = true;
 
     } catch (err) {
       console.error('[DirectSourceRequest] Error:', err);
@@ -399,11 +453,21 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
         setData(null);
       }
     } finally {
+      if (queryKey && inFlightQueryKeyRef.current === queryKey) {
+        inFlightQueryKeyRef.current = null;
+      }
       if (mountedRef.current) {
         setLoading(false);
+        if (queryKey && succeeded) {
+          lastFetchedQueryKeyRef.current = queryKey;
+        }
       }
     }
-  }, [normalizeDirectSourceVariables, queryInfo?.endpoint]);
+  }, [normalizeDirectSourceVariables]);
+
+  useEffect(() => {
+    fetchDataRef.current = fetchData;
+  }, [fetchData]);
 
   // Flatten nested voyage data for Tabulator display
   const matchesSelectedSail = (selectedSailCode, record) => {
@@ -477,170 +541,123 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
     return flattened;
   };
 
-  // Subscribe to persisted event changes
+  // Subscribe to sail selection changes (not every status-bar tick)
   useEffect(() => {
-    mountedRef.current = true;
-    let hasInitialFetch = false;
+    const applyPersistedEvent = (event, { fetch = true } = {}) => {
+      if (!event?.detail) return false;
 
-    // Check for initial persisted event and auto-fetch
-    const checkPersistedEvent = () => {
+      const eventKey = buildPersistedEventKey(event);
+      if (eventKey && eventKey === lastPersistedEventKeyRef.current) {
+        return false;
+      }
+      if (eventKey) {
+        lastPersistedEventKeyRef.current = eventKey;
+      }
+
+      setPersistedEvent(event);
+      const params = extractQueryParams(event);
+      if (!params) return false;
+
+      setManualDates({
+        effectiveDate: getTodayISO(),
+        startDate: params.startDateFrom,
+        endDate: params.startDateTo,
+      });
+
+      if (fetch) {
+        fetchDataRef.current?.(params);
+      }
+      return true;
+    };
+
+    const hydrateFromPersistedSources = () => {
+      if (hasHydratedRef.current) return false;
+      hasHydratedRef.current = true;
+
       if (window.__taliaStatus) {
         const state = window.__taliaStatus.getState();
-        if (state.persistedEvent && state.persistedEvent.detail) {
+        if (state.persistedEvent?.detail) {
           console.log('[DirectSourceRequest] Found persisted event on mount:', state.persistedEvent);
-          setPersistedEvent(state.persistedEvent);
-          
-          // Extract params and update manual dates to match context
-          const params = extractQueryParams(state.persistedEvent);
-          if (params) {
-            // Update manual dates to reflect context dates
-            setManualDates({
-              effectiveDate: getTodayISO(),
-              startDate: params.startDateFrom,
-              endDate: params.startDateTo
-            });
-            
-            // Auto-fetch with context
-            if (!hasInitialFetch) {
-              hasInitialFetch = true;
-              console.log('[DirectSourceRequest] Auto-fetching with context:', params._context);
-              fetchData(params);
-            }
-          }
-          return true;
+          return applyPersistedEvent(state.persistedEvent);
         }
       }
-      return false;
-    };
 
-    // Check last sail select event (global event bus)
-    const checkLastSailSelect = () => {
       if (window.lastSailSelectEvent?.detail) {
-        const persistedEvent = window.lastSailSelectEvent;
-        console.log('[DirectSourceRequest] Found lastSailSelectEvent on mount:', persistedEvent);
-        setPersistedEvent(persistedEvent);
-        const params = extractQueryParams(persistedEvent);
-        if (params) {
-          setManualDates({
-            effectiveDate: getTodayISO(),
-            startDate: params.startDateFrom,
-            endDate: params.startDateTo
-          });
-          if (!hasInitialFetch) {
-            hasInitialFetch = true;
-            fetchData(params);
-          }
-          return true;
-        }
+        console.log('[DirectSourceRequest] Found lastSailSelectEvent on mount:', window.lastSailSelectEvent);
+        return applyPersistedEvent(window.lastSailSelectEvent);
       }
-      return false;
-    };
 
-    // Also check localStorage for persisted event
-    const checkLocalStorage = () => {
       try {
         const persistedEventStr = localStorage.getItem('talia:persisted:lastEvent');
         if (persistedEventStr) {
           const persistedEvent = JSON.parse(persistedEventStr);
-          if (persistedEvent && persistedEvent.detail) {
+          if (persistedEvent?.detail) {
             console.log('[DirectSourceRequest] Found localStorage persisted event:', persistedEvent);
-            setPersistedEvent(persistedEvent);
-            
-            const params = extractQueryParams(persistedEvent);
-            if (params) {
-              setManualDates({
-                effectiveDate: getTodayISO(),
-                startDate: params.startDateFrom,
-                endDate: params.startDateTo
-              });
-              
-              if (!hasInitialFetch) {
-                hasInitialFetch = true;
-                console.log('[DirectSourceRequest] Auto-fetching with localStorage context:', params._context);
-                fetchData(params);
-              }
-            }
-            return true;
+            return applyPersistedEvent(persistedEvent);
           }
         }
       } catch (e) {
         console.warn('[DirectSourceRequest] Error checking localStorage:', e);
       }
+
       return false;
     };
 
-    // Subscribe to status changes
     let unsubscribe = null;
     if (window.__taliaStatus?.subscribe) {
       unsubscribe = window.__taliaStatus.subscribe(() => {
         const state = window.__taliaStatus.getState();
-        if (state.persistedEvent && state.persistedEvent.detail) {
-          setPersistedEvent(state.persistedEvent);
-          const params = extractQueryParams(state.persistedEvent);
-          if (params) {
-            // Update manual dates when context changes
-            setManualDates({
-              effectiveDate: getTodayISO(),
-              startDate: params.startDateFrom,
-              endDate: params.startDateTo
-            });
-            fetchData(params);
-          }
+        if (state.persistedEvent?.detail) {
+          applyPersistedEvent(state.persistedEvent);
         }
       });
     }
 
-    // Also listen to sail.select events directly
     const handleSailSelect = (event) => {
       console.log('[DirectSourceRequest] Received sail.select event:', event.detail);
-      const syntheticEvent = { detail: event.detail };
-      setPersistedEvent(syntheticEvent);
-      const params = extractQueryParams(syntheticEvent);
-      if (params) {
-        // Update manual dates when context changes
-        setManualDates({
-          effectiveDate: getTodayISO(),
-          startDate: params.startDateFrom,
-          endDate: params.startDateTo
-        });
-        fetchData(params);
-      }
+      applyPersistedEvent({ detail: event.detail });
     };
 
     window.addEventListener(SAIL_SELECT_EVENT, handleSailSelect);
 
-    // Check on mount - try multiple sources
-    const foundContext = checkPersistedEvent() || checkLastSailSelect() || checkLocalStorage();
-    
+    const foundContext = hydrateFromPersistedSources();
     if (!foundContext) {
       console.log('[DirectSourceRequest] No context found on mount - waiting for selection');
     }
 
     return () => {
-      mountedRef.current = false;
       if (unsubscribe) {
         unsubscribe();
       }
       window.removeEventListener(SAIL_SELECT_EVENT, handleSailSelect);
     };
-  }, [extractQueryParams, fetchData]);
+  }, [extractQueryParams]);
 
   // Manual refresh handler
   const handleRefresh = useCallback(() => {
     if (testMode) {
-      // Use manual test dates
-      handleTestQuery();
+      const effectiveDateTime = new Date(manualDates.effectiveDate).toISOString();
+      fetchData({
+        effectiveDate: effectiveDateTime,
+        startDateFrom: manualDates.startDate,
+        startDateTo: manualDates.endDate,
+        _context: {
+          testMode: true,
+          manualSelection: true,
+          rangeDaysBefore: null,
+          rangeDaysAfter: null,
+        },
+      }, { force: true });
     } else if (persistedEvent) {
       const params = extractQueryParams(persistedEvent);
       if (params) {
-        fetchData(params);
+        fetchData(params, { force: true });
       }
     } else {
-      // If no persisted event, use default date range (next 4 weeks)
       const today = new Date();
       const fourWeeksLater = new Date(today);
       fourWeeksLater.setDate(fourWeeksLater.getDate() + 28);
-      
+
       fetchData({
         effectiveDate: today.toISOString(),
         startDateFrom: today.toISOString().split('T')[0],
@@ -649,16 +666,16 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
           source: 'default',
           range: 'next-4-weeks',
           rangeDaysBefore: 0,
-          rangeDaysAfter: 28
-        }
-      });
+          rangeDaysAfter: 28,
+        },
+      }, { force: true });
     }
-  }, [persistedEvent, extractQueryParams, fetchData, testMode]);
+  }, [persistedEvent, extractQueryParams, fetchData, testMode, manualDates]);
 
   // Handle test query with manual dates
   const handleTestQuery = useCallback(() => {
     const effectiveDateTime = new Date(manualDates.effectiveDate).toISOString();
-    
+
     fetchData({
       effectiveDate: effectiveDateTime,
       startDateFrom: manualDates.startDate,
@@ -667,9 +684,9 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
         testMode: true,
         manualSelection: true,
         rangeDaysBefore: null,
-        rangeDaysAfter: null
-      }
-    });
+        rangeDaysAfter: null,
+      },
+    }, { force: true });
   }, [manualDates, fetchData]);
 
   // Handle manual date changes

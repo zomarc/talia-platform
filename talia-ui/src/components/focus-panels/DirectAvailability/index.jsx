@@ -25,6 +25,33 @@ const DIRECT_SOURCE_READ_NAMES = [
   'celestyal_b2b_api',
 ];
 
+const buildPersistedEventKey = (event) => {
+  if (!event?.detail) return null;
+  const detail = event.detail;
+  const rowData = detail.row_data || detail;
+  const sailCode = rowData.sail_code || rowData.Sail_Code || detail.sail_code || null;
+  const sailDate =
+    rowData.sail_date_from
+    || rowData.sail_date
+    || rowData.sailDate
+    || rowData.depart
+    || rowData.departure_date
+    || rowData.Sail_Date_From
+    || null;
+  return `${sailCode || ''}|${sailDate || ''}`;
+};
+
+const buildQueryKey = (variables) => {
+  if (!variables) return null;
+  const ctx = variables._context || {};
+  return [
+    ctx.sailCode || '',
+    variables.startDateFrom || '',
+    variables.startDateTo || '',
+    ctx.source || 'default',
+  ].join('|');
+};
+
 const DEFAULT_QUERY = `query Availability($effectiveDate: DateTime!, $startDateFrom: Date!, $startDateTo: Date!) {
   availableVoyages(
     params: {
@@ -201,6 +228,19 @@ const DirectAvailabilityContainer = () => {
     executionTime: null
   });
   const mountedRef = useRef(true);
+  const endpointRef = useRef(DEFAULT_GRAPHQL_ENDPOINT);
+  const fetchDataRef = useRef(null);
+  const lastFetchedQueryKeyRef = useRef(null);
+  const inFlightQueryKeyRef = useRef(null);
+  const hasHydratedRef = useRef(false);
+  const lastPersistedEventKeyRef = useRef(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -218,9 +258,11 @@ const DirectAvailabilityContainer = () => {
             .map((name) => sources.find((source) => source.sourceName === name))
             .find(Boolean) || null;
         if (!cancelled) {
+          const endpoint = directSource?.connectionConfig?.endpoint || DEFAULT_GRAPHQL_ENDPOINT;
+          endpointRef.current = endpoint;
           setQueryInfo((prev) => ({
             ...prev,
-            endpoint: directSource?.connectionConfig?.endpoint || DEFAULT_GRAPHQL_ENDPOINT,
+            endpoint,
             endpointSource: directSource?.sourceName || 'default'
           }));
         }
@@ -234,13 +276,22 @@ const DirectAvailabilityContainer = () => {
     };
   }, []);
 
-  const fetchData = useCallback(async (variables) => {
+  const fetchData = useCallback(async (variables, { force = false } = {}) => {
     if (!mountedRef.current || !variables?._context?.sailCode) return;
+
+    const queryKey = buildQueryKey(variables);
+    if (!force && queryKey) {
+      if (inFlightQueryKeyRef.current === queryKey) return;
+      if (lastFetchedQueryKeyRef.current === queryKey) return;
+    }
+    inFlightQueryKeyRef.current = queryKey;
+
     setLoading(true);
     setError(null);
     const startTime = Date.now();
-    const endpoint = queryInfo?.endpoint || DEFAULT_GRAPHQL_ENDPOINT;
+    const endpoint = endpointRef.current || DEFAULT_GRAPHQL_ENDPOINT;
     const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    let succeeded = false;
 
     try {
       let result = null;
@@ -294,6 +345,7 @@ const DirectAvailabilityContainer = () => {
         lastExecuted: new Date().toISOString(),
         executionTime: Date.now() - startTime
       }));
+      succeeded = true;
     } catch (err) {
       console.error('[DirectAvailability] Error:', err);
       if (mountedRef.current) {
@@ -301,28 +353,55 @@ const DirectAvailabilityContainer = () => {
         setData([]);
       }
     } finally {
-      if (mountedRef.current) setLoading(false);
+      if (queryKey && inFlightQueryKeyRef.current === queryKey) {
+        inFlightQueryKeyRef.current = null;
+      }
+      if (mountedRef.current) {
+        setLoading(false);
+        if (queryKey && succeeded) {
+          lastFetchedQueryKeyRef.current = queryKey;
+        }
+      }
     }
-  }, [queryInfo?.endpoint]);
+  }, []);
 
   useEffect(() => {
-    mountedRef.current = true;
-    const tryHydrate = () => {
+    fetchDataRef.current = fetchData;
+  }, [fetchData]);
+
+  useEffect(() => {
+    const applyPersistedEvent = (event) => {
+      if (!event?.detail) return false;
+
+      const eventKey = buildPersistedEventKey(event);
+      if (eventKey && eventKey === lastPersistedEventKeyRef.current) {
+        return false;
+      }
+      if (eventKey) {
+        lastPersistedEventKeyRef.current = eventKey;
+      }
+
+      setPersistedEvent(event);
+      const params = extractQueryParams(event);
+      if (params?._context?.sailCode) {
+        fetchDataRef.current?.(params);
+        return true;
+      }
+      return false;
+    };
+
+    const hydrateFromPersistedSources = () => {
+      if (hasHydratedRef.current) return false;
+      hasHydratedRef.current = true;
+
       if (window.__taliaStatus) {
         const state = window.__taliaStatus.getState();
         if (state.persistedEvent?.detail) {
-          setPersistedEvent(state.persistedEvent);
-          const params = extractQueryParams(state.persistedEvent);
-          if (params?._context?.sailCode) fetchData(params);
-          return true;
+          return applyPersistedEvent(state.persistedEvent);
         }
       }
       if (window.lastSailSelectEvent?.detail) {
-        const persisted = window.lastSailSelectEvent;
-        setPersistedEvent(persisted);
-        const params = extractQueryParams(persisted);
-        if (params?._context?.sailCode) fetchData(params);
-        return true;
+        return applyPersistedEvent(window.lastSailSelectEvent);
       }
       return false;
     };
@@ -332,9 +411,7 @@ const DirectAvailabilityContainer = () => {
       unsubscribe = window.__taliaStatus.subscribe(() => {
         const state = window.__taliaStatus.getState();
         if (state.persistedEvent?.detail) {
-          setPersistedEvent(state.persistedEvent);
-          const params = extractQueryParams(state.persistedEvent);
-          if (params?._context?.sailCode) fetchData(params);
+          applyPersistedEvent(state.persistedEvent);
         }
       });
     }
@@ -343,25 +420,21 @@ const DirectAvailabilityContainer = () => {
       window.dispatchEvent(new CustomEvent(CABIN_CLEAR_EVENT, {
         detail: { timestamp: new Date().toISOString() }
       }));
-      const syntheticEvent = { detail: event.detail };
-      setPersistedEvent(syntheticEvent);
-      const params = extractQueryParams(syntheticEvent);
-      if (params?._context?.sailCode) fetchData(params);
+      applyPersistedEvent({ detail: event.detail });
     };
     window.addEventListener(SAIL_SELECT_EVENT, handleSailSelect);
-    tryHydrate();
+    hydrateFromPersistedSources();
 
     return () => {
-      mountedRef.current = false;
       if (unsubscribe) unsubscribe();
       window.removeEventListener(SAIL_SELECT_EVENT, handleSailSelect);
     };
-  }, [fetchData]);
+  }, []);
 
   const handleRefresh = useCallback(() => {
     if (!persistedEvent) return;
     const params = extractQueryParams(persistedEvent);
-    if (params?._context?.sailCode) fetchData(params);
+    if (params?._context?.sailCode) fetchData(params, { force: true });
   }, [persistedEvent, fetchData]);
 
   if (loading && !data?.length) {

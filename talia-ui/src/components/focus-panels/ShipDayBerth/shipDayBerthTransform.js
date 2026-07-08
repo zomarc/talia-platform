@@ -56,15 +56,27 @@ export const resolveListenerScope = (detail, index = null) => {
   return emitted;
 };
 
+const rowMatchesVoyage = (row, voyageSailCodes) => (
+  (row.sail_codes || []).some((code) => voyageSailCodes.has(String(code)))
+);
+
 /** Filter ship × day rows to a canonical scope and annotate voyage membership. */
 export const filterDayRowsByScope = (dayRows = [], scope = null, search = '') => {
   const voyageSailCodes = new Set((scope?.sail_codes || []).map((code) => String(code)));
+  const referenceSailCode = scope?.reference_sail_code
+    ? String(scope.reference_sail_code).trim()
+    : null;
+  if (referenceSailCode) voyageSailCodes.add(referenceSailCode);
+
   const scopeShipCode = scope?.ship_code ? String(scope.ship_code).trim() : null;
+  // sail.select carries voyage sail_codes; ship.select alone does not.
+  const restrictToVoyage = voyageSailCodes.size > 0;
   const term = String(search || '').trim().toLowerCase();
 
   const rows = asArray(dayRows).filter((row) => {
     const rowShipCode = String(row?.ship_code || '').trim();
     if (scopeShipCode && rowShipCode !== scopeShipCode) return false;
+    if (restrictToVoyage && !rowMatchesVoyage(row, voyageSailCodes)) return false;
     if (!term) return true;
     const haystack = [
       row.ship_name,
@@ -77,8 +89,7 @@ export const filterDayRowsByScope = (dayRows = [], scope = null, search = '') =>
 
   return rows.map((row) => ({
     ...row,
-    in_voyage: voyageSailCodes.size > 0
-      && (row.sail_codes || []).some((code) => voyageSailCodes.has(String(code))),
+    in_voyage: restrictToVoyage && rowMatchesVoyage(row, voyageSailCodes),
   }));
 };
 

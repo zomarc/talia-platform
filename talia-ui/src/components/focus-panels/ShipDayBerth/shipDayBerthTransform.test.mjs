@@ -30,6 +30,8 @@ const berthRows = [
   // Turnaround day: two sail codes on same ship/date must NOT sum
   { ship_code: 'CJ', sail_code: 'CJ07260718', date: '2026-07-25', berth_capacity: 1693, berths_occupied: 1200 },
   { ship_code: 'CJ', sail_code: 'CJ07260725', date: '2026-07-25', berth_capacity: 1693, berths_occupied: 300 },
+  // Same ship, different voyage — must drop on sail.select
+  { ship_code: 'CJ', sail_code: 'CJ08260801', date: '2026-08-01', berth_capacity: 1693, berths_occupied: 500 },
   { ship_code: 'CD', sail_code: 'CD03260904', date: '2026-09-04', berth_capacity: 1200, berths_occupied: 900 },
 ];
 
@@ -64,7 +66,7 @@ test('summaries report peaks and tightest availability per ship', () => {
   assert.equal(cj.peak_capacity, 1693);
   assert.equal(cj.peak_occupied, 1453);
   assert.equal(cj.min_available, 240);
-  assert.equal(cj.day_count, 3);
+  assert.equal(cj.day_count, 4);
 });
 
 test('bundle returns rows and summaries', () => {
@@ -112,7 +114,7 @@ test('resolveListenerScope upgrades incomplete emitted canonical_scope via local
   assert.equal(scope.source, 'inventory_reference');
 });
 
-test('filterDayRowsByScope filters to ship and marks voyage days', () => {
+test('filterDayRowsByScope constrains sail.select to voyage days only', () => {
   const dayRows = buildShipDayRows(berthRows, shipRows);
   const scope = resolveListenerScope(
     {
@@ -133,10 +135,20 @@ test('filterDayRowsByScope filters to ship and marks voyage days', () => {
   const filtered = filterDayRowsByScope(dayRows, scope);
   assert.ok(filtered.every((row) => row.ship_code === 'CJ'));
   assert.equal(filtered.length, 3);
+  assert.ok(filtered.every((row) => row.in_voyage));
+  assert.deepEqual(filtered.map((row) => row.date), ['2026-07-18', '2026-07-19', '2026-07-25']);
+  assert.ok(!filtered.some((row) => row.date === '2026-08-01'));
+});
 
-  const voyageDays = filtered.filter((row) => row.in_voyage);
-  assert.equal(voyageDays.length, 3);
-  assert.deepEqual(voyageDays.map((row) => row.date), ['2026-07-18', '2026-07-19', '2026-07-25']);
+test('filterDayRowsByScope filters ship.select to all days for one ship', () => {
+  const dayRows = buildShipDayRows(berthRows, shipRows);
+  const scope = resolveListenerScope({ ship_code: 'CJ' }, inventoryIndex);
+  const filtered = filterDayRowsByScope(dayRows, scope);
+
+  assert.equal(filtered.length, 4);
+  assert.ok(filtered.every((row) => row.ship_code === 'CJ'));
+  assert.ok(filtered.every((row) => row.in_voyage === false));
+  assert.ok(filtered.some((row) => row.date === '2026-08-01'));
 });
 
 test('filterDayRowsByScope filters ship.select to one ship', () => {

@@ -14,6 +14,7 @@ Talia Platform v0.1.0 (Alpha) - System Architecture
 - [User Mapping System](#user-mapping-system)
 - [Revenue & Inventory Management](#revenue--inventory-management)
 - [Panel Selection Linking](#panel-selection-linking)
+- [Inventory Item ↔ Source Data](#inventory-item--source-data)
 - [Multi-Customer Considerations](#multi-customer-considerations)
 - [Technology Stack](#technology-stack)
 
@@ -429,6 +430,24 @@ component selection linking.
 
 **Full reference:** [`docs/CANONICAL-SELECTION-LINKING.md`](./CANONICAL-SELECTION-LINKING.md)
 (also enforced by `.cursor/rules/talia-canonical-selection-linking.mdc`).
+
+---
+
+## 📦 Inventory Item ↔ Source Data
+
+`inventory_item` is Talia's **source-independent** sailing identity. Upstream
+facts live on sync mirrors; identity and master↔segment hierarchy live here.
+
+```
+dwh.Dim_Master_Sail  →  master_sail  →  refresh_inventory_item_sailing_hierarchy()  →  inventory_item
+```
+
+- Unique key: `(sail_code, ship_code)`
+- Voyage key: `reference_sail_code` (`sailing_role` = `master` | `segment`)
+- Facts (berths, guests, rates) stay on their source-mirrors and join **in via**
+  sail/ship/reference codes — they are not copied onto `inventory_item`
+
+**Full contract:** [`docs/INVENTORY-ITEM-SOURCE-LINKING.md`](./INVENTORY-ITEM-SOURCE-LINKING.md)
 
 ---
 

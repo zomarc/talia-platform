@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import {
   buildInteractionModel,
   buildPresentationModel,
+  buildComponentCatalog,
   eventChannelKey,
+  eventLabel,
   normalizeEventName,
 } from './componentInteractionsTransform.js';
 
@@ -107,6 +109,39 @@ test('summary counts reflect participation', () => {
 test('includeUnlinked surfaces dangling contracts', () => {
   const { unlinked } = buildInteractionModel(registry, { includeUnlinked: true });
   assert.ok(unlinked.some((c) => c.key === 'talia:agency'));
+});
+
+test('eventLabel maps an event to its channel label', () => {
+  assert.equal(eventLabel('talia:sail.select'), 'Sailing selection');
+  assert.equal(eventLabel('talia:reservation.clear'), 'Reservation selection');
+});
+
+test('catalog includes every component, grouped by category, sorted by size', () => {
+  const { groups, summary } = buildComponentCatalog(registry);
+  assert.equal(summary.total, 7);
+  const catalogued = groups.reduce((sum, g) => sum + g.items.length, 0);
+  assert.equal(catalogued, 7);
+  // Tables is the largest category here, so it sorts first.
+  assert.equal(groups[0].category, 'Tables');
+  assert.equal(summary.categories, groups.length);
+});
+
+test('catalog captures event contract and flags per component', () => {
+  const { groups, summary } = buildComponentCatalog(registry);
+  const all = groups.flatMap((g) => g.items);
+
+  const explorer = all.find((i) => i.name === 'MasterSailingExplorer');
+  assert.ok(explorer.emits.some((c) => c.key === 'talia:sail' && c.canonical));
+  assert.equal(explorer.responds.length, 0);
+  assert.equal(explorer.canonical, true);
+
+  const berth = all.find((i) => i.name === 'ShipDayBerth');
+  assert.ok(berth.responds.some((c) => c.key === 'talia:ship'));
+  assert.equal(berth.emits.length, 0);
+
+  const lonely = all.find((i) => i.name === 'LonelyGame');
+  assert.equal(lonely.wired, false);
+  assert.ok(summary.isolated >= 1);
 });
 
 test('presentation model splits physical vs selling around the inventory_item hub', () => {

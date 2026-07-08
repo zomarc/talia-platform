@@ -155,9 +155,64 @@ const PresentationView = ({ presentation }) => {
   );
 };
 
+const CatalogCard = ({ item }) => (
+  <div className={`talia-cim-cat__card${item.canonical ? ' talia-cim-cat__card--canonical' : ''}`}>
+    <div className="talia-cim-cat__card-head">
+      <span className="talia-cim-cat__card-title" title={item.name}>{item.title}</span>
+      <span className="talia-cim-cat__card-flags">
+        {item.flags.mock && <span className="talia-cim-tag talia-cim-tag--mock" title="Uses mock data">mock</span>}
+        {item.flags.legacy && <span className="talia-cim-tag talia-cim-tag--legacy" title="Legacy component">legacy</span>}
+        {item.flags.restricted && <span className="talia-cim-tag talia-cim-tag--role" title={`Restricted: ${item.flags.roles.join(', ')}`}>admin</span>}
+      </span>
+    </div>
+    {item.description && <p className="talia-cim-cat__card-desc">{item.description}</p>}
+    <div className="talia-cim-cat__card-events">
+      <span className="talia-cim-cat__io" title={item.emits.map((c) => c.label).join(', ') || 'emits nothing'}>
+        ▲ {item.emits.length ? item.emits.map((c) => c.label).join(', ') : '—'}
+      </span>
+      <span className="talia-cim-cat__io" title={item.responds.map((c) => c.label).join(', ') || 'responds to nothing'}>
+        ▼ {item.responds.length ? item.responds.map((c) => c.label).join(', ') : '—'}
+      </span>
+    </div>
+  </div>
+);
+
+const CatalogView = ({ catalog }) => {
+  const groups = catalog?.groups || [];
+  const summary = catalog?.summary || {};
+  return (
+    <div className="talia-cim-cat">
+      <div className="talia-cim-summary">
+        <span className="talia-cim-stat"><strong>{summary.total ?? 0}</strong> components</span>
+        <span className="talia-cim-stat"><strong>{summary.categories ?? 0}</strong> categories</span>
+        <span className="talia-cim-stat"><strong>{summary.emitting ?? 0}</strong> emit</span>
+        <span className="talia-cim-stat"><strong>{summary.responding ?? 0}</strong> respond</span>
+        <span className="talia-cim-stat"><strong>{summary.canonical ?? 0}</strong> canonical</span>
+        <span className="talia-cim-stat"><strong>{summary.isolated ?? 0}</strong> standalone</span>
+      </div>
+      <p className="talia-cim-intro">
+        Every registered panel, grouped by category. <span className="talia-cim-cat__legend">▲ emits · ▼ responds to</span>
+      </p>
+      {groups.map((group) => (
+        <section key={group.category} className="talia-cim-cat__group">
+          <h3 className="talia-cim-cat__group-title">
+            {group.category} <span className="talia-cim-cat__group-count">{group.count}</span>
+          </h3>
+          <div className="talia-cim-cat__grid">
+            {group.items.map((item) => (
+              <CatalogCard key={item.name} item={item} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+};
+
 const ComponentInteractionMapPresenter = ({
   model,
   presentation,
+  catalog,
   mode = 'presentation',
   onModeChange,
   onRefresh,
@@ -165,6 +220,8 @@ const ComponentInteractionMapPresenter = ({
   const channels = model?.channels || [];
   const summary = model?.summary || {};
   const isPresentation = mode === 'presentation';
+  const isCatalog = mode === 'catalog';
+  const isDetailed = mode === 'detailed';
 
   return (
     <div className="talia-report" role="region" aria-label="Component interaction map">
@@ -172,9 +229,9 @@ const ComponentInteractionMapPresenter = ({
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Component Interaction Map</h2>
           <p className="talia-report__subtitle">
-            {isPresentation
-              ? 'The big picture: how physical and selling meet at inventory_item'
-              : 'Main panel-to-panel interactions, derived from the component registry'}
+            {isPresentation && 'The big picture: how physical and selling meet at inventory_item'}
+            {isDetailed && 'Main panel-to-panel interactions, derived from the component registry'}
+            {isCatalog && 'Global catalog of every registered component'}
           </p>
         </div>
         <div className="talia-report__actions">
@@ -189,11 +246,19 @@ const ComponentInteractionMapPresenter = ({
             </button>
             <button
               type="button"
-              className={`talia-btn ${!isPresentation ? 'talia-btn--primary' : 'talia-btn--ghost'}`}
-              aria-pressed={!isPresentation}
+              className={`talia-btn ${isDetailed ? 'talia-btn--primary' : 'talia-btn--ghost'}`}
+              aria-pressed={isDetailed}
               onClick={() => onModeChange?.('detailed')}
             >
               Detailed
+            </button>
+            <button
+              type="button"
+              className={`talia-btn ${isCatalog ? 'talia-btn--primary' : 'talia-btn--ghost'}`}
+              aria-pressed={isCatalog}
+              onClick={() => onModeChange?.('catalog')}
+            >
+              All components
             </button>
           </div>
           {onRefresh && (
@@ -207,6 +272,10 @@ const ComponentInteractionMapPresenter = ({
       {isPresentation && presentation ? (
         <main className="talia-report__content talia-cim">
           <PresentationView presentation={presentation} />
+        </main>
+      ) : isCatalog ? (
+        <main className="talia-report__content talia-cim">
+          <CatalogView catalog={catalog} />
         </main>
       ) : (
       <main className="talia-report__content talia-cim">

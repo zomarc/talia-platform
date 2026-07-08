@@ -7,7 +7,7 @@
 
 import React, { useMemo, useState, useCallback } from 'react';
 import componentRegistry from '../registry';
-import { buildInteractionModel, buildPresentationModel } from './componentInteractionsTransform';
+import { buildInteractionModel, buildPresentationModel, buildComponentCatalog } from './componentInteractionsTransform';
 import ComponentInteractionMapPresenter from './ComponentInteractionMapPresenter';
 
 const ComponentInteractionMapContainer = () => {
@@ -27,12 +27,19 @@ const ComponentInteractionMapContainer = () => {
     [nonce]
   );
 
+  const catalog = useMemo(
+    () => buildComponentCatalog(componentRegistry),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nonce]
+  );
+
   const handleRefresh = useCallback(() => setNonce((n) => n + 1), []);
 
   return (
     <ComponentInteractionMapPresenter
       model={model}
       presentation={presentation}
+      catalog={catalog}
       mode={mode}
       onModeChange={setMode}
       onRefresh={handleRefresh}

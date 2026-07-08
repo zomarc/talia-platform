@@ -216,6 +216,9 @@ Refreshed by `refresh_inventory_item_sailing_hierarchy()` after master-sail sync
 Physical berths come from `ship_day_berth_status`
 (`talia-server/supabase/migrations/20260708120000_ship_day_berth_status.sql`).
 
+**How source tables feed this layer** (field mapping, hierarchy rules, join
+contracts): [`docs/INVENTORY-ITEM-SOURCE-LINKING.md`](./INVENTORY-ITEM-SOURCE-LINKING.md).
+
 ---
 
 ## Tests

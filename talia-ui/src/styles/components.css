@@ -2459,3 +2459,131 @@ button:focus-visible,
     flex-direction: row;
   }
 }
+
+/* ---- Catalog mode (all components) ---- */
+
+.talia-cim-cat__legend {
+  font-size: 0.72rem;
+  color: var(--theme-text-muted);
+  margin-left: 6px;
+}
+
+.talia-cim-cat__group {
+  margin-bottom: var(--theme-component-gap-md);
+}
+
+.talia-cim-cat__group-title {
+  margin: 0 0 8px 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--theme-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--theme-border);
+}
+
+.talia-cim-cat__group-count {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--theme-text-muted);
+  background: color-mix(in srgb, var(--theme-text) 8%, transparent);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.talia-cim-cat__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--theme-component-gap-sm);
+}
+
+.talia-cim-cat__card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  background: var(--theme-surface, transparent);
+  min-width: 0;
+}
+
+.talia-cim-cat__card--canonical {
+  border-color: color-mix(in srgb, #5b9fd4 45%, var(--theme-border));
+  background: color-mix(in srgb, #5b9fd4 6%, transparent);
+}
+
+.talia-cim-cat__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.talia-cim-cat__card-title {
+  font-size: var(--theme-font-size-sm);
+  font-weight: 600;
+  color: var(--theme-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.talia-cim-cat__card-flags {
+  display: inline-flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.talia-cim-tag {
+  font-size: 0.56rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text-muted);
+}
+
+.talia-cim-tag--mock {
+  color: color-mix(in srgb, var(--theme-warning, #c88a2e) 90%, var(--theme-text));
+  border-color: color-mix(in srgb, var(--theme-warning, #c88a2e) 45%, transparent);
+}
+
+.talia-cim-tag--role {
+  color: color-mix(in srgb, #b45bd4 85%, var(--theme-text));
+  border-color: color-mix(in srgb, #b45bd4 45%, transparent);
+}
+
+.talia-cim-cat__card-desc {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--theme-text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.talia-cim-cat__card-events {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: auto;
+  padding-top: 4px;
+  border-top: 1px dashed var(--theme-border);
+}
+
+.talia-cim-cat__io {
+  font-size: 0.66rem;
+  color: var(--theme-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

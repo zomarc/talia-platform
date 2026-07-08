@@ -6,9 +6,20 @@ alwaysApply: true
 # Canonical Selection Linking
 
 All panel-to-panel selection linking goes through the `inventory_item` canonical
-layer. Full reference: `docs/CANONICAL-SELECTION-LINKING.md`.
+layer.
+- UI events: `docs/CANONICAL-SELECTION-LINKING.md`
+- Source ↔ inventory_item contract: `docs/INVENTORY-ITEM-SOURCE-LINKING.md`
 
-## The rule
+## Source ↔ inventory_item (data)
+
+- `inventory_item` is the **only** canonical sailing identity / hierarchy.
+- Primary feed: `dwh.Dim_Master_Sail` → synced `master_sail` →
+  `refresh_inventory_item_sailing_hierarchy()` (idempotent upsert + parent link).
+- Unique key: `(sail_code, ship_code)`. Voyage key: `reference_sail_code`.
+- Facts (berths, guests, rates) stay on source-mirrors; join *to* the resolved
+  voyage/ship scope — never re-derive master↔segment from `master_sail` in UI.
+
+## The rule (events)
 
 - There are exactly two selection events (+ their clears):
   `talia:sail.select` / `talia:sail.clear`, `talia:ship.select` / `talia:ship.clear`.

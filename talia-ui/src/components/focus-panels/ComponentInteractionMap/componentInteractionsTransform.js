@@ -55,6 +55,9 @@ const humanizeKey = (key) => {
 
 const channelLabel = (key) => CHANNEL_LABELS[key] || humanizeKey(key);
 
+/** Human label for a single event name (e.g. 'talia:sail.select' -> 'Sailing selection'). */
+export const eventLabel = (event) => channelLabel(eventChannelKey(event));
+
 /**
  * Build the interaction model from a component registry.
  *
@@ -245,6 +248,85 @@ export const buildPresentationModel = (registry = {}) => {
       ...selling,
     },
   };
+};
+
+const CANONICAL_CHANNEL_KEYS = CANONICAL_KEYS;
+
+const uniqueChannels = (events) => {
+  const map = new Map();
+  asArray(events).forEach((event) => {
+    const key = eventChannelKey(event);
+    if (!key || map.has(key)) return;
+    map.set(key, {
+      key,
+      label: channelLabel(key),
+      canonical: CANONICAL_CHANNEL_KEYS.has(key),
+    });
+  });
+  return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+};
+
+/**
+ * Build a global catalog of every registered component, grouped by category.
+ * A birds-eye inventory: each entry carries its event contract (emits / responds)
+ * and a few useful flags, so the whole surface area is visible at a glance.
+ *
+ * @param {object} registry - map of name -> metadata.
+ * @returns {{ groups: Array, summary: object }}
+ */
+export const buildComponentCatalog = (registry = {}) => {
+  const entries = Object.entries(registry || {});
+
+  const items = entries.map(([name, meta]) => {
+    const events = meta?.events || {};
+    const emits = uniqueChannels(events.emits);
+    const responds = uniqueChannels(events.responds || events.respondsTo);
+    return {
+      name,
+      title: meta?.title || name,
+      category: meta?.category || 'Other',
+      description: meta?.description || '',
+      panelId: meta?.panelId || null,
+      emits,
+      responds,
+      wired: emits.length > 0 || responds.length > 0,
+      canonical: [...emits, ...responds].some((c) => c.canonical),
+      flags: {
+        mock: Boolean(meta?.usesMockData),
+        legacy: Boolean(meta?.legacy),
+        refresh: Boolean(meta?.supportsRefresh),
+        restricted: Array.isArray(meta?.allowedRoles) && meta.allowedRoles.length > 0,
+        roles: Array.isArray(meta?.allowedRoles) ? meta.allowedRoles : [],
+      },
+    };
+  });
+
+  const groupsMap = new Map();
+  items.forEach((item) => {
+    if (!groupsMap.has(item.category)) groupsMap.set(item.category, []);
+    groupsMap.get(item.category).push(item);
+  });
+
+  const groups = Array.from(groupsMap.entries())
+    .map(([category, list]) => ({
+      category,
+      count: list.length,
+      items: list.slice().sort((a, b) => a.title.localeCompare(b.title)),
+    }))
+    .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
+
+  const summary = {
+    total: items.length,
+    categories: groups.length,
+    emitting: items.filter((i) => i.emits.length > 0).length,
+    responding: items.filter((i) => i.responds.length > 0).length,
+    canonical: items.filter((i) => i.canonical).length,
+    isolated: items.filter((i) => !i.wired).length,
+    mock: items.filter((i) => i.flags.mock).length,
+    legacy: items.filter((i) => i.flags.legacy).length,
+  };
+
+  return { groups, summary };
 };
 
 export default buildInteractionModel;

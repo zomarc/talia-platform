@@ -85,6 +85,7 @@ const MasterSailingExplorerPresenter = ({
   const pendingGroupActionRef = useRef(null);
   const groupCycleDepthRef = useRef(1);
   const [expandedMasters, setExpandedMasters] = useState(() => new Set());
+  const [segmentsVisible, setSegmentsVisible] = useState(true);
   const [filters, setFilters] = useState({
     sail_code: '',
     sail_date_from: '',
@@ -133,115 +134,125 @@ const MasterSailingExplorerPresenter = ({
     setExpandedMasters(new Set());
   }, []);
 
-  const columns = useMemo(() => ([
-    {
-      field: 'expand_toggle',
-      title: '',
-      width: 34,
-      hozAlign: 'center',
-      headerSort: false,
-      formatter: (cell) => {
-        const row = cell.getRow().getData();
-        if (row?.row_type !== 'master' || !row?.is_expandable) return '';
-        return row?.is_expanded ? '▾' : '▸';
+  const columns = useMemo(() => {
+    const baseColumns = [
+      {
+        field: 'expand_toggle',
+        title: '',
+        width: 34,
+        hozAlign: 'center',
+        headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (row?.row_type !== 'master' || !row?.is_expandable) return '';
+          return row?.is_expanded ? '▾' : '▸';
+        },
+        cellClick: (event, cell) => {
+          handleExpandToggle(event, cell.getRow().getData());
+        },
       },
-      cellClick: (event, cell) => {
-        handleExpandToggle(event, cell.getRow().getData());
+      {
+        field: 'row_label',
+        title: 'Master Sail / Day',
+        minWidth: 130,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (row?.row_type === 'day') {
+            return formatDayMon(row?.voyage_day_date, row?.day_label || '');
+          }
+          return row?.sail_code || '';
+        },
+        headerSort: false,
       },
-    },
-    {
-      field: 'row_label',
-      title: 'Master Sail / Day',
-      minWidth: 130,
-      formatter: (cell) => {
-        const row = cell.getRow().getData();
-        if (row?.row_type === 'day') {
-          return formatDayMon(row?.voyage_day_date, row?.day_label || '');
-        }
-        return row?.sail_code || '';
+    ];
+
+    if (segmentsVisible) {
+      baseColumns.push({
+        field: 'contributing_segments',
+        title: 'Segments',
+        minWidth: 220,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (row?.row_type === 'day') {
+            return formatSegmentHighlights(row?.contributing_segments);
+          }
+          return formatSegmentHighlights(row?.segment_summaries || []);
+        },
+        headerSort: false,
+      });
+    }
+
+    baseColumns.push(
+      {
+        field: 'sail_date_from',
+        title: 'Departure',
+        width: 88,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (row?.row_type === 'day') return `Day ${row?.voyage_day_index || ''}`;
+          return formatDayMon(cell.getValue(), '');
+        },
+        headerSort: false,
       },
-      headerSort: false,
-    },
-    {
-      field: 'contributing_segments',
-      title: 'Segments',
-      minWidth: 220,
-      formatter: (cell) => {
-        const row = cell.getRow().getData();
-        if (row?.row_type === 'day') {
-          return formatSegmentHighlights(row?.contributing_segments);
-        }
-        return formatSegmentHighlights(row?.segment_summaries || []);
+      {
+        field: 'sail_days',
+        title: 'Duration',
+        hozAlign: 'center',
+        width: 72,
+        headerSort: false,
       },
-      headerSort: false,
-    },
-    {
-      field: 'sail_date_from',
-      title: 'Departure',
-      width: 88,
-      formatter: (cell) => {
-        const row = cell.getRow().getData();
-        if (row?.row_type === 'day') return `Day ${row?.voyage_day_index || ''}`;
-        return formatDayMon(cell.getValue(), '');
+      {
+        field: 'package_name',
+        title: 'Package',
+        minWidth: 120,
+        headerSort: false,
       },
-      headerSort: false,
-    },
-    {
-      field: 'sail_days',
-      title: 'Duration',
-      hozAlign: 'center',
-      width: 72,
-      headerSort: false,
-    },
-    {
-      field: 'package_name',
-      title: 'Package',
-      minWidth: 120,
-      headerSort: false,
-    },
-    {
-      field: 'route',
-      title: 'Route',
-      width: 96,
-      headerSort: false,
-    },
-    {
-      field: 'booked_display',
-      title: 'Booked (berths)',
-      hozAlign: 'right',
-      width: 100,
-      formatter: (cell) => {
-        const row = cell.getRow().getData();
-        const value = row?.row_type === 'day' ? row?.booked : row?.total_booked;
-        return formatCount(value);
+      {
+        field: 'route',
+        title: 'Route',
+        width: 96,
+        headerSort: false,
       },
-      headerSort: false,
-    },
-    {
-      field: 'capacity_display',
-      title: 'Capacity (berths)',
-      hozAlign: 'right',
-      width: 108,
-      formatter: (cell) => {
-        const row = cell.getRow().getData();
-        const value = row?.row_type === 'day' ? row?.capacity : row?.total_capacity;
-        return formatCount(value);
+      {
+        field: 'booked_display',
+        title: 'Booked (berths)',
+        hozAlign: 'right',
+        width: 100,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const value = row?.row_type === 'day' ? row?.booked : row?.total_booked;
+          return formatCount(value);
+        },
+        headerSort: false,
       },
-      headerSort: false,
-    },
-    {
-      field: 'available_display',
-      title: 'Available',
-      hozAlign: 'right',
-      width: 88,
-      formatter: (cell) => {
-        const row = cell.getRow().getData();
-        const value = row?.row_type === 'day' ? row?.available : row?.total_available;
-        return formatCount(value);
+      {
+        field: 'capacity_display',
+        title: 'Capacity (berths)',
+        hozAlign: 'right',
+        width: 108,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const value = row?.row_type === 'day' ? row?.capacity : row?.total_capacity;
+          return formatCount(value);
+        },
+        headerSort: false,
       },
-      headerSort: false,
-    },
-  ]), [handleExpandToggle]);
+      {
+        field: 'available_display',
+        title: 'Available',
+        hozAlign: 'right',
+        width: 88,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const value = row?.row_type === 'day' ? row?.available : row?.total_available;
+          return formatCount(value);
+        },
+        headerSort: false,
+      }
+    );
+
+    return baseColumns;
+  }, [handleExpandToggle, segmentsVisible]);
 
   const openOnlyMonthGroup = useCallback((targetGroup) => {
     const table = instanceRef.current;
@@ -539,6 +550,14 @@ const MasterSailingExplorerPresenter = ({
         ))}
       </div>
       <div className="talia-report__controls" aria-label="Master sailing explorer controls">
+        <button
+          type="button"
+          className={`talia-btn ${segmentsVisible ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+          aria-pressed={segmentsVisible}
+          onClick={() => setSegmentsVisible((prev) => !prev)}
+        >
+          Segments
+        </button>
         <button type="button" className="talia-btn talia-btn--secondary" onClick={expandAllMasters}>
           Expand all days
         </button>

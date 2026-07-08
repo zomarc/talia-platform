@@ -57,7 +57,13 @@ const GROUP_BY = [
 ];
 const GROUP_MAX_DEPTH = GROUP_BY.length;
 
-const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => {
+const MasterSailingPresenter = ({
+  data,
+  panelInstanceId,
+  panelComponentId,
+  segmentsVisible = true,
+  onSegmentsVisibleChange,
+}) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const didApplyInitialGroupOpenRef = useRef(false);
@@ -77,56 +83,62 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
   const filterOptions = useMemo(() => Object.fromEntries(
     FILTER_FIELDS.map(([field]) => [field, buildSelectValues(data || [], field)])
   ), [data]);
-  const columns = useMemo(() => ([
-    {
-      field: 'sail_code',
-      title: 'Sail Code',
-      width: estimateColumnWidth(data || [], 'sail_code', 'Sail Code', 110, 220),
-      headerSort: false,
-    },
-    {
-      field: 'sail_date_from',
-      title: 'Departure',
-      width: estimateColumnWidth(data || [], 'sail_date_from', 'Departure', 80, 120),
-      formatter: (cell) => {
-        const value = cell.getValue();
-        return formatDayMon(value, '');
+  const columns = useMemo(() => {
+    const baseColumns = [
+      {
+        field: 'sail_code',
+        title: 'Sail Code',
+        width: estimateColumnWidth(data || [], 'sail_code', 'Sail Code', 110, 220),
+        headerSort: false,
       },
-      headerSort: false,
-    },
-    {
-      field: 'sail_days',
-      title: 'Duration',
-      hozAlign: 'center',
-      width: estimateColumnWidth(data || [], 'sail_days', 'Duration', 68, 100),
-      headerSort: false,
-    },
-    {
-      field: 'package_name',
-      title: 'Package',
-      width: estimateColumnWidth(data || [], 'package_name', 'Package', 100, 300),
-      headerSort: false,
-    },
-    {
-      field: 'package_type',
-      title: 'Type',
-      width: estimateColumnWidth(data || [], 'package_type', 'Type', 72, 200),
-      headerSort: false,
-    },
-    {
-      field: 'route',
-      title: 'Route',
-      width: estimateColumnWidth(data || [], 'route', 'Route', 90, 180),
-      headerSort: false,
-    },
-    {
-      field: 'segment_count',
-      title: 'Segments',
-      hozAlign: 'center',
-      width: 88,
-      headerSort: false,
-    },
-    {
+      {
+        field: 'sail_date_from',
+        title: 'Departure',
+        width: estimateColumnWidth(data || [], 'sail_date_from', 'Departure', 80, 120),
+        formatter: (cell) => {
+          const value = cell.getValue();
+          return formatDayMon(value, '');
+        },
+        headerSort: false,
+      },
+      {
+        field: 'sail_days',
+        title: 'Duration',
+        hozAlign: 'center',
+        width: estimateColumnWidth(data || [], 'sail_days', 'Duration', 68, 100),
+        headerSort: false,
+      },
+      {
+        field: 'package_name',
+        title: 'Package',
+        width: estimateColumnWidth(data || [], 'package_name', 'Package', 100, 300),
+        headerSort: false,
+      },
+      {
+        field: 'package_type',
+        title: 'Type',
+        width: estimateColumnWidth(data || [], 'package_type', 'Type', 72, 200),
+        headerSort: false,
+      },
+      {
+        field: 'route',
+        title: 'Route',
+        width: estimateColumnWidth(data || [], 'route', 'Route', 90, 180),
+        headerSort: false,
+      },
+    ];
+
+    if (segmentsVisible) {
+      baseColumns.push({
+        field: 'segment_count',
+        title: 'Segments',
+        hozAlign: 'center',
+        width: 88,
+        headerSort: false,
+      });
+    }
+
+    baseColumns.push({
       field: 'guests',
       title: 'Guests',
       hozAlign: 'right',
@@ -140,8 +152,10 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
         });
       },
       headerSort: false,
-    }
-  ]), [data]);
+    });
+
+    return baseColumns;
+  }, [data, segmentsVisible]);
 
   const openOnlyMonthGroup = useCallback((targetGroup) => {
     const table = instanceRef.current;
@@ -419,6 +433,16 @@ const MasterSailingPresenter = ({ data, panelInstanceId, panelComponentId }) => 
             </select>
           </label>
         ))}
+      </div>
+      <div className="talia-report__controls" aria-label="Master sailing controls">
+        <button
+          type="button"
+          className={`talia-btn ${segmentsVisible ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+          aria-pressed={segmentsVisible}
+          onClick={() => onSegmentsVisibleChange?.(!segmentsVisible)}
+        >
+          Segments
+        </button>
       </div>
       <div ref={tableRef} className="focus-panel__table master-sailing-table" />
     </div>

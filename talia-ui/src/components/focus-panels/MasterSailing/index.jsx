@@ -1,14 +1,14 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import { setInventoryItems } from '../../../services/data/inventoryReferenceService';
 import PanelDataState from '../../shared/PanelDataState';
 import MasterSailingPresenter from './MasterSailingPresenter';
 import { buildMasterSailingRows } from './masterSailingTransform';
 
-const MASTER_SAIL_FILTERS = { is_main: 1 };
 const INVENTORY_FILTERS = { is_operational: true };
 
 const MasterSailingContainer = ({ panelInstanceId, panelComponentId }) => {
+  const [segmentsVisible, setSegmentsVisible] = useState(true);
   const {
     data: masterSailRows,
     loading: masterLoading,
@@ -20,7 +20,6 @@ const MasterSailingContainer = ({ panelInstanceId, panelComponentId }) => {
     panelInstanceId,
     panelComponentId,
     contextMapper: () => null,
-    filters: MASTER_SAIL_FILTERS,
     limit: 500,
   });
 
@@ -60,8 +59,13 @@ const MasterSailingContainer = ({ panelInstanceId, panelComponentId }) => {
   }, [inventoryRows]);
 
   const mergedRows = useMemo(
-    () => buildMasterSailingRows(masterSailRows, inventoryRows, reservationCurrentStateRows),
-    [masterSailRows, inventoryRows, reservationCurrentStateRows]
+    () => buildMasterSailingRows(
+      masterSailRows,
+      inventoryRows,
+      reservationCurrentStateRows,
+      { showSegments: segmentsVisible }
+    ),
+    [masterSailRows, inventoryRows, reservationCurrentStateRows, segmentsVisible]
   );
 
   const loading = masterLoading || inventoryLoading || reservationLoading;
@@ -87,6 +91,8 @@ const MasterSailingContainer = ({ panelInstanceId, panelComponentId }) => {
         onRefresh={handleRefresh}
         panelInstanceId={panelInstanceId}
         panelComponentId={panelComponentId}
+        segmentsVisible={segmentsVisible}
+        onSegmentsVisibleChange={setSegmentsVisible}
       />
     </PanelDataState>
   );

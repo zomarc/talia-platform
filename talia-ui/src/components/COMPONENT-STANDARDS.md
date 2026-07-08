@@ -262,9 +262,9 @@ const MyChart = ({ data }) => {
 - **User data details (header ≣):** `hooks/usePanelDetailsVisibility.js` + `services/panelDetailsState.js` + **`components/shared/ReportDataDetails.jsx`**. Gate **entire** data-table regions with `<ReportDataDetails visible={showTable}>…</ReportDataDetails>` so Tabulator unmounts and no orphan headers remain (same pattern as Competitor Pricing). Header broadcasts `scope: 'all'` (persisted: `taliaGlobalReportDetailsVisible`). Optional in-panel overrides: `commitVisible(next)`. Use `respectGlobal: false` only where isolated (e.g. Data Management).
 - **Technical meta (tab ⓘ):** `hooks/usePanelTechnicalMetaVisibility.js` + `services/panelTechnicalMetaState.js` + `REPORT_PANEL_TECHNICAL_META_EVENT`. `ReportShell` shows `ReportEventMeta` only when this is on — **not** tied to header ≣.
 - **Do not** use the ⓘ event for end-user data tables; do not use header ≣ for technical meta.
-- **Within-report filter rows:** wrap controls in `talia-report-filters` (see `focus-panels.css`) so the header **Filters** toggle (`talia-filters-hidden` on `<html>`) shows/hides this panel filter bar consistently.
-- **Tabulator header filters are separate:** the global panel filter toggle must **not** hide Tabulator column header filters; these remain table-local controls.
-- **Visibility controls:** platform visibility toggles govern section-level blocks (`Title` / `Actions` / `Filters` / `Details` / `Callouts`) via shared root classes; do not create panel-specific toggle logic.
+- **Within-report filter rows (Talia filters):** wrap controls in `talia-report-filters` (see `focus-panels.css`) so the header **Filters** toggle (`talia-filters-hidden` on `<html>`) shows/hides this panel filter bar consistently.
+- **Tabulator column header filters:** independent of Talia filter rows. The header **Column filters** toggle (`talia-tabulator-filters-hidden` on `<html>`) hides `.tabulator-header-filter` globally via `tabulator-theme.css`. No per-panel opt-in — any Tabulator table with `headerFilter` columns is covered automatically.
+- **Visibility controls:** platform visibility toggles govern section-level blocks (`Title` / `Actions` / `Filters` / `Column filters` / `Details` / `Callouts`) via shared root classes; do not create panel-specific toggle logic.
 - For sub-panel expand/collapse *inside* a report (e.g. cabin group), use `hooks/useSubpanelExpansion.js`.
 - Do not duplicate these patterns per component.
 

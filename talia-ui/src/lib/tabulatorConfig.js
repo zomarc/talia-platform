@@ -13,6 +13,7 @@ import { formatDayMon } from './dateFormat';
 import 'tabulator-tables/dist/css/tabulator_midnight.min.css';
 
 const DASHBOARD_TABLE_LAYOUT_EVENT = 'talia:dashboard.tableLayout';
+const DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT = 'talia:dashboard.tabulatorFilterVisibility';
 const TABLE_LAYOUT_STORAGE_KEY = 'taliaTableLayoutMode';
 const TABLE_LAYOUT_WIDTH = 'width';
 const TABLE_LAYOUT_DATA = 'data';
@@ -117,6 +118,9 @@ const ensureLayoutListenerBound = () => {
     const mode = event?.detail?.mode;
     setGlobalTableLayoutMode(mode);
     applyAllTables();
+  });
+  window.addEventListener(DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT, () => {
+    tableInstances.forEach((table) => refreshTableLayout(table));
   });
   window.addEventListener('resize', () => {
     applyAllTables();

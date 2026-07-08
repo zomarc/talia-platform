@@ -24,6 +24,7 @@ import {
   DATA_MANAGEMENT_TABLE_ACTION_EVENT,
   DASHBOARD_DETAILS_VISIBILITY_EVENT,
   DASHBOARD_FILTER_VISIBILITY_EVENT,
+  DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT,
   DASHBOARD_TABLE_LAYOUT_EVENT,
 } from '../dockview/eventConstants';
 import {
@@ -44,6 +45,7 @@ import TaliaTooltip from './TaliaTooltip';
 const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
 const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';
 const FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderFiltersVisible';
+const TABULATOR_FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderTabulatorFiltersVisible';
 const DASHBOARD_CYCLE_FOCUS_EVENT = 'talia:dashboard.cycleFocus';
 const DASHBOARD_SELECT_FOCUS_EVENT = 'talia:dashboard.selectFocus';
 const DASHBOARD_SAVE_CURRENT_FOCUS_EVENT = 'talia:dashboard.saveCurrentFocus';
@@ -290,6 +292,16 @@ const StatusBar = ({
     }
     return window.__taliaFiltersVisible === true;
   });
+  const [tabulatorFiltersVisible, setTabulatorFiltersVisible] = useState(() => {
+    try {
+      const s = window.localStorage?.getItem?.(TABULATOR_FILTERS_VISIBILITY_STORAGE_KEY);
+      if (s === '0' || s === 'false') return false;
+      if (s === '1' || s === 'true') return true;
+    } catch {
+      // ignore
+    }
+    return window.__taliaTabulatorFiltersVisible !== false;
+  });
   const [eventsVisible, setEventsVisible] = useState(() => window.__taliaEventsVisible === true);
   const [criteriaVisible, setCriteriaVisible] = useState(() => window.__taliaCriteriaVisible === true);
   const [detailsVisible, setDetailsVisible] = useState(() => getGlobalReportDetailsVisible());
@@ -442,6 +454,14 @@ const StatusBar = ({
   }, [filtersVisible]);
 
   useEffect(() => {
+    try {
+      window.localStorage?.setItem?.(TABULATOR_FILTERS_VISIBILITY_STORAGE_KEY, tabulatorFiltersVisible ? '1' : '0');
+    } catch {
+      // ignore
+    }
+  }, [tabulatorFiltersVisible]);
+
+  useEffect(() => {
     const handleSidebarState = (event) => {
       const collapsed = event?.detail?.collapsed;
       if (typeof collapsed === 'boolean') {
@@ -461,6 +481,12 @@ const StatusBar = ({
     const nextVisible = !filtersVisible;
     userActivityTracker.recordHeaderAction('filters-toggle', { status: nextVisible ? 'show' : 'hide' });
     setFiltersVisible(nextVisible);
+  };
+
+  const handleTabulatorFiltersToggle = () => {
+    const nextVisible = !tabulatorFiltersVisible;
+    userActivityTracker.recordHeaderAction('tabulator-filters-toggle', { status: nextVisible ? 'show' : 'hide' });
+    setTabulatorFiltersVisible(nextVisible);
   };
 
   const handleCycleFocus = () => {
@@ -892,6 +918,17 @@ const StatusBar = ({
       })
     );
   }, [filtersVisible]);
+
+  useEffect(() => {
+    window.__taliaTabulatorFiltersVisible = tabulatorFiltersVisible;
+    const root = document.documentElement;
+    root.classList.toggle('talia-tabulator-filters-hidden', tabulatorFiltersVisible === false);
+    window.dispatchEvent(
+      new CustomEvent(DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT, {
+        detail: { visible: tabulatorFiltersVisible },
+      })
+    );
+  }, [tabulatorFiltersVisible]);
 
   useEffect(() => {
     window.__taliaViewScope = viewScope;
@@ -1620,6 +1657,18 @@ const StatusBar = ({
                 >
                   <span>Filters</span>
                   {filtersVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Show or hide Tabulator column header filters on all tables" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={tabulatorFiltersVisible}
+                  className={`status-bar__visibility-option ${tabulatorFiltersVisible ? 'status-bar__visibility-option--active' : ''}`}
+                  onClick={handleTabulatorFiltersToggle}
+                >
+                  <span>Column filters</span>
+                  {tabulatorFiltersVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Show or hide informational callouts across all reports" placement="bottom-left" delayMs={180}>

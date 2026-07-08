@@ -8,6 +8,7 @@ import { DEFAULT_HEADER_LOGO_SRC, resolveAppPublicUrl } from "../../lib/headerLo
 import {
   DASHBOARD_DETAILS_VISIBILITY_EVENT,
   DASHBOARD_FILTER_VISIBILITY_EVENT,
+  DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT,
   DASHBOARD_TABLE_LAYOUT_EVENT,
 } from "../dockview/eventConstants";
 import {
@@ -18,6 +19,7 @@ import {
 import TaliaTooltip from "../shared/TaliaTooltip";
 
 const FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderFiltersVisible';
+const TABULATOR_FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderTabulatorFiltersVisible';
 const TABLE_LAYOUT_STORAGE_KEY = 'taliaTableLayoutMode';
 const SIDEBAR_SECTIONS_STORAGE_KEY = 'taliaSidebarExpandedSections';
 
@@ -159,6 +161,16 @@ function DashboardSidebar({
     }
     return window.__taliaFiltersVisible !== false;
   });
+  const [globalTabulatorFiltersVisible, setGlobalTabulatorFiltersVisible] = React.useState(() => {
+    try {
+      const saved = window.localStorage?.getItem?.(TABULATOR_FILTERS_VISIBILITY_STORAGE_KEY);
+      if (saved === '0') return false;
+      if (saved === '1') return true;
+    } catch {
+      // ignore
+    }
+    return window.__taliaTabulatorFiltersVisible !== false;
+  });
   const [globalDetailsVisible, setGlobalDetailsVisible] = React.useState(() => getGlobalReportDetailsVisible());
   const [globalTableLayoutMode, setGlobalTableLayoutMode] = React.useState(() => {
     try {
@@ -182,6 +194,12 @@ function DashboardSidebar({
         setGlobalFiltersVisible(visible);
       }
     };
+    const handleTabulatorFilterVisibilityEvent = (event) => {
+      const visible = event?.detail?.visible;
+      if (typeof visible === 'boolean') {
+        setGlobalTabulatorFiltersVisible(visible);
+      }
+    };
     const handleTableLayoutEvent = (event) => {
       const mode = event?.detail?.mode;
       if (mode === 'data' || mode === 'width') {
@@ -195,10 +213,12 @@ function DashboardSidebar({
       }
     };
     window.addEventListener(DASHBOARD_FILTER_VISIBILITY_EVENT, handleFilterVisibilityEvent);
+    window.addEventListener(DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT, handleTabulatorFilterVisibilityEvent);
     window.addEventListener(DASHBOARD_TABLE_LAYOUT_EVENT, handleTableLayoutEvent);
     window.addEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibilityEvent);
     return () => {
       window.removeEventListener(DASHBOARD_FILTER_VISIBILITY_EVENT, handleFilterVisibilityEvent);
+      window.removeEventListener(DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT, handleTabulatorFilterVisibilityEvent);
       window.removeEventListener(DASHBOARD_TABLE_LAYOUT_EVENT, handleTableLayoutEvent);
       window.removeEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, handleDetailsVisibilityEvent);
     };
@@ -219,6 +239,21 @@ function DashboardSidebar({
       // ignore
     }
     window.dispatchEvent(new CustomEvent(DASHBOARD_FILTER_VISIBILITY_EVENT, {
+      detail: { visible: checked },
+    }));
+  };
+
+  const handleGlobalTabulatorFiltersToggle = (checked) => {
+    setGlobalTabulatorFiltersVisible(checked);
+    window.__taliaTabulatorFiltersVisible = checked;
+    const root = document.documentElement;
+    root.classList.toggle('talia-tabulator-filters-hidden', checked === false);
+    try {
+      window.localStorage?.setItem?.(TABULATOR_FILTERS_VISIBILITY_STORAGE_KEY, checked ? '1' : '0');
+    } catch {
+      // ignore
+    }
+    window.dispatchEvent(new CustomEvent(DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT, {
       detail: { visible: checked },
     }));
   };
@@ -935,6 +970,18 @@ function DashboardSidebar({
                 <span>Show report filter bars globally</span>
               </label>
               <div className="dashboard-form-hint">Matches the global filter toggle used in the top header.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Column Filters</label>
+              <label className="dashboard-form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={globalTabulatorFiltersVisible}
+                  onChange={(event) => handleGlobalTabulatorFiltersToggle(event.target.checked)}
+                />
+                <span>Show Tabulator column header filters globally</span>
+              </label>
+              <div className="dashboard-form-hint">Matches the Column filters toggle in the top header visibility menu.</div>
             </div>
             {isAdmin(userRole) && (
               <div className="dashboard-form-group">

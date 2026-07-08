@@ -1,6 +1,7 @@
 import {
   DASHBOARD_DETAILS_VISIBILITY_EVENT,
   DASHBOARD_FILTER_VISIBILITY_EVENT,
+  DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT,
   DASHBOARD_TABLE_LAYOUT_EVENT,
 } from '../components/dockview/eventConstants';
 import { getGlobalReportDetailsVisible } from './panelDetailsState';
@@ -8,6 +9,7 @@ import { getGlobalReportDetailsVisible } from './panelDetailsState';
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
 const DASHBOARD_VIEW_SCOPE_EVENT = 'talia:dashboard.viewScope';
 const FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderFiltersVisible';
+const TABULATOR_FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderTabulatorFiltersVisible';
 const TABLE_LAYOUT_STORAGE_KEY = 'taliaTableLayoutMode';
 
 const getBoolean = (value, fallback) => (typeof value === 'boolean' ? value : fallback);
@@ -29,6 +31,17 @@ export const enforceDashboardUiState = ({ dispatchEvents = true } = {}) => {
   window.__taliaFiltersVisible = filtersVisible;
   root.classList.toggle('talia-filters-hidden', filtersVisible === false);
 
+  let tabulatorFiltersVisible = getBoolean(window.__taliaTabulatorFiltersVisible, true);
+  try {
+    const saved = window.localStorage?.getItem?.(TABULATOR_FILTERS_VISIBILITY_STORAGE_KEY);
+    if (saved === '0' || saved === 'false') tabulatorFiltersVisible = false;
+    if (saved === '1' || saved === 'true') tabulatorFiltersVisible = true;
+  } catch {
+    // ignore storage failures
+  }
+  window.__taliaTabulatorFiltersVisible = tabulatorFiltersVisible;
+  root.classList.toggle('talia-tabulator-filters-hidden', tabulatorFiltersVisible === false);
+
   let tableLayoutMode = window.__taliaTableLayoutMode === 'data' ? 'data' : 'width';
   try {
     const saved = window.localStorage?.getItem?.(TABLE_LAYOUT_STORAGE_KEY);
@@ -45,6 +58,9 @@ export const enforceDashboardUiState = ({ dispatchEvents = true } = {}) => {
 
   window.dispatchEvent(new CustomEvent(DASHBOARD_FILTER_VISIBILITY_EVENT, {
     detail: { visible: filtersVisible },
+  }));
+  window.dispatchEvent(new CustomEvent(DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT, {
+    detail: { visible: tabulatorFiltersVisible },
   }));
   window.dispatchEvent(new CustomEvent(DASHBOARD_DETAILS_VISIBILITY_EVENT, {
     detail: { scope: 'all', visible: detailsVisible, action: 'set' },

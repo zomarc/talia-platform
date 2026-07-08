@@ -56,6 +56,12 @@
   min-height: var(--theme-table-filter-height);
 }
 
+.talia-tabulator-filters-hidden .tabulator-header .tabulator-col .tabulator-header-filter {
+  display: none !important;
+  min-height: 0;
+  margin-top: 0;
+}
+
 .tabulator .tabulator-header input,
 .tabulator .tabulator-header select {
   background: var(--theme-tabulator-filter-bg);

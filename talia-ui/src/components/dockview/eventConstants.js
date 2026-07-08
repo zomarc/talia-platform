@@ -7,6 +7,8 @@ export const DASHBOARD_DETAILS_VISIBILITY_EVENT = 'talia:dashboard.detailsVisibi
 export const REPORT_PANEL_TECHNICAL_META_EVENT = 'talia:report.panelTechnicalMeta';
 /** Header filter funnel — root class talia-filters-hidden + event for subscribers */
 export const DASHBOARD_FILTER_VISIBILITY_EVENT = 'talia:dashboard.filterVisibility';
+/** Tabulator column header filters — root class talia-tabulator-filters-hidden + event for subscribers */
+export const DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT = 'talia:dashboard.tabulatorFilterVisibility';
 export const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 export const REPORT_ACTIVE_PANEL_EVENT = 'talia:report.activePanelChanged';
 export const REPORT_PANEL_PAUSE_EVENT = 'talia:report.panelPauseChanged';

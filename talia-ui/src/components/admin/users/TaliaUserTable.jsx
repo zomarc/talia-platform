@@ -499,53 +499,53 @@ const TaliaUserTable = () => {
           <h2 className="talia-report__title">Talia Users</h2>
           <p className="talia-report__subtitle">Current backend users mapped to Talia IDs</p>
         </div>
-        <div className="talia-report__header-right">
-          <button
-            className="talia-btn talia-btn--primary"
-            type="button"
-            onClick={async () => {
-              const selected = WINDOW_OPTIONS.find((option) => option.key === windowKey) || WINDOW_OPTIONS[WINDOW_OPTIONS.length - 1];
-              await Promise.all([loadUsers(), loadSharedEvents(selected.minutes)]);
-            }}
-            disabled={loading}
-          >
-            {loading ? 'Loading...' : 'Refresh'}
-          </button>
-        </div>
       </header>
+      <div className="talia-report-filters admin-access__activity-controls" aria-label="User activity filters">
+        <label className="admin-access__control talia-report-filters__group">
+          <span className="talia-report-filters__label">Range</span>
+          <select className="admin-access__select talia-report-filters__input" value={windowKey} onChange={(event) => setWindowKey(event.target.value)}>
+            {WINDOW_OPTIONS.map((option) => (
+              <option key={option.key} value={option.key}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="admin-access__control talia-report-filters__group">
+          <span className="talia-report-filters__label">Type</span>
+          <select className="admin-access__select talia-report-filters__input" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+            <option value="all">All</option>
+            {detailKinds.map((kind) => (
+              <option key={kind} value={kind}>{kind}</option>
+            ))}
+          </select>
+        </label>
+        <label className="admin-access__control talia-report-filters__group">
+          <span className="talia-report-filters__label">Status</span>
+          <select className="admin-access__select talia-report-filters__input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="all">All</option>
+            {detailStatuses.map((status) => (
+              <option key={status} value={status}>{status || '—'}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="talia-report__actions-bar" aria-label="Talia user actions">
+        <button
+          className="talia-btn talia-btn--secondary"
+          type="button"
+          onClick={async () => {
+            const selected = WINDOW_OPTIONS.find((option) => option.key === windowKey) || WINDOW_OPTIONS[WINDOW_OPTIONS.length - 1];
+            await Promise.all([loadUsers(), loadSharedEvents(selected.minutes)]);
+          }}
+          disabled={loading}
+        >
+          {loading ? 'Loading...' : 'Refresh'}
+        </button>
+      </div>
       <main className="talia-report__content">
         {error ? <div className="admin-access__error">Error loading users: {error}</div> : null}
         <div className="admin-access__table admin-access__table--users" ref={tableElRef} />
         <div className="admin-access__table-caption">
           Activity detail for: <strong>{selectedUser?.email || '—'}</strong>
-        </div>
-        <div className="admin-access__activity-controls">
-          <label className="admin-access__control">
-            <span>Range</span>
-            <select className="admin-access__select" value={windowKey} onChange={(event) => setWindowKey(event.target.value)}>
-              {WINDOW_OPTIONS.map((option) => (
-                <option key={option.key} value={option.key}>{option.label}</option>
-              ))}
-            </select>
-          </label>
-          <label className="admin-access__control">
-            <span>Type</span>
-            <select className="admin-access__select" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-              <option value="all">All</option>
-              {detailKinds.map((kind) => (
-                <option key={kind} value={kind}>{kind}</option>
-              ))}
-            </select>
-          </label>
-          <label className="admin-access__control">
-            <span>Status</span>
-            <select className="admin-access__select" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="all">All</option>
-              {detailStatuses.map((status) => (
-                <option key={status} value={status}>{status || '—'}</option>
-              ))}
-            </select>
-          </label>
         </div>
         <div className="admin-access__activity-grid">
           <div className="admin-access__table admin-access__table--activity" ref={detailTableElRef} />

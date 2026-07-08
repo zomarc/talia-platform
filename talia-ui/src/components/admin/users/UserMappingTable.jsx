@@ -102,12 +102,12 @@ const UserMappingTable = () => {
           <h2 className="talia-report__title">User Mappings (Legacy)</h2>
           <p className="talia-report__subtitle">External auth to internal Talia user mapping reference</p>
         </div>
-        <div className="talia-report__header-right">
-          <button className="talia-btn talia-btn--primary" type="button" onClick={loadMappings} disabled={isLoading}>
-            {isLoading ? 'Loading...' : 'Refresh'}
-          </button>
-        </div>
       </header>
+      <div className="talia-report__actions-bar" aria-label="User mapping actions">
+        <button className="talia-btn talia-btn--secondary" type="button" onClick={loadMappings} disabled={isLoading}>
+          {isLoading ? 'Loading...' : 'Refresh'}
+        </button>
+      </div>
       <main className="talia-report__content">
         {error ? <div className="admin-access__error">Error: {error}</div> : null}
         <div className="admin-access__table" ref={tableElRef} />

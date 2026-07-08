@@ -139,6 +139,17 @@ Follow **Agency** / **Published Rates** (filters → callout → controls → ac
 - Gate **Content** with `ReportDataDetails` when the panel supports header **Details** (≣).
 - Do **not** use header ≣ for technical meta; do **not** use tab ⓘ for user data tables.
 
+### Shell audit checklist
+
+When reviewing active report panels (`showInReports: true` in `registry.js`):
+
+1. Root uses `focus-panel talia-report` (or `talia-report` for admin embeds).
+2. `talia-report__header` contains **title + subtitle only** — no `talia-report__header-right`, `talia-report__actions`, or buttons.
+3. Panel criteria inputs live in `.talia-report-filters` — not mixed with controls or actions.
+4. View-mode / expand toggles live in `.talia-report__controls` with `talia-btn talia-btn--secondary`.
+5. Refresh / export live in `.talia-report__actions-bar`.
+6. Primary body in `main.talia-report__content`; tables use `ReportDataDetails` when Details (≣) applies.
+
 Events: `components/dockview/eventConstants.js` (`DASHBOARD_FILTER_VISIBILITY_EVENT`, `DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT`, `DASHBOARD_DETAILS_VISIBILITY_EVENT`, `REPORT_PANEL_TECHNICAL_META_EVENT`).
 
 ## Styling Guidelines

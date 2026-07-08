@@ -448,13 +448,11 @@ const ShipTrackerMapPresenter = ({
       </div>
 
       <div className="ship-tracker-map__filters talia-report-filters">
-        <div className="ship-tracker-map__header-actions">
-          <label className="ship-tracker-map__ship-filter-label" htmlFor="ship-tracker-ship-select">
-            Ship
-          </label>
+        <label className="ship-tracker-map__ship-filter-label talia-report-filters__group" htmlFor="ship-tracker-ship-select">
+          <span className="talia-report-filters__label">Ship</span>
           <select
             id="ship-tracker-ship-select"
-            className="ship-tracker-map__ship-filter"
+            className="ship-tracker-map__ship-filter talia-report-filters__input"
             value={selectedShipCode}
             onChange={(event) => setSelectedShipCode(event.target.value)}
           >
@@ -479,64 +477,65 @@ const ShipTrackerMapPresenter = ({
               </optgroup>
             )}
           </select>
-          <button className="talia-btn talia-btn--small" onClick={onToggleAutoRefresh}>
-            {autoRefreshEnabled ? 'Auto: ON' : 'Auto: OFF'}
-          </button>
-          <div className="ship-tracker-map__compact-controls">
-            <label htmlFor="ship-route-display-mode" className="ship-tracker-map__timeline-label">Mode</label>
-            <select
-              id="ship-route-display-mode"
-              className="ship-tracker-map__route-mode"
-              value={routeDisplayMode}
-              onChange={(event) => setRouteDisplayMode(event.target.value)}
-            >
-              <option value="overlay">Overlay</option>
-              <option value="single">Single route</option>
-            </select>
-            <label htmlFor="ship-route-window-past" className="ship-tracker-map__timeline-label">Past</label>
+        </label>
+      </div>
+
+      <div className="talia-report__controls ship-tracker-map__compact-controls" aria-label="Ship tracker map controls">
+        <button type="button" className="talia-btn talia-btn--secondary" onClick={onToggleAutoRefresh}>
+          {autoRefreshEnabled ? 'Auto: ON' : 'Auto: OFF'}
+        </button>
+        <label htmlFor="ship-route-display-mode" className="ship-tracker-map__timeline-label">Mode</label>
+        <select
+          id="ship-route-display-mode"
+          className="ship-tracker-map__route-mode"
+          value={routeDisplayMode}
+          onChange={(event) => setRouteDisplayMode(event.target.value)}
+        >
+          <option value="overlay">Overlay</option>
+          <option value="single">Single route</option>
+        </select>
+        <label htmlFor="ship-route-window-past" className="ship-tracker-map__timeline-label">Past</label>
+        <input
+          id="ship-route-window-past"
+          className="ship-tracker-map__timeline-slider ship-tracker-map__timeline-slider--compact"
+          type="range"
+          min="1"
+          max={maxWindows.past}
+          step="1"
+          value={Math.min(pastWindow, maxWindows.past)}
+          onChange={(event) => setPastWindow(Number(event.target.value))}
+        />
+        <span className="ship-tracker-map__timeline-value">{Math.min(pastWindow, maxWindows.past)}</span>
+        <label htmlFor="ship-route-window-future" className="ship-tracker-map__timeline-label">Future</label>
+        <input
+          id="ship-route-window-future"
+          className="ship-tracker-map__timeline-slider ship-tracker-map__timeline-slider--compact"
+          type="range"
+          min="1"
+          max={maxWindows.future}
+          step="1"
+          value={Math.min(futureWindow, maxWindows.future)}
+          onChange={(event) => setFutureWindow(Number(event.target.value))}
+        />
+        <span className="ship-tracker-map__timeline-value">{Math.min(futureWindow, maxWindows.future)}</span>
+        {routeDisplayMode === 'single' && (
+          <>
+            <label htmlFor="ship-route-single-index" className="ship-tracker-map__timeline-label">Route</label>
             <input
-              id="ship-route-window-past"
+              id="ship-route-single-index"
               className="ship-tracker-map__timeline-slider ship-tracker-map__timeline-slider--compact"
               type="range"
-              min="1"
-              max={maxWindows.past}
+              min="0"
+              max={Math.max(0, timelineRouteEntries.length - 1)}
               step="1"
-              value={Math.min(pastWindow, maxWindows.past)}
-              onChange={(event) => setPastWindow(Number(event.target.value))}
+              value={Math.min(singleRouteIndex, Math.max(0, timelineRouteEntries.length - 1))}
+              onChange={(event) => setSingleRouteIndex(Number(event.target.value))}
             />
-            <span className="ship-tracker-map__timeline-value">{Math.min(pastWindow, maxWindows.past)}</span>
-            <label htmlFor="ship-route-window-future" className="ship-tracker-map__timeline-label">Future</label>
-            <input
-              id="ship-route-window-future"
-              className="ship-tracker-map__timeline-slider ship-tracker-map__timeline-slider--compact"
-              type="range"
-              min="1"
-              max={maxWindows.future}
-              step="1"
-              value={Math.min(futureWindow, maxWindows.future)}
-              onChange={(event) => setFutureWindow(Number(event.target.value))}
-            />
-            <span className="ship-tracker-map__timeline-value">{Math.min(futureWindow, maxWindows.future)}</span>
-            {routeDisplayMode === 'single' && (
-              <>
-                <label htmlFor="ship-route-single-index" className="ship-tracker-map__timeline-label">Route</label>
-                <input
-                  id="ship-route-single-index"
-                  className="ship-tracker-map__timeline-slider ship-tracker-map__timeline-slider--compact"
-                  type="range"
-                  min="0"
-                  max={Math.max(0, timelineRouteEntries.length - 1)}
-                  step="1"
-                  value={Math.min(singleRouteIndex, Math.max(0, timelineRouteEntries.length - 1))}
-                  onChange={(event) => setSingleRouteIndex(Number(event.target.value))}
-                />
-                <span className="ship-tracker-map__timeline-value">
-                  {timelineRouteEntries.length ? `${singleRouteIndex + 1}/${timelineRouteEntries.length}` : '0/0'}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
+            <span className="ship-tracker-map__timeline-value">
+              {timelineRouteEntries.length ? `${singleRouteIndex + 1}/${timelineRouteEntries.length}` : '0/0'}
+            </span>
+          </>
+        )}
       </div>
 
       <div className="ship-tracker-map__note talia-callout" role="note">

@@ -32,14 +32,14 @@ const AdminDashboard = ({ skipAuth = false }) => {
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Admin Dashboard</h2>
-          <p className="talia-report__subtitle">Focus access, users, mappings, themes, and logs</p>
-        </div>
-        <div className="talia-report__header-right admin-dashboard-panel__identity">
-          <span>{taliaUser?.email || 'Unknown user'}</span>
+          <p className="talia-report__subtitle">
+            Focus access, users, mappings, themes, and logs
+            {taliaUser?.email ? ` · Signed in as ${taliaUser.email}` : ''}
+          </p>
         </div>
       </header>
 
-      <div className="admin-tabs admin-dashboard-panel__tabs">
+      <div className="talia-report__controls admin-tabs admin-dashboard-panel__tabs" aria-label="Admin dashboard sections">
         <button className={`admin-tab ${activeTab === 'access' ? 'admin-tab-active' : ''}`} onClick={() => setActiveTab('access')}>
           Focus Access
         </button>

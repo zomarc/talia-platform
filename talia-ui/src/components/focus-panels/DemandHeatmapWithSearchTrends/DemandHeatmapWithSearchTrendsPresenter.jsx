@@ -210,8 +210,8 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
   return (
     <div className="demand-heatmap talia-report">
       {/* Header */}
-      <div className="demand-heatmap__header talia-report__header">
-        <div>
+      <header className="demand-heatmap__header talia-report__header">
+        <div className="talia-report__header-left">
           <h3 className="demand-heatmap__title talia-report__title">
             Demand Heatmap with Search Trends Correlation
           </h3>
@@ -219,21 +219,22 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
             Viewing demand across itineraries by departure month, enhanced with search trend indicators
           </p>
         </div>
-        
-        <div className="demand-heatmap__controls talia-report__actions talia-report-filters">
-          <button
-            onClick={() => setShowTrends(!showTrends)}
-            className="demand-heatmap__toggle"
-            data-active={showTrends ? 'true' : 'false'}
-          >
-            {showTrends ? '📊 Hide Trends' : '📊 Show Trends'}
-          </button>
-        </div>
+      </header>
+
+      <div className="talia-report__controls" aria-label="Demand heatmap controls">
+        <button
+          type="button"
+          onClick={() => setShowTrends(!showTrends)}
+          className="talia-btn talia-btn--secondary demand-heatmap__toggle"
+          data-active={showTrends ? 'true' : 'false'}
+        >
+          {showTrends ? '📊 Hide Trends' : '📊 Show Trends'}
+        </button>
       </div>
 
       {/* Search Trends Summary */}
       {showTrends && searchTrends && searchTrends.series && searchTrends.series.length > 0 && (
-        <div className="demand-heatmap__trends-summary">
+        <div className="demand-heatmap__trends-summary talia-callout" role="note">
           <div className="demand-heatmap__trends-title">
             📈 Active Search Trends ({searchTrends.series.length} queries)
           </div>
@@ -254,13 +255,13 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
         </div>
       )}
 
-      {/* Table Container */}
-      <div className="demand-heatmap__table">
-        <div ref={tableRef} className="demand-heatmap__table-host" />
-      </div>
+      <main className="talia-report__content">
+        <div className="demand-heatmap__table">
+          <div ref={tableRef} className="demand-heatmap__table-host talia-table" role="grid" />
+        </div>
 
-      {/* Legend */}
-      <div className="demand-heatmap__legend">
+        {/* Legend */}
+        <div className="demand-heatmap__legend">
         <span>Legend:</span>
         <div className="demand-heatmap__legend-item">
           <div className="demand-heatmap__legend-swatch demand-heatmap__legend-swatch--low" />
@@ -282,7 +283,8 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
         <div className="demand-heatmap__legend-note">
           Max demand: {maxValue.toLocaleString()} {containsMockData && '(includes mock data)'}
         </div>
-      </div>
+        </div>
+      </main>
     </div>
   );
 };

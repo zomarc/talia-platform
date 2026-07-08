@@ -254,81 +254,74 @@ const GoogleTrendsPresenter = ({
 
   return (
     <div className="google-trends talia-report">
-      {/* Header */}
-      <div className="google-trends__header talia-report__header">
-        <div className="google-trends__header-top">
-          <div>
-            <h3 className="google-trends__title talia-report__title">
-              Google Trends - What People Are Searching For
-            </h3>
-            <p className="google-trends__subtitle talia-report__subtitle">
-              Historical search interest for cruise holiday terms
-            </p>
-          </div>
-          
-          {/* Refresh Status */}
-          <div className="google-trends__refresh">
-            <RefreshStatus
-              lastRefreshTime={refreshMetadata?.lastRefreshedAt}
-              isLoading={refreshing || loading}
-              error={refreshMetadata?.refreshStatus === 'error' ? refreshMetadata?.refreshError : null}
-              dataSource="Google Trends"
-            />
-          </div>
-          
-          {/* Sort and Top X Controls */}
-          {seriesWithData.length > 1 && (
-            <div className="google-trends__controls talia-report__actions talia-report-filters">
-              {/* Sort Controls */}
-              <div className="google-trends__sort">
-                <label className="google-trends__label">Sort:</label>
-                <button
-                  onClick={() => setSortBy('mostSearched')}
-                  className="google-trends__toggle"
-                  data-active={sortBy === 'mostSearched' ? 'true' : 'false'}
-                  title="Sort by average interest score (most searched first)"
-                >
-                  Most Searched
-                </button>
-                <button
-                  onClick={() => setSortBy('alphabetical')}
-                  className="google-trends__toggle"
-                  data-active={sortBy === 'alphabetical' ? 'true' : 'false'}
-                  title="Sort alphabetically by query name"
-                >
-                  A-Z
-                </button>
-              </div>
-              
-              {/* Top X Filter */}
-              <div className="google-trends__top">
-                <label className="google-trends__label">Show Top:</label>
-                <select
-                  value={topLimit === null ? 'all' : topLimit.toString()}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setTopLimit(value === 'all' ? null : parseInt(value, 10));
-                  }}
-                  className="google-trends__select"
-                >
-                  <option value="all">All</option>
-                  <option value="5">Top 5</option>
-                  <option value="10">Top 10</option>
-                  <option value="15">Top 15</option>
-                  <option value="20">Top 20</option>
-                  <option value="25">Top 25</option>
-                </select>
-              </div>
-            </div>
-          )}
-        </div>
-        {trends.dateRange && (
-          <p className="google-trends__range">
-            Current Range: {formatDate(trends.dateRange.from)} - {formatDate(trends.dateRange.to)}
-            {trends.region && ` (${trends.region || 'Worldwide'})`}
+      <header className="talia-report__header">
+        <div className="talia-report__header-left">
+          <h3 className="google-trends__title talia-report__title">
+            Google Trends - What People Are Searching For
+          </h3>
+          <p className="google-trends__subtitle talia-report__subtitle">
+            Historical search interest for cruise holiday terms
+            {trends.dateRange
+              ? ` · ${formatDate(trends.dateRange.from)} - ${formatDate(trends.dateRange.to)}${trends.region ? ` (${trends.region || 'Worldwide'})` : ''}`
+              : ''}
           </p>
-        )}
-        
+        </div>
+      </header>
+
+      {seriesWithData.length > 1 ? (
+        <div className="talia-report__controls google-trends__controls" aria-label="Google trends controls">
+          <div className="google-trends__sort">
+            <label className="google-trends__label">Sort:</label>
+            <button
+              type="button"
+              onClick={() => setSortBy('mostSearched')}
+              className="talia-btn talia-btn--secondary google-trends__toggle"
+              data-active={sortBy === 'mostSearched' ? 'true' : 'false'}
+              title="Sort by average interest score (most searched first)"
+            >
+              Most Searched
+            </button>
+            <button
+              type="button"
+              onClick={() => setSortBy('alphabetical')}
+              className="talia-btn talia-btn--secondary google-trends__toggle"
+              data-active={sortBy === 'alphabetical' ? 'true' : 'false'}
+              title="Sort alphabetically by query name"
+            >
+              A-Z
+            </button>
+          </div>
+          <div className="google-trends__top">
+            <label className="google-trends__label">Show Top:</label>
+            <select
+              value={topLimit === null ? 'all' : topLimit.toString()}
+              onChange={(e) => {
+                const value = e.target.value;
+                setTopLimit(value === 'all' ? null : parseInt(value, 10));
+              }}
+              className="google-trends__select"
+            >
+              <option value="all">All</option>
+              <option value="5">Top 5</option>
+              <option value="10">Top 10</option>
+              <option value="15">Top 15</option>
+              <option value="20">Top 20</option>
+              <option value="25">Top 25</option>
+            </select>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="talia-report__actions-bar" aria-label="Google trends actions">
+        <RefreshStatus
+          lastRefreshTime={refreshMetadata?.lastRefreshedAt}
+          isLoading={refreshing || loading}
+          error={refreshMetadata?.refreshStatus === 'error' ? refreshMetadata?.refreshError : null}
+          dataSource="Google Trends"
+        />
+      </div>
+
+      <div className="talia-report-filters google-trends__filters">
         {/* Search Terms Selector */}
         <div className="google-trends__terms">
           <div className="google-trends__terms-header">
@@ -605,6 +598,7 @@ const GoogleTrendsPresenter = ({
         </div>
       </div>
 
+      <main className="talia-report__content">
       {/* Trends Series */}
       <div className="google-trends__series-grid">
         {seriesWithData.map((series, idx) => {
@@ -704,6 +698,7 @@ const GoogleTrendsPresenter = ({
           </strong> search {(trends.queries?.length || 0) === 1 ? 'query' : 'queries'}
         </div>
       )}
+      </main>
     </div>
   );
 };

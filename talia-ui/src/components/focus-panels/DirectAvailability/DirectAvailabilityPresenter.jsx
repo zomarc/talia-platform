@@ -211,25 +211,15 @@ const DirectAvailabilityPresenter = ({ data, loading, queryInfo, onRefresh }) =>
   const subtitle = `${selectedSailCode} · ${packageName || '—'}${selectedSailDate ? ` · ${formatDayMon(selectedSailDate, '—')}` : ''}`;
 
   return (
-    <div className="direct-availability">
+    <div className="focus-panel talia-report direct-availability" role="region" aria-label="Direct availability">
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Direct Availability</h2>
           <p className="talia-report__subtitle">{subtitle}</p>
         </div>
-        <div className="talia-report__actions">
-          <span className="direct-source__badge">{data?.length || 0} rows</span>
-          {queryInfo?.executionTime && <span className="direct-source__stats">{queryInfo.executionTime}ms</span>}
-          <button type="button" className="direct-source__button direct-source__button--primary" onClick={onRefresh} disabled={loading}>
-            {loading ? 'Refreshing…' : 'Refresh'}
-          </button>
-          <button type="button" className="direct-source__button" onClick={() => setShowQueryDetails((prev) => !prev)}>
-            {showQueryDetails ? '▼' : '▶'} Query
-          </button>
-        </div>
       </header>
 
-      <div className="direct-availability__callout">
+      <div className="direct-availability__callout talia-callout" role="note">
         <span className="direct-availability__callout-item">
           Source: [{queryInfo?.endpointSource || 'default'}] {queryInfo?.endpoint || '—'}
         </span>
@@ -245,21 +235,41 @@ const DirectAvailabilityPresenter = ({ data, loading, queryInfo, onRefresh }) =>
         )}
       </div>
 
-      {showQueryDetails && (
+      <div className="talia-report__controls" aria-label="Direct availability controls">
+        <button
+          type="button"
+          className="talia-btn talia-btn--secondary"
+          onClick={() => setShowQueryDetails((prev) => !prev)}
+        >
+          {showQueryDetails ? '▼' : '▶'} Query
+        </button>
+      </div>
+
+      <div className="talia-report__actions-bar" aria-label="Direct availability actions">
+        <span className="direct-source__badge">{data?.length || 0} rows</span>
+        {queryInfo?.executionTime ? <span className="direct-source__stats">{queryInfo.executionTime}ms</span> : null}
+        <button type="button" className="talia-btn talia-btn--secondary" onClick={onRefresh} disabled={loading}>
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </div>
+
+      {showQueryDetails ? (
         <div className="direct-source__query-panel">
           <div className="direct-source__query-title">GraphQL Query:</div>
           <pre className="direct-source__query-pre">{queryInfo?.query || 'No query'}</pre>
         </div>
-      )}
+      ) : null}
 
-      <div className="direct-source__table-container direct-availability__table-container">
-        {loading && (
-          <div className="direct-source__loading-overlay">
-            <div className="direct-source__loading-card">Querying external source...</div>
-          </div>
-        )}
-        <div ref={tableRef} className="direct-source__table-host" />
-      </div>
+      <main className="talia-report__content">
+        <div className="direct-source__table-container direct-availability__table-container">
+          {loading ? (
+            <div className="direct-source__loading-overlay">
+              <div className="direct-source__loading-card">Querying external source...</div>
+            </div>
+          ) : null}
+          <div ref={tableRef} className="direct-source__table-host talia-table" role="grid" />
+        </div>
+      </main>
     </div>
   );
 };

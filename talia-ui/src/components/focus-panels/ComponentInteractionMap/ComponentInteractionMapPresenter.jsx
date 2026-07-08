@@ -234,40 +234,44 @@ const ComponentInteractionMapPresenter = ({
             {isCatalog && 'Global catalog of every registered component'}
           </p>
         </div>
-        <div className="talia-report__actions">
-          <div className="talia-cim-modes" role="group" aria-label="View mode">
-            <button
-              type="button"
-              className={`talia-btn ${isPresentation ? 'talia-btn--primary' : 'talia-btn--ghost'}`}
-              aria-pressed={isPresentation}
-              onClick={() => onModeChange?.('presentation')}
-            >
-              Presentation
-            </button>
-            <button
-              type="button"
-              className={`talia-btn ${isDetailed ? 'talia-btn--primary' : 'talia-btn--ghost'}`}
-              aria-pressed={isDetailed}
-              onClick={() => onModeChange?.('detailed')}
-            >
-              Detailed
-            </button>
-            <button
-              type="button"
-              className={`talia-btn ${isCatalog ? 'talia-btn--primary' : 'talia-btn--ghost'}`}
-              aria-pressed={isCatalog}
-              onClick={() => onModeChange?.('catalog')}
-            >
-              All components
-            </button>
-          </div>
-          {onRefresh && (
-            <button type="button" className="talia-btn talia-btn--secondary" onClick={onRefresh}>
-              Refresh
-            </button>
-          )}
-        </div>
       </header>
+
+      <div className="talia-report__controls" aria-label="Component interaction map controls">
+        <div className="talia-cim-modes" role="group" aria-label="View mode">
+          <button
+            type="button"
+            className={`talia-btn ${isPresentation ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+            aria-pressed={isPresentation}
+            onClick={() => onModeChange?.('presentation')}
+          >
+            Presentation
+          </button>
+          <button
+            type="button"
+            className={`talia-btn ${isDetailed ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+            aria-pressed={isDetailed}
+            onClick={() => onModeChange?.('detailed')}
+          >
+            Detailed
+          </button>
+          <button
+            type="button"
+            className={`talia-btn ${isCatalog ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+            aria-pressed={isCatalog}
+            onClick={() => onModeChange?.('catalog')}
+          >
+            All components
+          </button>
+        </div>
+      </div>
+
+      {onRefresh ? (
+        <div className="talia-report__actions-bar" aria-label="Component interaction map actions">
+          <button type="button" className="talia-btn talia-btn--secondary" onClick={onRefresh}>
+            Refresh
+          </button>
+        </div>
+      ) : null}
 
       {isPresentation && presentation ? (
         <main className="talia-report__content talia-cim">

@@ -153,9 +153,19 @@ const YourReportPresenter = ({ data, onRefresh }) => {
         {/* Talia filters row — governed by header Filters toggle */}
       </div>
 
+      {/* Optional: panel operations (Expand/Collapse, view modes) — governed by Controls toggle */}
+      <div className="talia-report__controls" aria-label="Your report controls">
+        <button type="button" className="talia-btn talia-btn--secondary" onClick={onExpandAll}>
+          Expand all
+        </button>
+        <button type="button" className="talia-btn talia-btn--secondary" onClick={onCollapseAll}>
+          Collapse
+        </button>
+      </div>
+
       <div className="talia-report__actions-bar" aria-label="Your report actions">
         {onRefresh && (
-          <button type="button" className="talia-btn" onClick={onRefresh} aria-label="Refresh data">
+          <button type="button" className="talia-btn talia-btn--secondary" onClick={onRefresh} aria-label="Refresh data">
             ↻ Refresh
           </button>
         )}
@@ -242,8 +252,9 @@ Full shell vocabulary (Title, Filters, Actions, Callouts, Details, Controls vs C
 - `.talia-report__subtitle` - Subtitle/metadata (hidden with title)
 - `.talia-report-filters` - Panel filter row (toggle: **Filters**); not the app **Controls** strip
 - `.talia-callout` - Informational note (toggle: **Callouts**)
-- `.talia-report__actions-bar` - Panel actions row (toggle: **Actions**)
-- `.talia-report__actions` - Legacy compact actions in header (prefer `__actions-bar`)
+- `.talia-report__controls` - Panel operations row (Expand/Collapse, view modes; toggle: **Controls**)
+- `.talia-report__actions-bar` - Panel actions row (Refresh, Export; toggle: **Actions**)
+- `.talia-report__actions` - Legacy compact actions in header (prefer `__actions-bar`; do not add new uses)
 - `.talia-report__content` - Main content (table/chart/map)
 - `.talia-report__footer` - Footer (usually hidden via CSS)
 
@@ -251,8 +262,10 @@ Full shell vocabulary (Title, Filters, Actions, Callouts, Details, Controls vs C
 - `.talia-table` - Table wrapper
 
 ### Buttons
-- `.talia-btn` - Standard button
-- `.talia-btn--primary` - Primary action button
+- `.talia-btn` - Standard outlined button (default for actions)
+- `.talia-btn--secondary` - Outlined button for controls and secondary actions (preferred in `.talia-report__controls` and `.talia-report__actions-bar`)
+- `.talia-btn--primary` - Primary action button (one per row, or active toggle state)
+- `.talia-btn--ghost` - Borderless text-style button (avoid in controls/actions rows)
 - `.talia-btn--small` - Smaller button
 
 ### States

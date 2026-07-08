@@ -338,14 +338,6 @@ const ShipDayBerthPresenter = ({
             {subtitle}
           </p>
         </div>
-        <div className="master-sailing-panel__actions">
-          <button type="button" className="talia-btn talia-btn--ghost" onClick={openAllGroups}>
-            Expand months
-          </button>
-          <button type="button" className="talia-btn talia-btn--ghost" onClick={collapseAllGroups}>
-            Collapse
-          </button>
-        </div>
       </header>
       {selectedScope && (
         <div className="ms-berth-selection">
@@ -395,6 +387,14 @@ const ShipDayBerthPresenter = ({
             onChange={(event) => setSearch(event.target.value)}
           />
         </label>
+      </div>
+      <div className="talia-report__controls" aria-label="Ship day berth controls">
+        <button type="button" className="talia-btn talia-btn--secondary" onClick={openAllGroups}>
+          Expand months
+        </button>
+        <button type="button" className="talia-btn talia-btn--secondary" onClick={collapseAllGroups}>
+          Collapse
+        </button>
       </div>
       <div ref={tableRef} className="focus-panel__table master-sailing-table ms-explorer-table ms-berth-table" />
     </div>

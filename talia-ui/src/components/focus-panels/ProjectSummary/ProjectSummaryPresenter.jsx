@@ -25,14 +25,14 @@ const ProjectSummaryPresenter = ({ summary, onRefresh }) => {
             {generatedAt ? `Published ${generatedAt}` : 'Latest executive overview'}
           </p>
         </div>
-        {onRefresh ? (
-          <div className="talia-report__header-right">
-            <button type="button" className="talia-btn talia-btn--secondary" onClick={onRefresh}>
-              Refresh
-            </button>
-          </div>
-        ) : null}
       </header>
+      {onRefresh ? (
+        <div className="talia-report__actions-bar" aria-label="Project summary actions">
+          <button type="button" className="talia-btn talia-btn--secondary" onClick={onRefresh}>
+            Refresh
+          </button>
+        </div>
+      ) : null}
       <main className="talia-report__content" style={{ padding: 0 }}>
         <iframe
           title={summary?.title || 'Project Summary'}

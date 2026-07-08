@@ -539,10 +539,10 @@ const MasterSailingExplorerPresenter = ({
         ))}
       </div>
       <div className="talia-report__controls" aria-label="Master sailing explorer controls">
-        <button type="button" className="talia-btn talia-btn--ghost" onClick={expandAllMasters}>
+        <button type="button" className="talia-btn talia-btn--secondary" onClick={expandAllMasters}>
           Expand all days
         </button>
-        <button type="button" className="talia-btn talia-btn--ghost" onClick={collapseAllMasters}>
+        <button type="button" className="talia-btn talia-btn--secondary" onClick={collapseAllMasters}>
           Collapse days
         </button>
       </div>

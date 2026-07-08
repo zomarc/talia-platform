@@ -1,4 +1,5 @@
 import queryTracker from './queryTracker';
+import { GraphQLUtils } from '../../lib/apolloClient.js';
 
 const getQueryText = (query) => {
   if (typeof query === 'string') return query;
@@ -34,7 +35,7 @@ export const trackedFetchGraphql = async ({
   component = 'Unknown',
   purpose = 'Fetch GraphQL operation',
   tableName = 'unknown',
-  headers = { 'Content-Type': 'application/json' }
+  headers = {}
 }) => {
   const completeQuery = startTrackedGraphqlOperation({
     query,
@@ -46,7 +47,11 @@ export const trackedFetchGraphql = async ({
   try {
     const response = await fetch(url, {
       method: 'POST',
-      headers,
+      headers: {
+        'Content-Type': 'application/json',
+        ...GraphQLUtils.getRequestHeaders(),
+        ...headers,
+      },
       body: JSON.stringify({ query: getQueryText(query), variables })
     });
     const payload = await response.json();

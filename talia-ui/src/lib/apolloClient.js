@@ -23,25 +23,13 @@ const httpLink = createHttpLink({
 });
 
 // Auth link to add user context to requests
-const authLink = setContext((_, { headers }) => {
-  // Get user information from localStorage or context
-  const userRole = localStorage.getItem('userRole') || 'GUEST';
-  const taliaUserId = localStorage.getItem('taliaUserId');
-  const storedUserId = localStorage.getItem('userId') || 'anonymous';
-  const userId =
-    taliaUserId != null && taliaUserId !== '' ? taliaUserId : storedUserId;
-  const userEmail = localStorage.getItem('userEmail') || 'guest@celestyal.com';
-
-  return {
-    headers: {
-      ...headers,
-      'x-user-role': userRole,
-      'x-user-id': userId,
-      'x-user-email': userEmail,
-      'content-type': 'application/json',
-    }
-  };
-});
+const authLink = setContext((_, { headers }) => ({
+  headers: {
+    ...headers,
+    ...GraphQLUtils.getRequestHeaders(),
+    'content-type': 'application/json',
+  }
+}));
 
 // Create Apollo Client with enhanced configuration
 export const apolloClient = new ApolloClient({
@@ -409,6 +397,33 @@ export const FOCUS_MUTATIONS = {
 
 // Utility functions for working with GraphQL data
 export const GraphQLUtils = {
+  // Headers forwarded to GraphQL server for auth context (role, identity).
+  getRequestHeaders: () => {
+    try {
+      const userRole =
+        localStorage.getItem('userRole') ||
+        localStorage.getItem('devUserRole') ||
+        'GUEST';
+      const taliaUserId = localStorage.getItem('taliaUserId');
+      const storedUserId = localStorage.getItem('userId') || 'anonymous';
+      const userId =
+        taliaUserId != null && taliaUserId !== '' ? taliaUserId : storedUserId;
+      const userEmail = localStorage.getItem('userEmail') || 'guest@celestyal.com';
+      return {
+        'x-user-role': userRole,
+        'x-user-id': userId,
+        'x-user-email': userEmail,
+      };
+    } catch (error) {
+      console.warn('Failed to build GraphQL auth headers:', error);
+      return {
+        'x-user-role': 'GUEST',
+        'x-user-id': 'anonymous',
+        'x-user-email': 'guest@celestyal.com',
+      };
+    }
+  },
+
   // Extract user role from Apollo Client cache
   getUserRole: () => {
     try {

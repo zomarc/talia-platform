@@ -172,7 +172,7 @@
 }
 
 .talia-controls-hidden .talia-report__controls,
-.talia-controls-hidden .status-bar__criteria {
+.talia-controls-hidden .status-bar__criteria:not(.status-bar__criteria--visibility) {
   display: none !important;
 }
 

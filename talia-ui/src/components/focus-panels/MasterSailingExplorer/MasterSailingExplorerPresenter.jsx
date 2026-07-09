@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { emitSailSelect, SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { chainRowFormatters, createReferenceRowFormatter, refreshReferenceRowClasses } from '../../../lib/tabulatorReferenceSelection';
 import { formatDayMon, formatMonYear } from '../../../lib/dateFormat';
 import {
   buildExplorerDisplayRows,
@@ -349,6 +350,9 @@ const MasterSailingExplorerPresenter = ({
       suppressSelectionRestoreRef.current = true;
       table.deselectRow?.();
       targetRow.select?.();
+      refreshReferenceRowClasses(table, (data) => (
+        data?.row_type === 'master' && masterRowMatchesReference(data, referenceCode)
+      ));
     } catch { /* noop */ } finally {
       window.setTimeout(() => {
         suppressSelectionRestoreRef.current = false;
@@ -416,13 +420,19 @@ const MasterSailingExplorerPresenter = ({
           groupBy: GROUP_BY,
           groupStartOpen: [true, true],
           groupHeader: groupHeaders,
-          rowFormatter: (row) => {
-            const data = row.getData();
-            const element = row.getElement();
-            if (!element || !data) return;
-            element.classList.toggle('ms-explorer-row--day', data.row_type === 'day');
-            element.classList.toggle('ms-explorer-row--master', data.row_type === 'master');
-          },
+          rowFormatter: chainRowFormatters(
+            (row) => {
+              const data = row.getData();
+              const element = row.getElement();
+              if (!element || !data) return;
+              element.classList.toggle('ms-explorer-row--day', data.row_type === 'day');
+              element.classList.toggle('ms-explorer-row--master', data.row_type === 'master');
+            },
+            createReferenceRowFormatter((data) => (
+              data?.row_type === 'master'
+              && masterRowMatchesReference(data, selectedReferenceRef.current)
+            )),
+          ),
         }));
 
         instanceRef.current.on('tableBuilt', () => {

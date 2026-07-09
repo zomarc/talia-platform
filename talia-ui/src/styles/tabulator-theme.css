@@ -118,29 +118,44 @@
   background: var(--theme-table-row-odd) !important;
 }
 
-.tabulator .tabulator-row:not(.tabulator-group):hover,
-.tabulator .tabulator-tableholder .tabulator-table .tabulator-row:not(.tabulator-group):hover {
+/* Hover applies only to non-reference rows so active selection stays visible */
+.tabulator .tabulator-row:not(.tabulator-group):not(.tabulator-selected):not(.tabulator-row--reference):hover,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row:not(.tabulator-group):not(.tabulator-selected):not(.tabulator-row--reference):hover {
   background: var(--theme-table-row-hover) !important;
 }
 
-.tabulator .tabulator-row:not(.tabulator-group):hover .tabulator-cell,
-.tabulator .tabulator-tableholder .tabulator-table .tabulator-row:not(.tabulator-group):hover .tabulator-cell {
+.tabulator .tabulator-row:not(.tabulator-group):not(.tabulator-selected):not(.tabulator-row--reference):hover .tabulator-cell,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row:not(.tabulator-group):not(.tabulator-selected):not(.tabulator-row--reference):hover .tabulator-cell {
   background: var(--theme-table-row-hover) !important;
 }
 
+/* Persistent reference / Tabulator-selected row highlight */
 .tabulator .tabulator-row.tabulator-selected,
-.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected {
-  background: var(--theme-accent-light) !important;
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected,
+.tabulator .tabulator-row.tabulator-row--reference,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row--reference {
+  background: var(--theme-table-row-selected, var(--theme-accent-light)) !important;
 }
 
 .tabulator .tabulator-row.tabulator-selected .tabulator-cell,
-.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected .tabulator-cell {
-  background: var(--theme-accent-light) !important;
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected .tabulator-cell,
+.tabulator .tabulator-row.tabulator-row--reference .tabulator-cell,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row--reference .tabulator-cell {
+  background: var(--theme-table-row-selected, var(--theme-accent-light)) !important;
 }
 
 .tabulator .tabulator-row.tabulator-selected:hover,
-.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected:hover {
-  background: var(--theme-accent-light) !important;
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected:hover,
+.tabulator .tabulator-row.tabulator-row--reference:hover,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row--reference:hover {
+  background: var(--theme-table-row-selected-hover, var(--theme-table-row-selected, var(--theme-accent-light))) !important;
+}
+
+.tabulator .tabulator-row.tabulator-selected:hover .tabulator-cell,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected:hover .tabulator-cell,
+.tabulator .tabulator-row.tabulator-row--reference:hover .tabulator-cell,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row--reference:hover .tabulator-cell {
+  background: var(--theme-table-row-selected-hover, var(--theme-table-row-selected, var(--theme-accent-light))) !important;
 }
 
 .tabulator .tabulator-cell {
@@ -332,8 +347,12 @@
   grid-column: auto;
 }
 
-.ms-explorer-table .ms-explorer-row--day {
-  background: color-mix(in srgb, #1a2332 88%, transparent);
+.ms-explorer-table .ms-explorer-row--day:not(.tabulator-selected):not(.tabulator-row--reference):not(:hover) {
+  background: color-mix(in srgb, #1a2332 88%, transparent) !important;
+}
+
+.ms-explorer-table .ms-explorer-row--day:not(.tabulator-selected):not(.tabulator-row--reference):hover {
+  background: var(--theme-table-row-hover) !important;
 }
 
 .ms-explorer-table .ms-explorer-row--day .tabulator-cell {
@@ -499,8 +518,13 @@
   padding: 2px 10px;
 }
 
-.ms-berth-table .ms-berth-row--voyage {
-  background: color-mix(in srgb, #5b9fd4 14%, transparent);
+.ms-berth-table .ms-berth-row--voyage:not(.tabulator-selected):not(.tabulator-row--reference):not(:hover) {
+  background: color-mix(in srgb, #5b9fd4 14%, transparent) !important;
+  box-shadow: inset 3px 0 0 0 #5b9fd4;
+}
+
+.ms-berth-table .ms-berth-row--voyage:not(.tabulator-selected):not(.tabulator-row--reference):hover {
+  background: var(--theme-table-row-hover) !important;
   box-shadow: inset 3px 0 0 0 #5b9fd4;
 }
 

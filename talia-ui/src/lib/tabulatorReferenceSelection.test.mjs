@@ -4,6 +4,7 @@ import {
   REFERENCE_ROW_CLASS,
   chainRowFormatters,
   createReferenceRowFormatter,
+  forEachTableRow,
   refreshReferenceRowClasses,
 } from './tabulatorReferenceSelection.js';
 
@@ -35,7 +36,56 @@ test('chainRowFormatters runs all formatters in order', () => {
   assert.deepEqual(calls, ['a', 'b', 'c']);
 });
 
-test('refreshReferenceRowClasses updates active rows', () => {
+test('forEachTableRow visits nested grouped data rows', () => {
+  const visited = [];
+  const dataRow = (id) => ({
+    getType: () => 'row',
+    getData: () => ({ id }),
+  });
+  const table = {
+    getGroups: () => [{
+      getSubGroups: () => [{
+        getRows: () => [dataRow(1), dataRow(2)],
+      }],
+    }],
+  };
+
+  forEachTableRow(table, (row) => {
+    visited.push(row.getData().id);
+  });
+
+  assert.deepEqual(visited, [1, 2]);
+});
+
+test('refreshReferenceRowClasses updates active rows in grouped tables', () => {
+  const toggled = [];
+  const makeRow = (id, active) => ({
+    getType: () => 'row',
+    getElement: () => ({
+      classList: {
+        toggle(className, on) {
+          toggled.push({ id, className, on });
+        },
+      },
+    }),
+    getData: () => ({ id, active }),
+  });
+  const table = {
+    getGroups: () => [{
+      getSubGroups: () => [{
+        getRows: () => [makeRow(1, true), makeRow(2, false)],
+      }],
+    }],
+  };
+
+  refreshReferenceRowClasses(table, (data) => data.active === true);
+  assert.deepEqual(toggled, [
+    { id: 1, className: REFERENCE_ROW_CLASS, on: true },
+    { id: 2, className: REFERENCE_ROW_CLASS, on: false },
+  ]);
+});
+
+test('refreshReferenceRowClasses updates flat table rows', () => {
   const rows = [
     {
       getElement: () => ({ classList: { toggle() {} } }),

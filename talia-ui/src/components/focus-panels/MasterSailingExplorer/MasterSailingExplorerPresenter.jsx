@@ -87,7 +87,6 @@ const MasterSailingExplorerPresenter = ({
   const didApplyInitialGroupOpenRef = useRef(false);
   const suppressMonthAutoOpenRef = useRef(false);
   const suppressClearOnRefreshRef = useRef(false);
-  const suppressSelectionRestoreRef = useRef(false);
   const selectedReferenceRef = useRef(
     resolveSelectionReferenceCode(typeof window !== 'undefined' ? window.lastSailSelectEvent?.detail : null)
   );
@@ -324,41 +323,41 @@ const MasterSailingExplorerPresenter = ({
     maxDepth: GROUP_MAX_DEPTH,
   }), []);
 
+  const isReferenceMasterRow = useCallback((data) => (
+    data?.row_type === 'master'
+    && masterRowMatchesReference(data, selectedReferenceRef.current)
+  ), []);
+
+  const applyReferenceHighlight = useCallback(() => {
+    const table = instanceRef.current;
+    if (!table || !tableBuiltRef.current) return;
+    refreshReferenceRowClasses(table, isReferenceMasterRow);
+  }, [isReferenceMasterRow]);
+
   const focusSelectedMaster = useCallback(() => {
     const table = instanceRef.current;
     const referenceCode = selectedReferenceRef.current;
-    if (!table || !tableBuiltRef.current || !referenceCode) return;
-
-    const monthGroups = table.getGroups?.() || [];
-    let targetRow = null;
-
-    monthGroups.forEach((monthGroup) => {
-      const shipGroups = monthGroup.getSubGroups?.() || [];
-      shipGroups.forEach((shipGroup) => {
-        const rows = shipGroup.getRows?.() || [];
-        const match = rows.find((row) => masterRowMatchesReference(row.getData?.(), referenceCode));
-        if (match) {
-          monthGroup.show?.();
-          shipGroup.show?.();
-          targetRow = match;
-        }
-      });
-    });
-
-    if (!targetRow) return;
-    try {
-      suppressSelectionRestoreRef.current = true;
-      table.deselectRow?.();
-      targetRow.select?.();
-      refreshReferenceRowClasses(table, (data) => (
-        data?.row_type === 'master' && masterRowMatchesReference(data, referenceCode)
-      ));
-    } catch { /* noop */ } finally {
-      window.setTimeout(() => {
-        suppressSelectionRestoreRef.current = false;
-      }, 0);
+    if (!table || !tableBuiltRef.current) {
+      return;
     }
-  }, []);
+
+    if (referenceCode) {
+      const monthGroups = table.getGroups?.() || [];
+      monthGroups.forEach((monthGroup) => {
+        const shipGroups = monthGroup.getSubGroups?.() || [];
+        shipGroups.forEach((shipGroup) => {
+          const rows = shipGroup.getRows?.() || [];
+          const hasMatch = rows.some((row) => masterRowMatchesReference(row.getData?.(), referenceCode));
+          if (hasMatch) {
+            monthGroup.show?.();
+            shipGroup.show?.();
+          }
+        });
+      });
+    }
+
+    applyReferenceHighlight();
+  }, [applyReferenceHighlight]);
 
   const afterTableDataRefresh = useCallback((refreshPromise) => {
     const apply = () => focusSelectedMaster();
@@ -377,7 +376,7 @@ const MasterSailingExplorerPresenter = ({
     };
     const handleClear = () => {
       selectedReferenceRef.current = null;
-      try { instanceRef.current?.deselectRow?.(); } catch { /* noop */ }
+      applyReferenceHighlight();
     };
 
     window.addEventListener(SAIL_SELECT_EVENT, handleSelect);
@@ -392,7 +391,7 @@ const MasterSailingExplorerPresenter = ({
       window.removeEventListener(SAIL_SELECT_EVENT, handleSelect);
       window.removeEventListener(SAIL_CLEAR_EVENT, handleClear);
     };
-  }, [focusSelectedMaster]);
+  }, [applyReferenceHighlight, focusSelectedMaster]);
 
   useEffect(() => {
     let cancelled = false;
@@ -413,7 +412,7 @@ const MasterSailingExplorerPresenter = ({
           index: 'row_key',
           initialSort: [{ column: 'sail_date_from', dir: 'asc' }],
           height: '100%',
-          selectableRows: 1,
+          selectableRows: false,
           resizableColumns: true,
           movableColumns: true,
           pagination: false,
@@ -428,10 +427,7 @@ const MasterSailingExplorerPresenter = ({
               element.classList.toggle('ms-explorer-row--day', data.row_type === 'day');
               element.classList.toggle('ms-explorer-row--master', data.row_type === 'master');
             },
-            createReferenceRowFormatter((data) => (
-              data?.row_type === 'master'
-              && masterRowMatchesReference(data, selectedReferenceRef.current)
-            )),
+            createReferenceRowFormatter(isReferenceMasterRow),
           ),
         }));
 
@@ -465,14 +461,10 @@ const MasterSailingExplorerPresenter = ({
             handleExpandToggle(event, rowData);
             return;
           }
-          try { row?.select?.(); } catch { /* noop */ }
-        });
-
-        instanceRef.current.on('rowSelected', (row) => {
-          const rowData = row.getData();
           if (rowData?.row_type !== 'master') return;
           const managementSailCode = rowData.reference_sail_code || rowData.sail_code;
           selectedReferenceRef.current = managementSailCode ? String(managementSailCode).trim() : null;
+          applyReferenceHighlight();
           emitSailSelect({
             sail_code: managementSailCode,
             reference_sail_code: managementSailCode,
@@ -481,13 +473,6 @@ const MasterSailingExplorerPresenter = ({
             row_data: rowData,
             timestamp: new Date().toISOString(),
           });
-        });
-
-        instanceRef.current.on('rowDeselected', () => {
-          if (suppressClearOnRefreshRef.current || suppressSelectionRestoreRef.current) return;
-          const hasSelectedRows = (instanceRef.current?.getSelectedData?.() || []).length > 0;
-          if (hasSelectedRows) return;
-          selectedReferenceRef.current = null;
         });
 
         instanceRef.current.on('groupClick', (_event, group) => {
@@ -513,9 +498,11 @@ const MasterSailingExplorerPresenter = ({
   }, [
     afterTableDataRefresh,
     applyGroupDepth,
+    applyReferenceHighlight,
     collapseAllGroups,
     columns,
     handleExpandToggle,
+    isReferenceMasterRow,
     openAllGroups,
     openFirstMonthOnly,
     openOnlyMonthGroup,

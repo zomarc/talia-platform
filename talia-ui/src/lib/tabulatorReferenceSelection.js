@@ -35,6 +35,49 @@ export function createReferenceRowFormatter(isReferenceRow) {
   };
 }
 
+const isGroupRow = (row) => {
+  if (!row) return false;
+  if (typeof row.getType === 'function') {
+    return row.getType() === 'group';
+  }
+  const data = row.getData?.();
+  return !data || typeof data !== 'object' || Object.keys(data).length === 0;
+};
+
+/**
+ * Visit every rendered data row, including rows nested under group headers.
+ * @param {import('tabulator-tables').TabulatorFull} table
+ * @param {(row: object) => void} visit
+ */
+export function forEachTableRow(table, visit) {
+  if (!table || typeof visit !== 'function') return;
+
+  const walkRows = (rows) => {
+    (rows || []).forEach((row) => {
+      if (!row) return;
+      if (isGroupRow(row)) {
+        walkGroup(row);
+        return;
+      }
+      visit(row);
+    });
+  };
+
+  const walkGroup = (group) => {
+    if (!group) return;
+    walkRows(group.getRows?.() || []);
+    (group.getSubGroups?.() || []).forEach(walkGroup);
+  };
+
+  const topGroups = table.getGroups?.();
+  if (topGroups?.length) {
+    topGroups.forEach(walkGroup);
+    return;
+  }
+
+  walkRows(table.getRows?.() || []);
+}
+
 /**
  * Re-apply reference class on all rendered rows (e.g. after external selection change).
  * @param {import('tabulator-tables').TabulatorFull} table
@@ -42,8 +85,7 @@ export function createReferenceRowFormatter(isReferenceRow) {
  */
 export function refreshReferenceRowClasses(table, isReferenceRow) {
   if (!table || typeof isReferenceRow !== 'function') return;
-  const rows = table.getRows?.('active') || table.getRows?.() || [];
-  rows.forEach((row) => {
+  forEachTableRow(table, (row) => {
     const element = row.getElement?.();
     if (!element) return;
     const data = row.getData?.() || {};

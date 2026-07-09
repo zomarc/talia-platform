@@ -311,7 +311,7 @@ const ReservationCurrentStatePresenter = ({
 
   return (
     <div className="focus-panel reservation-current-state talia-report">
-      <div className="talia-report__controls" aria-label="Reservation status filter">
+      <div className="reservation-current-state__filters talia-report-filters" aria-label="Reservation status filter">
         <button
           type="button"
           className={`talia-btn ${statusFilter === 'booked' ? 'talia-btn--primary' : 'talia-btn--secondary'}`}

@@ -145,6 +145,63 @@
 
     .summary-points li strong { color: #fff; }
 
+    .commits-section { margin-top: 1.25rem; }
+
+    .commits-meta {
+      margin: 0 0 0.65rem;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .commit-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      max-height: 42vh;
+      overflow: hidden;
+      columns: 2;
+      column-gap: 1.5rem;
+    }
+
+    .commit-list li {
+      position: relative;
+      padding: 0.35rem 0 0.35rem 4.25rem;
+      margin-bottom: 0.35rem;
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      break-inside: avoid;
+      border-bottom: 1px solid rgba(232, 213, 184, 0.08);
+    }
+
+    .commit-hash {
+      position: absolute;
+      left: 0;
+      top: 0.38rem;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--sun);
+      background: rgba(212, 165, 116, 0.12);
+      padding: 0.12rem 0.35rem;
+      border-radius: 4px;
+      letter-spacing: 0.02em;
+    }
+
+    .commit-subject {
+      display: block;
+      color: #fff;
+      font-weight: 550;
+      line-height: 1.35;
+    }
+
+    .commit-detail {
+      display: block;
+      margin-top: 0.15rem;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
     /* —— Architecture page —— */
     .arch-intro {
       font-size: 0.88rem;
@@ -300,6 +357,13 @@
       .summary-points { gap: 0.35rem 1.5rem; }
       .summary-points li { font-size: 0.85rem; }
 
+      .commits-section { margin-top: 0.75rem; }
+      .commits-section h2 { font-size: 0.95rem; margin-bottom: 0.5rem; }
+      .commit-list { max-height: 68mm; columns: 2; }
+      .commit-list li { font-size: 0.72rem; padding-left: 3.6rem; margin-bottom: 0.2rem; }
+      .commit-hash { font-size: 0.64rem; top: 0.3rem; }
+      .commit-detail { font-size: 0.66rem; }
+
       .arch-diagram { border: 1px solid var(--border); padding: 0.25rem; }
       .arch-diagram svg { max-height: 172mm; width: 100%; }
 
@@ -353,6 +417,16 @@
           <li><strong>Next horizon:</strong> talia-engine intelligence layer (planned)</li>
         </ul>
       </div>
+
+      <section class="commits-section" aria-label="Recent development commits">
+        <h2>Recent development</h2>
+        <div class="card">
+          <!-- COMMITS:START -->
+          <p class="commits-meta">Generated at build time from git history</p>
+          <ul class="commit-list"></ul>
+          <!-- COMMITS:END -->
+        </div>
+      </section>
     </div>
 
     <!-- PAGE 2: Architecture -->

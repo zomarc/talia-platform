@@ -13,6 +13,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -78,12 +79,107 @@ function getRecentChanges() {
   return null;
 }
 
+// Gather recent git commits for the executive summary changelog
+const MAX_DISPLAY_COMMITS = 30;
+
+function deriveDetail(subject) {
+  if (!subject) return '';
+  const stripped = subject.replace(/^(feat|fix|docs|chore|refactor|test|style|perf)(\([^)]+\))?!?:\s*/i, '');
+  return stripped.length > 0 && stripped !== subject ? stripped : '';
+}
+
+function commitDetail(subject, body) {
+  const fromBody = body
+    .split('\n')
+    .map((line) => line.trim())
+    .find(Boolean);
+  const detail = fromBody || deriveDetail(subject);
+  if (!detail) return '';
+  const normalizedSubject = subject.replace(/\s+/g, ' ').trim().toLowerCase();
+  const normalizedDetail = detail.replace(/\s+/g, ' ').trim().toLowerCase();
+  if (normalizedDetail === normalizedSubject) return '';
+  if (normalizedSubject.includes(normalizedDetail) || normalizedDetail.includes(normalizedSubject)) {
+    return fromBody ? detail : '';
+  }
+  return detail;
+}
+
+function getRecentCommits() {
+  try {
+    const hasOriginMain = execSync('git rev-parse --verify origin/main', {
+      cwd: rootDir,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore']
+    }).trim();
+    const ahead = hasOriginMain
+      ? execSync('git rev-list --count origin/main..HEAD', {
+          cwd: rootDir,
+          encoding: 'utf8',
+          stdio: ['pipe', 'pipe', 'ignore']
+        }).trim()
+      : '0';
+
+    const range = hasOriginMain && ahead !== '0' ? 'origin/main..HEAD' : '-30';
+    const raw = execSync(`git log ${range} --format=%h%x1f%s%x1f%b%x1e`, {
+      cwd: rootDir,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore']
+    }).trim();
+
+    if (!raw) return { label: 'No commits found', commits: [], total: 0 };
+
+    const commits = raw
+      .split('\x1e')
+      .filter(Boolean)
+      .map((entry) => {
+        const [hash, subject, body = ''] = entry.split('\x1f');
+        return {
+          hash: hash?.trim(),
+          subject: subject?.trim(),
+          detail: commitDetail(subject?.trim() || '', body)
+        };
+      })
+      .filter((c) => c.hash && c.subject);
+
+    const label =
+      hasOriginMain && ahead !== '0'
+        ? `${ahead} commit${ahead === '1' ? '' : 's'} ahead of origin/main`
+        : 'Last 30 commits on current branch';
+
+    return { label, commits, total: commits.length };
+  } catch {
+    return { label: 'Git history unavailable', commits: [], total: 0 };
+  }
+}
+
+function formatCommitsSection({ label, commits, total }) {
+  if (!commits.length) {
+    return `### Recent Development Commits\n\n_${label}_\n`;
+  }
+
+  const displayed = commits.slice(0, MAX_DISPLAY_COMMITS);
+  const truncated = total > displayed.length;
+  const header = truncated
+    ? `_${label} · showing ${displayed.length} most recent of ${total} · ${getCurrentDate()}_`
+    : `_${label} · ${getCurrentDate()}_`;
+
+  const rows = displayed
+    .map(({ hash, subject, detail }) => {
+      const detailLine = detail ? ` — ${detail}` : '';
+      return `- \`${hash}\` ${subject}${detailLine}`;
+    })
+    .join('\n');
+
+  return `### Recent Development Commits\n\n${header}\n\n${rows}\n`;
+}
+
 // Generate the executive overview document
 function generateExecutiveOverview() {
   const version = getVersion();
   const currentDate = getCurrentDate();
   const weekNumber = getCurrentWeek();
   const recentChanges = getRecentChanges();
+  const recentCommits = getRecentCommits();
   
   // Determine status based on version
   let status = 'Active Development';
@@ -277,6 +373,7 @@ ${recentChanges ? `### Recent Changes (v${recentChanges.version})
 ${recentChanges.content.split('\n').slice(0, 20).join('\n')}
 ${recentChanges.content.split('\n').length > 20 ? '\n...' : ''}
 ` : ''}
+${formatCommitsSection(recentCommits)}
 ---
 
 ## 5. Current Goals

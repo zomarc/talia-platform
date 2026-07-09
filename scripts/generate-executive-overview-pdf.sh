@@ -74,6 +74,18 @@ main() {
   echo -e "${DIM}Chrome:${NC}  ${chrome_bin}"
   echo ""
 
+  if command -v node >/dev/null 2>&1; then
+    if node "${SCRIPT_DIR}/inject-executive-overview-commits.mjs"; then
+      echo -e "  ${GREEN}✓${NC} Injected git commit summary into HTML"
+    else
+      echo -e "  ${YELLOW}!${NC} Could not inject commit summary (continuing with existing HTML)"
+    fi
+    echo ""
+  else
+    echo -e "  ${YELLOW}!${NC} node not found — skipped commit summary injection"
+    echo ""
+  fi
+
   mkdir -p "$(dirname "$HTML_PUBLIC")" "$(dirname "$PDF_OUTPUT")"
   cp "$HTML_SOURCE" "$HTML_PUBLIC"
   echo -e "  ${GREEN}✓${NC} Synced public copy → talia-ui/public/executive-overview.html"

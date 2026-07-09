@@ -29,7 +29,7 @@
     "lint:backend": "cd talia-server && npm run lint",
     "deploy:preview": "netlify deploy",
     "deploy:production": "netlify deploy --prod",
-    "generate:overview": "node scripts/generate-executive-overview.js",
+    "generate:overview": "node scripts/inject-executive-overview-commits.mjs && node scripts/generate-executive-overview.js",
     "generate:overview:pdf": "bash scripts/generate-executive-overview-pdf.sh"
   },
   "devDependencies": {

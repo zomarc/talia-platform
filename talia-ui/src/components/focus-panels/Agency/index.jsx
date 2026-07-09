@@ -9,6 +9,7 @@ import AgencyPresenter from './AgencyPresenter';
 import PanelDataState from '../../shared/PanelDataState';
 import {
   AGENCY_SELECTION_MODES,
+  buildSailScopeKeyFromDetail,
   mapSailCodesToReservationFilters,
   resolveAgencyDirectoryData,
   resolveAgencyIdFromDetail,
@@ -93,17 +94,35 @@ const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
   }, []);
 
   const hasSailSelection = Boolean(sailContext);
-  const { mode, rows: data } = useMemo(
+  const sailScopeKey = useMemo(
+    () => (hasSailSelection ? buildSailScopeKeyFromDetail(sailContext) : null),
+    [hasSailSelection, sailContext]
+  );
+  const [sailRowsScopeKey, setSailRowsScopeKey] = useState(null);
+
+  useEffect(() => {
+    if (!hasSailSelection) {
+      setSailRowsScopeKey(null);
+      return;
+    }
+    if (sailReservationsLoading) return;
+    setSailRowsScopeKey(sailScopeKey);
+  }, [hasSailSelection, sailReservationsLoading, sailScopeKey]);
+
+  const { mode, rows: data, pendingSailScope } = useMemo(
     () => resolveAgencyDirectoryData({
       agencies,
       reservationAgencyId,
       sailReservationRows,
       hasSailSelection,
+      sailScopeKey,
+      sailRowsScopeKey,
     }),
-    [agencies, hasSailSelection, reservationAgencyId, sailReservationRows]
+    [agencies, hasSailSelection, reservationAgencyId, sailReservationRows, sailRowsScopeKey, sailScopeKey]
   );
 
-  const loading = agenciesLoading || (hasSailSelection && !reservationAgencyId && sailReservationsLoading);
+  const loading = agenciesLoading
+    || (!reservationAgencyId && hasSailSelection && (sailReservationsLoading || pendingSailScope));
   const error = agenciesError || sailReservationsError;
 
   const refetch = () => {

@@ -260,6 +260,7 @@ const MyComponent = () => {
 - Use `selectableRows: 1` for single row selection
 - Use `headerFilter: "list"` with `autocomplete: true` for dropdown filters
 - Emit events on row selection: `talia:componentname.select`
+- **Persistent selection indicator:** use `createReferenceRowFormatter` / `refreshReferenceRowClasses` from `lib/tabulatorReferenceSelection.js` so the active row keeps class `tabulator-row--reference` across data refresh. Shared left accent bar styling lives in `tabulator-theme.css` (`--theme-table-row-selected-accent`). Panels with `selectableRows: 1` get the same bar via `.tabulator-selected`.
 - For grouped tables that need tab-header controls, set `supportsGroupActions: true` in `registry.js` and register presenter actions in `window.__taliaPanelGroupActions`
 - Do not hardcode table `layout` in panel code unless you intentionally opt out with `enforceGlobalLayout: false`
 

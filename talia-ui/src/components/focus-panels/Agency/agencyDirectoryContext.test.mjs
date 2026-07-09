@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AGENCY_SELECTION_MODES,
+  buildSailScopeKey,
+  buildSailScopeKeyFromDetail,
   collectAgencyIdsFromReservations,
   filterAgenciesByIds,
   filterAgenciesForReservation,
@@ -70,8 +72,11 @@ test('resolveAgencyDirectoryData prioritizes reservation over sail selection', (
     reservationAgencyId: '10',
     sailReservationRows: [{ agency_id: 20 }],
     hasSailSelection: true,
+    sailScopeKey: 'SAIL-A',
+    sailRowsScopeKey: 'SAIL-A',
   });
   assert.equal(result.mode, AGENCY_SELECTION_MODES.RESERVATION);
+  assert.equal(result.pendingSailScope, false);
   assert.deepEqual(result.rows, [{ agency_id: 10, agency_name: 'Alpha' }]);
 });
 
@@ -86,12 +91,44 @@ test('resolveAgencyDirectoryData filters agencies by sail reservations', () => {
     reservationAgencyId: null,
     sailReservationRows: [{ agency_id: 10 }, { agency_id: 30 }],
     hasSailSelection: true,
+    sailScopeKey: 'SC001',
+    sailRowsScopeKey: 'SC001',
   });
   assert.equal(result.mode, AGENCY_SELECTION_MODES.SAIL);
+  assert.equal(result.pendingSailScope, false);
   assert.deepEqual(
     result.rows.map((row) => row.agency_id),
     [10, 30]
   );
+});
+
+test('resolveAgencyDirectoryData waits for sail scope before applying rows', () => {
+  const agencies = [{ agency_id: 10 }, { agency_id: 20 }];
+  const result = resolveAgencyDirectoryData({
+    agencies,
+    reservationAgencyId: null,
+    sailReservationRows: [{ agency_id: 10 }],
+    hasSailSelection: true,
+    sailScopeKey: 'SAIL-B',
+    sailRowsScopeKey: 'SAIL-A',
+  });
+  assert.equal(result.mode, AGENCY_SELECTION_MODES.SAIL);
+  assert.equal(result.pendingSailScope, true);
+  assert.deepEqual(result.rows, []);
+});
+
+test('resolveAgencyDirectoryData ignores stale sail rows when scope key is missing', () => {
+  const agencies = [{ agency_id: 10 }, { agency_id: 20 }];
+  const result = resolveAgencyDirectoryData({
+    agencies,
+    reservationAgencyId: null,
+    sailReservationRows: [{ agency_id: 10 }],
+    hasSailSelection: true,
+    sailScopeKey: 'SAIL-A',
+    sailRowsScopeKey: null,
+  });
+  assert.equal(result.pendingSailScope, true);
+  assert.deepEqual(result.rows, []);
 });
 
 test('resolveAgencyDirectoryData returns full directory with no selection', () => {
@@ -126,5 +163,19 @@ test('filterAgenciesByIds returns empty when no ids match', () => {
   assert.deepEqual(
     filterAgenciesByIds([{ agency_id: 1 }], new Set(['99'])),
     []
+  );
+});
+
+test('buildSailScopeKey normalizes and sorts sail codes', () => {
+  assert.equal(buildSailScopeKey(['SEG2', 'MASTER1', 'SEG1']), 'MASTER1|SEG1|SEG2');
+  assert.equal(buildSailScopeKey([]), null);
+});
+
+test('buildSailScopeKeyFromDetail uses canonical sail_codes', () => {
+  assert.equal(
+    buildSailScopeKeyFromDetail({
+      canonical_scope: { sail_codes: ['B', 'A'] },
+    }),
+    'A|B'
   );
 });

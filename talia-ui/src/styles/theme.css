@@ -97,6 +97,7 @@
   --theme-table-row-hover: rgba(91, 155, 213, 0.18);
   --theme-table-row-selected: rgba(91, 155, 213, 0.35);
   --theme-table-row-selected-hover: rgba(91, 155, 213, 0.45);
+  --theme-table-row-selected-accent: var(--theme-accent, #5b9bd5);
 
   /* Card/panel accent shading (linked to row intensity) */
   --theme-card-bg: var(--theme-panel-bg, #252a44);

@@ -61,6 +61,17 @@ export const mapSailCodesToReservationFilters = (sailCodes) => {
   return { sail_codes: codes };
 };
 
+/** Stable scope key for matching sail reservation fetches to the active selection. */
+export const buildSailScopeKey = (sailCodes) => {
+  const codes = (sailCodes || []).map((code) => String(code).trim()).filter(Boolean);
+  if (codes.length === 0) return null;
+  return [...codes].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).join('|');
+};
+
+export const buildSailScopeKeyFromDetail = (detail) => (
+  buildSailScopeKey(resolveSailCodesFromDetail(detail))
+);
+
 export const collectAgencyIdsFromReservations = (rows) => {
   const ids = new Set();
   for (const row of rows || []) {
@@ -86,24 +97,39 @@ export const resolveAgencyDirectoryData = ({
   reservationAgencyId = null,
   sailReservationRows = [],
   hasSailSelection = false,
+  sailScopeKey = null,
+  sailRowsScopeKey = null,
 }) => {
   if (reservationAgencyId) {
     return {
       mode: AGENCY_SELECTION_MODES.RESERVATION,
       rows: filterAgenciesForReservation(agencies, reservationAgencyId),
+      pendingSailScope: false,
     };
   }
 
   if (hasSailSelection) {
+    const scopeReady = sailScopeKey != null
+      && sailRowsScopeKey != null
+      && sailScopeKey === sailRowsScopeKey;
+    if (!scopeReady) {
+      return {
+        mode: AGENCY_SELECTION_MODES.SAIL,
+        rows: [],
+        pendingSailScope: true,
+      };
+    }
     const agencyIds = collectAgencyIdsFromReservations(sailReservationRows);
     return {
       mode: AGENCY_SELECTION_MODES.SAIL,
       rows: filterAgenciesByIds(agencies, agencyIds),
+      pendingSailScope: false,
     };
   }
 
   return {
     mode: AGENCY_SELECTION_MODES.ALL,
     rows: agencies || [],
+    pendingSailScope: false,
   };
 };

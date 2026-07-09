@@ -158,6 +158,14 @@
   background: var(--theme-table-row-selected-hover, var(--theme-table-row-selected, var(--theme-accent-light))) !important;
 }
 
+/* Left accent bar — shared selection indicator (reference + Tabulator-selected) */
+.tabulator .tabulator-row.tabulator-selected:not(.tabulator-group),
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected:not(.tabulator-group),
+.tabulator .tabulator-row.tabulator-row--reference:not(.tabulator-group),
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row--reference:not(.tabulator-group) {
+  box-shadow: inset 3px 0 0 0 var(--theme-table-row-selected-accent, var(--theme-accent, #5b9bd5));
+}
+
 .tabulator .tabulator-cell {
   padding: var(--theme-table-cell-padding-y) var(--theme-table-cell-padding-x);
   line-height: 1.3;

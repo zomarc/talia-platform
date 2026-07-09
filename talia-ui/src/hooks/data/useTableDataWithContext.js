@@ -51,6 +51,40 @@ const buildRequestKey = (tableName, limit, filters) => (
   `${tableName || ''}|${String(limit || '')}|${stableStringify(filters || null)}`
 );
 
+const buildEffectiveFilters = (currentFilters, staticFilters) => ({
+  ...(staticFilters || {}),
+  ...(currentFilters || {}),
+  ...getServerGlobalFilters(),
+});
+
+const buildEffectiveFiltersKey = (currentFilters, staticFilters) => {
+  const effectiveFilters = buildEffectiveFilters(currentFilters, staticFilters);
+  return effectiveFilters ? JSON.stringify(effectiveFilters) : 'null';
+};
+
+const resolveExpectedFiltersKey = (context, contextMapper, fetchWithoutContext, staticFilters) => {
+  let mapped = null;
+  if (context && contextMapper) {
+    try {
+      mapped = contextMapper(context);
+      if (mapped && typeof mapped === 'object') {
+        mapped = Object.fromEntries(
+          Object.entries(mapped).filter(([, v]) => v != null)
+        );
+        if (Object.keys(mapped).length === 0) mapped = null;
+      } else {
+        mapped = null;
+      }
+    } catch {
+      mapped = null;
+    }
+  }
+  if (mapped || fetchWithoutContext) {
+    return buildEffectiveFiltersKey(mapped, staticFilters);
+  }
+  return null;
+};
+
 const getGlobalDateFilters = () => {
   const criteria = window.__taliaGlobalCriteria || null;
   if (!criteria || typeof criteria !== 'object') return null;
@@ -364,6 +398,7 @@ export const useTableDataWithContext = ({
   const lastIncludeNonRealRef = useRef(window.__taliaGlobalCriteria?.includeNonRealSailings === true);
   const pausedRef = useRef(isPanelPaused(panelInstanceId, panelComponentId));
   const pendingRefreshOnResumeRef = useRef(false);
+  const fetchGenerationRef = useRef(0);
 
   useReportPanelLoading(panelInstanceId, panelComponentId, loading);
   
@@ -416,11 +451,9 @@ export const useTableDataWithContext = ({
     }
     const forceFetch = options?.force === true;
     const bypassCache = options?.bypassCache === true;
-    const effectiveFilters = {
-      ...(staticFiltersRef.current || {}),
-      ...(currentFilters || {}),
-      ...getServerGlobalFilters()
-    };
+    const effectiveFilters = buildEffectiveFilters(currentFilters, staticFiltersRef.current);
+    const requestedFiltersKey = buildEffectiveFiltersKey(currentFilters, staticFiltersRef.current);
+    const generation = ++fetchGenerationRef.current;
 
     const hasExplicitSailSelection = Boolean(
       resolveSelectedSailCode(currentFilters) || resolveSelectedSailCode(contextRef.current)
@@ -444,8 +477,7 @@ export const useTableDataWithContext = ({
     }
 
     // Check if filters actually changed - this is the key fix!
-    const filtersKey = effectiveFilters ? JSON.stringify(effectiveFilters) : 'null';
-    if (!forceFetch && lastFiltersRef.current === filtersKey) {
+    if (!forceFetch && lastFiltersRef.current === requestedFiltersKey) {
       // Filters haven't changed, skip fetch
       return;
     }
@@ -456,7 +488,7 @@ export const useTableDataWithContext = ({
     }
 
     fetchingRef.current = true;
-    lastFiltersRef.current = filtersKey;
+    lastFiltersRef.current = requestedFiltersKey;
     setLoading(true);
     setError(null);
 
@@ -548,6 +580,16 @@ export const useTableDataWithContext = ({
       }
 
       const loadedData = await requestPromise;
+      const expectedFiltersKey = resolveExpectedFiltersKey(
+        contextRef.current,
+        contextMapperRef.current,
+        fetchWithoutContextRef.current,
+        staticFiltersRef.current
+      );
+      if (generation !== fetchGenerationRef.current || expectedFiltersKey !== requestedFiltersKey) {
+        console.log(`[useTableDataWithContext] Ignoring stale ${tableNameRef.current} response`);
+        return;
+      }
       console.log(`[useTableDataWithContext] Loaded ${loadedData.length} records from ${tableNameRef.current}`);
       if (pausedRef.current) {
         pendingRefreshOnResumeRef.current = true;
@@ -561,7 +603,9 @@ export const useTableDataWithContext = ({
       rawDataRef.current = [];
       setData([]);
     } finally {
-      setLoading(false);
+      if (generation === fetchGenerationRef.current) {
+        setLoading(false);
+      }
       fetchingRef.current = false;
       if (pendingRef.current.hasPending) {
         const nextFilters = pendingRef.current.filters;
@@ -709,6 +753,7 @@ export const useTableDataWithContext = ({
     };
 
     const handleClearEvent = () => {
+      fetchGenerationRef.current += 1;
       if (pausedRef.current) {
         contextRef.current = null;
         setContext(null);

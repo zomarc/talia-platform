@@ -62,13 +62,16 @@ const PublishedRatesGridContainer = ({ panelInstanceId, panelComponentId }) => {
       });
   }, [data, selectedSailCode]);
 
+  // Tab header shows refresh; only block panel content before first selection.
+  const isInitialLoad = loading && !selectedSailCode;
+
   return (
     <PanelDataState
-      loading={loading}
+      loading={isInitialLoad}
       loadingMessage="Loading published rates grid..."
       error={error}
       errorTitle="Failed to load published rates grid"
-      empty={!selectedSailCode || !normalizedData || normalizedData.length === 0}
+      empty={selectedSailCode && !loading && (!normalizedData || normalizedData.length === 0)}
       emptyMessage={
         selectedSailCode
           ? `No published rate history found for sail code: ${selectedSailCode}`

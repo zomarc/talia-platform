@@ -1,4 +1,4 @@
-import { useEffect, useId } from 'react';
+import { useId, useLayoutEffect } from 'react';
 import { syncPanelLoadingSource } from '../services/panelLoadingState';
 
 /**
@@ -8,7 +8,7 @@ import { syncPanelLoadingSource } from '../services/panelLoadingState';
 const useReportPanelLoading = (panelInstanceId, panelComponentId, loading) => {
   const sourceId = useId();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!panelInstanceId && !panelComponentId) {
       return undefined;
     }

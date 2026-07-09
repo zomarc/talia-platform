@@ -85,8 +85,18 @@ export function resolvePanelLoading(panelInstanceId, panelComponentId) {
   if (panelInstanceId && stateStore[panelInstanceId] === true) {
     return true;
   }
-  if (panelComponentId && stateStore[panelComponentId] === true) {
+  if (!panelInstanceId && panelComponentId && stateStore[panelComponentId] === true) {
     return true;
   }
   return false;
+}
+
+/** Prefer Dockview instance id when matching loading events to tabs. */
+export function panelLoadingEventMatches(panelId, panelComponent, detail = {}) {
+  const targetPanelId = detail.panelInstanceId || null;
+  const targetPanelComponent = detail.panelComponentId || null;
+  if (targetPanelId) {
+    return panelId === targetPanelId;
+  }
+  return !!(targetPanelComponent && panelComponent === targetPanelComponent);
 }

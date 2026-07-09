@@ -320,6 +320,13 @@ const isPanelPaused = (panelInstanceId, panelComponentId) => {
   return false;
 };
 
+/** Defer listener fetches so emitter selection can paint before network work starts. */
+const scheduleContextFetch = (fetchFn, filters, options = null) => {
+  queueMicrotask(() => {
+    fetchFn(filters, options || undefined);
+  });
+};
+
 export const useTableDataWithContext = ({
   tableName,
   eventName,
@@ -432,6 +439,7 @@ export const useTableDataWithContext = ({
     // Prevent concurrent fetches
     if (fetchingRef.current) {
       pendingRef.current = { hasPending: true, filters: currentFilters, options };
+      setLoading(true);
       return;
     }
 
@@ -687,7 +695,10 @@ export const useTableDataWithContext = ({
       const newFilters = extractFiltersRef.current(contextDetail);
       contextRef.current = contextDetail;
       setContext(contextDetail);
-      fetchDataRef.current(newFilters);
+      if (newFilters || fetchWithoutContextRef.current) {
+        setLoading(true);
+      }
+      scheduleContextFetch(fetchDataRef.current, newFilters);
 
       if (event.type === SAIL_SELECT_EVENT) {
         window.lastSailSelectEvent = event;
@@ -715,7 +726,8 @@ export const useTableDataWithContext = ({
       setContext(null);
       lastFiltersRef.current = null; // Reset filters so we can fetch again
       if (fetchWithoutContextRef.current) {
-        fetchDataRef.current(null);
+        setLoading(true);
+        scheduleContextFetch(fetchDataRef.current, null);
       } else {
         setLoading(false);
         setError(null);

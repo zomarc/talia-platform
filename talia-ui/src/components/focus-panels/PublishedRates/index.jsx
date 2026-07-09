@@ -50,13 +50,16 @@ const PublishedRatesContainer = ({ panelInstanceId, panelComponentId }) => {
     ...row
   })) : [];
 
+  // Tab header shows refresh; only block panel content before first selection.
+  const isInitialLoad = loading && !selectedSailCode;
+
   return (
     <PanelDataState
-      loading={loading}
+      loading={isInitialLoad}
       loadingMessage="Loading published rates..."
       error={error}
       errorTitle="Failed to load published rates"
-      empty={!transformedData || transformedData.length === 0}
+      empty={selectedSailCode && !loading && (!transformedData || transformedData.length === 0)}
       emptyMessage={
         selectedSailCode
           ? `No published rates found for sail code: ${selectedSailCode}`

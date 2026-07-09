@@ -155,10 +155,9 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
       const detail = event?.detail || {};
       const targetPanelId = detail.panelInstanceId || null;
       const targetPanelComponent = detail.panelComponentId || null;
-      const isMatch = (
-        (panelId && targetPanelId === panelId) ||
-        (panelComponent && targetPanelComponent === panelComponent)
-      );
+      const isMatch = targetPanelId
+        ? panelId === targetPanelId
+        : !!(targetPanelComponent && panelComponent === targetPanelComponent);
       if (!isMatch) return;
       setIsLoading(detail.loading === true);
     };

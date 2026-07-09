@@ -62,28 +62,32 @@ const buildEffectiveFiltersKey = (currentFilters, staticFilters) => {
   return effectiveFilters ? JSON.stringify(effectiveFilters) : 'null';
 };
 
-const resolveExpectedFiltersKey = (context, contextMapper, fetchWithoutContext, staticFilters) => {
-  let mapped = null;
-  if (context && contextMapper) {
-    try {
-      mapped = contextMapper(context);
-      if (mapped && typeof mapped === 'object') {
-        mapped = Object.fromEntries(
-          Object.entries(mapped).filter(([, v]) => v != null)
-        );
-        if (Object.keys(mapped).length === 0) mapped = null;
-      } else {
-        mapped = null;
-      }
-    } catch {
-      mapped = null;
-    }
+const mapContextToFilters = (context, contextMapper) => {
+  if (!context || !contextMapper) return null;
+  try {
+    const mapped = contextMapper(context);
+    if (!mapped || typeof mapped !== 'object') return null;
+    const cleanFilters = Object.fromEntries(
+      Object.entries(mapped).filter(([, v]) => v != null)
+    );
+    return Object.keys(cleanFilters).length > 0 ? cleanFilters : null;
+  } catch {
+    return null;
   }
+};
+
+const resolveExpectedFiltersKey = (context, contextMapper, fetchWithoutContext, staticFilters) => {
+  const mapped = mapContextToFilters(context, contextMapper);
   if (mapped || fetchWithoutContext) {
     return buildEffectiveFiltersKey(mapped, staticFilters);
   }
   return null;
 };
+
+/** Stable key for the filters implied by an event context (for matching loaded data). */
+export const buildContextFiltersKey = (context, contextMapper, staticFilters = null) => (
+  resolveExpectedFiltersKey(context, contextMapper, true, staticFilters)
+);
 
 const getGlobalDateFilters = () => {
   const criteria = window.__taliaGlobalCriteria || null;
@@ -377,6 +381,7 @@ export const useTableDataWithContext = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [context, setContext] = useState(null);
+  const [loadedFiltersKey, setLoadedFiltersKey] = useState(null);
   const rawDataRef = useRef([]);
   const contextRef = useRef(null);
   
@@ -422,24 +427,14 @@ export const useTableDataWithContext = ({
 
   // Extract context from event and map to GraphQL filters - store in ref
   const extractFiltersRef = useRef(null);
-  extractFiltersRef.current = (eventDetail) => {
-    if (!contextMapperRef.current) {
-      return null;
-    }
-    try {
-      const mappedFilters = contextMapperRef.current(eventDetail);
-      if (!mappedFilters || typeof mappedFilters !== 'object') {
-        return null;
-      }
-      // Remove null/undefined values
-      const cleanFilters = Object.fromEntries(
-        Object.entries(mappedFilters).filter(([, v]) => v != null)
-      );
-      return Object.keys(cleanFilters).length > 0 ? cleanFilters : null;
-    } catch (err) {
-      console.error('[useTableDataWithContext] Error mapping context:', err);
-      return null;
-    }
+  extractFiltersRef.current = (eventDetail) => (
+    mapContextToFilters(eventDetail, contextMapperRef.current)
+  );
+
+  const commitLoadedData = (rows, filtersKey) => {
+    rawDataRef.current = rows || [];
+    setData(applyGlobalCriteria(rawDataRef.current, contextRef.current));
+    setLoadedFiltersKey(filtersKey);
   };
 
   // Fetch data from GraphQL
@@ -476,9 +471,19 @@ export const useTableDataWithContext = ({
       return;
     }
 
-    // Check if filters actually changed - this is the key fix!
+    // Filters unchanged — reuse in-memory rows but still clear loading (event may have set it).
     if (!forceFetch && lastFiltersRef.current === requestedFiltersKey) {
-      // Filters haven't changed, skip fetch
+      const expectedFiltersKey = resolveExpectedFiltersKey(
+        contextRef.current,
+        contextMapperRef.current,
+        fetchWithoutContextRef.current,
+        staticFiltersRef.current
+      );
+      if (expectedFiltersKey === requestedFiltersKey) {
+        commitLoadedData(rawDataRef.current, requestedFiltersKey);
+      }
+      setLoading(false);
+      setError(null);
       return;
     }
 
@@ -498,8 +503,7 @@ export const useTableDataWithContext = ({
     if (!bypassCache && ttl > 0) {
       const cached = responseCache.get(requestKey);
       if (cached && cached.expiresAt > now) {
-        rawDataRef.current = cached.data || [];
-          setData(applyGlobalCriteria(rawDataRef.current, contextRef.current));
+        commitLoadedData(cached.data || [], requestedFiltersKey);
         setLoading(false);
         setError(null);
         fetchingRef.current = false;
@@ -595,13 +599,13 @@ export const useTableDataWithContext = ({
         pendingRefreshOnResumeRef.current = true;
         return;
       }
-      rawDataRef.current = loadedData || [];
-      setData(applyGlobalCriteria(rawDataRef.current, contextRef.current));
+      commitLoadedData(loadedData || [], requestedFiltersKey);
     } catch (err) {
       console.error('[useTableDataWithContext] Error:', err);
       setError(err);
       rawDataRef.current = [];
       setData([]);
+      setLoadedFiltersKey(null);
     } finally {
       if (generation === fetchGenerationRef.current) {
         setLoading(false);
@@ -701,6 +705,7 @@ export const useTableDataWithContext = ({
         setLoading(false);
         setError(null);
         setData([]);
+        setLoadedFiltersKey(null);
       }
       hasCheckedContextRef.current = true;
     };
@@ -777,6 +782,7 @@ export const useTableDataWithContext = ({
         setLoading(false);
         setError(null);
         setData([]);
+        setLoadedFiltersKey(null);
       }
       
       // Clear stored event
@@ -889,6 +895,7 @@ export const useTableDataWithContext = ({
           setLoading(false);
           setError(null);
           setData([]);
+          setLoadedFiltersKey(null);
         }
         hasCheckedContextRef.current = true;
       };
@@ -1014,7 +1021,8 @@ export const useTableDataWithContext = ({
     loading,
     error,
     refetch,
-    context
+    context,
+    loadedFiltersKey,
   };
 };
 

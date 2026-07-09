@@ -97,8 +97,9 @@ export const resolveAgencyDirectoryData = ({
   reservationAgencyId = null,
   sailReservationRows = [],
   hasSailSelection = false,
-  sailScopeKey = null,
-  sailRowsScopeKey = null,
+  expectedReservationFiltersKey = null,
+  loadedReservationFiltersKey = null,
+  sailReservationsLoading = false,
 }) => {
   if (reservationAgencyId) {
     return {
@@ -109,9 +110,10 @@ export const resolveAgencyDirectoryData = ({
   }
 
   if (hasSailSelection) {
-    const scopeReady = sailScopeKey != null
-      && sailRowsScopeKey != null
-      && sailScopeKey === sailRowsScopeKey;
+    const scopeReady = !sailReservationsLoading
+      && expectedReservationFiltersKey != null
+      && loadedReservationFiltersKey != null
+      && expectedReservationFiltersKey === loadedReservationFiltersKey;
     if (!scopeReady) {
       return {
         mode: AGENCY_SELECTION_MODES.SAIL,

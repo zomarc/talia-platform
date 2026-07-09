@@ -72,8 +72,9 @@ test('resolveAgencyDirectoryData prioritizes reservation over sail selection', (
     reservationAgencyId: '10',
     sailReservationRows: [{ agency_id: 20 }],
     hasSailSelection: true,
-    sailScopeKey: 'SAIL-A',
-    sailRowsScopeKey: 'SAIL-A',
+    expectedReservationFiltersKey: '{"include_non_real_sailings":false,"sail_code":"SAIL-A"}',
+    loadedReservationFiltersKey: '{"include_non_real_sailings":false,"sail_code":"SAIL-A"}',
+    sailReservationsLoading: false,
   });
   assert.equal(result.mode, AGENCY_SELECTION_MODES.RESERVATION);
   assert.equal(result.pendingSailScope, false);
@@ -86,13 +87,15 @@ test('resolveAgencyDirectoryData filters agencies by sail reservations', () => {
     { agency_id: 20, agency_name: 'Beta' },
     { agency_id: 30, agency_name: 'Gamma' },
   ];
+  const filtersKey = '{"include_non_real_sailings":false,"sail_codes":["SC001"]}';
   const result = resolveAgencyDirectoryData({
     agencies,
     reservationAgencyId: null,
     sailReservationRows: [{ agency_id: 10 }, { agency_id: 30 }],
     hasSailSelection: true,
-    sailScopeKey: 'SC001',
-    sailRowsScopeKey: 'SC001',
+    expectedReservationFiltersKey: filtersKey,
+    loadedReservationFiltersKey: filtersKey,
+    sailReservationsLoading: false,
   });
   assert.equal(result.mode, AGENCY_SELECTION_MODES.SAIL);
   assert.equal(result.pendingSailScope, false);
@@ -102,30 +105,48 @@ test('resolveAgencyDirectoryData filters agencies by sail reservations', () => {
   );
 });
 
-test('resolveAgencyDirectoryData waits for sail scope before applying rows', () => {
+test('resolveAgencyDirectoryData waits while sail reservations are loading', () => {
   const agencies = [{ agency_id: 10 }, { agency_id: 20 }];
+  const filtersKey = '{"include_non_real_sailings":false,"sail_code":"SAIL-B"}';
   const result = resolveAgencyDirectoryData({
     agencies,
     reservationAgencyId: null,
     sailReservationRows: [{ agency_id: 10 }],
     hasSailSelection: true,
-    sailScopeKey: 'SAIL-B',
-    sailRowsScopeKey: 'SAIL-A',
+    expectedReservationFiltersKey: filtersKey,
+    loadedReservationFiltersKey: filtersKey,
+    sailReservationsLoading: true,
   });
   assert.equal(result.mode, AGENCY_SELECTION_MODES.SAIL);
   assert.equal(result.pendingSailScope, true);
   assert.deepEqual(result.rows, []);
 });
 
-test('resolveAgencyDirectoryData ignores stale sail rows when scope key is missing', () => {
+test('resolveAgencyDirectoryData ignores stale sail rows when filter keys differ', () => {
   const agencies = [{ agency_id: 10 }, { agency_id: 20 }];
   const result = resolveAgencyDirectoryData({
     agencies,
     reservationAgencyId: null,
     sailReservationRows: [{ agency_id: 10 }],
     hasSailSelection: true,
-    sailScopeKey: 'SAIL-A',
-    sailRowsScopeKey: null,
+    expectedReservationFiltersKey: '{"include_non_real_sailings":false,"sail_code":"SAIL-B"}',
+    loadedReservationFiltersKey: '{"include_non_real_sailings":false,"sail_code":"SAIL-A"}',
+    sailReservationsLoading: false,
+  });
+  assert.equal(result.pendingSailScope, true);
+  assert.deepEqual(result.rows, []);
+});
+
+test('resolveAgencyDirectoryData ignores sail rows before loaded filter key is set', () => {
+  const agencies = [{ agency_id: 10 }, { agency_id: 20 }];
+  const result = resolveAgencyDirectoryData({
+    agencies,
+    reservationAgencyId: null,
+    sailReservationRows: [{ agency_id: 10 }],
+    hasSailSelection: true,
+    expectedReservationFiltersKey: '{"include_non_real_sailings":false,"sail_code":"SAIL-A"}',
+    loadedReservationFiltersKey: null,
+    sailReservationsLoading: false,
   });
   assert.equal(result.pendingSailScope, true);
   assert.deepEqual(result.rows, []);

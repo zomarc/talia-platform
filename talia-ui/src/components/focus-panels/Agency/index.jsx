@@ -3,13 +3,12 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
+import { useTableDataWithContext, buildContextFiltersKey } from '../../../hooks/data/useTableDataWithContext';
 import { SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT } from '../../../lib/eventBus';
 import AgencyPresenter from './AgencyPresenter';
 import PanelDataState from '../../shared/PanelDataState';
 import {
   AGENCY_SELECTION_MODES,
-  buildSailScopeKeyFromDetail,
   mapSailCodesToReservationFilters,
   resolveAgencyDirectoryData,
   resolveAgencyIdFromDetail,
@@ -32,6 +31,10 @@ const readPersistedReservationDetail = () => {
     return null;
   }
 };
+
+const mapSailContextToReservationFilters = (detail) => (
+  mapSailCodesToReservationFilters(resolveSailCodesFromDetail(detail))
+);
 
 const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
   const [reservationAgencyId, setReservationAgencyId] = useState(() => {
@@ -62,12 +65,13 @@ const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
     error: sailReservationsError,
     refetch: refetchSailReservations,
     context: sailContext,
+    loadedFiltersKey: loadedReservationFiltersKey,
   } = useTableDataWithContext({
     tableName: 'reservation_current_state',
     eventName: SAIL_SELECT_EVENT,
     panelInstanceId,
     panelComponentId,
-    contextMapper: (detail) => mapSailCodesToReservationFilters(resolveSailCodesFromDetail(detail)),
+    contextMapper: mapSailContextToReservationFilters,
     fetchWithoutContext: false,
     limit: 50000,
   });
@@ -94,20 +98,12 @@ const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
   }, []);
 
   const hasSailSelection = Boolean(sailContext);
-  const sailScopeKey = useMemo(
-    () => (hasSailSelection ? buildSailScopeKeyFromDetail(sailContext) : null),
+  const expectedReservationFiltersKey = useMemo(
+    () => (hasSailSelection
+      ? buildContextFiltersKey(sailContext, mapSailContextToReservationFilters)
+      : null),
     [hasSailSelection, sailContext]
   );
-  const [sailRowsScopeKey, setSailRowsScopeKey] = useState(null);
-
-  useEffect(() => {
-    if (!hasSailSelection) {
-      setSailRowsScopeKey(null);
-      return;
-    }
-    if (sailReservationsLoading) return;
-    setSailRowsScopeKey(sailScopeKey);
-  }, [hasSailSelection, sailReservationsLoading, sailScopeKey]);
 
   const { mode, rows: data, pendingSailScope } = useMemo(
     () => resolveAgencyDirectoryData({
@@ -115,10 +111,19 @@ const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
       reservationAgencyId,
       sailReservationRows,
       hasSailSelection,
-      sailScopeKey,
-      sailRowsScopeKey,
+      expectedReservationFiltersKey,
+      loadedReservationFiltersKey,
+      sailReservationsLoading,
     }),
-    [agencies, hasSailSelection, reservationAgencyId, sailReservationRows, sailRowsScopeKey, sailScopeKey]
+    [
+      agencies,
+      expectedReservationFiltersKey,
+      hasSailSelection,
+      loadedReservationFiltersKey,
+      reservationAgencyId,
+      sailReservationRows,
+      sailReservationsLoading,
+    ]
   );
 
   const loading = agenciesLoading

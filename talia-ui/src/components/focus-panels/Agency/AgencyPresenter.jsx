@@ -4,6 +4,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
+import { afterTabulatorDataRefresh } from '../../../hooks/useTabulatorLayoutSync';
 import {
   AGENCY_CLEAR_EVENT,
   AGENCY_SELECT_EVENT,
@@ -298,9 +299,6 @@ const AgencyPresenter = ({
         initialSort: [{ column: 'agency_name', dir: 'asc' }],
         height: '100%',
         selectableRows: 1,
-        pagination: true,
-        paginationSize: 50,
-        paginationSizeSelector: [25, 50, 100, 200],
         headerFilterLiveFilter: true,
         headerFilterLiveFilterDelay: 300,
         movableColumns: true,
@@ -361,7 +359,7 @@ const AgencyPresenter = ({
 
   useEffect(() => {
     if (!instanceRef.current) return;
-    instanceRef.current.replaceData(filteredData);
+    afterTabulatorDataRefresh(instanceRef.current.replaceData(filteredData));
     setRecordCount(filteredData.length);
     focusLinkedAgency();
   }, [filteredData, focusLinkedAgency]);

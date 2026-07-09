@@ -15,6 +15,7 @@ import 'tabulator-tables/dist/css/tabulator_midnight.min.css';
 
 const DASHBOARD_TABLE_LAYOUT_EVENT = 'talia:dashboard.tableLayout';
 const DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT = 'talia:dashboard.tabulatorFilterVisibility';
+const DASHBOARD_DETAILS_VISIBILITY_EVENT = 'talia:dashboard.detailsVisibility';
 const TABLE_LAYOUT_STORAGE_KEY = 'taliaTableLayoutMode';
 const TABLE_LAYOUT_WIDTH = 'width';
 const TABLE_LAYOUT_DATA = 'data';
@@ -80,6 +81,26 @@ const refreshTableLayout = (table) => {
   }
 };
 
+/** Schedule layout refresh after data/visibility changes (safe before tableBuilt). */
+export const scheduleTabulatorLayoutRefresh = (table) => {
+  if (!table) return;
+  const meta = tableMeta.get(table);
+  if (meta && meta.isBuilt !== true && table?.initialized !== true) {
+    meta.pendingLayoutRefresh = true;
+    return;
+  }
+  refreshTableLayout(table);
+};
+
+const bindTableDataLayoutRefresh = (table) => {
+  if (!table || tableMeta.get(table)?.dataLayoutBound) return;
+  const meta = tableMeta.get(table) || {};
+  meta.dataLayoutBound = true;
+  tableMeta.set(table, meta);
+  table.on?.('dataProcessed', () => scheduleTabulatorLayoutRefresh(table));
+  table.on?.('dataLoaded', () => scheduleTabulatorLayoutRefresh(table));
+};
+
 const applyLayoutModeToTable = (table) => {
   if (!table) return;
   const mode = getGlobalTableLayoutMode();
@@ -123,6 +144,11 @@ const ensureLayoutListenerBound = () => {
   window.addEventListener(DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT, () => {
     tableInstances.forEach((table) => refreshTableLayout(table));
   });
+  window.addEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, () => {
+    window.requestAnimationFrame(() => {
+      tableInstances.forEach((table) => scheduleTabulatorLayoutRefresh(table));
+    });
+  });
   window.addEventListener('resize', () => {
     applyAllTables();
   });
@@ -134,7 +160,9 @@ const registerTableInstance = (table, baseColumns = null) => {
     tableMeta.set(table, {
       baseColumns: Array.isArray(baseColumns) ? [...baseColumns] : null,
       lastAppliedMode: null,
-      isBuilt: false
+      isBuilt: false,
+      pendingLayoutRefresh: false,
+      dataLayoutBound: false,
     });
   }
   tableInstances.add(table);
@@ -157,6 +185,7 @@ const getWrappedTabulatorClass = () => {
       super(element, processed);
 
       registerTableInstance(this, baseColumns);
+      bindTableDataLayoutRefresh(this);
       const meta = tableMeta.get(this);
       if (meta && this.initialized === true) {
         meta.isBuilt = true;
@@ -168,8 +197,13 @@ const getWrappedTabulatorClass = () => {
         const currentMeta = tableMeta.get(this);
         if (currentMeta) {
           currentMeta.isBuilt = true;
+          if (currentMeta.pendingLayoutRefresh) {
+            currentMeta.pendingLayoutRefresh = false;
+            refreshTableLayout(this);
+          }
         }
         applyLayoutModeToTable(this);
+        scheduleTabulatorLayoutRefresh(this);
       });
       this.on?.('groupVisibilityChanged', () => {
         refreshTableLayout(this);

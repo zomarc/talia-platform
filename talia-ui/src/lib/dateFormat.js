@@ -26,3 +26,27 @@ export const formatDateTime = (value, fallback = '') => {
   return date.toLocaleString('en-US');
 };
 
+/** Compact sail from–to range, e.g. "18–25 Jul 2026" or "18 Jul – 25 Aug 2026". */
+export const formatSailDateRange = (fromValue, toValue, fallback = '') => {
+  const fromDate = parseDateValue(fromValue);
+  const toDate = parseDateValue(toValue);
+  if (!fromDate && !toDate) return fallback;
+  if (fromDate && !toDate) return formatDayMon(fromValue, fallback);
+  if (!fromDate && toDate) return formatDayMon(toValue, fallback);
+
+  const fromDay = fromDate.getDate();
+  const toDay = toDate.getDate();
+  const fromMonth = fromDate.toLocaleString('en-US', { month: 'short' });
+  const toMonth = toDate.toLocaleString('en-US', { month: 'short' });
+  const fromYear = fromDate.getFullYear();
+  const toYear = toDate.getFullYear();
+
+  if (fromYear === toYear && fromMonth === toMonth) {
+    return `${fromDay}–${toDay} ${fromMonth} ${fromYear}`;
+  }
+  if (fromYear === toYear) {
+    return `${fromDay} ${fromMonth} – ${toDay} ${toMonth} ${fromYear}`;
+  }
+  return `${fromDay} ${fromMonth} ${fromYear} – ${toDay} ${toMonth} ${toYear}`;
+};
+

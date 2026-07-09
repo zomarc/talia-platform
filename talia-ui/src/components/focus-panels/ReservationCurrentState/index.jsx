@@ -10,15 +10,12 @@ import ReservationCurrentStatePresenter from './ReservationCurrentStatePresenter
 import PanelDataState from '../../shared/PanelDataState';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { CABIN_CLEAR_EVENT, CABIN_SELECT_EVENT, extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
-
-const isCancelledStatus = (value) => {
-  const normalized = String(value || '').trim().toUpperCase();
-  return normalized === 'CANCELLED' || normalized === 'CANCELED' || normalized === 'CX' || normalized === 'X';
-};
+import { filterByReservationStatus, isCancelledStatus } from './reservationCurrentStateTransform';
 
 const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId }) => {
   const { theme } = useTheme();
   const [selectedCabinCategory, setSelectedCabinCategory] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
   
   console.log('[ReservationCurrentStateContainer] Component rendering');
   
@@ -179,10 +176,11 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
     });
 
     const allRows = [...mergedRows, ...reservationOnlyRows];
-    if (!selectedCabinCategory) return allRows;
+    const statusFilteredRows = filterByReservationStatus(allRows, statusFilter);
+    if (!selectedCabinCategory) return statusFilteredRows;
     const normalized = String(selectedCabinCategory).toLowerCase();
-    return allRows.filter((row) => String(row?.cabin_category || '').toLowerCase() === normalized);
-  }, [currentStateRows, reservationRows, sailReservationChangeRows, selectedCabinCategory]);
+    return statusFilteredRows.filter((row) => String(row?.cabin_category || '').toLowerCase() === normalized);
+  }, [currentStateRows, reservationRows, sailReservationChangeRows, selectedCabinCategory, statusFilter]);
 
   const loading = currentStateLoading || reservationLoading || sailReservationChangeLoading;
   const error = currentStateError || reservationError || reservationHistoryError || sailReservationChangeError;
@@ -278,9 +276,9 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
       emptyMessage={
         selectedSailCode
           ? (selectedCabinCategory
-            ? `No reservations found for sail ${selectedSailCode} and cabin ${selectedCabinCategory}`
-            : `No reservations found for sail code: ${selectedSailCode}`)
-          : 'No reservation data available'
+            ? `No ${statusFilter === 'all' ? '' : `${statusFilter} `}reservations found for sail ${selectedSailCode} and cabin ${selectedCabinCategory}`
+            : `No ${statusFilter === 'all' ? '' : `${statusFilter} `}reservations found for sail code: ${selectedSailCode}`)
+          : `No ${statusFilter === 'all' ? '' : `${statusFilter} `}reservation data available`
       }
       onRetry={handleRefresh}
     >
@@ -294,6 +292,8 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
         selectedReservationRecord={selectedReservationRecord}
         historyLoading={reservationHistoryLoading}
         selectedCabinCategory={selectedCabinCategory}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
         panelInstanceId={panelInstanceId}
         panelComponentId={panelComponentId}
       />

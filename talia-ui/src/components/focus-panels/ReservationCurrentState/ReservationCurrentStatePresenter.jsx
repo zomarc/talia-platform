@@ -11,7 +11,8 @@
 
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
-import { formatDayMon } from '../../../lib/dateFormat';
+import { formatDayMon, formatSailDateRange } from '../../../lib/dateFormat';
+import { buildShipSailTooltip } from './reservationCurrentStateTransform';
 import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 
@@ -24,6 +25,8 @@ const ReservationCurrentStatePresenter = ({
   selectedReservationId = null,
   selectedReservationRecord = null,
   historyLoading = false,
+  statusFilter = 'all',
+  onStatusFilterChange,
   panelInstanceId,
   panelComponentId
 }) => {
@@ -35,43 +38,39 @@ const ReservationCurrentStatePresenter = ({
     panelComponentId: panelComponentId || 'reservation-current-state',
   });
 
+  const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
   // Column definitions using Tabulator's native features
   const columns = [
     { 
       field: "res_id", 
       title: "Res ID",
+      width: 110,
       headerFilter: "input",
       formatter: (cell) => {
         const value = cell.getValue();
         const rowData = cell.getRow()?.getData?.() || {};
         const resId = value ? Math.floor(value).toString() : '';
+        const tooltip = escapeHtml(buildShipSailTooltip(rowData));
         const historyCount = Number.parseInt(rowData.history_count, 10) || 0;
-        if (!historyCount) return resId;
+        const titleAttr = tooltip ? ` title="${tooltip}"` : '';
+        if (!historyCount) {
+          return `<span class="reservation-current-state__res-id-cell"${titleAttr}>${resId}</span>`;
+        }
         const intensityClass = historyCount >= 5
           ? 'reservation-current-state__history-count--5'
           : `reservation-current-state__history-count--${historyCount}`;
-        return `<span class="reservation-current-state__res-id-cell">${resId}</span><span class="reservation-current-state__history-count ${intensityClass}" title="${historyCount} history records">${historyCount}</span>`;
-      }
-    },
-    { 
-      field: "sail_code", 
-      title: "Sail Code",
-      headerFilter: "autocomplete",
-      headerFilterParams: {
-        valuesLookup: true
-      }
-    },
-    { 
-      field: "ship", 
-      title: "Ship",
-      headerFilter: "autocomplete",
-      headerFilterParams: {
-        valuesLookup: true
+        return `<span class="reservation-current-state__res-id-cell"${titleAttr}>${resId}</span><span class="reservation-current-state__history-count ${intensityClass}" title="${historyCount} history records">${historyCount}</span>`;
       }
     },
     { 
       field: "res_status", 
       title: "Status",
+      width: 80,
       headerFilter: "autocomplete",
       headerFilterParams: {
         valuesLookup: true
@@ -79,20 +78,12 @@ const ReservationCurrentStatePresenter = ({
     },
     { 
       field: "sail_from_date", 
-      title: "Sail From Date",
+      title: "Dates",
+      width: 130,
       headerFilter: "input",
       formatter: (cell) => {
-        const date = cell.getValue();
-        return formatDayMon(date, '');
-      }
-    },
-    { 
-      field: "sail_to_date", 
-      title: "Sail To Date",
-      headerFilter: "input",
-      formatter: (cell) => {
-        const date = cell.getValue();
-        return formatDayMon(date, '');
+        const rowData = cell.getRow()?.getData?.() || {};
+        return formatSailDateRange(rowData.sail_from_date, rowData.sail_to_date, '');
       }
     },
     { 
@@ -319,7 +310,33 @@ const ReservationCurrentStatePresenter = ({
   };
 
   return (
-    <div className="focus-panel reservation-current-state">
+    <div className="focus-panel reservation-current-state talia-report">
+      <div className="talia-report__controls" aria-label="Reservation status filter">
+        <button
+          type="button"
+          className={`talia-btn ${statusFilter === 'booked' ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+          aria-pressed={statusFilter === 'booked'}
+          onClick={() => onStatusFilterChange?.('booked')}
+        >
+          Booked
+        </button>
+        <button
+          type="button"
+          className={`talia-btn ${statusFilter === 'cancelled' ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+          aria-pressed={statusFilter === 'cancelled'}
+          onClick={() => onStatusFilterChange?.('cancelled')}
+        >
+          Cancelled
+        </button>
+        <button
+          type="button"
+          className={`talia-btn ${statusFilter === 'all' ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+          aria-pressed={statusFilter === 'all'}
+          onClick={() => onStatusFilterChange?.('all')}
+        >
+          All
+        </button>
+      </div>
       <div
         ref={tableRef}
         className="focus-panel__table reservation-current-state__table"

@@ -4,6 +4,15 @@ import { formatDayMon } from '../../../lib/dateFormat';
 import { filterDayRowsByScope, scopeNeedsGroupExpansion } from './shipDayBerthTransform';
 
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
+const VIEW_MODE_STORAGE_KEY = 'talia.ship-day-berth.viewMode';
+
+const readStoredViewMode = () => {
+  try {
+    return localStorage.getItem(VIEW_MODE_STORAGE_KEY) === 'table' ? 'table' : 'nested';
+  } catch {
+    return 'nested';
+  }
+};
 
 const GROUP_BY = [
   (rowData) => rowData?.ship_group_label || 'Unknown ship',
@@ -53,6 +62,18 @@ const ShipDayBerthPresenter = ({
   const pendingGroupActionRef = useRef(null);
   const dayRowsRef = useRef(dayRows);
   const [search, setSearch] = useState('');
+  const [viewMode, setViewModeState] = useState(readStoredViewMode);
+
+  const setViewMode = useCallback((mode) => {
+    setViewModeState(mode);
+    try {
+      localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
+    } catch {
+      // Ignore storage errors (private mode, quota, etc.)
+    }
+  }, []);
+
+  const isNestedView = viewMode === 'nested';
 
   const voyageSailCodes = useMemo(
     () => new Set((selectedScope?.sail_codes || []).map((code) => String(code))),
@@ -76,7 +97,14 @@ const ShipDayBerthPresenter = ({
     dayRowsRef.current = dayRows;
   }, [dayRows]);
 
-  const columns = useMemo(() => ([
+  const columns = useMemo(() => {
+    const shipColumn = {
+      field: 'ship_name',
+      title: 'Ship',
+      minWidth: 140,
+      headerSort: false,
+    };
+    const dayColumns = [
     {
       field: 'date',
       title: 'Date',
@@ -140,7 +168,9 @@ const ShipDayBerthPresenter = ({
         return `<span class="ms-berth-occ ${occupancyClass(value)}">${formatOccupancy(value)}</span>`;
       },
     },
-  ]), [voyageSailCodes]);
+  ];
+    return isNestedView ? dayColumns : [shipColumn, ...dayColumns];
+  }, [isNestedView, voyageSailCodes]);
 
   const applyGroupDepth = useCallback((depth) => {
     const table = instanceRef.current;
@@ -172,7 +202,7 @@ const ShipDayBerthPresenter = ({
   // Focus the linked scope: open ship/month groups and scroll voyage days into view.
   const focusSelectedScope = useCallback(() => {
     const table = instanceRef.current;
-    if (!table || !tableBuiltRef.current || !scopeNeedsGroupExpansion(selectedScope)) return;
+    if (!table || !tableBuiltRef.current || !isNestedView || !scopeNeedsGroupExpansion(selectedScope)) return;
 
     const run = () => {
       const shipGroups = table.getGroups?.() || [];
@@ -215,7 +245,7 @@ const ShipDayBerthPresenter = ({
     };
 
     window.requestAnimationFrame(run);
-  }, [scopeShipCode, selectedScope, voyageSailCodes]);
+  }, [isNestedView, scopeShipCode, selectedScope, voyageSailCodes]);
 
   const afterTableDataRefresh = useCallback((refreshPromise) => {
     const apply = () => focusSelectedScope();
@@ -245,9 +275,9 @@ const ShipDayBerthPresenter = ({
           resizableColumns: true,
           movableColumns: true,
           pagination: false,
-          groupBy: GROUP_BY,
-          groupStartOpen: [true, false],
-          groupHeader: groupHeaders,
+          groupBy: isNestedView ? GROUP_BY : false,
+          groupStartOpen: isNestedView ? [true, false] : false,
+          groupHeader: isNestedView ? groupHeaders : undefined,
           rowFormatter: (row) => {
             const element = row.getElement();
             const data = row.getData();
@@ -282,8 +312,7 @@ const ShipDayBerthPresenter = ({
         try { instanceRef.current.destroy(); } catch { /* noop */ }
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [afterTableDataRefresh, applyGroupDepth, columns]);
+  }, [afterTableDataRefresh, applyGroupDepth, columns, isNestedView]);
 
   useEffect(() => {
     if (!instanceRef.current || !tableBuiltRef.current) return;
@@ -295,9 +324,9 @@ const ShipDayBerthPresenter = ({
   }, [afterTableDataRefresh, filteredRows]);
 
   useEffect(() => {
-    if (!selectedScope || !tableBuiltRef.current) return;
+    if (!selectedScope || !tableBuiltRef.current || !isNestedView) return;
     focusSelectedScope();
-  }, [focusSelectedScope, selectedScope]);
+  }, [focusSelectedScope, isNestedView, selectedScope]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -341,9 +370,14 @@ const ShipDayBerthPresenter = ({
   const shipCount = summaries?.length || 0;
   const dayCount = dayRows?.length || 0;
   const voyageDayCount = filteredRows.filter((row) => row.in_voyage).length;
+  const restrictToVoyage = voyageSailCodes.size > 0;
+  const sailCodesLabel = (selectedScope?.sail_codes || [])
+    .map((code) => String(code))
+    .filter(Boolean)
+    .join(', ');
   const subtitle = selectedScope
-    ? `${selectedScope.ship_name || selectedScope.ship_code || 'Selected'} · ${filteredRows.length} ship-days · ${voyageDayCount} in voyage`
-    : `${shipCount} ships · ${dayCount} ship-days · physical berth capacity / occupied / available`;
+    ? `${filteredRows.length} ship-days${restrictToVoyage ? ` · ${voyageDayCount} in voyage` : ''}`
+    : `${shipCount} ships · ${dayCount} ship-days`;
 
   return (
     <div className="focus-panel talia-report master-sailing-panel ms-explorer-panel ms-berth-panel">
@@ -355,44 +389,45 @@ const ShipDayBerthPresenter = ({
           </p>
         </div>
       </header>
-      {selectedScope && (
-        <div className="ms-berth-selection">
-          <span className="ms-berth-selection__label">Linked to</span>
-          <span className="ms-berth-selection__chip">
-            {selectedScope.reference_sail_code || selectedScope.ship_code}
-            {selectedScope.ship_name ? ` · ${selectedScope.ship_name}` : ''}
-          </span>
-          <span className="ms-berth-selection__hint">via inventory reference</span>
-          <button
-            type="button"
-            className="talia-btn talia-btn--ghost ms-berth-selection__clear"
-            onClick={() => onClearSelection?.()}
-          >
-            Clear
-          </button>
-        </div>
-      )}
-      {summaries?.length > 0 && (
-        <div className="ms-berth-summary">
-          {summaries
-            .filter((summary) => !scopeShipCode || summary.ship_code === scopeShipCode)
-            .map((summary) => (
-              <div key={summary.ship_code} className="ms-berth-summary__card">
-                <span className="ms-berth-summary__ship">{summary.ship_name}</span>
-                <span className="ms-berth-summary__metric">
-                  Peak berths <strong>{formatCount(summary.peak_capacity)}</strong>
-                </span>
-                <span className="ms-berth-summary__metric">
-                  Peak booked <strong>{formatCount(summary.peak_occupied)}</strong>
-                </span>
-                <span className="ms-berth-summary__metric">
-                  Tightest availability <strong>{formatCount(summary.min_available)}</strong>
-                </span>
+      <div className="master-sailing-panel__filters talia-report-filters ms-berth-filters">
+        {selectedScope && (
+          <div className="ms-berth-criteria" aria-label="Linked selection criteria">
+            <div className="ms-berth-criteria__item">
+              <span className="ms-berth-criteria__label">Ship</span>
+              <span className="ms-berth-criteria__value">
+                {selectedScope.ship_name || selectedScope.ship_code || '—'}
+              </span>
+            </div>
+            {selectedScope.reference_sail_code && (
+              <div className="ms-berth-criteria__item">
+                <span className="ms-berth-criteria__label">Voyage</span>
+                <span className="ms-berth-criteria__value">{selectedScope.reference_sail_code}</span>
               </div>
-            ))}
-        </div>
-      )}
-      <div className="master-sailing-panel__filters talia-report-filters">
+            )}
+            {sailCodesLabel && (
+              <div className="ms-berth-criteria__item">
+                <span className="ms-berth-criteria__label">Sail codes</span>
+                <span className="ms-berth-criteria__value">{sailCodesLabel}</span>
+              </div>
+            )}
+            <div className="ms-berth-criteria__item">
+              <span className="ms-berth-criteria__label">Days</span>
+              <span className="ms-berth-criteria__value">
+                {filteredRows.length}
+                {restrictToVoyage && voyageDayCount !== filteredRows.length
+                  ? ` (${voyageDayCount} voyage)`
+                  : ''}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="talia-btn talia-btn--ghost ms-berth-criteria__clear"
+              onClick={() => onClearSelection?.()}
+            >
+              Clear
+            </button>
+          </div>
+        )}
         <label className="master-sailing-panel__filter talia-report-filters__group">
           <span className="talia-report-filters__label">Search</span>
           <input
@@ -405,12 +440,32 @@ const ShipDayBerthPresenter = ({
         </label>
       </div>
       <div className="talia-report__controls" aria-label="Ship day berth controls">
-        <button type="button" className="talia-btn talia-btn--secondary" onClick={openAllGroups}>
-          Expand months
+        <button
+          type="button"
+          className={`talia-btn ${isNestedView ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+          aria-pressed={isNestedView}
+          onClick={() => setViewMode('nested')}
+        >
+          Nested
         </button>
-        <button type="button" className="talia-btn talia-btn--secondary" onClick={collapseAllGroups}>
-          Collapse
+        <button
+          type="button"
+          className={`talia-btn ${!isNestedView ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+          aria-pressed={!isNestedView}
+          onClick={() => setViewMode('table')}
+        >
+          Table
         </button>
+        {isNestedView && (
+          <>
+            <button type="button" className="talia-btn talia-btn--secondary" onClick={openAllGroups}>
+              Expand months
+            </button>
+            <button type="button" className="talia-btn talia-btn--secondary" onClick={collapseAllGroups}>
+              Collapse
+            </button>
+          </>
+        )}
       </div>
       <div ref={tableRef} className="focus-panel__table master-sailing-table ms-explorer-table ms-berth-table" />
     </div>

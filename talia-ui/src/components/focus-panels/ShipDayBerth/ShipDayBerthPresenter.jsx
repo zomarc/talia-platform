@@ -97,14 +97,7 @@ const ShipDayBerthPresenter = ({
     dayRowsRef.current = dayRows;
   }, [dayRows]);
 
-  const columns = useMemo(() => {
-    const shipColumn = {
-      field: 'ship_name',
-      title: 'Ship',
-      minWidth: 140,
-      headerSort: false,
-    };
-    const dayColumns = [
+  const columns = useMemo(() => [
     {
       field: 'date',
       title: 'Date',
@@ -127,7 +120,8 @@ const ShipDayBerthPresenter = ({
       formatter: (cell) => {
         const codes = cell.getValue() || [];
         if (!codes.length) return '<span class="ms-berth-sail--empty">—</span>';
-        return `<span class="ms-berth-sails">${codes.map((code) => {
+        const stackClass = isNestedView ? '' : ' ms-berth-sails--stacked';
+        return `<span class="ms-berth-sails${stackClass}">${codes.map((code) => {
           const isVoyage = voyageSailCodes.has(String(code));
           return `<span class="ms-berth-sail ${isVoyage ? 'ms-berth-sail--voyage' : ''}">${code}</span>`;
         }).join('')}</span>`;
@@ -168,9 +162,7 @@ const ShipDayBerthPresenter = ({
         return `<span class="ms-berth-occ ${occupancyClass(value)}">${formatOccupancy(value)}</span>`;
       },
     },
-  ];
-    return isNestedView ? dayColumns : [shipColumn, ...dayColumns];
-  }, [isNestedView, voyageSailCodes]);
+  ], [isNestedView, voyageSailCodes]);
 
   const applyGroupDepth = useCallback((depth) => {
     const table = instanceRef.current;

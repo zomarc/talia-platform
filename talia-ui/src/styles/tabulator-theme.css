@@ -414,9 +414,17 @@
 }
 
 /* Ship × Day Berths — table cell styles */
+.ms-berth-sails {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 3px;
+}
+
+.ms-berth-sails--stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 
 .ms-berth-sail {

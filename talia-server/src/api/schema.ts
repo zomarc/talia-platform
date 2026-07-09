@@ -742,6 +742,7 @@ export const typeDefs = `#graphql
     sailing_role: String
     is_operational: Boolean
     reference_sail_code: String
+    sail_codes: [String]
     query_column: String
     query_value: String
     query_operator: String

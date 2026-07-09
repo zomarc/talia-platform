@@ -23,6 +23,18 @@ export const buildTableDataQueryResolvers = ({
           query = query.eq('sail_code', filters.sail_code);
           console.log(`[tableData] Applied filter: sail_code = ${filters.sail_code}`);
         }
+        if (Array.isArray(filters.sail_codes) && filters.sail_codes.length > 0) {
+          const sailCodes = filters.sail_codes
+            .map((value: unknown) => String(value).trim())
+            .filter((value: string) => value.length > 0);
+          if (sailCodes.length === 1) {
+            query = query.eq('sail_code', sailCodes[0]);
+            console.log(`[tableData] Applied filter: sail_code = ${sailCodes[0]}`);
+          } else if (sailCodes.length > 1) {
+            query = query.in('sail_code', sailCodes);
+            console.log(`[tableData] Applied filter: sail_code IN (${sailCodes.join(', ')})`);
+          }
+        }
         if (filters.ship_code) {
           query = query.eq('ship_code', filters.ship_code);
           console.log(`[tableData] Applied filter: ship_code = ${filters.ship_code}`);

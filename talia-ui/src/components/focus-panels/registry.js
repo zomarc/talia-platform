@@ -162,10 +162,10 @@ export const componentRegistry = {
     title: 'Agency Directory',
     description: 'Travel agency dimension from dwh.Dim_Agency with market, type, country, and status filters',
     props: {},
-    dataRequirements: 'Requires agency table synced from dwh.Dim_Agency. Responds to reservation selection.',
+    dataRequirements: 'Requires agency table synced from dwh.Dim_Agency. Responds to sail and reservation selection.',
     events: {
       emits: [agencySelect, agencyClear],
-      respondsTo: [reservationSelect]
+      respondsTo: [SAIL_SELECT_EVENT, reservationSelect]
     },
     supportsRefresh: true,
     showInReports: true,

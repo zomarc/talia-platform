@@ -16,6 +16,7 @@ import {
 } from '../../../lib/tabulatorReferenceSelection';
 import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
 import ReportDataDetails from '../../shared/ReportDataDetails';
+import { AGENCY_SELECTION_MODES } from './agencyDirectoryContext';
 
 const FILTER_FIELDS = [
   ['agency_type', 'Type'],
@@ -173,11 +174,17 @@ const AGENCY_COLUMNS = [
 
 const AgencyPresenter = ({
   data,
+  totalAgencyCount = 0,
   onRefresh,
   onClearReservationLink,
+  onClearSailLink,
   panelInstanceId,
   panelComponentId,
+  selectionMode = AGENCY_SELECTION_MODES.ALL,
   selectedAgencyId = null,
+  selectedReservationId = null,
+  selectedSailCodes = [],
+  selectedReferenceSailCode = null,
 }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
@@ -190,13 +197,19 @@ const AgencyPresenter = ({
     panelComponentId: panelComponentId || 'agency-directory',
   });
 
-  const totalCount = data?.length || 0;
+  const totalCount = selectionMode === AGENCY_SELECTION_MODES.ALL
+    ? (data?.length || 0)
+    : totalAgencyCount;
   const activeFilterCount = FILTER_FIELDS.filter(([field]) => filters[field]).length;
   const linkedAgencyName = useMemo(() => {
-    if (!selectedAgencyId || !data?.length) return null;
+    if (selectionMode !== AGENCY_SELECTION_MODES.RESERVATION || !selectedAgencyId || !data?.length) {
+      return null;
+    }
     const match = data.find((row) => String(row?.agency_id) === String(selectedAgencyId));
     return match?.agency_name || null;
-  }, [data, selectedAgencyId]);
+  }, [data, selectedAgencyId, selectionMode]);
+  const sailScopeLabel = selectedReferenceSailCode
+    || (selectedSailCodes.length === 1 ? selectedSailCodes[0] : null);
 
   const filterOptions = useMemo(
     () => Object.fromEntries(FILTER_FIELDS.map(([field]) => [field, buildSelectValues(data, field)])),
@@ -234,11 +247,11 @@ const AgencyPresenter = ({
   }, [applyReferenceHighlight, isReferenceAgencyRow]);
 
   useEffect(() => {
-    if (!selectedAgencyId) return;
+    if (selectionMode !== AGENCY_SELECTION_MODES.RESERVATION || !selectedAgencyId) return;
     activeAgencyIdRef.current = String(selectedAgencyId);
     setFilters({ ...EMPTY_FILTERS });
     focusLinkedAgency();
-  }, [focusLinkedAgency, selectedAgencyId]);
+  }, [focusLinkedAgency, selectedAgencyId, selectionMode]);
 
   useEffect(() => {
     const handleSelect = (event) => {
@@ -353,11 +366,13 @@ const AgencyPresenter = ({
     focusLinkedAgency();
   }, [filteredData, focusLinkedAgency]);
 
-  const subtitle = selectedAgencyId
+  const subtitle = selectionMode === AGENCY_SELECTION_MODES.RESERVATION
     ? `${recordCount.toLocaleString()} linked from reservation`
-    : activeFilterCount > 0
-      ? `${recordCount.toLocaleString()} of ${totalCount.toLocaleString()} agencies`
-      : `${recordCount.toLocaleString()} agencies from dwh.Dim_Agency`;
+    : selectionMode === AGENCY_SELECTION_MODES.SAIL
+      ? `${recordCount.toLocaleString()} agencies selling ${sailScopeLabel || 'selected sailing'}`
+      : activeFilterCount > 0
+        ? `${recordCount.toLocaleString()} of ${totalCount.toLocaleString()} agencies`
+        : `${recordCount.toLocaleString()} agencies from dwh.Dim_Agency`;
 
   return (
     <div className="focus-panel talia-report agency-directory-panel" role="region" aria-label="Agency directory">
@@ -369,8 +384,14 @@ const AgencyPresenter = ({
       </header>
 
       <div className="agency-directory-panel__filters talia-report-filters">
-        {selectedAgencyId ? (
+        {selectionMode === AGENCY_SELECTION_MODES.RESERVATION ? (
           <div className="ms-berth-criteria" aria-label="Linked reservation criteria">
+            {selectedReservationId ? (
+              <div className="ms-berth-criteria__item">
+                <span className="ms-berth-criteria__label">Reservation</span>
+                <span className="ms-berth-criteria__value">{selectedReservationId}</span>
+              </div>
+            ) : null}
             <div className="ms-berth-criteria__item">
               <span className="ms-berth-criteria__label">Agency ID</span>
               <span className="ms-berth-criteria__value">{selectedAgencyId}</span>
@@ -385,6 +406,29 @@ const AgencyPresenter = ({
               type="button"
               className="talia-btn talia-btn--ghost ms-berth-criteria__clear"
               onClick={() => onClearReservationLink?.()}
+            >
+              Clear
+            </button>
+          </div>
+        ) : null}
+        {selectionMode === AGENCY_SELECTION_MODES.SAIL ? (
+          <div className="ms-berth-criteria" aria-label="Linked sailing criteria">
+            {sailScopeLabel ? (
+              <div className="ms-berth-criteria__item">
+                <span className="ms-berth-criteria__label">Reference sail</span>
+                <span className="ms-berth-criteria__value">{sailScopeLabel}</span>
+              </div>
+            ) : null}
+            {selectedSailCodes.length > 1 ? (
+              <div className="ms-berth-criteria__item">
+                <span className="ms-berth-criteria__label">Sail codes</span>
+                <span className="ms-berth-criteria__value">{selectedSailCodes.join(', ')}</span>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="talia-btn talia-btn--ghost ms-berth-criteria__clear"
+              onClick={() => onClearSailLink?.()}
             >
               Clear
             </button>

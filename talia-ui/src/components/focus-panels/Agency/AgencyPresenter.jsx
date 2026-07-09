@@ -2,9 +2,18 @@
  * Agency Presenter — Tabulator table for dwh.Dim_Agency
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
-import { emitAgencyClear, emitAgencySelect } from '../../../lib/eventBus';
+import {
+  AGENCY_CLEAR_EVENT,
+  AGENCY_SELECT_EVENT,
+  emitAgencyClear,
+  emitAgencySelect,
+} from '../../../lib/eventBus';
+import {
+  createReferenceRowFormatter,
+  refreshReferenceRowClasses,
+} from '../../../lib/tabulatorReferenceSelection';
 import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 
@@ -14,6 +23,13 @@ const FILTER_FIELDS = [
   ['country', 'Country'],
   ['status', 'Status'],
 ];
+
+const EMPTY_FILTERS = Object.freeze({
+  agency_type: '',
+  market: '',
+  country: '',
+  status: '',
+});
 
 const buildSelectValues = (rows, field) => {
   const values = [...new Set(
@@ -158,23 +174,29 @@ const AGENCY_COLUMNS = [
 const AgencyPresenter = ({
   data,
   onRefresh,
+  onClearReservationLink,
   panelInstanceId,
   panelComponentId,
   selectedAgencyId = null,
 }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
+  const tableBuiltRef = useRef(false);
+  const activeAgencyIdRef = useRef(selectedAgencyId ? String(selectedAgencyId) : null);
   const [recordCount, setRecordCount] = useState(data?.length || 0);
-  const [filters, setFilters] = useState({
-    agency_type: '',
-    market: '',
-    country: '',
-    status: '',
-  });
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS });
   const [showTable] = usePanelDetailsVisibility({
     panelInstanceId,
     panelComponentId: panelComponentId || 'agency-directory',
   });
+
+  const totalCount = data?.length || 0;
+  const activeFilterCount = FILTER_FIELDS.filter(([field]) => filters[field]).length;
+  const linkedAgencyName = useMemo(() => {
+    if (!selectedAgencyId || !data?.length) return null;
+    const match = data.find((row) => String(row?.agency_id) === String(selectedAgencyId));
+    return match?.agency_name || null;
+  }, [data, selectedAgencyId]);
 
   const filterOptions = useMemo(
     () => Object.fromEntries(FILTER_FIELDS.map(([field]) => [field, buildSelectValues(data, field)])),
@@ -189,6 +211,61 @@ const AgencyPresenter = ({
       return String(row?.[field] ?? '') === filterValue;
     }));
   }, [data, filters]);
+
+  const isReferenceAgencyRow = useCallback((rowData) => {
+    const activeId = activeAgencyIdRef.current;
+    if (activeId == null || activeId === '') return false;
+    return String(rowData?.agency_id) === String(activeId);
+  }, []);
+
+  const applyReferenceHighlight = useCallback(() => {
+    const table = instanceRef.current;
+    if (!table || !tableBuiltRef.current) return;
+    refreshReferenceRowClasses(table, isReferenceAgencyRow);
+  }, [isReferenceAgencyRow]);
+
+  const focusLinkedAgency = useCallback(() => {
+    const table = instanceRef.current;
+    if (!table || !tableBuiltRef.current || !activeAgencyIdRef.current) return;
+    applyReferenceHighlight();
+    const rows = table.getRows?.() || [];
+    const match = rows.find((row) => isReferenceAgencyRow(row.getData?.()));
+    match?.scrollTo?.();
+  }, [applyReferenceHighlight, isReferenceAgencyRow]);
+
+  useEffect(() => {
+    if (!selectedAgencyId) return;
+    activeAgencyIdRef.current = String(selectedAgencyId);
+    setFilters({ ...EMPTY_FILTERS });
+    focusLinkedAgency();
+  }, [focusLinkedAgency, selectedAgencyId]);
+
+  useEffect(() => {
+    const handleSelect = (event) => {
+      const id = event?.detail?.agency_id ?? event?.detail?.row_data?.agency_id;
+      if (id == null || id === '') return;
+      activeAgencyIdRef.current = String(id);
+      focusLinkedAgency();
+    };
+    const handleClear = () => {
+      activeAgencyIdRef.current = null;
+      applyReferenceHighlight();
+    };
+
+    window.addEventListener(AGENCY_SELECT_EVENT, handleSelect);
+    window.addEventListener(AGENCY_CLEAR_EVENT, handleClear);
+
+    const persistedId = window.lastAgencySelectEvent?.detail?.agency_id
+      ?? window.lastAgencySelectEvent?.detail?.row_data?.agency_id;
+    if (persistedId != null && persistedId !== '') {
+      activeAgencyIdRef.current = String(persistedId);
+    }
+
+    return () => {
+      window.removeEventListener(AGENCY_SELECT_EVENT, handleSelect);
+      window.removeEventListener(AGENCY_CLEAR_EVENT, handleClear);
+    };
+  }, [applyReferenceHighlight, focusLinkedAgency]);
 
   useEffect(() => {
     let cancelled = false;
@@ -214,58 +291,105 @@ const AgencyPresenter = ({
         headerFilterLiveFilter: true,
         headerFilterLiveFilterDelay: 300,
         movableColumns: true,
-        rowClick: (_event, row) => {
-          try { row?.select?.(); } catch { /* noop */ }
-        },
-        rowSelectionChanged: (selectedData) => {
-          const rec = selectedData?.[0];
-          if (rec) {
-            emitAgencySelect({
-              agency_id: rec.agency_id,
-              row_data: rec,
-              panelInstanceId,
-              panelComponentId,
-              timestamp: new Date().toISOString()
-            });
-          } else {
-            emitAgencyClear({ timestamp: new Date().toISOString() });
-          }
-        },
-        dataLoaded: (loadedData) => {
-          setRecordCount(loadedData.length);
-        }
+        rowFormatter: createReferenceRowFormatter(isReferenceAgencyRow),
       }));
+
+      instanceRef.current.on('tableBuilt', () => {
+        tableBuiltRef.current = true;
+        focusLinkedAgency();
+      });
+
+      instanceRef.current.on('rowClick', (_event, row) => {
+        try { row?.select?.(); } catch { /* noop */ }
+      });
+
+      instanceRef.current.on('rowSelectionChanged', (selectedData) => {
+        const rec = selectedData?.[0];
+        if (rec) {
+          activeAgencyIdRef.current = String(rec.agency_id);
+          applyReferenceHighlight();
+          emitAgencySelect({
+            agency_id: rec.agency_id,
+            row_data: rec,
+            panelInstanceId,
+            panelComponentId,
+            timestamp: new Date().toISOString()
+          });
+        } else {
+          activeAgencyIdRef.current = null;
+          applyReferenceHighlight();
+          emitAgencyClear({ timestamp: new Date().toISOString() });
+        }
+      });
+
+      instanceRef.current.on('dataLoaded', (loadedData) => {
+        setRecordCount(loadedData.length);
+        focusLinkedAgency();
+      });
     };
 
     initTable();
 
     return () => {
       cancelled = true;
+      tableBuiltRef.current = false;
       if (instanceRef.current) {
         instanceRef.current.destroy();
         instanceRef.current = null;
       }
     };
-  }, [panelComponentId, panelInstanceId]);
+  }, [
+    applyReferenceHighlight,
+    focusLinkedAgency,
+    isReferenceAgencyRow,
+    panelComponentId,
+    panelInstanceId,
+  ]);
 
   useEffect(() => {
     if (!instanceRef.current) return;
     instanceRef.current.replaceData(filteredData);
     setRecordCount(filteredData.length);
-  }, [filteredData]);
+    focusLinkedAgency();
+  }, [filteredData, focusLinkedAgency]);
+
+  const subtitle = selectedAgencyId
+    ? `${recordCount.toLocaleString()} linked from reservation`
+    : activeFilterCount > 0
+      ? `${recordCount.toLocaleString()} of ${totalCount.toLocaleString()} agencies`
+      : `${recordCount.toLocaleString()} agencies from dwh.Dim_Agency`;
 
   return (
     <div className="focus-panel talia-report agency-directory-panel" role="region" aria-label="Agency directory">
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Agency Directory</h2>
-          <p className="talia-report__subtitle">
-            {recordCount.toLocaleString()} agencies from dwh.Dim_Agency
-          </p>
+          <p className="talia-report__subtitle">{subtitle}</p>
         </div>
       </header>
 
       <div className="agency-directory-panel__filters talia-report-filters">
+        {selectedAgencyId ? (
+          <div className="ms-berth-criteria" aria-label="Linked reservation criteria">
+            <div className="ms-berth-criteria__item">
+              <span className="ms-berth-criteria__label">Agency ID</span>
+              <span className="ms-berth-criteria__value">{selectedAgencyId}</span>
+            </div>
+            {linkedAgencyName ? (
+              <div className="ms-berth-criteria__item">
+                <span className="ms-berth-criteria__label">Agency</span>
+                <span className="ms-berth-criteria__value">{linkedAgencyName}</span>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="talia-btn talia-btn--ghost ms-berth-criteria__clear"
+              onClick={() => onClearReservationLink?.()}
+            >
+              Clear
+            </button>
+          </div>
+        ) : null}
         {FILTER_FIELDS.map(([field, label]) => (
           <label key={field} className="agency-directory-panel__filter talia-report-filters__group">
             <span className="talia-report-filters__label">{label}</span>
@@ -281,12 +405,6 @@ const AgencyPresenter = ({
           </label>
         ))}
       </div>
-
-      {selectedAgencyId ? (
-        <div className="agency-directory-panel__callout talia-callout" role="note" aria-label="Reservation link">
-          Filtered to agency ID {selectedAgencyId} from reservation selection. Clear the reservation selection to browse all agencies.
-        </div>
-      ) : null}
 
       {onRefresh ? (
         <div className="talia-report__actions-bar" aria-label="Agency directory actions">

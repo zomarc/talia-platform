@@ -8,6 +8,7 @@ import AgencyPresenter from './AgencyPresenter';
 import PanelDataState from '../../shared/PanelDataState';
 
 const reservationSelect = 'talia:reservation.select';
+const reservationClear = 'talia:reservation.clear';
 
 const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
   const { data, loading, error, refetch, context } = useTableDataWithContext({
@@ -32,6 +33,12 @@ const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
 
   const selectedAgencyId = context?.query_value || context?.row_data?.agency_id || null;
 
+  const handleClearReservationLink = () => {
+    window.dispatchEvent(new CustomEvent(reservationClear, {
+      detail: { timestamp: new Date().toISOString() },
+    }));
+  };
+
   return (
     <PanelDataState
       loading={loading}
@@ -49,6 +56,7 @@ const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
       <AgencyPresenter
         data={data}
         onRefresh={refetch}
+        onClearReservationLink={handleClearReservationLink}
         panelInstanceId={panelInstanceId}
         panelComponentId={panelComponentId}
         selectedAgencyId={selectedAgencyId}

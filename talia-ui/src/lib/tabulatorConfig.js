@@ -8,6 +8,7 @@
 // Import Tabulator from npm package
 import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import { formatDayMon } from './dateFormat';
+import { normalizeColumnHeaderAlignment } from './tabulatorColumnAlignment';
 
 // Import Tabulator midnight theme CSS
 import 'tabulator-tables/dist/css/tabulator_midnight.min.css';
@@ -207,7 +208,8 @@ export const getTabulatorOptions = (options = {}) => {
       ? 'fitDataTable'
       : 'fitColumns';
   const rawColumns = Array.isArray(options.columns) ? [...options.columns] : null;
-  const sourceColumns = ignoreGlobalLayout ? rawColumns : stripFixedWidths(rawColumns);
+  const alignedColumns = rawColumns ? normalizeColumnHeaderAlignment(rawColumns) : null;
+  const sourceColumns = ignoreGlobalLayout ? alignedColumns : stripFixedWidths(alignedColumns);
 
   const {
     enforceGlobalLayout,
@@ -261,7 +263,7 @@ export const COMMON_COLUMN_TYPES = {
     headerFilter: 'input',
     headerFilterPlaceholder: config.placeholder || 'Enter number...',
     headerFilterFunc: config.operator || '>=',
-    hozAlign: 'center',
+    hozAlign: 'right',
     ...config
   }),
 

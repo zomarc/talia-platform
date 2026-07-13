@@ -56,6 +56,32 @@ cd cloudflare-worker
 npx wrangler deploy
 ```
 
+## Local vs staging vs MVP
+
+| Target | How you reach it | Owns `taliahub.com`? |
+|--------|------------------|----------------------|
+| **local** | `http://127.0.0.1:5173` | Only when **local ngrok** is running (`./scripts/validate external-on` with working target `local`) |
+| **staging** (MiniPC) | `http://192.168.1.120:5173` (LAN) | Only when **staging** `ngrok-taliahub` systemd unit is active |
+| **mvp** (Azure) | `http://<MVP_UI_HOST>:5173` from `scripts/config/targets.env` | **Never** via this repo’s validate/ngrok path |
+
+`./scripts/validate set-target …` only sets the **working target** (check / start-core / deploy scope). It does **not** move `taliahub.com`.
+
+To put the public demo on local:
+
+```bash
+./scripts/validate set-target local
+# UI must be up on :5173
+./scripts/validate external-on   # type ENABLE_NGROK_EXTERNAL
+```
+
+To stop public demo from this laptop:
+
+```bash
+./scripts/validate external-off
+```
+
+If staging MiniPC SSH is unreachable, `external-off` still stops **local** ngrok and exits 0, but may report an **ORPHAN** tunnel if the MiniPC still holds the reserved domain. Reach the MiniPC (LAN/VPN) and stop `ngrok-taliahub` there, then re-run `external-off`.
+
 ## Local workflow
 
 Start app:
@@ -65,23 +91,28 @@ cd talia-ui && npm run dev
 cd talia-server && npm start
 ```
 
-Start ngrok:
+Start ngrok (or use validate menu 5):
 
 ```bash
 ngrok http --url=taliahub.com 5173
 ```
+
+Prefer: `./scripts/validate external-on` after `set-target local` (stops staging ngrok first when SSH works).
 
 ## Verification
 
 ```bash
 curl -sI https://taliahub.com
 curl -sI https://celestyal.taliahub.com
+./scripts/validate status   # shows working target vs public presenter
 ```
 
-- **ngrok running** → HTTP 200/302
+- **ngrok running** → HTTP 200/302 (or 401 if basic-auth challenge)
 - **ngrok stopped** → HTTP 503 (holding page)
+- **MVP check** → curl `http://$MVP_UI_HOST:5173/` (not taliahub.com)
 
 ## Notes
 
 - All subdomains map to the same tunnel by default (see `HOST_MAP`).
 - If you later add per-customer ngrok custom domains, add them to `HOST_MAP`.
+- Reserved ngrok domain is single-claim: only one of local / staging can present at a time.

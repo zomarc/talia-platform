@@ -19,7 +19,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Monotonic ops token (not a calendar stamp). Bump when validate menu behavior or Instance & keys cross-check changes.
-SCRIPT_VERSION="ops-6"
+SCRIPT_VERSION="ops-7"
 CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
 if [[ -f "${CONFIG_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -473,6 +473,86 @@ get_remembered_target() {
   fi
 }
 
+# True when Cloudflare still proxies a live ngrok origin (app or basic-auth challenge).
+public_tunnel_appears_live() {
+  local headers code gateway
+  headers=$(curl -sS -I --connect-timeout 2 --max-time 2 "${PUBLIC_MAIN_URL}/" 2>/dev/null || true)
+  code=$(echo "$headers" | awk 'BEGIN{c="000"} NR==1{c=$2} END{print c}')
+  gateway=$(echo "$headers" | awk -F': ' 'tolower($1)=="x-taliahub-gateway"{gsub("\r","",$2); print $2; exit}')
+  [[ "$gateway" == "proxied" ]] || [[ "$code" == "200" || "$code" == "302" || "$code" == "401" || "$code" == "403" ]]
+}
+
+# Extract semver from talia-app-version.json body or HTML meta fallback.
+extract_talia_app_version() {
+  local body="$1"
+  local ver=""
+  ver=$(printf '%s' "$body" | python3 -c '
+import sys, re, json
+s = sys.stdin.read()
+try:
+    d = json.loads(s)
+    if isinstance(d, dict):
+        for k in ("taliaAppVersion", "version", "appVersion"):
+            if d.get(k):
+                print(d[k]); raise SystemExit
+    if isinstance(d, str) and d.strip():
+        print(d.strip()); raise SystemExit
+except Exception:
+    pass
+m = re.search(r"talia-app-version\"\s+content=\"([^\"]+)\"", s)
+if m:
+    print(m.group(1)); raise SystemExit
+m = re.search(r"\b(\d+\.\d+\.\d+)\b", s)
+print(m.group(1) if m else "")
+' 2>/dev/null || true)
+  printf '%s' "$ver"
+}
+
+# Fingerprint public UI version against known hosts (best-effort presenter hint).
+infer_public_backend_hint() {
+  local pub_body loc_body st_body mvp_body
+  local pub_ver loc_ver st_ver mvp_ver
+  pub_body=$(curl -sS -u "${NGROK_BASIC_USER}:${NGROK_BASIC_PASS}" --connect-timeout 2 --max-time 3 \
+    "${PUBLIC_MAIN_URL}/talia-app-version.json" 2>/dev/null | tr -d '\r' | head -c 4000 || true)
+  pub_ver=$(extract_talia_app_version "$pub_body")
+  if [[ -z "$pub_ver" ]]; then
+    pub_body=$(curl -sS -u "${NGROK_BASIC_USER}:${NGROK_BASIC_PASS}" --connect-timeout 2 --max-time 3 \
+      "${PUBLIC_MAIN_URL}/" 2>/dev/null | tr -d '\r' | head -c 4000 || true)
+    pub_ver=$(extract_talia_app_version "$pub_body")
+  fi
+  [[ -z "$pub_ver" ]] && { echo "unknown"; return 0; }
+
+  loc_body=$(curl -sS --connect-timeout 1 --max-time 2 "${LOCAL_UI_URL%/}/talia-app-version.json" 2>/dev/null | head -c 4000 || true)
+  loc_ver=$(extract_talia_app_version "$loc_body")
+  if [[ -z "$loc_ver" ]]; then
+    loc_body=$(curl -sS --connect-timeout 1 --max-time 2 "${LOCAL_UI_URL%/}/" 2>/dev/null | head -c 4000 || true)
+    loc_ver=$(extract_talia_app_version "$loc_body")
+  fi
+  st_body=$(curl -sS --connect-timeout 1 --max-time 2 "${STAGING_UI_URL%/}/talia-app-version.json" 2>/dev/null | head -c 4000 || true)
+  st_ver=$(extract_talia_app_version "$st_body")
+  mvp_ver=""
+  if [[ "$MVP_VALIDATE" == "1" && -n "${MVP_UI_HOST:-}" ]]; then
+    mvp_body=$(curl -sS --connect-timeout 1 --max-time 2 "${MVP_UI_URL%/}/talia-app-version.json" 2>/dev/null | head -c 4000 || true)
+    mvp_ver=$(extract_talia_app_version "$mvp_body")
+  fi
+
+  if [[ -n "$mvp_ver" && "$pub_ver" == "$mvp_ver" && ( -z "$loc_ver" || "$pub_ver" != "$loc_ver" ) && ( -z "$st_ver" || "$pub_ver" != "$st_ver" ) ]]; then
+    echo "matches-mvp-v${pub_ver} (unusual — MVP is not the ngrok path)"
+  elif [[ -n "$st_ver" && "$pub_ver" == "$st_ver" && ( -z "$loc_ver" || "$pub_ver" != "$loc_ver" ) ]]; then
+    echo "matches-staging-v${pub_ver}"
+  elif [[ -n "$loc_ver" && "$pub_ver" == "$loc_ver" && ( -z "$st_ver" || "$pub_ver" != "$st_ver" ) && ( -z "$mvp_ver" || "$pub_ver" != "$mvp_ver" ) ]]; then
+    if pgrep -f "ngrok .*${LOCAL_NGROK_DOMAIN}" >/dev/null 2>&1; then
+      echo "matches-local-v${pub_ver}"
+    else
+      echo "public-v${pub_ver} equals local UI build, but local ngrok is off (orphan elsewhere; often MiniPC)"
+    fi
+  elif [[ -n "$mvp_ver" && "$pub_ver" == "$mvp_ver" ]]; then
+    echo "v${pub_ver} also equals MVP (and possibly others) — prefer direct ${MVP_UI_URL}"
+  else
+    echo "public-v${pub_ver}; local=${loc_ver:-n/a} staging=${st_ver:-n/a} mvp=${mvp_ver:-n/a}"
+  fi
+}
+
 get_current_target() {
   local local_ngrok
   local staging_ngrok
@@ -489,7 +569,14 @@ get_current_target() {
   elif [[ "$local_ngrok" == "active" && "$staging_ngrok" == "active" ]]; then
     presenter="conflict"
   elif [[ "$local_ngrok" != "active" && "$staging_ngrok" != "active" ]]; then
-    presenter="none"
+    # Working-target "local" does not control DNS. If Cloudflare still proxies a live
+    # tunnel we cannot see from this host (e.g. MiniPC ngrok while LAN SSH is down),
+    # report orphan so ops do not think the public URL is off or is MVP.
+    if public_tunnel_appears_live; then
+      presenter="orphan"
+    else
+      presenter="none"
+    fi
   fi
 
   echo "$presenter"
@@ -769,11 +856,12 @@ external_status_label() {
   case "$presenter" in
     local|staging) src=$(echo "$presenter" | tr '[:lower:]' '[:upper:]') ;;
     conflict) src="CONFLICT" ;;
+    orphan) src="ORPHAN" ;;
     none) src="NONE" ;;
     *) src="UNKNOWN" ;;
   esac
 
-  if [[ "$presenter" == "local" || "$presenter" == "staging" ]]; then
+  if [[ "$presenter" == "local" || "$presenter" == "staging" || "$presenter" == "orphan" ]]; then
     if [[ "$gateway" == "proxied" ]] || [[ "$pub_code" == "200" || "$pub_code" == "302" || "$pub_code" == "401" || "$pub_code" == "403" ]]; then
       echo -e "${GREEN}UP${NC} (${src})"
       return 0
@@ -791,11 +879,12 @@ external_status_plain() {
   case "$presenter" in
     local|staging) src=$(echo "$presenter" | tr '[:lower:]' '[:upper:]') ;;
     conflict) src="CONFLICT" ;;
+    orphan) src="ORPHAN" ;;
     none) src="NONE" ;;
     *) src="UNKNOWN" ;;
   esac
 
-  if [[ "$presenter" == "local" || "$presenter" == "staging" ]]; then
+  if [[ "$presenter" == "local" || "$presenter" == "staging" || "$presenter" == "orphan" ]]; then
     if [[ "$gateway" == "proxied" ]] || [[ "$pub_code" == "200" || "$pub_code" == "302" || "$pub_code" == "401" || "$pub_code" == "403" ]]; then
       status="UP"
     fi
@@ -1015,6 +1104,9 @@ _print_ops_summary_live_header() {
     conflict)
       top_level_version="CONFLICT (both local and staging presenters active)"
       ;;
+    orphan)
+      top_level_version="${pub_ui_version} (public tunnel live; not local/staging ngrok on this host)"
+      ;;
     *)
       if [[ "$pub_ui_version" == "n/a (DOWN)" ]]; then
         top_level_version="UNAVAILABLE (public gateway fallback/inactive)"
@@ -1028,6 +1120,7 @@ _print_ops_summary_live_header() {
     local) ext_line="${GREEN}active → local${NC}" ;;
     staging) ext_line="${BLUE}active → staging${NC}" ;;
     conflict) ext_line="${RED}CONFLICT (local + staging both on)${NC}" ;;
+    orphan) ext_line="${YELLOW}ORPHAN tunnel${NC} (live public; stop needs the host that owns ngrok)" ;;
     none) ext_line="${YELLOW}inactive${NC} (Cloudflare / holding page expected)" ;;
     *) ext_line="${DIM}unknown${NC}" ;;
   esac
@@ -1048,9 +1141,13 @@ _print_ops_summary_live_header() {
   echo -e "${DIM}Run at (UTC):   ${validate_run_iso}${NC}"
   echo -e "${DIM}Run at (local): ${validate_run_local} · host: ${HOSTNAME}${NC}"
   echo -e "  ${BOLD}Public demo${NC}: ${PUBLIC_MAIN_URL} (${ext_line})"
+  echo -e "  ${DIM}Working target ≠ public presenter. MVP is ${MVP_UI_URL:-IP:port} only — not ${PUBLIC_MAIN_URL}.${NC}"
   rem_disp=$(get_remembered_target)
   [[ -z "$rem_disp" ]] && rem_disp="(default by host)"
   echo -e "  ${DIM}Remembered target: ${rem_disp} (${TARGET_STATE_FILE/#$HOME/~})${NC}"
+  if [[ "$presenter" == "orphan" ]]; then
+    echo -e "  ${YELLOW}Hint:${NC} ${DIM}$(infer_public_backend_hint)${NC}"
+  fi
   echo ""
 }
 
@@ -1158,6 +1255,9 @@ _print_quick_targets_summary_impl() {
     conflict)
       top_level_version="CONFLICT (both local and staging presenters active)"
       ;;
+    orphan)
+      top_level_version="${pub_ui_version} (public tunnel live; not local/staging ngrok on this host)"
+      ;;
     *)
       if [[ "$pub_ui_version" == "n/a (DOWN)" ]]; then
         top_level_version="UNAVAILABLE (public gateway fallback/inactive)"
@@ -1171,6 +1271,7 @@ _print_quick_targets_summary_impl() {
     local) ext_line="${GREEN}active → local${NC}" ;;
     staging) ext_line="${BLUE}active → staging${NC}" ;;
     conflict) ext_line="${RED}CONFLICT (local + staging both on)${NC}" ;;
+    orphan) ext_line="${YELLOW}ORPHAN tunnel${NC} (live public; stop needs the host that owns ngrok)" ;;
     none) ext_line="${YELLOW}inactive${NC} (Cloudflare / holding page expected)" ;;
     *) ext_line="${DIM}unknown${NC}" ;;
   esac
@@ -1203,10 +1304,14 @@ _print_quick_targets_summary_impl() {
   echo -e "${DIM}Run at (UTC):   ${validate_run_iso}${NC}"
   echo -e "${DIM}Run at (local): ${validate_run_local} · host: ${HOSTNAME}${NC}"
   echo -e "  ${BOLD}Public demo${NC}: ${PUBLIC_MAIN_URL} (${ext_line})"
+  echo -e "  ${DIM}Working target ≠ public presenter. MVP is ${MVP_UI_URL:-IP:port} only — not ${PUBLIC_MAIN_URL}.${NC}"
   local rem_disp
   rem_disp=$(get_remembered_target)
   [[ -z "$rem_disp" ]] && rem_disp="(default by host)"
   echo -e "  ${DIM}Remembered target: ${rem_disp} (${TARGET_STATE_FILE/#$HOME/~})${NC}"
+  if [[ "$presenter" == "orphan" ]]; then
+    echo -e "  ${YELLOW}Hint:${NC} ${DIM}$(infer_public_backend_hint)${NC}"
+  fi
   echo ""
   local mvp_snap mvp_section
   mvp_snap="$([[ "$MVP_VALIDATE" == "1" && -n "$MVP_UI_HOST" ]] && echo 1 || echo 0)"
@@ -1453,12 +1558,12 @@ print_menu() {
   echo -e "${BOLD}Actions (core)${NC}"
   echo ""
 
-  echo -e "  ${GREEN}1)${NC} Set working target (local / staging / MVP when configured)"
+  echo -e "  ${GREEN}1)${NC} Set working target (local / staging / MVP — ops scope only, not ${PUBLIC_MAIN_URL})"
   echo -e "  ${GREEN}2)${NC} Check services (deep check, current target only)"
   echo -e "  ${GREEN}3)${NC} Start core services (local dev stack or Docker on staging / MVP)"
   echo -e "  ${GREEN}4)${NC} Stop core services (same scope as 3)"
-  echo -e "  ${GREEN}5)${NC} Start external access — ${DIM}ngrok; requires typing ENABLE_NGROK_EXTERNAL${NC}"
-  echo -e "  ${GREEN}6)${NC} Stop external access (ngrok off; Cloudflare shows unavailable)"
+  echo -e "  ${GREEN}5)${NC} Start external access — ${DIM}ngrok → ${PUBLIC_MAIN_URL} for local|staging only; type ENABLE_NGROK_EXTERNAL${NC}"
+  echo -e "  ${GREEN}6)${NC} Stop external access (local+staging ngrok; soft-fails if MiniPC SSH down)"
   echo ""
   echo -e "${BOLD}Deploy${NC}"
   echo ""
@@ -2159,10 +2264,11 @@ check_services_for_working_target() {
 set_working_target_interactive() {
   echo ""
   echo -e "${BOLD}Set working target:${NC}"
+  echo -e "  ${DIM}Controls check/start/stop/deploy scope only — not who serves ${PUBLIC_MAIN_URL}.${NC}"
   echo -e "  ${GREEN}1)${NC} Local (this machine’s dev stack)"
   echo -e "  ${GREEN}2)${NC} Staging (${STAGING_HOST})"
   if [[ "$MVP_VALIDATE" == "1" && -n "${MVP_SSH_HOST:-}" ]]; then
-    echo -e "  ${GREEN}3)${NC} MVP — Azure (${MVP_SSH_HOST})"
+    echo -e "  ${GREEN}3)${NC} MVP — Azure (${MVP_SSH_HOST} → ${MVP_UI_URL})"
   else
     echo -e "  ${DIM}3)${NC} ${DIM}MVP (set MVP_VALIDATE=1 and MVP_SSH_HOST in targets.env)${NC}"
   fi
@@ -2174,10 +2280,12 @@ set_working_target_interactive() {
     1|local)
       remember_target "local" || true
       echo -e "${GREEN}Working target saved: LOCAL${NC}"
+      echo -e "${DIM}To point ${PUBLIC_MAIN_URL} here: menu 5 (external-on) after UI is up on :5173.${NC}"
       ;;
     2|staging)
       remember_target "staging" || true
       echo -e "${GREEN}Working target saved: STAGING${NC}"
+      echo -e "${DIM}To point ${PUBLIC_MAIN_URL} at staging: menu 5 (starts ngrok on MiniPC).${NC}"
       ;;
     3|mvp)
       if ! is_supported_target "mvp"; then
@@ -2186,6 +2294,7 @@ set_working_target_interactive() {
       fi
       remember_target "mvp" || true
       echo -e "${GREEN}Working target saved: MVP${NC}"
+      echo -e "${YELLOW}MVP is not exposed via ${PUBLIC_MAIN_URL}.${NC} Open ${BOLD}${MVP_UI_URL}${NC} directly."
       ;;
     0|back|q|quit) return 0 ;;
     *)
@@ -2199,6 +2308,12 @@ start_external_for_working_target() {
   local t
   t=$(get_effective_working_target)
   remember_target "$t" || true
+  if [[ "$t" == "mvp" ]]; then
+    echo -e "${RED}Cannot map ${PUBLIC_MAIN_URL} to MVP via validate ngrok.${NC}"
+    echo -e "  MVP is direct Azure access: ${BOLD}${MVP_UI_URL}${NC}"
+    echo -e "  ${DIM}Set working target to local or staging, then re-run external-on.${NC}"
+    return 1
+  fi
   if ! confirm_ngrok_external_start "${PUBLIC_MAIN_URL} → working target ${t} (ngrok)"; then
     return 1
   fi
@@ -2209,6 +2324,10 @@ start_external_for_working_target() {
   new_u=$(echo "$new_target" | tr '[:lower:]' '[:upper:]')
   echo ""
   echo -e "${BOLD}External presenter (ngrok):${NC} ${GREEN}${new_u}${NC}"
+  if [[ "$new_target" == "orphan" || "$new_target" == "none" || "$new_target" == "unknown" ]]; then
+    echo -e "${YELLOW}Public URL may still be owned by another ngrok session (reserved domain is single-claim).${NC}"
+    echo -e "${DIM}Hint: $(infer_public_backend_hint)${NC}"
+  fi
 }
 
 advanced_validate_interactive() {
@@ -2459,9 +2578,24 @@ start_ngrok_staging_remote() {
 stop_ngrok_staging_remote() {
   if $IS_ON_STAGING; then
     run_command "sudo systemctl stop ${STAGING_NGROK_SERVICE}" "Stop ngrok on staging (systemd)"
-  else
-    run_staging_ssh_command "sudo systemctl stop ${STAGING_NGROK_SERVICE}" "Stop ngrok on staging (systemd)" "45"
+    return $?
   fi
+  # Soft-fail + short SSH probe: unreachable MiniPC must not abort external-off / local external-on.
+  local prev_attempts prev_retries
+  prev_attempts="${STAGING_SSH_READY_ATTEMPTS}"
+  prev_retries="${STAGING_REMOTE_CMD_RETRIES}"
+  STAGING_SSH_READY_ATTEMPTS=1
+  STAGING_REMOTE_CMD_RETRIES=1
+  if run_staging_ssh_command "sudo systemctl stop ${STAGING_NGROK_SERVICE}" "Stop ngrok on staging (systemd)" "20"; then
+    STAGING_SSH_READY_ATTEMPTS="$prev_attempts"
+    STAGING_REMOTE_CMD_RETRIES="$prev_retries"
+    return 0
+  fi
+  STAGING_SSH_READY_ATTEMPTS="$prev_attempts"
+  STAGING_REMOTE_CMD_RETRIES="$prev_retries"
+  echo -e "  ${YELLOW}Staging ngrok stop skipped/failed — SSH or remote error.${NC}"
+  echo -e "  ${DIM}If MiniPC still owns ${LOCAL_NGROK_DOMAIN}, ${PUBLIC_MAIN_URL} stays live until that tunnel stops.${NC}"
+  return 0
 }
 
 start_staging_services_remote() {
@@ -2684,11 +2818,17 @@ apply_target_external() {
     echo -e "${RED}Invalid target: ${target}${NC}"
     return 1
   fi
+  if [[ "$target" == "mvp" ]]; then
+    echo -e "${RED}MVP cannot own ${PUBLIC_MAIN_URL} via ngrok in this script.${NC}"
+    echo -e "  Use ${BOLD}${MVP_UI_URL}${NC} for Azure MVP."
+    return 1
+  fi
 
   # Stop all other targets first, then start selected target.
+  # Soft-fail stops so unreachable staging does not block local ngrok start.
   for candidate in local staging; do
     if [[ "$candidate" != "$target" ]]; then
-      stop_target_external "$candidate"
+      stop_target_external "$candidate" || true
     fi
   done
   start_target_external "$target"
@@ -2696,9 +2836,10 @@ apply_target_external() {
 
 switch_target() {
   echo ""
-  echo -e "${BOLD}Switch target:${NC}"
-  echo -e "  ${GREEN}1)${NC} Local (${PUBLIC_MAIN_URL} -> local)"
-  echo -e "  ${GREEN}2)${NC} Staging (${PUBLIC_MAIN_URL} -> staging)"
+  echo -e "${BOLD}Switch public presenter (ngrok → ${PUBLIC_MAIN_URL}):${NC}"
+  echo -e "  ${GREEN}1)${NC} Local (${PUBLIC_MAIN_URL} -> local :5173)"
+  echo -e "  ${GREEN}2)${NC} Staging (${PUBLIC_MAIN_URL} -> staging MiniPC)"
+  echo -e "  ${DIM}MVP is not an option here — use ${MVP_UI_URL:-MVP_UI_URL}${NC}"
   echo -e "  ${YELLOW}0)${NC} Back"
   echo ""
   echo -n -e "${BOLD}Enter target: ${NC}"
@@ -2735,7 +2876,7 @@ switch_target() {
   local checks=0
   while [[ "$checks" -lt 8 ]]; do
     new_target=$(get_current_target)
-    if [[ "$new_target" != "none" && "$new_target" != "unknown" ]]; then
+    if [[ "$new_target" != "none" && "$new_target" != "unknown" && "$new_target" != "orphan" ]]; then
       break
     fi
     checks=$((checks + 1))
@@ -2743,18 +2884,30 @@ switch_target() {
   done
   new_target_upper=$(echo "$new_target" | tr '[:lower:]' '[:upper:]')
   echo ""
-  echo -e "${BOLD}Current target is now:${NC} ${GREEN}${new_target_upper}${NC}"
+  echo -e "${BOLD}Current presenter is now:${NC} ${GREEN}${new_target_upper}${NC}"
+  if [[ "$new_target" == "orphan" ]]; then
+    echo -e "${YELLOW}Public tunnel still live from another host.${NC} Hint: $(infer_public_backend_hint)"
+  fi
 }
 
 stop_external_everywhere() {
   echo -e "${CYAN}Stopping external access everywhere (local + staging)...${NC}"
-  stop_target_external "local"
-  stop_target_external "staging"
+  stop_target_external "local" || true
+  stop_target_external "staging" || true
   echo ""
-  local remembered_target
+  local remembered_target pub_code
   remembered_target=$(get_remembered_target)
-  echo -e "${BOLD}External interface status:${NC} ${YELLOW}OFFLINE${NC} (no local/staging ngrok target)"
-  echo -e "${DIM}Remembered target preserved: ${remembered_target:-none}${NC}"
+  echo -e "${BOLD}Local/staging ngrok stop attempted.${NC}"
+  echo -e "${DIM}Remembered working target preserved: ${remembered_target:-none}${NC}"
+  if public_tunnel_appears_live; then
+    pub_code=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 2 "${PUBLIC_MAIN_URL}/" 2>/dev/null || echo "000")
+    echo -e "${YELLOW}${PUBLIC_MAIN_URL} is still UP (HTTP ${pub_code}).${NC}"
+    echo -e "${DIM}An orphan tunnel still holds the reserved domain (often MiniPC ngrok while SSH is down).${NC}"
+    echo -e "${DIM}Hint: $(infer_public_backend_hint)${NC}"
+    echo -e "${DIM}Fix: reach staging LAN/VPN and re-run external-off, or stop ngrok-taliahub on the MiniPC.${NC}"
+    return 0
+  fi
+  echo -e "${BOLD}External interface status:${NC} ${YELLOW}OFFLINE${NC} (Cloudflare holding page expected)"
 }
 
 enable_remembered_target_external() {
@@ -2772,6 +2925,12 @@ enable_remembered_target_external() {
       echo -e "${YELLOW}Use option 1 to set working target (local or staging) first.${NC}"
       return 1
     fi
+  fi
+
+  if [[ "$remembered_target" == "mvp" ]]; then
+    echo -e "${RED}Remembered target is MVP — ${PUBLIC_MAIN_URL} is not used for Azure.${NC}"
+    echo -e "  Open ${BOLD}${MVP_UI_URL}${NC} or set-target local|staging then external-on."
+    return 1
   fi
 
   echo -e "${CYAN}Enabling external access on remembered target: ${remembered_target}${NC}"
@@ -3402,8 +3561,8 @@ Talia validate — quick overview by default; heavy checks only from the menu or
   $0 start-core                   UI + GraphQL + Supabase (local) or Docker stack (staging/MVP)
   $0 stop-core                    stop core (ngrok unchanged)
   $0 db-disk                      Postgres size + top 5 public tables for current target
-  $0 external-on                  ngrok → current target (TTY: type ENABLE_NGROK_EXTERNAL; else TALIA_CONFIRM_NGROK=...)
-  $0 external-off                 stop all ngrok (Cloudflare unavailable page)
+  $0 external-on                  ngrok → local|staging working target only (not MVP; TTY: ENABLE_NGROK_EXTERNAL)
+  $0 external-off                 stop local+staging ngrok (soft-fail if staging SSH down; report orphan if public still up)
   $0 deploy-staging               local-sync deploy to staging (default UI paths; full stack only if you pick it)
   $0 deploy-mvp                   deploy to MVP (same; wide modes require explicit flags inside the script)
   $0 deploy-themes-db             upsert themes + focus rows from local Supabase → staging and/or MVP (no code deploy)

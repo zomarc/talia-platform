@@ -37,6 +37,8 @@ Optional: `deploy-to-azure-staging.sh` is a separate recipe for VMs that update 
 ## Ops checks
 
 - **`./scripts/validate`** — interactive menu; header shows **script version**, **UTC time**, and **local time** each run.
+- **Working target** (`set-target local|staging|mvp`) scopes check/start/stop/deploy. It does **not** move `https://taliahub.com`.
+- **Public presenter** is whoever currently holds the ngrok reserved domain (local process or MiniPC `ngrok-taliahub`). **MVP** is reached only via `MVP_UI_URL` (Azure IP:ports in `targets.env`), never via validate ngrok.
 - **Data Management → Instance & keys** — shows **GraphQL server version**, **validate script doc version** (must match `SCRIPT_VERSION` in `scripts/validate`), and **UI build** (`VITE_*`). Use this on **local, staging, and MVP** to confirm you are on the build you expect.
 
 When the validate menu / Instance cross-check contract changes, bump the **same** token in both `SCRIPT_VERSION` (`scripts/validate`) and `VALIDATE_SCRIPT_DOC_VERSION` (`instanceConnectionResolvers.ts`) — use a neutral monotonic value (e.g. `ops-4`), not calendar dates.

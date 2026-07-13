@@ -19,7 +19,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Monotonic ops token (not a calendar stamp). Bump when validate menu behavior or Instance & keys cross-check changes.
-SCRIPT_VERSION="ops-7"
+SCRIPT_VERSION="ops-8"
 CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
 if [[ -f "${CONFIG_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -103,9 +103,12 @@ PUBLIC_SECONDARY_URL="${PUBLIC_SECONDARY_URL:-https://celestyal.taliahub.com}"
 NGROK_BASIC_USER="${NGROK_BASIC_USER:-talia}"
 NGROK_BASIC_PASS="${NGROK_BASIC_PASS:-dev2025tal}"
 STAGING_SSH_TARGET="${STAGING_USER}@${STAGING_HOST}"
-STAGING_SSH_BASE_OPTS="${STAGING_SSH_BASE_OPTS:--o ConnectTimeout=5 -o ConnectionAttempts=1 -o ServerAliveInterval=5 -o ServerAliveCountMax=1 -o BatchMode=yes}"
+# Keep ConnectTimeout short: remote/VPN runs must fail fast when MiniPC LAN is unreachable.
+STAGING_SSH_BASE_OPTS="${STAGING_SSH_BASE_OPTS:--o ConnectTimeout=2 -o ConnectionAttempts=1 -o ServerAliveInterval=2 -o ServerAliveCountMax=1 -o BatchMode=yes}"
 STAGING_SSH_READY_ATTEMPTS="${STAGING_SSH_READY_ATTEMPTS:-5}"
 STAGING_REMOTE_CMD_RETRIES="${STAGING_REMOTE_CMD_RETRIES:-2}"
+# Wall-clock cap for status/presenter SSH probes (separate from deploy/start which use longer budgets).
+STAGING_STATUS_SSH_TIMEOUT_SEC="${STAGING_STATUS_SSH_TIMEOUT_SEC:-2}"
 LOCAL_NGROK_DOMAIN="${LOCAL_NGROK_DOMAIN:-${PUBLIC_MAIN_URL#https://}}"
 LOCAL_NGROK_DOMAIN="${LOCAL_NGROK_DOMAIN#http://}"
 
@@ -439,8 +442,9 @@ get_target_external_state() {
         sudo systemctl is-active "$STAGING_NGROK_SERVICE" 2>/dev/null || echo "inactive"
       else
         local status
-        # sudo -n avoids a password prompt; outer sleep caps total wait
-        status=$(ssh_staging_with_timeout 5 "sudo -n systemctl is-active $STAGING_NGROK_SERVICE 2>/dev/null || echo inactive" | head -n 1)
+        # sudo -n avoids a password prompt; short wall-clock cap for remote/VPN fail-fast
+        status=$(ssh_staging_with_timeout "${STAGING_STATUS_SSH_TIMEOUT_SEC}" \
+          "sudo -n systemctl is-active $STAGING_NGROK_SERVICE 2>/dev/null || echo inactive" | head -n 1)
         [[ -z "$status" ]] && status="unreachable"
         echo "$status"
       fi
@@ -473,13 +477,104 @@ get_remembered_target() {
   fi
 }
 
+# Probe public demo headers once. Sets PUBLIC_PROBE_CODE and PUBLIC_PROBE_GATEWAY.
+probe_public_gateway_headers() {
+  local headers
+  headers=$(curl -sS -I --connect-timeout 2 --max-time 2 "${PUBLIC_MAIN_URL}/" 2>/dev/null || true)
+  PUBLIC_PROBE_CODE=$(echo "$headers" | awk 'BEGIN{c="000"} NR==1{c=$2} END{print c}')
+  PUBLIC_PROBE_GATEWAY=$(echo "$headers" | awk -F': ' 'tolower($1)=="x-taliahub-gateway"{gsub("\r","",$2); print $2; exit}')
+  # Use if/fi (not [[ ]] &&) — bash 3.2 + set -e treats a failing final [[ as function failure.
+  if [[ -z "$PUBLIC_PROBE_CODE" ]]; then
+    PUBLIC_PROBE_CODE="000"
+  fi
+  if [[ -z "$PUBLIC_PROBE_GATEWAY" ]]; then
+    PUBLIC_PROBE_GATEWAY="n/a"
+  fi
+  return 0
+}
+
+# Cloudflare holding page: HTTP 503 + X-TaliaHub-Gateway: fallback (see cloudflare-worker/index.js).
+public_is_holding_page() {
+  local code="${1:-}"
+  local gateway="${2:-}"
+  if [[ -z "$code" || -z "$gateway" ]]; then
+    probe_public_gateway_headers
+    code="$PUBLIC_PROBE_CODE"
+    gateway="$PUBLIC_PROBE_GATEWAY"
+  fi
+  if [[ "$gateway" == "fallback" || "$code" == "503" ]]; then
+    return 0
+  fi
+  return 1
+}
+
 # True when Cloudflare still proxies a live ngrok origin (app or basic-auth challenge).
 public_tunnel_appears_live() {
-  local headers code gateway
-  headers=$(curl -sS -I --connect-timeout 2 --max-time 2 "${PUBLIC_MAIN_URL}/" 2>/dev/null || true)
-  code=$(echo "$headers" | awk 'BEGIN{c="000"} NR==1{c=$2} END{print c}')
-  gateway=$(echo "$headers" | awk -F': ' 'tolower($1)=="x-taliahub-gateway"{gsub("\r","",$2); print $2; exit}')
-  [[ "$gateway" == "proxied" ]] || [[ "$code" == "200" || "$code" == "302" || "$code" == "401" || "$code" == "403" ]]
+  local code gateway
+  probe_public_gateway_headers
+  code="$PUBLIC_PROBE_CODE"
+  gateway="$PUBLIC_PROBE_GATEWAY"
+  if public_is_holding_page "$code" "$gateway"; then
+    return 1
+  fi
+  if [[ "$gateway" == "proxied" || "$code" == "200" || "$code" == "302" || "$code" == "401" || "$code" == "403" ]]; then
+    return 0
+  fi
+  return 1
+}
+
+# Fetch public UI semver using basic-auth from targets.env (401 without auth is normal).
+probe_public_ui_semver() {
+  local body ver
+  body=$(curl -sS -u "${NGROK_BASIC_USER}:${NGROK_BASIC_PASS}" --connect-timeout 2 --max-time 3 \
+    "${PUBLIC_MAIN_URL%/}/talia-app-version.json" 2>/dev/null | tr -d '\r' | head -c 4000 || true)
+  ver=$(extract_talia_app_version "$body")
+  if [[ -z "$ver" ]]; then
+    body=$(curl -sS -u "${NGROK_BASIC_USER}:${NGROK_BASIC_PASS}" --connect-timeout 2 --max-time 3 \
+      "${PUBLIC_MAIN_URL%/}/" 2>/dev/null | tr -d '\r' | head -c 4000 || true)
+    ver=$(extract_talia_app_version "$body")
+  fi
+  printf '%s' "$ver"
+}
+
+# Deployed-versions Public row: agree with External presenter + show version when probeable.
+public_ui_version_label() {
+  local presenter="$1"
+  local pub_code="$2"
+  local gateway="$3"
+  local src ver
+
+  case "$presenter" in
+    local) src="LOCAL" ;;
+    staging) src="STAGING" ;;
+    conflict) src="CONFLICT" ;;
+    orphan) src="ORPHAN" ;;
+    none)
+      if public_is_holding_page "$pub_code" "$gateway"; then
+        echo "holding page"
+        return 0
+      fi
+      echo "n/a (DOWN)"
+      return 0
+      ;;
+    *) src="UNKNOWN" ;;
+  esac
+
+  if [[ "$gateway" == "proxied" ]] || [[ "$pub_code" == "200" || "$pub_code" == "302" || "$pub_code" == "401" || "$pub_code" == "403" ]]; then
+    ver=$(probe_public_ui_semver)
+    if [[ -n "$ver" ]]; then
+      echo "v${ver} (${src})"
+    else
+      echo "UP (${src})"
+    fi
+    return 0
+  fi
+
+  if public_is_holding_page "$pub_code" "$gateway"; then
+    echo "holding page"
+    return 0
+  fi
+  echo "n/a (${src})"
 }
 
 # Extract semver from talia-app-version.json body or HTML meta fallback.
@@ -599,8 +694,13 @@ get_effective_working_target() {
 get_http_code_quick() {
   local url="$1"
   local max_time="${2:-2}"
+  local connect_timeout="${3:-}"
   local out
-  out=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time "$max_time" "$url" 2>/dev/null) || true
+  # Default connect timeout to max_time so unreachable LAN hosts fail in 1–2s, not hang.
+  if [[ -z "$connect_timeout" ]]; then
+    connect_timeout="$max_time"
+  fi
+  out=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout "$connect_timeout" --max-time "$max_time" "$url" 2>/dev/null) || true
   if [[ -z "$out" ]]; then
     echo "000"
   else
@@ -857,7 +957,13 @@ external_status_label() {
     local|staging) src=$(echo "$presenter" | tr '[:lower:]' '[:upper:]') ;;
     conflict) src="CONFLICT" ;;
     orphan) src="ORPHAN" ;;
-    none) src="NONE" ;;
+    none)
+      if public_is_holding_page "$pub_code" "$gateway"; then
+        echo -e "${YELLOW}OFF${NC} (HOLDING)"
+        return 0
+      fi
+      src="NONE"
+      ;;
     *) src="UNKNOWN" ;;
   esac
 
@@ -880,7 +986,13 @@ external_status_plain() {
     local|staging) src=$(echo "$presenter" | tr '[:lower:]' '[:upper:]') ;;
     conflict) src="CONFLICT" ;;
     orphan) src="ORPHAN" ;;
-    none) src="NONE" ;;
+    none)
+      if public_is_holding_page "$pub_code" "$gateway"; then
+        echo "OFF (HOLDING)"
+        return 0
+      fi
+      src="NONE"
+      ;;
     *) src="UNKNOWN" ;;
   esac
 
@@ -1066,26 +1178,27 @@ _print_ops_summary_live_header() {
   loc_ui=$(get_http_code_quick "${LOCAL_UI_URL}/" 1)
   loc_gql=$(get_http_code_quick "${LOCAL_GRAPHQL_URL%/}" 1)
   loc_sb=$(get_http_code_quick "${LOCAL_SUPABASE_URL}" 1)
-  if $IS_ON_STAGING; then
-    st_ui=$(get_http_code_quick "${STAGING_UI_URL}/" 1)
-    st_gql=$(get_http_code_quick "${STAGING_GRAPHQL_URL%/}" 1)
-    st_sb=$(get_http_code_quick "${STAGING_SUPABASE_URL}" 1)
-  else
-    st_ui=$(get_http_code_quick "${STAGING_UI_URL}/" 1)
-    st_gql=$(get_http_code_quick "${STAGING_GRAPHQL_URL%/}" 1)
-    st_sb=$(get_http_code_quick "${STAGING_SUPABASE_URL}" 1)
-  fi
+  # Staging LAN probes: 1s connect+total — fail fast when MiniPC unreachable (remote/VPN).
+  local st_ui_f st_gql_f st_sb_f
+  st_ui_f=$(mktemp "${TMPDIR:-/tmp}/talia-st-ui.XXXXXX")
+  st_gql_f=$(mktemp "${TMPDIR:-/tmp}/talia-st-gql.XXXXXX")
+  st_sb_f=$(mktemp "${TMPDIR:-/tmp}/talia-st-sb.XXXXXX")
+  ( get_http_code_quick "${STAGING_UI_URL}/" 1 1 >"$st_ui_f" ) &
+  ( get_http_code_quick "${STAGING_GRAPHQL_URL%/}" 1 1 >"$st_gql_f" ) &
+  ( get_http_code_quick "${STAGING_SUPABASE_URL}" 1 1 >"$st_sb_f" ) &
+  wait || true
+  st_ui=$(cat "$st_ui_f" 2>/dev/null || echo 000)
+  st_gql=$(cat "$st_gql_f" 2>/dev/null || echo 000)
+  st_sb=$(cat "$st_sb_f" 2>/dev/null || echo 000)
+  rm -f "$st_ui_f" "$st_gql_f" "$st_sb_f"
 
-  local pub_headers
-  pub_headers=$(curl -sS -I --connect-timeout 2 --max-time 2 "${PUBLIC_MAIN_URL}/" 2>/dev/null || true)
-  pub_code=$(echo "$pub_headers" | awk 'NR==1{print $2}')
-  gateway=$(echo "$pub_headers" | awk -F': ' 'tolower($1)=="x-taliahub-gateway"{gsub("\r","",$2); print $2; exit}')
-  [[ -z "$pub_code" ]] && pub_code="000"
-  [[ -z "$gateway" ]] && gateway="n/a"
+  probe_public_gateway_headers
+  pub_code="$PUBLIC_PROBE_CODE"
+  gateway="$PUBLIC_PROBE_GATEWAY"
 
   loc_ui_version=$(quick_ui_version_label "${LOCAL_UI_URL}" "${loc_ui}" "true")
   st_ui_version=$(quick_ui_version_label "${STAGING_UI_URL}" "${st_ui}" "false")
-  pub_ui_version=$(quick_ui_version_label "${PUBLIC_MAIN_URL}" "${pub_code}" "false")
+  pub_ui_version=$(public_ui_version_label "$presenter" "$pub_code" "$gateway")
 
   mvp_ui="000"
   mvp_ui_version="n/a"
@@ -1107,6 +1220,15 @@ _print_ops_summary_live_header() {
     orphan)
       top_level_version="${pub_ui_version} (public tunnel live; not local/staging ngrok on this host)"
       ;;
+    none)
+      if public_is_holding_page "$pub_code" "$gateway"; then
+        top_level_version="HOLDING PAGE (Cloudflare fallback · HTTP ${pub_code})"
+      elif [[ "$pub_ui_version" == "n/a (DOWN)" ]]; then
+        top_level_version="UNAVAILABLE (public gateway fallback/inactive)"
+      else
+        top_level_version="${pub_ui_version} (public)"
+      fi
+      ;;
     *)
       if [[ "$pub_ui_version" == "n/a (DOWN)" ]]; then
         top_level_version="UNAVAILABLE (public gateway fallback/inactive)"
@@ -1121,7 +1243,13 @@ _print_ops_summary_live_header() {
     staging) ext_line="${BLUE}active → staging${NC}" ;;
     conflict) ext_line="${RED}CONFLICT (local + staging both on)${NC}" ;;
     orphan) ext_line="${YELLOW}ORPHAN tunnel${NC} (live public; stop needs the host that owns ngrok)" ;;
-    none) ext_line="${YELLOW}inactive${NC} (Cloudflare / holding page expected)" ;;
+    none)
+      if public_is_holding_page "$pub_code" "$gateway"; then
+        ext_line="${YELLOW}holding page${NC} (HTTP 503 · gateway=fallback)"
+      else
+        ext_line="${YELLOW}inactive${NC} (Cloudflare / holding page expected)"
+      fi
+      ;;
     *) ext_line="${DIM}unknown${NC}" ;;
   esac
 
@@ -1174,15 +1302,20 @@ _print_quick_targets_summary_impl() {
   loc_sb=$(get_http_code_quick "${LOCAL_SUPABASE_URL}" 1)
   validate_summary_log_step "HTTP · local UI, GraphQL, Supabase Kong"
 
-  if $IS_ON_STAGING; then
-    st_ui=$(get_http_code_quick "${STAGING_UI_URL}/" 1)
-    st_gql=$(get_http_code_quick "${STAGING_GRAPHQL_URL%/}" 1)
-    st_sb=$(get_http_code_quick "${STAGING_SUPABASE_URL}" 1)
-  else
-    st_ui=$(get_http_code_quick "${STAGING_UI_URL}/" 1)
-    st_gql=$(get_http_code_quick "${STAGING_GRAPHQL_URL%/}" 1)
-    st_sb=$(get_http_code_quick "${STAGING_SUPABASE_URL}" 1)
-  fi
+  # Staging LAN: 1s fail-fast when MiniPC is off-network (e.g. remote VPN).
+  # Parallel probes so three unreachable ports cost ~1s wall-clock, not ~3s.
+  local st_ui_f st_gql_f st_sb_f
+  st_ui_f=$(mktemp "${TMPDIR:-/tmp}/talia-st-ui.XXXXXX")
+  st_gql_f=$(mktemp "${TMPDIR:-/tmp}/talia-st-gql.XXXXXX")
+  st_sb_f=$(mktemp "${TMPDIR:-/tmp}/talia-st-sb.XXXXXX")
+  ( get_http_code_quick "${STAGING_UI_URL}/" 1 1 >"$st_ui_f" ) &
+  ( get_http_code_quick "${STAGING_GRAPHQL_URL%/}" 1 1 >"$st_gql_f" ) &
+  ( get_http_code_quick "${STAGING_SUPABASE_URL}" 1 1 >"$st_sb_f" ) &
+  wait || true
+  st_ui=$(cat "$st_ui_f" 2>/dev/null || echo 000)
+  st_gql=$(cat "$st_gql_f" 2>/dev/null || echo 000)
+  st_sb=$(cat "$st_sb_f" 2>/dev/null || echo 000)
+  rm -f "$st_ui_f" "$st_gql_f" "$st_sb_f"
   validate_summary_log_step "HTTP · staging UI, GraphQL, Kong"
 
   mvp_ui="000"
@@ -1208,16 +1341,14 @@ _print_quick_targets_summary_impl() {
   fi
 
   local pub_headers
-  pub_headers=$(curl -sS -I --connect-timeout 2 --max-time 2 "${PUBLIC_MAIN_URL}/" 2>/dev/null || true)
-  pub_code=$(echo "$pub_headers" | awk 'NR==1{print $2}')
-  gateway=$(echo "$pub_headers" | awk -F': ' 'tolower($1)=="x-taliahub-gateway"{gsub("\r","",$2); print $2; exit}')
-  [[ -z "$pub_code" ]] && pub_code="000"
-  [[ -z "$gateway" ]] && gateway="n/a"
+  probe_public_gateway_headers
+  pub_code="$PUBLIC_PROBE_CODE"
+  gateway="$PUBLIC_PROBE_GATEWAY"
   validate_summary_log_step "Public demo URL headers + X-Taliahub-Gateway"
 
   loc_ui_version=$(quick_ui_version_label "${LOCAL_UI_URL}" "${loc_ui}" "true")
   st_ui_version=$(quick_ui_version_label "${STAGING_UI_URL}" "${st_ui}" "false")
-  pub_ui_version=$(quick_ui_version_label "${PUBLIC_MAIN_URL}" "${pub_code}" "false")
+  pub_ui_version=$(public_ui_version_label "$presenter" "$pub_code" "$gateway")
   validate_summary_log_step "Deployed Talia UI version (meta / JSON / bundle per host)"
 
   local loc_hp st_hp pub_hp pub_gql pub_gql_prof
@@ -1258,6 +1389,15 @@ _print_quick_targets_summary_impl() {
     orphan)
       top_level_version="${pub_ui_version} (public tunnel live; not local/staging ngrok on this host)"
       ;;
+    none)
+      if public_is_holding_page "$pub_code" "$gateway"; then
+        top_level_version="HOLDING PAGE (Cloudflare fallback · HTTP ${pub_code})"
+      elif [[ "$pub_ui_version" == "n/a (DOWN)" ]]; then
+        top_level_version="UNAVAILABLE (public gateway fallback/inactive)"
+      else
+        top_level_version="${pub_ui_version} (public)"
+      fi
+      ;;
     *)
       if [[ "$pub_ui_version" == "n/a (DOWN)" ]]; then
         top_level_version="UNAVAILABLE (public gateway fallback/inactive)"
@@ -1272,7 +1412,13 @@ _print_quick_targets_summary_impl() {
     staging) ext_line="${BLUE}active → staging${NC}" ;;
     conflict) ext_line="${RED}CONFLICT (local + staging both on)${NC}" ;;
     orphan) ext_line="${YELLOW}ORPHAN tunnel${NC} (live public; stop needs the host that owns ngrok)" ;;
-    none) ext_line="${YELLOW}inactive${NC} (Cloudflare / holding page expected)" ;;
+    none)
+      if public_is_holding_page "$pub_code" "$gateway"; then
+        ext_line="${YELLOW}holding page${NC} (HTTP 503 · gateway=fallback)"
+      else
+        ext_line="${YELLOW}inactive${NC} (Cloudflare / holding page expected)"
+      fi
+      ;;
     *) ext_line="${DIM}unknown${NC}" ;;
   esac
 
@@ -1563,7 +1709,7 @@ print_menu() {
   echo -e "  ${GREEN}3)${NC} Start core services (local dev stack or Docker on staging / MVP)"
   echo -e "  ${GREEN}4)${NC} Stop core services (same scope as 3)"
   echo -e "  ${GREEN}5)${NC} Start external access — ${DIM}ngrok → ${PUBLIC_MAIN_URL} for local|staging only; type ENABLE_NGROK_EXTERNAL${NC}"
-  echo -e "  ${GREEN}6)${NC} Stop external access (local+staging ngrok; soft-fails if MiniPC SSH down)"
+  echo -e "  ${GREEN}6)${NC} Stop external access (local immediate; staging soft-fail; verify holding page)"
   echo ""
   echo -e "${BOLD}Deploy${NC}"
   echo ""
@@ -2458,22 +2604,23 @@ check_external_gateway() {
       status="DOWN"
       detail="no response"
     elif [[ "$gateway" == "fallback" ]]; then
-      status="DOWN"
+      status="HOLDING"
       detail="holding page"
-    elif [[ "$gateway" == "proxied" && ( "$code" == "200" || "$code" == "302" ) ]]; then
+    elif [[ "$gateway" == "proxied" && ( "$code" == "200" || "$code" == "302" || "$code" == "401" || "$code" == "403" ) ]]; then
       status="UP"
       detail="app served"
-    elif [[ "$code" == "200" || "$code" == "302" ]]; then
+    elif [[ "$code" == "200" || "$code" == "302" || "$code" == "401" || "$code" == "403" ]]; then
       status="UP"
-      detail="app served"
+      detail="app served (auth challenge OK)"
     elif [[ "$code" == "503" ]]; then
-      status="DOWN"
+      status="HOLDING"
       detail="holding page"
     fi
 
     local status_color="$YELLOW"
     [[ "$status" == "UP" ]] && status_color="$GREEN"
     [[ "$status" == "DOWN" ]] && status_color="$RED"
+    [[ "$status" == "HOLDING" ]] && status_color="$YELLOW"
 
     local details=""
     details="$detail"
@@ -2486,6 +2633,7 @@ check_external_gateway() {
   echo -e "${DIM}Next steps:${NC}"
   echo -e "  ${DIM}- If DOWN but you expect UP: start services → External gateway.${NC}"
   echo -e "  ${DIM}- If still DOWN: check UI on localhost:5173 and ngrok status.${NC}"
+  echo -e "  ${DIM}- Holding page = HTTP 503 + X-TaliaHub-Gateway: fallback (expected after external-off).${NC}"
 }
 
 check_external_gateway_quick() {
@@ -2503,22 +2651,23 @@ check_external_gateway_quick() {
       status="DOWN"
       detail="no response"
     elif [[ "$gateway" == "fallback" ]]; then
-      status="DOWN"
+      status="HOLDING"
       detail="holding page"
-    elif [[ "$gateway" == "proxied" && ( "$code" == "200" || "$code" == "302" ) ]]; then
+    elif [[ "$gateway" == "proxied" && ( "$code" == "200" || "$code" == "302" || "$code" == "401" || "$code" == "403" ) ]]; then
       status="UP"
       detail="app served"
-    elif [[ "$code" == "200" || "$code" == "302" ]]; then
+    elif [[ "$code" == "200" || "$code" == "302" || "$code" == "401" || "$code" == "403" ]]; then
       status="UP"
-      detail="app served"
+      detail="app served (auth challenge OK)"
     elif [[ "$code" == "503" ]]; then
-      status="DOWN"
+      status="HOLDING"
       detail="holding page"
     fi
     local status_color="$YELLOW"
     [[ "$status" == "UP" ]] && status_color="$GREEN"
     [[ "$status" == "DOWN" ]] && status_color="$RED"
-    printf "  %-36s  ${BOLD}%b%-6s${NC}  %s  gateway=%s\n" "$url" "$status_color" "$status" "$detail" "${gateway:-n/a}"
+    [[ "$status" == "HOLDING" ]] && status_color="$YELLOW"
+    printf "  %-36s  ${BOLD}%b%-8s${NC}  %s  gateway=%s\n" "$url" "$status_color" "$status" "$detail" "${gateway:-n/a}"
   done
   echo ""
 }
@@ -2581,18 +2730,18 @@ stop_ngrok_staging_remote() {
     return $?
   fi
   # Soft-fail + short SSH probe: unreachable MiniPC must not abort external-off / local external-on.
-  local prev_attempts prev_retries
-  prev_attempts="${STAGING_SSH_READY_ATTEMPTS}"
-  prev_retries="${STAGING_REMOTE_CMD_RETRIES}"
-  STAGING_SSH_READY_ATTEMPTS=1
-  STAGING_REMOTE_CMD_RETRIES=1
-  if run_staging_ssh_command "sudo systemctl stop ${STAGING_NGROK_SERVICE}" "Stop ngrok on staging (systemd)" "20"; then
-    STAGING_SSH_READY_ATTEMPTS="$prev_attempts"
-    STAGING_REMOTE_CMD_RETRIES="$prev_retries"
+  # Bypass check_staging_ssh_ready (multi-attempt) — one 2s probe is enough for remote/VPN.
+  local probe
+  probe=$(ssh_staging_with_timeout "${STAGING_STATUS_SSH_TIMEOUT_SEC}" "echo ok" | tr -d '\r' | awk 'NF{print; exit}')
+  if [[ "$probe" != "ok" ]]; then
+    echo -e "  ${YELLOW}Staging ngrok stop skipped — MiniPC SSH unreachable (${STAGING_SSH_TARGET}).${NC}"
+    echo -e "  ${DIM}If MiniPC still owns ${LOCAL_NGROK_DOMAIN}, ${PUBLIC_MAIN_URL} stays live until that tunnel stops.${NC}"
     return 0
   fi
-  STAGING_SSH_READY_ATTEMPTS="$prev_attempts"
-  STAGING_REMOTE_CMD_RETRIES="$prev_retries"
+  if ssh_staging_with_timeout 8 "sudo -n systemctl stop ${STAGING_NGROK_SERVICE}" >/dev/null 2>&1; then
+    echo -e "  ${GREEN}✓${NC} Stopped ngrok on staging (systemd)"
+    return 0
+  fi
   echo -e "  ${YELLOW}Staging ngrok stop skipped/failed — SSH or remote error.${NC}"
   echo -e "  ${DIM}If MiniPC still owns ${LOCAL_NGROK_DOMAIN}, ${PUBLIC_MAIN_URL} stays live until that tunnel stops.${NC}"
   return 0
@@ -2892,22 +3041,38 @@ switch_target() {
 
 stop_external_everywhere() {
   echo -e "${CYAN}Stopping external access everywhere (local + staging)...${NC}"
+  # Local first — immediate; do not wait on MiniPC.
   stop_target_external "local" || true
   stop_target_external "staging" || true
   echo ""
-  local remembered_target pub_code
+  local remembered_target pub_code gateway
   remembered_target=$(get_remembered_target)
-  echo -e "${BOLD}Local/staging ngrok stop attempted.${NC}"
+  echo -e "${BOLD}Local ngrok stop completed; staging stop attempted (soft-fail if unreachable).${NC}"
   echo -e "${DIM}Remembered working target preserved: ${remembered_target:-none}${NC}"
-  if public_tunnel_appears_live; then
-    pub_code=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 2 "${PUBLIC_MAIN_URL}/" 2>/dev/null || echo "000")
-    echo -e "${YELLOW}${PUBLIC_MAIN_URL} is still UP (HTTP ${pub_code}).${NC}"
-    echo -e "${DIM}An orphan tunnel still holds the reserved domain (often MiniPC ngrok while SSH is down).${NC}"
-    echo -e "${DIM}Hint: $(infer_public_backend_hint)${NC}"
-    echo -e "${DIM}Fix: reach staging LAN/VPN and re-run external-off, or stop ngrok-taliahub on the MiniPC.${NC}"
+
+  # Brief settle so Cloudflare sees origin down (worker then serves holding page).
+  sleep 1
+  probe_public_gateway_headers
+  pub_code="$PUBLIC_PROBE_CODE"
+  gateway="$PUBLIC_PROBE_GATEWAY"
+
+  if public_is_holding_page "$pub_code" "$gateway"; then
+    echo -e "${BOLD}External interface status:${NC} ${YELLOW}OFF (HOLDING)${NC}"
+    echo -e "${DIM}${PUBLIC_MAIN_URL} → Cloudflare holding page (HTTP ${pub_code}, X-TaliaHub-Gateway: ${gateway}).${NC}"
+    echo -e "${DIM}Expected when all ngrok endpoints for the reserved domain are stopped.${NC}"
     return 0
   fi
-  echo -e "${BOLD}External interface status:${NC} ${YELLOW}OFFLINE${NC} (Cloudflare holding page expected)"
+
+  if public_tunnel_appears_live; then
+    echo -e "${YELLOW}${PUBLIC_MAIN_URL} is still UP (HTTP ${pub_code}, gateway=${gateway}).${NC}"
+    echo -e "${DIM}An orphan tunnel still holds the reserved domain (often MiniPC ngrok while SSH is down).${NC}"
+    echo -e "${DIM}Hint: $(infer_public_backend_hint)${NC}"
+    echo -e "${DIM}Fix: stop the endpoint in the ngrok dashboard, or reach staging LAN/VPN and re-run external-off.${NC}"
+    return 0
+  fi
+
+  echo -e "${BOLD}External interface status:${NC} ${YELLOW}OFFLINE${NC} (HTTP ${pub_code}, gateway=${gateway})"
+  echo -e "${DIM}No live tunnel detected; holding page expected (HTTP 503 + X-TaliaHub-Gateway: fallback).${NC}"
 }
 
 enable_remembered_target_external() {
@@ -3562,7 +3727,7 @@ Talia validate — quick overview by default; heavy checks only from the menu or
   $0 stop-core                    stop core (ngrok unchanged)
   $0 db-disk                      Postgres size + top 5 public tables for current target
   $0 external-on                  ngrok → local|staging working target only (not MVP; TTY: ENABLE_NGROK_EXTERNAL)
-  $0 external-off                 stop local+staging ngrok (soft-fail if staging SSH down; report orphan if public still up)
+  $0 external-off                 stop local ngrok immediately; soft-fail MiniPC; expect HTTP 503 holding page (or report ORPHAN)
   $0 deploy-staging               local-sync deploy to staging (default UI paths; full stack only if you pick it)
   $0 deploy-mvp                   deploy to MVP (same; wide modes require explicit flags inside the script)
   $0 deploy-themes-db             upsert themes + focus rows from local Supabase → staging and/or MVP (no code deploy)

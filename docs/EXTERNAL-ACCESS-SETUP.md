@@ -80,7 +80,15 @@ To stop public demo from this laptop:
 ./scripts/validate external-off
 ```
 
-If staging MiniPC SSH is unreachable, `external-off` still stops **local** ngrok and exits 0, but may report an **ORPHAN** tunnel if the MiniPC still holds the reserved domain. Reach the MiniPC (LAN/VPN) and stop `ngrok-taliahub` there, then re-run `external-off`.
+`external-off` behavior:
+
+1. Stops **local** ngrok immediately (`pkill` for the reserved domain).
+2. Attempts to stop staging `ngrok-taliahub` over SSH with a **2s** connect timeout; soft-fails if MiniPC is unreachable (does not hang).
+3. Re-probes `https://taliahub.com`:
+   - **Holding page (success):** HTTP **503** and `X-TaliaHub-Gateway: fallback` → status `OFF (HOLDING)`.
+   - **Still live:** HTTP 200/302/401/403 or `gateway=proxied` → **ORPHAN** (another host still owns the reserved domain; stop that tunnel in the ngrok dashboard or on MiniPC, then re-run).
+
+If staging MiniPC SSH is unreachable, local stop still completes; reclaim an orphan by stopping the endpoint in the ngrok dashboard, then `external-on` on the laptop when ready.
 
 ## Local workflow
 
@@ -107,9 +115,11 @@ curl -sI https://celestyal.taliahub.com
 ./scripts/validate status   # shows working target vs public presenter
 ```
 
-- **ngrok running** → HTTP 200/302 (or 401 if basic-auth challenge)
-- **ngrok stopped** → HTTP 503 (holding page)
+- **ngrok running** → HTTP 200/302 (or **401** if basic-auth challenge) and `X-TaliaHub-Gateway: proxied`
+- **ngrok stopped** → HTTP **503** + `X-TaliaHub-Gateway: fallback` (holding page)
+- **`validate status` Public row** must agree with the External line (e.g. `vX.Y.Z (LOCAL)` when local holds the domain; `holding page` when offline — not `n/a (DOWN)` while External says UP)
 - **MVP check** → curl `http://$MVP_UI_HOST:5173/` (not taliahub.com)
+- Remote/VPN: staging LAN/SSH probes use **1–2s** timeouts so MiniPC-down fails fast
 
 ## Notes
 

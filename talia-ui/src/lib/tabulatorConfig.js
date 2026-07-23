@@ -10,13 +10,17 @@ import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import { formatDayMon } from './dateFormat';
 import { normalizeColumnHeaderAlignment } from './tabulatorColumnAlignment';
 import { observeTabulatorFieldTerminology, resolveGlobalTabulatorLabel } from './tabulatorColumnLabelDictionary';
+import {
+  DASHBOARD_DETAILS_VISIBILITY_EVENT,
+  DASHBOARD_GLOBAL_CONFIG_EVENT,
+  DASHBOARD_TABLE_LAYOUT_EVENT,
+  DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT,
+  REPORT_ACTIVE_PANEL_EVENT,
+} from '../components/dockview/eventConstants';
 
 // Import Tabulator midnight theme CSS
 import 'tabulator-tables/dist/css/tabulator_midnight.min.css';
 
-const DASHBOARD_TABLE_LAYOUT_EVENT = 'talia:dashboard.tableLayout';
-const DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT = 'talia:dashboard.tabulatorFilterVisibility';
-const DASHBOARD_DETAILS_VISIBILITY_EVENT = 'talia:dashboard.detailsVisibility';
 const TABLE_LAYOUT_STORAGE_KEY = 'taliaTableLayoutMode';
 const TABLE_LAYOUT_BEST = 'best';
 const TABLE_LAYOUT_WIDTH = 'width';
@@ -28,6 +32,17 @@ let wrappedTabulatorClass = null;
 const missingTerminologyWarnings = new Set();
 
 const isBrowser = () => typeof window !== 'undefined';
+
+const isTableHostVisible = (table) => {
+  const el = table?.element;
+  if (!el || typeof el.getBoundingClientRect !== 'function') return false;
+  try {
+    const rect = el.getBoundingClientRect();
+    return rect.width > 1 && rect.height > 1;
+  } catch {
+    return false;
+  }
+};
 
 const stripFixedWidths = (columns = []) => {
   if (!Array.isArray(columns)) return columns;
@@ -195,6 +210,12 @@ export const scheduleTabulatorLayoutRefresh = (table) => {
     meta.pendingLayoutRefresh = true;
     return;
   }
+  // Never measure fit while the host is hidden (inactive Dockview tab).
+  if (!isTableHostVisible(table)) {
+    if (meta) meta.pendingLayoutRefresh = true;
+    return;
+  }
+  if (meta) meta.pendingLayoutRefresh = false;
   refreshTableLayout(table);
 };
 
@@ -207,8 +228,13 @@ const bindTableDataLayoutRefresh = (table) => {
   table.on?.('dataLoaded', () => scheduleTabulatorLayoutRefresh(table));
 };
 
-const applyLayoutModeToTable = (table) => {
+const applyLayoutModeToTable = (table, { force = false } = {}) => {
   if (!table) return;
+  if (!force && !isTableHostVisible(table)) {
+    const meta = tableMeta.get(table);
+    if (meta) meta.pendingLayoutRefresh = true;
+    return;
+  }
   const mode = getGlobalTableLayoutMode();
   const nextLayout = mode === TABLE_LAYOUT_DATA
     ? 'fitDataTable'
@@ -220,9 +246,7 @@ const applyLayoutModeToTable = (table) => {
     const ready = meta?.isBuilt === true || table?.initialized === true;
     if (meta) {
       meta.lastAppliedMode = mode;
-      if (ready) {
-        meta.isBuilt = true;
-      }
+      if (ready) meta.isBuilt = true;
     }
     if (typeof table.setOption === 'function') {
       table.setOption('layout', nextLayout);
@@ -232,27 +256,55 @@ const applyLayoutModeToTable = (table) => {
     if (!ready) {
       return;
     }
-    // Tabulator keeps an active layout mode in module state; re-init after mode option change.
     table.modules?.layout?.initialize?.();
     refreshTableLayout(table);
+    if (meta) meta.pendingLayoutRefresh = false;
   } catch {
     // no-op
   }
 };
 
+/** Re-apply current global fit to every table that is currently visible. */
+export const flushVisibleTabulatorLayouts = () => {
+  tableInstances.forEach((table) => {
+    if (!isTableHostVisible(table)) {
+      const meta = tableMeta.get(table);
+      if (meta) meta.pendingLayoutRefresh = true;
+      return;
+    }
+    applyLayoutModeToTable(table, { force: true });
+  });
+};
+
 const ensureLayoutListenerBound = () => {
   if (!isBrowser() || hasBoundLayoutListener) return;
   hasBoundLayoutListener = true;
-  const applyAllTables = () => {
-    tableInstances.forEach((table) => applyLayoutModeToTable(table));
-  };
+  const applyAllVisible = () => flushVisibleTabulatorLayouts();
+
+  window.addEventListener(DASHBOARD_GLOBAL_CONFIG_EVENT, (event) => {
+    const mode = event?.detail?.tableLayoutMode;
+    if (mode) setGlobalTableLayoutMode(mode);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(applyAllVisible);
+    });
+  });
+
   window.addEventListener(DASHBOARD_TABLE_LAYOUT_EVENT, (event) => {
     const mode = event?.detail?.mode;
     setGlobalTableLayoutMode(mode);
-    applyAllTables();
+    applyAllVisible();
   });
+
+  window.addEventListener(REPORT_ACTIVE_PANEL_EVENT, () => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(applyAllVisible);
+    });
+  });
+
   window.addEventListener(DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT, () => {
-    tableInstances.forEach((table) => refreshTableLayout(table));
+    window.requestAnimationFrame(() => {
+      tableInstances.forEach((table) => scheduleTabulatorLayoutRefresh(table));
+    });
   });
   window.addEventListener(DASHBOARD_DETAILS_VISIBILITY_EVENT, () => {
     window.requestAnimationFrame(() => {
@@ -260,11 +312,11 @@ const ensureLayoutListenerBound = () => {
     });
   });
   window.addEventListener('resize', () => {
-    applyAllTables();
+    applyAllVisible();
   });
 };
 
-const registerTableInstance = (table, baseColumns = null) => {
+const registerTableInstance = (table, baseColumns = null, ids = {}) => {
   if (!table) return;
   if (!tableMeta.has(table)) {
     tableMeta.set(table, {
@@ -273,7 +325,13 @@ const registerTableInstance = (table, baseColumns = null) => {
       isBuilt: false,
       pendingLayoutRefresh: false,
       dataLayoutBound: false,
+      panelInstanceId: ids.panelInstanceId || null,
+      panelComponentId: ids.panelComponentId || null,
     });
+  } else {
+    const meta = tableMeta.get(table);
+    if (ids.panelInstanceId) meta.panelInstanceId = ids.panelInstanceId;
+    if (ids.panelComponentId) meta.panelComponentId = ids.panelComponentId;
   }
   tableInstances.add(table);
 };
@@ -290,11 +348,15 @@ const getWrappedTabulatorClass = () => {
         ? { ...incomingOptions }
         : getTabulatorOptions(incomingOptions);
       const baseColumns = processed.__taliaBaseColumns || incomingOptions.columns || null;
+      const panelInstanceId = processed.__taliaPanelInstanceId || null;
+      const panelComponentId = processed.__taliaPanelComponentId || null;
       delete processed.__taliaProcessedOptions;
       delete processed.__taliaBaseColumns;
+      delete processed.__taliaPanelInstanceId;
+      delete processed.__taliaPanelComponentId;
       super(element, processed);
 
-      registerTableInstance(this, baseColumns);
+      registerTableInstance(this, baseColumns, { panelInstanceId, panelComponentId });
       bindTableDataLayoutRefresh(this);
       const meta = tableMeta.get(this);
       if (meta && this.initialized === true) {
@@ -307,12 +369,8 @@ const getWrappedTabulatorClass = () => {
         const currentMeta = tableMeta.get(this);
         if (currentMeta) {
           currentMeta.isBuilt = true;
-          if (currentMeta.pendingLayoutRefresh) {
-            currentMeta.pendingLayoutRefresh = false;
-            refreshTableLayout(this);
-          }
         }
-        applyLayoutModeToTable(this);
+        applyLayoutModeToTable(this, { force: isTableHostVisible(this) });
         scheduleTabulatorLayoutRefresh(this);
       });
       this.on?.('groupVisibilityChanged', () => {
@@ -369,11 +427,15 @@ export const getTabulatorOptions = (options = {}) => {
   const compactColumns = titledColumns ? applyGlobalCompactFormatters(titledColumns) : null;
   const alignedColumns = compactColumns ? normalizeColumnHeaderAlignment(compactColumns) : null;
   const sourceColumns = ignoreGlobalLayout ? alignedColumns : stripFixedWidths(alignedColumns);
+  const panelInstanceId = typeof options.panelInstanceId === 'string' && options.panelInstanceId.trim()
+    ? options.panelInstanceId.trim()
+    : null;
 
   const {
     enforceGlobalLayout: _enforceGlobalLayout,
     layout: _layout,
     panelComponentId: _panelComponentId,
+    panelInstanceId: _panelInstanceId,
     ...restOptions
   } = options;
 
@@ -384,6 +446,8 @@ export const getTabulatorOptions = (options = {}) => {
     ...(sourceColumns ? { columns: sourceColumns } : {}),
     __taliaProcessedOptions: true,
     __taliaBaseColumns: sourceColumns ? [...sourceColumns] : null,
+    __taliaPanelInstanceId: panelInstanceId,
+    __taliaPanelComponentId: panelComponentId || null,
   };
 };
 

@@ -16,6 +16,7 @@ import {
   setGlobalReportDetailsVisible,
   clearPanelReportDetailsOverrides,
 } from "../../services/panelDetailsState";
+import { publishDashboardGlobalConfig } from "../../services/dashboardUiState";
 import TaliaTooltip from "../shared/TaliaTooltip";
 
 const FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderFiltersVisible';
@@ -89,6 +90,8 @@ function DashboardSidebar({
     setGameSoundEnabled,
     defaultDisplayCurrency,
     setDefaultDisplayCurrency,
+    tableLayoutMode: themeTableLayoutMode,
+    setTableLayoutMode: setThemeTableLayoutMode,
     appearanceDbLoaded,
     appearanceProfiles,
     activeAppearanceProfileId,
@@ -263,27 +266,17 @@ function DashboardSidebar({
     setGlobalDetailsVisible(checked);
     setGlobalReportDetailsVisible(checked);
     clearPanelReportDetailsOverrides();
-    window.dispatchEvent(new CustomEvent(DASHBOARD_DETAILS_VISIBILITY_EVENT, {
-      detail: {
-        scope: 'all',
-        visible: checked,
-        action: 'set',
-      },
-    }));
+    publishDashboardGlobalConfig({ detailsVisible: checked });
   };
 
   const handleTableLayoutModeChange = (nextMode) => {
     if (!TABLE_LAYOUT_MODES.includes(nextMode)) return;
     setGlobalTableLayoutMode(nextMode);
-    window.__taliaTableLayoutMode = nextMode;
-    try {
-      window.localStorage?.setItem?.(TABLE_LAYOUT_STORAGE_KEY, nextMode);
-    } catch {
-      // ignore
+    if (typeof setThemeTableLayoutMode === 'function') {
+      setThemeTableLayoutMode(nextMode);
+    } else {
+      publishDashboardGlobalConfig({ tableLayoutMode: nextMode });
     }
-    window.dispatchEvent(new CustomEvent(DASHBOARD_TABLE_LAYOUT_EVENT, {
-      detail: { mode: nextMode },
-    }));
   };
 
   const reportGroups = React.useMemo(() => {

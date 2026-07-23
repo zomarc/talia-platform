@@ -23,6 +23,8 @@ export const DASHBOARD_SELECT_FOCUS_EVENT = 'talia:dashboard.selectFocus';
 export const DASHBOARD_FOCUS_STATE_EVENT = 'talia:dashboard.focusState';
 export const DASHBOARD_OPEN_PANEL_EVENT = 'talia:dashboard.openPanel';
 export const DASHBOARD_TABLE_LAYOUT_EVENT = 'talia:dashboard.tableLayout';
+/** Unified dashboard UI + criteria snapshot — components ALWAYS conform */
+export const DASHBOARD_GLOBAL_CONFIG_EVENT = 'talia:dashboard.globalConfig';
 export const DATA_MANAGEMENT_STATE_EVENT = 'talia:dataManagement.state';
 export const DATA_MANAGEMENT_SET_RANGE_EVENT = 'talia:dataManagement.setRange';
 export const DATA_MANAGEMENT_SYNC_ALL_EVENT = 'talia:dataManagement.syncAll';

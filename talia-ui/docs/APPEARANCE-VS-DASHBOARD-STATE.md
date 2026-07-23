@@ -32,13 +32,23 @@ Legacy code name **`focus-panels/`** = **registry report components** (implement
 
 ---
 
-## 4. Global criteria (per user → all reports via bus)
+## 4. Global criteria and dashboard globalConfig (per user → all reports via bus)
 
 - **Global criteria** are **set per user** (saved with user profile / dashboard state, e.g. `StatusBar` + `saveUserProfileState` patch `globalCriteria`, and `window.__taliaGlobalCriteria`).
 
-- They **must propagate to all reports** (and any subscriber) via the **message bus**: event **`talia:dashboard.globalCriteria`**, detail + `window.__taliaGlobalCriteria` snapshot — emitted from **`StatusBar.jsx`** (Date, Dur, Active, Wide, …). Reports and hooks listen; they do **not** infer filters from theme alone.
+- They **must propagate to all reports** (and any subscriber) via the **message bus**.
 
-- **Separation:** the **appearance** of controls (sidebar / theme) is **separate** from **which criteria values are active** for data. Some values may appear in both places for UX (e.g. currency shown in header **and** mirrored on the criteria payload); the **contract for “what filters apply to data right now”** is still the **bus payload**, not `ThemeContext` by itself.
+- **Unified UI + criteria channel:** `talia:dashboard.globalConfig` (`publishDashboardGlobalConfig` / `window.__taliaDashboardGlobalConfig` in `services/dashboardUiState.js`). Payload includes:
+
+  - `tableLayoutMode` (`best` | `width` | `data`)
+  - chrome toggles: `filtersVisible`, `tabulatorFiltersVisible`, `detailsVisible`, `titlesVisible`, `calloutsVisible`, `actionsVisible`, `controlsVisible`
+  - `viewScope`, `criteria`, `activePanelId`
+
+- Components and framework listeners (**especially Tabulator fit** in `tabulatorConfig.js`) **ALWAYS conform** to the latest `globalConfig`. Fit is re-applied when a Dockview tab becomes active (`talia:report.activePanelChanged`) so hidden-panel refreshes cannot poison column widths.
+
+- Legacy aliases still fire from the same publish for compatibility: `talia:dashboard.globalCriteria`, `talia:dashboard.tableLayout`, filter/details/viewScope visibility events.
+
+- **Separation:** appearance tokens (ThemeContext CSS variables) stay presentation-only. **Which filters / fit / chrome toggles apply right now** is the **bus payload**, not Theme by itself.
 
 ---
 
@@ -50,7 +60,7 @@ Legacy code name **`focus-panels/`** = **registry report components** (implement
 | **Focus** | Layout of panels/components = work surface | `focusesByRole`, `GraphQLFocusService`, Dockview, `__taliaFocusState` |
 | **Theme / style** | Presentation / appearance only | `theme.css`, `ThemeContext`, sidebar, `appearanceSettings` |
 | **Role → reports/focuses** | Configurable access list | Existing focus / registry / role configuration |
-| **Global criteria** | Per-user filter state → **all** reports via bus | `talia:dashboard.globalCriteria`, `__taliaGlobalCriteria`, `StatusBar` |
+| **Global criteria / UI config** | Per-user filters + chrome + fit → **all** reports via bus | `talia:dashboard.globalConfig`, `__taliaDashboardGlobalConfig`, aliases for criteria/layout |
 
 Optional refactors later: rename `ThemeContext` → `AppearanceContext`, rename `focus-panels/*` → `report-panels/*`. This document is the behavioral contract regardless of filenames.
 

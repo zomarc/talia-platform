@@ -1,6 +1,13 @@
+/**
+ * Dashboard UI config bus — single snapshot for layout fit, chrome toggles,
+ * view scope, and global criteria. Components conform via
+ * `talia:dashboard.globalConfig` (legacy events re-dispatched as aliases).
+ */
+
 import {
   DASHBOARD_DETAILS_VISIBILITY_EVENT,
   DASHBOARD_FILTER_VISIBILITY_EVENT,
+  DASHBOARD_GLOBAL_CONFIG_EVENT,
   DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT,
   DASHBOARD_TABLE_LAYOUT_EVENT,
 } from '../components/dockview/eventConstants';
@@ -15,69 +22,186 @@ const TABLE_LAYOUT_MODES = ['best', 'width', 'data'];
 
 const getBoolean = (value, fallback) => (typeof value === 'boolean' ? value : fallback);
 
-export const enforceDashboardUiState = ({ dispatchEvents = true } = {}) => {
-  if (typeof window === 'undefined') return;
-
-  const root = document.documentElement;
-  const detailsVisible = getGlobalReportDetailsVisible();
-
-  let filtersVisible = getBoolean(window.__taliaFiltersVisible, true);
+const readStoredBoolean = (storageKey, inMemory, fallback = true) => {
+  let value = getBoolean(inMemory, fallback);
   try {
-    const saved = window.localStorage?.getItem?.(FILTERS_VISIBILITY_STORAGE_KEY);
-    if (saved === '0' || saved === 'false') filtersVisible = false;
-    if (saved === '1' || saved === 'true') filtersVisible = true;
+    const saved = window.localStorage?.getItem?.(storageKey);
+    if (saved === '0' || saved === 'false') value = false;
+    if (saved === '1' || saved === 'true') value = true;
   } catch {
     // ignore storage failures
   }
-  window.__taliaFiltersVisible = filtersVisible;
-  root.classList.toggle('talia-filters-hidden', filtersVisible === false);
+  return value;
+};
 
-  let tabulatorFiltersVisible = getBoolean(window.__taliaTabulatorFiltersVisible, true);
-  try {
-    const saved = window.localStorage?.getItem?.(TABULATOR_FILTERS_VISIBILITY_STORAGE_KEY);
-    if (saved === '0' || saved === 'false') tabulatorFiltersVisible = false;
-    if (saved === '1' || saved === 'true') tabulatorFiltersVisible = true;
-  } catch {
-    // ignore storage failures
+const normalizeTableLayoutMode = (mode) => (
+  TABLE_LAYOUT_MODES.includes(mode) ? mode : 'best'
+);
+
+/**
+ * Build the current dashboard global config from window / storage / DOM flags.
+ */
+export const getDashboardGlobalConfig = () => {
+  if (typeof window === 'undefined') {
+    return {
+      tableLayoutMode: 'best',
+      filtersVisible: true,
+      tabulatorFiltersVisible: true,
+      detailsVisible: true,
+      titlesVisible: true,
+      calloutsVisible: false,
+      actionsVisible: true,
+      controlsVisible: true,
+      viewScope: 'local',
+      criteria: null,
+      activePanelId: null,
+      timestamp: new Date().toISOString(),
+    };
   }
-  window.__taliaTabulatorFiltersVisible = tabulatorFiltersVisible;
-  root.classList.toggle('talia-tabulator-filters-hidden', tabulatorFiltersVisible === false);
 
-  let tableLayoutMode = TABLE_LAYOUT_MODES.includes(window.__taliaTableLayoutMode)
-    ? window.__taliaTableLayoutMode
-    : 'best';
+  const filtersVisible = readStoredBoolean(
+    FILTERS_VISIBILITY_STORAGE_KEY,
+    window.__taliaFiltersVisible,
+    true
+  );
+  const tabulatorFiltersVisible = readStoredBoolean(
+    TABULATOR_FILTERS_VISIBILITY_STORAGE_KEY,
+    window.__taliaTabulatorFiltersVisible,
+    true
+  );
+
+  let tableLayoutMode = normalizeTableLayoutMode(window.__taliaTableLayoutMode);
   try {
     const saved = window.localStorage?.getItem?.(TABLE_LAYOUT_STORAGE_KEY);
     if (TABLE_LAYOUT_MODES.includes(saved)) tableLayoutMode = saved;
   } catch {
-    // ignore storage failures
+    // ignore
   }
-  window.__taliaTableLayoutMode = tableLayoutMode;
 
-  const criteria = window.__taliaGlobalCriteria || null;
-  const viewScope = window.__taliaViewScope === 'wide' ? 'wide' : 'local';
+  const criteria = (
+    window.__taliaGlobalCriteria && typeof window.__taliaGlobalCriteria === 'object'
+      ? { ...window.__taliaGlobalCriteria }
+      : null
+  );
 
-  if (!dispatchEvents) return;
+  return {
+    tableLayoutMode,
+    filtersVisible,
+    tabulatorFiltersVisible,
+    detailsVisible: getGlobalReportDetailsVisible(),
+    titlesVisible: window.__taliaPanelTitlesVisible !== false,
+    calloutsVisible: window.__taliaCalloutsVisible === true,
+    actionsVisible: window.__taliaActionsVisible !== false,
+    controlsVisible: window.__taliaControlsVisible === true,
+    viewScope: window.__taliaViewScope === 'wide' ? 'wide' : 'local',
+    criteria,
+    activePanelId: window.__taliaActivePanelId || null,
+    timestamp: new Date().toISOString(),
+  };
+};
 
+const applyChromeClasses = (config) => {
+  const root = document.documentElement;
+  root.classList.toggle('talia-filters-hidden', config.filtersVisible === false);
+  root.classList.toggle('talia-tabulator-filters-hidden', config.tabulatorFiltersVisible === false);
+  root.classList.toggle('talia-panel-titles-hidden', config.titlesVisible === false);
+  root.classList.toggle('talia-callouts-hidden', config.calloutsVisible === false);
+  root.classList.toggle('talia-actions-hidden', config.actionsVisible === false);
+  root.classList.toggle('talia-controls-hidden', config.controlsVisible !== true);
+};
+
+const writeWindowSnapshots = (config) => {
+  window.__taliaDashboardGlobalConfig = config;
+  window.__taliaFiltersVisible = config.filtersVisible;
+  window.__taliaTabulatorFiltersVisible = config.tabulatorFiltersVisible;
+  window.__taliaTableLayoutMode = config.tableLayoutMode;
+  window.__taliaPanelTitlesVisible = config.titlesVisible;
+  window.__taliaCalloutsVisible = config.calloutsVisible;
+  window.__taliaActionsVisible = config.actionsVisible;
+  window.__taliaControlsVisible = config.controlsVisible;
+  window.__taliaViewScope = config.viewScope;
+  if (config.criteria && typeof config.criteria === 'object') {
+    window.__taliaGlobalCriteria = config.criteria;
+  }
+  try {
+    window.localStorage?.setItem?.(FILTERS_VISIBILITY_STORAGE_KEY, config.filtersVisible ? '1' : '0');
+    window.localStorage?.setItem?.(
+      TABULATOR_FILTERS_VISIBILITY_STORAGE_KEY,
+      config.tabulatorFiltersVisible ? '1' : '0'
+    );
+    window.localStorage?.setItem?.(TABLE_LAYOUT_STORAGE_KEY, config.tableLayoutMode);
+  } catch {
+    // ignore
+  }
+};
+
+const dispatchLegacyAliases = (config) => {
   window.dispatchEvent(new CustomEvent(DASHBOARD_FILTER_VISIBILITY_EVENT, {
-    detail: { visible: filtersVisible },
+    detail: { visible: config.filtersVisible },
   }));
   window.dispatchEvent(new CustomEvent(DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT, {
-    detail: { visible: tabulatorFiltersVisible },
+    detail: { visible: config.tabulatorFiltersVisible },
   }));
   window.dispatchEvent(new CustomEvent(DASHBOARD_DETAILS_VISIBILITY_EVENT, {
-    detail: { scope: 'all', visible: detailsVisible, action: 'set' },
+    detail: { scope: 'all', visible: config.detailsVisible, action: 'set' },
   }));
   window.dispatchEvent(new CustomEvent(DASHBOARD_TABLE_LAYOUT_EVENT, {
-    detail: { mode: tableLayoutMode },
+    detail: { mode: config.tableLayoutMode },
   }));
   window.dispatchEvent(new CustomEvent(DASHBOARD_VIEW_SCOPE_EVENT, {
-    detail: { scope: viewScope },
+    detail: { scope: config.viewScope },
   }));
-  if (criteria && typeof criteria === 'object') {
+  if (config.criteria && typeof config.criteria === 'object') {
     window.dispatchEvent(new CustomEvent(DASHBOARD_GLOBAL_CRITERIA_EVENT, {
-      detail: criteria,
+      detail: config.criteria,
     }));
   }
 };
 
+/**
+ * Merge optional partial updates, persist snapshot, apply chrome, and publish
+ * `talia:dashboard.globalConfig` (+ legacy aliases for existing listeners).
+ */
+export const publishDashboardGlobalConfig = (partial = {}, { dispatchLegacy = true } = {}) => {
+  if (typeof window === 'undefined') return null;
+
+  const base = getDashboardGlobalConfig();
+  const next = {
+    ...base,
+    ...(partial && typeof partial === 'object' ? partial : {}),
+    tableLayoutMode: normalizeTableLayoutMode(
+      partial?.tableLayoutMode ?? base.tableLayoutMode
+    ),
+    timestamp: new Date().toISOString(),
+  };
+  if (partial && Object.prototype.hasOwnProperty.call(partial, 'criteria')) {
+    next.criteria = partial.criteria && typeof partial.criteria === 'object'
+      ? { ...partial.criteria }
+      : null;
+  }
+
+  writeWindowSnapshots(next);
+  applyChromeClasses(next);
+
+  window.dispatchEvent(new CustomEvent(DASHBOARD_GLOBAL_CONFIG_EVENT, {
+    detail: next,
+  }));
+
+  if (dispatchLegacy) {
+    dispatchLegacyAliases(next);
+  }
+
+  return next;
+};
+
+/** @deprecated Prefer publishDashboardGlobalConfig */
+export const enforceDashboardUiState = ({ dispatchEvents = true } = {}) => {
+  if (typeof window === 'undefined') return;
+  if (!dispatchEvents) {
+    const config = getDashboardGlobalConfig();
+    writeWindowSnapshots(config);
+    applyChromeClasses(config);
+    return;
+  }
+  publishDashboardGlobalConfig();
+};

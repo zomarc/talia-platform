@@ -28,9 +28,7 @@ import {
   mergeTaliaUiThemesFromDb,
   resolveThemeDefaultHeaderLogoUrl,
 } from '../themes/taliaUiThemes';
-import {
-  DASHBOARD_TABLE_LAYOUT_EVENT,
-} from '../components/dockview/eventConstants';
+import { publishDashboardGlobalConfig } from '../services/dashboardUiState';
 
 const ThemeContext = createContext();
 const LEGACY_APPEARANCE_MIGRATE_PREFIX = 'taliaAppearanceMigrated:';
@@ -839,9 +837,7 @@ export const ThemeProvider = ({ children }) => {
     } catch {
       // ignore storage failures
     }
-    window.dispatchEvent(new CustomEvent(DASHBOARD_TABLE_LAYOUT_EVENT, {
-      detail: { mode: nextMode },
-    }));
+    publishDashboardGlobalConfig({ tableLayoutMode: nextMode });
   }, [tableLayoutMode]);
 
   useEffect(() => {
@@ -880,24 +876,28 @@ export const ThemeProvider = ({ children }) => {
     const root = document.documentElement;
     root.classList.toggle('talia-panel-titles-hidden', panelTitlesVisible === false);
     window.__taliaPanelTitlesVisible = panelTitlesVisible !== false;
+    publishDashboardGlobalConfig({ titlesVisible: panelTitlesVisible !== false }, { dispatchLegacy: false });
   }, [panelTitlesVisible]);
 
   useEffect(() => {
     const root = document.documentElement;
     root.classList.toggle('talia-actions-hidden', actionsVisible === false);
     window.__taliaActionsVisible = actionsVisible !== false;
+    publishDashboardGlobalConfig({ actionsVisible: actionsVisible !== false }, { dispatchLegacy: false });
   }, [actionsVisible]);
 
   useEffect(() => {
     const root = document.documentElement;
     root.classList.toggle('talia-controls-hidden', controlsVisible !== true);
     window.__taliaControlsVisible = controlsVisible === true;
+    publishDashboardGlobalConfig({ controlsVisible: controlsVisible === true }, { dispatchLegacy: false });
   }, [controlsVisible]);
 
   useEffect(() => {
     const root = document.documentElement;
     root.classList.toggle('talia-callouts-hidden', calloutsVisible === false);
     window.__taliaCalloutsVisible = calloutsVisible !== false;
+    publishDashboardGlobalConfig({ calloutsVisible: calloutsVisible === true }, { dispatchLegacy: false });
   }, [calloutsVisible]);
 
   // Update CSS variables when font/appearance settings change

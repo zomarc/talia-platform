@@ -32,7 +32,7 @@ import {
   setGlobalReportDetailsVisible,
   clearPanelReportDetailsOverrides,
 } from '../../services/panelDetailsState';
-import { enforceDashboardUiState } from '../../services/dashboardUiState';
+import { enforceDashboardUiState, publishDashboardGlobalConfig } from '../../services/dashboardUiState';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useFocusManagement } from '../../hooks/useFocusManagement';
 import { DEFAULT_HEADER_LOGO_SRC, resolveAppPublicUrl } from '../../lib/headerLogoAsset';
@@ -748,15 +748,7 @@ const StatusBar = ({
     setGlobalReportDetailsVisible(nextVisible);
     clearPanelReportDetailsOverrides();
     userActivityTracker.recordHeaderAction('details-toggle', { status: nextVisible ? 'show' : 'hide' });
-    window.dispatchEvent(
-      new CustomEvent(DASHBOARD_DETAILS_VISIBILITY_EVENT, {
-        detail: {
-          scope: 'all',
-          visible: nextVisible,
-          action: 'set',
-        },
-      })
-    );
+    publishDashboardGlobalConfig({ detailsVisible: nextVisible });
   };
 
   const handlePanelTitlesToggle = () => {
@@ -889,38 +881,15 @@ const StatusBar = ({
   };
 
   useEffect(() => {
-    window.__taliaFiltersVisible = filtersVisible;
-    const root = document.documentElement;
-    if (filtersVisible) {
-      root.classList.remove('talia-filters-hidden');
-    } else {
-      root.classList.add('talia-filters-hidden');
-    }
-    window.dispatchEvent(
-      new CustomEvent(DASHBOARD_FILTER_VISIBILITY_EVENT, {
-        detail: { visible: filtersVisible },
-      })
-    );
+    publishDashboardGlobalConfig({ filtersVisible });
   }, [filtersVisible]);
 
   useEffect(() => {
-    window.__taliaTabulatorFiltersVisible = tabulatorFiltersVisible;
-    const root = document.documentElement;
-    root.classList.toggle('talia-tabulator-filters-hidden', tabulatorFiltersVisible === false);
-    window.dispatchEvent(
-      new CustomEvent(DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT, {
-        detail: { visible: tabulatorFiltersVisible },
-      })
-    );
+    publishDashboardGlobalConfig({ tabulatorFiltersVisible });
   }, [tabulatorFiltersVisible]);
 
   useEffect(() => {
-    window.__taliaViewScope = viewScope;
-    window.dispatchEvent(
-      new CustomEvent(DASHBOARD_VIEW_SCOPE_EVENT, {
-        detail: { scope: viewScope },
-      })
-    );
+    publishDashboardGlobalConfig({ viewScope });
   }, [viewScope]);
 
   useEffect(() => {
@@ -1185,11 +1154,7 @@ const StatusBar = ({
       criteria.selectedSailing = null;
     }
     window.__taliaGlobalCriteria = criteria;
-    window.dispatchEvent(
-      new CustomEvent(DASHBOARD_GLOBAL_CRITERIA_EVENT, {
-        detail: criteria,
-      })
-    );
+    publishDashboardGlobalConfig({ criteria });
   }, [globalDateRange, globalDuration, activeOnly, defaultDisplayCurrency]);
 
   useEffect(() => {

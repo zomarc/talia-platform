@@ -306,7 +306,8 @@ const AgencyPresenter = ({
         headerFilterLiveFilterDelay: 300,
         movableColumns: true,
         rowFormatter: createReferenceRowFormatter((rowData) => isReferenceAgencyRowRef.current(rowData)),
-        panelComponentId: panelComponentIdRef.current || 'agency-directory',
+        panelComponentId: panelComponentId || 'agency-directory',
+        panelInstanceId: panelInstanceId || null,
       }));
 
       instanceRef.current.on('tableBuilt', () => {

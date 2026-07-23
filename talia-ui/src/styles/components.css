@@ -178,7 +178,8 @@
 }
 
 .talia-controls-hidden .talia-report__controls,
-.talia-controls-hidden .status-bar__criteria:not(.status-bar__criteria--visibility) {
+/* Hide global criteria only — focus/visibility header strips stay independently toggleable. */
+.talia-controls-hidden .status-bar__criteria:not(.status-bar__criteria--visibility):not(.status-bar__criteria--focus) {
   display: none !important;
 }
 

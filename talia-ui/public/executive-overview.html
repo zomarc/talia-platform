@@ -145,6 +145,63 @@
 
     .summary-points li strong { color: #fff; }
 
+    .commits-section { margin-top: 1.25rem; }
+
+    .commits-meta {
+      margin: 0 0 0.65rem;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .commit-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      max-height: 42vh;
+      overflow: hidden;
+      columns: 2;
+      column-gap: 1.5rem;
+    }
+
+    .commit-list li {
+      position: relative;
+      padding: 0.35rem 0 0.35rem 4.25rem;
+      margin-bottom: 0.35rem;
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      break-inside: avoid;
+      border-bottom: 1px solid rgba(232, 213, 184, 0.08);
+    }
+
+    .commit-hash {
+      position: absolute;
+      left: 0;
+      top: 0.38rem;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--sun);
+      background: rgba(212, 165, 116, 0.12);
+      padding: 0.12rem 0.35rem;
+      border-radius: 4px;
+      letter-spacing: 0.02em;
+    }
+
+    .commit-subject {
+      display: block;
+      color: #fff;
+      font-weight: 550;
+      line-height: 1.35;
+    }
+
+    .commit-detail {
+      display: block;
+      margin-top: 0.15rem;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
     /* —— Architecture page —— */
     .arch-intro {
       font-size: 0.88rem;
@@ -300,6 +357,13 @@
       .summary-points { gap: 0.35rem 1.5rem; }
       .summary-points li { font-size: 0.85rem; }
 
+      .commits-section { margin-top: 0.75rem; }
+      .commits-section h2 { font-size: 0.95rem; margin-bottom: 0.5rem; }
+      .commit-list { max-height: 68mm; columns: 2; }
+      .commit-list li { font-size: 0.72rem; padding-left: 3.6rem; margin-bottom: 0.2rem; }
+      .commit-hash { font-size: 0.64rem; top: 0.3rem; }
+      .commit-detail { font-size: 0.66rem; }
+
       .arch-diagram { border: 1px solid var(--border); padding: 0.25rem; }
       .arch-diagram svg { max-height: 172mm; width: 100%; }
 
@@ -353,6 +417,159 @@
           <li><strong>Next horizon:</strong> talia-engine intelligence layer (planned)</li>
         </ul>
       </div>
+
+      <section class="commits-section" aria-label="Recent development commits">
+        <h2>Recent development</h2>
+        <div class="card">
+          <!-- COMMITS:START -->
+<p class="commits-meta">121 commits ahead of origin/main · showing 30 most recent of 121 · generated 2026-07-09</p>
+<ul class="commit-list">
+<li>
+  <code class="commit-hash">febd5dc</code>
+  <span class="commit-subject">feat(docs): add git commit changelog to executive summary</span>
+  <span class="commit-detail">Inject recent branch commits into the branded executive overview HTML at</span>
+</li>
+<li>
+  <code class="commit-hash">8b39ab6</code>
+  <span class="commit-subject">fix(ui): Master Sailing Explorer reference row hover and tab loading</span>
+</li>
+<li>
+  <code class="commit-hash">2451fd8</code>
+  <span class="commit-subject">fix(ui): persistent active row highlight with hover coexistence</span>
+</li>
+<li>
+  <code class="commit-hash">fba19ad</code>
+  <span class="commit-subject">fix(ui): tab loading on listener panels only, instant selection</span>
+  <span class="commit-detail">Defer selection-triggered fetches so emitters paint immediately, match tab</span>
+</li>
+<li>
+  <code class="commit-hash">855e09e</code>
+  <span class="commit-subject">fix(ui): show loading state on panel tab headers</span>
+  <span class="commit-detail">Publish panel fetch loading through a shared hook wired into useTableDataWithContext</span>
+</li>
+<li>
+  <code class="commit-hash">5506db0</code>
+  <span class="commit-subject">fix(ui): persist sail selection highlight and auto-expand linked berths</span>
+  <span class="commit-detail">Canonical selection should stay visible in Master Sailing Explorer after</span>
+</li>
+<li>
+  <code class="commit-hash">5b6c872</code>
+  <span class="commit-subject">fix(ui): constrain Ship Day Berths table to selected voyage scope</span>
+</li>
+<li>
+  <code class="commit-hash">b0af781</code>
+  <span class="commit-subject">fix(ui): Ship Day Berths filters on canonical selection events</span>
+</li>
+<li>
+  <code class="commit-hash">8e91722</code>
+  <span class="commit-subject">fix(ui): stop Direct Source Request query loop and stabilize fetch</span>
+</li>
+<li>
+  <code class="commit-hash">df5eaab</code>
+  <span class="commit-subject">fix(ui): redesign Direct Source Request and align booking panels to report shell</span>
+</li>
+<li>
+  <code class="commit-hash">81efc64</code>
+  <span class="commit-subject">fix(ui): align active report panels with shell vocabulary standard</span>
+  <span class="commit-detail">Move header actions, mixed filter/controls rows, and admin header-right</span>
+</li>
+<li>
+  <code class="commit-hash">b2c9bc5</code>
+  <span class="commit-subject">feat(ui): add show/hide segments control to Master Sailing</span>
+</li>
+<li>
+  <code class="commit-hash">d33c3b5</code>
+  <span class="commit-subject">fix(ui): style report controls as outlined buttons and align shell layout</span>
+  <span class="commit-detail">Add talia-btn--secondary for controls/actions rows, move Ship Day Berth</span>
+</li>
+<li>
+  <code class="commit-hash">c056dad</code>
+  <span class="commit-subject">fix(ui): keep visibility menu interactive when Controls is hidden</span>
+  <span class="commit-detail">The talia-controls-hidden rule from 6f18aa6 hid all status-bar__criteria</span>
+</li>
+<li>
+  <code class="commit-hash">6f18aa6</code>
+  <span class="commit-subject">fix(ui): move Master Sailing Explorer controls out of title header</span>
+  <span class="commit-detail">Expand/Collapse now live in talia-report__controls, hidden by the global</span>
+</li>
+<li>
+  <code class="commit-hash">a8ff2d8</code>
+  <span class="commit-subject">docs(ui): define standard report shell vocabulary (title, filters, controls)</span>
+</li>
+<li>
+  <code class="commit-hash">fd74fa9</code>
+  <span class="commit-subject">feat(ui): add global Column filters toggle for Tabulator headers</span>
+  <span class="commit-detail">Separate Tabulator column header filters from Talia report filter rows so each can be shown or hidden independently via the header visibility menu.</span>
+</li>
+<li>
+  <code class="commit-hash">dc24917</code>
+  <span class="commit-subject">fix(ui): align Agency Directory with report shell standards</span>
+  <span class="commit-detail">Add panel filter row, actions bar, callout, and Details visibility so Agency Directory honors global header toggles like Master Sailing Explorer.</span>
+</li>
+<li>
+  <code class="commit-hash">5c27d47</code>
+  <span class="commit-subject">fix(ui): normalize role in GraphQL auth headers consistently</span>
+  <span class="commit-detail">Uppercase role via normalizeRole in getRequestHeaders, getUserRole, and</span>
+</li>
+<li>
+  <code class="commit-hash">2f56662</code>
+  <span class="commit-subject">fix(ui): forward auth headers in trackedFetchGraphql for admin mutations</span>
+  <span class="commit-detail">Instance &amp; keys saves use trackedFetchGraphql, which previously sent only</span>
+</li>
+<li>
+  <code class="commit-hash">3d3408f</code>
+  <span class="commit-subject">feat(ui): add component catalog and document inventory_item source linkage</span>
+  <span class="commit-detail">Working dev version: extend Component Interaction Map with an All components</span>
+</li>
+<li>
+  <code class="commit-hash">1f48539</code>
+  <span class="commit-subject">feat(ui): add Component Interaction Map report with presentation mode</span>
+  <span class="commit-detail">Add a Reports-category panel that derives the main panel-to-panel</span>
+</li>
+<li>
+  <code class="commit-hash">555e70a</code>
+  <span class="commit-subject">feat(platform): separate physical/selling layers with canonical selection linking</span>
+  <span class="commit-detail">Introduce inventory_item.reference_sail_code as the canonical layer for</span>
+</li>
+<li>
+  <code class="commit-hash">015d362</code>
+  <span class="commit-subject">feat(docs): add executive overview PDF and in-app Project Summary panel.</span>
+  <span class="commit-detail">Store the branded HTML in project_summary and expose it via GraphQL so stakeholders can view the latest architecture overview from Talia, with validate option 14 to regenerate and publish on demand.</span>
+</li>
+<li>
+  <code class="commit-hash">94a17a4</code>
+  <span class="commit-subject">feat(agency): sync dwh.Dim_Agency and add Agency Directory panel</span>
+  <span class="commit-detail">Load the agency dimension from the data lake into Supabase and expose a filterable Tabulator focus panel with reservation cross-linking.</span>
+</li>
+<li>
+  <code class="commit-hash">d1e72ac</code>
+  <span class="commit-subject">feat(platform): stabilize tabulator fit behavior and align library-first standards</span>
+  <span class="commit-detail">Finalize immediate Fit Width/Fit Data and grouped-row height refresh behavior across shared Tabulator config, standardize panel usage on shared tabulator options, and consolidate canonical development docs with legacy root docs archived. Bump UI package version to 0.2.1 and add Tabulator/DockView package visibility in Data Management cross-check.</span>
+</li>
+<li>
+  <code class="commit-hash">1b50df2</code>
+  <span class="commit-subject">feat(ui): enrich reservation activity details and align tabulator fit behavior</span>
+  <span class="commit-detail">Improve reservation monitoring with history badges, richer booking change details, and merged current-state data while adding route/guest context to master sailing. Standardize Tabulator sizing to native data-fit behavior across focus panels for consistent readability.</span>
+</li>
+<li>
+  <code class="commit-hash">ec20f03</code>
+  <span class="commit-subject">fix(reservations): keep stg-driven sync and preserve delta current-state flow</span>
+  <span class="commit-detail">Keep RES_HEADER as the primary bookings source while enriching sail fields from foundation data, and make reservation changes remain event-based deltas. Default CLI syncs to the active integration window with fail-fast behavior when no range is configured.</span>
+</li>
+<li>
+  <code class="commit-hash">026a63b</code>
+  <span class="commit-subject">fix(data-match): stabilize filters and simplify table readability</span>
+  <span class="commit-detail">Align Data Match with panel-level filtering and predictable table behavior so global criteria no longer over-constrains results. Improve scanability with fixed-width columns, wrapped two-line headers, and cleaner match-cell tooltip/color presentation without intrusive table overrides.</span>
+</li>
+<li>
+  <code class="commit-hash">aa882ca</code>
+  <span class="commit-subject">fix(published-rates-grid): compact cards and maximize sparkline area</span>
+  <span class="commit-detail">Refine latest-price cards to improve readability in dense layouts by removing redundant currency decimals, moving rate labels into sparkline overlays, and ensuring chart content fills available space without baseline gaps.</span>
+</li>
+</ul>
+      <!-- COMMITS:END -->
+        </div>
+      </section>
     </div>
 
     <!-- PAGE 2: Architecture -->

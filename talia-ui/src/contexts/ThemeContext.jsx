@@ -126,8 +126,8 @@ const normalizeSidebarDisplayMode = (value, fallback = 'panel') => (
   value === 'overlay' ? 'overlay' : fallback
 );
 
-const normalizeTableLayoutMode = (value, fallback = 'width') => (
-  value === 'data' ? 'data' : fallback
+const normalizeTableLayoutMode = (value, fallback = 'best') => (
+  value === 'data' || value === 'width' || value === 'best' ? value : fallback
 );
 
 /** @deprecated Import from `../themes/taliaUiThemes` */
@@ -234,7 +234,7 @@ export const ThemeProvider = ({ children }) => {
   const [tableHeaderIntensity, setTableHeaderIntensity] = useState(60);
   const [panelTitlesVisible, setPanelTitlesVisible] = useState(true);
   const [actionsVisible, setActionsVisible] = useState(true);
-  const [controlsVisible, setControlsVisible] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
   const [menuDisappearMs, setMenuDisappearMs] = useState(
     normalizeMenuDisappearMs(undefined, 5000)
   );
@@ -245,7 +245,7 @@ export const ThemeProvider = ({ children }) => {
   const [sidebarDisplayMode, setSidebarDisplayMode] = useState(
     normalizeSidebarDisplayMode(undefined, 'panel')
   );
-  const [calloutsVisible, setCalloutsVisible] = useState(true);
+  const [calloutsVisible, setCalloutsVisible] = useState(false);
   const [gameSoundEnabled, setGameSoundEnabled] = useState(true);
   const [defaultDisplayCurrency, setDefaultDisplayCurrencyState] = useState(() =>
     normalizeDefaultDisplayCurrency(undefined, inferLocaleDefaultCurrency())
@@ -253,15 +253,15 @@ export const ThemeProvider = ({ children }) => {
   const [tableLayoutMode, setTableLayoutModeState] = useState(() => {
     try {
       const inMemory = window?.__taliaTableLayoutMode;
-      if (inMemory === 'data' || inMemory === 'width') return inMemory;
+      if (inMemory === 'data' || inMemory === 'width' || inMemory === 'best') return inMemory;
       const saved = window?.localStorage?.getItem?.('taliaTableLayoutMode');
-      return normalizeTableLayoutMode(saved, 'width');
+      return normalizeTableLayoutMode(saved, 'best');
     } catch {
-      return 'width';
+      return 'best';
     }
   });
   const setTableLayoutMode = useCallback((next) => {
-    setTableLayoutModeState(normalizeTableLayoutMode(next, 'width'));
+    setTableLayoutModeState(normalizeTableLayoutMode(next, 'best'));
   }, []);
 
   const setDefaultDisplayCurrency = useCallback((next) => {
@@ -418,11 +418,16 @@ export const ThemeProvider = ({ children }) => {
     if (Object.prototype.hasOwnProperty.call(settings, 'panelTitlesVisible')) {
       setPanelTitlesVisible(settings.panelTitlesVisible !== false);
     }
-    if (Object.prototype.hasOwnProperty.call(settings, 'actionsVisible')) {
-      setActionsVisible(settings.actionsVisible !== false);
-    }
-    if (Object.prototype.hasOwnProperty.call(settings, 'controlsVisible')) {
-      setControlsVisible(settings.controlsVisible === true);
+    const hasActionsSetting = Object.prototype.hasOwnProperty.call(settings, 'actionsVisible');
+    const hasControlsSetting = Object.prototype.hasOwnProperty.call(settings, 'controlsVisible');
+    if (hasActionsSetting) {
+      const next = settings.actionsVisible !== false;
+      setActionsVisible(next);
+      setControlsVisible(next);
+    } else if (hasControlsSetting) {
+      const next = settings.controlsVisible === true;
+      setActionsVisible(next);
+      setControlsVisible(next);
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'menuDisappearMs')) {
       setMenuDisappearMs(normalizeMenuDisappearMs(settings.menuDisappearMs, 5000));
@@ -437,7 +442,7 @@ export const ThemeProvider = ({ children }) => {
       setSidebarDisplayMode(normalizeSidebarDisplayMode(settings.sidebarDisplayMode, 'panel'));
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'calloutsVisible')) {
-      setCalloutsVisible(settings.calloutsVisible !== false);
+      setCalloutsVisible(settings.calloutsVisible === true);
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'gameSoundEnabled')) {
       setGameSoundEnabled(settings.gameSoundEnabled !== false);
@@ -448,7 +453,7 @@ export const ThemeProvider = ({ children }) => {
       );
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'tableLayoutMode')) {
-      setTableLayoutModeState(normalizeTableLayoutMode(settings.tableLayoutMode, 'width'));
+      setTableLayoutModeState(normalizeTableLayoutMode(settings.tableLayoutMode, 'best'));
     }
     return true;
   };
@@ -534,15 +539,15 @@ export const ThemeProvider = ({ children }) => {
     setTableHeaderIntensity(60);
     setPanelTitlesVisible(true);
     setActionsVisible(true);
-    setControlsVisible(false);
+    setControlsVisible(true);
     setMenuDisappearMs(normalizeMenuDisappearMs(undefined, 5000));
     setSidebarAutoCloseEnabled(false);
     setSidebarAutoCloseMs(normalizeSidebarAutoCloseMs(undefined, 8000));
     setSidebarDisplayMode(normalizeSidebarDisplayMode(undefined, 'panel'));
-    setCalloutsVisible(true);
+    setCalloutsVisible(false);
     setGameSoundEnabled(true);
     setDefaultDisplayCurrencyState(normalizeDefaultDisplayCurrency(undefined, inferLocaleDefaultCurrency()));
-    setTableLayoutModeState('width');
+    setTableLayoutModeState('best');
     setAppearanceProfiles([]);
     setActiveAppearanceProfileId('');
     setBgColorState('midnight');
@@ -827,7 +832,7 @@ export const ThemeProvider = ({ children }) => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const nextMode = normalizeTableLayoutMode(tableLayoutMode, 'width');
+    const nextMode = normalizeTableLayoutMode(tableLayoutMode, 'best');
     window.__taliaTableLayoutMode = nextMode;
     try {
       window.localStorage?.setItem?.('taliaTableLayoutMode', nextMode);

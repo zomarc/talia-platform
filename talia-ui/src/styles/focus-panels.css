@@ -47,6 +47,117 @@
   min-height: 0;
 }
 
+.column-terminology__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--theme-component-gap-sm);
+  padding: var(--theme-component-padding-sm);
+}
+
+.column-terminology__content--details-hidden {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.column-terminology__table {
+  padding: 0;
+}
+
+.column-terminology__details {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+  background: color-mix(in srgb, var(--theme-bg-elevated) 85%, var(--theme-glass));
+  padding: var(--theme-component-padding-sm);
+}
+
+.column-terminology__details-title {
+  margin: 0 0 6px 0;
+  font-size: var(--theme-font-size-sm);
+}
+
+.column-terminology__details-body {
+  display: grid;
+  gap: 6px;
+}
+
+.column-terminology__details-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.column-terminology__details-field-name {
+  font-family: var(--theme-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--theme-font-size-sm);
+  font-weight: 600;
+}
+
+.column-terminology__details-status {
+  opacity: 0.8;
+  font-size: var(--theme-font-size-xs, 0.75rem);
+}
+
+.column-terminology__details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.column-terminology__details-field {
+  display: grid;
+  gap: 2px;
+}
+
+.column-terminology__details-field > span {
+  font-size: var(--theme-font-size-xs, 0.75rem);
+  opacity: 0.85;
+}
+
+.column-terminology__details-field .talia-input {
+  min-height: 28px;
+  padding: 4px 8px;
+}
+
+.column-terminology__details-field textarea.talia-input {
+  min-height: 48px;
+  resize: vertical;
+}
+
+.column-terminology__components {
+  border-top: 1px solid var(--theme-border);
+  padding-top: 6px;
+}
+
+.column-terminology__components-title {
+  font-size: var(--theme-font-size-xs, 0.75rem);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.column-terminology__components-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 2px;
+  font-size: var(--theme-font-size-sm);
+}
+
+.column-terminology__components-empty,
+.column-terminology__details-saved {
+  font-size: var(--theme-font-size-xs, 0.75rem);
+  opacity: 0.85;
+}
+
+@media (max-width: 1200px) {
+  .column-terminology__content {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(280px, 1fr) auto;
+  }
+}
+
 .focus-panel-empty {
   padding: 40px;
   text-align: center;

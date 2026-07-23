@@ -2,9 +2,15 @@
  * Agency Container — dwh.Dim_Agency dimension table
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTableDataWithContext, buildContextFiltersKey } from '../../../hooks/data/useTableDataWithContext';
-import { SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT } from '../../../lib/eventBus';
+import {
+  RESERVATION_CLEAR_EVENT,
+  RESERVATION_SELECT_EVENT,
+  SAIL_SELECT_EVENT,
+  emitReservationClear,
+  emitSailClear,
+} from '../../../lib/eventBus';
 import AgencyPresenter from './AgencyPresenter';
 import PanelDataState from '../../shared/PanelDataState';
 import {
@@ -17,15 +23,12 @@ import {
   resolveSailCodesFromDetail,
 } from './agencyDirectoryContext';
 
-const RESERVATION_SELECT = 'talia:reservation.select';
-const RESERVATION_CLEAR = 'talia:reservation.clear';
-
 const readPersistedReservationDetail = () => {
   try {
     const persisted = localStorage.getItem('talia:persisted:lastEvent');
     if (!persisted) return null;
     const event = JSON.parse(persisted);
-    if (event?.name !== RESERVATION_SELECT || !event.detail) return null;
+    if (event?.name !== RESERVATION_SELECT_EVENT || !event.detail) return null;
     return event.detail;
   } catch {
     return null;
@@ -37,6 +40,7 @@ const mapSailContextToReservationFilters = (detail) => (
 );
 
 const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
+  const reservationClearTimerRef = useRef(null);
   const [reservationAgencyId, setReservationAgencyId] = useState(() => {
     const detail = readPersistedReservationDetail();
     return resolveAgencyIdFromDetail(detail);
@@ -77,23 +81,43 @@ const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
   });
 
   useEffect(() => {
+    const clearReservationLink = () => {
+      setReservationAgencyId(null);
+      setReservationId(null);
+    };
+
     const handleReservationSelect = (event) => {
+      // Coalesce Tabulator deselect→select in the same turn so Agency does not
+      // briefly drop into sail-scope loading and remount/thrash.
+      if (reservationClearTimerRef.current != null) {
+        window.clearTimeout(reservationClearTimerRef.current);
+        reservationClearTimerRef.current = null;
+      }
       const detail = event?.detail;
       setReservationAgencyId(resolveAgencyIdFromDetail(detail));
       setReservationId(resolveReservationIdFromDetail(detail));
     };
 
     const handleReservationClear = () => {
-      setReservationAgencyId(null);
-      setReservationId(null);
+      if (reservationClearTimerRef.current != null) {
+        window.clearTimeout(reservationClearTimerRef.current);
+      }
+      reservationClearTimerRef.current = window.setTimeout(() => {
+        reservationClearTimerRef.current = null;
+        clearReservationLink();
+      }, 0);
     };
 
-    window.addEventListener(RESERVATION_SELECT, handleReservationSelect);
-    window.addEventListener(RESERVATION_CLEAR, handleReservationClear);
+    window.addEventListener(RESERVATION_SELECT_EVENT, handleReservationSelect);
+    window.addEventListener(RESERVATION_CLEAR_EVENT, handleReservationClear);
 
     return () => {
-      window.removeEventListener(RESERVATION_SELECT, handleReservationSelect);
-      window.removeEventListener(RESERVATION_CLEAR, handleReservationClear);
+      if (reservationClearTimerRef.current != null) {
+        window.clearTimeout(reservationClearTimerRef.current);
+        reservationClearTimerRef.current = null;
+      }
+      window.removeEventListener(RESERVATION_SELECT_EVENT, handleReservationSelect);
+      window.removeEventListener(RESERVATION_CLEAR_EVENT, handleReservationClear);
     };
   }, []);
 
@@ -105,7 +129,7 @@ const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
     [hasSailSelection, sailContext]
   );
 
-  const { mode, rows: data, pendingSailScope } = useMemo(
+  const resolved = useMemo(
     () => resolveAgencyDirectoryData({
       agencies,
       reservationAgencyId,
@@ -126,8 +150,28 @@ const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
     ]
   );
 
-  const loading = agenciesLoading
-    || (!reservationAgencyId && hasSailSelection && (sailReservationsLoading || pendingSailScope));
+  // Keep last ready sail/reservation rows while a new sail scope is fetching —
+  // avoids empty→loading remount thrash (page freeze).
+  const [displaySnapshot, setDisplaySnapshot] = useState(() => ({
+    mode: AGENCY_SELECTION_MODES.ALL,
+    rows: [],
+  }));
+
+  useEffect(() => {
+    if (resolved.pendingSailScope) return;
+    setDisplaySnapshot({
+      mode: resolved.mode,
+      rows: resolved.rows,
+    });
+  }, [resolved]);
+
+  const mode = resolved.pendingSailScope ? displaySnapshot.mode : resolved.mode;
+  const data = resolved.pendingSailScope ? displaySnapshot.rows : resolved.rows;
+  const scopeLoading = Boolean(resolved.pendingSailScope);
+
+  // Only block the panel on the agency dimension load — never unmount while
+  // sail reservation scope is catching up.
+  const loading = agenciesLoading;
   const error = agenciesError || sailReservationsError;
 
   const refetch = () => {
@@ -145,15 +189,11 @@ const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
   );
 
   const handleClearReservationLink = () => {
-    window.dispatchEvent(new CustomEvent(RESERVATION_CLEAR, {
-      detail: { timestamp: new Date().toISOString() },
-    }));
+    emitReservationClear({ timestamp: new Date().toISOString() });
   };
 
   const handleClearSailLink = () => {
-    window.dispatchEvent(new CustomEvent(SAIL_CLEAR_EVENT, {
-      detail: { timestamp: new Date().toISOString() },
-    }));
+    emitSailClear({ timestamp: new Date().toISOString() });
   };
 
   const emptyMessage = (() => {
@@ -162,7 +202,7 @@ const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
         ? `No agency found for ID ${reservationAgencyId}${reservationId ? ` (reservation ${reservationId})` : ''}`
         : 'No agency linked to the selected reservation.';
     }
-    if (mode === AGENCY_SELECTION_MODES.SAIL) {
+    if (mode === AGENCY_SELECTION_MODES.SAIL || hasSailSelection) {
       const sailLabel = selectedReferenceSailCode || selectedSailCodes[0] || 'selected sailing';
       return `No agencies with reservations found for ${sailLabel}.`;
     }
@@ -175,7 +215,7 @@ const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
       loadingMessage="Loading agencies..."
       error={error}
       errorTitle="Failed to load agencies"
-      empty={!data || data.length === 0}
+      empty={!loading && !scopeLoading && (!data || data.length === 0)}
       emptyMessage={emptyMessage}
       onRetry={refetch}
     >
@@ -188,6 +228,7 @@ const AgencyContainer = ({ panelInstanceId, panelComponentId }) => {
         panelInstanceId={panelInstanceId}
         panelComponentId={panelComponentId}
         selectionMode={mode}
+        scopeLoading={scopeLoading}
         selectedAgencyId={reservationAgencyId}
         selectedReservationId={reservationId}
         selectedSailCodes={selectedSailCodes}

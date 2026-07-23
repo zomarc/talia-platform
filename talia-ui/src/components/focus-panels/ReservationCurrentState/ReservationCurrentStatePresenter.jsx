@@ -11,10 +11,15 @@
 
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
+import { afterTabulatorDataRefresh } from '../../../hooks/useTabulatorLayoutSync';
 import { formatDayMon, formatSailDateRange } from '../../../lib/dateFormat';
 import { buildShipSailTooltip } from './reservationCurrentStateTransform';
 import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
 import ReportDataDetails from '../../shared/ReportDataDetails';
+import {
+  emitReservationClear,
+  emitReservationSelect,
+} from '../../../lib/eventBus';
 
 /**
  * Presentational component for reservation current state
@@ -32,6 +37,15 @@ const ReservationCurrentStatePresenter = ({
 }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
+  const tableBuiltRef = useRef(false);
+  const suppressSelectionEventsRef = useRef(false);
+  const dataRef = useRef(data);
+  const selectedResIdRef = useRef(
+    selectedReservationId != null && selectedReservationId !== ''
+      ? String(selectedReservationId)
+      : null
+  );
+  dataRef.current = data;
   const [historyFilter, setHistoryFilter] = useState('all');
   const [showDetails] = usePanelDetailsVisibility({
     panelInstanceId,
@@ -45,7 +59,7 @@ const ReservationCurrentStatePresenter = ({
     .replace(/>/g, '&gt;');
 
   // Column definitions using Tabulator's native features
-  const columns = [
+  const columns = useMemo(() => ([
     { 
       field: "res_id", 
       title: "Res ID",
@@ -165,9 +179,48 @@ const ReservationCurrentStatePresenter = ({
         valuesLookup: true
       }
     }
-  ];
+  ]), []);
 
-  // Initialize Tabulator table
+  const emitSelectFromRowData = (rowData) => {
+    if (!rowData) return;
+    const resId = rowData.res_id;
+    selectedResIdRef.current = resId != null && resId !== '' ? String(resId) : null;
+    emitReservationSelect({
+      res_id: rowData.res_id,
+      sail_code: rowData.sail_code,
+      row_data: rowData,
+      timestamp: new Date().toISOString(),
+    });
+  };
+
+  const applyTableData = (table) => {
+    if (!table) return;
+    suppressSelectionEventsRef.current = true;
+    const rows = Array.isArray(dataRef.current) ? dataRef.current : [];
+    const refreshPromise = Promise.resolve(table.replaceData(rows))
+      .catch((error) => {
+        console.warn('[ReservationCurrentState] Error updating data:', error);
+      })
+      .finally(() => {
+        const keepId = selectedResIdRef.current;
+        if (keepId) {
+          try {
+            const match = (table.getRows?.() || []).find(
+              (row) => String(row.getData?.()?.res_id ?? '') === keepId
+            );
+            if (match) {
+              match.select?.();
+            } else {
+              selectedResIdRef.current = null;
+            }
+          } catch { /* noop */ }
+        }
+        suppressSelectionEventsRef.current = false;
+      });
+    afterTabulatorDataRefresh(table, refreshPromise);
+  };
+
+  // Initialize Tabulator once — never rebuild on data identity changes (that raced clear events).
   useEffect(() => {
     let cancelled = false;
 
@@ -175,19 +228,18 @@ const ReservationCurrentStatePresenter = ({
       if (!tableRef.current) return;
 
       try {
-        // Load Tabulator resources using shared config
         const Tabulator = await initTabulator();
+        if (cancelled || !tableRef.current) return;
 
-        if (cancelled) return;
-
-        // Create Tabulator instance
         if (instanceRef.current) {
-          instanceRef.current.destroy();
+          suppressSelectionEventsRef.current = true;
+          try { instanceRef.current.destroy(); } catch { /* noop */ }
+          instanceRef.current = null;
         }
 
         instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
-          data: data,
-          columns: columns,
+          data: [],
+          columns,
           initialSort: [
             { column: "sail_from_date", dir: "desc" }
           ],
@@ -197,37 +249,41 @@ const ReservationCurrentStatePresenter = ({
           movableColumns: true,
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,
-          pagination: false
+          pagination: false,
+          panelComponentId: panelComponentId || 'reservation-current-state',
         }));
 
-        // Register event listeners using Tabulator's .on() method
-        instanceRef.current.on("rowClick", (e, row) => {
+        instanceRef.current.on('tableBuilt', () => {
+          tableBuiltRef.current = true;
+          applyTableData(instanceRef.current);
+        });
+
+        // Click any cell: select the row. Re-clicking an already-selected row
+        // re-emits select (instead of Tabulator's default toggle-deselect).
+        instanceRef.current.on('rowClick', (_event, row) => {
+          const rowData = row?.getData?.();
+          if (!rowData) return;
+          const resId = rowData.res_id != null ? String(rowData.res_id) : '';
+          const alreadySelected = selectedResIdRef.current && resId
+            && selectedResIdRef.current === resId
+            && row.isSelected?.();
+          if (alreadySelected) {
+            emitSelectFromRowData(rowData);
+            return;
+          }
           try { row?.select?.(); } catch { /* noop */ }
         });
 
-        instanceRef.current.on("rowSelected", (row) => {
-          const rowData = row.getData();
-          console.log("[ReservationCurrentState] Row selected:", rowData);
-          window.dispatchEvent(new CustomEvent('talia:reservation.select', { 
-            detail: {
-              res_id: rowData.res_id,
-              sail_code: rowData.sail_code,
-              row_data: rowData,
-              timestamp: new Date().toISOString()
-            }
-          }));
+        instanceRef.current.on('rowSelectionChanged', (selectedData) => {
+          if (suppressSelectionEventsRef.current) return;
+          const rowData = selectedData?.[0];
+          if (rowData) {
+            emitSelectFromRowData(rowData);
+            return;
+          }
+          selectedResIdRef.current = null;
+          emitReservationClear({ timestamp: new Date().toISOString() });
         });
-
-        instanceRef.current.on("rowDeselected", () => {
-          console.log("[ReservationCurrentState] Row deselected");
-          window.dispatchEvent(new CustomEvent('talia:reservation.clear', {
-            detail: {
-              timestamp: new Date().toISOString()
-            }
-          }));
-        });
-
-        console.log('[ReservationCurrentState] Table initialized with event listeners');
       } catch (err) {
         console.error('[ReservationCurrentState] Error initializing table:', err);
       }
@@ -237,25 +293,23 @@ const ReservationCurrentStatePresenter = ({
 
     return () => {
       cancelled = true;
+      tableBuiltRef.current = false;
+      suppressSelectionEventsRef.current = true;
       if (instanceRef.current) {
         try {
           instanceRef.current.destroy();
         } catch (e) {
           console.warn('Error destroying table:', e);
         }
+        instanceRef.current = null;
       }
     };
-  }, [data]);
+  }, [columns, panelComponentId]);
 
-  // Update table data when data prop changes
+  // Replace data without destroying the table; suppress clear events during refresh.
   useEffect(() => {
-    if (instanceRef.current && data) {
-      try {
-        instanceRef.current.replaceData(data);
-      } catch (e) {
-        console.warn('[ReservationCurrentState] Error updating data:', e);
-      }
-    }
+    if (!instanceRef.current || !tableBuiltRef.current) return;
+    applyTableData(instanceRef.current);
   }, [data]);
 
   const historyRows = useMemo(() => {

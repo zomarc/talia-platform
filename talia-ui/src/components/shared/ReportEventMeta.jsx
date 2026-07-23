@@ -47,7 +47,8 @@ const buildComponentVisibilitySummary = () => {
   const controls = window.__taliaControlsVisible === true ? 'on' : 'off';
   const filters = window.__taliaFiltersVisible === true ? 'on' : 'off';
   const details = window.__taliaGlobalReportDetailsVisible === false ? 'off' : 'on';
-  const fit = window.__taliaTableLayoutMode === 'data' ? 'data' : 'width';
+  const mode = String(window.__taliaTableLayoutMode || '').toLowerCase();
+  const fit = mode === 'data' || mode === 'width' || mode === 'best' ? mode : 'best';
   return [
     `style: ${style}`,
     `controls: ${controls}`,
@@ -837,7 +838,8 @@ const ReportEventMeta = ({ emits = [], respondsTo = [], sources = [] }) => {
 
   useEffect(() => {
     const handleTableLayoutChange = (event) => {
-      const mode = String(event?.detail?.mode || '').toLowerCase() === 'data' ? 'data' : 'width';
+      const modeRaw = String(event?.detail?.mode || '').toLowerCase();
+      const mode = modeRaw === 'data' || modeRaw === 'width' || modeRaw === 'best' ? modeRaw : 'best';
       appendFlowEntry({
         type: 'lifecycle',
         cycleId: null,

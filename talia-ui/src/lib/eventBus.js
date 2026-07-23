@@ -10,6 +10,8 @@ export const SHIP_SELECT_EVENT = 'talia:ship.select';
 export const SHIP_CLEAR_EVENT = 'talia:ship.clear';
 export const CABIN_SELECT_EVENT = 'talia:cabin.select';
 export const CABIN_CLEAR_EVENT = 'talia:cabin.clear';
+export const RESERVATION_SELECT_EVENT = 'talia:reservation.select';
+export const RESERVATION_CLEAR_EVENT = 'talia:reservation.clear';
 
 /**
  * Dispatch a selection event after translating it through the canonical
@@ -134,5 +136,24 @@ export const emitCabinClear = (detail = {}) => {
     window.dispatchEvent(new CustomEvent(CABIN_CLEAR_EVENT, { detail }));
   } catch (error) {
     console.warn('[eventBus] emitCabinClear failed', error);
+  }
+};
+
+export const emitReservationSelect = (detail) => {
+  try {
+    const payload = detail && typeof detail === 'object' ? detail : {};
+    window.lastReservationSelectEvent = { type: RESERVATION_SELECT_EVENT, detail: payload };
+    window.dispatchEvent(new CustomEvent(RESERVATION_SELECT_EVENT, { detail: payload }));
+  } catch (error) {
+    console.warn('[eventBus] emitReservationSelect failed', error);
+  }
+};
+
+export const emitReservationClear = (detail = {}) => {
+  try {
+    window.lastReservationSelectEvent = null;
+    window.dispatchEvent(new CustomEvent(RESERVATION_CLEAR_EVENT, { detail }));
+  } catch (error) {
+    console.warn('[eventBus] emitReservationClear failed', error);
   }
 };

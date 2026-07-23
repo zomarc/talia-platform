@@ -45,8 +45,8 @@ test('master explorer uses physical berths for booked/capacity not selling guest
       { sail_code: 'CJ07260719', reference_sail_code: 'CJ07260718', sailing_role: 'segment', is_operational: true },
     ],
     reservationRows: [
-      { sail_code: 'CJ07260718', guest_count: 1973 },
-      { sail_code: 'CJ07260719', guest_count: 195 },
+      { sail_code: 'CJ07260718', guest_count: 1973, res_id: 44122 },
+      { sail_code: 'CJ07260719', guest_count: 195, res_probability: 100 },
     ],
     hierarchyRows: [{
       master_sail_code: 'CJ07260718',
@@ -62,11 +62,19 @@ test('master explorer uses physical berths for booked/capacity not selling guest
   const master = bundle.masters[0];
   assert.equal(master.total_capacity, 1200);
   assert.equal(master.total_booked, 900);
+  assert.equal(master.total_cabins, 600);
+  assert.equal(master.booked_cabins, 450);
+  assert.equal(master.available_cabins, 150);
+  assert.equal(master.guaranteed_cabins, 98);
+  assert.equal(master.actual_booked_pct, 75);
+  assert.equal(master.potential_booked_pct, 91.25);
+  assert.equal(master.booking_upside_pct, 16.25);
   assert.equal(master.selling_guests_total, 2168);
   assert.ok(master.total_booked < master.selling_guests_total);
 
   const days = bundle.dayDetailsByMaster.get('CJ07260718');
   assert.equal(days[0].booked, 900);
+  assert.equal(days[0].booked_cabins, 450);
   assert.equal(days[0].available, 300);
   assert.equal(days[1].booked, 840);
 });

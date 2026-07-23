@@ -48,6 +48,12 @@ const formatCount = (value) => {
   return numeric.toLocaleString('en-US', { maximumFractionDigits: 0 });
 };
 
+const formatPercent = (value) => {
+  const numeric = Number.parseFloat(value);
+  if (!Number.isFinite(numeric)) return '—';
+  return `${numeric.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+};
+
 const buildSelectValues = (rows, field) => {
   const masterRows = (rows || []).filter((row) => row?.row_type === 'master');
   const values = [...new Set(
@@ -161,7 +167,8 @@ const MasterSailingExplorerPresenter = ({
       },
       {
         field: 'row_label',
-        title: 'Master Sail / Day',
+        title: 'Sail/Day',
+        headerTooltip: 'Master sail / voyage day',
         minWidth: 130,
         formatter: (cell) => {
           const row = cell.getRow().getData();
@@ -177,7 +184,8 @@ const MasterSailingExplorerPresenter = ({
     if (segmentsVisible) {
       baseColumns.push({
         field: 'contributing_segments',
-        title: 'Segments',
+        title: 'Segs',
+        headerTooltip: 'Contributing segments',
         minWidth: 220,
         formatter: (cell) => {
           const row = cell.getRow().getData();
@@ -193,7 +201,8 @@ const MasterSailingExplorerPresenter = ({
     baseColumns.push(
       {
         field: 'sail_date_from',
-        title: 'Departure',
+        title: 'Dep',
+        headerTooltip: 'Departure date',
         width: 88,
         formatter: (cell) => {
           const row = cell.getRow().getData();
@@ -204,26 +213,30 @@ const MasterSailingExplorerPresenter = ({
       },
       {
         field: 'sail_days',
-        title: 'Duration',
+        title: 'Dur',
+        headerTooltip: 'Duration',
         hozAlign: 'center',
         width: 72,
         headerSort: false,
       },
       {
         field: 'package_name',
-        title: 'Package',
+        title: 'Pkg',
+        headerTooltip: 'Package',
         minWidth: 120,
         headerSort: false,
       },
       {
         field: 'route',
-        title: 'Route',
+        titleShort: 'Route',
+        titleLong: 'Route',
         width: 96,
         headerSort: false,
       },
       {
-        field: 'booked_display',
-        title: 'Booked (berths)',
+        field: 'berths_occupied',
+        titleShort: 'Bk B',
+        titleLong: 'Booked (berths)',
         hozAlign: 'right',
         width: 100,
         formatter: (cell) => {
@@ -234,8 +247,93 @@ const MasterSailingExplorerPresenter = ({
         headerSort: false,
       },
       {
-        field: 'capacity_display',
-        title: 'Capacity (berths)',
+        field: 'total_cabins',
+        titleShort: 'Tot C',
+        titleLong: 'Total cabins',
+        hozAlign: 'right',
+        width: 96,
+        formatter: (cell) => formatCount(cell.getRow().getData()?.total_cabins),
+        headerSort: false,
+      },
+      {
+        field: 'booked_cabins',
+        titleShort: 'Bk C',
+        titleLong: 'Booked cabins',
+        hozAlign: 'right',
+        width: 104,
+        formatter: (cell) => formatCount(cell.getRow().getData()?.booked_cabins),
+        headerSort: false,
+      },
+      {
+        field: 'guaranteed_cabins',
+        titleShort: 'Res C',
+        titleLong: 'Reserved cabins (group × probability)',
+        hozAlign: 'right',
+        width: 184,
+        formatter: (cell) => formatCount(cell.getRow().getData()?.guaranteed_cabins),
+        headerSort: false,
+      },
+      {
+        field: 'actual_booked_pct',
+        titleShort: 'Bk%',
+        titleLong: 'Actual booked cabins %',
+        hozAlign: 'right',
+        width: 92,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const pct = row?.row_type === 'day'
+            ? (
+              Number(row?.total_cabins) > 0
+                ? (Number(row?.booked_cabins || 0) / Number(row?.total_cabins)) * 100
+                : null
+            )
+            : row?.actual_booked_pct;
+          return formatPercent(pct);
+        },
+        headerSort: false,
+      },
+      {
+        field: 'potential_booked_pct',
+        titleShort: 'Pot%',
+        titleLong: 'Potential booked cabins % (booked + reserved)',
+        hozAlign: 'right',
+        width: 102,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const pct = row?.row_type === 'day'
+            ? (
+              Number(row?.total_cabins) > 0
+                ? ((Number(row?.booked_cabins || 0) + Number(row?.guaranteed_cabins || 0)) / Number(row?.total_cabins)) * 100
+                : null
+            )
+            : row?.potential_booked_pct;
+          return formatPercent(pct);
+        },
+        headerSort: false,
+      },
+      {
+        field: 'booking_upside_pct',
+        titleShort: 'Up%',
+        titleLong: 'Upside % (potential - actual)',
+        hozAlign: 'right',
+        width: 92,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const pct = row?.row_type === 'day'
+            ? (
+              Number(row?.total_cabins) > 0
+                ? ((Number(row?.guaranteed_cabins || 0) / Number(row?.total_cabins)) * 100)
+                : null
+            )
+            : row?.booking_upside_pct;
+          return formatPercent(pct);
+        },
+        headerSort: false,
+      },
+      {
+        field: 'berth_capacity',
+        titleShort: 'Cap B',
+        titleLong: 'Capacity (berths)',
         hozAlign: 'right',
         width: 108,
         formatter: (cell) => {
@@ -246,8 +344,9 @@ const MasterSailingExplorerPresenter = ({
         headerSort: false,
       },
       {
-        field: 'available_display',
-        title: 'Available',
+        field: 'berths_available',
+        titleShort: 'Avl B',
+        titleLong: 'Available (berths)',
         hozAlign: 'right',
         width: 88,
         formatter: (cell) => {
@@ -416,6 +515,7 @@ const MasterSailingExplorerPresenter = ({
           resizableColumns: true,
           movableColumns: true,
           pagination: false,
+          panelComponentId: panelComponentId || 'master-sailing-explorer',
           groupBy: GROUP_BY,
           groupStartOpen: [true, true],
           groupHeader: groupHeaders,
@@ -506,6 +606,7 @@ const MasterSailingExplorerPresenter = ({
     openAllGroups,
     openFirstMonthOnly,
     openOnlyMonthGroup,
+    panelComponentId,
   ]);
 
   useEffect(() => {
@@ -611,7 +712,7 @@ const MasterSailingExplorerPresenter = ({
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Master Sailing Explorer</h2>
           <p className="talia-report__subtitle">
-            {masterCount} master sailings · physical berths by day · segments show selling guests
+            {masterCount} master sailings · physical berths by day · actual vs potential booked cabin percentages
           </p>
         </div>
       </header>

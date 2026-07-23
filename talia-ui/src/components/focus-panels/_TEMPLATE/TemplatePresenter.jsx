@@ -39,13 +39,15 @@ const TemplatePresenter = ({ data, panelInstanceId, panelComponentId }) => {
   const columns = [
     { 
       field: "id", 
-      title: "ID",
+      titleShort: "ID",
+      titleLong: "Record identifier",
       width: 100,
       headerFilter: "input"
     },
     { 
       field: "name", 
-      title: "Name",
+      titleShort: "Name",
+      titleLong: "Display name",
       widthGrow: 2,
       headerFilter: "list", // Use "list" instead of deprecated "autocomplete"
       headerFilterParams: {

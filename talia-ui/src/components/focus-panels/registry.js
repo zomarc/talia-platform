@@ -17,6 +17,7 @@ import ExceptionList from './ExceptionList';
 import ItineraryList from './ItineraryList';
 import ItineraryExtract from './ItineraryExtract';
 import ReservationCurrentStateContainer from './ReservationCurrentState';
+import GroupBookingReviewContainer from './GroupBookingReview';
 import BookingProfileContainer from './BookingProfile';
 import TargetProfileEditorContainer from './TargetProfileEditor';
 import BookingTargetChartContainer from './BookingTargetChart';
@@ -47,6 +48,7 @@ import ProjectSummaryContainer from './ProjectSummary';
 import ComponentInteractionMapContainer from './ComponentInteractionMap';
 import ContextRowMonitor from './ContextRowMonitor';
 import DataManagementPanel from './DataManagement';
+import ColumnTerminologyPanel from './ColumnTerminology';
 import TestWorkbenchPanel from './TestWorkbench';
 import DataDebugView from '../TestPage/DataDebugView';
 import DataTypesValidation from '../dev/DataTypesValidation';
@@ -412,6 +414,22 @@ export const componentRegistry = {
     },
     showInReports: true,
     filePath: 'src/components/focus-panels/ReservationCurrentState/index.jsx'
+  },
+  GroupBookingReview: {
+    component: GroupBookingReviewContainer,
+    panelId: 'group-booking-review',
+    category: 'Tables',
+    title: 'Group vs Real Bookings',
+    description: 'Direct GraphQL reservation review where rows without res_id are treated as pending group bookings and rows with res_id as real bookings.',
+    props: {},
+    dataRequirements: 'Uses direct GraphQL reservations query (trackedFetchGraphql) and sail.select context.',
+    events: {
+      emits: [],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+    },
+    supportsRefresh: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/GroupBookingReview/index.jsx'
   },
   BookingProfile: {
     component: BookingProfileContainer,
@@ -807,6 +825,19 @@ export const componentRegistry = {
     allowedRoles: ['ADMIN', 'SUPER_USER'],
     showInReports: true,
     filePath: 'src/components/focus-panels/DataManagement/index.jsx'
+  },
+  ColumnTerminologyPanel: {
+    component: ColumnTerminologyPanel,
+    panelId: 'column-terminology-panel',
+    category: 'Admin',
+    title: 'Column Terminology',
+    description: 'Admin view of global short/long table terminology dictionary with observed field coverage.',
+    props: {},
+    dataRequirements: 'Derived from tabulatorColumnLabelDictionary and runtime field observations; ADMIN/SUPER_USER only',
+    events: { emits: [], respondsTo: [] },
+    allowedRoles: ['ADMIN', 'SUPER_USER'],
+    showInReports: true,
+    filePath: 'src/components/focus-panels/ColumnTerminology/index.jsx'
   },
   TestWorkbenchPanel: {
     component: TestWorkbenchPanel,

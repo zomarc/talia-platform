@@ -100,6 +100,16 @@ export const typeDefs = `#graphql
     assets: JSON!
   }
 
+  type ColumnTerminologyDefinition {
+    field: String!
+    shortLabel: String
+    longLabel: String
+    userDefinition: String
+    adminDefinition: String
+    updatedAt: String
+    updatedBy: String
+  }
+
   type BreakoutScore {
     userId: String!
     highScore: Int!
@@ -1253,6 +1263,7 @@ export const typeDefs = `#graphql
     appearanceSettings(userId: String): AppearanceSettings!
     appearanceProfileBuckets(userId: String): AppearanceProfileBuckets!
     taliaUiThemeRegistry: TaliaUiThemeRegistryPayload!
+    columnTerminologyDefinitions: [ColumnTerminologyDefinition!]!
     userProfileState(userId: String): JSON
     gameScore(gameId: String!, userId: String): GameScore!
     gameLeaderboard(gameId: String!, limitTop: Int, limitRecent: Int): GameLeaderboard!
@@ -1307,6 +1318,7 @@ export const typeDefs = `#graphql
     saveAppearanceSettings(settings: JSON!, activeProfileId: String, userId: String): AppearanceSettings!
     saveAppearanceProfiles(profiles: JSON!, userId: String): [AppearanceProfile!]!
     saveTaliaUiThemeRegistry(themes: JSON, assets: JSON): TaliaUiThemeRegistryPayload!
+    saveColumnTerminologyDefinitions(definitions: JSON!): [ColumnTerminologyDefinition!]!
     saveUserProfileState(patch: JSON!, userId: String): JSON
     saveGameScore(gameId: String!, score: Int!, userId: String): GameScore!
     saveBreakoutScore(score: Int!, userId: String): BreakoutScore!

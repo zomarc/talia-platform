@@ -182,6 +182,7 @@ const AgencyPresenter = ({
   panelInstanceId,
   panelComponentId,
   selectionMode = AGENCY_SELECTION_MODES.ALL,
+  scopeLoading = false,
   selectedAgencyId = null,
   selectedReservationId = null,
   selectedSailCodes = [],
@@ -190,6 +191,7 @@ const AgencyPresenter = ({
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const tableBuiltRef = useRef(false);
+  const suppressSelectionEventsRef = useRef(false);
   const activeAgencyIdRef = useRef(selectedAgencyId ? String(selectedAgencyId) : null);
   const [recordCount, setRecordCount] = useState(data?.length || 0);
   const [filters, setFilters] = useState({ ...EMPTY_FILTERS });
@@ -250,7 +252,9 @@ const AgencyPresenter = ({
   useEffect(() => {
     if (selectionMode !== AGENCY_SELECTION_MODES.RESERVATION || !selectedAgencyId) return;
     activeAgencyIdRef.current = String(selectedAgencyId);
-    setFilters({ ...EMPTY_FILTERS });
+    setFilters((previous) => (
+      FILTER_FIELDS.some(([field]) => previous[field]) ? { ...EMPTY_FILTERS } : previous
+    ));
     focusLinkedAgency();
   }, [focusLinkedAgency, selectedAgencyId, selectionMode]);
 
@@ -290,7 +294,9 @@ const AgencyPresenter = ({
       if (cancelled || !tableRef.current) return;
 
       if (instanceRef.current) {
-        instanceRef.current.destroy();
+        suppressSelectionEventsRef.current = true;
+        try { instanceRef.current.destroy(); } catch { /* noop */ }
+        instanceRef.current = null;
       }
 
       instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
@@ -303,6 +309,7 @@ const AgencyPresenter = ({
         headerFilterLiveFilterDelay: 300,
         movableColumns: true,
         rowFormatter: createReferenceRowFormatter(isReferenceAgencyRow),
+        panelComponentId: panelComponentId || 'agency-directory',
       }));
 
       instanceRef.current.on('tableBuilt', () => {
@@ -315,6 +322,7 @@ const AgencyPresenter = ({
       });
 
       instanceRef.current.on('rowSelectionChanged', (selectedData) => {
+        if (suppressSelectionEventsRef.current) return;
         const rec = selectedData?.[0];
         if (rec) {
           activeAgencyIdRef.current = String(rec.agency_id);
@@ -344,8 +352,9 @@ const AgencyPresenter = ({
     return () => {
       cancelled = true;
       tableBuiltRef.current = false;
+      suppressSelectionEventsRef.current = true;
       if (instanceRef.current) {
-        instanceRef.current.destroy();
+        try { instanceRef.current.destroy(); } catch { /* noop */ }
         instanceRef.current = null;
       }
     };
@@ -358,19 +367,28 @@ const AgencyPresenter = ({
   ]);
 
   useEffect(() => {
-    if (!instanceRef.current) return;
-    afterTabulatorDataRefresh(instanceRef.current.replaceData(filteredData));
-    setRecordCount(filteredData.length);
-    focusLinkedAgency();
+    const table = instanceRef.current;
+    if (!table || !tableBuiltRef.current) return;
+    suppressSelectionEventsRef.current = true;
+    const refreshPromise = Promise.resolve(table.replaceData(filteredData))
+      .catch(() => { /* noop */ })
+      .finally(() => {
+        suppressSelectionEventsRef.current = false;
+        setRecordCount(filteredData.length);
+        focusLinkedAgency();
+      });
+    afterTabulatorDataRefresh(table, refreshPromise);
   }, [filteredData, focusLinkedAgency]);
 
-  const subtitle = selectionMode === AGENCY_SELECTION_MODES.RESERVATION
-    ? `${recordCount.toLocaleString()} linked from reservation`
-    : selectionMode === AGENCY_SELECTION_MODES.SAIL
-      ? `${recordCount.toLocaleString()} agencies selling ${sailScopeLabel || 'selected sailing'}`
-      : activeFilterCount > 0
-        ? `${recordCount.toLocaleString()} of ${totalCount.toLocaleString()} agencies`
-        : `${recordCount.toLocaleString()} agencies from dwh.Dim_Agency`;
+  const subtitle = scopeLoading
+    ? `Updating agencies for ${sailScopeLabel || 'selected sailing'}...`
+    : selectionMode === AGENCY_SELECTION_MODES.RESERVATION
+      ? `${recordCount.toLocaleString()} linked from reservation`
+      : selectionMode === AGENCY_SELECTION_MODES.SAIL
+        ? `${recordCount.toLocaleString()} agencies selling ${sailScopeLabel || 'selected sailing'}`
+        : activeFilterCount > 0
+          ? `${recordCount.toLocaleString()} of ${totalCount.toLocaleString()} agencies`
+          : `${recordCount.toLocaleString()} agencies from dwh.Dim_Agency`;
 
   return (
     <div className="focus-panel talia-report agency-directory-panel" role="region" aria-label="Agency directory">

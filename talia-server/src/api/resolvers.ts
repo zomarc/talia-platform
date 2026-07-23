@@ -806,6 +806,7 @@ const mapGraphQLFocusToDb = (input: any, createdBy?: string) => {
 const APPEARANCE_SETTINGS_CATEGORY = 'ui_appearance';
 const THEME_REGISTRY_SETTING_KEY = 'theme_registry';
 const THEME_ASSET_OVERRIDES_SETTING_KEY = 'theme_asset_overrides';
+const COLUMN_TERMINOLOGY_DEFINITIONS_KEY = 'column_terminology_definitions';
 const USER_PROFILE_CATEGORY = 'ui_profile';
 const GAME_SETTINGS_CATEGORY = 'ui_game';
 const DEFAULT_GAME_ID = 'breakout';
@@ -823,6 +824,66 @@ const normalizeUserId = (value: any) => String(value || 'dev-user-1').trim();
 const userProfileStateKey = (userId: string) => `state:${normalizeUserId(userId)}`;
 
 const gameScoreKey = (gameId: string, userId: string) => `score:${normalizeGameId(gameId)}:${normalizeUserId(userId)}`;
+
+const normalizeColumnTerminologyDefinitions = (raw: any) => {
+  const list = Array.isArray(raw)
+    ? raw
+    : (raw && typeof raw === 'object' ? Object.values(raw) : []);
+  return list
+    .map((entry: any) => {
+      const field = String(entry?.field || '').trim();
+      if (!field) return null;
+      return {
+        field,
+        shortLabel: String(entry?.shortLabel || '').trim(),
+        longLabel: String(entry?.longLabel || '').trim(),
+        userDefinition: String(entry?.userDefinition || '').trim(),
+        adminDefinition: String(entry?.adminDefinition || '').trim(),
+        updatedAt: entry?.updatedAt ? String(entry.updatedAt) : null,
+        updatedBy: entry?.updatedBy ? String(entry.updatedBy) : null,
+      };
+    })
+    .filter(Boolean);
+};
+
+const columnTerminologyContentEqual = (left: any, right: any) => (
+  String(left?.shortLabel || '') === String(right?.shortLabel || '')
+  && String(left?.longLabel || '') === String(right?.longLabel || '')
+  && String(left?.userDefinition || '') === String(right?.userDefinition || '')
+  && String(left?.adminDefinition || '') === String(right?.adminDefinition || '')
+);
+
+const mergeColumnTerminologyDefinitions = (
+  existingRaw: any,
+  incomingRaw: any,
+  auditBy: string
+) => {
+  const existing = normalizeColumnTerminologyDefinitions(existingRaw);
+  const incoming = normalizeColumnTerminologyDefinitions(incomingRaw);
+  const byField = new Map(existing.map((entry: any) => [entry.field, entry]));
+  const now = new Date().toISOString();
+
+  incoming.forEach((entry: any) => {
+    const previous = byField.get(entry.field);
+    if (previous && columnTerminologyContentEqual(previous, entry)) {
+      byField.set(entry.field, {
+        ...entry,
+        updatedAt: previous.updatedAt || null,
+        updatedBy: previous.updatedBy || null,
+      });
+      return;
+    }
+    byField.set(entry.field, {
+      ...entry,
+      updatedAt: now,
+      updatedBy: auditBy,
+    });
+  });
+
+  return Array.from(byField.values()).sort((left: any, right: any) => (
+    String(left.field).localeCompare(String(right.field))
+  ));
+};
 
 const normalizeIntegrationValue = (value: any) => {
   if (value === undefined) return undefined;
@@ -2577,6 +2638,19 @@ export const resolvers = {
       }
     },
 
+    columnTerminologyDefinitions: async () => {
+      try {
+        const stored = await configService.getSetting(
+          APPEARANCE_SETTINGS_CATEGORY,
+          COLUMN_TERMINOLOGY_DEFINITIONS_KEY
+        );
+        return normalizeColumnTerminologyDefinitions(stored);
+      } catch (error: any) {
+        console.error('Error getting column terminology definitions:', error);
+        return [];
+      }
+    },
+
     userProfileState: async (parent: any, args: any) => {
       const uid = normalizeUserId(args?.userId);
       try {
@@ -3985,6 +4059,40 @@ export const resolvers = {
       } catch (error: any) {
         console.error('Error saving UI theme registry:', error);
         throw new Error(`Failed to save UI theme registry: ${error.message}`);
+      }
+    },
+
+    saveColumnTerminologyDefinitions: async (parent: any, args: any, context: any) => {
+      if (!canManageInstanceConfig(context)) {
+        throw new Error('Not authorized to save column terminology definitions.');
+      }
+      try {
+        const existing = await configService.getSetting(
+          APPEARANCE_SETTINGS_CATEGORY,
+          COLUMN_TERMINOLOGY_DEFINITIONS_KEY
+        );
+        const stamped = mergeColumnTerminologyDefinitions(
+          existing,
+          args?.definitions,
+          intelAuditStamp(context)
+        );
+        await configService.upsertSetting(
+          APPEARANCE_SETTINGS_CATEGORY,
+          COLUMN_TERMINOLOGY_DEFINITIONS_KEY,
+          stamped,
+          {
+            displayName: 'Column terminology definitions',
+            description: 'Shared user and admin/dev definitions for compact table column terminology',
+          }
+        );
+        const saved = await configService.getSetting(
+          APPEARANCE_SETTINGS_CATEGORY,
+          COLUMN_TERMINOLOGY_DEFINITIONS_KEY
+        );
+        return normalizeColumnTerminologyDefinitions(saved);
+      } catch (error: any) {
+        console.error('Error saving column terminology definitions:', error);
+        throw new Error(`Failed to save column terminology definitions: ${error.message}`);
       }
     },
 

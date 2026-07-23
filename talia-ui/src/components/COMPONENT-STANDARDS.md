@@ -50,7 +50,7 @@ const ComponentName = ({ data, theme, onRefresh }) => {
 
 Every focus-panel report uses the same **shell elements**. Use the standard CSS classes so global header visibility toggles work without per-panel logic.
 
-**Do not call panel filter rows “Controls”.** In Talia vocabulary, **Controls** means the app header criteria strip (Date, Dur, Active, …) **and** in-panel control rows (Expand/Collapse, group toggles) — not `.talia-report-filters`.
+**Do not call panel filter rows “Controls”.** In Talia vocabulary, `.talia-report-filters` are report/application filters, while panel operations belong in `.talia-report__controls` + `.talia-report__actions-bar` and are governed together by the **Operations** visibility toggle.
 
 ```
 ┌─ .talia-report ─────────────────────────────────────────────┐
@@ -62,9 +62,9 @@ Every focus-panel report uses the same **shell elements**. Use the standard CSS 
 ├─────────────────────────────────────────────────────────────┤
 │ .talia-callout (0+)                    [Callouts toggle]    │
 ├─────────────────────────────────────────────────────────────┤
-│ .talia-report__controls (0+)           [Controls toggle]    │
+│ .talia-report__controls (0+)                                │
 ├─────────────────────────────────────────────────────────────┤
-│ .talia-report__actions-bar             [Actions toggle]     │
+│ .talia-report__actions-bar             [Operations toggle]  │
 ├─────────────────────────────────────────────────────────────┤
 │ main.talia-report__content                                  │
 │   ReportDataDetails (Details toggle) → table/chart/map      │
@@ -80,11 +80,11 @@ StatusBar `.status-bar__criteria` also hides under **Controls** (root `talia-con
 |---------------|------------|----------------|---------------|-----------|
 | **Title** | Panel name in report header | `header.talia-report__header` → `h2.talia-report__title` | **Titles** | Appearance profile `panelTitlesVisible` |
 | **Subtitle** | Metadata line under title (counts, source) | `p.talia-report__subtitle` (inside header; hidden with Title) | *(with Titles)* | — |
-| **Talia filters** | Panel-scoped criteria row (dropdowns, search) | `.talia-report-filters` (+ `__group`, `__label`, `__input`) | **Filters** | `localStorage` `taliaHeaderFiltersVisible` |
-| **Column filters** | Tabulator per-column header filters | `headerFilter` columns → `.tabulator-header-filter` | **Column filters** | `localStorage` `taliaHeaderTabulatorFiltersVisible` |
-| **Callout** | Informational note / guidance | `.talia-callout` | **Callouts** | Appearance profile `calloutsVisible` |
-| **Controls** | App header global criteria strip (Date, Dur, Active, Wide) **and** in-panel operations (Expand/Collapse, group toggles) | StatusBar `.status-bar__criteria`; panel `.talia-report__controls`; root `talia-controls-hidden` | **Controls** | Appearance profile `controlsVisible` |
-| **Actions** | Panel operations (Refresh, Export, …) | `.talia-report__actions-bar` (preferred); legacy compact: `.talia-report__actions` in header | **Actions** | Appearance profile `actionsVisible` |
+| **Talia filters** | Application-level filter row in report shell (not panel controls) | `.talia-report-filters` (+ `__group`, `__label`, `__input`) | **Filters** | `localStorage` `taliaHeaderFiltersVisible` |
+| **Column filters** | Native Tabulator column header filters | `headerFilter` columns → `.tabulator-header-filter` | **Column filters** | `localStorage` `taliaHeaderTabulatorFiltersVisible` |
+| **Callout** | Extra informational note / guidance (usually hidden) | `.talia-callout` | **Callouts** | Appearance profile `calloutsVisible` |
+| **Controls** | In-panel operation controls (Expand/Collapse, view modes, group toggles) | panel `.talia-report__controls` | *(with Operations)* | Appearance profile `controlsVisible` |
+| **Actions** | Panel operation actions (Refresh, Export, …) | `.talia-report__actions-bar` (preferred); legacy compact: `.talia-report__actions` in header | **Operations** | Appearance profile `actionsVisible` |
 | **Details** | User-facing extra data blocks (header ≣); gates table/chart mount | `ReportDataDetails` + `usePanelDetailsVisibility` | **Details** (≣ btn) | `localStorage` `taliaGlobalReportDetailsVisible` |
 | **Technical meta** | Dev/diagnostic block (dock tab ⓘ) | `ReportEventMeta` via `usePanelTechnicalMetaVisibility` | Tab ⓘ only | In-memory `__taliaPanelTechnicalMetaVisibility` |
 | **Content** | Primary body (table, chart, map) | `main.talia-report__content`; tables: `.talia-table` | — | — |
@@ -133,8 +133,8 @@ Follow **Agency** / **Published Rates** (filters → callout → controls → ac
 
 - **Title header is informational only** — `h2.talia-report__title` + `p.talia-report__subtitle`; never put action or control buttons in `talia-report__header`.
 - Put **Talia filters** in their own row — never mix into the title block (except legacy panels not yet migrated).
-- Put **Controls** (Expand/Collapse, group toggles) in `.talia-report__controls` — toggled by global **Controls**, not **Actions**.
-- Put **Actions** (Refresh, Export) in `.talia-report__actions-bar` — toggled by global **Actions**.
+- Put **Controls** (Expand/Collapse, group toggles) in `.talia-report__controls` — toggled with global **Operations**.
+- Put **Actions** (Refresh, Export) in `.talia-report__actions-bar` — toggled with global **Operations**.
 - **Column filters** need no panel markup; set `headerFilter` on Tabulator columns.
 - Gate **Content** with `ReportDataDetails` when the panel supports header **Details** (≣).
 - Do **not** use header ≣ for technical meta; do **not** use tab ⓘ for user data tables.
@@ -259,6 +259,16 @@ const MyComponent = () => {
 - Always create instances with `new Tabulator(..., getTabulatorOptions({ ... }))`
 - Use `selectableRows: 1` for single row selection
 - Use `headerFilter: "list"` with `autocomplete: true` for dropdown filters
+- Standardize column labels with short+long naming:
+  - `titleShort`: compact column header shown in-table
+  - `titleLong`: full label used by Tabulator `headerTooltip`
+  - `tabulatorConfig` auto-applies this, and also defaults `headerTooltip` to `title` when no long name is provided
+  - Global field-level defaults live in `lib/tabulatorColumnLabelDictionary.js` and are applied automatically across components
+- Global compact text policy: package columns (`package_name` / `package`) are rendered as first word + `...` with full value on hover title (applied centrally in `tabulatorConfig`)
+- Enforcement rule: when adding a new table component, prefer dictionary-backed fields in `tabulatorColumnLabelDictionary`; if a field is new, add it to the dictionary in the same change
+- Shared definitions rule: maintain two per-field notes in the Column Terminology admin panel:
+  - **User definition** (business/user-facing meaning)
+  - **Admin/Dev definition** (technical/internal meaning)
 - Emit events on row selection: `talia:componentname.select`
 - **Persistent selection indicator:** use `createReferenceRowFormatter` / `refreshReferenceRowClasses` from `lib/tabulatorReferenceSelection.js` so the active row keeps class `tabulator-row--reference` across data refresh. Shared left accent bar styling lives in `tabulator-theme.css` (`--theme-table-row-selected-accent`). Panels with `selectableRows: 1` get the same bar via `.tabulator-selected`.
 - For grouped tables that need tab-header controls, set `supportsGroupActions: true` in `registry.js` and register presenter actions in `window.__taliaPanelGroupActions`

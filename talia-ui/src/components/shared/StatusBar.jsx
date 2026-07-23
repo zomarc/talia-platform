@@ -53,6 +53,7 @@ const DASHBOARD_VIEW_SCOPE_EVENT = 'talia:dashboard.viewScope';
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
 const TABLE_LAYOUT_STORAGE_KEY = 'taliaTableLayoutMode';
 const TEST_DEFAULT_GLOBAL_RANGE_KEY = 'all_future';
+const TABLE_LAYOUT_MODES = ['best', 'width', 'data'];
 
 const GLOBAL_DURATION_OPTIONS = [
   { key: 'all', label: 'All' },
@@ -336,9 +337,9 @@ const StatusBar = ({
   const [refreshPhase, setRefreshPhase] = useState('active'); // active -> all -> cooldown
   const [tableLayoutMode, setTableLayoutMode] = useState(() => {
     const inMemory = window.__taliaTableLayoutMode;
-    if (inMemory === 'data' || inMemory === 'width') return inMemory;
+    if (TABLE_LAYOUT_MODES.includes(inMemory)) return inMemory;
     const saved = window.localStorage?.getItem?.(TABLE_LAYOUT_STORAGE_KEY);
-    return saved === 'data' ? 'data' : 'width';
+    return TABLE_LAYOUT_MODES.includes(saved) ? saved : 'best';
   });
   const refreshPhaseTimerRef = useRef(null);
   const criteriaSaveTimerRef = useRef(null);
@@ -358,7 +359,6 @@ const StatusBar = ({
     focus: false,
   });
   const [isHeaderInteractionActive, setIsHeaderInteractionActive] = useState(false);
-  const focusOpenClickTimerRef = useRef(null);
   const statusBarRootRef = useRef(null);
   const [activePanelComponent, setActivePanelComponent] = useState(() => (
     window?.dockviewApi?.activePanel?.component
@@ -507,13 +507,6 @@ const StatusBar = ({
     );
   };
 
-  const clearFocusOpenClickTimer = () => {
-    if (focusOpenClickTimerRef.current) {
-      window.clearTimeout(focusOpenClickTimerRef.current);
-      focusOpenClickTimerRef.current = null;
-    }
-  };
-
   useEffect(() => {
     if (!eventsVisible && !criteriaVisible && !visibilityControlsOpen && !focusControlsOpen) {
       setAutoCloseFading({
@@ -550,7 +543,6 @@ const StatusBar = ({
       setVisibilityControlsOpen(false);
       setFocusControlsOpen(false);
       setShowSaveFocusConfirm(false);
-      clearFocusOpenClickTimer();
       setAutoCloseFading({
         advanced: false,
         criteria: false,
@@ -612,7 +604,7 @@ const StatusBar = ({
   };
 
   const handleTableLayoutSelect = (mode) => {
-    if (mode !== 'data' && mode !== 'width') return;
+    if (!TABLE_LAYOUT_MODES.includes(mode)) return;
     const next = mode;
     if (next === tableLayoutMode) return;
     setTableLayoutMode(next);
@@ -635,7 +627,7 @@ const StatusBar = ({
   };
 
   useEffect(() => {
-    if (themeTableLayoutMode === 'data' || themeTableLayoutMode === 'width') {
+    if (TABLE_LAYOUT_MODES.includes(themeTableLayoutMode)) {
       setTableLayoutMode(themeTableLayoutMode);
     }
   }, [themeTableLayoutMode]);
@@ -647,7 +639,6 @@ const StatusBar = ({
     if (groupToKeep !== 'focus') {
       setFocusControlsOpen(false);
       setShowSaveFocusConfirm(false);
-      clearFocusOpenClickTimer();
     }
     setAutoCloseFading({
       advanced: false,
@@ -678,23 +669,21 @@ const StatusBar = ({
     setVisibilityControlsOpen(nextVisible);
   };
 
+  // Same pattern as visibility/criteria: toggle immediately. No open delays.
   const handleFocusTopClick = () => {
-    clearFocusOpenClickTimer();
-    focusOpenClickTimerRef.current = window.setTimeout(() => {
-      closeOtherTopLevelGroups('focus');
-      setFocusControlsOpen(true);
-      setShowSaveFocusConfirm(false);
-      userActivityTracker.recordHeaderAction('focus-selector-open', { status: 'single-click' });
-      focusOpenClickTimerRef.current = null;
-    }, 220);
+    const nextVisible = !focusControlsOpen;
+    userActivityTracker.recordHeaderAction(
+      nextVisible ? 'focus-selector-open' : 'focus-selector-close',
+      { status: 'single-click' }
+    );
+    if (nextVisible) closeOtherTopLevelGroups('focus');
+    setFocusControlsOpen(nextVisible);
+    setShowSaveFocusConfirm(false);
   };
 
   const handleFocusTopDoubleClick = (event) => {
     event?.preventDefault?.();
-    clearFocusOpenClickTimer();
-    closeOtherTopLevelGroups('focus');
-    setFocusControlsOpen(false);
-    setShowSaveFocusConfirm(false);
+    // Two clicks already toggled open→closed; cycle focus and leave strip closed.
     handleCycleFocus();
     userActivityTracker.recordHeaderAction('focus-next', { status: 'double-click' });
   };
@@ -784,13 +773,8 @@ const StatusBar = ({
 
   const handleActionsToggle = () => {
     const nextVisible = !actionsVisible;
-    userActivityTracker.recordHeaderAction('actions-toggle', { status: nextVisible ? 'show' : 'hide' });
+    userActivityTracker.recordHeaderAction('operations-toggle', { status: nextVisible ? 'show' : 'hide' });
     setActionsVisible(nextVisible);
-  };
-
-  const handleControlsToggle = () => {
-    const nextVisible = controlsVisible !== true;
-    userActivityTracker.recordHeaderAction('controls-toggle', { status: nextVisible ? 'show' : 'hide' });
     setControlsVisible(nextVisible);
   };
 
@@ -944,18 +928,30 @@ const StatusBar = ({
   }, [eventsVisible]);
 
   useEffect(() => {
+    const resolveElement = (node) => {
+      if (!node) return null;
+      if (node instanceof Element) return node;
+      return node.parentElement || null;
+    };
+    const isInside = (node, root, selector) => {
+      const el = resolveElement(node);
+      if (!el) return false;
+      if (root && typeof root.contains === 'function' && root.contains(el)) return true;
+      return Boolean(selector && el.closest(selector));
+    };
+
     const handleOutsideClick = (event) => {
-      const insideTrigger = visibilityControlsRef.current?.contains(event.target);
-      const insidePanel = visibilityPanelRef.current?.contains(event.target);
-      const insideFocusTrigger = focusControlsRef.current?.contains(event.target);
-      const insideFocusPanel = focusPanelRef.current?.contains(event.target);
-      if (!insideTrigger && !insidePanel) {
+      const target = event.target;
+      const insideVisibility = isInside(target, visibilityControlsRef.current, '.status-bar__visibility-controls')
+        || isInside(target, visibilityPanelRef.current, '.status-bar__criteria--visibility');
+      const insideFocus = isInside(target, focusControlsRef.current, '.status-bar__focus-controls')
+        || isInside(target, focusPanelRef.current, '.status-bar__criteria--focus');
+      if (!insideVisibility) {
         setVisibilityControlsOpen(false);
       }
-      if (!insideFocusTrigger && !insideFocusPanel) {
+      if (!insideFocus) {
         setFocusControlsOpen(false);
         setShowSaveFocusConfirm(false);
-        clearFocusOpenClickTimer();
       }
     };
     const handleEscape = (event) => {
@@ -963,15 +959,14 @@ const StatusBar = ({
         setVisibilityControlsOpen(false);
         setFocusControlsOpen(false);
         setShowSaveFocusConfirm(false);
-        clearFocusOpenClickTimer();
         setCriteriaVisible(false);
         setEventsVisible(false);
       }
     };
-    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('pointerdown', handleOutsideClick);
     window.addEventListener('keydown', handleEscape);
     return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('pointerdown', handleOutsideClick);
       window.removeEventListener('keydown', handleEscape);
     };
   }, []);
@@ -1024,7 +1019,7 @@ const StatusBar = ({
   useEffect(() => {
     const handleTableLayoutEvent = (event) => {
       const nextMode = event?.detail?.mode;
-      if (nextMode === 'data' || nextMode === 'width') {
+      if (TABLE_LAYOUT_MODES.includes(nextMode)) {
         setTableLayoutMode(nextMode);
       }
     };
@@ -1035,7 +1030,6 @@ const StatusBar = ({
   useEffect(() => {
     return () => {
       clearRefreshTimer();
-      clearFocusOpenClickTimer();
       if (messageFadeTimerRef.current) {
         window.clearTimeout(messageFadeTimerRef.current);
       }
@@ -1348,9 +1342,11 @@ const StatusBar = ({
                       <button
                         type="button"
                         className={`status-bar__header-btn status-bar__header-btn--focus-top ${focusControlsOpen ? 'status-bar__header-btn--active' : ''}`}
+                        onPointerDown={(event) => event.stopPropagation()}
                         onClick={handleFocusTopClick}
                         onDoubleClick={handleFocusTopDoubleClick}
-                        aria-label="Focus controls"
+                        aria-label={focusControlsOpen ? 'Hide focus controls' : 'Show focus controls'}
+                        aria-expanded={focusControlsOpen}
                       >
                         ◎
                       </button>
@@ -1366,6 +1362,7 @@ const StatusBar = ({
                     className={`status-bar__criteria status-bar__criteria--focus ${autoCloseFading.focus ? 'status-bar__auto-close-fade' : ''}`}
                     role="group"
                     aria-label="Focus controls"
+                    onPointerDown={(event) => event.stopPropagation()}
                   >
                     <TaliaTooltip content={lastFocusId ? `Switch to ${lastFocusId}` : 'Switch to last focus'} placement="bottom-left" delayMs={180}>
                       <button
@@ -1606,6 +1603,7 @@ const StatusBar = ({
               className={`status-bar__criteria status-bar__criteria--visibility ${autoCloseFading.visibility ? 'status-bar__auto-close-fade' : ''}`}
               role="menu"
               aria-label="Visibility controls"
+              onPointerDown={(event) => event.stopPropagation()}
             >
               {styleSelectOptions.length > 0 && (
                 <TaliaTooltip
@@ -1635,18 +1633,6 @@ const StatusBar = ({
                   </div>
                 </TaliaTooltip>
               )}
-              <TaliaTooltip content="Show or hide the top-level controls strip" placement="bottom-left" delayMs={180}>
-                <button
-                  type="button"
-                  role="menuitemcheckbox"
-                  aria-checked={controlsVisible}
-                  className={`status-bar__visibility-option ${controlsVisible ? 'status-bar__visibility-option--active' : ''}`}
-                  onClick={handleControlsToggle}
-                >
-                  <span>Controls</span>
-                  {controlsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
-                </button>
-              </TaliaTooltip>
               <TaliaTooltip content="Show or hide filter rows on all reports" placement="bottom-left" delayMs={180}>
                 <button
                   type="button"
@@ -1659,7 +1645,7 @@ const StatusBar = ({
                   {filtersVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
                 </button>
               </TaliaTooltip>
-              <TaliaTooltip content="Show or hide Tabulator column header filters on all tables" placement="bottom-left" delayMs={180}>
+              <TaliaTooltip content="Show or hide native Tabulator column header filters on all tables" placement="bottom-left" delayMs={180}>
                 <button
                   type="button"
                   role="menuitemcheckbox"
@@ -1683,16 +1669,16 @@ const StatusBar = ({
                   {calloutsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
                 </button>
               </TaliaTooltip>
-              <TaliaTooltip content="Show or hide panel action sections across all reports" placement="bottom-left" delayMs={180}>
+              <TaliaTooltip content="Show or hide panel operations (actions + controls) across all reports" placement="bottom-left" delayMs={180}>
                 <button
                   type="button"
                   role="menuitemcheckbox"
-                  aria-checked={actionsVisible}
-                  className={`status-bar__visibility-option ${actionsVisible ? 'status-bar__visibility-option--active' : ''}`}
+                  aria-checked={actionsVisible && controlsVisible}
+                  className={`status-bar__visibility-option ${(actionsVisible && controlsVisible) ? 'status-bar__visibility-option--active' : ''}`}
                   onClick={handleActionsToggle}
                 >
-                  <span>Actions</span>
-                  {actionsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                  <span>Operations</span>
+                  {(actionsVisible && controlsVisible) ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Show or hide panel titles globally" placement="bottom-left" delayMs={180}>
@@ -1717,6 +1703,18 @@ const StatusBar = ({
                 >
                   <span>Details</span>
                   {detailsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Use adaptive best-fit table layout" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={tableLayoutMode === 'best'}
+                  className={`status-bar__visibility-option ${tableLayoutMode === 'best' ? 'status-bar__visibility-option--active' : ''}`}
+                  onClick={() => handleTableLayoutSelect('best')}
+                >
+                  <span>Best Fit</span>
+                  {tableLayoutMode === 'best' ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Use width-fit table layout" placement="bottom-left" delayMs={180}>
@@ -1751,6 +1749,7 @@ const StatusBar = ({
                 <button
                   type="button"
                   className={`status-bar__header-btn status-bar__header-btn--visibility ${visibilityControlsOpen ? 'status-bar__header-btn--active' : ''}`}
+                  onPointerDown={(event) => event.stopPropagation()}
                   onClick={handleVisibilityToggle}
                   aria-label={visibilityControlsOpen ? 'Hide visibility controls' : 'Show visibility controls'}
                 >

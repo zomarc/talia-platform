@@ -11,6 +11,7 @@ const DASHBOARD_VIEW_SCOPE_EVENT = 'talia:dashboard.viewScope';
 const FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderFiltersVisible';
 const TABULATOR_FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderTabulatorFiltersVisible';
 const TABLE_LAYOUT_STORAGE_KEY = 'taliaTableLayoutMode';
+const TABLE_LAYOUT_MODES = ['best', 'width', 'data'];
 
 const getBoolean = (value, fallback) => (typeof value === 'boolean' ? value : fallback);
 
@@ -42,10 +43,12 @@ export const enforceDashboardUiState = ({ dispatchEvents = true } = {}) => {
   window.__taliaTabulatorFiltersVisible = tabulatorFiltersVisible;
   root.classList.toggle('talia-tabulator-filters-hidden', tabulatorFiltersVisible === false);
 
-  let tableLayoutMode = window.__taliaTableLayoutMode === 'data' ? 'data' : 'width';
+  let tableLayoutMode = TABLE_LAYOUT_MODES.includes(window.__taliaTableLayoutMode)
+    ? window.__taliaTableLayoutMode
+    : 'best';
   try {
     const saved = window.localStorage?.getItem?.(TABLE_LAYOUT_STORAGE_KEY);
-    if (saved === 'data' || saved === 'width') tableLayoutMode = saved;
+    if (TABLE_LAYOUT_MODES.includes(saved)) tableLayoutMode = saved;
   } catch {
     // ignore storage failures
   }

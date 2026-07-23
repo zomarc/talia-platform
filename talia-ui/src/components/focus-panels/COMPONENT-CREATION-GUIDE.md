@@ -103,9 +103,15 @@ const formatCurrency = (value) => {
 
 // Column definitions
 const columns = [
-  { field: "id", title: "ID", width: 100 },
-  { field: "name", title: "Name", headerFilter: "input" },
-  { field: "amount", title: "Amount", hozAlign: "right", formatter: (cell) => formatCurrency(cell.getValue()) }
+  { field: "id", titleShort: "ID", titleLong: "Record identifier", width: 100 },
+  { field: "name", titleShort: "Name", titleLong: "Customer name", headerFilter: "input" },
+  {
+    field: "amount",
+    titleShort: "Amt",
+    titleLong: "Amount (EUR)",
+    hozAlign: "right",
+    formatter: (cell) => formatCurrency(cell.getValue())
+  }
 ];
 
 const YourReportPresenter = ({ data, onRefresh }) => {
@@ -150,10 +156,10 @@ const YourReportPresenter = ({ data, onRefresh }) => {
       </header>
 
       <div className="your-report__filters talia-report-filters" aria-label="Your report filters">
-        {/* Talia filters row — governed by header Filters toggle */}
+        {/* Application/report filters row — governed by header Filters toggle */}
       </div>
 
-      {/* Optional: panel operations (Expand/Collapse, view modes) — governed by Controls toggle */}
+      {/* Optional: panel operation controls (Expand/Collapse, view modes) — governed by Operations toggle */}
       <div className="talia-report__controls" aria-label="Your report controls">
         <button type="button" className="talia-btn talia-btn--secondary" onClick={onExpandAll}>
           Expand all
@@ -251,9 +257,9 @@ Full shell vocabulary (Title, Filters, Actions, Callouts, Details, Controls vs C
 - `.talia-report__title` - Report title (h2)
 - `.talia-report__subtitle` - Subtitle/metadata (hidden with title)
 - `.talia-report-filters` - Panel filter row (toggle: **Filters**); not the app **Controls** strip
-- `.talia-callout` - Informational note (toggle: **Callouts**)
-- `.talia-report__controls` - Panel operations row (Expand/Collapse, view modes; toggle: **Controls**)
-- `.talia-report__actions-bar` - Panel actions row (Refresh, Export; toggle: **Actions**)
+- `.talia-callout` - Informational note (toggle: **Callouts**, usually hidden by default)
+- `.talia-report__controls` - Panel operations row (Expand/Collapse, view modes; toggle: **Operations**)
+- `.talia-report__actions-bar` - Panel actions row (Refresh, Export; toggle: **Operations**)
 - `.talia-report__actions` - Legacy compact actions in header (prefer `__actions-bar`; do not add new uses)
 - `.talia-report__content` - Main content (table/chart/map)
 - `.talia-report__footer` - Footer (usually hidden via CSS)
@@ -339,7 +345,10 @@ const chart = new Chart(ctx, {
 - Include ARIA labels and roles
 - Handle loading/error/empty states using shared panel patterns (`PanelDataState`, `LoadingSpinner`, `ErrorMessage`)
 - Use `initTabulator()` + `getTabulatorOptions(...)` for every Tabulator table
-- Let global fit mode control table layout (`Fit Width`/`Fit Data` from header controls)
+- Let global fit mode control table layout (`Best Fit`/`Fit Width`/`Fit Data` from header controls)
+- Prefer `titleShort` + `titleLong` for every column so headers stay compact while Tabulator `headerTooltip` shows full names
+- Reuse global defaults from `src/lib/tabulatorColumnLabelDictionary.js` for common field names (for example `guest_count`, `sail_days`, `cabin_category`)
+- If you introduce a new column field, add its short/long terminology entry to `tabulatorColumnLabelDictionary.js` in the same PR
 
 ### DON'T
 - Use inline styles

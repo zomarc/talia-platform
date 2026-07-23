@@ -22,6 +22,7 @@ const FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderFiltersVisible';
 const TABULATOR_FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderTabulatorFiltersVisible';
 const TABLE_LAYOUT_STORAGE_KEY = 'taliaTableLayoutMode';
 const SIDEBAR_SECTIONS_STORAGE_KEY = 'taliaSidebarExpandedSections';
+const TABLE_LAYOUT_MODES = ['best', 'width', 'data'];
 
 function DashboardSidebar({
   isCollapsed,
@@ -175,11 +176,11 @@ function DashboardSidebar({
   const [globalTableLayoutMode, setGlobalTableLayoutMode] = React.useState(() => {
     try {
       const saved = window.localStorage?.getItem?.(TABLE_LAYOUT_STORAGE_KEY);
-      if (saved === 'data' || saved === 'width') return saved;
+      if (TABLE_LAYOUT_MODES.includes(saved)) return saved;
     } catch {
       // ignore
     }
-    return window.__taliaTableLayoutMode === 'data' ? 'data' : 'width';
+    return TABLE_LAYOUT_MODES.includes(window.__taliaTableLayoutMode) ? window.__taliaTableLayoutMode : 'best';
   });
 
   React.useEffect(() => {
@@ -202,7 +203,7 @@ function DashboardSidebar({
     };
     const handleTableLayoutEvent = (event) => {
       const mode = event?.detail?.mode;
-      if (mode === 'data' || mode === 'width') {
+      if (TABLE_LAYOUT_MODES.includes(mode)) {
         setGlobalTableLayoutMode(mode);
       }
     };
@@ -272,7 +273,7 @@ function DashboardSidebar({
   };
 
   const handleTableLayoutModeChange = (nextMode) => {
-    if (nextMode !== 'data' && nextMode !== 'width') return;
+    if (!TABLE_LAYOUT_MODES.includes(nextMode)) return;
     setGlobalTableLayoutMode(nextMode);
     window.__taliaTableLayoutMode = nextMode;
     try {
@@ -820,28 +821,20 @@ function DashboardSidebar({
               <div className="dashboard-form-hint">Uses the shared panel header selector for all components that follow Talia report standards.</div>
             </div>
             <div className="dashboard-form-group">
-              <label className="dashboard-form-label">Actions</label>
+              <label className="dashboard-form-label">Operations</label>
               <label className="dashboard-form-checkbox">
                 <input
                   type="checkbox"
-                  checked={actionsVisible}
-                  onChange={(event) => setActionsVisible(event.target.checked)}
+                  checked={actionsVisible && controlsVisible}
+                  onChange={(event) => {
+                    const next = event.target.checked;
+                    setActionsVisible(next);
+                    setControlsVisible(next);
+                  }}
                 />
-                <span>Show panel action sections across reports</span>
+                <span>Show panel operations (actions + controls) across reports</span>
               </label>
-              <div className="dashboard-form-hint">Matches the Actions toggle in the top header visibility menu.</div>
-            </div>
-            <div className="dashboard-form-group">
-              <label className="dashboard-form-label">Controls</label>
-              <label className="dashboard-form-checkbox">
-                <input
-                  type="checkbox"
-                  checked={controlsVisible}
-                  onChange={(event) => setControlsVisible(event.target.checked)}
-                />
-                <span>Show top-level controls drawer for Data Management</span>
-              </label>
-              <div className="dashboard-form-hint">Matches the Controls toggle in the top header visibility menu. Defaults to closed.</div>
+              <div className="dashboard-form-hint">Matches the Operations toggle in the top header visibility menu.</div>
             </div>
             <div className="dashboard-form-group">
               <label className="dashboard-form-label">Disappear Time: {menuDisappearMs} ms</label>
@@ -954,6 +947,7 @@ function DashboardSidebar({
                 value={globalTableLayoutMode}
                 onChange={(event) => handleTableLayoutModeChange(event.target.value)}
               >
+                <option value="best">Best Fit (recommended)</option>
                 <option value="width">Expand to Fit Width</option>
                 <option value="data">Fit to Data</option>
               </select>
@@ -979,7 +973,7 @@ function DashboardSidebar({
                   checked={globalTabulatorFiltersVisible}
                   onChange={(event) => handleGlobalTabulatorFiltersToggle(event.target.checked)}
                 />
-                <span>Show Tabulator column header filters globally</span>
+                <span>Show native Tabulator column header filters globally</span>
               </label>
               <div className="dashboard-form-hint">Matches the Column filters toggle in the top header visibility menu.</div>
             </div>

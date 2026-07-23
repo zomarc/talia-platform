@@ -135,23 +135,39 @@ const writeWindowSnapshots = (config) => {
   }
 };
 
-const dispatchLegacyAliases = (config) => {
-  window.dispatchEvent(new CustomEvent(DASHBOARD_FILTER_VISIBILITY_EVENT, {
-    detail: { visible: config.filtersVisible },
-  }));
-  window.dispatchEvent(new CustomEvent(DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT, {
-    detail: { visible: config.tabulatorFiltersVisible },
-  }));
-  window.dispatchEvent(new CustomEvent(DASHBOARD_DETAILS_VISIBILITY_EVENT, {
-    detail: { scope: 'all', visible: config.detailsVisible, action: 'set' },
-  }));
-  window.dispatchEvent(new CustomEvent(DASHBOARD_TABLE_LAYOUT_EVENT, {
-    detail: { mode: config.tableLayoutMode },
-  }));
-  window.dispatchEvent(new CustomEvent(DASHBOARD_VIEW_SCOPE_EVENT, {
-    detail: { scope: config.viewScope },
-  }));
-  if (config.criteria && typeof config.criteria === 'object') {
+const dispatchLegacyAliases = (config, partial = null) => {
+  // Only re-fire aliases for fields that actually changed. A full publish
+  // (no partial / empty partial) still fans out everything for boot/enforce.
+  const keys = partial && typeof partial === 'object' ? Object.keys(partial) : [];
+  const all = keys.length === 0;
+  const changed = (key) => all || keys.includes(key);
+
+  if (changed('filtersVisible')) {
+    window.dispatchEvent(new CustomEvent(DASHBOARD_FILTER_VISIBILITY_EVENT, {
+      detail: { visible: config.filtersVisible },
+    }));
+  }
+  if (changed('tabulatorFiltersVisible')) {
+    window.dispatchEvent(new CustomEvent(DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT, {
+      detail: { visible: config.tabulatorFiltersVisible },
+    }));
+  }
+  if (changed('detailsVisible')) {
+    window.dispatchEvent(new CustomEvent(DASHBOARD_DETAILS_VISIBILITY_EVENT, {
+      detail: { scope: 'all', visible: config.detailsVisible, action: 'set' },
+    }));
+  }
+  if (changed('tableLayoutMode')) {
+    window.dispatchEvent(new CustomEvent(DASHBOARD_TABLE_LAYOUT_EVENT, {
+      detail: { mode: config.tableLayoutMode },
+    }));
+  }
+  if (changed('viewScope')) {
+    window.dispatchEvent(new CustomEvent(DASHBOARD_VIEW_SCOPE_EVENT, {
+      detail: { scope: config.viewScope },
+    }));
+  }
+  if (changed('criteria') && config.criteria && typeof config.criteria === 'object') {
     window.dispatchEvent(new CustomEvent(DASHBOARD_GLOBAL_CRITERIA_EVENT, {
       detail: config.criteria,
     }));
@@ -160,23 +176,26 @@ const dispatchLegacyAliases = (config) => {
 
 /**
  * Merge optional partial updates, persist snapshot, apply chrome, and publish
- * `talia:dashboard.globalConfig` (+ legacy aliases for existing listeners).
+ * `talia:dashboard.globalConfig` (+ legacy aliases for changed fields only).
  */
 export const publishDashboardGlobalConfig = (partial = {}, { dispatchLegacy = true } = {}) => {
   if (typeof window === 'undefined') return null;
 
   const base = getDashboardGlobalConfig();
+  const patch = partial && typeof partial === 'object' ? partial : {};
+  const changedKeys = Object.keys(patch);
   const next = {
     ...base,
-    ...(partial && typeof partial === 'object' ? partial : {}),
+    ...patch,
     tableLayoutMode: normalizeTableLayoutMode(
-      partial?.tableLayoutMode ?? base.tableLayoutMode
+      patch.tableLayoutMode ?? base.tableLayoutMode
     ),
     timestamp: new Date().toISOString(),
+    changedKeys,
   };
-  if (partial && Object.prototype.hasOwnProperty.call(partial, 'criteria')) {
-    next.criteria = partial.criteria && typeof partial.criteria === 'object'
-      ? { ...partial.criteria }
+  if (Object.prototype.hasOwnProperty.call(patch, 'criteria')) {
+    next.criteria = patch.criteria && typeof patch.criteria === 'object'
+      ? { ...patch.criteria }
       : null;
   }
 
@@ -188,7 +207,7 @@ export const publishDashboardGlobalConfig = (partial = {}, { dispatchLegacy = tr
   }));
 
   if (dispatchLegacy) {
-    dispatchLegacyAliases(next);
+    dispatchLegacyAliases(next, patch);
   }
 
   return next;

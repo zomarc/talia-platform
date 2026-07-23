@@ -433,6 +433,28 @@ const MasterSailingExplorerPresenter = ({
     refreshReferenceRowClasses(table, isReferenceMasterRow);
   }, [isReferenceMasterRow]);
 
+  const getTableScrollHolder = useCallback((table) => (
+    table?.rowManager?.element
+    || table?.element?.querySelector?.('.tabulator-tableholder')
+    || null
+  ), []);
+
+  const withPreservedTableScroll = useCallback((table, fn) => {
+    const holder = getTableScrollHolder(table);
+    const top = holder?.scrollTop ?? 0;
+    const left = holder?.scrollLeft ?? 0;
+    fn();
+    const restore = () => {
+      if (!holder) return;
+      holder.scrollTop = top;
+      holder.scrollLeft = left;
+    };
+    restore();
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(restore);
+    }
+  }, [getTableScrollHolder]);
+
   const focusSelectedMaster = useCallback(() => {
     const table = instanceRef.current;
     const referenceCode = selectedReferenceRef.current;
@@ -440,23 +462,25 @@ const MasterSailingExplorerPresenter = ({
       return;
     }
 
-    if (referenceCode) {
-      const monthGroups = table.getGroups?.() || [];
-      monthGroups.forEach((monthGroup) => {
-        const shipGroups = monthGroup.getSubGroups?.() || [];
-        shipGroups.forEach((shipGroup) => {
-          const rows = shipGroup.getRows?.() || [];
-          const hasMatch = rows.some((row) => masterRowMatchesReference(row.getData?.(), referenceCode));
-          if (hasMatch) {
-            monthGroup.show?.();
-            shipGroup.show?.();
-          }
+    withPreservedTableScroll(table, () => {
+      if (referenceCode) {
+        const monthGroups = table.getGroups?.() || [];
+        monthGroups.forEach((monthGroup) => {
+          const shipGroups = monthGroup.getSubGroups?.() || [];
+          shipGroups.forEach((shipGroup) => {
+            const rows = shipGroup.getRows?.() || [];
+            const hasMatch = rows.some((row) => masterRowMatchesReference(row.getData?.(), referenceCode));
+            if (hasMatch) {
+              monthGroup.show?.();
+              shipGroup.show?.();
+            }
+          });
         });
-      });
-    }
+      }
 
-    applyReferenceHighlight();
-  }, [applyReferenceHighlight]);
+      applyReferenceHighlight();
+    });
+  }, [applyReferenceHighlight, withPreservedTableScroll]);
 
   const afterTableDataRefresh = useCallback((refreshPromise) => {
     const apply = () => focusSelectedMaster();
@@ -470,7 +494,19 @@ const MasterSailingExplorerPresenter = ({
   useEffect(() => {
     const handleSelect = (event) => {
       const referenceCode = resolveSelectionReferenceCode(event?.detail);
+      const fromSelf = event?.detail?.selection_origin === 'master-sailing-explorer';
+      const alreadySelected = Boolean(
+        referenceCode
+        && selectedReferenceRef.current
+        && String(selectedReferenceRef.current) === String(referenceCode)
+      );
       selectedReferenceRef.current = referenceCode;
+      // Own click already highlighted the row; never reopen groups from self
+      // (group show → layout refresh → scroll bounce / feels like a missed click).
+      if (fromSelf || alreadySelected) {
+        applyReferenceHighlight();
+        return;
+      }
       focusSelectedMaster();
     };
     const handleClear = () => {
@@ -571,6 +607,7 @@ const MasterSailingExplorerPresenter = ({
             segment_sail_codes: rowData.segment_codes || [],
             sailing_role: rowData.sailing_role,
             row_data: rowData,
+            selection_origin: 'master-sailing-explorer',
             timestamp: new Date().toISOString(),
           });
         });

@@ -190,16 +190,27 @@ const setGlobalTableLayoutMode = (mode) => {
   }
 };
 
+const getTableScrollHolder = (table) => (
+  table?.rowManager?.element
+  || table?.element?.querySelector?.('.tabulator-tableholder')
+  || null
+);
+
+const restoreTableScrollIfChanged = (holder, top, left) => {
+  if (!holder) return;
+  if (holder.scrollTop !== top) holder.scrollTop = top;
+  if (holder.scrollLeft !== left) holder.scrollLeft = left;
+};
+
+/** One-pass layout refresh; preserve scroll without a second rAF redraw (that caused pixel bounce). */
 const refreshTableLayout = (table) => {
   if (!table) return;
+  const holder = getTableScrollHolder(table);
+  const top = holder?.scrollTop ?? 0;
+  const left = holder?.scrollLeft ?? 0;
   table.layoutRefresh?.(true);
   table.redraw?.(true);
-  if (isBrowser()) {
-    window.requestAnimationFrame(() => {
-      table.layoutRefresh?.(true);
-      table.redraw?.(true);
-    });
-  }
+  restoreTableScrollIfChanged(holder, top, left);
 };
 
 /** Schedule layout refresh after data/visibility changes (safe before tableBuilt). */
@@ -282,7 +293,15 @@ const ensureLayoutListenerBound = () => {
   const applyAllVisible = () => flushVisibleTabulatorLayouts();
 
   window.addEventListener(DASHBOARD_GLOBAL_CONFIG_EVENT, (event) => {
-    const mode = event?.detail?.tableLayoutMode;
+    const detail = event?.detail || {};
+    const changedKeys = Array.isArray(detail.changedKeys) ? detail.changedKeys : null;
+    // Full publish (boot/enforce) or explicit layout change → re-apply fit.
+    // Filters/Details/etc. must not force a full table layout refresh.
+    const shouldApplyLayout = !changedKeys
+      || changedKeys.length === 0
+      || changedKeys.includes('tableLayoutMode');
+    if (!shouldApplyLayout) return;
+    const mode = detail.tableLayoutMode;
     if (mode) setGlobalTableLayoutMode(mode);
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(applyAllVisible);
@@ -295,9 +314,16 @@ const ensureLayoutListenerBound = () => {
     applyAllVisible();
   });
 
+  // Only flush tables that deferred layout while hidden. Activating an already-
+  // visible grid panel must not redraw every sibling (scroll bounce / missed click).
   window.addEventListener(REPORT_ACTIVE_PANEL_EVENT, () => {
     window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(applyAllVisible);
+      tableInstances.forEach((table) => {
+        const meta = tableMeta.get(table);
+        if (!meta?.pendingLayoutRefresh) return;
+        if (!isTableHostVisible(table)) return;
+        applyLayoutModeToTable(table, { force: true });
+      });
     });
   });
 
@@ -358,6 +384,18 @@ const getWrappedTabulatorClass = () => {
 
       registerTableInstance(this, baseColumns, { panelInstanceId, panelComponentId });
       bindTableDataLayoutRefresh(this);
+      // Sibling panel reflows often resize the host; Tabulator redraw resets scrollTop.
+      if (typeof this.redraw === 'function') {
+        const originalRedraw = this.redraw.bind(this);
+        this.redraw = (...args) => {
+          const holder = getTableScrollHolder(this);
+          const top = holder?.scrollTop ?? 0;
+          const left = holder?.scrollLeft ?? 0;
+          const result = originalRedraw(...args);
+          restoreTableScrollIfChanged(holder, top, left);
+          return result;
+        };
+      }
       const meta = tableMeta.get(this);
       if (meta && this.initialized === true) {
         meta.isBuilt = true;

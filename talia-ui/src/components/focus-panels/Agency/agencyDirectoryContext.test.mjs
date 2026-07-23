@@ -62,6 +62,13 @@ test('filterAgenciesForReservation returns a single agency row', () => {
   ]);
 });
 
+test('filterAgenciesForReservation returns empty without agency id', () => {
+  assert.deepEqual(
+    filterAgenciesForReservation([{ agency_id: 1 }], null),
+    []
+  );
+});
+
 test('resolveAgencyDirectoryData prioritizes reservation over sail selection', () => {
   const agencies = [
     { agency_id: 10, agency_name: 'Alpha' },
@@ -79,6 +86,28 @@ test('resolveAgencyDirectoryData prioritizes reservation over sail selection', (
   assert.equal(result.mode, AGENCY_SELECTION_MODES.RESERVATION);
   assert.equal(result.pendingSailScope, false);
   assert.deepEqual(result.rows, [{ agency_id: 10, agency_name: 'Alpha' }]);
+});
+
+test('resolveAgencyDirectoryData returns sail view once reservation link is cleared', () => {
+  const agencies = [
+    { agency_id: 10, agency_name: 'Alpha' },
+    { agency_id: 20, agency_name: 'Beta' },
+  ];
+  const filtersKey = '{"include_non_real_sailings":false,"sail_code":"SAIL-B"}';
+  const result = resolveAgencyDirectoryData({
+    agencies,
+    reservationAgencyId: null,
+    sailReservationRows: [{ agency_id: 20 }, { agency_id: 10 }],
+    hasSailSelection: true,
+    expectedReservationFiltersKey: filtersKey,
+    loadedReservationFiltersKey: filtersKey,
+    sailReservationsLoading: false,
+  });
+  assert.equal(result.mode, AGENCY_SELECTION_MODES.SAIL);
+  assert.deepEqual(
+    result.rows.map((row) => row.agency_id),
+    [10, 20]
+  );
 });
 
 test('resolveAgencyDirectoryData filters agencies by sail reservations', () => {
@@ -152,7 +181,7 @@ test('resolveAgencyDirectoryData ignores sail rows before loaded filter key is s
   assert.deepEqual(result.rows, []);
 });
 
-test('resolveAgencyDirectoryData returns full directory with no selection', () => {
+test('resolveAgencyDirectoryData returns empty with no selection (never full directory)', () => {
   const agencies = [{ agency_id: 1 }, { agency_id: 2 }];
   const result = resolveAgencyDirectoryData({
     agencies,
@@ -160,8 +189,8 @@ test('resolveAgencyDirectoryData returns full directory with no selection', () =
     sailReservationRows: [],
     hasSailSelection: false,
   });
-  assert.equal(result.mode, AGENCY_SELECTION_MODES.ALL);
-  assert.equal(result.rows.length, 2);
+  assert.equal(result.mode, AGENCY_SELECTION_MODES.NONE);
+  assert.deepEqual(result.rows, []);
 });
 
 test('resolveAgencyIdFromDetail reads row_data agency_id', () => {

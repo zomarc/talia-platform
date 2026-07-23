@@ -67,7 +67,8 @@ Every focus-panel report uses the same **shell elements**. Use the standard CSS 
 │ .talia-report__actions-bar             [Operations toggle]  │
 ├─────────────────────────────────────────────────────────────┤
 │ main.talia-report__content                                  │
-│   ReportDataDetails (Details toggle) → table/chart/map      │
+│   primary table/chart/map (always mounted)                  │
+│   ReportDataDetails (Details ≣) → secondary detail blocks   │
 │   (.tabulator-header-filter = Column filters toggle)        │
 └─────────────────────────────────────────────────────────────┘
 
@@ -85,7 +86,7 @@ StatusBar `.status-bar__criteria` also hides under **Controls** (root `talia-con
 | **Callout** | Extra informational note / guidance (usually hidden) | `.talia-callout` | **Callouts** | Appearance profile `calloutsVisible` |
 | **Controls** | In-panel operation controls (Expand/Collapse, view modes, group toggles) | panel `.talia-report__controls` | *(with Operations)* | Appearance profile `controlsVisible` |
 | **Actions** | Panel operation actions (Refresh, Export, …) | `.talia-report__actions-bar` (preferred); legacy compact: `.talia-report__actions` in header | **Operations** | Appearance profile `actionsVisible` |
-| **Details** | User-facing extra data blocks (header ≣); gates table/chart mount | `ReportDataDetails` + `usePanelDetailsVisibility` | **Details** (≣ btn) | `localStorage` `taliaGlobalReportDetailsVisible` |
+| **Details** | User-facing *extra* data blocks (header ≣); never the primary table/chart | `ReportDataDetails` + `usePanelDetailsVisibility` | **Details** (≣ btn) | `localStorage` `taliaGlobalReportDetailsVisible` |
 | **Technical meta** | Dev/diagnostic block (dock tab ⓘ) | `ReportEventMeta` via `usePanelTechnicalMetaVisibility` | Tab ⓘ only | In-memory `__taliaPanelTechnicalMetaVisibility` |
 | **Content** | Primary body (table, chart, map) | `main.talia-report__content`; tables: `.talia-table` | — | — |
 
@@ -100,7 +101,7 @@ StatusBar `.status-bar__criteria` also hides under **Controls** (root `talia-con
 | Actions | `talia-actions-hidden` |
 | Controls | `talia-controls-hidden` |
 
-Details use `ReportDataDetails` / `visible={showTable}` — not a root CSS class.
+Details use `ReportDataDetails` / `visible={showDetails}` for **secondary** blocks only — not a root CSS class. Primary Tabulator/chart hosts stay mounted in `talia-report__content`.
 
 ### Standard shell markup order
 
@@ -124,8 +125,10 @@ Follow **Agency** / **Published Rates** (filters → callout → controls → ac
   <div className="talia-report__actions-bar" aria-label="… actions">…</div>
 
   <main className="talia-report__content">
-    <ReportDataDetails visible={showTable}>
-      <div ref={tableRef} className="talia-table" role="grid" />
+    <div ref={tableRef} className="talia-table" role="grid" />
+    {/* Optional secondary details only — never wrap the primary table/chart */}
+    <ReportDataDetails visible={showDetails} as="section">
+      …
     </ReportDataDetails>
   </main>
 </div>
@@ -136,7 +139,7 @@ Follow **Agency** / **Published Rates** (filters → callout → controls → ac
 - Put **Controls** (Expand/Collapse, group toggles) in `.talia-report__controls` — toggled with global **Operations**.
 - Put **Actions** (Refresh, Export) in `.talia-report__actions-bar` — toggled with global **Operations**.
 - **Column filters** need no panel markup; set `headerFilter` on Tabulator columns.
-- Gate **Content** with `ReportDataDetails` when the panel supports header **Details** (≣).
+- Gate **secondary detail blocks** with `ReportDataDetails` when the panel has header **Details** (≣) content (history, editors, extra tables). Do **not** wrap the primary table/chart — that destroys one-shot Tabulator/chart instances when Details is toggled off.
 - Do **not** use header ≣ for technical meta; do **not** use tab ⓘ for user data tables.
 
 ### Shell audit checklist
@@ -148,7 +151,7 @@ When reviewing active report panels (`showInReports: true` in `registry.js`):
 3. Panel criteria inputs live in `.talia-report-filters` — not mixed with controls or actions.
 4. View-mode / expand toggles live in `.talia-report__controls` with `talia-btn talia-btn--secondary`.
 5. Refresh / export live in `.talia-report__actions-bar`.
-6. Primary body in `main.talia-report__content`; tables use `ReportDataDetails` when Details (≣) applies.
+6. Primary body in `main.talia-report__content` (always mounted). Use `ReportDataDetails` only for secondary Details (≣) blocks.
 
 Events: `components/dockview/eventConstants.js` (`DASHBOARD_FILTER_VISIBILITY_EVENT`, `DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT`, `DASHBOARD_DETAILS_VISIBILITY_EVENT`, `REPORT_PANEL_TECHNICAL_META_EVENT`).
 

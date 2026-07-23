@@ -7,18 +7,12 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useBookingTargetChart } from '../../../hooks/data/useBookingTargetChart';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
-import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
-import ReportDataDetails from '../../shared/ReportDataDetails';
 
 Chart.register(...registerables);
 
 const BookingTargetDataSimple = ({ panelInstanceId, panelComponentId }) => {
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
-  const [showDetails] = usePanelDetailsVisibility({
-    panelInstanceId,
-    panelComponentId: panelComponentId || 'booking-target-data-simple',
-  });
 
   const {
     sailCode,
@@ -124,13 +118,11 @@ const BookingTargetDataSimple = ({ panelInstanceId, panelComponentId }) => {
       {error ? <div className="booking-simple__error">{error?.message || String(error)}</div> : null}
 
       <main className="talia-report__content">
-        <ReportDataDetails visible={showDetails}>
-          {!loading && labels.length === 0 ? (
-            <div className="focus-panel-empty">No business target data available for this sail.</div>
-          ) : (
-            <div className="booking-simple__chart"><canvas ref={chartRef} /></div>
-          )}
-        </ReportDataDetails>
+        {!loading && labels.length === 0 ? (
+          <div className="focus-panel-empty">No business target data available for this sail.</div>
+        ) : (
+          <div className="booking-simple__chart"><canvas ref={chartRef} /></div>
+        )}
       </main>
     </div>
   );

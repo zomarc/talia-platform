@@ -5,10 +5,13 @@
  * reservation_current_state (and reservation) carry sail_code + agency_id, so
  * agencies "for a sailing" are the distinct agency_id values on bookings for
  * that sail scope.
+ *
+ * Selection-driven only: no sail and no reservation → empty (never paint the
+ * full Dim_Agency directory into Tabulator).
  */
 
 export const AGENCY_SELECTION_MODES = {
-  ALL: 'all',
+  NONE: 'none',
   SAIL: 'sail',
   RESERVATION: 'reservation',
 };
@@ -88,7 +91,7 @@ export const filterAgenciesByIds = (agencies, agencyIds) => {
 };
 
 export const filterAgenciesForReservation = (agencies, agencyId) => {
-  if (agencyId == null || agencyId === '') return agencies || [];
+  if (agencyId == null || agencyId === '') return [];
   return filterAgenciesByIds(agencies, new Set([String(agencyId)]));
 };
 
@@ -129,9 +132,10 @@ export const resolveAgencyDirectoryData = ({
     };
   }
 
+  // Selection-driven: never hand the full Dim_Agency set to Tabulator.
   return {
-    mode: AGENCY_SELECTION_MODES.ALL,
-    rows: agencies || [],
+    mode: AGENCY_SELECTION_MODES.NONE,
+    rows: [],
     pendingSailScope: false,
   };
 };

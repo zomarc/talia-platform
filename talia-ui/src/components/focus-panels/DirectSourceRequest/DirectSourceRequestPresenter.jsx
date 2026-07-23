@@ -8,8 +8,6 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { formatDayMon } from '../../../lib/dateFormat';
-import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
-import ReportDataDetails from '../../shared/ReportDataDetails';
 
 const DirectSourceRequestPresenter = ({
   data,
@@ -29,10 +27,6 @@ const DirectSourceRequestPresenter = ({
   const [tableInitialized, setTableInitialized] = useState(false);
   const [showQueryDetails, setShowQueryDetails] = useState(false);
   const lastDataRef = useRef(null);
-  const [showDetails] = usePanelDetailsVisibility({
-    panelInstanceId,
-    panelComponentId: panelComponentId || 'direct-source-request',
-  });
 
   const columns = [
     {
@@ -508,7 +502,6 @@ const DirectSourceRequestPresenter = ({
       ) : null}
 
       <main className="talia-report__content">
-        <ReportDataDetails visible={showDetails} className="direct-source__data-details">
           <div className="direct-source__summary">
             <div className="direct-source__summary-card">
               <div className="direct-source__summary-label">Sail Code</div>
@@ -595,7 +588,6 @@ const DirectSourceRequestPresenter = ({
             ) : null}
             <div ref={tableRef} className="direct-source__table-host talia-table" role="grid" />
           </div>
-        </ReportDataDetails>
       </main>
     </div>
   );

@@ -9,8 +9,6 @@ import BuildCurveChart from './BuildCurveChart';
 import { formatDayMon } from '../../../lib/dateFormat';
 import { useTheme } from '../../../contexts/ThemeContext';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
-import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
-import ReportDataDetails from '../../shared/ReportDataDetails';
 
 Chart.register(...registerables);
 
@@ -27,10 +25,6 @@ const BookingProfilePresenter = ({
   const { fontSize, fontFamily } = useTheme();
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
-  const [showDetails] = usePanelDetailsVisibility({
-    panelInstanceId,
-    panelComponentId: panelComponentId || 'booking-profile',
-  });
 
   const isYOY = data?.previousYear !== undefined;
   const currentYear = isYOY ? data.currentYear : data;
@@ -161,7 +155,6 @@ const BookingProfilePresenter = ({
       ) : null}
 
       <main className="talia-report__content">
-        <ReportDataDetails visible={showDetails} className="booking-profile__data-details">
           <div className="booking-profile__kpi-grid">
             <KPICard
               title="Current Bookings"
@@ -238,7 +231,6 @@ const BookingProfilePresenter = ({
               </div>
             </div>
           ) : null}
-        </ReportDataDetails>
       </main>
     </div>
   );

@@ -8,8 +8,6 @@ import { Chart, registerables } from 'chart.js';
 import { useBookingTargetChart } from '../../../hooks/data/useBookingTargetChart';
 import { useInventoryProfileSeriesBySail } from '../../../hooks/data/useInventoryProfileSeriesBySail';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
-import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
-import ReportDataDetails from '../../shared/ReportDataDetails';
 
 Chart.register(...registerables);
 const DASHBOARD_VIEW_SCOPE_EVENT = 'talia:dashboard.viewScope';
@@ -27,10 +25,6 @@ const BookingCombinedDataSimple = ({ panelInstanceId, panelComponentId }) => {
   const [viewScope, setViewScope] = useState(() => (window.__taliaViewScope === 'wide' ? 'wide' : 'local'));
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
-  const [showDetails] = usePanelDetailsVisibility({
-    panelInstanceId,
-    panelComponentId: panelComponentId || 'booking-combined-data-simple',
-  });
 
   const {
     sailCode,
@@ -288,13 +282,11 @@ const BookingCombinedDataSimple = ({ panelInstanceId, panelComponentId }) => {
       ) : null}
 
       <main className="talia-report__content">
-        <ReportDataDetails visible={showDetails}>
-          {!(loading || unifiedLoading) && labels.length === 0 ? (
-            <div className="focus-panel-empty">No combined data available for this sail.</div>
-          ) : (
-            <div className="booking-simple__chart"><canvas ref={chartRef} /></div>
-          )}
-        </ReportDataDetails>
+        {!(loading || unifiedLoading) && labels.length === 0 ? (
+          <div className="focus-panel-empty">No combined data available for this sail.</div>
+        ) : (
+          <div className="booking-simple__chart"><canvas ref={chartRef} /></div>
+        )}
       </main>
     </div>
   );

@@ -17,6 +17,7 @@ import { buildShipSailTooltip } from './reservationCurrentStateTransform';
 import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import {
+  RESERVATION_CLEAR_EVENT,
   emitReservationClear,
   emitReservationSelect,
 } from '../../../lib/eventBus';
@@ -51,6 +52,22 @@ const ReservationCurrentStatePresenter = ({
     panelInstanceId,
     panelComponentId: panelComponentId || 'reservation-current-state',
   });
+
+  // Sail scope change clears reservation via eventBus; sync table selection without re-emitting.
+  useEffect(() => {
+    const handleReservationClear = () => {
+      selectedResIdRef.current = null;
+      const table = instanceRef.current;
+      if (!table) return;
+      suppressSelectionEventsRef.current = true;
+      try {
+        table.deselectRow?.();
+      } catch { /* noop */ }
+      suppressSelectionEventsRef.current = false;
+    };
+    window.addEventListener(RESERVATION_CLEAR_EVENT, handleReservationClear);
+    return () => window.removeEventListener(RESERVATION_CLEAR_EVENT, handleReservationClear);
+  }, []);
 
   const escapeHtml = (value) => String(value ?? '')
     .replace(/&/g, '&amp;')

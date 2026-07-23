@@ -10,8 +10,6 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { getChartColors, getSeriesColors } from '../../../lib/chartConfig';
 import { formatDayMon, formatDateTime } from '../../../lib/dateFormat';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
-import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
-import ReportDataDetails from '../../shared/ReportDataDetails';
 
 Chart.register(...registerables);
 
@@ -52,10 +50,6 @@ const BookingTargetChartPresenter = ({
   const { theme, fontSize, fontFamily } = useTheme();
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
-  const [showDetails] = usePanelDetailsVisibility({
-    panelInstanceId,
-    panelComponentId: panelComponentId || 'booking-target-chart',
-  });
 
   const [metric, setMetric] = useState('bookings');
   const [chartType, setChartType] = useState('line');
@@ -411,7 +405,6 @@ const BookingTargetChartPresenter = ({
       ) : null}
 
       <main className="talia-report__content">
-        <ReportDataDetails visible={showDetails}>
           <div className="booking-target-chart__chart-wrap">
             {error ? (
               <div className="booking-target-chart__error-banner">
@@ -520,7 +513,6 @@ const BookingTargetChartPresenter = ({
               <div className="booking-target-chart__loading">No target points available to edit.</div>
             )}
           </div>
-        </ReportDataDetails>
       </main>
     </div>
   );

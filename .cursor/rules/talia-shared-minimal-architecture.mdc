@@ -32,4 +32,4 @@ Focus-panel presenters must use standard shell classes so global visibility togg
 
 - **Title/Subtitle** → `talia-report__header`; **Talia filters** → `talia-report-filters`; **Actions** → `talia-report__actions-bar`; **Callouts** → `talia-callout`; **Content** → `talia-report__content`.
 - **Column filters** = Tabulator `headerFilter` only. **Controls** = StatusBar global criteria strip — not panel filter rows.
-- Gate user data tables with `ReportDataDetails` for header **Details** (≣); tab ⓘ is technical meta only.
+- Gate **secondary** detail blocks with `ReportDataDetails` for header **Details** (≣); never wrap the primary table/chart. Tab ⓘ is technical meta only.

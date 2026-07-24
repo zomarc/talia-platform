@@ -5653,3 +5653,45 @@
   font-weight: 700;
   letter-spacing: 0.02em;
 }
+
+/* Distribution + Capacity Validation */
+.distribution-panel__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  overflow: auto;
+}
+
+.distribution-panel__charts {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.distribution-panel__chart-card {
+  position: relative;
+  height: 140px;
+  min-height: 120px;
+}
+
+.distribution-panel__summary,
+.distribution-panel__note,
+.capacity-validation__callout,
+.capacity-validation__note {
+  margin: 0;
+  font-size: var(--theme-font-size-sm, 0.85rem);
+}
+
+.capacity-validation__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+  flex: 1;
+}
+
+.capacity-validation__table {
+  flex: 1;
+  min-height: 120px;
+}

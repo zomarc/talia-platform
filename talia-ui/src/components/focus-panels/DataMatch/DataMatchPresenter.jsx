@@ -6,7 +6,7 @@
 
 import React, { useRef, useEffect, useMemo, useCallback } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
-import { emitSailClear, emitSailSelect, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { emitSailSelect } from '../../../lib/eventBus';
 import { formatDayMon, formatMonYear } from '../../../lib/dateFormat';
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 
@@ -302,41 +302,18 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, panelInstanceId, p
 
         instanceRef.current.on("rowSelected", (row) => {
           const data = row.getData();
-          console.log("[DataMatch] Row selected:", data);
-          
-          // Create event detail object
-          const eventDetail = {
+          emitSailSelect({
             sail_code: data.sail_code,
             ship_code: data.ship_code,
             departure_date: data.departure_date,
             month_name: data.month_name,
             row_data: data,
-            timestamp: new Date().toISOString()
-          };
-          
-        // Create event with all key fields for persistence
-        const event = new CustomEvent(SAIL_SELECT_EVENT, { detail: eventDetail });
-          
-          // Store for context restoration (components check these on mount)
-          window.lastSailSelectEvent = event;
-        window.latestEvent = {
-          name: SAIL_SELECT_EVENT,
-            detail: eventDetail,
-            timestamp: new Date().toLocaleTimeString()
-          };
-          
-          // Emit sail select event (other components listen to this)
-        emitSailSelect(eventDetail);
+            timestamp: new Date().toISOString(),
+          });
         });
 
         instanceRef.current.on("rowDeselected", () => {
-          console.log("[DataMatch] Row deselected");
-          
-          // Clear stored event
-          window.lastSailSelectEvent = null;
-          
-          // Emit clear event
-        emitSailClear({ timestamp: new Date().toISOString() });
+          // Keep sail context until another select; replaceData must not clear.
         });
 
         console.log('[DataMatch] Table initialized with', transformedData.length, 'rows');

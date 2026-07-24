@@ -44,6 +44,8 @@ import VoyageReportContainer from './VoyageReport';
 import DirectSourceRequestContainer from './DirectSourceRequest';
 import DirectAvailabilityContainer from './DirectAvailability';
 import AgencyContainer from './Agency';
+import DistributionContainer from './Distribution';
+import CapacityValidationContainer from './CapacityValidation';
 import ProjectSummaryContainer from './ProjectSummary';
 import ComponentInteractionMapContainer from './ComponentInteractionMap';
 import ContextRowMonitor from './ContextRowMonitor';
@@ -172,6 +174,38 @@ export const componentRegistry = {
     supportsRefresh: true,
     showInReports: true,
     filePath: 'src/components/focus-panels/Agency/index.jsx'
+  },
+  Distribution: {
+    component: DistributionContainer,
+    panelId: 'distribution',
+    category: 'Charts',
+    title: 'Distribution',
+    description: 'Horizontal stacked charts of sold guests by channel (Agency/Direct/Tour Op), market, and Group/FIT for the selected sailing',
+    props: {},
+    dataRequirements: 'Requires reservation_current_state + agency (Dim_Agency). Channel from agency_type rollup; market from agency.market. Group/FIT uses group_id when present.',
+    events: {
+      emits: [],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+    },
+    supportsRefresh: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/Distribution/index.jsx'
+  },
+  CapacityValidation: {
+    component: CapacityValidationContainer,
+    panelId: 'capacity-validation',
+    category: 'Debugging',
+    title: 'Capacity Validation',
+    description: 'Data-check comparison of capacity across physical berths, cabin availability, inventory-by-day, ship nameplate, and sold guests for the selected voyage',
+    props: {},
+    dataRequirements: 'Requires master_sail, ship_day_berth_status, cabin_availability, inventory_status_by_day, ship, reservation_current_state. Linked via sail.select.',
+    events: {
+      emits: [],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+    },
+    supportsRefresh: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/CapacityValidation/index.jsx'
   },
   ProjectSummary: {
     component: ProjectSummaryContainer,

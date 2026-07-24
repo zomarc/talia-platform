@@ -72,6 +72,8 @@ const MasterSailingPresenter = ({
   const suppressClearOnRefreshRef = useRef(false);
   const pendingGroupActionRef = useRef(null);
   const groupCycleDepthRef = useRef(1);
+  const dataRef = useRef(data);
+  dataRef.current = data;
   const [filters, setFilters] = useState({
     sail_code: '',
     sail_date_from: '',
@@ -240,7 +242,7 @@ const MasterSailingPresenter = ({
         }
 
         instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
-          data,
+          data: [],
           columns,
           initialSort: [{ column: 'sail_date_from', dir: 'asc' }],
           height: '100%',
@@ -257,6 +259,14 @@ const MasterSailingPresenter = ({
 
         instanceRef.current.on('tableBuilt', () => {
           tableBuiltRef.current = true;
+          try {
+            suppressClearOnRefreshRef.current = true;
+            instanceRef.current.replaceData(dataRef.current || []);
+          } catch { /* noop */ } finally {
+            window.setTimeout(() => {
+              suppressClearOnRefreshRef.current = false;
+            }, 0);
+          }
           if (!didApplyInitialGroupOpenRef.current) {
             openFirstMonthOnly();
             didApplyInitialGroupOpenRef.current = true;
@@ -323,7 +333,7 @@ const MasterSailingPresenter = ({
         try { instanceRef.current.destroy(); } catch { /* noop */ }
       }
     };
-  }, [applyGroupDepth, collapseAllGroups, columns, data, openAllGroups, openFirstMonthOnly, openOnlyMonthGroup]);
+  }, [applyGroupDepth, collapseAllGroups, columns, openAllGroups, openFirstMonthOnly, openOnlyMonthGroup]);
 
   useEffect(() => {
     if (!instanceRef.current || !tableBuiltRef.current) return;

@@ -10,10 +10,12 @@
  * STANDARD PATTERN:
  * - Initialize table once when data is ready
  * - Update table data when data changes (using replaceData)
- * - Emit events when rows are selected (talia:yourcomponent.select)
+ * - For sail selection use emitSailSelect from lib/eventBus (never raw CustomEvent)
+ * - Do not emitSailClear on deselect / replaceData side-effects
  * - Use selectableRows: 1 for single row selection
  * - Use headerFilter: "list" with autocomplete: true for dropdown filters
  * - Optional grouped tab actions: register cycle/getCycleState handlers on window.__taliaPanelGroupActions
+ * - See docs/FRAMEWORK-BACKLOG.md and docs/CANONICAL-SELECTION-LINKING.md
  * 
  * TO USE THIS TEMPLATE:
  * 1. Update the columns array with your column definitions

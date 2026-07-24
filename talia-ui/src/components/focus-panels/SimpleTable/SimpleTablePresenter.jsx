@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
-import { emitSailClear, emitSailSelect } from '../../../lib/eventBus';
+import { emitSailSelect } from '../../../lib/eventBus';
 import { formatDayMon } from '../../../lib/dateFormat';
 
 const columns = [
@@ -116,6 +116,7 @@ const columns = [
 const SimpleTablePresenter = ({ data }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
+  const suppressClearOnRefreshRef = useRef(false);
   const [recordCount, setRecordCount] = useState(data?.length || 0);
 
   useEffect(() => {
@@ -131,7 +132,7 @@ const SimpleTablePresenter = ({ data }) => {
       }
 
       instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
-        data: data || [],
+        data: [],
         columns,
         initialSort: [{ column: 'sail_date_from', dir: 'desc' }],
         pagination: false,
@@ -139,21 +140,30 @@ const SimpleTablePresenter = ({ data }) => {
           try { row?.select?.(); } catch { /* noop */ }
         },
         rowSelectionChanged: (selectedData) => {
+          if (suppressClearOnRefreshRef.current) return;
           const rec = selectedData && selectedData[0];
           if (rec) {
             emitSailSelect({
               sail_code: rec.sail_code,
               row_data: rec,
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
             });
-          } else {
-            emitSailClear({ timestamp: new Date().toISOString() });
           }
+          // Keep sail context until another select; replaceData must not clear.
         },
         dataLoaded: (loadedData) => {
           setRecordCount(loadedData.length);
-        }
+        },
       }));
+
+      try {
+        suppressClearOnRefreshRef.current = true;
+        instanceRef.current.replaceData(data || []);
+      } finally {
+        window.setTimeout(() => {
+          suppressClearOnRefreshRef.current = false;
+        }, 0);
+      }
     };
 
     initTable();
@@ -169,8 +179,15 @@ const SimpleTablePresenter = ({ data }) => {
 
   useEffect(() => {
     if (!instanceRef.current) return;
-    instanceRef.current.replaceData(data || []);
-    setRecordCount(data?.length || 0);
+    try {
+      suppressClearOnRefreshRef.current = true;
+      instanceRef.current.replaceData(data || []);
+      setRecordCount(data?.length || 0);
+    } finally {
+      window.setTimeout(() => {
+        suppressClearOnRefreshRef.current = false;
+      }, 0);
+    }
   }, [data]);
 
   return (

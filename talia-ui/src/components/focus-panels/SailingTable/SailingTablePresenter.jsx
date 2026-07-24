@@ -11,7 +11,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
-import { emitSailClear, emitSailSelect } from '../../../lib/eventBus';
+import { emitSailSelect } from '../../../lib/eventBus';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { gql } from '@apollo/client';
 import { trackedApolloMutate } from '../../../services/data/trackedGraphql';
@@ -35,6 +35,7 @@ const UPDATE_USER_PREFERENCES = gql`
 const SailingTablePresenter = ({ data }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
+  const suppressClearOnRefreshRef = useRef(false);
   
   // Safely get user from auth context (may not be available in all contexts)
   let user = null;
@@ -197,7 +198,7 @@ const SailingTablePresenter = ({ data }) => {
         }
 
         instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
-          data: data,
+          data: [],
           columns: columns,
           initialSort: [
             { column: "sail_date_from", dir: "desc" }
@@ -211,6 +212,17 @@ const SailingTablePresenter = ({ data }) => {
           pagination: false
         }));
 
+        instanceRef.current.on("tableBuilt", () => {
+          try {
+            suppressClearOnRefreshRef.current = true;
+            instanceRef.current.replaceData(data || []);
+          } catch { /* noop */ } finally {
+            window.setTimeout(() => {
+              suppressClearOnRefreshRef.current = false;
+            }, 0);
+          }
+        });
+
         // Register event listeners using Tabulator's .on() method
         instanceRef.current.on("rowClick", (e, row) => {
           try { row?.select?.(); } catch { /* noop */ }
@@ -218,27 +230,17 @@ const SailingTablePresenter = ({ data }) => {
 
         instanceRef.current.on("rowSelected", (row) => {
           const data = row.getData();
-          console.log("[SailingTable] Row selected:", data);
-          
-          // Save to database
           updateSelectedSail(data.sail_code);
-          
-          // Emit selection event for other components with full row data
-        emitSailSelect({
-          sail_code: data.sail_code,
-          row_data: data,
-          timestamp: new Date().toISOString()
-        });
+          emitSailSelect({
+            sail_code: data.sail_code,
+            row_data: data,
+            timestamp: new Date().toISOString(),
+          });
         });
 
         instanceRef.current.on("rowDeselected", () => {
-          console.log("[SailingTable] Row deselected");
-          
-          // Clear from database
-          updateSelectedSail(null);
-          
-          // Emit clear event
-        emitSailClear({ timestamp: new Date().toISOString() });
+          if (suppressClearOnRefreshRef.current) return;
+          // Keep sail context until another select; replaceData must not clear.
         });
 
         console.log('[SailingTable] Table initialized with event listeners');
@@ -259,16 +261,20 @@ const SailingTablePresenter = ({ data }) => {
         }
       }
     };
-  }, [data]);
+  }, []);
 
   // Update table data when data prop changes
   useEffect(() => {
-    if (instanceRef.current && data) {
-      try {
-        instanceRef.current.replaceData(data);
-      } catch (e) {
-        console.warn('[SailingTable] Error updating data:', e);
-      }
+    if (!instanceRef.current || !data) return;
+    try {
+      suppressClearOnRefreshRef.current = true;
+      instanceRef.current.replaceData(data);
+    } catch (e) {
+      console.warn('[SailingTable] Error updating data:', e);
+    } finally {
+      window.setTimeout(() => {
+        suppressClearOnRefreshRef.current = false;
+      }, 0);
     }
   }, [data]);
 

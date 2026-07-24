@@ -6,7 +6,7 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
-import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { emitSailSelect } from '../../../lib/eventBus';
 import { formatDayMon } from '../../../lib/dateFormat';
 
 // Function to aggregate sailing data at sail level
@@ -240,14 +240,11 @@ const SailingSummaryPresenter = ({ data }) => {
             if (suppressClearOnRefreshRef.current) return;
             const rec = selectedData && selectedData[0];
             if (rec) {
-              console.log("[SailingSummary] Row selected:", rec);
-              window.dispatchEvent(new CustomEvent(SAIL_SELECT_EVENT, { 
-                detail: {
-                  sail_code: rec.sail_code,
-                  row_data: rec,
-                  timestamp: new Date().toISOString()
-                }
-              }));
+              emitSailSelect({
+                sail_code: rec.sail_code,
+                row_data: rec,
+                timestamp: new Date().toISOString(),
+              });
             }
           },
         }));

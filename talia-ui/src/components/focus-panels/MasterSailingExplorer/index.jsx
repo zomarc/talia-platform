@@ -82,6 +82,20 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
     limit: 60000,
   });
 
+  const {
+    data: occupancyRows,
+    loading: occupancyLoading,
+    error: occupancyError,
+    refetch: refetchOccupancy,
+  } = useTableDataWithContext({
+    tableName: 'sail_by_cabin_occupancy',
+    eventName: null,
+    panelInstanceId,
+    panelComponentId,
+    contextMapper: () => null,
+    limit: 100000,
+  });
+
   useEffect(() => {
     if (inventoryRows && inventoryRows.length > 0) {
       setInventoryItems(inventoryRows);
@@ -101,6 +115,7 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
       inventoryItems: inventoryRows,
       reservationRows: reservationCurrentStateRows,
       hierarchyRows: filteredHierarchyRows,
+      occupancyRows,
       shipDayBerthRows,
     }),
     [
@@ -108,6 +123,7 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
       inventoryRows,
       reservationCurrentStateRows,
       filteredHierarchyRows,
+      occupancyRows,
       shipDayBerthRows,
     ]
   );
@@ -116,12 +132,14 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
     || inventoryLoading
     || reservationLoading
     || hierarchyLoading
-    || shipDayLoading;
+    || shipDayLoading
+    || occupancyLoading;
   const error = masterError
     || inventoryError
     || reservationError
     || hierarchyError
-    || shipDayError;
+    || shipDayError
+    || occupancyError;
 
   const handleRefresh = () => {
     refetchMasterSail();
@@ -129,6 +147,7 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
     refetchReservations();
     refetchHierarchy();
     refetchShipDay();
+    refetchOccupancy();
   };
 
   return (

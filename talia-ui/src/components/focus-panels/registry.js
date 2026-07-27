@@ -46,6 +46,7 @@ import DirectAvailabilityContainer from './DirectAvailability';
 import AgencyContainer from './Agency';
 import DistributionContainer from './Distribution';
 import CapacityValidationContainer from './CapacityValidation';
+import CabinDeckInventoryContainer from './CabinDeckInventory';
 import ProjectSummaryContainer from './ProjectSummary';
 import ComponentInteractionMapContainer from './ComponentInteractionMap';
 import ContextRowMonitor from './ContextRowMonitor';
@@ -180,9 +181,9 @@ export const componentRegistry = {
     panelId: 'distribution',
     category: 'Charts',
     title: 'Distribution',
-    description: 'Horizontal stacked charts of sold guests by channel (Agency/Direct/Tour Op), market, and Group/FIT for the selected sailing',
+    description: 'Horizontal stacked charts of sold guests by channel (Agency/Direct/Tour Op), market group (market_roll_up), and Group/FIT for the selected sailing',
     props: {},
-    dataRequirements: 'Requires reservation_current_state + agency (Dim_Agency). Channel from agency_type rollup; market from agency.market. Group/FIT uses group_id when present.',
+    dataRequirements: 'Requires reservation_current_state + agency + market_roll_up. Channel from agency_type rollup; market group from agency.market → new_budget_roll_up. Group/FIT uses group_id when present.',
     events: {
       emits: [],
       respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
@@ -196,7 +197,7 @@ export const componentRegistry = {
     panelId: 'capacity-validation',
     category: 'Debugging',
     title: 'Capacity Validation',
-    description: 'Data-check comparison of capacity across physical berths, cabin availability, inventory-by-day, ship nameplate, and sold guests for the selected voyage',
+    description: 'Vertical source ledger of capacity, booked, and availability for one sailing — each value shows table, derivation, grain, and scope for manual reconciliation with MSE',
     props: {},
     dataRequirements: 'Requires master_sail, ship_day_berth_status, cabin_availability, inventory_status_by_day, ship, reservation_current_state. Linked via sail.select.',
     events: {
@@ -206,6 +207,22 @@ export const componentRegistry = {
     supportsRefresh: true,
     showInReports: true,
     filePath: 'src/components/focus-panels/CapacityValidation/index.jsx'
+  },
+  CabinDeckInventory: {
+    component: CabinDeckInventoryContainer,
+    panelId: 'cabin-deck-inventory',
+    category: 'Inventory',
+    title: 'Cabin Deck Inventory',
+    description: 'Assigned cabins by deck and category with FIT/Group ownership highlights; GTY ONLY holds shown as unassigned group bookings',
+    props: {},
+    dataRequirements: 'Requires ship_inventory_alloc, ship_cabin, ship_cabin_ctg_link (fou.SHIP_CABIN_CTG_LINK). No customer/PII. Owner id is res_id (FIT) or group_id (GROUP).',
+    events: {
+      emits: [],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+    },
+    supportsRefresh: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/CabinDeckInventory/index.jsx'
   },
   ProjectSummary: {
     component: ProjectSummaryContainer,

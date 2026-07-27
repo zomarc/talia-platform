@@ -1,5 +1,6 @@
 /**
  * Distribution Presenter — horizontal stacked bars (channel, market, group/FIT).
+ * Charts are the focus; legends stay compact (market = top 5 + Others).
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -10,11 +11,25 @@ const buildStackedDataset = (slices, stackedLabel) => {
   const colors = getSeriesColors();
   return (slices || []).map((slice, index) => ({
     label: slice.label,
-    data: [slice.value],
+    data: [Number(slice.value) || 0],
     backgroundColor: colors[index % colors.length],
     borderWidth: 0,
     stack: stackedLabel,
+    barThickness: 28,
+    maxBarThickness: 36,
   }));
+};
+
+const compactLegend = {
+  display: true,
+  position: 'right',
+  align: 'center',
+  labels: {
+    boxWidth: 10,
+    boxHeight: 10,
+    padding: 6,
+    font: { size: 10 },
+  },
 };
 
 const buildHorizontalStackedChart = (canvas, slices, { title, valueMode = 'absolute' } = {}) => {
@@ -23,10 +38,11 @@ const buildHorizontalStackedChart = (canvas, slices, { title, valueMode = 'absol
   if (!safeSlices.length) return null;
   initChartDefaults();
   const colors = getChartColors();
-  const total = safeSlices.reduce((sum, s) => sum + (s.value || 0), 0);
+  const total = safeSlices.reduce((sum, s) => sum + (Number(s.value) || 0), 0);
+  if (total <= 0) return null;
   const datasets = buildStackedDataset(
-    valueMode === 'percent' && total > 0
-      ? safeSlices.map((s) => ({ ...s, value: (s.value / total) * 100 }))
+    valueMode === 'percent'
+      ? safeSlices.map((s) => ({ ...s, value: (Number(s.value) / total) * 100 }))
       : safeSlices,
     title
   );
@@ -34,23 +50,28 @@ const buildHorizontalStackedChart = (canvas, slices, { title, valueMode = 'absol
   return new Chart(canvas, {
     type: 'bar',
     data: {
-      labels: [valueMode === 'percent' ? 'Share' : 'Guests'],
+      labels: [' '],
       datasets,
     },
     options: getChartOptions.bar({
       indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: {
+        padding: { top: 4, right: 4, bottom: 4, left: 4 },
+      },
       plugins: {
         title: {
           display: true,
           text: title,
           align: 'start',
+          font: { size: 12, weight: '600' },
+          padding: { bottom: 6 },
         },
-        legend: {
-          display: true,
-          position: 'bottom',
-        },
+        legend: compactLegend,
         tooltip: {
           callbacks: {
+            title: () => '',
             label: (ctx) => {
               const v = ctx.parsed?.x;
               if (valueMode === 'percent') {
@@ -67,6 +88,8 @@ const buildHorizontalStackedChart = (canvas, slices, { title, valueMode = 'absol
           beginAtZero: true,
           max: valueMode === 'percent' ? 100 : undefined,
           ticks: {
+            maxTicksLimit: 6,
+            font: { size: 10 },
             callback: (value) => (
               valueMode === 'percent' ? `${value}%` : value
             ),
@@ -75,6 +98,7 @@ const buildHorizontalStackedChart = (canvas, slices, { title, valueMode = 'absol
         },
         y: {
           stacked: true,
+          ticks: { display: false },
           grid: { display: false },
         },
       },
@@ -101,24 +125,31 @@ const DistributionPresenter = ({
     chartsRef.current = [];
     if (!hasSailSelection || scopeLoading) return undefined;
 
-    const channelChart = buildHorizontalStackedChart(
-      channelRef.current,
-      bundle?.channelSlices,
-      { title: 'Sold by Distribution (guests)', valueMode: 'absolute' }
-    );
-    const marketChart = buildHorizontalStackedChart(
-      marketRef.current,
-      bundle?.marketSlices,
-      { title: 'Sold by Market (share)', valueMode: 'percent' }
-    );
-    const groupChart = buildHorizontalStackedChart(
-      groupRef.current,
-      bundle?.groupFitSlices,
-      { title: 'Sold by Groups / FIT (guests)', valueMode: 'absolute' }
-    );
-    chartsRef.current = [channelChart, marketChart, groupChart].filter(Boolean);
+    // Defer one frame so canvas parents have layout size (avoids blank bars).
+    let cancelled = false;
+    const frame = window.requestAnimationFrame(() => {
+      if (cancelled) return;
+      const channelChart = buildHorizontalStackedChart(
+        channelRef.current,
+        bundle?.channelSlices,
+        { title: 'Sold by Distribution (guests)', valueMode: 'absolute' }
+      );
+      const marketChart = buildHorizontalStackedChart(
+        marketRef.current,
+        bundle?.marketSlices,
+        { title: 'Sold by Market Group (share)', valueMode: 'percent' }
+      );
+      const groupChart = buildHorizontalStackedChart(
+        groupRef.current,
+        bundle?.groupFitSlices,
+        { title: 'Sold by Groups / FIT (guests)', valueMode: 'absolute' }
+      );
+      chartsRef.current = [channelChart, marketChart, groupChart].filter(Boolean);
+    });
 
     return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
       chartsRef.current.forEach((chart) => {
         try { chart?.destroy?.(); } catch { /* noop */ }
       });
@@ -129,6 +160,9 @@ const DistributionPresenter = ({
   const scopeLabel = selectedReferenceSailCode
     || (selectedSailCodes.length ? selectedSailCodes.join(', ') : null);
   const meta = bundle?.meta || {};
+  const marketCount = bundle?.marketSliceCount || 0;
+  const marketEmpty = hasSailSelection && !scopeLoading
+    && !(bundle?.marketSlices || []).some((s) => Number(s?.value) > 0);
 
   return (
     <div className="focus-panel talia-report distribution-panel" role="region" aria-label="Distribution">
@@ -152,10 +186,14 @@ const DistributionPresenter = ({
         )}
         {hasSailSelection && !scopeLoading && (
           <>
-            <p className="talia-callout distribution-panel__summary">
+            <p className="distribution-panel__summary">
               {meta.bookingCount || 0} bookings · {Number(meta.guestTotal || 0).toLocaleString()} guests
-              {meta.withAgency != null
-                ? ` · ${meta.withAgency} matched to agency`
+              {meta.withAgency != null ? ` · ${meta.withAgency} agency-matched` : ''}
+              {meta.withMarketGroup != null
+                ? ` · ${meta.withMarketGroup} market-group mapped`
+                : ''}
+              {marketCount > 0
+                ? ` · market groups top ${meta.marketTopN || 5}${marketCount > (meta.marketTopN || 5) ? ` of ${marketCount}` : ''}`
                 : ''}
             </p>
             <div className="distribution-panel__charts">
@@ -163,15 +201,19 @@ const DistributionPresenter = ({
                 <canvas ref={channelRef} aria-label="Channel distribution chart" />
               </div>
               <div className="distribution-panel__chart-card">
-                <canvas ref={marketRef} aria-label="Market distribution chart" />
+                {marketEmpty ? (
+                  <p className="distribution-panel__chart-empty">
+                    No market group split — agency.market / market_roll_up missing.
+                  </p>
+                ) : (
+                  <canvas ref={marketRef} aria-label="Market distribution chart" />
+                )}
               </div>
               <div className="distribution-panel__chart-card">
                 <canvas ref={groupRef} aria-label="Group versus FIT chart" />
               </div>
             </div>
-            <p className="talia-callout distribution-panel__note">
-              {meta.groupFitCoverageNote}
-            </p>
+            <p className="distribution-panel__note">{meta.groupFitCoverageNote}</p>
           </>
         )}
       </main>

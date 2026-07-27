@@ -1,167 +1,28 @@
 /**
- * Capacity Validation Presenter — Tabulator comparison of capacity sources.
+ * Capacity Validation Presenter — compact cabins × berths source matrix.
  */
 
-import React, { useEffect, useMemo, useRef } from 'react';
-import { afterTabulatorDataRefresh } from '../../../hooks/useTabulatorLayoutSync';
+import React from 'react';
 import { formatDayMon } from '../../../lib/dateFormat';
-import { getTabulatorOptions, initTabulator } from '../../../lib/tabulatorConfig';
 
-const numberFormatter = (cell) => {
-  const value = cell.getValue();
+const fmt = (value) => {
   if (value == null || value === '') return '—';
   const n = Number(value);
   if (!Number.isFinite(n)) return '—';
   return n.toLocaleString();
 };
 
-const deltaFormatter = (cell) => {
-  const value = cell.getValue();
-  if (value == null || value === '') return '—';
-  const n = Number(value);
-  if (!Number.isFinite(n)) return '—';
-  const sign = n > 0 ? '+' : '';
-  return `${sign}${n.toLocaleString()}`;
-};
-
 const CapacityValidationPresenter = ({
-  row,
+  ledger,
   hasSailSelection,
   scopeLoading = false,
   selectedSailCodes = [],
   selectedReferenceSailCode = null,
-  panelComponentId,
 }) => {
-  const tableRef = useRef(null);
-  const instanceRef = useRef(null);
-  const tableBuiltRef = useRef(false);
-
-  const rows = useMemo(() => (row ? [row] : []), [row]);
-
-  const columns = useMemo(() => ([
-    { field: 'reference_sail_code', title: 'Reference Sail', minWidth: 120, headerFilter: 'input' },
-    { field: 'sail_codes', title: 'Sail Codes', minWidth: 160, headerFilter: 'input' },
-    { field: 'ship_code', title: 'Ship', width: 70 },
-    {
-      field: 'sail_date_from',
-      title: 'Departs',
-      width: 90,
-      formatter: (cell) => formatDayMon(cell.getValue(), ''),
-    },
-    { field: 'package_name', title: 'Package', minWidth: 140 },
-    {
-      field: 'physical_berth_capacity',
-      title: 'Physical Berths',
-      titleLong: 'Peak ship_day_berth_status.berth_capacity',
-      hozAlign: 'right',
-      formatter: numberFormatter,
-      minWidth: 110,
-    },
-    {
-      field: 'cabin_availability_total_cabins',
-      title: 'Cabin Avail Cabins',
-      titleLong: 'Sum cabin_availability.total_cabins by category',
-      hozAlign: 'right',
-      formatter: numberFormatter,
-      minWidth: 120,
-    },
-    {
-      field: 'inventory_status_capacity',
-      title: 'Inventory Day Cap',
-      titleLong: 'Peak inventory_status_by_day.capacity',
-      hozAlign: 'right',
-      formatter: numberFormatter,
-      minWidth: 120,
-    },
-    {
-      field: 'ship_pax_capacity',
-      title: 'Ship Nameplate',
-      titleLong: 'ship.ship_pax_capacity',
-      hozAlign: 'right',
-      formatter: numberFormatter,
-      minWidth: 110,
-    },
-    {
-      field: 'sold_guests',
-      title: 'Sold Guests',
-      titleLong: 'Sum reservation_current_state.guest_count',
-      hozAlign: 'right',
-      formatter: numberFormatter,
-      minWidth: 100,
-    },
-    {
-      field: 'delta_physical_vs_nameplate',
-      title: 'Δ Phys−Name',
-      hozAlign: 'right',
-      formatter: deltaFormatter,
-      minWidth: 100,
-    },
-    {
-      field: 'delta_physical_vs_inventory',
-      title: 'Δ Phys−Inv',
-      hozAlign: 'right',
-      formatter: deltaFormatter,
-      minWidth: 100,
-    },
-    {
-      field: 'delta_guests_vs_physical',
-      title: 'Δ Guests−Phys',
-      hozAlign: 'right',
-      formatter: deltaFormatter,
-      minWidth: 110,
-    },
-  ]), []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const initTable = async () => {
-      if (!tableRef.current) return;
-      try {
-        const Tabulator = await initTabulator();
-        if (cancelled || !tableRef.current) return;
-        if (instanceRef.current) {
-          try { instanceRef.current.destroy(); } catch { /* noop */ }
-          instanceRef.current = null;
-        }
-        instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
-          data: [],
-          columns,
-          height: '100%',
-          selectableRows: false,
-          pagination: false,
-          panelComponentId: panelComponentId || 'capacity-validation',
-        }));
-        instanceRef.current.on('tableBuilt', () => {
-          tableBuiltRef.current = true;
-          afterTabulatorDataRefresh(
-            instanceRef.current,
-            instanceRef.current.replaceData(rows)
-          );
-        });
-      } catch (error) {
-        console.error('[CapacityValidation] Failed to init table', error);
-      }
-    };
-    initTable();
-    return () => {
-      cancelled = true;
-      tableBuiltRef.current = false;
-      if (instanceRef.current) {
-        try { instanceRef.current.destroy(); } catch { /* noop */ }
-        instanceRef.current = null;
-      }
-    };
-  }, [columns, panelComponentId]);
-
-  useEffect(() => {
-    if (!instanceRef.current || !tableBuiltRef.current) return;
-    afterTabulatorDataRefresh(
-      instanceRef.current,
-      instanceRef.current.replaceData(rows)
-    );
-  }, [rows]);
-
+  const scope = ledger?.scope || {};
+  const sources = ledger?.sources || [];
   const scopeLabel = selectedReferenceSailCode
+    || scope.reference_sail_code
     || (selectedSailCodes.length ? selectedSailCodes.join(', ') : null);
 
   return (
@@ -171,16 +32,12 @@ const CapacityValidationPresenter = ({
           <h2 className="talia-report__title">Capacity Validation</h2>
           <p className="talia-report__subtitle">
             {hasSailSelection
-              ? `Source capacity check for ${scopeLabel}`
+              ? `${scopeLabel}${scope.ship_code ? ` · ${scope.ship_code}` : ''}${scope.sail_date_from ? ` · ${formatDayMon(scope.sail_date_from, '')}` : ''}`
               : 'Select a sailing in Master Sailing Explorer'}
           </p>
         </div>
       </header>
-      <div className="talia-callout capacity-validation__callout">
-        Data-check panel (not a user report). Compares physical berths, cabin availability,
-        inventory-by-day, ship nameplate, and sold guests. Physical figures use peak day —
-        never sum master + segment berths.
-      </div>
+
       <main className="talia-report__content capacity-validation__content">
         {!hasSailSelection && (
           <p className="focus-panel-empty__detail">No sailing selected.</p>
@@ -188,13 +45,70 @@ const CapacityValidationPresenter = ({
         {hasSailSelection && scopeLoading && (
           <p className="focus-panel-empty__detail">Loading capacity sources…</p>
         )}
-        <div
-          ref={tableRef}
-          className="focus-panel__table capacity-validation__table"
-          hidden={!hasSailSelection || scopeLoading}
-        />
-        {hasSailSelection && !scopeLoading && row?.note && (
-          <p className="talia-callout capacity-validation__note">{row.note}</p>
+        {hasSailSelection && !scopeLoading && ledger && (
+          <>
+            <p className="capacity-validation__hint">
+              Physical cabins and berths by source. MSE row is what Master Sailing Explorer displays
+              (cabins = berths ÷ 2).
+            </p>
+
+            <div className="capacity-validation__table-wrap">
+              <table className="capacity-validation__table">
+                <thead>
+                  <tr>
+                    <th rowSpan={2} className="capacity-validation__col-source">Source</th>
+                    <th colSpan={2}>Capacity</th>
+                    <th colSpan={2}>Booked</th>
+                    <th colSpan={2}>Available</th>
+                  </tr>
+                  <tr>
+                    <th>Cabins</th>
+                    <th>Berths</th>
+                    <th>Cabins</th>
+                    <th>Berths</th>
+                    <th>Cabins</th>
+                    <th>Berths</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sources.map((src) => (
+                    <tr
+                      key={src.id}
+                      className={[
+                        src.highlight ? 'capacity-validation__row--mse' : '',
+                        src.kind === 'selling' ? 'capacity-validation__row--selling' : '',
+                      ].filter(Boolean).join(' ')}
+                    >
+                      <th scope="row" className="capacity-validation__col-source">
+                        <div className="capacity-validation__source-name">{src.name}</div>
+                        <div className="capacity-validation__source-table"><code>{src.table}</code></div>
+                        <div className="capacity-validation__source-how">{src.how}</div>
+                        {src.detail && (
+                          <div className="capacity-validation__source-detail">{src.detail}</div>
+                        )}
+                        {src.warn && (
+                          <div className="capacity-validation__source-warn">{src.warn}</div>
+                        )}
+                      </th>
+                      <td>{fmt(src.capacity?.cabins)}</td>
+                      <td>{fmt(src.capacity?.berths)}</td>
+                      <td>{fmt(src.booked?.cabins)}</td>
+                      <td>{fmt(src.booked?.berths)}</td>
+                      <td>{fmt(src.available?.cabins)}</td>
+                      <td>{fmt(src.available?.berths)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {scope.package_name && (
+              <p className="capacity-validation__footer">
+                {(scope.sail_codes || []).join(', ')}
+                {scope.package_name ? ` · ${scope.package_name}` : ''}
+              </p>
+            )}
+          </>
         )}
       </main>
     </div>

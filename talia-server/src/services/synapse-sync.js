@@ -749,6 +749,87 @@ class SynapseSyncService {
           created_at: currentTime
         }));
 
+      case 'marketRollUp':
+        return data.map(row => ({
+          agency_market: getField(row, ['AGENCY_MARKET', 'Agency_Market']) || null,
+          new_budget_roll_up: getField(row, ['NEW_BUDGET_ROLL_UP', 'New_Budget_Roll_Up']) || null,
+          effective_from: getField(row, ['EFFECTIVE_FROM', 'Effective_From']) || null,
+          effective_to: getField(row, ['EFFECTIVE_TO', 'Effective_To']) || null,
+          active_record_flag: toNumber(getField(row, ['ACTIVE_RECORD_FLAG', 'Active_Record_Flag'])),
+          created_at: currentTime
+        }));
+
+      case 'shipInventoryAlloc':
+        return data.map(row => ({
+          allocation_id: toNumber(getField(row, ['ALLOCATION_ID', 'Allocation_Id'])),
+          allocation_owner_type: getField(row, ['ALLOCATION_OWNER_TYPE', 'Allocation_Owner_Type']) || null,
+          allocation_owner_id: toNumber(getField(row, ['ALLOCATION_OWNER_ID', 'Allocation_Owner_Id'])),
+          ship_code: getField(row, ['SHIP_CODE', 'Ship_Code']) || null,
+          sail_date_from: toDateOnly(getField(row, ['SAIL_DATE_FROM', 'Sail_Date_From'])),
+          sail_date_to: toDateOnly(getField(row, ['SAIL_DATE_TO', 'Sail_Date_To'])),
+          cabin_category: getField(row, ['CABIN_CATEGORY', 'Cabin_Category']) || null,
+          cabin_number: getField(row, ['CABIN_NUMBER', 'Cabin_Number']) || null,
+          berth_number: getField(row, ['BERTH_NUMBER', 'Berth_Number']) != null
+            ? String(getField(row, ['BERTH_NUMBER', 'Berth_Number']))
+            : null,
+          occupancy: toNumber(getField(row, ['OCCUPANCY', 'Occupancy'])),
+          price_category: getField(row, ['PRICE_CATEGORY', 'Price_Category']) || null,
+          inventory_request_type: getField(row, ['INVENTORY_REQUEST_TYPE', 'Inventory_Request_Type']) || null,
+          inventory_result_type: getField(row, ['INVENTORY_RESULT_TYPE', 'Inventory_Result_Type']) || null,
+          probability: toNumber(getField(row, ['PROBABILITY', 'Probability'])),
+          is_soft_assign: getField(row, ['IS_SOFT_ASSIGN', 'Is_Soft_Assign']) != null
+            ? String(getField(row, ['IS_SOFT_ASSIGN', 'Is_Soft_Assign']))
+            : null,
+          release_timestamp: getField(row, ['RELEASE_TIMESTAMP', 'Release_Timestamp']) || null,
+          dlgt_res_id: toNumber(getField(row, ['DLGT_RES_ID', 'Dlgt_Res_Id'])),
+          allocation_timestamp: getField(row, ['ALLOCATION_TIMESTAMP', 'Allocation_Timestamp']) || null,
+          created_at: currentTime
+        }));
+
+      case 'shipCabin':
+        return data.map(row => ({
+          ship_code: getField(row, ['SHIP_CODE', 'Ship_Code']) || null,
+          cabin_number: getField(row, ['CABIN_NUMBER', 'Cabin_Number']) != null
+            ? String(getField(row, ['CABIN_NUMBER', 'Cabin_Number']))
+            : null,
+          cabin_id: toNumber(getField(row, ['CABIN_ID', 'Cabin_Id'])),
+          deck_number: toNumber(getField(row, ['DECK_NUMBER', 'Deck_Number'])),
+          cabin_name: getField(row, ['CABIN_NAME', 'Cabin_Name']) || null,
+          comments: getField(row, ['COMMENTS', 'Comments']) || null,
+          image_id: toNumber(getField(row, ['IMAGE_ID', 'Image_Id'])),
+          cabin_rank: toNumber(getField(row, ['CABIN_RANK', 'Cabin_Rank'])),
+          firezone_code: getField(row, ['FIREZONE_CODE', 'Firezone_Code']) || null,
+          ext_cabin_id: toNumber(getField(row, ['EXT_CABIN_ID', 'Ext_Cabin_Id'])),
+          record_added_manually: getField(row, ['RECORD_ADDED_MANUALLY', 'Record_Added_Manually']) || null,
+          effective_from: getField(row, ['EFFECTIVE_FROM', 'Effective_From']) || null,
+          effective_to: getField(row, ['EFFECTIVE_TO', 'Effective_To']) || null,
+          active_record_flag: toNumber(getField(row, ['ACTIVE_RECORD_FLAG', 'Active_Record_Flag'])),
+          created_at: currentTime
+        }));
+
+      case 'shipCabinCtgLink':
+        // Physical inventory only — do not map ACCOUNT_NUMBER or other commercial/PII fields.
+        return data.map(row => ({
+          record_id: toNumber(getField(row, ['RECORD_ID', 'Record_Id'])),
+          ship_code: getField(row, ['SHIP_CODE', 'Ship_Code']) || null,
+          cabin_number: getField(row, ['CABIN_NUMBER', 'Cabin_Number']) != null
+            ? String(getField(row, ['CABIN_NUMBER', 'Cabin_Number']))
+            : null,
+          cabin_category: getField(row, ['CABIN_CATEGORY', 'Cabin_Category']) || null,
+          eff_sail_from: toDateOnly(getField(row, ['EFF_SAIL_FROM', 'Eff_Sail_From'])),
+          eff_sail_to: toDateOnly(getField(row, ['EFF_SAIL_TO', 'Eff_Sail_To'])),
+          rollaway_beds: toNumber(getField(row, ['ROLLAWAY_BEDS', 'Rollaway_Beds'])),
+          cabin_capacity: toNumber(getField(row, ['CABIN_CAPACITY', 'Cabin_Capacity'])),
+          is_active: getField(row, ['IS_ACTIVE', 'Is_Active']) != null
+            ? String(getField(row, ['IS_ACTIVE', 'Is_Active']))
+            : null,
+          child_beds: toNumber(getField(row, ['CHILD_BEDS', 'Child_Beds'])),
+          effective_from: getField(row, ['EFFECTIVE_FROM', 'Effective_From']) || null,
+          effective_to: getField(row, ['EFFECTIVE_TO', 'Effective_To']) || null,
+          active_record_flag: toNumber(getField(row, ['ACTIVE_RECORD_FLAG', 'Active_Record_Flag'])),
+          created_at: currentTime
+        }));
+
       case 'cabinAvailability':
         return data.map(row => ({
           snapshot_date: row.Snapshot_Date,

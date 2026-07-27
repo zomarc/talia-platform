@@ -5658,7 +5658,7 @@
 .distribution-panel__content {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
   min-height: 0;
   overflow: auto;
 }
@@ -5666,21 +5666,35 @@
 .distribution-panel__charts {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.65rem;
+  flex: 1;
+  min-height: 0;
 }
 
 .distribution-panel__chart-card {
   position: relative;
-  height: 140px;
-  min-height: 120px;
+  flex: 1 1 0;
+  min-height: 110px;
+  height: 120px;
+}
+
+.distribution-panel__chart-card canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.distribution-panel__chart-empty {
+  margin: 0;
+  padding: 1rem 0.75rem;
+  color: var(--theme-text-muted);
+  font-size: var(--theme-font-size-sm, 0.85rem);
 }
 
 .distribution-panel__summary,
-.distribution-panel__note,
-.capacity-validation__callout,
-.capacity-validation__note {
+.distribution-panel__note {
   margin: 0;
-  font-size: var(--theme-font-size-sm, 0.85rem);
+  font-size: var(--theme-font-size-xs, 0.75rem);
+  color: var(--theme-text-muted);
 }
 
 .capacity-validation__content {
@@ -5689,9 +5703,615 @@
   gap: 0.5rem;
   min-height: 0;
   flex: 1;
+  overflow: auto;
+}
+
+.capacity-validation__hint,
+.capacity-validation__footer {
+  margin: 0;
+  font-size: var(--theme-font-size-xs, 0.75rem);
+  color: var(--theme-text-muted);
+}
+
+.capacity-validation__table-wrap {
+  overflow: auto;
+  border: 1px solid var(--theme-border, rgba(255,255,255,0.12));
+  border-radius: 6px;
 }
 
 .capacity-validation__table {
-  flex: 1;
-  min-height: 120px;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--theme-font-size-sm, 0.85rem);
+}
+
+.capacity-validation__table th,
+.capacity-validation__table td {
+  padding: 0.4rem 0.55rem;
+  border-bottom: 1px solid var(--theme-border-light, rgba(255,255,255,0.08));
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.capacity-validation__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--theme-bg-elevated, #1a1a2e);
+  color: var(--theme-text-secondary);
+  font-weight: 600;
+  text-align: center;
+  font-size: var(--theme-font-size-xs, 0.75rem);
+}
+
+.capacity-validation__col-source,
+.capacity-validation__table th.capacity-validation__col-source,
+.capacity-validation__table td.capacity-validation__col-source {
+  text-align: left;
+  white-space: normal;
+  min-width: 14rem;
+  max-width: 22rem;
+}
+
+.capacity-validation__source-name {
+  font-weight: 650;
+  color: var(--theme-fg);
+  line-height: 1.25;
+}
+
+.capacity-validation__source-table {
+  margin-top: 0.1rem;
+  font-size: var(--theme-font-size-xs, 0.75rem);
+}
+
+.capacity-validation__source-table code {
+  font-size: inherit;
+}
+
+.capacity-validation__source-how,
+.capacity-validation__source-detail {
+  margin-top: 0.15rem;
+  font-size: var(--theme-font-size-xs, 0.75rem);
+  color: var(--theme-text-muted);
+  line-height: 1.3;
+}
+
+.capacity-validation__source-warn {
+  margin-top: 0.25rem;
+  font-size: var(--theme-font-size-xs, 0.75rem);
+  color: var(--theme-warning, #ff9800);
+  line-height: 1.3;
+}
+
+.capacity-validation__row--mse {
+  background: rgba(91, 155, 213, 0.12);
+}
+
+.capacity-validation__row--mse .capacity-validation__source-name::after {
+  content: " · MSE";
+  font-weight: 500;
+  color: var(--theme-accent, #5b9bd5);
+  font-size: var(--theme-font-size-xs, 0.75rem);
+}
+
+.capacity-validation__row--selling {
+  opacity: 0.9;
+}
+
+.capacity-validation__table tbody tr:last-child th,
+.capacity-validation__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.capacity-validation__callout,
+.capacity-validation__note {
+  margin: 0;
+  font-size: var(--theme-font-size-sm, 0.85rem);
+}
+
+/* Cabin Deck Inventory */
+.cabin-deck-panel {
+  position: relative;
+}
+
+.cabin-deck__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-component-gap-sm);
+  min-height: 0;
+  overflow: auto;
+  padding: var(--theme-card-padding);
+}
+
+/* Report shell sets min-height:0 on content children so tables can shrink.
+   Cabin deck sections must keep natural height and scroll the content area —
+   otherwise GTY chips overflow and paint over the deck grid. */
+.cabin-deck__content > * {
+  flex-shrink: 0;
+  min-height: auto;
+}
+
+.cabin-deck__summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--theme-component-gap-xs) var(--theme-component-gap-md);
+}
+
+.cabin-deck__summary,
+.cabin-deck__hint {
+  margin: 0;
+  font-size: var(--theme-font-size-xs);
+  color: var(--theme-text-muted);
+  line-height: 1.3;
+}
+
+.cabin-deck__details {
+  margin-bottom: var(--theme-component-gap-xs);
+}
+
+.cabin-deck__details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--theme-component-gap-sm) var(--theme-component-gap-md);
+  padding: var(--theme-card-padding);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-md);
+  background: var(--theme-card-bg);
+}
+
+@media (max-width: 720px) {
+  .cabin-deck__details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cabin-deck__details-block--wide {
+  grid-column: 1 / -1;
+}
+
+.cabin-deck__details-heading {
+  margin: 0 0 var(--theme-component-gap-xs);
+  font-size: var(--theme-font-size-sm);
+  font-weight: 650;
+  color: var(--theme-fg);
+}
+
+.cabin-deck__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--theme-component-gap-xs) var(--theme-component-gap-md);
+  margin: 0;
+}
+
+.cabin-deck__stats > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--theme-component-gap-sm);
+  font-size: var(--theme-font-size-xs);
+  line-height: 1.3;
+}
+
+.cabin-deck__stats dt {
+  margin: 0;
+  color: var(--theme-text-muted);
+  font-weight: 500;
+}
+
+.cabin-deck__stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: var(--theme-fg);
+  text-align: right;
+}
+
+.cabin-deck__details-note {
+  margin: var(--theme-component-gap-xs) 0 0;
+  font-size: var(--theme-font-size-xs);
+  color: var(--theme-text-muted);
+}
+
+.cabin-deck__legend-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-component-gap-xs);
+}
+
+.cabin-deck__legend-row {
+  display: grid;
+  grid-template-columns: 0.85rem minmax(3rem, auto) 1fr;
+  align-items: center;
+  gap: var(--theme-component-gap-xs);
+  font-size: var(--theme-font-size-xs);
+}
+
+.cabin-deck__legend-swatch {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: var(--theme-radius-sm);
+  border: 1px solid transparent;
+  display: inline-block;
+}
+
+.cabin-deck__legend-label {
+  font-weight: 650;
+  color: var(--theme-fg);
+}
+
+.cabin-deck__legend-hint {
+  color: var(--theme-text-muted);
+}
+
+.cabin-deck__source-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: var(--theme-font-size-xs);
+  color: var(--theme-text-muted);
+  line-height: 1.4;
+}
+
+.cabin-deck__source-list code {
+  font-size: inherit;
+  color: var(--theme-fg);
+}
+
+.cabin-deck__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--theme-component-gap-xs);
+}
+
+.cabin-deck__legend-item {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--theme-padding-xs) var(--theme-component-padding-xs);
+  border-radius: var(--theme-radius-sm);
+  font-size: var(--theme-font-size-xs);
+  border: 1px solid transparent;
+}
+
+.cabin-deck__section-title {
+  margin: 0 0 var(--theme-component-gap-xs);
+  font-size: var(--theme-font-size-xs);
+  font-weight: 650;
+  display: flex;
+  align-items: baseline;
+  gap: var(--theme-component-gap-xs);
+}
+
+.cabin-deck__deck-count {
+  font-weight: 500;
+  color: var(--theme-text-muted);
+  font-size: var(--theme-font-size-xs);
+}
+
+.cabin-deck__decks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-component-gap-sm);
+  flex: 0 0 auto;
+  min-height: auto;
+}
+
+.cabin-deck__deck {
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-md);
+  padding: var(--theme-card-padding);
+  background: var(--theme-card-bg);
+}
+
+.cabin-deck__category {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--theme-component-gap-sm);
+  margin-top: var(--theme-component-gap-xs);
+}
+
+.cabin-deck__category-label {
+  flex: 0 0 3.75rem;
+  width: 3.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-top: var(--theme-padding-xs);
+  line-height: 1.15;
+}
+
+.cabin-deck__category-label--inline {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 3.25rem;
+  flex-direction: row;
+  align-items: baseline;
+  padding-top: 0;
+  white-space: nowrap;
+}
+
+.cabin-deck__category-inline {
+  font-size: var(--theme-font-size-xs);
+  font-weight: 700;
+  color: var(--theme-fg);
+  letter-spacing: 0.02em;
+}
+
+.cabin-deck__category-code {
+  font-size: var(--theme-font-size-sm);
+  font-weight: 700;
+  color: var(--theme-fg);
+  letter-spacing: 0.02em;
+}
+
+.cabin-deck__category-count {
+  font-size: var(--theme-font-size-xs);
+  font-weight: 500;
+  color: var(--theme-text-muted);
+}
+
+.cabin-deck__category-inline .cabin-deck__category-count {
+  font-weight: 500;
+}
+
+.cabin-deck__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--theme-component-gap-xs);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cabin-deck__chip {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  width: 4.6rem;
+  min-width: 4.6rem;
+  max-width: 4.6rem;
+  height: 2.25rem;
+  padding: var(--theme-padding-xs) var(--theme-component-padding-xs);
+  border-radius: var(--theme-radius-sm);
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: var(--theme-font-size-xs);
+  line-height: 1.1;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+  appearance: none;
+  -webkit-appearance: none;
+  color: inherit;
+}
+
+.cabin-deck__chip:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--theme-accent) 70%, transparent);
+  outline-offset: 1px;
+}
+
+.cabin-deck__chip--compact {
+  width: 0.85rem;
+  min-width: 0.85rem;
+  max-width: 0.85rem;
+  height: 0.85rem;
+  padding: 0;
+  border-radius: 2px;
+}
+
+.cabin-deck__chip-cabin {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cabin-deck__chip-owner {
+  color: inherit;
+  opacity: 0.85;
+  font-size: max(0.55rem, calc(var(--theme-font-size-xs) * 0.9));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cabin-deck__chip--fit,
+.cabin-deck__legend-item.cabin-deck__chip--fit {
+  background: rgba(91, 155, 213, 0.22);
+  border-color: rgba(91, 155, 213, 0.5);
+  color: var(--theme-fg);
+}
+
+.cabin-deck__chip--group,
+.cabin-deck__legend-item.cabin-deck__chip--group {
+  background: rgba(129, 199, 132, 0.22);
+  border-color: rgba(129, 199, 132, 0.55);
+  color: var(--theme-fg);
+}
+
+.cabin-deck__chip--gty,
+.cabin-deck__legend-item.cabin-deck__chip--gty {
+  background: rgba(255, 167, 38, 0.24);
+  border-color: rgba(255, 167, 38, 0.6);
+  color: var(--theme-fg);
+}
+
+.cabin-deck__chip--gty-fit,
+.cabin-deck__legend-item.cabin-deck__chip--gty-fit,
+.cabin-deck__legend-swatch.cabin-deck__chip--gty-fit {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 167, 38, 0.34),
+    rgba(255, 167, 38, 0.34) 4px,
+    rgba(255, 167, 38, 0.14) 4px,
+    rgba(255, 167, 38, 0.14) 8px
+  );
+  border-color: rgba(255, 167, 38, 0.75);
+  color: var(--theme-fg);
+}
+
+.cabin-deck__chip--missing-dlgt {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-error) 70%, transparent);
+  border-color: color-mix(in srgb, var(--theme-error) 55%, var(--theme-border));
+}
+
+.cabin-deck__legend-swatch.cabin-deck__chip--missing-dlgt-swatch {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-error) 70%, transparent);
+  background: transparent;
+  border-color: transparent;
+}
+
+.cabin-deck__category--over-alloc {
+  background: color-mix(in srgb, var(--theme-error) 6%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--theme-error) 45%, transparent);
+  border-radius: 0 var(--theme-radius-sm) var(--theme-radius-sm) 0;
+  padding: 0.05rem 0.15rem 0.05rem 0.25rem;
+}
+
+.cabin-deck__decks--compact .cabin-deck__category-label {
+  padding-top: 0;
+}
+
+.cabin-deck__decks--compact .cabin-deck__category {
+  align-items: center;
+}
+
+.cabin-deck__allocate-meta {
+  font-size: var(--theme-font-size-xs);
+  color: var(--theme-text-muted);
+  align-self: center;
+}
+
+.cabin-deck__chip--empty,
+.cabin-deck__legend-item.cabin-deck__chip--empty {
+  background: color-mix(in srgb, var(--theme-fg) 4%, transparent);
+  border-color: color-mix(in srgb, var(--theme-fg) 28%, transparent);
+  color: var(--theme-text-muted);
+}
+
+.cabin-deck__chip--assigned,
+.cabin-deck__legend-item.cabin-deck__chip--assigned {
+  background: color-mix(in srgb, var(--theme-fg) 12%, transparent);
+  border-color: color-mix(in srgb, var(--theme-fg) 28%, transparent);
+  color: var(--theme-fg);
+}
+
+.cabin-deck__gty {
+  flex: 0 0 auto;
+  min-height: auto;
+  padding: var(--theme-card-padding);
+  margin-bottom: var(--theme-component-gap-xs);
+  border: 1px solid color-mix(in srgb, var(--theme-warning, #ff9800) 40%, var(--theme-border));
+  border-radius: var(--theme-radius-md);
+  background: color-mix(in srgb, var(--theme-warning, #ff9800) 8%, var(--theme-card-bg));
+}
+
+.cabin-deck__decks--compact .cabin-deck__chips {
+  gap: max(2px, calc(var(--theme-component-gap-xs) * 0.5));
+}
+
+.cabin-deck__limit-warning {
+  margin: 0;
+  padding: var(--theme-component-padding-sm) var(--theme-card-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-warning, #ff9800) 65%, var(--theme-border));
+  background: color-mix(in srgb, var(--theme-warning, #ff9800) 16%, transparent);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size-xs);
+  line-height: 1.35;
+  border-radius: var(--theme-radius-sm);
+}
+
+.cabin-deck__soft-warning {
+  margin: 0;
+  font-size: var(--theme-font-size-xs);
+  color: var(--theme-warning, #ff9800);
+}
+
+.cabin-deck__detail-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.cabin-deck__detail-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: color-mix(in srgb, var(--theme-bg-solid, #0b0d14) 12%, transparent);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.cabin-deck__detail-panel {
+  position: absolute;
+  z-index: 1;
+  width: min(17.5rem, calc(100% - 1rem));
+  max-height: min(22rem, calc(100% - 1rem));
+  overflow: auto;
+  pointer-events: auto;
+  /* Nearly solid so the grid stays readable behind a light fade */
+  background: color-mix(in srgb, var(--theme-bg-elevated) 95%, transparent);
+  border: 1px solid var(--theme-border);
+  box-shadow: var(--theme-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.35));
+}
+
+.cabin-deck__detail-panel.talia-card {
+  background: color-mix(in srgb, var(--theme-bg-elevated) 95%, transparent);
+}
+
+.cabin-deck__detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--theme-component-gap-sm);
+  margin-bottom: var(--theme-component-gap-sm);
+}
+
+.cabin-deck__detail-title {
+  margin: 0;
+  font-size: var(--theme-font-size-sm);
+  font-weight: 650;
+  color: var(--theme-fg);
+}
+
+.cabin-deck__detail-close {
+  flex: 0 0 auto;
+}
+
+.cabin-deck__detail-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-component-gap-xs);
+}
+
+.cabin-deck__detail-row {
+  display: grid;
+  grid-template-columns: minmax(6rem, 38%) 1fr;
+  gap: var(--theme-component-gap-sm);
+  font-size: var(--theme-font-size-xs);
+  line-height: 1.35;
+}
+
+.cabin-deck__detail-row dt {
+  margin: 0;
+  color: var(--theme-text-muted);
+  font-weight: 500;
+}
+
+.cabin-deck__detail-row dd {
+  margin: 0;
+  color: var(--theme-fg);
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
 }

@@ -308,6 +308,104 @@
         "[RES_ID]",
         "[RES_PROMO_ID]"
       ]
+    },
+    "marketRollUp": {
+      "type": "direct",
+      "source": "lkp.MARKET_ROLL_UP",
+      "target": "market_roll_up",
+      "columns": [
+        "AGENCY_MARKET",
+        "NEW_BUDGET_ROLL_UP",
+        "EFFECTIVE_FROM",
+        "EFFECTIVE_TO",
+        "ACTIVE_RECORD_FLAG"
+      ],
+      "transformKey": "marketRollUp",
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "id"
+      }
+    },
+    "shipInventoryAlloc": {
+      "type": "direct",
+      "source": "stg.SHIP_INVENTORY_ALLOC",
+      "target": "ship_inventory_alloc",
+      "columns": [
+        "ALLOCATION_ID",
+        "ALLOCATION_OWNER_TYPE",
+        "ALLOCATION_OWNER_ID",
+        "SHIP_CODE",
+        "SAIL_DATE_FROM",
+        "SAIL_DATE_TO",
+        "CABIN_CATEGORY",
+        "CABIN_NUMBER",
+        "BERTH_NUMBER",
+        "OCCUPANCY",
+        "PRICE_CATEGORY",
+        "INVENTORY_REQUEST_TYPE",
+        "INVENTORY_RESULT_TYPE",
+        "PROBABILITY",
+        "IS_SOFT_ASSIGN",
+        "RELEASE_TIMESTAMP",
+        "DLGT_RES_ID",
+        "ALLOCATION_TIMESTAMP"
+      ],
+      "transformKey": "shipInventoryAlloc",
+      "isLargeDataset": true,
+      "rowNumberOrder": [
+        "ALLOCATION_ID"
+      ]
+    },
+    "shipCabin": {
+      "type": "direct",
+      "source": "fou.SHIP_CABIN",
+      "target": "ship_cabin",
+      "columns": [
+        "SHIP_CODE",
+        "CABIN_NUMBER",
+        "CABIN_ID",
+        "DECK_NUMBER",
+        "CABIN_NAME",
+        "COMMENTS",
+        "IMAGE_ID",
+        "CABIN_RANK",
+        "FIREZONE_CODE",
+        "EXT_CABIN_ID",
+        "RECORD_ADDED_MANUALLY",
+        "EFFECTIVE_FROM",
+        "EFFECTIVE_TO",
+        "ACTIVE_RECORD_FLAG"
+      ],
+      "transformKey": "shipCabin",
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "id"
+      }
+    },
+    "shipCabinCtgLink": {
+      "type": "direct",
+      "source": "fou.SHIP_CABIN_CTG_LINK",
+      "target": "ship_cabin_ctg_link",
+      "columns": [
+        "RECORD_ID",
+        "SHIP_CODE",
+        "CABIN_NUMBER",
+        "CABIN_CATEGORY",
+        "EFF_SAIL_FROM",
+        "EFF_SAIL_TO",
+        "ROLLAWAY_BEDS",
+        "CABIN_CAPACITY",
+        "IS_ACTIVE",
+        "CHILD_BEDS",
+        "EFFECTIVE_FROM",
+        "EFFECTIVE_TO",
+        "ACTIVE_RECORD_FLAG"
+      ],
+      "transformKey": "shipCabinCtgLink",
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "id"
+      }
     }
   },
   "datasets": {
@@ -316,11 +414,15 @@
       "tableSequence": [
         "agency",
         "ships",
+        "marketRollUp",
+        "shipCabin",
+        "shipCabinCtgLink",
         "masterSail",
         "cabinAvailability",
         "sailByCabinOccupancy",
         "reservations",
         "reservationPromotion",
+        "shipInventoryAlloc",
         "publishedRates",
         "reservationChanges",
         "competitor"
@@ -333,6 +435,24 @@
           }
         },
         "ships": {
+          "replace": {
+            "strategy": "delete-all",
+            "column": "id"
+          }
+        },
+        "marketRollUp": {
+          "replace": {
+            "strategy": "delete-all",
+            "column": "id"
+          }
+        },
+        "shipCabin": {
+          "replace": {
+            "strategy": "delete-all",
+            "column": "id"
+          }
+        },
+        "shipCabinCtgLink": {
           "replace": {
             "strategy": "delete-all",
             "column": "id"
@@ -366,6 +486,22 @@
           "replace": {
             "strategy": "delete-range",
             "column": "sail_from_date",
+            "from": "2025-09-01",
+            "to": "2025-12-31"
+          }
+        },
+        "shipInventoryAlloc": {
+          "filters": [
+            {
+              "column": "[SAIL_DATE_FROM]",
+              "operator": "between",
+              "from": "2025-09-01",
+              "to": "2025-12-31"
+            }
+          ],
+          "replace": {
+            "strategy": "delete-range",
+            "column": "sail_date_from",
             "from": "2025-09-01",
             "to": "2025-12-31"
           }

@@ -735,6 +735,8 @@ export const typeDefs = `#graphql
   input TableDataFilters {
     sail_code: String
     ship_code: String
+    sail_date_from: String
+    sail_date_to: String
     cabin_category: String
     ship_name: String
     package_name: String

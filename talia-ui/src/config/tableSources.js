@@ -12,11 +12,36 @@ export const tableSources = {
     dateColumns: [],
     syncType: 'agency'
   },
+  market_roll_up: {
+    source: 'lkp.MARKET_ROLL_UP',
+    type: 'direct',
+    dateColumns: [],
+    syncType: 'marketRollUp'
+  },
   ship: {
     source: 'dwh.Dim_Ship',
     type: 'direct',
     dateColumns: [], // No date columns for ship table
     syncType: 'ships' // Match sync.config.json table key (plural)
+  },
+  ship_inventory_alloc: {
+    source: 'stg.SHIP_INVENTORY_ALLOC',
+    type: 'direct',
+    isLargeDataset: true,
+    dateColumns: ['sail_date_from', 'sail_date_to'],
+    syncType: 'shipInventoryAlloc'
+  },
+  ship_cabin: {
+    source: 'fou.SHIP_CABIN',
+    type: 'direct',
+    dateColumns: [],
+    syncType: 'shipCabin'
+  },
+  ship_cabin_ctg_link: {
+    source: 'fou.SHIP_CABIN_CTG_LINK',
+    type: 'direct',
+    dateColumns: ['eff_sail_from', 'eff_sail_to'],
+    syncType: 'shipCabinCtgLink'
   },
   cabin_availability: {
     source: 'dwh.Dim_Cabin_Availability',
@@ -107,12 +132,6 @@ export const tableSources = {
     source: null, // Not in sync config
     type: 'unknown',
     dateColumns: ['sail_date_from', 'sail_date_to'],
-    syncType: null
-  },
-  ship_cabin: {
-    source: null, // Not in sync config
-    type: 'unknown',
-    dateColumns: [],
     syncType: null
   },
   reservation_promotion: {

@@ -30,8 +30,10 @@ Generated from live code audit + docs scan (Jul 2026). Prefer this over stale `N
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Distribution panel | **Done (v1)** | Channel + Market + Group/FIT charts; Group/FIT caveat documented |
-| Capacity Validation panel | **Done (v1)** | Multi-source capacity compare linked to sail.select |
+| Distribution panel | **Done (v1+)** | Channel + Market Group (`market_roll_up`) + Group/FIT; volumes need Reservation Validation |
+| Capacity Validation panel | **Done (v1 ledger)** | Vertical source-attributed list; MSE-aligned physical berths called out |
+| Cabin Deck Inventory | **Done (v1)** | `ship_inventory_alloc` + `ship_cabin` by deck/category; FIT/Group/GTY ONLY highlights |
+| Reservation Validation ledger | Open | Same style as Capacity Validation — before trusting Distribution |
 | ShipDayBerth re-focus only on scope change | Open | Avoid scroll jump on every `replaceData` |
 | Group cycle without full `setData` | Open | MSE / MasterSailing / DataMatch / ShipDayBerth |
 | Booking*Simple / ColumnTerminology split | Defer | Split when next touched |
@@ -42,6 +44,7 @@ Generated from live code audit + docs scan (Jul 2026). Prefer this over stale `N
 | Item | Status | Notes |
 |------|--------|-------|
 | Group/FIT from FACT_RESERVATION | Open | Need reliable `pax_type` / group holds without confirmed `res_id` |
+| Sync `market_roll_up` + `ship_inventory_alloc` + `ship_cabin` | Open | Migration + sync.config ready; run dataset sync before Cabin Deck / market groups show data |
 | Backfill `agency_channel` / `agency_market` on reservation | Defer | v1 joins Dim_Agency |
 | Focus-group mutation admin checks | Open | `resolvers.ts` TODOs |
 | Tracked wrappers for remaining Apollo services | Open | Focus/user/profile services |
@@ -60,8 +63,9 @@ Generated from live code audit + docs scan (Jul 2026). Prefer this over stale `N
 
 ## Review checklist (tomorrow)
 
-1. Open focus with MSE + Distribution + Capacity Validation + RCS.
-2. Select sailing → Distribution charts fill; Capacity Validation row fills; no MSE scroll jump.
+1. Open focus with MSE + Distribution + Capacity Validation + Cabin Deck Inventory + RCS.
+2. Select sailing → Distribution market **groups** fill; Cabin Deck shows decks + GTY holds; Capacity Validation row fills; no MSE scroll jump.
 3. Select booking → MSE stays put; Agency filters; Distribution unchanged until sail changes.
 4. Toggle Filters/Details → tables do not full-refresh.
 5. Click sailing once after activating another panel → single-click select.
+6. On Cabin Deck chips: FIT shows `Res {id}`, GROUP shows `Group {id}`, GTY ONLY listed under unassigned.

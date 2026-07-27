@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildPhysicalBerthsBySailDate,
+  buildPhysicalBerthsFromShipDayRows,
+  mergeCabinOccupancyOntoBerths,
   buildDayDetailsForMaster,
   buildMasterSailingExplorerBundle,
   buildExplorerDisplayRows,
@@ -27,6 +29,37 @@ test('physical berths are keyed by ship+sail+date without cross-sail summing', (
   assert.equal(masterDay.berth_capacity, 1200);
   assert.equal(masterDay.berths_occupied, 840);
   assert.equal(masterDay.berths_available, 360);
+});
+
+test('cabin occupancy overlays berth÷2 estimates for Bk C / Tot C', () => {
+  const berthIndex = buildPhysicalBerthsFromShipDayRows([
+    {
+      ship_code: 'CJ',
+      sail_code: 'CJ07260718',
+      date: '2026-07-18',
+      berth_capacity: 1200,
+      berths_occupied: 1072,
+      berths_available: 128,
+    },
+  ]);
+  assert.equal(berthIndex.get('CJ|CJ07260718|2026-07-18').occupied_cabins, 536);
+  const cabinIndex = buildPhysicalBerthsBySailDate([
+    {
+      ship_code: 'CJ',
+      sail_code: 'CJ07260718',
+      sail_itinerary_date: '2026-07-18',
+      cabin_category: 'IA',
+      cabin_capacity: 2,
+      total_cabins: 630,
+      occupied_cabins: 402,
+    },
+  ]);
+  const merged = mergeCabinOccupancyOntoBerths(berthIndex, cabinIndex);
+  const day = merged.get('CJ|CJ07260718|2026-07-18');
+  assert.equal(day.berths_occupied, 1072);
+  assert.equal(day.occupied_cabins, 402);
+  assert.equal(day.total_cabins, 630);
+  assert.equal(day.cabin_source, 'sail_by_cabin_occupancy');
 });
 
 test('master explorer uses physical berths for booked/capacity not selling guest sums', () => {

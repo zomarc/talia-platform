@@ -10,8 +10,15 @@ export const buildTableDataQueryResolvers = ({
     try {
       const includeNonRealSailings = filters?.include_non_real_sailings === true;
       const baseLimit = Number.isFinite(Number(limit)) ? Number(limit) : 100;
-      const expandedLimit = tableName === 'agency'
-        ? Math.min(Math.max(baseLimit, 100), 50000)
+      const largeTable = tableName === 'agency'
+        || tableName === 'ship_inventory_alloc'
+        || tableName === 'reservation_current_state'
+        || tableName === 'ship_day_berth_status'
+        || tableName === 'sail_by_cabin_occupancy'
+        || tableName === 'ship_cabin'
+        || tableName === 'ship_cabin_ctg_link';
+      const expandedLimit = largeTable
+        ? Math.min(Math.max(baseLimit, 100), 150000)
         : (includeNonRealSailings ? baseLimit : Math.min(Math.max(baseLimit * 3, baseLimit), 5000));
 
       let query = supabaseDataService.client
@@ -38,6 +45,14 @@ export const buildTableDataQueryResolvers = ({
         if (filters.ship_code) {
           query = query.eq('ship_code', filters.ship_code);
           console.log(`[tableData] Applied filter: ship_code = ${filters.ship_code}`);
+        }
+        if (filters.sail_date_from) {
+          query = query.eq('sail_date_from', filters.sail_date_from);
+          console.log(`[tableData] Applied filter: sail_date_from = ${filters.sail_date_from}`);
+        }
+        if (filters.sail_date_to) {
+          query = query.eq('sail_date_to', filters.sail_date_to);
+          console.log(`[tableData] Applied filter: sail_date_to = ${filters.sail_date_to}`);
         }
         if (filters.cabin_category) {
           query = query.eq('cabin_category', filters.cabin_category);

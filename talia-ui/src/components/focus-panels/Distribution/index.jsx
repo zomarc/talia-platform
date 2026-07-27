@@ -32,6 +32,18 @@ const DistributionContainer = ({ panelInstanceId, panelComponentId }) => {
   });
 
   const {
+    data: marketRollUpRows,
+    loading: marketRollUpLoading,
+    error: marketRollUpError,
+  } = useTableDataWithContext({
+    tableName: 'market_roll_up',
+    panelInstanceId,
+    panelComponentId,
+    fetchWithoutContext: true,
+    limit: 5000,
+  });
+
+  const {
     data: reservationRows,
     loading: reservationsLoading,
     error: reservationsError,
@@ -70,17 +82,20 @@ const DistributionContainer = ({ panelInstanceId, panelComponentId }) => {
     () => buildDistributionBundle({
       reservations: hasSailSelection && !scopePending ? (reservationRows || []) : [],
       agencies: agencies || [],
+      marketRollUp: marketRollUpRows || [],
     }),
-    [agencies, hasSailSelection, reservationRows, scopePending]
+    [agencies, hasSailSelection, marketRollUpRows, reservationRows, scopePending]
   );
 
-  const loading = agenciesLoading || (hasSailSelection && (reservationsLoading || scopePending));
-  const error = agenciesError || reservationsError;
+  const loading = agenciesLoading
+    || marketRollUpLoading
+    || (hasSailSelection && (reservationsLoading || scopePending));
+  const error = agenciesError || marketRollUpError || reservationsError;
 
   return (
     <PanelDataState
-      loading={agenciesLoading}
-      loadingMessage="Loading agency dimension..."
+      loading={agenciesLoading || marketRollUpLoading}
+      loadingMessage="Loading agency and market roll-up..."
       error={error}
       errorTitle="Failed to load distribution data"
       empty={false}

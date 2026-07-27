@@ -1,5 +1,5 @@
 /**
- * Capacity Validation Container — multi-source capacity check for selected voyage.
+ * Capacity Validation Container — multi-source ledger for one selected voyage.
  */
 
 import React, { useMemo } from 'react';
@@ -12,7 +12,7 @@ import {
   resolveSailCodesFromDetail,
 } from '../Agency/agencyDirectoryContext';
 import CapacityValidationPresenter from './CapacityValidationPresenter';
-import { buildCapacityValidationRow } from './capacityValidationTransform';
+import { buildCapacityValidationLedger } from './capacityValidationTransform';
 
 const mapSailContextToReservationFilters = (detail) => (
   mapSailCodesToReservationFilters(resolveSailCodesFromDetail(detail))
@@ -55,6 +55,20 @@ const CapacityValidationContainer = ({ panelInstanceId, panelComponentId }) => {
     error: cabinError,
   } = useTableDataWithContext({
     tableName: 'cabin_availability',
+    eventName: SAIL_SELECT_EVENT,
+    panelInstanceId,
+    panelComponentId,
+    contextMapper: mapSailContextToReservationFilters,
+    fetchWithoutContext: false,
+    limit: 20000,
+  });
+
+  const {
+    data: occupancyRows,
+    loading: occupancyLoading,
+    error: occupancyError,
+  } = useTableDataWithContext({
+    tableName: 'sail_by_cabin_occupancy',
     eventName: SAIL_SELECT_EVENT,
     panelInstanceId,
     panelComponentId,
@@ -144,9 +158,9 @@ const CapacityValidationContainer = ({ panelInstanceId, panelComponentId }) => {
     return rows[0];
   }, [masterSailRows, referenceSailCode]);
 
-  const row = useMemo(() => {
+  const ledger = useMemo(() => {
     if (!hasSailSelection || scopePending) return null;
-    return buildCapacityValidationRow({
+    return buildCapacityValidationLedger({
       referenceSailCode,
       sailCodes,
       shipCode,
@@ -154,6 +168,7 @@ const CapacityValidationContainer = ({ panelInstanceId, panelComponentId }) => {
       masterSailRow,
       berthRows: berthRows || [],
       cabinRows: cabinRows || [],
+      occupancyRows: occupancyRows || [],
       inventoryDayRows: inventoryDayRows || [],
       ships: ships || [],
       reservationRows: reservationRows || [],
@@ -164,6 +179,7 @@ const CapacityValidationContainer = ({ panelInstanceId, panelComponentId }) => {
     hasSailSelection,
     inventoryDayRows,
     masterSailRow,
+    occupancyRows,
     referenceSailCode,
     reservationRows,
     sailCodes,
@@ -179,12 +195,14 @@ const CapacityValidationContainer = ({ panelInstanceId, panelComponentId }) => {
       reservationsLoading
       || berthLoading
       || cabinLoading
+      || occupancyLoading
       || inventoryLoading
       || scopePending
     ));
   const error = reservationsError
     || berthError
     || cabinError
+    || occupancyError
     || inventoryError
     || shipsError
     || masterError;
@@ -198,7 +216,7 @@ const CapacityValidationContainer = ({ panelInstanceId, panelComponentId }) => {
       empty={false}
     >
       <CapacityValidationPresenter
-        row={row}
+        ledger={ledger}
         hasSailSelection={hasSailSelection}
         scopeLoading={Boolean(loading && hasSailSelection)}
         selectedSailCodes={sailCodes}

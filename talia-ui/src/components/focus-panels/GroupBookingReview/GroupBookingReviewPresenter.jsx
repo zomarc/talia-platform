@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getTabulatorOptions, initTabulator } from '../../../lib/tabulatorConfig';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 
 const formatCount = (value) => Number(value || 0).toLocaleString('en-US');
 
@@ -111,7 +112,13 @@ const GroupBookingReviewPresenter = ({
           Real booking
         </button>
       </div>
-      <div ref={tableRef} className="focus-panel__table" />
+      <ReportTableOrRecord
+        data={filteredRows}
+        columns={columns}
+        tableRef={tableRef}
+        tableClassName="focus-panel__table"
+        ariaLabel="Booking record"
+      />
     </div>
   );
 };

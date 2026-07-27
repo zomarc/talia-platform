@@ -12,7 +12,7 @@
  * Copy this as a template for new report components.
  */
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useCallback, useRef, useEffect, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import {
   createPerformanceFormatter,
@@ -21,6 +21,7 @@ import {
   isEmpty,
   parseNumber
 } from '../../../lib/dataTypes';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 
 // ============================================================================
 // Value Formatters (from dataTypes patterns)
@@ -140,6 +141,12 @@ const columns = [
   }
 ];
 
+/** Flatten nested Tabulator column groups for the single-row record form. */
+const flattenColumns = (cols) => cols.flatMap((col) => (
+  Array.isArray(col.columns) ? flattenColumns(col.columns) : [col]
+));
+const recordFormColumns = flattenColumns(columns);
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -234,6 +241,13 @@ const VoyageReportPresenter = ({ data }) => {
     }
   }, [data, initialized]);
 
+  const onRecordActive = useCallback((rec) => {
+    if (!rec) return;
+    window.dispatchEvent(new CustomEvent('talia:voyagereport.select', {
+      detail: { voyage_code: rec.voyageCode, row_data: rec },
+    }));
+  }, []);
+
   return (
     <div 
       className="talia-report"
@@ -250,12 +264,18 @@ const VoyageReportPresenter = ({ data }) => {
 
       {/* Table */}
       <main className="talia-report__content">
-        <div 
-          ref={tableRef} 
-          className="talia-table"
-          role="grid"
-          aria-label="Voyage data"
-          aria-rowcount={recordCount}
+        <ReportTableOrRecord
+          data={data}
+          columns={recordFormColumns}
+          tableRef={tableRef}
+          tableClassName="talia-table"
+          tableProps={{
+            role: 'grid',
+            'aria-label': 'Voyage data',
+            'aria-rowcount': recordCount,
+          }}
+          onRecordActive={onRecordActive}
+          ariaLabel="Voyage record"
         />
       </main>
 

@@ -61,7 +61,6 @@ const detectTruncation = (rows, limit, source) => {
 };
 
 const CabinDeckInventoryContainer = ({ panelInstanceId, panelComponentId }) => {
-  const [emptyCategoryMode, setEmptyCategoryMode] = useState('by_category');
   const {
     data: masterSailRows,
     loading: masterLoading,
@@ -288,14 +287,12 @@ const CabinDeckInventoryContainer = ({ panelInstanceId, panelComponentId }) => {
       sailCode: referenceSailCode,
       sailDateFrom,
       truncations,
-      emptyCategoryMode,
     });
   }, [
     allocLoading,
     allocScopePending,
     cabinCategoryLinkRows,
     cabinLoading,
-    emptyCategoryMode,
     hasSailSelection,
     masterLoading,
     masterSailRows,
@@ -341,8 +338,6 @@ const CabinDeckInventoryContainer = ({ panelInstanceId, panelComponentId }) => {
         truncations={truncations}
         softErrors={softErrors}
         reconciliationLoading={Boolean(occupancyLoading || reservationsLoading)}
-        emptyCategoryMode={emptyCategoryMode}
-        onEmptyCategoryModeChange={setEmptyCategoryMode}
         panelInstanceId={panelInstanceId}
         panelComponentId={panelComponentId}
       />

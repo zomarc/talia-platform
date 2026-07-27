@@ -7,7 +7,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
-import { allocateGtyPreview } from './cabinDeckAllocate.js';
+import { ALLOCATE_MODE, allocateGtyPreview } from './cabinDeckAllocate.js';
+import { emitCabinClear, emitCabinSelect } from '../../../lib/eventBus';
+import { isFitOwner, isGroupOwner } from '../../../lib/shipInventoryAlloc.js';
 
 const DETAIL_PANEL_WIDTH = 280;
 const DETAIL_PANEL_EST_HEIGHT = 320;
@@ -64,6 +66,59 @@ const probabilityStyle = (item) => {
   return { opacity: 0.35 + (p * 0.65) };
 };
 
+const cabinItemKey = (item) => {
+  if (!item) return null;
+  if (item.cabin_number != null && String(item.cabin_number).trim() !== '') {
+    return `cabin:${String(item.cabin_number).trim()}`;
+  }
+  if (item.allocation_id != null) return `alloc:${item.allocation_id}`;
+  return `gty:${item.allocation_owner_id ?? ''}:${item.cabin_category ?? ''}:${item.status_key ?? ''}`;
+};
+
+const resolveCabinResId = (item) => {
+  if (!item || item.is_empty) return null;
+  if (item.dlgt_res_id != null) return item.dlgt_res_id;
+  if (isFitOwner(item.allocation_owner_type) && item.allocation_owner_id != null) {
+    return item.allocation_owner_id;
+  }
+  return null;
+};
+
+const resolveCabinGroupId = (item) => {
+  if (!item || item.is_empty) return null;
+  if (isGroupOwner(item.allocation_owner_type) && item.allocation_owner_id != null) {
+    return item.allocation_owner_id;
+  }
+  return null;
+};
+
+const buildCabinSelectDetail = (item, scope = {}) => {
+  const resId = resolveCabinResId(item);
+  const groupId = resolveCabinGroupId(item);
+  return {
+    sail_code: scope.referenceSailCode || null,
+    reference_sail_code: scope.referenceSailCode || null,
+    ship_code: scope.shipCode || null,
+    ship_name: scope.shipName || null,
+    sail_date_from: scope.sailDateFrom || null,
+    cabin_number: item?.cabin_number || null,
+    cabin_category: item?.cabin_category || item?.link_cabin_category || null,
+    allocation_id: item?.allocation_id ?? null,
+    allocation_owner_type: item?.allocation_owner_type || null,
+    allocation_owner_id: item?.allocation_owner_id ?? null,
+    dlgt_res_id: item?.dlgt_res_id ?? null,
+    res_id: resId,
+    group_id: groupId,
+    probability: item?.probability ?? null,
+    status_key: item?.status_key || null,
+    is_empty: Boolean(item?.is_empty),
+    is_gty: item?.status_key === 'gty' || Boolean(item?.is_gty),
+    row_data: item || null,
+    timestamp: new Date().toISOString(),
+    source: 'cabin-deck-inventory',
+  };
+};
+
 const buildDetailRows = (item) => ([
   { label: 'Cabin', value: item.cabin_number || '— (GTY / unassigned)' },
   { label: 'Category', value: item.cabin_category || null },
@@ -90,7 +145,7 @@ const buildDetailRows = (item) => ([
   { label: 'Allocation id', value: item.allocation_id != null ? String(item.allocation_id) : null },
 ].filter((row) => row.value != null && String(row.value).trim() !== ''));
 
-const CabinChip = ({ item, compact, onSelect }) => (
+const CabinChip = ({ item, compact, selected = false, onSelect }) => (
   <button
     type="button"
     className={[
@@ -98,8 +153,10 @@ const CabinChip = ({ item, compact, onSelect }) => (
       `cabin-deck__chip--${item.status_key}`,
       compact ? 'cabin-deck__chip--compact' : '',
       item.missing_dlgt ? 'cabin-deck__chip--missing-dlgt' : '',
+      selected ? 'cabin-deck__chip--selected' : '',
     ].filter(Boolean).join(' ')}
     style={probabilityStyle(item)}
+    aria-pressed={selected}
     onClick={(event) => {
       event.stopPropagation();
       onSelect?.(item, event.currentTarget);
@@ -119,7 +176,7 @@ const CabinChip = ({ item, compact, onSelect }) => (
   </button>
 );
 
-const GtyChip = ({ item, compact, onSelect }) => (
+const GtyChip = ({ item, compact, selected = false, onSelect }) => (
   <button
     type="button"
     className={[
@@ -127,8 +184,10 @@ const GtyChip = ({ item, compact, onSelect }) => (
       'cabin-deck__chip--gty',
       compact ? 'cabin-deck__chip--compact' : '',
       item.missing_dlgt ? 'cabin-deck__chip--missing-dlgt' : '',
+      selected ? 'cabin-deck__chip--selected' : '',
     ].filter(Boolean).join(' ')}
     style={probabilityStyle(item)}
+    aria-pressed={selected}
     onClick={(event) => {
       event.stopPropagation();
       onSelect?.(item, event.currentTarget);
@@ -151,6 +210,7 @@ const CategoryRow = ({
   bookedCount,
   emptyCount,
   overAlloc = 0,
+  selectedKey = null,
   onSelectCabin,
 }) => (
   <div className={`cabin-deck__category ${overAlloc > 0 ? 'cabin-deck__category--over-alloc' : ''}`}>
@@ -179,6 +239,7 @@ const CategoryRow = ({
           key={`${item.cabin_number}-${item.allocation_id || item.status_key}-${item.is_gty_fit ? 'fit' : 'base'}`}
           item={item}
           compact={compact}
+          selected={selectedKey != null && cabinItemKey(item) === selectedKey}
           onSelect={onSelectCabin}
         />
       ))}
@@ -203,29 +264,55 @@ const CabinDeckInventoryPresenter = ({
   truncations = [],
   softErrors = [],
   reconciliationLoading = false,
-  emptyCategoryMode = 'by_category',
-  onEmptyCategoryModeChange = null,
   panelInstanceId = null,
   panelComponentId = null,
 }) => {
   const [compactBlocks, setCompactBlocks] = useState(true);
-  const [allocateActive, setAllocateActive] = useState(false);
+  const [allocateMode, setAllocateMode] = useState(null);
   const [selectedDetail, setSelectedDetail] = useState(null);
   const [detailPosition, setDetailPosition] = useState({ top: 8, left: 8 });
   const panelRef = useRef(null);
   const detailPanelRef = useRef(null);
   const pendingChipRectRef = useRef(null);
+  const hadCabinSelectionRef = useRef(false);
   const [showDetails] = usePanelDetailsVisibility({
     panelInstanceId,
     panelComponentId,
   });
 
+  const cabinScope = {
+    referenceSailCode: selectedReferenceSailCode,
+    shipCode,
+    shipName,
+    sailDateFrom,
+  };
+
+  const closeCabinDetail = () => {
+    setSelectedDetail(null);
+    if (hadCabinSelectionRef.current) {
+      hadCabinSelectionRef.current = false;
+      emitCabinClear({
+        sail_code: selectedReferenceSailCode || null,
+        reference_sail_code: selectedReferenceSailCode || null,
+        ship_code: shipCode || null,
+        source: 'cabin-deck-inventory',
+        timestamp: new Date().toISOString(),
+      });
+    }
+  };
+
   const openCabinDetail = (item, chipEl) => {
+    if (cabinItemKey(item) && cabinItemKey(item) === cabinItemKey(selectedDetail)) {
+      closeCabinDetail();
+      return;
+    }
     const panelRect = panelRef.current?.getBoundingClientRect?.() || null;
     const chipRect = chipEl?.getBoundingClientRect?.() || null;
     pendingChipRectRef.current = chipRect;
     setDetailPosition(resolveDetailPosition(panelRect, chipRect));
     setSelectedDetail(item);
+    hadCabinSelectionRef.current = true;
+    emitCabinSelect(buildCabinSelectDetail(item, cabinScope));
   };
 
   useEffect(() => {
@@ -252,25 +339,47 @@ const CabinDeckInventoryPresenter = ({
   }, [selectedDetail]);
 
   useEffect(() => {
-    setAllocateActive(false);
+    setAllocateMode(null);
+    if (hadCabinSelectionRef.current) {
+      hadCabinSelectionRef.current = false;
+      emitCabinClear({
+        sail_code: selectedReferenceSailCode || null,
+        reference_sail_code: selectedReferenceSailCode || null,
+        ship_code: shipCode || null,
+        source: 'cabin-deck-inventory',
+        timestamp: new Date().toISOString(),
+      });
+    }
     setSelectedDetail(null);
-  }, [selectedReferenceSailCode, shipCode, sailDateFrom, emptyCategoryMode]);
+  }, [selectedReferenceSailCode, shipCode, sailDateFrom]);
 
   useEffect(() => {
     if (!selectedDetail) return undefined;
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') setSelectedDetail(null);
+      if (event.key === 'Escape') closeCabinDetail();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedDetail]);
+  }, [selectedDetail, selectedReferenceSailCode, shipCode]);
+
+  useEffect(() => () => {
+    if (!hadCabinSelectionRef.current) return;
+    hadCabinSelectionRef.current = false;
+    emitCabinClear({
+      source: 'cabin-deck-inventory',
+      timestamp: new Date().toISOString(),
+    });
+  }, []);
+
+  const selectedCabinKey = cabinItemKey(selectedDetail);
 
   const scopeLabel = selectedReferenceSailCode
     || (selectedSailCodes.length ? selectedSailCodes.join(', ') : null);
   const summary = bundle?.summary || {};
+  const allocateActive = Boolean(allocateMode);
   const allocateResult = useMemo(
-    () => (allocateActive && bundle ? allocateGtyPreview(bundle) : null),
-    [allocateActive, bundle]
+    () => (allocateMode && bundle ? allocateGtyPreview(bundle, { mode: allocateMode }) : null),
+    [allocateMode, bundle]
   );
   const decks = allocateResult?.decks || bundle?.decks || [];
   const gtyHolds = allocateResult?.gtyHolds || bundle?.gtyHolds || [];
@@ -323,24 +432,6 @@ const CabinDeckInventoryPresenter = ({
           >
             Labels
           </button>
-          <button
-            type="button"
-            className={`talia-btn ${emptyCategoryMode === 'by_category' ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
-            onClick={() => onEmptyCategoryModeChange?.('by_category')}
-            aria-pressed={emptyCategoryMode === 'by_category'}
-            title="Place empty cabins under ship_cabin_ctg_link category"
-          >
-            By category
-          </button>
-          <button
-            type="button"
-            className={`talia-btn ${emptyCategoryMode === 'open_bucket' ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
-            onClick={() => onEmptyCategoryModeChange?.('open_bucket')}
-            aria-pressed={emptyCategoryMode === 'open_bucket'}
-            title="Keep empty cabins in a separate Open bucket"
-          >
-            Open bucket
-          </button>
         </div>
       )}
 
@@ -348,24 +439,33 @@ const CabinDeckInventoryPresenter = ({
         <div className="talia-report__actions-bar" aria-label="GTY allocate preview">
           <button
             type="button"
-            className={`talia-btn ${allocateActive ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
-            onClick={() => setAllocateActive(true)}
-            disabled={allocateActive}
-            title="Local preview only — does not write to Synapse"
+            className={`talia-btn ${allocateMode === ALLOCATE_MODE.PRIORITY ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+            onClick={() => setAllocateMode(ALLOCATE_MODE.PRIORITY)}
+            title="Place all GTY that fit — highest probability first (local preview)"
           >
             Allocate GTY
           </button>
           <button
             type="button"
+            className={`talia-btn ${allocateMode === ALLOCATE_MODE.EXPECTED ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+            onClick={() => setAllocateMode(ALLOCATE_MODE.EXPECTED)}
+            title="Place ~sum(probability) rooms per category — highest probability first (local preview)"
+          >
+            Allocate by probability
+          </button>
+          <button
+            type="button"
             className="talia-btn talia-btn--secondary"
-            onClick={() => setAllocateActive(false)}
+            onClick={() => setAllocateMode(null)}
             disabled={!allocateActive}
           >
             Clear allocation
           </button>
           {allocateActive && allocateResult && (
             <span className="cabin-deck__allocate-meta">
-              Preview · placed {allocateResult.placementCount}
+              {allocateMode === ALLOCATE_MODE.EXPECTED ? 'Expected' : 'Priority'}
+              {' · '}
+              placed {allocateResult.placementCount}
               {allocateResult.unplacedCount
                 ? ` · ${allocateResult.unplacedCount} unplaced`
                 : ''}
@@ -468,9 +568,12 @@ const CabinDeckInventoryPresenter = ({
                   <ul className="cabin-deck__source-list">
                     <li>Physical cabins from <code>fou.SHIP_CABIN</code>.</li>
                     <li>Default category from <code>fou.SHIP_CABIN_CTG_LINK</code> (no customer fields).</li>
-                    <li>Ownership from <code>stg.SHIP_INVENTORY_ALLOC</code> (FIT/Group/GTY · probability).</li>
-                    <li>GTY Allocate is a local preview only — not written back.</li>
-                    <li>Named-passenger star deferred — reservation/customer PII stays out of Talia.</li>
+                    <li>Ownership from <code>stg.RES_CABIN_ALLOCATION_DETAIL</code> (FIT/Group/GTY · probability).</li>
+                    <li>
+                      GTY Allocate is local only — Priority fills highest probability first;
+                      By probability places ~sum(p/100) rooms per category.
+                    </li>
+                    <li>PPD / upgrade recommendation and named-passenger signals are future work (no PII).</li>
                   </ul>
                   {softErrors.map((err, index) => (
                     <p key={`soft-${index}`} className="cabin-deck__soft-warning">
@@ -518,6 +621,7 @@ const CabinDeckInventoryPresenter = ({
                           key={`${item.allocation_id || item.allocation_owner_id || index}-${index}`}
                           item={item}
                           compact={compactBlocks}
+                          selected={selectedCabinKey != null && cabinItemKey(item) === selectedCabinKey}
                           onSelect={openCabinDetail}
                         />
                       ))}
@@ -546,6 +650,7 @@ const CabinDeckInventoryPresenter = ({
                       bookedCount={cat.booked_count}
                       emptyCount={cat.empty_count}
                       overAlloc={cat.over_alloc || 0}
+                      selectedKey={selectedCabinKey}
                       onSelectCabin={openCabinDetail}
                     />
                   ))}
@@ -562,7 +667,7 @@ const CabinDeckInventoryPresenter = ({
             type="button"
             className="cabin-deck__detail-backdrop"
             aria-label="Close cabin details"
-            onClick={() => setSelectedDetail(null)}
+            onClick={closeCabinDetail}
           />
           <aside
             ref={detailPanelRef}
@@ -584,7 +689,7 @@ const CabinDeckInventoryPresenter = ({
               <button
                 type="button"
                 className="talia-btn talia-btn--secondary cabin-deck__detail-close"
-                onClick={() => setSelectedDetail(null)}
+                onClick={closeCabinDetail}
               >
                 Close
               </button>

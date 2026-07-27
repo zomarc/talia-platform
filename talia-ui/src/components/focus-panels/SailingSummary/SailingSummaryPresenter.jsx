@@ -4,10 +4,11 @@
  * Pure UI component - receives data as props
  */
 
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useRef, useEffect, useState, useMemo } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { emitSailSelect } from '../../../lib/eventBus';
 import { formatDayMon } from '../../../lib/dateFormat';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 
 // Function to aggregate sailing data at sail level
 const aggregateSailingData = (rawData) => {
@@ -52,6 +53,144 @@ const aggregateSailingData = (rawData) => {
   return aggregatedData;
 };
 
+const columns = [
+  { 
+    title: "Sail Code", 
+    field: "sail_code", 
+    width: 120,
+    headerFilter: "input",
+    headerFilterPlaceholder: "Filter sail code..."
+  },
+  { 
+    title: "Ship", 
+    field: "ship_name", 
+    width: 150,
+    headerFilter: "list",
+    headerFilterParams: {
+      valuesLookup: true,
+      autocomplete: true
+    }
+  },
+  { 
+    title: "Package Type", 
+    field: "package_type", 
+    width: 120,
+    headerFilter: "input",
+    headerFilterPlaceholder: "Filter type..."
+  },
+  { 
+    title: "Package", 
+    field: "package_name", 
+    widthGrow: 2,
+    headerFilter: "input",
+    headerFilterPlaceholder: "Filter package..."
+  },
+  { 
+    title: "Sail Date", 
+    field: "sail_date_from", 
+    width: 120,
+    headerFilter: "input",
+    headerFilterPlaceholder: "YYYY-MM-DD",
+    formatter: (cell) => {
+      const value = cell.getValue();
+      if (!value) return '';
+      return formatDayMon(value, '');
+    }
+  },
+  { 
+    title: "Port", 
+    field: "port_code", 
+    width: 80,
+    headerFilter: "input",
+    headerFilterPlaceholder: "Filter port..."
+  },
+  { 
+    title: "Days", 
+    field: "sail_days", 
+    hozAlign: "center", 
+    width: 80,
+    headerFilter: "number",
+    headerFilterParams: {
+      min: 0,
+      step: 1
+    }
+  },
+  { 
+    title: "Geographic Area", 
+    field: "geog_area_code", 
+    width: 120,
+    headerFilter: "list",
+    headerFilterParams: {
+      valuesLookup: true,
+      autocomplete: true
+    }
+  },
+  { 
+    title: "Total Capacity", 
+    field: "total_cabin_capacity", 
+    hozAlign: "right", 
+    width: 120,
+    headerFilter: "number",
+    headerFilterParams: {
+      min: 0,
+      step: 1
+    },
+    formatter: (cell) => {
+      const value = cell.getValue();
+      return value ? value.toLocaleString() : '0';
+    }
+  },
+  { 
+    title: "Total Cabins", 
+    field: "total_cabins", 
+    hozAlign: "right", 
+    width: 100,
+    headerFilter: "number",
+    headerFilterParams: {
+      min: 0,
+      step: 1
+    }
+  },
+  { 
+    title: "Occupied", 
+    field: "total_occupied_cabins", 
+    hozAlign: "right", 
+    width: 100,
+    headerFilter: "number",
+    headerFilterParams: {
+      min: 0,
+      step: 1
+    }
+  },
+  { 
+    title: "Remaining", 
+    field: "total_remaining_cabins", 
+    hozAlign: "right", 
+    width: 100,
+    headerFilter: "number",
+    headerFilterParams: {
+      min: 0,
+      step: 1
+    }
+  },
+  { 
+    title: "Occupancy %", 
+    field: "occupancy_percentage", 
+    hozAlign: "right", 
+    width: 100,
+    headerFilter: "number",
+    headerFilterParams: {
+      min: 0,
+      max: 100,
+      step: 1
+    },
+    formatter: (cell) => {
+      const value = cell.getValue();
+      return `${value}%`;
+    }
+  }
+];
+
 const SailingSummaryPresenter = ({ data }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
@@ -81,144 +220,6 @@ const SailingSummaryPresenter = ({ data }) => {
         if (instanceRef.current) {
           instanceRef.current.destroy();
         }
-
-        const columns = [
-          { 
-            title: "Sail Code", 
-            field: "sail_code", 
-            width: 120,
-            headerFilter: "input",
-            headerFilterPlaceholder: "Filter sail code..."
-          },
-          { 
-            title: "Ship", 
-            field: "ship_name", 
-            width: 150,
-            headerFilter: "list",
-            headerFilterParams: {
-              valuesLookup: true,
-              autocomplete: true
-            }
-          },
-          { 
-            title: "Package Type", 
-            field: "package_type", 
-            width: 120,
-            headerFilter: "input",
-            headerFilterPlaceholder: "Filter type..."
-          },
-          { 
-            title: "Package", 
-            field: "package_name", 
-            widthGrow: 2,
-            headerFilter: "input",
-            headerFilterPlaceholder: "Filter package..."
-          },
-          { 
-            title: "Sail Date", 
-            field: "sail_date_from", 
-            width: 120,
-            headerFilter: "input",
-            headerFilterPlaceholder: "YYYY-MM-DD",
-            formatter: (cell) => {
-              const value = cell.getValue();
-              if (!value) return '';
-              return formatDayMon(value, '');
-            }
-          },
-          { 
-            title: "Port", 
-            field: "port_code", 
-            width: 80,
-            headerFilter: "input",
-            headerFilterPlaceholder: "Filter port..."
-          },
-          { 
-            title: "Days", 
-            field: "sail_days", 
-            hozAlign: "center", 
-            width: 80,
-            headerFilter: "number",
-            headerFilterParams: {
-              min: 0,
-              step: 1
-            }
-          },
-          { 
-            title: "Geographic Area", 
-            field: "geog_area_code", 
-            width: 120,
-            headerFilter: "list",
-            headerFilterParams: {
-              valuesLookup: true,
-              autocomplete: true
-            }
-          },
-          { 
-            title: "Total Capacity", 
-            field: "total_cabin_capacity", 
-            hozAlign: "right", 
-            width: 120,
-            headerFilter: "number",
-            headerFilterParams: {
-              min: 0,
-              step: 1
-            },
-            formatter: (cell) => {
-              const value = cell.getValue();
-              return value ? value.toLocaleString() : '0';
-            }
-          },
-          { 
-            title: "Total Cabins", 
-            field: "total_cabins", 
-            hozAlign: "right", 
-            width: 100,
-            headerFilter: "number",
-            headerFilterParams: {
-              min: 0,
-              step: 1
-            }
-          },
-          { 
-            title: "Occupied", 
-            field: "total_occupied_cabins", 
-            hozAlign: "right", 
-            width: 100,
-            headerFilter: "number",
-            headerFilterParams: {
-              min: 0,
-              step: 1
-            }
-          },
-          { 
-            title: "Remaining", 
-            field: "total_remaining_cabins", 
-            hozAlign: "right", 
-            width: 100,
-            headerFilter: "number",
-            headerFilterParams: {
-              min: 0,
-              step: 1
-            }
-          },
-          { 
-            title: "Occupancy %", 
-            field: "occupancy_percentage", 
-            hozAlign: "right", 
-            width: 100,
-            headerFilter: "number",
-            headerFilterParams: {
-              min: 0,
-              max: 100,
-              step: 1
-            },
-            formatter: (cell) => {
-              const value = cell.getValue();
-              return `${value}%`;
-            }
-          }
-        ];
 
         instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
           data: aggregatedData,
@@ -295,15 +296,27 @@ const SailingSummaryPresenter = ({ data }) => {
     }
   }, [aggregatedData, tableInitialized]);
 
+  const onRecordActive = useCallback((rec) => {
+    if (!rec) return;
+    emitSailSelect({
+      sail_code: rec.sail_code,
+      row_data: rec,
+      timestamp: new Date().toISOString(),
+    });
+  }, []);
+
   return (
     <div className="focus-panel">
-      <div 
-        ref={tableRef} 
-        className="focus-panel__table"
+      <ReportTableOrRecord
+        data={aggregatedData}
+        columns={columns}
+        tableRef={tableRef}
+        tableClassName="focus-panel__table"
+        onRecordActive={onRecordActive}
+        ariaLabel="Sailing summary record"
       />
     </div>
   );
 };
 
 export default SailingSummaryPresenter;
-

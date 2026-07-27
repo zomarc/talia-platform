@@ -8,6 +8,7 @@ import React, { useRef, useEffect, useMemo, useCallback } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { emitSailSelect } from '../../../lib/eventBus';
 import { formatDayMon, formatMonYear } from '../../../lib/dateFormat';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 
 const GROUP_BY = [
@@ -421,6 +422,18 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, panelInstanceId, p
     };
   }, [collapseAllGroups, cycleGroupState, openAllGroups, panelComponentId, panelInstanceId]);
 
+  const onRecordActive = useCallback((rowData) => {
+    if (!rowData) return;
+    emitSailSelect({
+      sail_code: rowData.sail_code,
+      ship_code: rowData.ship_code,
+      departure_date: rowData.departure_date,
+      month_name: rowData.month_name,
+      row_data: rowData,
+      timestamp: new Date().toISOString(),
+    });
+  }, []);
+
   return (
     <div className="focus-panel talia-report data-match data-match-panel">
       <header className="talia-report__header">
@@ -474,9 +487,13 @@ const DataMatchPresenter = ({ data, filters, onFiltersChange, panelInstanceId, p
       </div>
 
       {/* Table */}
-      <div 
-        ref={tableRef} 
-        className="focus-panel__table data-match__table data-match-table"
+      <ReportTableOrRecord
+        data={transformedData}
+        columns={columns}
+        tableRef={tableRef}
+        tableClassName="focus-panel__table data-match__table data-match-table"
+        onRecordActive={onRecordActive}
+        ariaLabel="Data match record"
       />
     </div>
   );

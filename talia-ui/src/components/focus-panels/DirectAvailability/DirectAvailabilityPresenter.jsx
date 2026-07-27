@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getTabulatorOptions, initTabulator } from '../../../lib/tabulatorConfig';
 import { formatDayMon } from '../../../lib/dateFormat';
 import { CABIN_CLEAR_EVENT, CABIN_SELECT_EVENT } from '../../../lib/eventBus';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 
 const DirectAvailabilityPresenter = ({ data, loading, queryInfo, onRefresh }) => {
   const tableRef = useRef(null);
@@ -210,6 +211,18 @@ const DirectAvailabilityPresenter = ({ data, loading, queryInfo, onRefresh }) =>
 
   const subtitle = `${selectedSailCode} · ${packageName || '—'}${selectedSailDate ? ` · ${formatDayMon(selectedSailDate, '—')}` : ''}`;
 
+  const onRecordActive = useCallback((rowData) => {
+    if (!rowData) return;
+    window.dispatchEvent(new CustomEvent(CABIN_SELECT_EVENT, {
+      detail: {
+        sail_code: selectedSailCodeRef.current || null,
+        cabin_category: rowData.cabinCategoryCode || null,
+        row_data: rowData,
+        timestamp: new Date().toISOString(),
+      },
+    }));
+  }, []);
+
   return (
     <div className="focus-panel talia-report direct-availability" role="region" aria-label="Direct availability">
       <header className="talia-report__header">
@@ -267,7 +280,15 @@ const DirectAvailabilityPresenter = ({ data, loading, queryInfo, onRefresh }) =>
               <div className="direct-source__loading-card">Querying external source...</div>
             </div>
           ) : null}
-          <div ref={tableRef} className="direct-source__table-host talia-table" role="grid" />
+          <ReportTableOrRecord
+            data={data}
+            columns={columns}
+            tableRef={tableRef}
+            tableClassName="direct-source__table-host talia-table"
+            tableProps={{ role: 'grid' }}
+            onRecordActive={onRecordActive}
+            ariaLabel="Availability record"
+          />
         </div>
       </main>
     </div>

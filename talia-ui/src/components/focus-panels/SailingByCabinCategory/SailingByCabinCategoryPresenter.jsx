@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 
 const columns = [
   { title: 'Sail ID', field: 'sail_id', width: 100, headerFilter: 'input' },
@@ -77,7 +78,14 @@ const SailingByCabinCategoryPresenter = ({ data, context, selectedSailCode }) =>
         </div>
       </header>
       <main className="talia-report__content">
-        <div ref={tableRef} className="talia-table" role="grid" aria-rowcount={recordCount} />
+        <ReportTableOrRecord
+          data={data}
+          columns={columns}
+          tableRef={tableRef}
+          tableClassName="talia-table"
+          tableProps={{ role: 'grid', 'aria-rowcount': recordCount }}
+          ariaLabel="Cabin category record"
+        />
       </main>
     </div>
   );

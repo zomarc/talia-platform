@@ -14,7 +14,7 @@ import { filterByReservationStatus, isCancelledStatus } from './reservationCurre
 
 const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId }) => {
   const { theme } = useTheme();
-  const [selectedCabinCategory, setSelectedCabinCategory] = useState(null);
+  const [selectedCabinFilter, setSelectedCabinFilter] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   
   console.log('[ReservationCurrentStateContainer] Component rendering');
@@ -102,12 +102,24 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
 
   const selectedSailCode = context?.sail_code || context?.row_data?.sail_code || (typeof context === 'string' ? context : null);
   useEffect(() => {
+    setSelectedCabinFilter(null);
+  }, [selectedSailCode]);
+
+  useEffect(() => {
     const onCabinSelect = (event) => {
-      const cabinCategory = event?.detail?.cabin_category || event?.detail?.row_data?.cabinCategoryCode || null;
-      setSelectedCabinCategory(cabinCategory ? String(cabinCategory) : null);
+      const detail = event?.detail || {};
+      const resId = detail.res_id ?? detail.dlgt_res_id ?? null;
+      const cabinCategory = detail.cabin_category
+        || detail.row_data?.cabin_category
+        || detail.row_data?.cabinCategoryCode
+        || null;
+      setSelectedCabinFilter({
+        res_id: resId != null ? String(resId) : null,
+        cabin_category: cabinCategory ? String(cabinCategory) : null,
+      });
     };
     const onCabinClear = () => {
-      setSelectedCabinCategory(null);
+      setSelectedCabinFilter(null);
     };
     window.addEventListener(CABIN_SELECT_EVENT, onCabinSelect);
     window.addEventListener(CABIN_CLEAR_EVENT, onCabinClear);
@@ -177,10 +189,15 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
 
     const allRows = [...mergedRows, ...reservationOnlyRows];
     const statusFilteredRows = filterByReservationStatus(allRows, statusFilter);
-    if (!selectedCabinCategory) return statusFilteredRows;
-    const normalized = String(selectedCabinCategory).toLowerCase();
-    return statusFilteredRows.filter((row) => String(row?.cabin_category || '').toLowerCase() === normalized);
-  }, [currentStateRows, reservationRows, sailReservationChangeRows, selectedCabinCategory, statusFilter]);
+    if (selectedCabinFilter?.res_id) {
+      return statusFilteredRows.filter((row) => String(row?.res_id || '') === selectedCabinFilter.res_id);
+    }
+    if (selectedCabinFilter?.cabin_category) {
+      const normalized = String(selectedCabinFilter.cabin_category).toLowerCase();
+      return statusFilteredRows.filter((row) => String(row?.cabin_category || '').toLowerCase() === normalized);
+    }
+    return statusFilteredRows;
+  }, [currentStateRows, reservationRows, sailReservationChangeRows, selectedCabinFilter, statusFilter]);
 
   const loading = currentStateLoading || reservationLoading || sailReservationChangeLoading;
   const error = currentStateError || reservationError || reservationHistoryError || sailReservationChangeError;
@@ -255,6 +272,14 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
     });
   }, [reservationHistoryRows, selectedReservationId, selectedReservationRecord]);
 
+  const selectedCabinCategory = selectedCabinFilter?.cabin_category || null;
+  const selectedCabinResId = selectedCabinFilter?.res_id || null;
+  const cabinFilterLabel = selectedCabinResId
+    ? `res ${selectedCabinResId}`
+    : selectedCabinCategory
+      ? selectedCabinCategory
+      : null;
+
   console.log('[ReservationCurrentStateContainer] State:', { loading, error: error?.message, dataLength: data?.length, selectedSailCode });
 
   const handleRefresh = () => {
@@ -275,8 +300,8 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
       empty={!data || data.length === 0}
       emptyMessage={
         selectedSailCode
-          ? (selectedCabinCategory
-            ? `No ${statusFilter === 'all' ? '' : `${statusFilter} `}reservations found for sail ${selectedSailCode} and cabin ${selectedCabinCategory}`
+          ? (cabinFilterLabel
+            ? `No ${statusFilter === 'all' ? '' : `${statusFilter} `}reservations found for sail ${selectedSailCode} and cabin ${cabinFilterLabel}`
             : `No ${statusFilter === 'all' ? '' : `${statusFilter} `}reservations found for sail code: ${selectedSailCode}`)
           : `No ${statusFilter === 'all' ? '' : `${statusFilter} `}reservation data available`
       }

@@ -16,7 +16,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_market_roll_up_agency_market_active
 CREATE INDEX IF NOT EXISTS idx_market_roll_up_agency_market ON market_roll_up(agency_market);
 CREATE INDEX IF NOT EXISTS idx_market_roll_up_budget_roll_up ON market_roll_up(new_budget_roll_up);
 
--- Ship inventory allocations (stg.SHIP_INVENTORY_ALLOC)
+-- Ship inventory allocations (synced from stg.RES_CABIN_ALLOCATION_DETAIL;
+-- previously stg.SHIP_INVENTORY_ALLOC, which stopped refreshing ~2026-06-03).
 -- allocation_owner_id is res_id when FIT/OBJ FIT, group_id when GROUP.
 -- inventory_request_type 'GTY ONLY' = group booked, cabin not assigned.
 CREATE TABLE IF NOT EXISTS ship_inventory_alloc (

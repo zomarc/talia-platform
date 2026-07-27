@@ -44,7 +44,7 @@ Generated from live code audit + docs scan (Jul 2026). Prefer this over stale `N
 | Item | Status | Notes |
 |------|--------|-------|
 | Group/FIT from FACT_RESERVATION | Open | Need reliable `pax_type` / group holds without confirmed `res_id` |
-| Sync `market_roll_up` + `ship_inventory_alloc` + `ship_cabin` | Open | Migration + sync.config ready; run dataset sync before Cabin Deck / market groups show data |
+| Sync `market_roll_up` + `ship_inventory_alloc` + `ship_cabin` | Open | `ship_inventory_alloc` source is `stg.RES_CABIN_ALLOCATION_DETAIL` (replaces stale `stg.SHIP_INVENTORY_ALLOC`) |
 | Backfill `agency_channel` / `agency_market` on reservation | Defer | v1 joins Dim_Agency |
 | Focus-group mutation admin checks | Open | `resolvers.ts` TODOs |
 | Tracked wrappers for remaining Apollo services | Open | Focus/user/profile services |

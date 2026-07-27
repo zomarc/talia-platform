@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { emitSailSelect } from '../../../lib/eventBus';
 import { formatDayMon, formatMonYear } from '../../../lib/dateFormat';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 
 const buildSelectValues = (rows, field) => {
@@ -420,6 +421,19 @@ const MasterSailingPresenter = ({
     };
   }, [collapseAllGroups, cycleGroupState, openAllGroups, panelComponentId, panelInstanceId]);
 
+  const onRecordActive = useCallback((rowData) => {
+    if (!rowData) return;
+    const managementSailCode = rowData.reference_sail_code || rowData.sail_code;
+    emitSailSelect({
+      sail_code: managementSailCode,
+      reference_sail_code: managementSailCode,
+      segment_sail_code: rowData.sail_code,
+      sailing_role: rowData.sailing_role,
+      row_data: rowData,
+      timestamp: new Date().toISOString(),
+    });
+  }, []);
+
   return (
     <div className="focus-panel talia-report master-sailing-panel">
       <header className="talia-report__header">
@@ -454,7 +468,14 @@ const MasterSailingPresenter = ({
           Segments
         </button>
       </div>
-      <div ref={tableRef} className="focus-panel__table master-sailing-table" />
+      <ReportTableOrRecord
+        data={data}
+        columns={columns}
+        tableRef={tableRef}
+        tableClassName="focus-panel__table master-sailing-table"
+        onRecordActive={onRecordActive}
+        ariaLabel="Sailing record"
+      />
     </div>
   );
 };

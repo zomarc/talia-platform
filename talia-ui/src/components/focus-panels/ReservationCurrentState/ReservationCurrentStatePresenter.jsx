@@ -9,13 +9,14 @@
  * See CODING-STANDARDS.md for principles
  */
 
-import React, { useMemo, useRef, useEffect, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { afterTabulatorDataRefresh } from '../../../hooks/useTabulatorLayoutSync';
 import { formatDayMon, formatSailDateRange } from '../../../lib/dateFormat';
 import { buildShipSailTooltip } from './reservationCurrentStateTransform';
 import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
 import ReportDataDetails from '../../shared/ReportDataDetails';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 import {
   RESERVATION_CLEAR_EVENT,
   emitReservationClear,
@@ -198,7 +199,7 @@ const ReservationCurrentStatePresenter = ({
     }
   ]), []);
 
-  const emitSelectFromRowData = (rowData) => {
+  const emitSelectFromRowData = useCallback((rowData) => {
     if (!rowData) return;
     const resId = rowData.res_id;
     selectedResIdRef.current = resId != null && resId !== '' ? String(resId) : null;
@@ -208,7 +209,11 @@ const ReservationCurrentStatePresenter = ({
       row_data: rowData,
       timestamp: new Date().toISOString(),
     });
-  };
+  }, []);
+
+  const onRecordActive = useCallback((row) => {
+    emitSelectFromRowData(row);
+  }, [emitSelectFromRowData]);
 
   const applyTableData = (table) => {
     if (!table) return;
@@ -408,9 +413,13 @@ const ReservationCurrentStatePresenter = ({
           All
         </button>
       </div>
-      <div
-        ref={tableRef}
-        className="focus-panel__table reservation-current-state__table"
+      <ReportTableOrRecord
+        data={data}
+        columns={columns}
+        tableRef={tableRef}
+        tableClassName="focus-panel__table reservation-current-state__table"
+        onRecordActive={onRecordActive}
+        ariaLabel="Reservation record"
       />
       <ReportDataDetails
         visible={showDetails}

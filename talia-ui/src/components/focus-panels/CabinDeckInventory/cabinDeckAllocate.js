@@ -1,11 +1,30 @@
 /**
  * Local-only GTY → empty cabin allocate preview (concept).
  * Exact category match; no Synapse write-back.
+ *
+ * Modes:
+ * - priority: place all GTY that fit, highest probability first
+ * - expected: per category place only ~sum(probability/100) rooms (rounded),
+ *   choosing the highest-probability holds first
  */
+
+export const ALLOCATE_MODE = {
+  PRIORITY: 'priority',
+  EXPECTED: 'expected',
+};
 
 const normalizeCategory = (value) => String(value || '').trim() || 'Uncategorized';
 
-const sortGty = (items) => [...items].sort((a, b) => {
+const probabilityOf = (item) => {
+  const raw = Number(item?.probability);
+  if (!Number.isFinite(raw)) return 0;
+  return Math.max(0, Math.min(100, raw));
+};
+
+/** Highest probability first; stable secondary keys. */
+export const sortGtyByProbability = (items) => [...items].sort((a, b) => {
+  const prob = probabilityOf(b) - probabilityOf(a);
+  if (prob !== 0) return prob;
   const cat = normalizeCategory(a.cabin_category).localeCompare(normalizeCategory(b.cabin_category));
   if (cat !== 0) return cat;
   const owner = String(a.owner_label || '').localeCompare(String(b.owner_label || ''));
@@ -20,10 +39,46 @@ const sortEmptyCabins = (cabins) => [...cabins].sort((a, b) => {
   return String(a.cabin_number || '').localeCompare(String(b.cabin_number || ''), undefined, { numeric: true });
 });
 
+const groupByCategory = (items) => {
+  const map = new Map();
+  items.forEach((item) => {
+    const key = normalizeCategory(item.cabin_category);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(item);
+  });
+  return map;
+};
+
+/**
+ * Select which GTY holds to attempt placing for a category.
+ * @returns {{ toPlace: any[], deferred: any[], expectedCount: number }}
+ */
+export const selectGtyHoldsForMode = (holds, mode) => {
+  const ranked = sortGtyByProbability(holds || []);
+  if (mode !== ALLOCATE_MODE.EXPECTED) {
+    return {
+      toPlace: ranked,
+      deferred: [],
+      expectedCount: ranked.length,
+    };
+  }
+  const expectedRaw = ranked.reduce((sum, item) => sum + (probabilityOf(item) / 100), 0);
+  const expectedCount = Math.min(ranked.length, Math.max(0, Math.round(expectedRaw)));
+  return {
+    toPlace: ranked.slice(0, expectedCount),
+    deferred: ranked.slice(expectedCount),
+    expectedCount,
+  };
+};
+
 /**
  * @param {{ decks: any[], gtyHolds: { category: string, items: any[] }[] }} bundle
+ * @param {{ mode?: 'priority' | 'expected' }} [options]
  */
-export const allocateGtyPreview = (bundle) => {
+export const allocateGtyPreview = (bundle, options = {}) => {
+  const mode = options.mode === ALLOCATE_MODE.EXPECTED
+    ? ALLOCATE_MODE.EXPECTED
+    : ALLOCATE_MODE.PRIORITY;
   const sourceDecks = bundle?.decks || [];
   const sourceGty = bundle?.gtyHolds || [];
 
@@ -41,39 +96,54 @@ export const allocateGtyPreview = (bundle) => {
     emptiesByCategory.set(key, sortEmptyCabins(list));
   });
 
-  const placements = new Map(); // cabin_number → placed item
+  const placements = new Map();
   const unplaced = [];
   const overByCategory = new Map();
+  const expectedByCategory = new Map();
   let placementCount = 0;
 
-  sortGty(sourceGty.flatMap((group) => group.items || [])).forEach((hold) => {
-    const key = normalizeCategory(hold.cabin_category);
+  const holdsByCategory = groupByCategory(
+    sourceGty.flatMap((group) => group.items || [])
+  );
+
+  [...holdsByCategory.keys()].sort().forEach((key) => {
+    const { toPlace, deferred, expectedCount } = selectGtyHoldsForMode(
+      holdsByCategory.get(key) || [],
+      mode
+    );
+    expectedByCategory.set(key, expectedCount);
+    deferred.forEach((hold) => unplaced.push(hold));
+
     const pool = emptiesByCategory.get(key) || [];
-    const empty = pool.shift();
-    if (!empty) {
-      unplaced.push(hold);
-      overByCategory.set(key, (overByCategory.get(key) || 0) + 1);
-      return;
-    }
-    const cabinKey = String(empty.cabin_number || '').trim();
-    placements.set(cabinKey, {
-      ...empty,
-      ...hold,
-      cabin_number: empty.cabin_number,
-      deck_number: empty.deck_number,
-      deck_source: empty.deck_source,
-      cabin_category: key,
-      link_cabin_category: empty.link_cabin_category || key,
-      is_empty: false,
-      is_gty: true,
-      is_gty_fit: true,
-      status_key: 'gty-fit',
-      status_label: 'GTY fit (preview)',
-      owner_label: hold.owner_label,
-      missing_dlgt: Boolean(hold.missing_dlgt),
-      probability: hold.probability,
+    toPlace.forEach((hold) => {
+      const empty = pool.shift();
+      if (!empty) {
+        unplaced.push(hold);
+        overByCategory.set(key, (overByCategory.get(key) || 0) + 1);
+        return;
+      }
+      const cabinKey = String(empty.cabin_number || '').trim();
+      placements.set(cabinKey, {
+        ...empty,
+        ...hold,
+        cabin_number: empty.cabin_number,
+        deck_number: empty.deck_number,
+        deck_source: empty.deck_source,
+        cabin_category: key,
+        link_cabin_category: empty.link_cabin_category || key,
+        is_empty: false,
+        is_gty: true,
+        is_gty_fit: true,
+        status_key: 'gty-fit',
+        status_label: mode === ALLOCATE_MODE.EXPECTED
+          ? 'GTY fit (expected)'
+          : 'GTY fit (priority)',
+        owner_label: hold.owner_label,
+        missing_dlgt: Boolean(hold.missing_dlgt),
+        probability: hold.probability,
+      });
+      placementCount += 1;
     });
-    placementCount += 1;
   });
 
   const decks = sourceDecks.map((deck) => {
@@ -109,14 +179,24 @@ export const allocateGtyPreview = (bundle) => {
   });
 
   return {
+    mode,
     decks,
     gtyHolds: [...unplacedByCategory.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([category, items]) => ({ category, items })),
+      .map(([category, items]) => ({
+        category,
+        items: sortGtyByProbability(items),
+      })),
     placementCount,
     unplacedCount: unplaced.length,
     overAllocCategories: [...overByCategory.keys()].sort(),
+    expectedByCategory: Object.fromEntries(expectedByCategory),
   };
 };
 
-export default { allocateGtyPreview };
+export default {
+  ALLOCATE_MODE,
+  sortGtyByProbability,
+  selectGtyHoldsForMode,
+  allocateGtyPreview,
+};

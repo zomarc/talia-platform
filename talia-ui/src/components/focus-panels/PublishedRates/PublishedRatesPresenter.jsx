@@ -12,9 +12,10 @@
  * primary surface — it stays mounted (header ≣ hides optional extras elsewhere; not the main table).
  */
 
-import React, { useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { formatDayMon } from '../../../lib/dateFormat';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 
 const SELECT_EVENT = 'talia:publishedRates.select';
 const CLEAR_EVENT = 'talia:publishedRates.clear';
@@ -271,6 +272,19 @@ const PublishedRatesPresenter = ({ data, selectedSailCode }) => {
 
   const rowCount = Array.isArray(data) ? data.length : 0;
 
+  const onRecordActive = useCallback((rowData) => {
+    if (!rowData) return;
+    window.dispatchEvent(
+      new CustomEvent(SELECT_EVENT, {
+        detail: {
+          sail_code: rowData.SAIL_CODE,
+          row_data: rowData,
+          timestamp: new Date().toISOString(),
+        },
+      })
+    );
+  }, []);
+
   return (
     <div className="talia-report published-rates" role="region" aria-label="Published rates">
       <header className="talia-report__header published-rates__header">
@@ -283,7 +297,14 @@ const PublishedRatesPresenter = ({ data, selectedSailCode }) => {
       </header>
 
       <main className="talia-report__content published-rates__content">
-        <div ref={tableRef} className="published-rates__table talia-table" />
+        <ReportTableOrRecord
+          data={data}
+          columns={PUBLISHED_RATES_TABULATOR_COLUMNS}
+          tableRef={tableRef}
+          tableClassName="published-rates__table talia-table"
+          onRecordActive={onRecordActive}
+          ariaLabel="Published rate record"
+        />
       </main>
     </div>
   );

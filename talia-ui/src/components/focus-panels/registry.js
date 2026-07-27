@@ -215,9 +215,9 @@ export const componentRegistry = {
     title: 'Cabin Deck Inventory',
     description: 'Assigned cabins by deck and category with FIT/Group ownership highlights; GTY ONLY holds shown as unassigned group bookings',
     props: {},
-    dataRequirements: 'Requires ship_inventory_alloc, ship_cabin, ship_cabin_ctg_link (fou.SHIP_CABIN_CTG_LINK). No customer/PII. Owner id is res_id (FIT) or group_id (GROUP).',
+    dataRequirements: 'Requires ship_inventory_alloc (from stg.RES_CABIN_ALLOCATION_DETAIL), ship_cabin, ship_cabin_ctg_link (fou.SHIP_CABIN_CTG_LINK). No customer/PII. Owner id is res_id (FIT) or group_id (GROUP).',
     events: {
-      emits: [],
+      emits: [cabinSelect, cabinClear],
       respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
     },
     supportsRefresh: true,

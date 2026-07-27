@@ -16,6 +16,7 @@ import {
   createReferenceRowFormatter,
   refreshReferenceRowClasses,
 } from '../../../lib/tabulatorReferenceSelection';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 import { AGENCY_SELECTION_MODES } from './agencyDirectoryContext';
 
 const AGENCY_COLUMNS = [
@@ -349,7 +350,7 @@ const AgencyPresenter = ({
       });
 
       instanceRef.current.on('dataLoaded', (loadedData) => {
-        setRecordCount(loadedData.length);
+        setRecordCount(Array.isArray(loadedData) ? loadedData.length : 0);
       });
     };
 
@@ -402,6 +403,19 @@ const AgencyPresenter = ({
   const showReservationCriteria = selectionMode === AGENCY_SELECTION_MODES.RESERVATION;
   const showSailCriteria = selectionMode === AGENCY_SELECTION_MODES.SAIL;
 
+  const onRecordActive = useCallback((rec) => {
+    if (!rec) return;
+    activeAgencyIdRef.current = String(rec.agency_id);
+    applyReferenceHighlightRef.current();
+    emitAgencySelect({
+      agency_id: rec.agency_id,
+      row_data: rec,
+      panelInstanceId: panelInstanceIdRef.current,
+      panelComponentId: panelComponentIdRef.current,
+      timestamp: new Date().toISOString(),
+    });
+  }, []);
+
   return (
     <div className="focus-panel talia-report agency-directory-panel" role="region" aria-label="Agency directory">
       <header className="talia-report__header">
@@ -453,7 +467,15 @@ const AgencyPresenter = ({
       ) : null}
 
       <main className="talia-report__content">
-        <div ref={tableRef} className="talia-table" role="grid" aria-rowcount={recordCount} />
+        <ReportTableOrRecord
+          data={data}
+          columns={AGENCY_COLUMNS}
+          tableRef={tableRef}
+          tableClassName="talia-table"
+          tableProps={{ role: 'grid', 'aria-rowcount': recordCount }}
+          onRecordActive={onRecordActive}
+          ariaLabel="Agency record"
+        />
       </main>
     </div>
   );

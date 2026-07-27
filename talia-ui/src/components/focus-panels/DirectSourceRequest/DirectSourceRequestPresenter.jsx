@@ -5,9 +5,10 @@
  * Uses standard talia-report shell vocabulary.
  */
 
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useRef, useEffect, useState, useMemo } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { formatDayMon } from '../../../lib/dateFormat';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 
 const DirectSourceRequestPresenter = ({
   data,
@@ -314,6 +315,17 @@ const DirectSourceRequestPresenter = ({
     }
   }, [data, tableInitialized]);
 
+  const onRecordActive = useCallback((rec) => {
+    if (!rec) return;
+    window.dispatchEvent(new CustomEvent('talia:directsource.select', {
+      detail: {
+        source: 'DirectSourceRequest',
+        row_data: rec,
+        timestamp: new Date().toISOString(),
+      },
+    }));
+  }, []);
+
   const formatDateLabel = (value) => {
     if (!value) return '—';
     return formatDayMon(value, '—');
@@ -586,7 +598,15 @@ const DirectSourceRequestPresenter = ({
                 <div className="direct-source__loading-card">Querying external source...</div>
               </div>
             ) : null}
-            <div ref={tableRef} className="direct-source__table-host talia-table" role="grid" />
+            <ReportTableOrRecord
+              data={data}
+              columns={columns}
+              tableRef={tableRef}
+              tableClassName="direct-source__table-host talia-table"
+              tableProps={{ role: 'grid' }}
+              onRecordActive={onRecordActive}
+              ariaLabel="Direct source record"
+            />
           </div>
       </main>
     </div>

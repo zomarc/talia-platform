@@ -276,6 +276,7 @@ const MyComponent = () => {
 - **Persistent selection indicator:** use `createReferenceRowFormatter` / `refreshReferenceRowClasses` from `lib/tabulatorReferenceSelection.js` so the active row keeps class `tabulator-row--reference` across data refresh. Shared left accent bar styling lives in `tabulator-theme.css` (`--theme-table-row-selected-accent`). Panels with `selectableRows: 1` get the same bar via `.tabulator-selected`.
 - For grouped tables that need tab-header controls, set `supportsGroupActions: true` in `registry.js` and register presenter actions in `window.__taliaPanelGroupActions`
 - Do not hardcode table `layout` in panel code unless you intentionally opt out with `enforceGlobalLayout: false`
+- **Single-row record form:** when the presenter’s data array has exactly one row, render `ReportTableOrRecord` / `ReportRecordForm` (`components/shared/ReportRecordForm.jsx`) instead of the visible table. Keep the Tabulator host mounted but hidden so the instance is not destroyed. Reuses column `titleLong`/`title` and formatters via `lib/reportRecordForm.js`. Opt out a column with `excludeFromRecordForm: true`. Skip matrix/heatmap panels.
 
 **Grouped Tab Header Controls (optional):**
 - Use only when the panel has Tabulator grouping and users need global expand/collapse

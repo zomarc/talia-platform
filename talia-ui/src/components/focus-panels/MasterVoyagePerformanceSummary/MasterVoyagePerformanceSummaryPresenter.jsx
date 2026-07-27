@@ -17,6 +17,7 @@ import {
   isEmpty,
   parseNumber
 } from '../../../lib/dataTypes';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 
 /**
@@ -814,12 +815,27 @@ const MasterVoyagePerformanceSummaryPresenter = ({ data, panelInstanceId, panelC
     };
   }, [collapseAllGroups, cycleGroupState, openAllGroups, panelComponentId, panelInstanceId]);
 
+  const onRecordActive = useCallback((rec) => {
+    if (!rec) return;
+    window.dispatchEvent(new CustomEvent('talia:mastervoyage.select', {
+      detail: {
+        voyage_code: rec.voyageCode,
+        row_data: rec,
+        timestamp: new Date().toISOString(),
+      },
+    }));
+  }, []);
+
   return (
     <div className="focus-panel master-voyage-performance-summary-panel">
       <div className="master-voyage-performance-summary-table-wrap">
-        <div
-          ref={tableRef}
-          className="focus-panel__table master-voyage-performance-summary-table"
+        <ReportTableOrRecord
+          data={data}
+          columns={columns}
+          tableRef={tableRef}
+          tableClassName="focus-panel__table master-voyage-performance-summary-table"
+          onRecordActive={onRecordActive}
+          ariaLabel="Voyage performance record"
         />
       </div>
     </div>

@@ -349,6 +349,7 @@ const chart = new Chart(ctx, {
 - Prefer `titleShort` + `titleLong` for every column so headers stay compact while Tabulator `headerTooltip` shows full names
 - Reuse global defaults from `src/lib/tabulatorColumnLabelDictionary.js` for common field names (for example `guest_count`, `sail_days`, `cabin_category`)
 - If you introduce a new column field, add its short/long terminology entry to `tabulatorColumnLabelDictionary.js` in the same PR
+- Wrap the Tabulator host with `ReportTableOrRecord` so a single-row result renders as a vertical record form (table stays mounted/hidden). Pass `onRecordActive` when the panel emits select on row click.
 
 ### DON'T
 - Use inline styles

@@ -14,6 +14,9 @@
  * - Do not emitSailClear on deselect / replaceData side-effects
  * - Use selectableRows: 1 for single row selection
  * - Use headerFilter: "list" with autocomplete: true for dropdown filters
+ * - Wrap the Tabulator host with ReportTableOrRecord so a single-row result
+ *   shows a vertical record form (table host stays mounted/hidden)
+ * - Pass onRecordActive when the panel emits select on row click
  * - Optional grouped tab actions: register cycle/getCycleState handlers on window.__taliaPanelGroupActions
  * - See docs/FRAMEWORK-BACKLOG.md and docs/CANONICAL-SELECTION-LINKING.md
  * 
@@ -24,8 +27,9 @@
  * 4. Update field names to match your data structure
  */
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useCallback, useRef, useEffect, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 
 /**
  * Presentational component template
@@ -184,11 +188,29 @@ const TemplatePresenter = ({ data, panelInstanceId, panelComponentId }) => {
     // };
   }, [panelComponentId, panelInstanceId]);
 
+  // Mirror rowSelectionChanged emit when the form activates for a single row.
+  const onRecordActive = useCallback((rec) => {
+    if (!rec) return;
+    console.log('[Template] Record form active:', rec);
+    // TODO: Update event name / primary key to match your component
+    window.dispatchEvent(new CustomEvent('talia:template.select', {
+      detail: {
+        id: rec.id,
+        row_data: rec,
+        timestamp: new Date().toISOString(),
+      },
+    }));
+  }, []);
+
   return (
     <div className="focus-panel">
-      <div 
-        ref={tableRef} 
-        className="focus-panel__table"
+      <ReportTableOrRecord
+        data={data}
+        columns={columns}
+        tableRef={tableRef}
+        tableClassName="focus-panel__table"
+        onRecordActive={onRecordActive}
+        ariaLabel="Record details"
       />
     </div>
   );

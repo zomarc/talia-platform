@@ -1,6 +1,6 @@
 /**
  * Cabin Deck Inventory transform — allocations + ship_cabin + ship_cabin_ctg_link.
- * Empty cabins use linked default category (By category) or Open bucket.
+ * Empty cabins use linked default category from ship_cabin_ctg_link (fallback Open).
  * No customer/PII fields — inventory ownership signals only.
  */
 
@@ -147,20 +147,19 @@ const resolveDeckMeta = (cabinNumber, meta, counters) => {
   return { deckNumber, deckSource };
 };
 
-const resolveEmptyCategory = (cabinKey, categoryLinkIndex, emptyCategoryMode) => {
-  if (emptyCategoryMode === 'open_bucket') return 'Open';
+const resolveEmptyCategory = (cabinKey, categoryLinkIndex) => {
   const linked = categoryLinkIndex.get(cabinKey)?.cabin_category;
   return linked || 'Open';
 };
 
-const buildEmptyCabinItem = (meta, counters, cabinKey, categoryLinkIndex, emptyCategoryMode) => {
+const buildEmptyCabinItem = (meta, counters, cabinKey, categoryLinkIndex) => {
   const cabinNumber = meta.cabin_number;
   const { deckNumber, deckSource } = resolveDeckMeta(cabinNumber, meta, counters);
   const linked = categoryLinkIndex.get(cabinKey);
   return {
     allocation_id: null,
     cabin_number: cabinNumber,
-    cabin_category: resolveEmptyCategory(cabinKey, categoryLinkIndex, emptyCategoryMode),
+    cabin_category: resolveEmptyCategory(cabinKey, categoryLinkIndex),
     link_cabin_category: linked?.cabin_category || null,
     deck_number: deckNumber,
     deck_source: deckSource,
@@ -215,7 +214,6 @@ export const buildCabinDeckInventoryBundle = ({
   sailCode = null,
   sailDateFrom = null,
   truncations = [],
-  emptyCategoryMode = 'by_category',
 } = {}) => {
   const filtered = filterAllocationsForSailing(allocationRows, { shipCode, sailDateFrom });
   const cabinIndex = indexShipCabins(shipCabinRows, shipCode);
@@ -291,7 +289,7 @@ export const buildCabinDeckInventoryBundle = ({
   const emptyCabins = [];
   cabinIndex.forEach((meta, cabinKey) => {
     if (assignedKeys.has(cabinKey)) return;
-    const item = buildEmptyCabinItem(meta, counters, cabinKey, categoryLinkIndex, emptyCategoryMode);
+    const item = buildEmptyCabinItem(meta, counters, cabinKey, categoryLinkIndex);
     if (item.link_cabin_category) counters.emptiesLinked += 1;
     else counters.emptiesOpenFallback += 1;
     emptyCabins.push(item);
@@ -377,7 +375,6 @@ export const buildCabinDeckInventoryBundle = ({
       deck_unknown: counters.deckUnknown,
       empties_linked: counters.emptiesLinked,
       empties_open_fallback: counters.emptiesOpenFallback,
-      empty_category_mode: emptyCategoryMode,
       occupancy_booked_cabins: occupancyBooked || null,
       occupancy_total_cabins: occupancy.total_cabins || null,
       reservation_count: reservationCount,

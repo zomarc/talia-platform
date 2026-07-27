@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { formatDayMon } from '../../../lib/dateFormat';
 import { filterDayRowsByScope, scopeNeedsGroupExpansion } from './shipDayBerthTransform';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
 const VIEW_MODE_STORAGE_KEY = 'talia.ship-day-berth.viewMode';
@@ -459,7 +460,13 @@ const ShipDayBerthPresenter = ({
           </>
         )}
       </div>
-      <div ref={tableRef} className="focus-panel__table master-sailing-table ms-explorer-table ms-berth-table" />
+      <ReportTableOrRecord
+        data={filteredRows}
+        columns={columns}
+        tableRef={tableRef}
+        tableClassName="focus-panel__table master-sailing-table ms-explorer-table ms-berth-table"
+        ariaLabel="Ship-day berth record"
+      />
     </div>
   );
 };

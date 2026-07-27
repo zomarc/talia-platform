@@ -328,7 +328,7 @@
     },
     "shipInventoryAlloc": {
       "type": "direct",
-      "source": "stg.SHIP_INVENTORY_ALLOC",
+      "source": "stg.RES_CABIN_ALLOCATION_DETAIL",
       "target": "ship_inventory_alloc",
       "columns": [
         "ALLOCATION_ID",
@@ -674,4 +674,3 @@
     }
   }
 }
-

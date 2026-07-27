@@ -9,7 +9,7 @@
  * See CODING-STANDARDS.md for principles
  */
 
-import React, { useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { emitSailSelect } from '../../../lib/eventBus';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
@@ -17,6 +17,7 @@ import { gql } from '@apollo/client';
 import { trackedApolloMutate } from '../../../services/data/trackedGraphql';
 import { apolloClient } from '../../../lib/apolloClient';
 import { formatDayMon } from '../../../lib/dateFormat';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 
 const UPDATE_USER_PREFERENCES = gql`
   mutation UpdateUserPreferences($input: UserPreferencesInput!) {
@@ -278,7 +279,26 @@ const SailingTablePresenter = ({ data }) => {
     }
   }, [data]);
 
-  return <div ref={tableRef} className="focus-panel__table" />;
+  const onRecordActive = useCallback((rowData) => {
+    if (!rowData) return;
+    updateSelectedSail(rowData.sail_code);
+    emitSailSelect({
+      sail_code: rowData.sail_code,
+      row_data: rowData,
+      timestamp: new Date().toISOString(),
+    });
+  }, []);
+
+  return (
+    <ReportTableOrRecord
+      data={data}
+      columns={columns}
+      tableRef={tableRef}
+      tableClassName="focus-panel__table"
+      onRecordActive={onRecordActive}
+      ariaLabel="Sailing record"
+    />
+  );
 };
 
 export default SailingTablePresenter;

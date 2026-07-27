@@ -25,7 +25,8 @@ export const tableSources = {
     syncType: 'ships' // Match sync.config.json table key (plural)
   },
   ship_inventory_alloc: {
-    source: 'stg.SHIP_INVENTORY_ALLOC',
+    // Prefer RES_CABIN_ALLOCATION_DETAIL — SHIP_INVENTORY_ALLOC stalled (last alloc ~2026-06-03).
+    source: 'stg.RES_CABIN_ALLOCATION_DETAIL',
     type: 'direct',
     isLargeDataset: true,
     dateColumns: ['sail_date_from', 'sail_date_to'],

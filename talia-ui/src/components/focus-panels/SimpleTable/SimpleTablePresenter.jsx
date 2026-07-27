@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { emitSailSelect } from '../../../lib/eventBus';
 import { formatDayMon } from '../../../lib/dateFormat';
+import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 
 const columns = [
   {
@@ -190,6 +191,15 @@ const SimpleTablePresenter = ({ data }) => {
     }
   }, [data]);
 
+  const onRecordActive = useCallback((rec) => {
+    if (!rec) return;
+    emitSailSelect({
+      sail_code: rec.sail_code,
+      row_data: rec,
+      timestamp: new Date().toISOString(),
+    });
+  }, []);
+
   return (
     <div className="talia-report" role="region" aria-label="Master sail table">
       <header className="talia-report__header">
@@ -199,7 +209,15 @@ const SimpleTablePresenter = ({ data }) => {
         </div>
       </header>
       <main className="talia-report__content">
-        <div ref={tableRef} className="talia-table" role="grid" aria-rowcount={recordCount} />
+        <ReportTableOrRecord
+          data={data}
+          columns={columns}
+          tableRef={tableRef}
+          tableClassName="talia-table"
+          tableProps={{ role: 'grid', 'aria-rowcount': recordCount }}
+          onRecordActive={onRecordActive}
+          ariaLabel="Sail record"
+        />
       </main>
     </div>
   );

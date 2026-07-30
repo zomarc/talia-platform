@@ -13,10 +13,12 @@ import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react'
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { afterTabulatorDataRefresh } from '../../../hooks/useTabulatorLayoutSync';
 import { formatDayMon, formatSailDateRange } from '../../../lib/dateFormat';
-import { buildShipSailTooltip } from './reservationCurrentStateTransform';
+import { clipAnchorRectToViewport } from '../../../lib/clipAnchorRect';
 import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
+import HoverPreview from '../../shared/HoverPreview';
+import ReservationHoverSummary from '../../shared/ReservationHoverSummary';
 import {
   RESERVATION_CLEAR_EVENT,
   emitReservationClear,
@@ -28,6 +30,7 @@ import {
  */
 const ReservationCurrentStatePresenter = ({
   data,
+  hoverByResId = null,
   reservationHistory = [],
   selectedReservationId = null,
   selectedReservationRecord = null,
@@ -42,13 +45,16 @@ const ReservationCurrentStatePresenter = ({
   const tableBuiltRef = useRef(false);
   const suppressSelectionEventsRef = useRef(false);
   const dataRef = useRef(data);
+  const hoverByResIdRef = useRef(hoverByResId);
   const selectedResIdRef = useRef(
     selectedReservationId != null && selectedReservationId !== ''
       ? String(selectedReservationId)
       : null
   );
   dataRef.current = data;
+  hoverByResIdRef.current = hoverByResId;
   const [historyFilter, setHistoryFilter] = useState('all');
+  const [hoverPreview, setHoverPreview] = useState(null);
   const [showDetails] = usePanelDetailsVisibility({
     panelInstanceId,
     panelComponentId: panelComponentId || 'reservation-current-state',
@@ -70,12 +76,6 @@ const ReservationCurrentStatePresenter = ({
     return () => window.removeEventListener(RESERVATION_CLEAR_EVENT, handleReservationClear);
   }, []);
 
-  const escapeHtml = (value) => String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
   // Column definitions using Tabulator's native features
   const columns = useMemo(() => ([
     { 
@@ -87,16 +87,15 @@ const ReservationCurrentStatePresenter = ({
         const value = cell.getValue();
         const rowData = cell.getRow()?.getData?.() || {};
         const resId = value ? Math.floor(value).toString() : '';
-        const tooltip = escapeHtml(buildShipSailTooltip(rowData));
+        // Rich HoverPreview replaces native title tooltips (avoid double tooltips).
         const historyCount = Number.parseInt(rowData.history_count, 10) || 0;
-        const titleAttr = tooltip ? ` title="${tooltip}"` : '';
         if (!historyCount) {
-          return `<span class="reservation-current-state__res-id-cell"${titleAttr}>${resId}</span>`;
+          return `<span class="reservation-current-state__res-id-cell">${resId}</span>`;
         }
         const intensityClass = historyCount >= 5
           ? 'reservation-current-state__history-count--5'
           : `reservation-current-state__history-count--${historyCount}`;
-        return `<span class="reservation-current-state__res-id-cell"${titleAttr}>${resId}</span><span class="reservation-current-state__history-count ${intensityClass}" title="${historyCount} history records">${historyCount}</span>`;
+        return `<span class="reservation-current-state__res-id-cell">${resId}</span><span class="reservation-current-state__history-count ${intensityClass}" title="${historyCount} history records">${historyCount}</span>`;
       }
     },
     { 
@@ -306,6 +305,27 @@ const ReservationCurrentStatePresenter = ({
           selectedResIdRef.current = null;
           emitReservationClear({ timestamp: new Date().toISOString() });
         });
+
+        instanceRef.current.on('rowMouseEnter', (_event, row) => {
+          const rowData = row?.getData?.() || {};
+          const resId = rowData.res_id != null ? String(rowData.res_id) : '';
+          if (!resId || !hoverByResIdRef.current?.get?.(resId)) {
+            setHoverPreview(null);
+            return;
+          }
+          const element = row.getElement?.();
+          const rowRect = element?.getBoundingClientRect?.();
+          const rect = clipAnchorRectToViewport(rowRect, tableRef.current);
+          if (!rect || rect.width <= 0 || rect.height <= 0) {
+            setHoverPreview(null);
+            return;
+          }
+          setHoverPreview({ resId, rect });
+        });
+
+        instanceRef.current.on('rowMouseLeave', () => {
+          setHoverPreview(null);
+        });
       } catch (err) {
         console.error('[ReservationCurrentState] Error initializing table:', err);
       }
@@ -498,6 +518,16 @@ const ReservationCurrentStatePresenter = ({
           </div>
         )}
       </ReportDataDetails>
+      <HoverPreview
+        open={Boolean(hoverPreview?.resId)}
+        anchorRect={hoverPreview?.rect || null}
+        placement="right"
+        onRequestClose={() => setHoverPreview(null)}
+      >
+        {hoverPreview?.resId && hoverByResId?.get?.(hoverPreview.resId) ? (
+          <ReservationHoverSummary card={hoverByResId.get(hoverPreview.resId)} />
+        ) : null}
+      </HoverPreview>
     </div>
   );
 };

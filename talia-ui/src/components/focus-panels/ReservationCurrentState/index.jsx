@@ -10,6 +10,8 @@ import ReservationCurrentStatePresenter from './ReservationCurrentStatePresenter
 import PanelDataState from '../../shared/PanelDataState';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { CABIN_CLEAR_EVENT, CABIN_SELECT_EVENT, extractSailCodeFromEvent, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { indexAgenciesById } from '../Distribution/distributionTransform';
+import { buildReservationHoverIndex } from '../../../lib/reservationHover';
 import { filterByReservationStatus, isCancelledStatus } from './reservationCurrentStateTransform';
 
 const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId }) => {
@@ -100,6 +102,15 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
     limit: 20000
   });
 
+  // Non-blocking agency names for hover cards (same pattern as MSE).
+  const { data: agencies } = useTableDataWithContext({
+    tableName: 'agency',
+    panelInstanceId,
+    panelComponentId,
+    fetchWithoutContext: true,
+    limit: 50000,
+  });
+
   const selectedSailCode = context?.sail_code || context?.row_data?.sail_code || (typeof context === 'string' ? context : null);
   useEffect(() => {
     setSelectedCabinFilter(null);
@@ -129,7 +140,8 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
     };
   }, []);
 
-  const data = useMemo(() => {
+  // Full sail-scoped merge (before UI status/cabin filters) — used for hover agency rollups.
+  const sailRows = useMemo(() => {
     const currentRows = Array.isArray(currentStateRows) ? currentStateRows : [];
     const reservations = Array.isArray(reservationRows) ? reservationRows : [];
     const reservationByResId = new Map(
@@ -187,8 +199,11 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
       return !currentIds.has(String(row.res_id));
     });
 
-    const allRows = [...mergedRows, ...reservationOnlyRows];
-    const statusFilteredRows = filterByReservationStatus(allRows, statusFilter);
+    return [...mergedRows, ...reservationOnlyRows];
+  }, [currentStateRows, reservationRows, sailReservationChangeRows]);
+
+  const data = useMemo(() => {
+    const statusFilteredRows = filterByReservationStatus(sailRows, statusFilter);
     if (selectedCabinFilter?.res_id) {
       return statusFilteredRows.filter((row) => String(row?.res_id || '') === selectedCabinFilter.res_id);
     }
@@ -197,7 +212,12 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
       return statusFilteredRows.filter((row) => String(row?.cabin_category || '').toLowerCase() === normalized);
     }
     return statusFilteredRows;
-  }, [currentStateRows, reservationRows, sailReservationChangeRows, selectedCabinFilter, statusFilter]);
+  }, [sailRows, selectedCabinFilter, statusFilter]);
+
+  const hoverByResId = useMemo(() => {
+    const agencyById = indexAgenciesById(agencies);
+    return buildReservationHoverIndex(sailRows, agencyById);
+  }, [sailRows, agencies]);
 
   const loading = currentStateLoading || reservationLoading || sailReservationChangeLoading;
   const error = currentStateError || reservationError || reservationHistoryError || sailReservationChangeError;
@@ -309,6 +329,7 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
     >
       <ReservationCurrentStatePresenter
         data={data}
+        hoverByResId={hoverByResId}
         theme={theme}
         onRefresh={handleRefresh}
         selectedSailCode={selectedSailCode}

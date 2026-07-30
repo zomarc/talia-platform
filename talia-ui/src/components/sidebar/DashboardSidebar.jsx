@@ -78,6 +78,10 @@ function DashboardSidebar({
     setControlsVisible,
     menuDisappearMs,
     setMenuDisappearMs,
+    hoverPreviewDelayMs,
+    setHoverPreviewDelayMs,
+    hoverPreviewOpacity,
+    setHoverPreviewOpacity,
     sidebarAutoCloseEnabled,
     setSidebarAutoCloseEnabled,
     sidebarAutoCloseMs,
@@ -86,6 +90,8 @@ function DashboardSidebar({
     setSidebarDisplayMode,
     calloutsVisible,
     setCalloutsVisible,
+    chartLegendsVisible,
+    setChartLegendsVisible,
     gameSoundEnabled,
     setGameSoundEnabled,
     defaultDisplayCurrency,
@@ -389,8 +395,8 @@ function DashboardSidebar({
           </button>
           <div className={`dashboard-section__content ${expandedSections.reports ? 'dashboard-section__content--expanded' : ''}`}>
             <div className="dashboard-section__group">
-              <div className="dashboard-section__subtitle">Profile Tools (3 goals)</div>
-              <TaliaTooltip content="Goal ① REAL: trends from bookings; select a sail in the table. Toggle YoY via the next button or panel params." placement="bottom-left" delayMs={180}>
+              <div className="dashboard-section__subtitle">Profile Tools</div>
+              <TaliaTooltip content="Goal ① REAL: inventory-scoped curves; breakdown by market / group / currency; absolute or load-factor %." placement="bottom-left" delayMs={180}>
                 <button
                   className="dashboard-btn"
                   onClick={() => onAddPanel('booking-profile', 'Real booking profile (+ YoY)', { reportId: 'booking-profile', includeComparison: false })}
@@ -398,7 +404,7 @@ function DashboardSidebar({
                   ① Real profile
                 </button>
               </TaliaTooltip>
-              <TaliaTooltip content="Goal ① REAL with year-over-year comparison (prior sail auto-derived unless you set previousYearSailCode in params)" placement="bottom-left" delayMs={180}>
+              <TaliaTooltip content="Goal ① with YoY overlay (illustrative — recent years are weak futures proxies). Peer sail auto-resolved when possible." placement="bottom-left" delayMs={180}>
                 <button
                   className="dashboard-btn"
                   onClick={() => onAddPanel('booking-profile', 'Real booking profile + YoY', { reportId: 'booking-profile', includeComparison: true })}
@@ -412,6 +418,14 @@ function DashboardSidebar({
                   onClick={() => onAddPanel('booking-target-data-simple', 'TARGET only (imported)', { reportId: 'booking-target-data-simple' })}
                 >
                   ② Imported targets
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Nested load-factor target profiles — multiple perspectives per voyage (Manager+)." placement="bottom-left" delayMs={180}>
+                <button
+                  className="dashboard-btn"
+                  onClick={() => onAddPanel('inventory-target-profile-editor', 'Nested LF target profiles', { reportId: 'inventory-target-profile-editor' })}
+                >
+                  Nested LF targets
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Overlay REAL, imported TARGET, BUDGET, and inventory MODEL on one chart" placement="bottom-left" delayMs={180}>
@@ -843,6 +857,32 @@ function DashboardSidebar({
               <div className="dashboard-form-hint">Global auto-dismiss delay for header menus and dropdowns across the app.</div>
             </div>
             <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Hover Preview Opacity: {hoverPreviewOpacity}%</label>
+              <input
+                type="range"
+                min="20"
+                max="100"
+                step="5"
+                value={hoverPreviewOpacity}
+                onChange={(event) => setHoverPreviewOpacity(Number(event.target.value))}
+                className="dashboard-form-input dashboard-form-input--range"
+              />
+              <div className="dashboard-form-hint">Transparency for dense row hover cards (MSE distribution, reservation detail, etc.).</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Hover Preview Delay: {hoverPreviewDelayMs} ms</label>
+              <input
+                type="range"
+                min="0"
+                max="500"
+                step="10"
+                value={hoverPreviewDelayMs}
+                onChange={(event) => setHoverPreviewDelayMs(Number(event.target.value))}
+                className="dashboard-form-input dashboard-form-input--range"
+              />
+              <div className="dashboard-form-hint">Time before dense hover cards appear after pointing at a row.</div>
+            </div>
+            <div className="dashboard-form-group">
               <label className="dashboard-form-label">Sidebar Behavior</label>
               <select
                 className="dashboard-form-input"
@@ -887,6 +927,18 @@ function DashboardSidebar({
                 <span>Show informational callouts and tips across reports</span>
               </label>
               <div className="dashboard-form-hint">Matches the callouts toggle in the top header visibility menu.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Chart Legends</label>
+              <label className="dashboard-form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={chartLegendsVisible}
+                  onChange={(event) => setChartLegendsVisible(event.target.checked)}
+                />
+                <span>Show compact overlay legends on charts</span>
+              </label>
+              <div className="dashboard-form-hint">Matches the Legends toggle in the top header visibility menu.</div>
             </div>
             <div className="dashboard-form-group">
               <label className="dashboard-form-label">Game Sound</label>

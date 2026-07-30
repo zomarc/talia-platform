@@ -60,18 +60,74 @@
       }
       
       /* Apply dark theme to body immediately */
+      html, body {
+        height: 100%;
+      }
       body {
         background: var(--theme-bg);
+        background-color: var(--theme-bg-solid);
         color: var(--theme-fg);
         margin: 0;
         padding: 0;
         font-family: var(--theme-font-family);
         font-size: var(--theme-font-size);
       }
+
+      /*
+        Boot splash — paints with index.html before the JS module graph loads.
+        React replaces #root on mount, so this disappears automatically.
+      */
+      #root {
+        min-height: 100%;
+      }
+      .talia-boot {
+        box-sizing: border-box;
+        min-height: 100vh;
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 24px;
+        text-align: center;
+        background: var(--theme-bg);
+        background-color: var(--theme-bg-solid);
+        color: var(--theme-fg);
+      }
+      .talia-boot__brand {
+        margin: 0;
+        font-size: 1.75rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--theme-fg);
+      }
+      .talia-boot__spinner {
+        width: 28px;
+        height: 28px;
+        border: 3px solid var(--theme-border);
+        border-top-color: var(--theme-accent);
+        border-radius: 50%;
+        animation: talia-boot-spin 0.8s linear infinite;
+      }
+      .talia-boot__message {
+        margin: 0;
+        font-size: 0.875rem;
+        color: var(--theme-text-muted);
+      }
+      @keyframes talia-boot-spin {
+        to { transform: rotate(360deg); }
+      }
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="talia-boot" role="status" aria-live="polite" aria-busy="true">
+        <p class="talia-boot__brand">Talia</p>
+        <div class="talia-boot__spinner" aria-hidden="true"></div>
+        <p class="talia-boot__message">Loading application…</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

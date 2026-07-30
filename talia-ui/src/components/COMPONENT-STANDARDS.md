@@ -12,6 +12,8 @@ This document outlines the standards and patterns for building components in the
 6. [Framework Usage](#framework-usage)
 7. [No Overrides Policy](#no-overrides-policy)
 8. [Component Template](#component-template)
+9. [Booked composition (FIT / Group)](#booked-composition-fit--group)
+10. [Dense row hover previews](#dense-row-hover-previews)
 
 ## Component Structure
 
@@ -66,13 +68,19 @@ Every focus-panel report uses the same **shell elements**. Use the standard CSS 
 ├─────────────────────────────────────────────────────────────┤
 │ .talia-report__actions-bar             [Operations toggle]  │
 ├─────────────────────────────────────────────────────────────┤
+│ section.talia-report__snapshot (0|1)   [pinned KPIs]        │
+│   (flex-shrink: 0 — does not scroll)                        │
+├─────────────────────────────────────────────────────────────┤
 │ main.talia-report__content                                  │
+│   (+ --scroll when Snapshot present)                        │
 │   primary table/chart/map (always mounted)                  │
 │   ReportDataDetails (Details ≣) → secondary detail blocks   │
 │   (.tabulator-header-filter = Column filters toggle)        │
 └─────────────────────────────────────────────────────────────┘
 
-StatusBar `.status-bar__criteria` also hides under **Controls** (root `talia-controls-hidden`).
+StatusBar global criteria / focus / visibility strips are independent of **Operations**
+(each has its own header toggle). Only panel `.talia-report__controls` hides under
+`talia-controls-hidden`.
 ```
 
 ### Element reference
@@ -86,9 +94,10 @@ StatusBar `.status-bar__criteria` also hides under **Controls** (root `talia-con
 | **Callout** | Extra informational note / guidance (usually hidden) | `.talia-callout` | **Callouts** | Appearance profile `calloutsVisible` |
 | **Controls** | In-panel operation controls (Expand/Collapse, view modes, group toggles) | panel `.talia-report__controls` | *(with Operations)* | Appearance profile `controlsVisible` |
 | **Actions** | Panel operation actions (Refresh, Export, …) | `.talia-report__actions-bar` (preferred); legacy compact: `.talia-report__actions` in header | **Operations** | Appearance profile `actionsVisible` |
+| **Snapshot** | Pinned KPI strip above scrollable body (Booked, Velocity, …) | `ReportSnapshot` → `section.talia-report__snapshot` + `.talia-report__metrics` / `.talia-metric` | — | — |
 | **Details** | User-facing *extra* data blocks (header ≣); never the primary table/chart | `ReportDataDetails` + `usePanelDetailsVisibility` | **Details** (≣ btn) | `localStorage` `taliaGlobalReportDetailsVisible` |
 | **Technical meta** | Dev/diagnostic block (dock tab ⓘ) | `ReportEventMeta` via `usePanelTechnicalMetaVisibility` | Tab ⓘ only | In-memory `__taliaPanelTechnicalMetaVisibility` |
-| **Content** | Primary body (table, chart, map) | `main.talia-report__content`; tables: `.talia-table` | — | — |
+| **Content** | Primary body (table, chart, map) | `main.talia-report__content`; with Snapshot use `talia-report__content--scroll` so only the body scrolls | — | — |
 
 ### Root `<html>` classes (visibility)
 
@@ -124,7 +133,10 @@ Follow **Agency** / **Published Rates** (filters → callout → controls → ac
 
   <div className="talia-report__actions-bar" aria-label="… actions">…</div>
 
-  <main className="talia-report__content">
+  {/* Optional pinned KPIs — sibling above content, never inside the scroll region */}
+  <ReportSnapshot items={[…]} />
+
+  <main className="talia-report__content talia-report__content--scroll">
     <div ref={tableRef} className="talia-table" role="grid" />
     {/* Optional secondary details only — never wrap the primary table/chart */}
     <ReportDataDetails visible={showDetails} as="section">
@@ -138,6 +150,7 @@ Follow **Agency** / **Published Rates** (filters → callout → controls → ac
 - Put **Talia filters** in their own row — never mix into the title block (except legacy panels not yet migrated).
 - Put **Controls** (Expand/Collapse, group toggles) in `.talia-report__controls` — toggled with global **Operations**.
 - Put **Actions** (Refresh, Export) in `.talia-report__actions-bar` — toggled with global **Operations**.
+- Put **Snapshot** KPIs in `ReportSnapshot` / `.talia-report__snapshot` as a sibling **above** `main` — do not place them inside scrollable content. Pair with `talia-report__content--scroll`.
 - **Column filters** need no panel markup; set `headerFilter` on Tabulator columns.
 - Gate **secondary detail blocks** with `ReportDataDetails` when the panel has header **Details** (≣) content (history, editors, extra tables). Do **not** wrap the primary table/chart — that destroys one-shot Tabulator/chart instances when Details is toggled off.
 - Do **not** use header ≣ for technical meta; do **not** use tab ⓘ for user data tables.
@@ -151,7 +164,8 @@ When reviewing active report panels (`showInReports: true` in `registry.js`):
 3. Panel criteria inputs live in `.talia-report-filters` — not mixed with controls or actions.
 4. View-mode / expand toggles live in `.talia-report__controls` with `talia-btn talia-btn--secondary`.
 5. Refresh / export live in `.talia-report__actions-bar`.
-6. Primary body in `main.talia-report__content` (always mounted). Use `ReportDataDetails` only for secondary Details (≣) blocks.
+6. KPI strips use `ReportSnapshot` / `.talia-report__snapshot` as a sibling **above** `main` (not inside scrollable content), with `talia-report__content--scroll` on the body.
+7. Primary body in `main.talia-report__content` (always mounted). Use `ReportDataDetails` only for secondary Details (≣) blocks.
 
 Events: `components/dockview/eventConstants.js` (`DASHBOARD_FILTER_VISIBILITY_EVENT`, `DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT`, `DASHBOARD_DETAILS_VISIBILITY_EVENT`, `REPORT_PANEL_TECHNICAL_META_EVENT`).
 
@@ -188,6 +202,7 @@ return <div className="my-component">Content</div>;
 - For focus panel reports, prefer `useTableDataWithContext` and container/presenter separation.
 - Standardize loading/error/empty handling via shared wrappers (for example `PanelDataState`) where possible.
 - Pass `panelInstanceId` and `panelComponentId` through containers/hooks so panel-scoped refresh/diagnostics remain generic.
+- **Keep content while refreshing:** do not swap the panel for a spinner when prior data exists (`if (loading && !data)` / `PanelDataState` with `empty`). ReportShell greys the panel via `useReportPanelLoading` + `talia-report-shell--loading`. Spinner only on initial empty load.
 
 ### Apollo Client (GraphQL, When Needed)
 
@@ -490,6 +505,27 @@ const BadComponent = () => {
   );
 };
 ```
+
+## Booked composition (FIT / Group)
+
+Global StatusBar criterion `bookedComposition` (`window.__taliaGlobalCriteria.bookedComposition`) defines how FIT vs Group is reported. Subscribe with `useGlobalBookedComposition`. Helpers live in `lib/bookedComposition.js`.
+
+| Mode | Meaning |
+|------|---------|
+| `booked_only` | FIT = `pax_type` F · Group = `pax_type` G |
+| `three_way` | FIT · Group booked · Group held (GTY × source probability) |
+| `group_fit_expected` (**default**) | FIT booked · Group = G booked + GTY held expected |
+
+Do not invent Talia group probabilities yet — use `ship_inventory_alloc.probability` via `resolveGroupHoldProbability`. Cabin Deck ownership highlighting is a separate concept.
+
+## Dense row hover previews
+
+Use shared `HoverPreview` (portal chrome) + a panel-specific dense summary component (e.g. `DistributionSummary`, `ReservationHoverSummary`).
+
+- **Precompute** indexes in the container (`useMemo`) when sail/table data loads — never aggregate inside `rowMouseEnter`.
+- Presenter keeps the index in a **ref** for hot Tabulator handlers; hover state stores only `{ id, rect }`.
+- Clip row rects with `clipAnchorRectToViewport` so wide Tabulator rows do not park the preview off-screen.
+- Prefer Appearance **Hover Preview Delay / Opacity** (ThemeContext) for timing and transparency; drop native `title` tooltips on the same rows to avoid doubles.
 
 ## Summary
 

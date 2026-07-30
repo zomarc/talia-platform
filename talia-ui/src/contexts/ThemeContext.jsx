@@ -120,6 +120,20 @@ const normalizeSidebarAutoCloseMs = (value, fallback = 8000) => {
   return Math.min(60000, Math.max(1000, Math.round(parsed)));
 };
 
+/** Delay before dense HoverPreview cards appear (ms). */
+const normalizeHoverPreviewDelayMs = (value, fallback = 10) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(1000, Math.max(0, Math.round(parsed)));
+};
+
+/** Opacity of dense HoverPreview cards (0–100). */
+const normalizeHoverPreviewOpacity = (value, fallback = 88) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(100, Math.max(20, Math.round(parsed)));
+};
+
 const normalizeSidebarDisplayMode = (value, fallback = 'panel') => (
   value === 'overlay' ? 'overlay' : fallback
 );
@@ -236,6 +250,12 @@ export const ThemeProvider = ({ children }) => {
   const [menuDisappearMs, setMenuDisappearMs] = useState(
     normalizeMenuDisappearMs(undefined, 5000)
   );
+  const [hoverPreviewDelayMs, setHoverPreviewDelayMs] = useState(
+    normalizeHoverPreviewDelayMs(undefined, 10)
+  );
+  const [hoverPreviewOpacity, setHoverPreviewOpacity] = useState(
+    normalizeHoverPreviewOpacity(undefined, 88)
+  );
   const [sidebarAutoCloseEnabled, setSidebarAutoCloseEnabled] = useState(false);
   const [sidebarAutoCloseMs, setSidebarAutoCloseMs] = useState(
     normalizeSidebarAutoCloseMs(undefined, 8000)
@@ -244,6 +264,7 @@ export const ThemeProvider = ({ children }) => {
     normalizeSidebarDisplayMode(undefined, 'panel')
   );
   const [calloutsVisible, setCalloutsVisible] = useState(false);
+  const [chartLegendsVisible, setChartLegendsVisible] = useState(true);
   const [gameSoundEnabled, setGameSoundEnabled] = useState(true);
   const [defaultDisplayCurrency, setDefaultDisplayCurrencyState] = useState(() =>
     normalizeDefaultDisplayCurrency(undefined, inferLocaleDefaultCurrency())
@@ -358,17 +379,20 @@ export const ThemeProvider = ({ children }) => {
     actionsVisible,
     controlsVisible,
     menuDisappearMs,
+    hoverPreviewDelayMs,
+    hoverPreviewOpacity,
     sidebarAutoCloseEnabled,
     sidebarAutoCloseMs,
     sidebarDisplayMode,
     calloutsVisible,
+    chartLegendsVisible,
     gameSoundEnabled,
     defaultDisplayCurrency,
     tableLayoutMode,
     headerLogoUrl,
     headerLogoVisible,
     customBackgroundHex,
-  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, defaultDisplayCurrency, tableLayoutMode, headerLogoUrl, headerLogoVisible, customBackgroundHex]);
+  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, hoverPreviewDelayMs, hoverPreviewOpacity, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, chartLegendsVisible, gameSoundEnabled, defaultDisplayCurrency, tableLayoutMode, headerLogoUrl, headerLogoVisible, customBackgroundHex]);
 
   const applyAppearanceSettings = (settings) => {
     if (!settings || typeof settings !== 'object') return false;
@@ -430,6 +454,12 @@ export const ThemeProvider = ({ children }) => {
     if (Object.prototype.hasOwnProperty.call(settings, 'menuDisappearMs')) {
       setMenuDisappearMs(normalizeMenuDisappearMs(settings.menuDisappearMs, 5000));
     }
+    if (Object.prototype.hasOwnProperty.call(settings, 'hoverPreviewDelayMs')) {
+      setHoverPreviewDelayMs(normalizeHoverPreviewDelayMs(settings.hoverPreviewDelayMs, 10));
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'hoverPreviewOpacity')) {
+      setHoverPreviewOpacity(normalizeHoverPreviewOpacity(settings.hoverPreviewOpacity, 88));
+    }
     if (Object.prototype.hasOwnProperty.call(settings, 'sidebarAutoCloseEnabled')) {
       setSidebarAutoCloseEnabled(settings.sidebarAutoCloseEnabled === true);
     }
@@ -441,6 +471,9 @@ export const ThemeProvider = ({ children }) => {
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'calloutsVisible')) {
       setCalloutsVisible(settings.calloutsVisible === true);
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'chartLegendsVisible')) {
+      setChartLegendsVisible(settings.chartLegendsVisible !== false);
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'gameSoundEnabled')) {
       setGameSoundEnabled(settings.gameSoundEnabled !== false);
@@ -539,10 +572,13 @@ export const ThemeProvider = ({ children }) => {
     setActionsVisible(true);
     setControlsVisible(true);
     setMenuDisappearMs(normalizeMenuDisappearMs(undefined, 5000));
+    setHoverPreviewDelayMs(normalizeHoverPreviewDelayMs(undefined, 10));
+    setHoverPreviewOpacity(normalizeHoverPreviewOpacity(undefined, 88));
     setSidebarAutoCloseEnabled(false);
     setSidebarAutoCloseMs(normalizeSidebarAutoCloseMs(undefined, 8000));
     setSidebarDisplayMode(normalizeSidebarDisplayMode(undefined, 'panel'));
     setCalloutsVisible(false);
+    setChartLegendsVisible(true);
     setGameSoundEnabled(true);
     setDefaultDisplayCurrencyState(normalizeDefaultDisplayCurrency(undefined, inferLocaleDefaultCurrency()));
     setTableLayoutModeState('best');
@@ -826,7 +862,7 @@ export const ThemeProvider = ({ children }) => {
         clearTimeout(saveSettingsTimerRef.current);
       }
     };
-  }, [appearanceDbLoaded, appearanceUserId, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, customBackgroundHex, headerLogoUrl, headerLogoVisible, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, gameSoundEnabled, defaultDisplayCurrency, tableLayoutMode, activeAppearanceProfileId]);
+  }, [appearanceDbLoaded, appearanceUserId, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, customBackgroundHex, headerLogoUrl, headerLogoVisible, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, hoverPreviewDelayMs, hoverPreviewOpacity, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, chartLegendsVisible, gameSoundEnabled, defaultDisplayCurrency, tableLayoutMode, activeAppearanceProfileId]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -900,6 +936,13 @@ export const ThemeProvider = ({ children }) => {
     publishDashboardGlobalConfig({ calloutsVisible: calloutsVisible === true }, { dispatchLegacy: false });
   }, [calloutsVisible]);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('talia-chart-legends-hidden', chartLegendsVisible === false);
+    window.__taliaChartLegendsVisible = chartLegendsVisible !== false;
+    publishDashboardGlobalConfig({ chartLegendsVisible: chartLegendsVisible !== false }, { dispatchLegacy: false });
+  }, [chartLegendsVisible]);
+
   // Update CSS variables when font/appearance settings change
   useEffect(() => {
     const root = document.documentElement;
@@ -962,6 +1005,14 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-side-panel-width', scaledPx(300, 220));
     root.style.setProperty('--theme-report-card-min-track', scaledPx(240, 160));
     root.style.setProperty('--theme-auto-disappear-ms', `${normalizeMenuDisappearMs(menuDisappearMs, 5000)}ms`);
+    root.style.setProperty(
+      '--theme-hover-preview-opacity',
+      String(normalizeHoverPreviewOpacity(hoverPreviewOpacity, 88) / 100)
+    );
+    root.style.setProperty(
+      '--theme-hover-preview-delay-ms',
+      `${normalizeHoverPreviewDelayMs(hoverPreviewDelayMs, 10)}ms`
+    );
 
     const uiTheme = mergedTaliaUiThemes[bgColor] || mergedTaliaUiThemes.midnight;
     const customBgRgb = (() => {
@@ -1148,7 +1199,7 @@ export const ThemeProvider = ({ children }) => {
     // Re-sync Chart.js globals with current CSS variables
     initChartDefaults();
 
-  }, [fontSize, selectedFont, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor, customBackgroundHex, menuDisappearMs, mergedTaliaUiThemes]);
+  }, [fontSize, selectedFont, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor, customBackgroundHex, menuDisappearMs, hoverPreviewDelayMs, hoverPreviewOpacity, mergedTaliaUiThemes]);
 
   const applyAppearanceStyleSelectKey = (rawNext) => {
     const key =
@@ -1245,6 +1296,10 @@ export const ThemeProvider = ({ children }) => {
     setControlsVisible,
     menuDisappearMs,
     setMenuDisappearMs,
+    hoverPreviewDelayMs,
+    setHoverPreviewDelayMs,
+    hoverPreviewOpacity,
+    setHoverPreviewOpacity,
     sidebarAutoCloseEnabled,
     setSidebarAutoCloseEnabled,
     sidebarAutoCloseMs,
@@ -1253,6 +1308,8 @@ export const ThemeProvider = ({ children }) => {
     setSidebarDisplayMode,
     calloutsVisible,
     setCalloutsVisible,
+    chartLegendsVisible,
+    setChartLegendsVisible,
     gameSoundEnabled,
     setGameSoundEnabled,
     defaultDisplayCurrency,

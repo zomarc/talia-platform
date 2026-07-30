@@ -82,6 +82,82 @@
   background: var(--theme-bg-elevated);
 }
 
+/* Pinned KPI strip — sibling above scrollable talia-report__content */
+.talia-report__snapshot {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 12px 10px;
+}
+
+.talia-report__snapshot-title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--theme-fg);
+  line-height: 1.3;
+}
+
+.talia-report__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  background: var(--theme-glass);
+}
+
+.talia-report__metric {
+  min-width: 0;
+  gap: 2px;
+}
+
+.talia-report__metric .talia-metric__label {
+  font-size: 10px;
+}
+
+.talia-report__metric .talia-metric__value {
+  font-size: 1.15rem;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.talia-report__metric .talia-metric__change {
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.talia-report__metric--concern {
+  background: color-mix(in srgb, var(--theme-delta-negative, #f44336) 14%, transparent);
+  border-radius: 4px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+}
+
+.talia-report__snapshot-trend {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.65em;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.talia-report__snapshot-trend--up {
+  color: var(--theme-delta-positive);
+}
+
+.talia-report__snapshot-trend--down {
+  color: var(--theme-delta-negative);
+}
+
+/* Scrollable body when Snapshot (or other pinned chrome) sits above content */
+.talia-report__content--scroll {
+  overflow: auto !important;
+}
+
 .talia-report__controls {
   display: flex;
   align-items: center;
@@ -172,14 +248,44 @@
   display: none !important;
 }
 
+/* Compact HTML chart legends (non-Chart.js) — hide via global Legends toggle */
+.talia-chart-legends-hidden .talia-chart-legend,
+.talia-chart-legends-hidden .demand-heatmap__legend,
+.talia-chart-legends-hidden .cabin-deck__legend,
+.talia-chart-legends-hidden .cabin-deck__legend-list,
+.talia-chart-legends-hidden .published-rates-grid__legend {
+  display: none !important;
+}
+
+.talia-chart-legend {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  max-width: min(72%, 320px);
+  max-height: 72px;
+  overflow: auto;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--theme-border);
+  background: color-mix(in srgb, var(--theme-bg-solid, var(--theme-bg)) 78%, transparent);
+  backdrop-filter: blur(4px);
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--theme-text-muted, var(--theme-fg));
+  pointer-events: none;
+}
+
 .talia-actions-hidden .talia-report__actions-bar,
 .talia-actions-hidden .talia-report__actions:not(.talia-report-filters) {
   display: none !important;
 }
 
-.talia-controls-hidden .talia-report__controls,
-/* Hide global criteria only — focus/visibility header strips stay independently toggleable. */
-.talia-controls-hidden .status-bar__criteria:not(.status-bar__criteria--visibility):not(.status-bar__criteria--focus) {
+/* Panel operation controls only — StatusBar criteria/focus/visibility have their own header toggles. */
+.talia-controls-hidden .talia-report__controls {
   display: none !important;
 }
 
@@ -1517,6 +1623,23 @@
 .talia-tooltip__bubble--bottom-left {
   top: calc(100% + 6px);
   left: 0;
+}
+
+.talia-hover-preview {
+  position: fixed;
+  z-index: 1200;
+  max-width: min(360px, calc(100vw - 16px));
+  padding: 0;
+  border-radius: var(--theme-radius-sm, 6px);
+  border: 1px solid color-mix(in srgb, var(--theme-accent, #4da3ff) 45%, var(--theme-border));
+  background: color-mix(in srgb, var(--theme-bg-elevated, #1a2332) 98%, #000);
+  color: var(--theme-fg);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--theme-fg) 8%, transparent),
+    0 12px 28px rgba(0, 0, 0, 0.45),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  opacity: var(--theme-hover-preview-opacity, 0.88);
 }
 
 .talia-event-meta__flow-segment--event {

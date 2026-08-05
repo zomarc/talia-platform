@@ -1,6 +1,7 @@
 import {
   buildCabinDeckInventoryBundle,
   filterAllocationsForSailing,
+  findCabinItemForReservation,
   inferDeckFromCabinNumber,
 } from './cabinDeckInventoryTransform.js';
 import {
@@ -185,5 +186,67 @@ const placed = fitExpected.decks[0].categories
   .find((c) => c.is_gty_fit);
 assert(placed?.allocation_id === 3, 'expected places higher probability hold');
 assert(placed?.status_key === 'gty-fit', 'placed chip is gty-fit');
+
+const resBundle = {
+  decks: [
+    {
+      deck: 8,
+      categories: [
+        {
+          category: 'IA',
+          cabins: [
+            {
+              cabin_number: '8001',
+              allocation_owner_type: 'FIT',
+              allocation_owner_id: 1001,
+              status_key: 'fit',
+            },
+            {
+              cabin_number: '8002',
+              allocation_owner_type: 'GROUP',
+              allocation_owner_id: 55,
+              dlgt_res_id: 2002,
+              status_key: 'group',
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  gtyHolds: [
+    {
+      category: 'IB',
+      items: [
+        {
+          allocation_owner_type: 'FIT',
+          allocation_owner_id: 3003,
+          status_key: 'gty',
+          cabin_category: 'IB',
+        },
+      ],
+    },
+  ],
+};
+
+assert(
+  findCabinItemForReservation(resBundle, { res_id: 1001 })?.cabin_number === '8001',
+  'FIT owner id maps to cabin'
+);
+assert(
+  findCabinItemForReservation(resBundle, { res_id: 2002 })?.cabin_number === '8002',
+  'group delegate res maps to cabin'
+);
+assert(
+  findCabinItemForReservation(resBundle, { cabin_number: '8001' })?.allocation_owner_id === 1001,
+  'cabin_number fallback'
+);
+assert(
+  findCabinItemForReservation(resBundle, { res_id: 3003 })?.allocation_owner_id === 3003,
+  'GTY hold by owner id (grouped gtyHolds)'
+);
+assert(
+  findCabinItemForReservation(resBundle, { res_id: 9999 }) == null,
+  'unknown reservation yields null'
+);
 
 console.log('cabinDeckInventoryTransform.test.mjs: ok');

@@ -10,7 +10,7 @@
  */
 
 import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react';
-import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions, captureTableScroll } from '../../../lib/tabulatorConfig';
 import { afterTabulatorDataRefresh } from '../../../hooks/useTabulatorLayoutSync';
 import { formatDayMon, formatSailDateRange } from '../../../lib/dateFormat';
 import { clipAnchorRectToViewport } from '../../../lib/clipAnchorRect';
@@ -21,6 +21,7 @@ import HoverPreview from '../../shared/HoverPreview';
 import ReservationHoverSummary from '../../shared/ReservationHoverSummary';
 import {
   RESERVATION_CLEAR_EVENT,
+  RESERVATION_SELECT_EVENT,
   emitReservationClear,
   emitReservationSelect,
 } from '../../../lib/eventBus';
@@ -205,7 +206,9 @@ const ReservationCurrentStatePresenter = ({
     emitReservationSelect({
       res_id: rowData.res_id,
       sail_code: rowData.sail_code,
+      agency_id: rowData.agency_id ?? null,
       row_data: rowData,
+      source: 'reservation-current-state',
       timestamp: new Date().toISOString(),
     });
   }, []);
@@ -218,6 +221,7 @@ const ReservationCurrentStatePresenter = ({
     if (!table) return;
     suppressSelectionEventsRef.current = true;
     const rows = Array.isArray(dataRef.current) ? dataRef.current : [];
+    const scroll = captureTableScroll(table);
     const refreshPromise = Promise.resolve(table.replaceData(rows))
       .catch((error) => {
         console.warn('[ReservationCurrentState] Error updating data:', error);
@@ -238,7 +242,7 @@ const ReservationCurrentStatePresenter = ({
         }
         suppressSelectionEventsRef.current = false;
       });
-    afterTabulatorDataRefresh(table, refreshPromise);
+    afterTabulatorDataRefresh(table, refreshPromise, scroll);
   };
 
   // Initialize Tabulator once — never rebuild on data identity changes (that raced clear events).
@@ -279,20 +283,29 @@ const ReservationCurrentStatePresenter = ({
           applyTableData(instanceRef.current);
         });
 
-        // Click any cell: select the row. Re-clicking an already-selected row
-        // re-emits select (instead of Tabulator's default toggle-deselect).
+        // Capture selection *before* Tabulator processes the click. Otherwise rowClick
+        // runs after rowSelectionChanged has already selected the row, and we would
+        // immediately deselect (cabin highlight flashes then clears).
+        const rowSelectedBeforePointerRef = { current: false };
+        instanceRef.current.on('rowMouseDown', (_event, row) => {
+          const resId = row?.getData?.()?.res_id;
+          const key = resId != null && resId !== '' ? String(resId) : '';
+          rowSelectedBeforePointerRef.current = Boolean(
+            key
+            && selectedResIdRef.current === key
+            && row.isSelected?.()
+          );
+        });
+
+        // Click: select row. Re-click a row that was already selected: deselect → general view.
         instanceRef.current.on('rowClick', (_event, row) => {
-          const rowData = row?.getData?.();
-          if (!rowData) return;
-          const resId = rowData.res_id != null ? String(rowData.res_id) : '';
-          const alreadySelected = selectedResIdRef.current && resId
-            && selectedResIdRef.current === resId
-            && row.isSelected?.();
-          if (alreadySelected) {
-            emitSelectFromRowData(rowData);
+          if (rowSelectedBeforePointerRef.current) {
+            try { row?.deselect?.(); } catch { /* noop */ }
             return;
           }
-          try { row?.select?.(); } catch { /* noop */ }
+          try {
+            if (!row?.isSelected?.()) row?.select?.();
+          } catch { /* noop */ }
         });
 
         instanceRef.current.on('rowSelectionChanged', (selectedData) => {
@@ -303,7 +316,11 @@ const ReservationCurrentStatePresenter = ({
             return;
           }
           selectedResIdRef.current = null;
-          emitReservationClear({ timestamp: new Date().toISOString() });
+          emitReservationClear({
+            reason: 'reservation-cleared',
+            source: 'reservation-current-state',
+            timestamp: new Date().toISOString(),
+          });
         });
 
         instanceRef.current.on('rowMouseEnter', (_event, row) => {
@@ -347,6 +364,68 @@ const ReservationCurrentStatePresenter = ({
       }
     };
   }, [columns, panelComponentId]);
+
+  // Keep row selection in sync when cabin (or another panel) drives reservation select/clear.
+  useEffect(() => {
+    const selectRowByResId = (resId) => {
+      const table = instanceRef.current;
+      if (!table || !tableBuiltRef.current) return;
+      const key = resId != null && String(resId).trim() !== '' ? String(resId).trim() : null;
+      if (!key) return;
+      if (selectedResIdRef.current === key) {
+        // Already selected locally — ensure Tabulator selection matches.
+      }
+      selectedResIdRef.current = key;
+      suppressSelectionEventsRef.current = true;
+      try {
+        const rows = table.getRows?.() || [];
+        const match = rows.find((row) => String(row.getData?.()?.res_id ?? '') === key);
+        rows.forEach((row) => {
+          try {
+            if (row === match) row.select?.();
+            else if (row.isSelected?.()) row.deselect?.();
+          } catch { /* noop */ }
+        });
+      } finally {
+        suppressSelectionEventsRef.current = false;
+      }
+    };
+
+    const clearRowSelection = () => {
+      const table = instanceRef.current;
+      selectedResIdRef.current = null;
+      if (!table || !tableBuiltRef.current) return;
+      suppressSelectionEventsRef.current = true;
+      try {
+        (table.getSelectedRows?.() || []).forEach((row) => {
+          try { row.deselect?.(); } catch { /* noop */ }
+        });
+      } finally {
+        suppressSelectionEventsRef.current = false;
+      }
+    };
+
+    const onReservationSelect = (event) => {
+      const detail = event?.detail || {};
+      // Ignore our own emits — rowSelectionChanged already updated selection.
+      if (detail.source === 'reservation-current-state') return;
+      const resId = detail.res_id ?? detail.row_data?.res_id ?? null;
+      selectRowByResId(resId);
+    };
+
+    const onReservationClear = (event) => {
+      const detail = event?.detail || {};
+      if (detail.source === 'reservation-current-state') return;
+      clearRowSelection();
+    };
+
+    window.addEventListener(RESERVATION_SELECT_EVENT, onReservationSelect);
+    window.addEventListener(RESERVATION_CLEAR_EVENT, onReservationClear);
+    return () => {
+      window.removeEventListener(RESERVATION_SELECT_EVENT, onReservationSelect);
+      window.removeEventListener(RESERVATION_CLEAR_EVENT, onReservationClear);
+    };
+  }, []);
 
   // Replace data without destroying the table; suppress clear events during refresh.
   useEffect(() => {

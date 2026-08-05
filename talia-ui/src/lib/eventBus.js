@@ -13,26 +13,62 @@ export const CABIN_CLEAR_EVENT = 'talia:cabin.clear';
 export const RESERVATION_SELECT_EVENT = 'talia:reservation.select';
 export const RESERVATION_CLEAR_EVENT = 'talia:reservation.clear';
 
+const resolveSelectionIdentity = (detail) => {
+  if (detail == null) return null;
+  if (typeof detail === 'string') {
+    const text = detail.trim();
+    return text || null;
+  }
+  if (typeof detail !== 'object') return null;
+  const row = detail.row_data && typeof detail.row_data === 'object' ? detail.row_data : {};
+  const candidate = detail.reference_sail_code
+    || detail.sail_code
+    || detail.Sail_Code
+    || row.reference_sail_code
+    || row.sail_code
+    || row.Sail_Code
+    || detail.ship_code
+    || detail.Ship_Code
+    || row.ship_code
+    || row.Ship_Code
+    || null;
+  if (candidate == null || candidate === '') return null;
+  return String(candidate).trim() || null;
+};
+
 /**
  * Dispatch a selection event after translating it through the canonical
  * inventory_item layer. Every sail/ship selection carries reference_sail_code,
  * ship_code, ship_name, sail_codes[] and a canonical_scope for listeners.
  * If the index is not primed yet, we dispatch immediately and re-dispatch once
  * the translation becomes available (so no click is ever dropped).
+ * Late enrichment must not overwrite a newer selection that arrived meanwhile.
  */
 const dispatchCanonicalSelection = (type, rawDetail, lastEventKey) => {
   const detail = enrichSelectionDetail(rawDetail);
+  const emitIdentity = resolveSelectionIdentity(rawDetail) || resolveSelectionIdentity(detail);
   window[lastEventKey] = { type, detail };
   window.dispatchEvent(new CustomEvent(type, { detail }));
 
   if (!isInventoryIndexReady()) {
     ensureInventoryIndex()
       .then(() => {
+        const current = window[lastEventKey]?.detail;
+        const currentIdentity = resolveSelectionIdentity(current);
+        // Drop stale enrichment if the user already selected something else.
+        if (emitIdentity && currentIdentity && emitIdentity !== currentIdentity) {
+          return;
+        }
         const enriched = enrichSelectionDetail(rawDetail);
         const gainedScope = enriched?.canonical_scope
           && (enriched.ship_code !== detail?.ship_code
             || enriched.reference_sail_code !== detail?.reference_sail_code);
         if (gainedScope) {
+          // Re-check after enrich — another select may have won the race.
+          const latestIdentity = resolveSelectionIdentity(window[lastEventKey]?.detail);
+          if (emitIdentity && latestIdentity && emitIdentity !== latestIdentity) {
+            return;
+          }
           window[lastEventKey] = { type, detail: enriched };
           window.dispatchEvent(new CustomEvent(type, { detail: enriched }));
         }
@@ -115,8 +151,32 @@ export const emitReservationSelect = (detail) => {
 
 export const emitReservationClear = (detail = {}) => {
   try {
+    const reason = detail?.reason || 'reservation-cleared';
+    const timestamp = detail?.timestamp || new Date().toISOString();
     window.lastReservationSelectEvent = null;
-    window.dispatchEvent(new CustomEvent(RESERVATION_CLEAR_EVENT, { detail }));
+    window.dispatchEvent(new CustomEvent(RESERVATION_CLEAR_EVENT, {
+      detail: { ...detail, reason, timestamp },
+    }));
+
+    // Booking deselect → sail-scoped agency view (and drop explorer focus).
+    emitAgencyClear({ reason, timestamp });
+
+    // Primary booking clear also drops cabin focus so CDI / DA revert.
+    // Skip when cabin or sail already owns the cascade (avoids loops).
+    if (
+      reason === 'cabin-cleared'
+      || reason === 'cabin-select-no-res'
+      || reason === 'sail-scope-changed'
+    ) {
+      return;
+    }
+    if (window.lastCabinSelectEvent) {
+      emitCabinClear({
+        reason: 'reservation-cleared',
+        timestamp,
+        source: detail?.source || null,
+      });
+    }
   } catch (error) {
     console.warn('[eventBus] emitReservationClear failed', error);
   }
@@ -134,9 +194,19 @@ const clearReservationForSailScopeChange = () => {
   });
 };
 
+/** Sail scope change also drops cabin selection (CDI / Direct Availability). */
+const clearCabinForSailScopeChange = () => {
+  if (!window.lastCabinSelectEvent) return;
+  emitCabinClear({
+    reason: 'sail-scope-changed',
+    timestamp: new Date().toISOString(),
+  });
+};
+
 export const emitSailSelect = (detail) => {
   try {
     clearReservationForSailScopeChange();
+    clearCabinForSailScopeChange();
     // Translate through inventory_item, persist for late listeners, then dispatch.
     dispatchCanonicalSelection(SAIL_SELECT_EVENT, detail, 'lastSailSelectEvent');
   } catch (error) {
@@ -147,6 +217,7 @@ export const emitSailSelect = (detail) => {
 export const emitSailClear = (detail = {}) => {
   try {
     clearReservationForSailScopeChange();
+    clearCabinForSailScopeChange();
     window.lastSailSelectEvent = null;
     window.dispatchEvent(new CustomEvent(SAIL_CLEAR_EVENT, { detail }));
   } catch (error) {
@@ -156,8 +227,35 @@ export const emitSailClear = (detail = {}) => {
 
 export const emitCabinSelect = (detail) => {
   try {
-    window.lastCabinSelectEvent = { type: CABIN_SELECT_EVENT, detail };
-    window.dispatchEvent(new CustomEvent(CABIN_SELECT_EVENT, { detail }));
+    const payload = detail && typeof detail === 'object' ? detail : {};
+    window.lastCabinSelectEvent = { type: CABIN_SELECT_EVENT, detail: payload };
+    window.dispatchEvent(new CustomEvent(CABIN_SELECT_EVENT, { detail: payload }));
+
+    // FIT cabin with a reservation id → narrow reservation (Agency / RCS).
+    const resId = payload.res_id ?? payload.dlgt_res_id ?? payload.row_data?.res_id ?? null;
+    if (resId != null && String(resId).trim() !== '') {
+      emitReservationSelect({
+        res_id: resId,
+        agency_id: payload.agency_id ?? payload.row_data?.agency_id ?? null,
+        cabin_number: payload.cabin_number ?? null,
+        row_data: {
+          ...(payload.row_data && typeof payload.row_data === 'object' ? payload.row_data : {}),
+          res_id: resId,
+          agency_id: payload.agency_id ?? payload.row_data?.agency_id ?? null,
+        },
+        reason: 'cabin-select',
+        timestamp: payload.timestamp || new Date().toISOString(),
+      });
+      return;
+    }
+
+    // GTY / empty cabin — drop any reservation narrow so reports return to sail scope.
+    if (window.lastReservationSelectEvent) {
+      emitReservationClear({
+        reason: 'cabin-select-no-res',
+        timestamp: new Date().toISOString(),
+      });
+    }
   } catch (error) {
     console.warn('[eventBus] emitCabinSelect failed', error);
   }
@@ -165,8 +263,19 @@ export const emitCabinSelect = (detail) => {
 
 export const emitCabinClear = (detail = {}) => {
   try {
+    const reason = detail?.reason || 'cabin-cleared';
+    const timestamp = detail?.timestamp || new Date().toISOString();
     window.lastCabinSelectEvent = null;
-    window.dispatchEvent(new CustomEvent(CABIN_CLEAR_EVENT, { detail }));
+    window.dispatchEvent(new CustomEvent(CABIN_CLEAR_EVENT, { detail: { ...detail, reason, timestamp } }));
+
+    // Always clear agency explorer highlight driven by cabin focus.
+    emitAgencyClear({ reason, timestamp });
+
+    // Sail / reservation already cleared the booking; avoid a second clear loop.
+    if (reason === 'sail-scope-changed' || reason === 'reservation-cleared') return;
+    if (window.lastReservationSelectEvent) {
+      emitReservationClear({ reason: 'cabin-cleared', timestamp });
+    }
   } catch (error) {
     console.warn('[eventBus] emitCabinClear failed', error);
   }

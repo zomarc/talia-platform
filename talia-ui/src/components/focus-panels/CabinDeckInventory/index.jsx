@@ -109,10 +109,14 @@ const CabinDeckInventoryContainer = ({ panelInstanceId, panelComponentId }) => {
   const hasSailSelection = Boolean(sailContext) && Boolean(shipCode);
   const allocReady = hasSailSelection && Boolean(sailDateFrom);
 
+  // Stay on the bus (no enabled toggle). Null mapper ⇒ wait; sail_date_from from event or master_sail.
   const mapAllocFilters = useMemo(() => (
     (detail) => {
-      const ship = detail?.canonical_scope?.ship_code || detail?.ship_code || null;
-      const date = sailDateFrom || resolveSailDateFromDetail(detail);
+      const ship = detail?.canonical_scope?.ship_code
+        || detail?.ship_code
+        || detail?.row_data?.ship_code
+        || null;
+      const date = resolveSailDateFromDetail(detail) || sailDateFrom;
       if (!ship || !date) return null;
       return {
         ship_code: String(ship).trim(),
@@ -134,7 +138,6 @@ const CabinDeckInventoryContainer = ({ panelInstanceId, panelComponentId }) => {
     panelComponentId,
     contextMapper: mapAllocFilters,
     fetchWithoutContext: false,
-    enabled: allocReady,
     limit: ALLOC_LIMIT,
   });
 

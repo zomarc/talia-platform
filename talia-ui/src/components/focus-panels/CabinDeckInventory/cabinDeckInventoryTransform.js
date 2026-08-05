@@ -7,6 +7,7 @@
 import {
   describeOwner,
   hasAssignedCabin,
+  isFitOwner,
   isGtyOnly,
   isGroupOwner,
   resolveAllocationStatus,
@@ -386,10 +387,99 @@ export const buildCabinDeckInventoryBundle = ({
   };
 };
 
+/**
+ * Find a deck/GTY chip that belongs to a reservation selection.
+ * Prefer assigned cabin by FIT owner id / group delegate res; then cabin_number;
+ * then GTY hold by owner id.
+ */
+export const findCabinItemForReservation = (bundle, detail = {}) => {
+  const resId = detail?.res_id ?? detail?.row_data?.res_id ?? null;
+  const resKey = resId != null && String(resId).trim() !== '' ? String(resId).trim() : null;
+  const cabinNumber = String(
+    detail?.cabin_number
+    || detail?.row_data?.cabin_number
+    || detail?.row_data?.Cabin_Number
+    || ''
+  ).trim() || null;
+  const groupId = detail?.group_id ?? detail?.row_data?.group_id ?? null;
+  const groupKey = groupId != null && String(groupId).trim() !== '' ? String(groupId).trim() : null;
+
+  const assigned = [];
+  const gty = [];
+  (bundle?.decks || []).forEach((deck) => {
+    (deck.categories || []).forEach((cat) => {
+      (cat.cabins || []).forEach((item) => {
+        if (item && !item.is_empty) assigned.push(item);
+      });
+    });
+  });
+  // gtyHolds is normally [{ category, items }] (bundle + allocate preview).
+  const pushGtyEntry = (entry) => {
+    if (!entry) return;
+    if (Array.isArray(entry.items)) {
+      entry.items.forEach((item) => {
+        if (item) gty.push(item);
+      });
+      return;
+    }
+    gty.push(entry);
+  };
+  (bundle?.gtyHolds || bundle?.gty_holds || []).forEach(pushGtyEntry);
+  (bundle?.gty_by_category || []).forEach(pushGtyEntry);
+
+  const byResOwner = resKey
+    ? assigned.find((item) => {
+      // FIT / OBJ FIT owner id is the reservation id.
+      if (String(item.allocation_owner_id ?? '').trim() === resKey) {
+        // Prefer FIT owners; still accept exact owner-id match if type is atypical.
+        if (isFitOwner(item.allocation_owner_type) || !isGroupOwner(item.allocation_owner_type)) {
+          return true;
+        }
+      }
+      if (item.dlgt_res_id != null && String(item.dlgt_res_id).trim() === resKey) {
+        return true;
+      }
+      return false;
+    })
+    : null;
+  if (byResOwner) return byResOwner;
+
+  if (cabinNumber) {
+    const byCabin = assigned.find(
+      (item) => String(item.cabin_number || '').trim() === cabinNumber
+    );
+    if (byCabin) return byCabin;
+  }
+
+  if (resKey) {
+    const gtyByRes = gty.find((item) => (
+      String(item.allocation_owner_id ?? '').trim() === resKey
+      || (item.dlgt_res_id != null && String(item.dlgt_res_id).trim() === resKey)
+    ));
+    if (gtyByRes) return gtyByRes;
+  }
+
+  if (groupKey) {
+    const gtyByGroup = gty.find((item) => (
+      isGroupOwner(item.allocation_owner_type)
+      && String(item.allocation_owner_id ?? '').trim() === groupKey
+    ));
+    if (gtyByGroup) return gtyByGroup;
+    const assignedByGroup = assigned.find((item) => (
+      isGroupOwner(item.allocation_owner_type)
+      && String(item.allocation_owner_id ?? '').trim() === groupKey
+    ));
+    if (assignedByGroup) return assignedByGroup;
+  }
+
+  return null;
+};
+
 export default {
   inferDeckFromCabinNumber,
   filterAllocationsForSailing,
   indexShipCabins,
   indexCabinCategoryLinks,
   buildCabinDeckInventoryBundle,
+  findCabinItemForReservation,
 };

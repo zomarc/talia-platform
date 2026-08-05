@@ -1,51 +1,26 @@
 /**
  * Cabin Deck Inventory Presenter — deck/category cabin blocks with ownership highlights.
  * Summary + legend under Details (≣). GTY Allocate is a local concept preview only.
+ * Cabin/GTY detail uses shared HoverPreview (Appearance delay/opacity) + CabinDeckHoverSummary.
  * No customer/PII display.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReportDataDetails from '../../shared/ReportDataDetails';
+import HoverPreview from '../../shared/HoverPreview';
+import CabinDeckHoverSummary from '../../shared/CabinDeckHoverSummary';
 import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import { clipAnchorRectToViewport } from '../../../lib/clipAnchorRect';
 import { ALLOCATE_MODE, allocateGtyPreview } from './cabinDeckAllocate.js';
-import { emitCabinClear, emitCabinSelect } from '../../../lib/eventBus';
+import { findCabinItemForReservation } from './cabinDeckInventoryTransform.js';
+import {
+  emitCabinClear,
+  emitCabinSelect,
+  CABIN_CLEAR_EVENT,
+  RESERVATION_CLEAR_EVENT,
+  RESERVATION_SELECT_EVENT,
+} from '../../../lib/eventBus';
 import { isFitOwner, isGroupOwner } from '../../../lib/shipInventoryAlloc.js';
-
-const DETAIL_PANEL_WIDTH = 280;
-const DETAIL_PANEL_EST_HEIGHT = 320;
-const DETAIL_GAP = 8;
-
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-
-const resolveDetailPosition = (panelRect, chipRect) => {
-  if (!panelRect || !chipRect) {
-    return { top: DETAIL_GAP, left: DETAIL_GAP };
-  }
-  const maxLeft = Math.max(DETAIL_GAP, panelRect.width - DETAIL_PANEL_WIDTH - DETAIL_GAP);
-  const maxTop = Math.max(DETAIL_GAP, panelRect.height - DETAIL_PANEL_EST_HEIGHT - DETAIL_GAP);
-  const chipLeft = chipRect.left - panelRect.left;
-  const chipTop = chipRect.top - panelRect.top;
-  const chipRight = chipRect.right - panelRect.left;
-  const chipBottom = chipRect.bottom - panelRect.top;
-
-  // Prefer to the right of the chip; flip left if near the right edge.
-  let left = chipRight + DETAIL_GAP;
-  if (left > maxLeft) {
-    left = chipLeft - DETAIL_PANEL_WIDTH - DETAIL_GAP;
-  }
-  left = clamp(left, DETAIL_GAP, maxLeft);
-
-  // Prefer aligned to chip top; keep inside panel.
-  const top = clamp(chipTop, DETAIL_GAP, maxTop);
-  // If chip is near bottom and panel would clip, nudge above chip when possible.
-  if (chipBottom + DETAIL_PANEL_EST_HEIGHT > panelRect.height && chipTop > DETAIL_PANEL_EST_HEIGHT) {
-    return {
-      top: clamp(chipBottom - DETAIL_PANEL_EST_HEIGHT, DETAIL_GAP, maxTop),
-      left,
-    };
-  }
-  return { top, left };
-};
 
 const STATUS_LEGEND = [
   { key: 'fit', label: 'FIT', hint: 'res_id owner' },
@@ -118,34 +93,15 @@ const buildCabinSelectDetail = (item, scope = {}) => {
     source: 'cabin-deck-inventory',
   };
 };
-
-const buildDetailRows = (item) => ([
-  { label: 'Cabin', value: item.cabin_number || '— (GTY / unassigned)' },
-  { label: 'Category', value: item.cabin_category || null },
-  {
-    label: 'Link category',
-    value: item.link_cabin_category && item.link_cabin_category !== item.cabin_category
-      ? item.link_cabin_category
-      : null,
-  },
-  { label: 'Deck', value: item.deck_number != null ? String(item.deck_number) : 'Unknown' },
-  { label: 'Deck source', value: item.deck_source || null },
-  { label: 'Status', value: item.status_label || null },
-  { label: 'Owner', value: item.is_empty ? 'Empty / available' : (item.owner_label || null) },
-  { label: 'Owner type', value: item.allocation_owner_type || null },
-  { label: 'Owner id', value: item.allocation_owner_id != null ? String(item.allocation_owner_id) : null },
-  { label: 'Probability', value: item.probability != null ? `${item.probability}%` : null },
-  { label: 'Delegate res', value: item.dlgt_res_id != null ? String(item.dlgt_res_id) : null },
-  { label: 'Missing delegate', value: item.missing_dlgt ? 'Yes' : null },
-  { label: 'GTY fit preview', value: item.is_gty_fit ? 'Yes (local only)' : null },
-  { label: 'Request type', value: item.inventory_request_type || null },
-  { label: 'Result type', value: item.inventory_result_type || null },
-  { label: 'Occupancy', value: item.occupancy != null ? String(item.occupancy) : null },
-  { label: 'Price category', value: item.price_category || null },
-  { label: 'Allocation id', value: item.allocation_id != null ? String(item.allocation_id) : null },
-].filter((row) => row.value != null && String(row.value).trim() !== ''));
-
-const CabinChip = ({ item, compact, selected = false, onSelect }) => (
+const CabinChip = ({
+  item,
+  compact,
+  selected = false,
+  itemKey = null,
+  onSelect,
+  onHoverStart,
+  onHoverEnd,
+}) => (
   <button
     type="button"
     className={[
@@ -156,7 +112,20 @@ const CabinChip = ({ item, compact, selected = false, onSelect }) => (
       selected ? 'cabin-deck__chip--selected' : '',
     ].filter(Boolean).join(' ')}
     style={probabilityStyle(item)}
+    data-cabin-key={itemKey || undefined}
     aria-pressed={selected}
+    onMouseEnter={(event) => {
+      onHoverStart?.(item, event.currentTarget);
+    }}
+    onMouseLeave={() => {
+      onHoverEnd?.();
+    }}
+    onFocus={(event) => {
+      onHoverStart?.(item, event.currentTarget);
+    }}
+    onBlur={() => {
+      onHoverEnd?.();
+    }}
     onClick={(event) => {
       event.stopPropagation();
       onSelect?.(item, event.currentTarget);
@@ -176,7 +145,15 @@ const CabinChip = ({ item, compact, selected = false, onSelect }) => (
   </button>
 );
 
-const GtyChip = ({ item, compact, selected = false, onSelect }) => (
+const GtyChip = ({
+  item,
+  compact,
+  selected = false,
+  itemKey = null,
+  onSelect,
+  onHoverStart,
+  onHoverEnd,
+}) => (
   <button
     type="button"
     className={[
@@ -187,7 +164,20 @@ const GtyChip = ({ item, compact, selected = false, onSelect }) => (
       selected ? 'cabin-deck__chip--selected' : '',
     ].filter(Boolean).join(' ')}
     style={probabilityStyle(item)}
+    data-cabin-key={itemKey || undefined}
     aria-pressed={selected}
+    onMouseEnter={(event) => {
+      onHoverStart?.(item, event.currentTarget);
+    }}
+    onMouseLeave={() => {
+      onHoverEnd?.();
+    }}
+    onFocus={(event) => {
+      onHoverStart?.(item, event.currentTarget);
+    }}
+    onBlur={() => {
+      onHoverEnd?.();
+    }}
     onClick={(event) => {
       event.stopPropagation();
       onSelect?.(item, event.currentTarget);
@@ -212,6 +202,8 @@ const CategoryRow = ({
   overAlloc = 0,
   selectedKey = null,
   onSelectCabin,
+  onHoverCabinStart,
+  onHoverCabinEnd,
 }) => (
   <div className={`cabin-deck__category ${overAlloc > 0 ? 'cabin-deck__category--over-alloc' : ''}`}>
     <div
@@ -239,8 +231,11 @@ const CategoryRow = ({
           key={`${item.cabin_number}-${item.allocation_id || item.status_key}-${item.is_gty_fit ? 'fit' : 'base'}`}
           item={item}
           compact={compact}
+          itemKey={cabinItemKey(item)}
           selected={selectedKey != null && cabinItemKey(item) === selectedKey}
           onSelect={onSelectCabin}
+          onHoverStart={onHoverCabinStart}
+          onHoverEnd={onHoverCabinEnd}
         />
       ))}
     </div>
@@ -269,16 +264,34 @@ const CabinDeckInventoryPresenter = ({
 }) => {
   const [compactBlocks, setCompactBlocks] = useState(true);
   const [allocateMode, setAllocateMode] = useState(null);
-  const [selectedDetail, setSelectedDetail] = useState(null);
-  const [detailPosition, setDetailPosition] = useState({ top: 8, left: 8 });
+  const [cabinPreview, setCabinPreview] = useState(null);
+  const [selectedCabinKey, setSelectedCabinKey] = useState(null);
+  const [reservationHighlight, setReservationHighlight] = useState(null); // { resId, cabinLabel, missed }
   const panelRef = useRef(null);
-  const detailPanelRef = useRef(null);
-  const pendingChipRectRef = useRef(null);
+  const contentRef = useRef(null);
   const hadCabinSelectionRef = useRef(false);
+  const selectionOriginRef = useRef(null); // 'local' | 'reservation'
+  const reservationDetailRef = useRef(null);
+  const allocateModeRef = useRef(null);
+  const bundleRef = useRef(bundle);
+  const cabinScopeRef = useRef(null);
+  const selectedCabinKeyRef = useRef(null);
+  bundleRef.current = bundle;
+  allocateModeRef.current = allocateMode;
+  selectedCabinKeyRef.current = selectedCabinKey;
   const [showDetails] = usePanelDetailsVisibility({
     panelInstanceId,
     panelComponentId,
   });
+
+  const allocateResult = useMemo(
+    () => (allocateMode && bundle ? allocateGtyPreview(bundle, { mode: allocateMode }) : null),
+    [allocateMode, bundle]
+  );
+
+  const displayBundle = allocateResult || bundle;
+  const displayBundleRef = useRef(displayBundle);
+  displayBundleRef.current = displayBundle;
 
   const cabinScope = {
     referenceSailCode: selectedReferenceSailCode,
@@ -286,101 +299,217 @@ const CabinDeckInventoryPresenter = ({
     shipName,
     sailDateFrom,
   };
+  cabinScopeRef.current = cabinScope;
 
-  const closeCabinDetail = () => {
-    setSelectedDetail(null);
+  const clearCabinSelection = ({ emitClear = true, clearReservationDetail = true } = {}) => {
+    setSelectedCabinKey(null);
+    setReservationHighlight(null);
+    if (clearReservationDetail) reservationDetailRef.current = null;
     if (hadCabinSelectionRef.current) {
       hadCabinSelectionRef.current = false;
-      emitCabinClear({
-        sail_code: selectedReferenceSailCode || null,
-        reference_sail_code: selectedReferenceSailCode || null,
-        ship_code: shipCode || null,
-        source: 'cabin-deck-inventory',
-        timestamp: new Date().toISOString(),
-      });
-    }
-  };
-
-  const openCabinDetail = (item, chipEl) => {
-    if (cabinItemKey(item) && cabinItemKey(item) === cabinItemKey(selectedDetail)) {
-      closeCabinDetail();
+      selectionOriginRef.current = null;
+      // User deselect (local or reservation-driven highlight) → cabin.clear cascades to
+      // reservation.clear + agency.clear so linked panels revert to sail scope.
+      if (emitClear) {
+        const scope = cabinScopeRef.current || {};
+        emitCabinClear({
+          sail_code: scope.referenceSailCode || null,
+          reference_sail_code: scope.referenceSailCode || null,
+          ship_code: scope.shipCode || null,
+          source: 'cabin-deck-inventory',
+          timestamp: new Date().toISOString(),
+        });
+      }
       return;
     }
-    const panelRect = panelRef.current?.getBoundingClientRect?.() || null;
-    const chipRect = chipEl?.getBoundingClientRect?.() || null;
-    pendingChipRectRef.current = chipRect;
-    setDetailPosition(resolveDetailPosition(panelRect, chipRect));
-    setSelectedDetail(item);
-    hadCabinSelectionRef.current = true;
-    emitCabinSelect(buildCabinSelectDetail(item, cabinScope));
+    selectionOriginRef.current = null;
   };
 
-  useEffect(() => {
-    if (!selectedDetail || !detailPanelRef.current || !panelRef.current) return undefined;
-    const panelRect = panelRef.current.getBoundingClientRect();
-    const chipRect = pendingChipRectRef.current;
-    if (!chipRect) return undefined;
-    const detailRect = detailPanelRef.current.getBoundingClientRect();
-    const maxLeft = Math.max(DETAIL_GAP, panelRect.width - detailRect.width - DETAIL_GAP);
-    const maxTop = Math.max(DETAIL_GAP, panelRect.height - detailRect.height - DETAIL_GAP);
-    const chipLeft = chipRect.left - panelRect.left;
-    const chipTop = chipRect.top - panelRect.top;
-    const chipRight = chipRect.right - panelRect.left;
-    let left = chipRight + DETAIL_GAP;
-    if (left > maxLeft) left = chipLeft - detailRect.width - DETAIL_GAP;
-    left = clamp(left, DETAIL_GAP, maxLeft);
-    const top = clamp(chipTop, DETAIL_GAP, maxTop);
-    setDetailPosition((prev) => (
-      Math.abs(prev.top - top) < 1 && Math.abs(prev.left - left) < 1
-        ? prev
-        : { top, left }
-    ));
-    return undefined;
-  }, [selectedDetail]);
+  const showCabinPreview = (item, chipEl) => {
+    const chipRect = chipEl?.getBoundingClientRect?.() || null;
+    const rect = clipAnchorRectToViewport(chipRect, panelRef.current);
+    if (!rect || rect.width <= 0 || rect.height <= 0) {
+      setCabinPreview(null);
+      return;
+    }
+    setCabinPreview({ item, rect });
+  };
 
+  const hideCabinPreview = () => {
+    setCabinPreview(null);
+  };
+
+  const selectCabin = (item, chipEl) => {
+    const key = cabinItemKey(item);
+    if (key && key === selectedCabinKeyRef.current) {
+      clearCabinSelection({ emitClear: true });
+      hideCabinPreview();
+      return;
+    }
+    showCabinPreview(item, chipEl);
+    setSelectedCabinKey(key);
+    setReservationHighlight(null);
+    hadCabinSelectionRef.current = true;
+    selectionOriginRef.current = 'local';
+    reservationDetailRef.current = null;
+    emitCabinSelect(buildCabinSelectDetail(item, cabinScopeRef.current || {}));
+  };
+
+  const resolveDisplayBundle = () => displayBundleRef.current || bundleRef.current || null;
+
+  const resolveReservationDetail = (detail) => {
+    if (detail && typeof detail === 'object') return detail;
+    const last = window.lastReservationSelectEvent?.detail;
+    if (!last || last.reason === 'cabin-select') return null;
+    return last;
+  };
+
+  const highlightCabinFromReservation = (rawDetail) => {
+    const detail = resolveReservationDetail(rawDetail);
+    if (!detail) {
+      setReservationHighlight(null);
+      return false;
+    }
+    reservationDetailRef.current = detail;
+    const resId = detail.res_id ?? detail.row_data?.res_id ?? null;
+    const resLabel = resId != null && String(resId).trim() !== '' ? String(resId).trim() : null;
+    const activeBundle = resolveDisplayBundle();
+    if (!activeBundle) {
+      // Keep pending — allocations may still be loading.
+      selectionOriginRef.current = 'reservation';
+      setSelectedCabinKey(null);
+      setReservationHighlight(resLabel ? { resId: resLabel, cabinLabel: null, missed: false, pending: true } : null);
+      return false;
+    }
+    const match = findCabinItemForReservation(activeBundle, detail);
+    if (!match) {
+      selectionOriginRef.current = 'reservation';
+      hadCabinSelectionRef.current = false;
+      setSelectedCabinKey(null);
+      setReservationHighlight(resLabel
+        ? { resId: resLabel, cabinLabel: null, missed: true, pending: false }
+        : null);
+      return false;
+    }
+    const key = cabinItemKey(match);
+    setSelectedCabinKey(key);
+    hadCabinSelectionRef.current = true;
+    selectionOriginRef.current = 'reservation';
+    setReservationHighlight({
+      resId: resLabel,
+      cabinLabel: match.cabin_number || (match.is_gty || match.status_key === 'gty' ? 'GTY' : null),
+      missed: false,
+      pending: false,
+    });
+    return true;
+  };
+
+  // Stable bus listeners — do not tear down on sailDateFrom / ship code churn.
+  useEffect(() => {
+    const handleReservationSelect = (event) => {
+      // Ignore reservation selects that we just emitted from a cabin click.
+      if (event?.detail?.reason === 'cabin-select') return;
+      highlightCabinFromReservation(event?.detail || {});
+    };
+    const clearFromBus = () => {
+      clearCabinSelection({ emitClear: false });
+      hideCabinPreview();
+    };
+    const handleReservationClear = () => {
+      clearFromBus();
+    };
+    const handleCabinClear = (event) => {
+      if (event?.detail?.source === 'cabin-deck-inventory') return;
+      clearFromBus();
+    };
+    window.addEventListener(RESERVATION_SELECT_EVENT, handleReservationSelect);
+    window.addEventListener(RESERVATION_CLEAR_EVENT, handleReservationClear);
+    window.addEventListener(CABIN_CLEAR_EVENT, handleCabinClear);
+    // Late join: apply whatever reservation is already on the bus.
+    if (window.lastReservationSelectEvent?.detail?.reason !== 'cabin-select') {
+      highlightCabinFromReservation(window.lastReservationSelectEvent?.detail || null);
+    }
+    return () => {
+      window.removeEventListener(RESERVATION_SELECT_EVENT, handleReservationSelect);
+      window.removeEventListener(RESERVATION_CLEAR_EVENT, handleReservationClear);
+      window.removeEventListener(CABIN_CLEAR_EVENT, handleCabinClear);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only bus subscription
+  }, []);
+
+  // Reset local allocate + cabin selection when sailing identity changes (not date settle).
   useEffect(() => {
     setAllocateMode(null);
-    if (hadCabinSelectionRef.current) {
-      hadCabinSelectionRef.current = false;
-      emitCabinClear({
-        sail_code: selectedReferenceSailCode || null,
-        reference_sail_code: selectedReferenceSailCode || null,
-        ship_code: shipCode || null,
-        source: 'cabin-deck-inventory',
-        timestamp: new Date().toISOString(),
-      });
+    // Sail change already clears cabin/reservation on the bus — only reset local UI.
+    clearCabinSelection({ emitClear: false });
+    hideCabinPreview();
+    if (window.lastReservationSelectEvent?.detail?.reason !== 'cabin-select') {
+      highlightCabinFromReservation(window.lastReservationSelectEvent?.detail || null);
     }
-    setSelectedDetail(null);
-  }, [selectedReferenceSailCode, shipCode, sailDateFrom]);
-
-  useEffect(() => {
-    if (!selectedDetail) return undefined;
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') closeCabinDetail();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedDetail, selectedReferenceSailCode, shipCode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sail/ship identity only
+  }, [selectedReferenceSailCode, shipCode]);
 
   useEffect(() => () => {
     if (!hadCabinSelectionRef.current) return;
+    if (selectionOriginRef.current !== 'local') {
+      hadCabinSelectionRef.current = false;
+      selectionOriginRef.current = null;
+      return;
+    }
     hadCabinSelectionRef.current = false;
+    selectionOriginRef.current = null;
     emitCabinClear({
       source: 'cabin-deck-inventory',
       timestamp: new Date().toISOString(),
     });
   }, []);
 
-  const selectedCabinKey = cabinItemKey(selectedDetail);
+  // Re-apply reservation highlight when deck data / allocate preview becomes available.
+  useEffect(() => {
+    if (selectionOriginRef.current === 'local') return;
+    const detail = reservationDetailRef.current
+      || (window.lastReservationSelectEvent?.detail?.reason === 'cabin-select'
+        ? null
+        : window.lastReservationSelectEvent?.detail);
+    if (!detail) return;
+    highlightCabinFromReservation(detail);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply when inventory payload changes
+  }, [displayBundle, sailDateFrom]);
+
+  useEffect(() => {
+    if (!selectedCabinKey) return undefined;
+    const root = contentRef.current || panelRef.current;
+    if (!root) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const el = root.querySelector?.(
+        `[data-cabin-key="${CSS.escape(selectedCabinKey)}"]`
+      );
+      if (!el) return;
+      // Center in the cabin-deck scroll container (scrollIntoView often pins to edges
+      // when the scrollport is a nested overflow:auto panel, not the window).
+      const scrollParent = el.closest?.('.cabin-deck__content') || root;
+      if (scrollParent && typeof scrollParent.scrollTop === 'number') {
+        const parentRect = scrollParent.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        const elCenterY = elRect.top + (elRect.height / 2);
+        const parentCenterY = parentRect.top + (parentRect.height / 2);
+        const nextTop = scrollParent.scrollTop + (elCenterY - parentCenterY);
+        const maxTop = Math.max(0, scrollParent.scrollHeight - scrollParent.clientHeight);
+        scrollParent.scrollTo({
+          top: Math.max(0, Math.min(maxTop, nextTop)),
+          behavior: 'smooth',
+        });
+        return;
+      }
+      el.scrollIntoView?.({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selectedCabinKey, compactBlocks, allocateMode, displayBundle]);
 
   const scopeLabel = selectedReferenceSailCode
     || (selectedSailCodes.length ? selectedSailCodes.join(', ') : null);
   const summary = bundle?.summary || {};
   const allocateActive = Boolean(allocateMode);
-  const allocateResult = useMemo(
-    () => (allocateMode && bundle ? allocateGtyPreview(bundle, { mode: allocateMode }) : null),
-    [allocateMode, bundle]
-  );
   const decks = allocateResult?.decks || bundle?.decks || [];
   const gtyHolds = allocateResult?.gtyHolds || bundle?.gtyHolds || [];
   const limitWarnings = truncations?.length
@@ -390,7 +519,6 @@ const CabinDeckInventoryPresenter = ({
     && summary.allocation_count === 0
     && (summary.physical_cabin_count || 0) === 0;
   const gtyTotal = summary.gty_count || 0;
-  const detailRows = selectedDetail ? buildDetailRows(selectedDetail) : [];
 
   return (
     <div
@@ -411,6 +539,15 @@ const CabinDeckInventoryPresenter = ({
               ].filter(Boolean).join(' · ')
               : 'Select a sailing in Master Sailing Explorer'}
           </p>
+          {reservationHighlight?.resId ? (
+            <p className={`cabin-deck__reservation-link ${reservationHighlight.missed ? 'cabin-deck__reservation-link--miss' : ''}`}>
+              {reservationHighlight.pending
+                ? `Waiting for cabin inventory for res ${reservationHighlight.resId}…`
+                : reservationHighlight.missed
+                  ? `No cabin allocation found for res ${reservationHighlight.resId}`
+                  : `Res ${reservationHighlight.resId}${reservationHighlight.cabinLabel ? ` → cabin ${reservationHighlight.cabinLabel}` : ''}`}
+            </p>
+          ) : null}
         </div>
       </header>
 
@@ -477,7 +614,7 @@ const CabinDeckInventoryPresenter = ({
         </div>
       )}
 
-      <main className="talia-report__content cabin-deck__content">
+      <main ref={contentRef} className="talia-report__content cabin-deck__content">
         {!hasSailSelection && (
           <p className="focus-panel-empty__detail">No sailing selected.</p>
         )}
@@ -621,8 +758,11 @@ const CabinDeckInventoryPresenter = ({
                           key={`${item.allocation_id || item.allocation_owner_id || index}-${index}`}
                           item={item}
                           compact={compactBlocks}
+                          itemKey={cabinItemKey(item)}
                           selected={selectedCabinKey != null && cabinItemKey(item) === selectedCabinKey}
-                          onSelect={openCabinDetail}
+                          onSelect={selectCabin}
+                          onHoverStart={showCabinPreview}
+                          onHoverEnd={hideCabinPreview}
                         />
                       ))}
                     </div>
@@ -651,7 +791,9 @@ const CabinDeckInventoryPresenter = ({
                       emptyCount={cat.empty_count}
                       overAlloc={cat.over_alloc || 0}
                       selectedKey={selectedCabinKey}
-                      onSelectCabin={openCabinDetail}
+                      onSelectCabin={selectCabin}
+                      onHoverCabinStart={showCabinPreview}
+                      onHoverCabinEnd={hideCabinPreview}
                     />
                   ))}
                 </section>
@@ -661,50 +803,16 @@ const CabinDeckInventoryPresenter = ({
         )}
       </main>
 
-      {selectedDetail && (
-        <div className="cabin-deck__detail-overlay" role="presentation">
-          <button
-            type="button"
-            className="cabin-deck__detail-backdrop"
-            aria-label="Close cabin details"
-            onClick={closeCabinDetail}
-          />
-          <aside
-            ref={detailPanelRef}
-            className="cabin-deck__detail-panel talia-card"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Cabin allocation details"
-            style={{
-              top: `${Math.round(detailPosition.top)}px`,
-              left: `${Math.round(detailPosition.left)}px`,
-            }}
-          >
-            <div className="cabin-deck__detail-header">
-              <h3 className="cabin-deck__detail-title">
-                {selectedDetail.cabin_number
-                  ? `Cabin ${selectedDetail.cabin_number}`
-                  : (selectedDetail.owner_label || 'GTY hold')}
-              </h3>
-              <button
-                type="button"
-                className="talia-btn talia-btn--secondary cabin-deck__detail-close"
-                onClick={closeCabinDetail}
-              >
-                Close
-              </button>
-            </div>
-            <dl className="cabin-deck__detail-list">
-              {detailRows.map((row) => (
-                <div key={row.label} className="cabin-deck__detail-row">
-                  <dt>{row.label}</dt>
-                  <dd>{row.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </aside>
-        </div>
-      )}
+      <HoverPreview
+        open={Boolean(cabinPreview?.item)}
+        anchorRect={cabinPreview?.rect || null}
+        placement="right"
+        onRequestClose={hideCabinPreview}
+      >
+        {cabinPreview?.item ? (
+          <CabinDeckHoverSummary item={cabinPreview.item} scope={cabinScope} />
+        ) : null}
+      </HoverPreview>
     </div>
   );
 };

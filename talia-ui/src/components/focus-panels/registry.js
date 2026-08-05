@@ -19,7 +19,10 @@ import ItineraryExtract from './ItineraryExtract';
 import ReservationCurrentStateContainer from './ReservationCurrentState';
 import GroupBookingReviewContainer from './GroupBookingReview';
 import BookingProfileContainer from './BookingProfile';
+import ReservationBookingCurveContainer from './ReservationBookingCurve';
+import SeasonalTradingPackContainer from './SeasonalTradingPack';
 import TargetProfileEditorContainer from './TargetProfileEditor';
+import InventoryTargetProfileEditorContainer from './InventoryTargetProfileEditor';
 import BookingTargetChartContainer from './BookingTargetChart';
 import BookingCurrentDataSimple from './BookingCurrentDataSimple';
 import BookingTargetDataSimple from './BookingTargetDataSimple';
@@ -52,6 +55,7 @@ import ComponentInteractionMapContainer from './ComponentInteractionMap';
 import ContextRowMonitor from './ContextRowMonitor';
 import DataManagementPanel from './DataManagement';
 import ColumnTerminologyPanel from './ColumnTerminology';
+import EtlTableParametersPanel from './EtlTableParameters';
 import TestWorkbenchPanel from './TestWorkbench';
 import DataDebugView from '../TestPage/DataDebugView';
 import DataTypesValidation from '../dev/DataTypesValidation';
@@ -164,13 +168,13 @@ export const componentRegistry = {
     component: AgencyContainer,
     panelId: 'agency-directory',
     category: 'Tables',
-    title: 'Agency Directory',
-    description: 'Travel agency dimension from dwh.Dim_Agency with market, type, country, and status filters',
+    title: 'Agency Explorer',
+    description: 'Agency directory with sail-scoped value and PPD (current vs expected), Group/FIT mix, and cabin category breakdowns via lkp.CABIN_CTG',
     props: {},
-    dataRequirements: 'Requires agency table synced from dwh.Dim_Agency. Responds to sail and reservation selection.',
+    dataRequirements: 'Requires agency (Dim_Agency), reservation (revenue), cabin_ctg (lkp.CABIN_CTG). Responds to sail and reservation selection.',
     events: {
       emits: [agencySelect, agencyClear],
-      respondsTo: [SAIL_SELECT_EVENT, reservationSelect]
+      respondsTo: [SAIL_SELECT_EVENT, reservationSelect, cabinSelect, cabinClear]
     },
     supportsRefresh: true,
     showInReports: true,
@@ -183,7 +187,7 @@ export const componentRegistry = {
     title: 'Distribution',
     description: 'Horizontal stacked charts of sold guests by channel (Agency/Direct/Tour Op), market group (market_roll_up), and Group/FIT for the selected sailing',
     props: {},
-    dataRequirements: 'Requires reservation_current_state + agency + market_roll_up. Channel from agency_type rollup; market group from agency.market → new_budget_roll_up. Group/FIT uses group_id when present.',
+    dataRequirements: 'Requires reservation (+ occupancy + ship_inventory_alloc for held) + agency + market_roll_up. Channel from agency_type; market group from agency.market → new_budget_roll_up. Group/FIT follows global bookedComposition (default: FIT booked + Group confirmed + GTY held at source probability).',
     events: {
       emits: [],
       respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
@@ -218,7 +222,7 @@ export const componentRegistry = {
     dataRequirements: 'Requires ship_inventory_alloc (from stg.RES_CABIN_ALLOCATION_DETAIL), ship_cabin, ship_cabin_ctg_link (fou.SHIP_CABIN_CTG_LINK). No customer/PII. Owner id is res_id (FIT) or group_id (GROUP).',
     events: {
       emits: [cabinSelect, cabinClear],
-      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, reservationSelect, reservationClear, cabinClear]
     },
     supportsRefresh: true,
     showInReports: true,
@@ -486,20 +490,70 @@ export const componentRegistry = {
     component: BookingProfileContainer,
     panelId: 'booking-profile',
     category: 'Booking & profiles',
-    title: 'Real booking profile (+ YoY)',
+    title: 'Real booking profile (+ YoY) — legacy',
+    legacy: true,
     description:
-      'Goal ①: REAL data — trends, KPIs, optional build curves. Pass includeComparison (or open Profile Tools shortcut) for year-over-year. Follows sail selection from the sailing table.',
+      'Legacy snapshot-based curves (reservation_changes). Prefer Reservation booking curve for MSE-aligned booked cabins and original book dates.',
     props: {
       sailCode: { type: 'string', required: false, description: 'Sail code (optional if sail is selected in UI)' },
       includeComparison: { type: 'boolean', required: false, description: 'Include year-over-year comparison' },
       previousYearSailCode: { type: 'string', required: false, description: 'Previous year sail code for comparison' },
-      includeBuildCurves: { type: 'boolean', required: false, description: 'Include incremental build curves' },
+      includeBudget: { type: 'boolean', required: false, description: 'Include finance budget end-state comparison' },
       theme: { type: 'object', required: false, description: 'Theme object for styling' }
     },
-    dataRequirements: 'Requires GraphQL connection to bookingProfile endpoints',
+    dataRequirements: 'Requires GraphQL bookingProfileDimensional (+ optional YoY / budgetEndStateComparison)',
+    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
+    showInReports: false,
+    filePath: 'src/components/focus-panels/BookingProfile/index.jsx'
+  },
+  ReservationBookingCurve: {
+    component: ReservationBookingCurveContainer,
+    panelId: 'reservation-booking-curve',
+    category: 'Booking & profiles',
+    title: 'Reservation booking curve',
+    description:
+      'Cumulative bookings by original booked date, stacked by market. Booked / capacity match Master Sailing Explorer cabin peaks. Velocity for 7 / 14 / 28 days from reservation data only.',
+    props: {
+      sailCode: { type: 'string', required: false, description: 'Sail code (optional if sail is selected in UI)' },
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'GraphQL reservationBookingCurve (reservation + sail_by_cabin_occupancy)',
+    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
+    supportsRefresh: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/ReservationBookingCurve/index.jsx'
+  },
+  SeasonalTradingPack: {
+    component: SeasonalTradingPackContainer,
+    panelId: 'seasonal-trading-pack',
+    category: 'Booking & profiles',
+    title: 'Seasonal Trading Pack',
+    description:
+      'Weekly commercial pack: narrative callouts, By Dep Month Pax/Rev matrix vs budget and held groups, and trading performance. Offered (OF) and RFC deferred.',
+    props: {
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'GraphQL seasonalTradingPack (reservation + budget + ship_inventory_alloc)',
+    events: { emits: [], respondsTo: [] },
+    supportsRefresh: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/SeasonalTradingPack/index.jsx'
+  },
+  InventoryTargetProfileEditor: {
+    component: InventoryTargetProfileEditorContainer,
+    panelId: 'inventory-target-profile-editor',
+    category: 'Booking & profiles',
+    title: 'Nested LF target profiles',
+    description:
+      'Multi-perspective nested load-factor targets per inventory item (voyage → market group → market → currency). Manager+ to save.',
+    props: {
+      sailCode: { type: 'string', required: false, description: 'Sail code' },
+      theme: { type: 'object', required: false, description: 'Theme object' }
+    },
+    dataRequirements: 'inventory_target_profile + inventory_item',
     events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
     showInReports: true,
-    filePath: 'src/components/focus-panels/BookingProfile/index.jsx'
+    filePath: 'src/components/focus-panels/InventoryTargetProfileEditor/index.jsx'
   },
   TargetProfileEditor: {
     component: TargetProfileEditorContainer,
@@ -546,7 +600,7 @@ export const componentRegistry = {
     props: {},
     dataRequirements: 'Requires GraphQL booking profile with build curves',
     events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
-    showInReports: true,
+    showInReports: false,
     filePath: 'src/components/focus-panels/BookingCurrentDataSimple/index.jsx'
   },
   BookingTargetDataSimple: {
@@ -570,7 +624,7 @@ export const componentRegistry = {
     props: {},
     dataRequirements: 'Requires booking profile, booking_targets_supplied, and optional target_profiles',
     events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
-    showInReports: true,
+    showInReports: false,
     filePath: 'src/components/focus-panels/BookingCombinedDataSimple/index.jsx'
   },
   BookingTargetProfileEditorSimple: {
@@ -889,6 +943,19 @@ export const componentRegistry = {
     allowedRoles: ['ADMIN', 'SUPER_USER'],
     showInReports: true,
     filePath: 'src/components/focus-panels/ColumnTerminology/index.jsx'
+  },
+  EtlTableParametersPanel: {
+    component: EtlTableParametersPanel,
+    panelId: 'etl-table-parameters-panel',
+    category: 'Admin',
+    title: 'ETL Table Parameters',
+    description: 'Read-only local mirror of upstream config.ETL_Table_Parameters source→target mappings.',
+    props: {},
+    dataRequirements: 'Requires etl_table_parameters table via GraphQL tableData; ADMIN/SUPER_USER only',
+    events: { emits: [], respondsTo: [] },
+    allowedRoles: ['ADMIN', 'SUPER_USER'],
+    showInReports: true,
+    filePath: 'src/components/focus-panels/EtlTableParameters/index.jsx'
   },
   TestWorkbenchPanel: {
     component: TestWorkbenchPanel,

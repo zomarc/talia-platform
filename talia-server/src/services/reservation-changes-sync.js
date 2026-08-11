@@ -43,6 +43,42 @@ const buildActiveResIdsQuery = (dateRange) => `
     AND ${ACTIVE_RES_SAIL_FROM_COLUMN} <= '${dateRange.to}'
 `;
 
+/**
+ * Prefer local reservation IDs (what booking profiles actually join on).
+ * Synapse sail-window IDs can be much larger and mostly miss local enrichment.
+ * Snapshot date filtering stays on Synapse; this only selects which RES_IDs to pull.
+ */
+async function loadLocalActiveResIds(supabaseClient, _dateRange, logger = null) {
+  const ids = [];
+  const pageSize = 1000;
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    // All local reservations — profiles need history for the sailings we already synced
+    const { data, error } = await supabaseClient
+      .from('reservation')
+      .select('res_id')
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      logger?.warn?.(`⚠️  Local reservation ID lookup failed: ${error.message}`);
+      return [];
+    }
+    if (!data?.length) {
+      hasMore = false;
+      break;
+    }
+    for (const row of data) {
+      if (row.res_id != null) ids.push(row.res_id);
+    }
+    hasMore = data.length === pageSize;
+    from += pageSize;
+  }
+
+  return [...new Set(ids.map((id) => Number(id)).filter((n) => Number.isFinite(n)))];
+}
+
 const getRowField = (row, keys = []) => {
   for (const key of keys) {
     if (row[key] !== undefined && row[key] !== null) return row[key];
@@ -123,7 +159,8 @@ async function loadCurrentState(supabaseClient, dateRange, activeResIds, logger 
             sail_code: row.sail_code,
             agency_id: row.agency_id,
             group_id: row.group_id,
-            guest_count: row.guest_count
+            guest_count: row.guest_count,
+            pax_type: row.pax_type ?? null,
           });
           filteredCount++;
         }
@@ -245,7 +282,7 @@ async function backfillMissingCurrentStateFromReservations(supabaseClient, activ
     const chunk = missingResIds.slice(i, i + chunkSize);
     const { data, error } = await supabaseClient
       .from('reservation')
-      .select('res_id, sail_code, agency_id, guest_count, sail_from_date')
+      .select('res_id, sail_code, agency_id, guest_count, sail_from_date, pax_type')
       .in('res_id', chunk);
 
     if (error) {
@@ -264,6 +301,7 @@ async function backfillMissingCurrentStateFromReservations(supabaseClient, activ
         agency_id: row.agency_id || null,
         group_id: null,
         guest_count: row.guest_count != null ? Number(row.guest_count) : null,
+        pax_type: row.pax_type != null ? String(row.pax_type).trim() || null : null,
         updated_at: new Date().toISOString()
       });
     }
@@ -278,7 +316,8 @@ async function backfillMissingCurrentStateFromReservations(supabaseClient, activ
       sail_code: state.sail_code,
       agency_id: state.agency_id,
       group_id: state.group_id,
-      guest_count: state.guest_count
+      guest_count: state.guest_count,
+      pax_type: state.pax_type ?? null,
     });
   }
 
@@ -295,8 +334,9 @@ async function backfillMissingCurrentStateFromReservations(supabaseClient, activ
  * @param {Object} supabaseClient - Supabase client for local database queries
  * @param {Map} sailCodeMap - Pre-loaded map of res_id -> sail_code from local reservation table
  * @param {Object} logger - Optional logger instance
+ * @param {Map} [paxTypeMap] - Pre-loaded map of res_id -> pax_type from local reservation table
  */
-export function processReservationChangesBatch(batch, currentState, supabaseClient, sailCodeMap, logger = null) {
+export function processReservationChangesBatch(batch, currentState, supabaseClient, sailCodeMap, logger = null, paxTypeMap = null) {
   const changes = [];
   const updatedStates = [];
 
@@ -318,6 +358,10 @@ export function processReservationChangesBatch(batch, currentState, supabaseClie
 
     // Get sail_code from local reservation table (pre-loaded in sailCodeMap)
     const sailCode = sourceSailCode || sailCodeMap.get(resId) || null;
+    const previous = currentState.get(resId);
+    const paxType = paxTypeMap?.get(resId)
+      ?? previous?.pax_type
+      ?? null;
 
     const current = {
       snapshot_date: snapshotDate,
@@ -329,9 +373,8 @@ export function processReservationChangesBatch(batch, currentState, supabaseClie
         const raw = getRowField(row, ['RES_GUEST_COUNT', 'Guest_Count']);
         return raw != null ? parseFloat(raw) : null;
       })(),
+      pax_type: paxType,
     };
-
-    const previous = currentState.get(resId);
 
     // Only store a change if there's a previous state AND something changed
     if (previous) {
@@ -364,7 +407,8 @@ export function processReservationChangesBatch(batch, currentState, supabaseClie
       sail_code: current.sail_code,
       agency_id: current.agency_id,
       group_id: current.group_id,
-      guest_count: current.guest_count
+      guest_count: current.guest_count,
+      pax_type: current.pax_type,
     });
   }
 
@@ -381,6 +425,10 @@ export function processReservationChangesBatch(batch, currentState, supabaseClie
       // Get sail_code from local reservation table (pre-loaded in sailCodeMap)
       const sourceSailCode = getRowField(row, ['SAIL_CODE', 'Sail_code']);
       const sailCode = sourceSailCode || sailCodeMap.get(resId) || null;
+      const previous = currentState.get(resId);
+      const paxType = paxTypeMap?.get(resId)
+        ?? previous?.pax_type
+        ?? null;
       
       latestStatePerReservation.set(resId, {
         res_id: resId,
@@ -392,6 +440,7 @@ export function processReservationChangesBatch(batch, currentState, supabaseClie
           const raw = getRowField(row, ['RES_GUEST_COUNT', 'Guest_Count']);
           return raw != null ? parseFloat(raw) : null;
         })(),
+        pax_type: paxType,
         updated_at: new Date().toISOString()
       });
     }
@@ -599,12 +648,17 @@ export async function syncReservationChanges({
   const activeResQuery = buildActiveResIdsQuery(dateRange);
   
   logger?.info(`🔍 Querying for active reservations: ${activeResQuery}`);
-  const activeResResult = await pool.request().query(activeResQuery);
-  const activeResIds = activeResResult.recordset.map(row => row.RES_ID).filter(Boolean);
-  
-  logger?.info(`📊 Found ${activeResIds.length} active reservation IDs in date range ${dateRange.from} to ${dateRange.to}`);
-  if (activeResIds.length > 0 && activeResIds.length <= 10) {
-    logger?.info(`   RES_IDs: ${activeResIds.join(', ')}`);
+  let activeResIds = [];
+  const localResIds = await loadLocalActiveResIds(supabaseClient, dateRange, logger);
+  if (localResIds.length > 0) {
+    activeResIds = localResIds;
+    logger?.info(
+      `📊 Using ${activeResIds.length} local reservation IDs for snapshot sync (Snapshot_Date ${dateRange.from} → ${dateRange.to})`
+    );
+  } else {
+    const activeResResult = await pool.request().query(activeResQuery);
+    activeResIds = activeResResult.recordset.map(row => row.RES_ID).filter(Boolean);
+    logger?.info(`📊 Found ${activeResIds.length} active reservation IDs in Synapse date range ${dateRange.from} to ${dateRange.to}`);
   }
   
   // Close initial connection - we'll recreate it after loading current state
@@ -733,30 +787,42 @@ export async function syncReservationChanges({
           break;
         }
 
-        // Load sail_code from local reservation table for all res_ids in this batch
+        // Load sail_code + pax_type from local reservation table for all res_ids in this batch
         const resIdsInBatch = [...new Set(batch.map(row => getRowField(row, ['RES_ID', 'Res_ID'])).filter(Boolean))];
         const sailCodeMap = new Map();
+        const paxTypeMap = new Map();
         
         if (resIdsInBatch.length > 0) {
-          // Query local reservation table for sail_code
+          // Query local reservation table for sail_code + pax_type
           const { data: reservationData, error: resError } = await supabaseClient
             .from('reservation')
-            .select('res_id, sail_code')
+            .select('res_id, sail_code, pax_type')
             .in('res_id', resIdsInBatch);
           
           if (resError) {
-            logger?.warn(`⚠️  Could not load sail_code from reservation table: ${resError.message}`);
+            logger?.warn(`⚠️  Could not load sail_code/pax_type from reservation table: ${resError.message}`);
           } else if (reservationData) {
             reservationData.forEach(row => {
-              if (row.res_id && row.sail_code) {
+              if (!row.res_id) return;
+              if (row.sail_code) {
                 sailCodeMap.set(row.res_id, row.sail_code);
+              }
+              if (row.pax_type != null && String(row.pax_type).trim() !== '') {
+                paxTypeMap.set(row.res_id, String(row.pax_type).trim());
               }
             });
             logger?.info(`📊 Loaded sail_code for ${sailCodeMap.size} of ${resIdsInBatch.length} reservations from local database`);
           }
         }
 
-        const { changes, updatedStates } = processReservationChangesBatch(batch, currentState, supabaseClient, sailCodeMap, logger);
+        const { changes, updatedStates } = processReservationChangesBatch(
+          batch,
+          currentState,
+          supabaseClient,
+          sailCodeMap,
+          logger,
+          paxTypeMap
+        );
         totalChangesDetected += changes.length;
         allChanges.push(...changes);
         allUpdatedStates.push(...updatedStates);
@@ -798,7 +864,8 @@ export async function syncReservationChanges({
               sail_code: state.sail_code,
               agency_id: state.agency_id,
               group_id: state.group_id,
-              guest_count: state.guest_count
+              guest_count: state.guest_count,
+              pax_type: state.pax_type ?? null,
             });
           }
           allUpdatedStates.length = 0;
@@ -822,7 +889,8 @@ export async function syncReservationChanges({
           sail_code: state.sail_code,
           agency_id: state.agency_id,
           group_id: state.group_id,
-          guest_count: state.guest_count
+          guest_count: state.guest_count,
+          pax_type: state.pax_type ?? null,
         });
       }
     }

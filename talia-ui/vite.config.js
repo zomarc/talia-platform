@@ -21,8 +21,12 @@ function taliaReleaseProbePlugin(version) {
       outDir = pathResolve(config.root, config.build.outDir)
     },
     transformIndexHtml(html) {
-      if (/name=["']talia-app-version["']/i.test(html)) {
-        return html
+      // Match a real <meta> tag only — boot JS may mention the name in selectors.
+      if (/<meta\b[^>]*\bname=["']talia-app-version["']/i.test(html)) {
+        return html.replace(
+          /(<meta\b[^>]*\bname=["']talia-app-version["'][^>]*\bcontent=["'])([^"']*)(["'])/i,
+          `$1${version}$3`
+        )
       }
       const tag = `    <meta name="talia-app-version" content="${version}" />\n`
       return html.replace('<head>', `<head>\n${tag}`)
@@ -58,6 +62,52 @@ export default defineConfig({
     chunkSizeWarningLimit: Infinity,
     // Minification only happens in production builds (npm run build)
     // Dev mode (npm run dev) does NOT minify
+  },
+  // Public/ngrok should use `vite preview` (bundled). Dev-server module
+  // waterfall over ngrok routinely leaves the HTML boot screen stuck.
+  preview: {
+    port: 4173,
+    strictPort: true,
+    host: true,
+    allowedHosts: [
+      'taliahub.com',
+      'www.taliahub.com',
+      'celestyal.taliahub.com',
+      '*.ngrok-free.dev',
+      '*.ngrok-free.app',
+      '*.ngrok.io',
+      '*.ngrok.app',
+      '*.ngrok.dev',
+    ],
+    proxy: {
+      '/api/sync/stream': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+        ws: true,
+      },
+      '/api/btop/stream': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+        ws: true,
+      },
+      '/api/public-image': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
+      '/api/public-itinerary-catalog': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
+      '/api/public-image-pool': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
+      '/api': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
   },
   server: {
     port: 5173,

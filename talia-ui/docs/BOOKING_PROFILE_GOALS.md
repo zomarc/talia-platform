@@ -1,48 +1,50 @@
-# Booking profiles: three goals (REAL, TARGET, MODEL)
+# Booking profiles: REAL, TARGET, MODEL, finance budget
 
-This doc maps **product intent** to **panels** in the Talia UI so charts are not confused with each other.
+Maps **product intent** to **panels** after the inventory-scoped dimensional profile work.
 
 ## System ownership (`talia`)
 
-Canonical **REAL / TARGET / BUDGET / MODEL** profile data stored in Supabase is owned by the **Talia system**, not by an individual user account:
+Canonical **REAL / TARGET / BUDGET / MODEL** profile data stored in Supabase is owned by the **Talia system**:
 
 - **Scope:** `system` (GraphQL `ProfileSeriesScope.SYSTEM`)
-- **Owner key:** `talia` (constant `TALIA_SYSTEM_OWNER_KEY`)
-- **Humans:** default to **viewers**; **Manager+** or **Super User** roles may mutate curves and `target_profiles`. The API records **who last edited** (`last_edited_by`) for audit, while rows remain system-owned.
+- **Owner key:** `talia` (`TALIA_SYSTEM_OWNER_KEY`)
+- **Humans:** viewers by default; **Manager+** may mutate curves, nested LF targets, and `target_profiles`.
 
-GraphQL context comes from request headers `x-user-id`, `x-user-role`, `x-user-email` (set by the UI Apollo link from `localStorage` / dev user switcher).
+## ① REAL — actual booking behaviour (primary)
 
-## ① REAL — actual booking behaviour
-
-- **What:** Trends, KPIs, and (optionally) build curves from reservation/booking data.
+- **What:** Inventory-scoped voyage profile (master + segment `sail_codes`), week build curves, dimensional distribution.
 - **Primary panel:** **Real booking profile (+ YoY)** (`booking-profile`).
-- **Shortcuts:** Sidebar → Reports → **Profile Tools** → **① Real profile** or **① Real + YoY**.
-- **Sail context:** The panel listens to `talia:sail.select` / clear and restores the last sail from persisted events when needed (same idea as other booking charts).
-- **YoY:** Pass `includeComparison: true` in panel `params` (the **① Real + YoY** shortcut does this). Prior-year sail is auto-derived unless you pass `previousYearSailCode`.
-- **Note:** If you enable **both** `includeBuildCurves` and `includeComparison`, the curves hook currently loads comparison data without full build-curve merge — prefer separate panels if you need both at once.
+- **Controls:** Breakdown = Total | Market group | Market | Currency; Metric = Guests | Bookings | Load factor %.
+- **API:** `bookingProfileDimensional` / `bookingProfileDimensionalYoY`.
+- **Capacity:** counted once (berth status or `ship.ship_pax_capacity`) — never sum master + segment berths.
+- **History:** If `reservation_changes` snapshot density is thin, the panel shows a data-quality callout and current distribution still works from `reservation`. Re-sync `reservationChanges` with a wide `Snapshot_Date` range (see `sync.config.json`).
 
-## ② TARGET — business / external targets
+## YoY (secondary / illustrative)
 
-- **What:** Targets supplied outside Talia (e.g. planning spreadsheets) ingested for display.
-- **How loaded:** **Data Management** import → `booking_targets_supplied`.
-- **Primary panel:** **TARGET only (imported)** (`booking-target-data-simple`) for an isolated TARGET curve check.
-- **Also shown on:** **Overlay: REAL + TARGET + MODEL** and **Target vs booking (configurable)**.
+- Weeks-to-sail aligned overlay; peer resolved via ship + sail-date window when not passed explicitly.
+- UI callout: recent years are weak futures proxies — not a planning baseline.
 
-## ③ MODEL — Talia-defined curve, stored for reuse
+## Finance budget (end-state)
 
-- **What:** A profile you shape in the UI (when permitted), then **save** as consolidated **MODEL** data on the **inventory item** (`upsertInventoryProfileSeries`). Rows are stored as **system / talia**; your user id is only an audit stamp.
-- **Permissions:** **Manager+** or **Super User** can save; others see a read-only banner and cannot drag or edit table cells in the MODEL editor panel.
-- **Primary panel:** **MODEL profile editor (graph)** (`booking-target-profile-editor-simple`).
-- **Shortcut:** Sidebar → **③ Model editor (graph)**.
-- **Point grid:** Tabulator via shared `initTabulator` / `getTabulatorOptions`. **Header ≣** toggles this grid with other panels’ data details (`talia:dashboard.detailsVisibility`). **Tab ⓘ** is only for technical `ReportEventMeta` (dev/admin), not this table.
-- **Database:** Saving requires table `inventory_item_profile_curve_point` and system-owner columns. Apply migrations in order, including `20260324100000_talia_system_intel_owner.sql` (e.g. `supabase db push`). If you see a Supabase “schema cache” error after migrating, retry after cache refresh.
-- **Numbers:** Bookings/guests are stored and shown as **whole numbers** with sane caps so the chart axis stays readable (no float drift / scientific notation).
+- Synapse `lkp.BUDGET` → `budget` table (`sync.config.json` key `budget`).
+- **API / UI:** `budgetEndStateComparison` — passengers by market / market group / currency vs actual guests; not a week curve.
+- Labelled **Finance budget** (distinct from commercial TARGET/MODEL perspectives).
 
-## Overlay / exploratory
+## ② TARGET — supplied external targets
 
-- **Overlay: REAL + TARGET + MODEL** (`booking-combined-data-simple`): one chart comparing streams; respects Wide vs Local scope where applicable.
-- **Target vs booking (configurable)** (`booking-target-chart`): flexible metrics and legacy target-profile workflows; banner on the panel points editors to the **MODEL profile editor** for inventory-backed graph editing.
+- CSV → `booking_targets_supplied` via Data Management.
+- Panel: **TARGET only (imported)**.
+
+## ③ MODEL + nested LF perspectives
+
+- **MODEL graph editor** (`booking-target-profile-editor-simple`): absolute bookings/guests points on `inventory_item_profile_curve_point`.
+- **Nested LF target profiles** (`inventory-target-profile-editor`): many named perspectives per inventory item; tree voyage → market_group → market → currency; metric = load factor %. Tables: `inventory_target_profile`, `inventory_target_profile_node`.
 
 ## Legacy
 
-- **Target Profile Editor** (`target-profile-editor`): table-oriented editor for legacy `target_profiles`; hidden from Reports list (`showInReports: false`, marked legacy). Prefer **MODEL profile editor (graph)** for the consolidated inventory MODEL workflow.
+- **Target Profile Editor** / `target_profiles`: hidden from Reports; keep read-compat only.
+- Diagnostic Simple REAL / Overlay panels: hidden from Reports; prefer primary Booking Profile.
+
+## Forecast
+
+Deferred until REAL + targets + budget are in regular use.

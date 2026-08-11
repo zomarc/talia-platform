@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.0] - 2026-08-11
+
+### Summary
+
+Development baseline for client discuss demos: durable `dev.taliahub.com` presenter, sail horizon through Dec 2027 (current bookings, not daily facts), MSE flat/date/month workflow, and denser explorer + reservation UX.
+
+### Added
+
+- **Demo presenter:** macOS launchd KeepAlive for vite preview `:4173` + ngrok (`scripts/install-demo-presenter.sh`); Start Demo rebuilds and claims the tunnel.
+- **Global Month** criterion (departure calendar month ∩ Date window) for Flat MSE and shared table criteria.
+- **MSE:** Date column first with YY, Nested/Flat views, month-driven flat preference.
+- Sync horizon Sep 2025 → Dec 2027 for sail/departure facts; short snapshot lookback for cabin availability; ship cabin reserve sail filter; promotion subquery templates.
+
+### Changed
+
+- Ops validate menu/URL clarity (`PUBLIC_DEV_URL` discuss path; MiniPC/Azure as prove-deploy).
+- Reservations report defaults to **Booked**.
+- Data Management date displays include year.
+- MSE payload densify and related inventory/booking improvements in this baseline.
+
+---
+
 ## [0.2.0] - 2026-04-14
 
 ### Summary

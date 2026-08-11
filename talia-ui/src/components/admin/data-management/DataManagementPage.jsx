@@ -19,7 +19,7 @@ import DataManagementTable from './DataManagementTable.jsx';
 import InstanceConnectionPanel from './InstanceConnectionPanel.jsx';
 import TargetImportSection from './TargetImportSection.jsx';
 import { createTableActions } from './tableActions.js';
-import { formatDayMon } from '../../../lib/dateFormat';
+import { formatDayMonYear, formatSailDateRange } from '../../../lib/dateFormat';
 import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
 import SubpanelExpandButton from '../../shared/SubpanelExpandButton.jsx';
 import { enforceDashboardUiState } from '../../../services/dashboardUiState';
@@ -427,11 +427,11 @@ The backup will be saved to: talia-server/backups/`;
     fetchBackupStatus();
   }, []);
 
-  // Format date for display (condensed)
+  // Format date for display (include year — multi-year sail horizon)
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     try {
-      return formatDayMon(dateString, String(dateString));
+      return formatDayMonYear(dateString, String(dateString));
     } catch {
       return dateString;
     }
@@ -443,7 +443,7 @@ The backup will be saved to: talia-server/backups/`;
     try {
       const date = new Date(dateString);
       if (Number.isNaN(date.getTime())) return String(dateString);
-      const dateLabel = formatDayMon(date, String(dateString));
+      const dateLabel = formatDayMonYear(date, String(dateString));
       const timeLabel = date.toLocaleTimeString('en-US', {
         hour: 'numeric',
         minute: '2-digit',
@@ -455,7 +455,7 @@ The backup will be saved to: talia-server/backups/`;
     }
   };
 
-  // Format date range for display (condensed)
+  // Format date range for display (include year across horizon)
   const formatDateRange = (dateRange) => {
     if (!dateRange || (!dateRange.min && !dateRange.max)) {
       return 'N/A';
@@ -463,9 +463,7 @@ The backup will be saved to: talia-server/backups/`;
     if (dateRange.min === dateRange.max) {
       return formatDate(dateRange.min);
     }
-    const min = dateRange.min ? formatDate(dateRange.min) : 'N/A';
-    const max = dateRange.max ? formatDate(dateRange.max) : 'N/A';
-    return `${min} - ${max}`;
+    return formatSailDateRange(dateRange.min, dateRange.max, 'N/A');
   };
 
   // Format duration in milliseconds to human-readable format

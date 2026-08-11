@@ -1,38 +1,67 @@
 /**
- * Booking Profile Container Component
- * Displays booking trends and metrics for a specific sailing
+ * Booking Profile Container — inventory-scoped dimensional REAL profile.
  */
 
 import React, { useEffect, useState } from 'react';
-import { SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, extractSailCodeFromEvent } from '../../../lib/eventBus';
-import { useBookingProfile, useBookingProfileWithCurves } from '../../../hooks/data/useBookingProfile';
+import {
+  SAIL_SELECT_EVENT,
+  SAIL_CLEAR_EVENT,
+  extractSailCodeFromEvent,
+} from '../../../lib/eventBus';
+import { resolveSelectionScope } from '../../../lib/inventoryReference';
+import { useBookingProfileDimensional } from '../../../hooks/data/useBookingProfile';
+import { useGlobalMarketDimension } from '../../../hooks/useGlobalMarketDimension';
 import BookingProfilePresenter from './BookingProfilePresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
+
+const resolveSailFromDetail = (detail) => {
+  const scope = detail?.canonical_scope;
+  if (scope?.reference_sail_code) return scope.reference_sail_code;
+  if (Array.isArray(scope?.sail_codes) && scope.sail_codes.length) {
+    return scope.sail_codes[0];
+  }
+  try {
+    const resolved = resolveSelectionScope(detail);
+    if (resolved?.reference_sail_code) return resolved.reference_sail_code;
+  } catch {
+    // ignore
+  }
+  return extractSailCodeFromEvent(detail);
+};
 
 const BookingProfileContainer = ({ panelInstanceId, panelComponentId, ...props }) => {
   const {
     sailCode: sailProp,
     includeComparison: includeComparisonProp = false,
     previousYearSailCode: previousYearProp = null,
-    includeBuildCurves = false,
+    includeBudget: includeBudgetProp = true,
     theme,
     params = {},
   } = props;
 
   const includeComparison = params.includeComparison ?? includeComparisonProp;
   const previousYearSailCode = params.previousYearSailCode ?? previousYearProp;
+  const includeBudget = params.includeBudget ?? includeBudgetProp;
   const sailFromParams = params.sailCode ?? sailProp ?? null;
+  const globalMarketDimension = useGlobalMarketDimension();
 
   const [sailCode, setSailCode] = useState(sailFromParams);
+  const [breakdown, setBreakdown] = useState(params.breakdown || globalMarketDimension || 'market_group');
+  const [metric, setMetric] = useState(params.metric || 'guests');
 
   useEffect(() => {
     if (sailFromParams) setSailCode(sailFromParams);
   }, [sailFromParams]);
 
   useEffect(() => {
+    if (params.breakdown) return;
+    setBreakdown(globalMarketDimension);
+  }, [globalMarketDimension, params.breakdown]);
+
+  useEffect(() => {
     const handleSelect = (e) => {
-      const code = extractSailCodeFromEvent(e?.detail);
+      const code = resolveSailFromDetail(e?.detail);
       if (code) setSailCode(code);
     };
     const handleClear = () => setSailCode(null);
@@ -53,49 +82,42 @@ const BookingProfileContainer = ({ panelInstanceId, panelComponentId, ...props }
         if (!raw) continue;
         try {
           const parsed = JSON.parse(raw);
-          const code = extractSailCodeFromEvent(parsed?.detail);
+          const code = resolveSailFromDetail(parsed?.detail);
           if (code) return code;
         } catch {
           // ignore
         }
       }
-      return extractSailCodeFromEvent(window?.lastSailSelectEvent?.detail) || null;
+      return resolveSailFromDetail(window?.lastSailSelectEvent?.detail) || null;
     };
     const restored = extractFromPersisted();
     if (restored) setSailCode(restored);
   }, [sailFromParams, sailCode]);
 
-  // Use build curves hook if requested, otherwise use standard hook
-  const standardHook = useBookingProfile(sailCode, {
+  const { data, budget, loading, error, refetch } = useBookingProfileDimensional(sailCode, {
+    breakdown,
     includeComparison,
-    previousYearSailCode
+    previousYearSailCode,
+    includeBudget,
+    panelInstanceId,
+    panelComponentId: panelComponentId || 'booking-profile',
   });
-  
-  const curvesHook = useBookingProfileWithCurves(sailCode, {
-    includeComparison,
-    previousYearSailCode
-  });
-  
-  // Select which hook to use based on includeBuildCurves flag
-  const { data, loading, error, refetch } = includeBuildCurves ? curvesHook : standardHook;
 
-  // Handle loading state
-  if (loading) {
+  // Initial load only — keep prior chart mounted so ReportShell can grey-out on sail change.
+  if (loading && !data) {
     return <LoadingSpinner message="Loading booking profile..." fullScreen={false} />;
   }
 
-  // Handle error state
-  if (error) {
+  if (error && !data) {
     return (
-      <ErrorMessage 
-        error={error} 
+      <ErrorMessage
+        error={error}
         title="Failed to load booking profile"
         onRetry={refetch}
       />
     );
   }
 
-  // Handle no sail code
   if (!sailCode) {
     return (
       <div className="focus-panel-empty">
@@ -104,27 +126,31 @@ const BookingProfileContainer = ({ panelInstanceId, panelComponentId, ...props }
     );
   }
 
-  // Handle empty data
   if (!data) {
     return (
       <div className="focus-panel-empty">
         <p>No booking data available for {sailCode}</p>
         <div className="focus-panel-empty__action">
-          <button className="talia-btn talia-btn--primary" onClick={refetch}>Retry</button>
+          <button type="button" className="talia-btn talia-btn--primary" onClick={refetch}>
+            Retry
+          </button>
         </div>
       </div>
     );
   }
 
-  // Render booking profile with data
   return (
     <BookingProfilePresenter
       data={data}
+      budget={budget}
       sailCode={sailCode}
       theme={theme}
       onRefresh={refetch}
-      includeBuildCurves={includeBuildCurves}
       includeComparison={includeComparison}
+      breakdown={breakdown}
+      metric={metric}
+      onBreakdownChange={setBreakdown}
+      onMetricChange={setMetric}
       panelInstanceId={panelInstanceId}
       panelComponentId={panelComponentId}
     />
@@ -132,5 +158,3 @@ const BookingProfileContainer = ({ panelInstanceId, panelComponentId, ...props }
 };
 
 export default BookingProfileContainer;
-
-

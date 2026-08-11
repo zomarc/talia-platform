@@ -30,7 +30,7 @@ const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, b
   // Color palette for different queries
   const colorCount = 10;
 
-  if (loading) {
+  if (loading && (!trends || trends.series.length === 0)) {
     return (
       <div className="search-trends__status">
         <p className="search-trends__status-text">Loading search trends...</p>
@@ -38,7 +38,7 @@ const SearchTrendsPresenter = ({ trends, trackedQueries, loading, backfilling, b
     );
   }
 
-  if (!trends || trends.series.length === 0) {
+  if (!loading && (!trends || trends.series.length === 0)) {
     return (
       <div className="search-trends__empty">
         <h3 className="search-trends__empty-title">Search Trends</h3>

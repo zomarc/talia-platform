@@ -7,7 +7,7 @@
 import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { getChartColors, getSeriesColors } from '../../../lib/chartConfig';
+import { getChartColors, getOverlayLegendOptions, getSeriesColors } from '../../../lib/chartConfig';
 import { formatDayMon, formatDateTime } from '../../../lib/dateFormat';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
 
@@ -47,7 +47,7 @@ const BookingTargetChartPresenter = ({
   panelInstanceId,
   panelComponentId,
 }) => {
-  const { theme, fontSize, fontFamily } = useTheme();
+  const { theme, fontSize, fontFamily, chartLegendsVisible } = useTheme();
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
 
@@ -244,7 +244,7 @@ const BookingTargetChartPresenter = ({
         maintainAspectRatio: false,
         animation: { duration: 0 },
         plugins: {
-          legend: { position: 'top' },
+          legend: getOverlayLegendOptions({ visible: chartLegendsVisible }),
           title: {
             display: false,
           },
@@ -295,6 +295,7 @@ const BookingTargetChartPresenter = ({
     colors,
     fontSize,
     fontFamily,
+    chartLegendsVisible,
   ]);
 
   const sailOptions = [

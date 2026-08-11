@@ -2,28 +2,92 @@ type BuildTableDataResolversDeps = {
   supabaseDataService: any;
 };
 
+/** Optional column projection allowlists (identifier-safe only). */
+const TABLE_DATA_COLUMN_ALLOWLIST: Record<string, ReadonlySet<string>> = {
+  ship_day_berth_status: new Set([
+    'ship_code', 'sail_code', 'date',
+    'berth_capacity', 'berths_occupied', 'berths_available',
+    'total_cabins', 'occupied_cabins', 'available_cabins', 'cabin_categories',
+  ]),
+  sail_booking_summary: new Set([
+    'sail_code', 'guest_count', 'guaranteed_cabins',
+  ]),
+  reservation_current_state: new Set([
+    'res_id', 'sail_code', 'agency_id', 'group_id', 'guest_count',
+    'pax_type', 'snapshot_date', 'updated_at',
+  ]),
+  agency: new Set([
+    'agency_id', 'agency_name', 'agency_type', 'market', 'status', 'country_code',
+  ]),
+  market_roll_up: new Set([
+    'agency_market', 'new_budget_roll_up', 'active_record_flag',
+    'effective_from', 'effective_to',
+  ]),
+  ship_inventory_alloc: new Set([
+    'ship_code', 'sail_date_from', 'sail_date_to',
+    'allocation_owner_type', 'allocation_owner_id',
+    'inventory_request_type', 'occupancy', 'probability',
+    'cabin_category', 'cabin_number',
+  ]),
+};
+
+const SAFE_COLUMN_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+const resolveSelectClause = (tableName: string, columns: unknown): string => {
+  if (!Array.isArray(columns) || columns.length === 0) return '*';
+  const requested = columns
+    .map((value) => String(value || '').trim())
+    .filter((value) => value.length > 0 && SAFE_COLUMN_RE.test(value));
+  if (requested.length === 0) return '*';
+
+  const allowlist = TABLE_DATA_COLUMN_ALLOWLIST[tableName];
+  const selected = allowlist
+    ? requested.filter((col) => allowlist.has(col))
+    : requested;
+  if (selected.length === 0) {
+    throw new Error(
+      `tableData columns projection rejected for ${tableName}: none of the requested columns are allowed`
+    );
+  }
+  if (allowlist) {
+    const rejected = requested.filter((col) => !allowlist.has(col));
+    if (rejected.length > 0) {
+      console.warn(`[tableData] Dropped non-allowlisted columns for ${tableName}: ${rejected.join(', ')}`);
+    }
+  }
+  return selected.join(',');
+};
+
 export const buildTableDataQueryResolvers = ({
   supabaseDataService
 }: BuildTableDataResolversDeps) => ({
   tableData: async (_parent: any, args: any) => {
-    const { tableName, limit = 100, filters } = args;
+    const { tableName, limit = 100, filters, columns } = args;
     try {
       const includeNonRealSailings = filters?.include_non_real_sailings === true;
       const baseLimit = Number.isFinite(Number(limit)) ? Number(limit) : 100;
       const largeTable = tableName === 'agency'
         || tableName === 'ship_inventory_alloc'
+        || tableName === 'reservation'
         || tableName === 'reservation_current_state'
+        || tableName === 'sail_booking_summary'
         || tableName === 'ship_day_berth_status'
         || tableName === 'sail_by_cabin_occupancy'
         || tableName === 'ship_cabin'
-        || tableName === 'ship_cabin_ctg_link';
+        || tableName === 'ship_cabin_ctg_link'
+        || tableName === 'ship_cabin_reserve'
+        || tableName === 'cabin_ctg';
       const expandedLimit = largeTable
         ? Math.min(Math.max(baseLimit, 100), 150000)
         : (includeNonRealSailings ? baseLimit : Math.min(Math.max(baseLimit * 3, baseLimit), 5000));
 
+      const selectClause = resolveSelectClause(tableName, columns);
       let query = supabaseDataService.client
         .from(tableName)
-        .select('*');
+        .select(selectClause);
+      if (selectClause !== '*') {
+        console.log(`[tableData] Projecting columns for ${tableName}: ${selectClause}`);
+      }
 
       if (filters) {
         if (filters.sail_code) {

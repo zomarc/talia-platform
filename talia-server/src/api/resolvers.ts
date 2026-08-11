@@ -2918,10 +2918,14 @@ export const resolvers = {
         const currentYear = await supabaseDataService.getBookingProfile(sailCode);
         let previousYear = null;
         let comparison = null;
+        let resolvedPrev = previousYearSailCode;
+        if (!resolvedPrev) {
+          resolvedPrev = await supabaseDataService.findPriorYearPeerSail(sailCode);
+        }
 
-        if (previousYearSailCode) {
+        if (resolvedPrev) {
           try {
-            previousYear = await supabaseDataService.getBookingProfile(previousYearSailCode);
+            previousYear = await supabaseDataService.getBookingProfile(resolvedPrev);
             
             // Calculate comparison metrics
             comparison = {
@@ -2963,6 +2967,88 @@ export const resolvers = {
         return profile;
       } catch (error) {
         console.error('Error fetching booking profile with curves:', error);
+        throw error;
+      }
+    },
+
+    bookingProfileDimensional: async (_parent: any, args: any) => {
+      const { sailCode, breakdown = 'none' } = args;
+      try {
+        return await supabaseDataService.getBookingProfileDimensional(sailCode, { breakdown });
+      } catch (error) {
+        console.error('Error fetching dimensional booking profile:', error);
+        throw error;
+      }
+    },
+
+    bookingProfileDimensionalYoY: async (_parent: any, args: any) => {
+      const { sailCode, breakdown = 'none', previousYearSailCode } = args;
+      try {
+        return await supabaseDataService.getBookingProfileDimensionalYoY(sailCode, {
+          breakdown,
+          previousYearSailCode,
+        });
+      } catch (error) {
+        console.error('Error fetching dimensional YoY booking profile:', error);
+        throw error;
+      }
+    },
+
+    budgetEndStateComparison: async (_parent: any, args: any) => {
+      const { sailCode, breakdown = 'market_group' } = args;
+      try {
+        return await supabaseDataService.getBudgetEndStateComparison(sailCode, { breakdown });
+      } catch (error) {
+        console.error('Error fetching budget end-state comparison:', error);
+        throw error;
+      }
+    },
+
+    reservationBookingCurve: async (_parent: any, args: any) => {
+      const {
+        sailCode,
+        marketBreakdown = 'market_group',
+        seriesMode = 'market',
+        includeCompetitor = false,
+      } = args;
+      try {
+        return await supabaseDataService.getReservationBookingCurve(sailCode, {
+          marketBreakdown,
+          seriesMode,
+          includeCompetitor,
+        });
+      } catch (error) {
+        console.error('Error fetching reservation booking curve:', error);
+        throw error;
+      }
+    },
+
+    seasonalTradingPack: async (_parent: any, args: any) => {
+      const filters = args?.filters || {};
+      try {
+        return await supabaseDataService.getSeasonalTradingPack(filters);
+      } catch (error) {
+        console.error('Error fetching seasonal trading pack:', error);
+        throw error;
+      }
+    },
+
+    inventoryTargetProfiles: async (_parent: any, args: any) => {
+      const { inventoryItemId } = args;
+      try {
+        return await supabaseDataService.listInventoryTargetProfiles(inventoryItemId);
+      } catch (error) {
+        console.error('Error listing inventory target profiles:', error);
+        throw error;
+      }
+    },
+
+    inventoryTargetProfile: async (_parent: any, args: any) => {
+      const { id } = args;
+      try {
+        return await supabaseDataService.getInventoryTargetProfile(id);
+      } catch (error) {
+        console.error('Error fetching inventory target profile:', error);
         throw error;
       }
     },
@@ -4290,9 +4376,42 @@ export const resolvers = {
         const inventoryItemId = Number(args?.inventoryItemId);
         const kind = String(args?.kind || '').toUpperCase();
         const modelKey = args?.modelKey || null;
-        return await supabaseDataService.deleteInventoryProfileSeries(inventoryItemId, kind, modelKey);
+        return await supabaseDataService.deleteInventoryProfileSeries(
+          inventoryItemId,
+          kind,
+          modelKey
+        );
       } catch (error) {
         console.error('Error deleting inventory profile series:', error);
+        throw error;
+      }
+    },
+
+    upsertInventoryTargetProfile: async (_parent: any, args: any, context: any) => {
+      try {
+        if (!canEditTaliaIntel(context)) {
+          throw new Error(
+            'Only MANAGER or ADMIN may update nested load-factor target profiles (system-owned)'
+          );
+        }
+        return await supabaseDataService.upsertInventoryTargetProfile(
+          args?.input || {},
+          intelAuditStamp(context)
+        );
+      } catch (error) {
+        console.error('Error upserting inventory target profile:', error);
+        throw error;
+      }
+    },
+
+    deleteInventoryTargetProfile: async (_parent: any, args: any, context: any) => {
+      try {
+        if (!canEditTaliaIntel(context)) {
+          throw new Error('Only MANAGER or ADMIN may delete nested load-factor target profiles');
+        }
+        return await supabaseDataService.deleteInventoryTargetProfile(args?.id);
+      } catch (error) {
+        console.error('Error deleting inventory target profile:', error);
         throw error;
       }
     },

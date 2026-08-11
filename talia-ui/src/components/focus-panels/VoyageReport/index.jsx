@@ -34,8 +34,8 @@ const VoyageReportContainer = ({ panelInstanceId, panelComponentId }) => {
     return transformVoyageData(data);
   }, [data]);
 
-  // Loading state
-  if (loading) {
+  // Initial load only — keep prior content so ReportShell can grey-out while refreshing.
+  if (loading && !transformedData.length) {
     return (
       <div className="talia-loading" role="status" aria-live="polite">
         <div className="talia-loading__spinner" aria-hidden="true" />
@@ -45,7 +45,7 @@ const VoyageReportContainer = ({ panelInstanceId, panelComponentId }) => {
   }
 
   // Error state
-  if (error) {
+  if (error && !transformedData.length) {
     return (
       <div className="talia-error" role="alert">
         <span className="talia-error__icon" aria-hidden="true">⚠️</span>
@@ -59,7 +59,7 @@ const VoyageReportContainer = ({ panelInstanceId, panelComponentId }) => {
   }
 
   // Empty state
-  if (!transformedData.length) {
+  if (!loading && !transformedData.length) {
     return (
       <div className="talia-empty" role="status">
         <span className="talia-empty__icon" aria-hidden="true">📊</span>

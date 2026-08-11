@@ -37,6 +37,11 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useFocusManagement } from '../../hooks/useFocusManagement';
 import { DEFAULT_HEADER_LOGO_SRC, resolveAppPublicUrl } from '../../lib/headerLogoAsset';
 import { GLOBAL_DATE_RANGE_OPTIONS, normalizeGlobalDateRangeKey, resolveGlobalDateRange } from '../../lib/globalDateRange';
+import {
+  ALL_DEPARTURE_MONTH_KEY,
+  filterDepartureMonthOptionsForDateWindow,
+  normalizeGlobalDepartureMonth,
+} from '../../lib/globalDepartureMonth';
 import { extractSailCodeFromEvent, SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../lib/eventBus';
 import userActivityTracker from '../../services/userActivityTracker';
 import { loadUserProfileState, saveUserProfileState } from '../../services/data/userProfileState';
@@ -76,6 +81,37 @@ const GLOBAL_DISPLAY_CURRENCY_OPTIONS = [
   { key: 'JPY', label: 'JPY' },
   { key: 'CHF', label: 'CHF' },
 ];
+
+const GLOBAL_MARKET_DIMENSION_OPTIONS = [
+  { key: 'market_group', label: 'Group' },
+  { key: 'market', label: 'Market' },
+];
+
+const GLOBAL_BOOKED_COMPOSITION_OPTIONS = [
+  { key: 'booked_only', label: 'Booked' },
+  { key: 'three_way', label: '3-way' },
+  { key: 'group_fit_expected', label: 'FIT+Held' },
+];
+
+const GLOBAL_CABIN_CATEGORY_MODE_OPTIONS = [
+  { key: 'real', label: 'Real' },
+  { key: 'group', label: 'Group' },
+];
+
+const normalizeMarketDimension = (value) => (
+  value === 'market' ? 'market' : 'market_group'
+);
+
+const normalizeBookedComposition = (value) => {
+  const key = String(value || '').trim();
+  if (key === 'booked_only') return 'booked_only';
+  if (key === 'three_way') return 'three_way';
+  return 'group_fit_expected';
+};
+
+const normalizeCabinCategoryMode = (value) => (
+  String(value || '').trim() === 'group' ? 'group' : 'real'
+);
 
 const normalizePersistedSailing = (raw) => {
   if (raw == null) return null;
@@ -238,6 +274,8 @@ const StatusBar = ({
     menuDisappearMs,
     calloutsVisible,
     setCalloutsVisible,
+    chartLegendsVisible,
+    setChartLegendsVisible,
     headerLogoUrl,
     headerLogoVisible,
     defaultDisplayCurrency,
@@ -310,10 +348,28 @@ const StatusBar = ({
   const [globalDateRange, setGlobalDateRange] = useState(() => {
     return TEST_DEFAULT_GLOBAL_RANGE_KEY;
   });
+  const [departureMonth, setDepartureMonth] = useState(() => (
+    normalizeGlobalDepartureMonth(window.__taliaGlobalCriteria?.departureMonth)
+  ));
   const [globalDuration, setGlobalDuration] = useState(() => {
     const saved = window.__taliaGlobalCriteria?.durationKey;
     return GLOBAL_DURATION_OPTIONS.some((option) => option.key === saved) ? saved : 'all';
   });
+
+  const departureMonthOptions = useMemo(() => {
+    const range = resolveGlobalDateRange(globalDateRange);
+    return filterDepartureMonthOptionsForDateWindow({
+      dateFrom: range.dateFrom,
+      dateTo: range.dateTo,
+    });
+  }, [globalDateRange]);
+
+  // If Date window shrinks, drop Month selections that no longer intersect.
+  useEffect(() => {
+    if (departureMonth === ALL_DEPARTURE_MONTH_KEY) return;
+    if (departureMonthOptions.some((option) => option.key === departureMonth)) return;
+    setDepartureMonth(ALL_DEPARTURE_MONTH_KEY);
+  }, [departureMonth, departureMonthOptions]);
   const [globalSailSelection, setGlobalSailSelection] = useState(() => (
     normalizePersistedSailing(
       window.__taliaGlobalCriteria?.selectedSailing || window.lastSailSelectEvent?.detail || null
@@ -334,6 +390,15 @@ const StatusBar = ({
     }
     return true;
   });
+  const [marketDimension, setMarketDimension] = useState(() => (
+    normalizeMarketDimension(window.__taliaGlobalCriteria?.marketDimension)
+  ));
+  const [bookedComposition, setBookedComposition] = useState(() => (
+    normalizeBookedComposition(window.__taliaGlobalCriteria?.bookedComposition)
+  ));
+  const [cabinCategoryMode, setCabinCategoryMode] = useState(() => (
+    normalizeCabinCategoryMode(window.__taliaGlobalCriteria?.cabinCategoryMode)
+  ));
   const [refreshPhase, setRefreshPhase] = useState('active'); // active -> all -> cooldown
   const [tableLayoutMode, setTableLayoutMode] = useState(() => {
     const inMemory = window.__taliaTableLayoutMode;
@@ -697,6 +762,14 @@ const StatusBar = ({
     setGlobalDateRange(next);
   };
 
+  const handleDepartureMonthChange = (nextValue) => {
+    const raw = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value;
+    const next = normalizeGlobalDepartureMonth(raw);
+    if (!departureMonthOptions.some((option) => option.key === next)) return;
+    userActivityTracker.recordHeaderAction('global-departure-month', { status: next });
+    setDepartureMonth(next);
+  };
+
   const handleGlobalDurationChange = (nextValue) => {
     const next = typeof nextValue === 'string' ? nextValue : nextValue?.target?.value;
     if (!GLOBAL_DURATION_OPTIONS.some((option) => option.key === next)) return;
@@ -763,6 +836,12 @@ const StatusBar = ({
     setCalloutsVisible(nextVisible);
   };
 
+  const handleChartLegendsToggle = () => {
+    const nextVisible = !chartLegendsVisible;
+    userActivityTracker.recordHeaderAction('chart-legends-toggle', { status: nextVisible ? 'show' : 'hide' });
+    setChartLegendsVisible(nextVisible);
+  };
+
   const handleActionsToggle = () => {
     const nextVisible = !actionsVisible;
     userActivityTracker.recordHeaderAction('operations-toggle', { status: nextVisible ? 'show' : 'hide' });
@@ -824,6 +903,24 @@ const StatusBar = ({
   const handleActiveOnlyChange = (checked) => {
     userActivityTracker.recordHeaderAction('active-only-toggle', { status: checked ? 'active-only' : 'include-non-real' });
     setActiveOnly(checked);
+  };
+
+  const handleMarketDimensionChange = (nextValue) => {
+    const next = normalizeMarketDimension(nextValue);
+    userActivityTracker.recordHeaderAction('market-dimension', { marketDimension: next });
+    setMarketDimension(next);
+  };
+
+  const handleBookedCompositionChange = (nextValue) => {
+    const next = normalizeBookedComposition(nextValue);
+    userActivityTracker.recordHeaderAction('booked-composition', { bookedComposition: next });
+    setBookedComposition(next);
+  };
+
+  const handleCabinCategoryModeChange = (nextValue) => {
+    const next = normalizeCabinCategoryMode(nextValue);
+    userActivityTracker.recordHeaderAction('cabin-category-mode', { cabinCategoryMode: next });
+    setCabinCategoryMode(next);
   };
 
   const dispatchDataManagementCommand = (eventName, detail = {}) => {
@@ -1077,10 +1174,22 @@ const StatusBar = ({
           if (GLOBAL_DURATION_OPTIONS.some((option) => option.key === nextDuration)) {
             setGlobalDuration(nextDuration);
           }
+          if (Object.prototype.hasOwnProperty.call(criteria, 'departureMonth')) {
+            setDepartureMonth(normalizeGlobalDepartureMonth(criteria.departureMonth));
+          }
           if (Object.prototype.hasOwnProperty.call(criteria, 'activeOnly')) {
             setActiveOnly(criteria.activeOnly !== false);
           } else if (Object.prototype.hasOwnProperty.call(criteria, 'includeNonRealSailings')) {
             setActiveOnly(criteria.includeNonRealSailings !== true);
+          }
+          if (Object.prototype.hasOwnProperty.call(criteria, 'marketDimension')) {
+            setMarketDimension(normalizeMarketDimension(criteria.marketDimension));
+          }
+          if (Object.prototype.hasOwnProperty.call(criteria, 'bookedComposition')) {
+            setBookedComposition(normalizeBookedComposition(criteria.bookedComposition));
+          }
+          if (Object.prototype.hasOwnProperty.call(criteria, 'cabinCategoryMode')) {
+            setCabinCategoryMode(normalizeCabinCategoryMode(criteria.cabinCategoryMode));
           }
           const savedCurrency = typeof criteria.defaultDisplayCurrency === 'string'
             ? criteria.defaultDisplayCurrency.trim().toUpperCase()
@@ -1113,11 +1222,19 @@ const StatusBar = ({
     };
   }, []);
 
+  const globalSailSelectionRef = useRef(globalSailSelection);
+  globalSailSelectionRef.current = globalSailSelection;
+
   useEffect(() => {
     const handleSailSelect = (event) => {
       const next = normalizePersistedSailing(event?.detail);
       if (!next) return;
-      setGlobalSailSelection(next);
+      setGlobalSailSelection((prev) => {
+        if (prev?.sailCode && next.sailCode && String(prev.sailCode) === String(next.sailCode)) {
+          return prev;
+        }
+        return next;
+      });
     };
     const handleSailClear = () => {
       setGlobalSailSelection(null);
@@ -1130,22 +1247,29 @@ const StatusBar = ({
     };
   }, []);
 
+  // Date/duration/composition criteria — do NOT depend on sail selection.
+  // Sail.select must not republish globalCriteria (that forced every report to refresh).
   useEffect(() => {
     const range = resolveGlobalDateRange(globalDateRange || TEST_DEFAULT_GLOBAL_RANGE_KEY);
     const includeNonRealSailings = !activeOnly;
+    const sail = globalSailSelectionRef.current;
     const criteria = {
       rangeKey: range.rangeKey,
       durationKey: globalDuration,
+      departureMonth: normalizeGlobalDepartureMonth(departureMonth),
       activeOnly,
       includeNonRealSailings,
+      marketDimension: normalizeMarketDimension(marketDimension),
+      bookedComposition: normalizeBookedComposition(bookedComposition),
+      cabinCategoryMode: normalizeCabinCategoryMode(cabinCategoryMode),
       defaultDisplayCurrency: String(defaultDisplayCurrency || '').trim().toUpperCase() || 'USD',
       ...range
     };
-    if (globalSailSelection) {
+    if (sail) {
       const selectedSailing = {
-        sailCode: globalSailSelection.sailCode,
-        detail: globalSailSelection.detail,
-        capturedAt: globalSailSelection.capturedAt || new Date().toISOString(),
+        sailCode: sail.sailCode,
+        detail: sail.detail,
+        capturedAt: sail.capturedAt || new Date().toISOString(),
       };
       criteria.selectedSailCode = selectedSailing.sailCode;
       criteria.selectedSailing = selectedSailing;
@@ -1155,10 +1279,13 @@ const StatusBar = ({
     }
     window.__taliaGlobalCriteria = criteria;
     publishDashboardGlobalConfig({ criteria });
-  }, [globalDateRange, globalDuration, activeOnly, defaultDisplayCurrency]);
+  }, [globalDateRange, departureMonth, globalDuration, activeOnly, marketDimension, bookedComposition, cabinCategoryMode, defaultDisplayCurrency]);
 
+  // Sail selection updates the window snapshot only — listeners already got sail.select.
   useEffect(() => {
-    if (!window.__taliaGlobalCriteria || typeof window.__taliaGlobalCriteria !== 'object') return;
+    if (!window.__taliaGlobalCriteria || typeof window.__taliaGlobalCriteria !== 'object') {
+      window.__taliaGlobalCriteria = window.__taliaGlobalCriteria || {};
+    }
     if (globalSailSelection) {
       window.__taliaGlobalCriteria.selectedSailCode = globalSailSelection.sailCode;
       window.__taliaGlobalCriteria.selectedSailing = {
@@ -1182,8 +1309,12 @@ const StatusBar = ({
       const currentCriteria = window.__taliaGlobalCriteria || {
         rangeKey: globalDateRange,
         durationKey: globalDuration,
+        departureMonth: normalizeGlobalDepartureMonth(departureMonth),
         activeOnly,
         includeNonRealSailings: !activeOnly,
+        marketDimension: normalizeMarketDimension(marketDimension),
+        bookedComposition: normalizeBookedComposition(bookedComposition),
+        cabinCategoryMode: normalizeCabinCategoryMode(cabinCategoryMode),
         defaultDisplayCurrency: String(defaultDisplayCurrency || '').trim().toUpperCase() || 'USD',
         ...resolveGlobalDateRange(globalDateRange),
       };
@@ -1200,7 +1331,7 @@ const StatusBar = ({
         criteriaSaveTimerRef.current = null;
       }
     };
-  }, [profileCriteriaHydrated, globalDateRange, globalDuration, activeOnly, defaultDisplayCurrency, globalSailSelection]);
+  }, [profileCriteriaHydrated, globalDateRange, departureMonth, globalDuration, activeOnly, marketDimension, bookedComposition, cabinCategoryMode, defaultDisplayCurrency, globalSailSelection]);
 
   useEffect(() => {
     enforceDashboardUiState({ dispatchEvents: true });
@@ -1420,6 +1551,19 @@ const StatusBar = ({
                       />
                     </label>
                     </TaliaTooltip>
+                    <TaliaTooltip content="Departure month (sail date from). Only months inside the Date window are listed; combines with Date range." placement="bottom-left" delayMs={180}>
+                    <label className="status-bar__header-range">
+                      <span className="status-bar__header-range-label">Month</span>
+                      <HeaderCriteriaMenuSelect
+                        id="status-bar-global-departure-month"
+                        options={departureMonthOptions}
+                        value={departureMonth}
+                        onChange={handleDepartureMonthChange}
+                        aria-label="Global departure month"
+                        autoCloseMs={menuDisappearMs}
+                      />
+                    </label>
+                    </TaliaTooltip>
                     <TaliaTooltip content="Global duration criteria applied across reports" placement="bottom-left" delayMs={180}>
                     <label className="status-bar__header-range">
                       <span className="status-bar__header-range-label">Dur</span>
@@ -1442,6 +1586,45 @@ const StatusBar = ({
                         value={defaultDisplayCurrency}
                         onChange={handleGlobalDisplayCurrencyChange}
                         aria-label="Default display currency"
+                        autoCloseMs={menuDisappearMs}
+                      />
+                    </label>
+                    </TaliaTooltip>
+                    <TaliaTooltip content="Market dimension for distribution and booking profile charts (Group = budget roll-up)" placement="bottom-left" delayMs={180}>
+                    <label className="status-bar__header-range">
+                      <span className="status-bar__header-range-label">Mkt</span>
+                      <HeaderCriteriaMenuSelect
+                        id="status-bar-global-market-dimension"
+                        options={GLOBAL_MARKET_DIMENSION_OPTIONS}
+                        value={marketDimension}
+                        onChange={handleMarketDimensionChange}
+                        aria-label="Market dimension"
+                        autoCloseMs={menuDisappearMs}
+                      />
+                    </label>
+                    </TaliaTooltip>
+                    <TaliaTooltip content="FIT vs Group view: Booked only, 3-way (FIT / Group booked / Group held), or FIT+Held (Group includes GTY expected at source probability)" placement="bottom-left" delayMs={180}>
+                    <label className="status-bar__header-range">
+                      <span className="status-bar__header-range-label">Bk</span>
+                      <HeaderCriteriaMenuSelect
+                        id="status-bar-global-booked-composition"
+                        options={GLOBAL_BOOKED_COMPOSITION_OPTIONS}
+                        value={bookedComposition}
+                        onChange={handleBookedCompositionChange}
+                        aria-label="Booked composition"
+                        autoCloseMs={menuDisappearMs}
+                      />
+                    </label>
+                    </TaliaTooltip>
+                    <TaliaTooltip content="Cabin categories: Real codes (IA, XB) or Group (INSIDE / OUTSIDE / DELUXE from lkp.CABIN_CTG)" placement="bottom-left" delayMs={180}>
+                    <label className="status-bar__header-range">
+                      <span className="status-bar__header-range-label">Cat</span>
+                      <HeaderCriteriaMenuSelect
+                        id="status-bar-global-cabin-category-mode"
+                        options={GLOBAL_CABIN_CATEGORY_MODE_OPTIONS}
+                        value={cabinCategoryMode}
+                        onChange={handleCabinCategoryModeChange}
+                        aria-label="Cabin category mode"
                         autoCloseMs={menuDisappearMs}
                       />
                     </label>
@@ -1632,6 +1815,18 @@ const StatusBar = ({
                 >
                   <span>Callouts</span>
                   {calloutsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Show or hide compact chart legends across reports" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={chartLegendsVisible}
+                  className={`status-bar__visibility-option ${chartLegendsVisible ? 'status-bar__visibility-option--active' : ''}`}
+                  onClick={handleChartLegendsToggle}
+                >
+                  <span>Legends</span>
+                  {chartLegendsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Show or hide panel operations (actions + controls) across all reports" placement="bottom-left" delayMs={180}>

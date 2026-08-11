@@ -92,11 +92,13 @@ const HOLDING_HTML = `<!DOCTYPE html>
 const NGROK_RESOLVE = '3gdvs2ekygjh8etb5.2yicxjompem9a7yrz.ngrok-cname.com';
 const ORIGIN_TIMEOUT_MS = 8000;
 
-// Map subdomains to a single ngrok tunnel for now.
-// If you later create per-customer ngrok custom domains, add them here.
+// Map public hostnames to the ngrok reserved domain Host header.
+// Laptop discuss URL is https://dev.taliahub.com — same tunnel as apex (single reserved domain).
+// Apex + aliases stay for staging / legacy bookmarks; Host is rewritten to taliahub.com for ngrok.
 const HOST_MAP = {
   'taliahub.com': 'taliahub.com',
   'www.taliahub.com': 'taliahub.com',
+  'dev.taliahub.com': 'taliahub.com',
   'celestyal.taliahub.com': 'taliahub.com',
 };
 

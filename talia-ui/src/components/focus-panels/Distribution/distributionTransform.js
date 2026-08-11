@@ -1,47 +1,27 @@
 /**
- * Distribution aggregations — guests by channel (agency type rollup) and market group.
- * Join booking agency_id → agency.market → market_roll_up.new_budget_roll_up.
- * Never invent channel from source_code.
+ * Distribution aggregations — guests by channel, market/market_group, Group/FIT.
+ * Aligns with reservation booking curve: active reservation facts + shared roll-up.
  */
 
 import {
   indexMarketRollUpByAgencyMarket,
+  normalizeMarketDimension,
   resolveMarketGroup,
 } from '../../../lib/marketRollup.js';
+import {
+  buildGroupFitSlices,
+  DEFAULT_BOOKED_COMPOSITION,
+  normalizeBookedComposition,
+} from '../../../lib/bookedComposition.js';
+import {
+  CHANNEL_ORDER,
+  classifyPassengerType,
+  rollupAgencyTypeToChannel,
+} from '../../../lib/reservationDimensions.js';
+import { summarizeCabinOccupancyBerths } from '../CapacityValidation/capacityValidationTransform.js';
 
-export const CHANNEL_ORDER = ['Agency', 'Direct', 'Tour Op', 'Other'];
+export { CHANNEL_ORDER, classifyPassengerType, rollupAgencyTypeToChannel };
 export const MARKET_TOP_N = 5;
-
-/** Map Dim_Agency.agency_type → business channel rollup. */
-export const rollupAgencyTypeToChannel = (agencyType) => {
-  const raw = String(agencyType || '').trim();
-  if (!raw) return 'Other';
-  const key = raw.toUpperCase();
-  if (
-    key.includes('TRAVEL AGENCY')
-    || key.includes('HOSTED AGENT')
-    || key.includes('ONLINE TRAVEL')
-    || key === 'OTA'
-    || key.includes('SUBAGENCY')
-    || key.includes('MAIN AGENCY')
-    || key.includes('CONSORTIUM')
-  ) {
-    return 'Agency';
-  }
-  if (key.includes('TOUR OPERATOR') || key === 'DMC' || key.includes('DMC')) {
-    return 'Tour Op';
-  }
-  if (
-    key.includes('CLST DIRECT')
-    || key === 'DIRECT'
-    || key === 'B2C'
-    || key.includes('STAFF')
-    || key.includes('COMPANY AGR')
-  ) {
-    return 'Direct';
-  }
-  return 'Other';
-};
 
 const asNumber = (value) => {
   const n = Number.parseFloat(value);
@@ -49,6 +29,11 @@ const asNumber = (value) => {
 };
 
 const agencyKey = (id) => (id == null || id === '' ? null : String(id).trim());
+
+export const isActiveReservation = (row) => {
+  const status = String(row?.res_status || '').toUpperCase();
+  return status !== 'CX' && status !== 'CANCELLED' && status !== 'CANCELED';
+};
 
 export const indexAgenciesById = (agencies = []) => {
   const map = new Map();
@@ -58,6 +43,43 @@ export const indexAgenciesById = (agencies = []) => {
     map.set(id, row);
   });
   return map;
+};
+
+/**
+ * Voyage berth capacity for LF indicators.
+ * Prefer reference sail; never sum master + segments (same physical berths).
+ */
+export const resolveDistributionCapacity = (
+  occupancyRows = [],
+  { sailCodes = [], referenceSailCode = null } = {}
+) => {
+  const codes = (sailCodes || []).map((c) => String(c).trim()).filter(Boolean);
+  const preferred = referenceSailCode
+    ? String(referenceSailCode).trim()
+    : (codes[0] || null);
+
+  const fromCode = (code) => {
+    if (!code) return null;
+    const summary = summarizeCabinOccupancyBerths(occupancyRows, { sailCode: code });
+    if (summary?.capacity == null) return null;
+    return {
+      capacityBerths: summary.capacity,
+      capacityCabins: summary.cabins,
+      sourceSail: code,
+      peakDate: summary.peakDate || null,
+    };
+  };
+
+  const preferredHit = fromCode(preferred);
+  if (preferredHit) return preferredHit;
+
+  let best = null;
+  codes.forEach((code) => {
+    const hit = fromCode(code);
+    if (!hit) return;
+    if (!best || hit.capacityBerths > best.capacityBerths) best = hit;
+  });
+  return best;
 };
 
 const toSortedSlices = (map, preferredOrder = null) => {
@@ -80,7 +102,6 @@ const toSortedSlices = (map, preferredOrder = null) => {
 
 /**
  * Keep top N slices by value; roll the rest into "Others".
- * Preserves descending order; "Others" always last when present.
  */
 export const collapseTopNSlices = (slices = [], topN = MARKET_TOP_N) => {
   const sorted = [...(slices || [])]
@@ -94,29 +115,49 @@ export const collapseTopNSlices = (slices = [], topN = MARKET_TOP_N) => {
   return [...head, { label: 'Others', value: othersValue, others_count: rest.length }];
 };
 
+const withCapacityShare = (slices, capacityBerths) => {
+  if (capacityBerths == null || !(capacityBerths > 0)) {
+    return (slices || []).map((s) => ({ ...s, capacityPct: null }));
+  }
+  return (slices || []).map((s) => ({
+    ...s,
+    capacityPct: Math.round(((Number(s.value) || 0) / capacityBerths) * 1000) / 10,
+  }));
+};
+
 /**
  * Join reservations to agencies and roll up guest counts.
- * Market chart uses market_roll_up.new_budget_roll_up (falls back to agency.market).
- * Group/FIT: group_id present → Group; else FIT. Data coverage is thin — flag in meta.
+ * @param {'market'|'market_group'} marketDimension — from global header criteria
+ * @param {number|null} [capacityBerths] — optional override (skips occupancy resolve)
  */
 export const buildDistributionBundle = ({
   reservations = [],
   agencies = [],
   marketRollUp = [],
+  occupancyRows = [],
+  sailCodes = [],
+  referenceSailCode = null,
+  marketDimension = 'market_group',
+  bookedComposition = DEFAULT_BOOKED_COMPOSITION,
+  allocRows = [],
+  capacityBerths: capacityBerthsOverride = undefined,
 } = {}) => {
+  const dim = normalizeMarketDimension(marketDimension);
+  const compositionMode = normalizeBookedComposition(bookedComposition);
   const agencyById = indexAgenciesById(agencies);
   const rollUpIndex = indexMarketRollUpByAgencyMarket(marketRollUp);
   const channelTotals = new Map();
   const marketTotals = new Map();
-  const groupFitTotals = new Map([['Group', 0], ['FIT', 0]]);
   let bookingCount = 0;
   let guestTotal = 0;
   let withAgency = 0;
   let withMarket = 0;
   let withMarketGroup = 0;
-  let withGroupId = 0;
+  let withGroupSignal = 0;
+  let withPaxType = 0;
 
   (reservations || []).forEach((row) => {
+    if (!isActiveReservation(row)) return;
     const guests = asNumber(row?.guest_count);
     if (guests <= 0) return;
     bookingCount += 1;
@@ -128,49 +169,231 @@ export const buildDistributionBundle = ({
     const channel = rollupAgencyTypeToChannel(agency?.agency_type);
     channelTotals.set(channel, (channelTotals.get(channel) || 0) + guests);
 
-    const marketRaw = String(agency?.market || '').trim();
+    const marketRaw = String(row?.agency_market || agency?.market || '').trim();
     const marketGroup = resolveMarketGroup(marketRaw, rollUpIndex);
-    const market = marketGroup || marketRaw || 'Unknown';
     if (marketRaw) withMarket += 1;
     if (marketGroup) withMarketGroup += 1;
-    marketTotals.set(market, (marketTotals.get(market) || 0) + guests);
+    const marketLabel = dim === 'market'
+      ? (marketRaw || 'Unknown')
+      : (marketGroup || marketRaw || 'Unknown');
+    marketTotals.set(marketLabel, (marketTotals.get(marketLabel) || 0) + guests);
 
-    const hasGroup = row?.group_id != null && String(row.group_id).trim() !== '';
-    if (hasGroup) {
-      withGroupId += 1;
-      groupFitTotals.set('Group', (groupFitTotals.get('Group') || 0) + guests);
-    } else {
-      groupFitTotals.set('FIT', (groupFitTotals.get('FIT') || 0) + guests);
-    }
+    if (String(row?.pax_type || '').trim()) withPaxType += 1;
+    if (classifyPassengerType(row) === 'Group') withGroupSignal += 1;
   });
 
+  const hasOverride = capacityBerthsOverride !== undefined;
+  const capacity = hasOverride
+    ? null
+    : resolveDistributionCapacity(occupancyRows, {
+      sailCodes,
+      referenceSailCode,
+    });
+  const capacityBerths = hasOverride
+    ? (capacityBerthsOverride != null && Number(capacityBerthsOverride) > 0
+      ? Number(capacityBerthsOverride)
+      : null)
+    : (capacity?.capacityBerths ?? null);
+  const loadFactorPct = capacityBerths > 0
+    ? Math.round((guestTotal / capacityBerths) * 1000) / 10
+    : null;
+
   const marketAll = toSortedSlices(marketTotals);
+  const groupFit = buildGroupFitSlices({
+    reservations,
+    allocRows,
+    mode: compositionMode,
+    capacityBerths,
+  });
 
   return {
-    channelSlices: toSortedSlices(channelTotals, CHANNEL_ORDER),
-    marketSlices: collapseTopNSlices(marketAll, MARKET_TOP_N),
+    channelSlices: withCapacityShare(
+      toSortedSlices(channelTotals, CHANNEL_ORDER),
+      capacityBerths
+    ),
+    marketSlices: withCapacityShare(
+      collapseTopNSlices(marketAll, MARKET_TOP_N),
+      capacityBerths
+    ),
     marketSliceCount: marketAll.length,
-    groupFitSlices: toSortedSlices(groupFitTotals, ['Group', 'FIT']),
+    groupFitSlices: groupFit.slices,
     meta: {
       bookingCount,
       guestTotal,
       withAgency,
       withMarket,
       withMarketGroup,
-      withGroupId,
+      withGroupSignal,
+      withPaxType,
       marketTopN: MARKET_TOP_N,
-      marketGrouping: rollUpIndex.size > 0 ? 'new_budget_roll_up' : 'agency.market',
-      groupFitCoverageNote: withGroupId === 0
-        ? 'No group_id on current bookings — Group/FIT split is not reliable until FACT enrichment.'
-        : `Only ${withGroupId} of ${bookingCount} bookings have group_id; unconfirmed group holds need FACT_RESERVATION review.`,
+      marketDimension: dim,
+      marketGrouping: dim === 'market'
+        ? 'agency.market'
+        : (rollUpIndex.size > 0 ? 'new_budget_roll_up' : 'agency.market'),
+      capacityBerths,
+      capacityCabins: capacity?.capacityCabins ?? null,
+      capacitySourceSail: capacity?.sourceSail
+        || (hasOverride ? (referenceSailCode || null) : null),
+      loadFactorPct,
+      availableBerths: capacityBerths != null
+        ? Math.max(0, capacityBerths - guestTotal)
+        : null,
+      bookedComposition: compositionMode,
+      groupFitLabel: groupFit.meta.groupFitLabel,
+      fitGuests: groupFit.meta.fitGuests,
+      groupBookedGuests: groupFit.meta.groupBookedGuests,
+      groupHeldExpected: groupFit.meta.groupHeldExpected,
+      probabilitySource: groupFit.meta.probabilitySource,
+      groupFitCoverageNote: withPaxType === 0
+        ? (withGroupSignal > 0
+          ? `No pax_type — Group inferred from group_id on ${withGroupSignal} of ${bookingCount} bookings.`
+          : 'No pax_type on reservations — Group/FIT defaults to FIT until Fact_Reservation enrichment.')
+        : [
+          withPaxType < bookingCount
+            ? `pax_type on ${withPaxType} of ${bookingCount} bookings.`
+            : null,
+          compositionMode !== 'booked_only' && groupFit.meta.groupHeldExpected > 0
+            ? `Group held expected ${groupFit.meta.groupHeldExpected} (source alloc probability).`
+            : null,
+        ].filter(Boolean).join(' ') || null,
     },
   };
+};
+
+const normalizeSailCodeSet = (sailCodes = []) => {
+  const set = new Set();
+  (sailCodes || []).forEach((code) => {
+    const normalized = String(code || '').trim();
+    if (normalized) set.add(normalized);
+  });
+  return set;
+};
+
+/** Filter reservations to sail codes, then build a distribution bundle. */
+export const buildDistributionBundleForSail = ({
+  reservations = [],
+  sailCodes = [],
+  ...rest
+} = {}) => {
+  const codeSet = normalizeSailCodeSet(sailCodes);
+  const filtered = codeSet.size === 0
+    ? []
+    : (reservations || []).filter((row) => (
+      codeSet.has(String(row?.sail_code || '').trim())
+    ));
+  return buildDistributionBundle({
+    ...rest,
+    reservations: filtered,
+    sailCodes: [...codeSet],
+  });
+};
+
+/**
+ * Batch-precompute distribution bundles keyed by master sail_code.
+ * @param {string[]} sailCodeList — master sail codes
+ * @param {Record<string, number>|Map} [capacityBySail]
+ * @param {Record<string, string[]>|Map} [filterSailCodesBySail] — master → codes to include in mix
+ */
+export const indexDistributionBundlesBySailCode = ({
+  reservations = [],
+  agencies = [],
+  marketRollUp = [],
+  sailCodeList = [],
+  capacityBySail = null,
+  filterSailCodesBySail = null,
+  marketDimension = 'market_group',
+  bookedComposition = DEFAULT_BOOKED_COMPOSITION,
+  allocRowsByScope = null,
+  masterScopeBySail = null,
+} = {}) => {
+  const bySail = new Map();
+  (reservations || []).forEach((row) => {
+    const code = String(row?.sail_code || '').trim();
+    if (!code) return;
+    if (!bySail.has(code)) bySail.set(code, []);
+    bySail.get(code).push(row);
+  });
+
+  const capacityLookup = (code) => {
+    if (!capacityBySail) return undefined;
+    if (capacityBySail instanceof Map) return capacityBySail.get(code);
+    return capacityBySail[code];
+  };
+
+  const filterLookup = (code) => {
+    if (!filterSailCodesBySail) return null;
+    if (filterSailCodesBySail instanceof Map) return filterSailCodesBySail.get(code);
+    return filterSailCodesBySail[code];
+  };
+
+  const scopeLookup = (code) => {
+    if (!masterScopeBySail) return null;
+    if (masterScopeBySail instanceof Map) return masterScopeBySail.get(code);
+    return masterScopeBySail[code];
+  };
+
+  const allocLookup = (scopeKey) => {
+    if (!scopeKey || !allocRowsByScope) return [];
+    if (allocRowsByScope instanceof Map) return allocRowsByScope.get(scopeKey) || [];
+    return allocRowsByScope[scopeKey] || [];
+  };
+
+  const result = new Map();
+  (sailCodeList || []).forEach((entry) => {
+    const masterCode = String(
+      (entry && typeof entry === 'object' ? (entry.sailCode || entry.sail_code) : entry) || ''
+    ).trim();
+    if (!masterCode) return;
+
+    const filterCodes = (() => {
+      if (entry && typeof entry === 'object' && Array.isArray(entry.filterSailCodes)) {
+        return [...normalizeSailCodeSet(entry.filterSailCodes)];
+      }
+      const fromLookup = filterLookup(masterCode);
+      if (Array.isArray(fromLookup) && fromLookup.length) {
+        return [...normalizeSailCodeSet(fromLookup)];
+      }
+      return [masterCode];
+    })();
+
+    const rows = [];
+    filterCodes.forEach((code) => {
+      const list = bySail.get(code);
+      if (list?.length) rows.push(...list);
+    });
+
+    const capacityOverride = entry && typeof entry === 'object' && entry.capacityBerths != null
+      ? entry.capacityBerths
+      : capacityLookup(masterCode);
+
+    const scope = scopeLookup(masterCode);
+    const allocRows = allocLookup(scope?.scopeKey || null);
+
+    result.set(masterCode, buildDistributionBundle({
+      reservations: rows,
+      agencies,
+      marketRollUp,
+      sailCodes: filterCodes,
+      referenceSailCode: masterCode,
+      marketDimension,
+      bookedComposition,
+      allocRows,
+      capacityBerths: capacityOverride !== undefined ? capacityOverride : null,
+    }));
+  });
+
+  return result;
 };
 
 export default {
   CHANNEL_ORDER,
   MARKET_TOP_N,
   rollupAgencyTypeToChannel,
+  classifyPassengerType,
+  isActiveReservation,
   collapseTopNSlices,
+  resolveDistributionCapacity,
   buildDistributionBundle,
+  buildDistributionBundleForSail,
+  indexDistributionBundlesBySailCode,
 };

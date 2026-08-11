@@ -40,15 +40,15 @@ const SailingByCabinCategory = ({ panelInstanceId, panelComponentId }) => {
     }
   }, [data, loading, selectedSailCode]);
 
-  if (loading) {
+  if (loading && (!data || data.length === 0)) {
     return <LoadingSpinner message="Loading cabin occupancy data..." />;
   }
 
-  if (error) {
+  if (error && (!data || data.length === 0)) {
     return <ErrorMessage error={error} title="Error loading cabin occupancy data" />;
   }
 
-  if (!data || data.length === 0) {
+  if (!loading && (!data || data.length === 0)) {
     const emptyMessage = context
       ? 'No cabin occupancy data found for the selected sail.'
       : 'Select a sail to view cabin occupancy data.';

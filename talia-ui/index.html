@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="talia-app-version" content="0.2.1" />
     <title>Talia UI - Business Intelligence Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -115,6 +116,35 @@
         font-size: 0.875rem;
         color: var(--theme-text-muted);
       }
+      .talia-boot__detail {
+        margin: 0;
+        max-width: 28rem;
+        font-size: 0.75rem;
+        line-height: 1.45;
+        color: var(--theme-text-secondary);
+      }
+      .talia-boot__meta {
+        margin: 4px 0 0;
+        font-size: 0.7rem;
+        letter-spacing: 0.02em;
+        color: var(--theme-text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .talia-boot__warn {
+        margin: 8px 0 0;
+        max-width: 28rem;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid color-mix(in srgb, #e2a336 45%, transparent);
+        background: color-mix(in srgb, #e2a336 12%, transparent);
+        color: var(--theme-fg);
+        font-size: 0.75rem;
+        line-height: 1.45;
+        text-align: left;
+      }
+      .talia-boot__warn[hidden] {
+        display: none;
+      }
       @keyframes talia-boot-spin {
         to { transform: rotate(360deg); }
       }
@@ -122,12 +152,108 @@
   </head>
   <body>
     <div id="root">
-      <div class="talia-boot" role="status" aria-live="polite" aria-busy="true">
+      <div class="talia-boot" id="talia-boot" role="status" aria-live="polite" aria-busy="true">
         <p class="talia-boot__brand">Talia</p>
         <div class="talia-boot__spinner" aria-hidden="true"></div>
-        <p class="talia-boot__message">Loading application…</p>
+        <p class="talia-boot__message" id="talia-boot-message">Loading application…</p>
+        <p class="talia-boot__detail" id="talia-boot-detail">Starting UI…</p>
+        <p class="talia-boot__meta" id="talia-boot-meta"></p>
+        <div class="talia-boot__warn" id="talia-boot-warn" hidden></div>
       </div>
     </div>
+    <script>
+      (function () {
+        var started = Date.now();
+        var messageEl = document.getElementById('talia-boot-message');
+        var detailEl = document.getElementById('talia-boot-detail');
+        var metaEl = document.getElementById('talia-boot-meta');
+        var warnEl = document.getElementById('talia-boot-warn');
+        var versionMeta = document.querySelector('meta[name="talia-app-version"]');
+        var version = (versionMeta && versionMeta.getAttribute('content')) || 'unknown';
+        var host = location.host || 'local';
+        var scriptSrc = '';
+        var scripts = document.getElementsByTagName('script');
+        for (var i = 0; i < scripts.length; i++) {
+          if (scripts[i].src) scriptSrc = scripts[i].src;
+        }
+        var isViteDev = /\/src\/main\.|\/@vite\/client/.test(scriptSrc)
+          || document.querySelector('script[src*="/src/main"]') != null
+          || document.querySelector('script[src*="@vite/client"]') != null;
+        var modeLabel = isViteDev ? 'vite-dev (module graph)' : 'production bundle';
+        var failed = [];
+
+        function setDetail(text) {
+          if (detailEl) detailEl.textContent = text;
+        }
+        function setMessage(text) {
+          if (messageEl) messageEl.textContent = text;
+        }
+        function renderMeta() {
+          var secs = ((Date.now() - started) / 1000).toFixed(1);
+          if (metaEl) {
+            metaEl.textContent = 'v' + version + ' · ' + host + ' · ' + modeLabel + ' · ' + secs + 's';
+          }
+        }
+        function showWarn(html) {
+          if (!warnEl) return;
+          warnEl.hidden = false;
+          warnEl.innerHTML = html;
+        }
+
+        renderMeta();
+        setDetail(isViteDev
+          ? 'Fetching Vite modules over the public tunnel…'
+          : 'Loading bundled assets…');
+
+        window.addEventListener('error', function (event) {
+          var src = (event && event.filename) || (event && event.target && event.target.src) || '';
+          if (src) failed.push(String(src).replace(location.origin, ''));
+          if (failed.length) {
+            showWarn(
+              '<strong>Asset load problem</strong><br/>'
+              + failed.slice(-3).join('<br/>')
+            );
+          }
+        }, true);
+
+        var timer = window.setInterval(function () {
+          if (!document.getElementById('talia-boot')) {
+            window.clearInterval(timer);
+            return;
+          }
+          var elapsed = Date.now() - started;
+          renderMeta();
+          if (elapsed > 4000 && elapsed <= 12000) {
+            setMessage('Still loading…');
+            setDetail(isViteDev
+              ? 'Public tunnel + Vite-dev loads hundreds of files. This often stalls.'
+              : 'Waiting for JS bundle / auth bootstrap…');
+          }
+          if (elapsed > 12000) {
+            setMessage('Taking longer than expected');
+            if (isViteDev) {
+              showWarn(
+                '<strong>Vite-dev over ngrok is unreliable</strong><br/>'
+                + 'taliahub.com should serve a local <code>vite preview</code> build, not <code>npm run dev</code>. '
+                + 'Local editing can stay on <code>http://127.0.0.1:5173</code>.'
+              );
+            } else {
+              showWarn(
+                '<strong>Bundle loaded slowly or auth is waiting</strong><br/>'
+                + 'Check GraphQL on <code>/api/graphql</code> and Supabase, then hard-refresh.'
+              );
+            }
+          }
+        }, 500);
+
+        window.__taliaBoot = {
+          startedAt: started,
+          version: version,
+          mode: isViteDev ? 'vite-dev' : 'preview',
+          host: host
+        };
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

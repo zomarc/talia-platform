@@ -47,13 +47,12 @@ const TemplateContainer = ({ panelInstanceId, panelComponentId }) => {
   // TODO: Remove if not needed, or customize for your data structure
   const transformedData = data || [];
 
-  // Handle loading state
-  if (loading) {
+  // Initial load only — keep prior content so ReportShell can grey-out while refreshing.
+  if (loading && (!transformedData || transformedData.length === 0)) {
     return <LoadingSpinner message="Loading data..." fullScreen={false} />;
   }
 
-  // Handle error state
-  if (error) {
+  if (error && (!transformedData || transformedData.length === 0)) {
     return (
       <ErrorMessage 
         error={error} 
@@ -63,8 +62,7 @@ const TemplateContainer = ({ panelInstanceId, panelComponentId }) => {
     );
   }
 
-  // Handle empty data
-  if (!transformedData || transformedData.length === 0) {
+  if (!loading && (!transformedData || transformedData.length === 0)) {
     return (
       <div className="focus-panel-empty">
         <p>

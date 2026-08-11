@@ -5,6 +5,9 @@ import ErrorMessage from './ErrorMessage';
 /**
  * Shared state wrapper for data-driven panels.
  * Keeps loading/error/empty handling consistent and minimal.
+ *
+ * While refreshing with previous content (`loading && !empty`), children stay
+ * mounted so ReportShell can grey the panel instead of flashing a spinner.
  */
 const PanelDataState = ({
   loading = false,
@@ -16,15 +19,16 @@ const PanelDataState = ({
   onRetry = null,
   children
 }) => {
-  if (loading) {
+  // Initial load only — keep prior content visible during sail/filter refresh.
+  if (loading && empty) {
     return <LoadingSpinner message={loadingMessage} fullScreen={false} />;
   }
 
-  if (error) {
+  if (error && (empty || !loading)) {
     return <ErrorMessage error={error} title={errorTitle} onRetry={onRetry} />;
   }
 
-  if (empty) {
+  if (empty && !loading) {
     return (
       <div className="focus-panel-empty">
         <p>{emptyMessage}</p>

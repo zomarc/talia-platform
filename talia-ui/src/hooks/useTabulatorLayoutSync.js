@@ -1,5 +1,9 @@
 import { useEffect } from 'react';
-import { scheduleTabulatorLayoutRefresh } from '../lib/tabulatorConfig';
+import {
+  captureTableScroll,
+  restoreTableScrollSoon,
+  scheduleTabulatorLayoutRefresh,
+} from '../lib/tabulatorConfig';
 
 /**
  * Re-apply the global Tabulator fit mode after data or visibility changes.
@@ -15,14 +19,25 @@ export const useTabulatorLayoutSync = (instanceRef, deps = []) => {
   }, deps);
 };
 
-/** Call after replaceData (or similar) when not using the shared Tabulator wrapper hooks. */
-export const afterTabulatorDataRefresh = (table, refreshPromise) => {
-  const apply = () => scheduleTabulatorLayoutRefresh(table);
+/**
+ * Call after starting replaceData. Pass a scroll snapshot taken *before*
+ * replaceData — Tabulator clears scrollTop synchronously during replace.
+ *
+ *   const scroll = captureTableScroll(table);
+ *   afterTabulatorDataRefresh(table, table.replaceData(rows), scroll);
+ */
+export const afterTabulatorDataRefresh = (table, refreshPromise, scrollSnapshot = null) => {
+  const snapshot = scrollSnapshot || captureTableScroll(table);
+  const finish = () => {
+    restoreTableScrollSoon(snapshot);
+    scheduleTabulatorLayoutRefresh(table);
+    restoreTableScrollSoon(snapshot);
+  };
   if (refreshPromise && typeof refreshPromise.then === 'function') {
-    refreshPromise.then(apply).catch(apply);
+    refreshPromise.then(finish).catch(finish);
     return;
   }
-  scheduleTabulatorLayoutRefresh(table);
+  finish();
 };
 
 export default useTabulatorLayoutSync;

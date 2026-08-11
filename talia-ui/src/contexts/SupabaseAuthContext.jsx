@@ -27,8 +27,25 @@ export const SupabaseAuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [session, setSession] = useState(null);
   
-  // Development mode flag - check both Vite dev mode and custom env var for staging
-  const isDevMode = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_MODE === 'true';
+  // Open-access / staging bypass:
+  // - Vite DEV, or VITE_ENABLE_DEV_MODE
+  // - OR Supabase is only reachable on loopback while the UI is served remotely
+  //   (taliahub.com → local machine). Real auth against 127.0.0.1 fails with
+  //   "Failed to fetch" in that case; ngrok basic-auth is enough for now.
+  const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL || '');
+  let supabaseIsLoopback = false;
+  try {
+    const host = new URL(supabaseUrl).hostname;
+    supabaseIsLoopback = host === 'localhost' || host === '127.0.0.1';
+  } catch {
+    supabaseIsLoopback = !supabaseUrl;
+  }
+  const pageHost = typeof window !== 'undefined' ? window.location.hostname : '';
+  const pageIsLoopback = pageHost === 'localhost' || pageHost === '127.0.0.1';
+  const isDevMode =
+    import.meta.env.DEV
+    || import.meta.env.VITE_ENABLE_DEV_MODE === 'true'
+    || (supabaseIsLoopback && !pageIsLoopback);
 
   const resolveUserRole = (email) => {
     const normalizedEmail = String(email || '').toLowerCase().trim();
@@ -190,6 +207,17 @@ export const SupabaseAuthProvider = ({ children }) => {
     let timeoutId;
     let subscription;
     let isMounted = true;
+
+    // Remote UI + loopback Supabase: skip network auth entirely.
+    if (isDevMode && supabaseIsLoopback && !pageIsLoopback) {
+      console.log('🔧 Open-access mode: skipping Supabase (loopback URL from remote host)');
+      const mockUser = createMockUser();
+      setUser(mockUser);
+      setLoading(false);
+      return () => {
+        isMounted = false;
+      };
+    }
 
     // Set a timeout to prevent infinite loading
     timeoutId = setTimeout(() => {
@@ -356,10 +384,30 @@ export const SupabaseAuthProvider = ({ children }) => {
     }
   };
 
+  /** Local/open-access session — no Supabase network call. */
+  const enterDevSession = (devUserId = 'dev-user-1') => {
+    if (!isDevMode) {
+      console.warn('enterDevSession only works in development/open-access mode');
+      return null;
+    }
+    localStorage.setItem('devUserId', devUserId);
+    const mockUser = createMockUser();
+    setUser(mockUser);
+    setSession(null);
+    setError(null);
+    setLoading(false);
+    return mockUser;
+  };
+
   const signInWithPassword = async (email, password) => {
     try {
       setLoading(true);
       setError(null);
+
+      // Public tunnel + loopback Supabase cannot authenticate; use local admin.
+      if (isDevMode && supabaseIsLoopback && !pageIsLoopback) {
+        return { user: enterDevSession('dev-user-1') };
+      }
       
       // Try to sign in with existing credentials
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
@@ -452,6 +500,7 @@ export const SupabaseAuthProvider = ({ children }) => {
     error,
     signInWithEmail,
     signInWithPassword,
+    enterDevSession,
     signOut,
     updateUserRole,
     isDevMode,

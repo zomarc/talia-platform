@@ -604,6 +604,254 @@ export const typeDefs = `#graphql
     buildCurves: [BuildCurvePoint!]!  # Incremental build curves at week intervals
   }
 
+  enum ProfileBreakdown {
+    none
+    market
+    market_group
+    currency
+  }
+
+  type ProfileHistoryMeta {
+    quality: String!
+    distinctSnapshotDates: Int!
+    minSnapshotDate: String
+    maxSnapshotDate: String
+    thinHistory: Boolean!
+    message: String
+  }
+
+  type ProfileCompositionSlice {
+    dimensionKey: String!
+    bookings: Int!
+    guests: Int!
+    loadFactorPct: Float
+  }
+
+  type ProfileComposition {
+    market: [ProfileCompositionSlice!]!
+    marketGroup: [ProfileCompositionSlice!]!
+    currency: [ProfileCompositionSlice!]!
+  }
+
+  type DimensionalCurvePoint {
+    weekLabel: String!
+    weeksUntilSailing: Int!
+    bookings: Int!
+    guests: Int!
+    loadFactorPct: Float
+  }
+
+  type DimensionalSeries {
+    dimensionKey: String!
+    points: [DimensionalCurvePoint!]!
+  }
+
+  type BookingProfileDimensional {
+    sailCode: String!
+    referenceSailCode: String
+    inventoryItemId: ID
+    sailCodes: [String!]!
+    sailDate: String!
+    shipName: String
+    shipCode: String
+    currentBookings: Int!
+    currentGuests: Int!
+    capacity: Float
+    capacitySource: String
+    currentLoadFactorPct: Float
+    bookingVelocity: Float!
+    cancellationRate: Float!
+    daysUntilSailing: Int
+    breakdown: ProfileBreakdown!
+    bookingDataPoints: [BookingDataPoint!]!
+    buildCurves: [DimensionalCurvePoint!]!
+    series: [DimensionalSeries!]!
+    composition: ProfileComposition!
+    history: ProfileHistoryMeta!
+  }
+
+  type DimensionalComparisonMetrics {
+    bookingsDifference: Int!
+    bookingsPercentageChange: Float!
+    guestsDifference: Int!
+    guestsPercentageChange: Float!
+    velocityDifference: Float!
+    velocityPercentageChange: Float!
+    loadFactorDifference: Float
+  }
+
+  type BookingProfileDimensionalYoY {
+    currentYear: BookingProfileDimensional!
+    previousYear: BookingProfileDimensional
+    comparison: DimensionalComparisonMetrics
+    previousYearSailCode: String
+    peerSource: String
+    representativenessNote: String!
+  }
+
+  type BudgetComparisonRow {
+    dimensionKey: String!
+    budgetPassengers: Float!
+    actualGuests: Int!
+    actualBookings: Int!
+    gapGuests: Float!
+    budgetLoadFactorPct: Float
+    actualLoadFactorPct: Float
+    gapLoadFactorPct: Float
+  }
+
+  type BudgetEndStateComparison {
+    sailCode: String!
+    referenceSailCode: String
+    shipCode: String
+    shipName: String
+    capacity: Float
+    breakdown: ProfileBreakdown!
+    streamLabel: String!
+    totalBudgetPassengers: Float!
+    totalActualGuests: Int!
+    totalGapGuests: Float!
+    rows: [BudgetComparisonRow!]!
+    budgetRowCount: Int!
+    message: String
+  }
+
+  type ReservationVelocityWindow {
+    label: String!
+    days: Int!
+    bookings: Int!
+    guests: Int!
+    bookingsPerDay: Float!
+    guestsPerDay: Float!
+  }
+
+  type ReservationVelocity {
+    pastWeek: ReservationVelocityWindow!
+    pastTwoWeeks: ReservationVelocityWindow!
+    pastFourWeeks: ReservationVelocityWindow!
+    pastSixtyDays: ReservationVelocityWindow!
+  }
+
+  type ReservationRevenueSummary {
+    totalNetEur: Float!
+    totalGrossEur: Float!
+    revPerPaxEur: Float
+    bookingsWithRevenue: Int!
+    guestsWithRevenue: Int!
+    totalGuests: Int!
+    coveragePct: Float!
+    currency: String!
+    message: String
+  }
+
+  type ReservationCompetitorSnapshot {
+    currency: String!
+    ourMinFarePp: Float
+    competitorMedianPp: Float
+    competitorMinPp: Float
+    competitorCount: Int!
+    gapPct: Float
+    departureMonth: String
+    message: String
+  }
+
+  enum ReservationCurveSeriesMode {
+    market
+    channel
+    pax_type
+  }
+
+  type ReservationBookingCurve {
+    sailCode: String!
+    referenceSailCode: String
+    sailCodes: [String!]!
+    sailDate: String
+    shipCode: String
+    shipName: String
+    marketBreakdown: ProfileBreakdown!
+    seriesMode: ReservationCurveSeriesMode!
+    bookedCabins: Int
+    totalCabins: Int
+    loadFactorPct: Float
+    capacitySource: String
+    reservationBookings: Int!
+    reservationGuests: Int!
+    bookDateField: String!
+    missingBookDates: Int!
+    velocity: ReservationVelocity!
+    revenue: ReservationRevenueSummary!
+    competitor: ReservationCompetitorSnapshot
+    series: [DimensionalSeries!]!
+    totals: [DimensionalCurvePoint!]!
+    composition: [ProfileCompositionSlice!]!
+    maxWeeks: Int!
+    daysUntilSailing: Int
+  }
+
+  input SeasonalTradingPackFilters {
+    asOfDate: String
+    depMonthFrom: String
+    depMonthTo: String
+    marketGroup: String
+    fyLabel: String
+  }
+
+  enum TargetDimensionLevel {
+    voyage
+    market_group
+    market
+    currency
+  }
+
+  type InventoryTargetProfileNode {
+    id: ID!
+    profileId: ID!
+    dimensionLevel: TargetDimensionLevel!
+    dimensionKey: String!
+    parentNodeId: ID
+    weekLabel: String
+    weeksUntilSailing: Int
+    lfPct: Float!
+    pointOrder: Int!
+    metadata: JSON
+  }
+
+  type InventoryTargetProfile {
+    id: ID!
+    inventoryItemId: ID!
+    name: String!
+    perspective: String!
+    description: String
+    metric: String!
+    profileScope: String!
+    ownerKey: String
+    lastEditedBy: String
+    nodes: [InventoryTargetProfileNode!]!
+    createdAt: String
+    updatedAt: String
+  }
+
+  input InventoryTargetProfileNodeInput {
+    dimensionLevel: TargetDimensionLevel!
+    dimensionKey: String!
+    parentTempKey: String
+    tempKey: String
+    weekLabel: String
+    weeksUntilSailing: Int
+    lfPct: Float!
+    pointOrder: Int
+    metadata: JSON
+  }
+
+  input UpsertInventoryTargetProfileInput {
+    id: ID
+    inventoryItemId: ID!
+    name: String!
+    perspective: String!
+    description: String
+    nodes: [InventoryTargetProfileNodeInput!]!
+  }
+
   # Target Profile Types
   type TargetProfile {
     id: ID!
@@ -1223,6 +1471,18 @@ export const typeDefs = `#graphql
     bookingProfile(sailCode: String!): BookingProfile
     bookingProfileYearOverYear(sailCode: String!, previousYearSailCode: String): YearOverYearComparison
     bookingProfileWithCurves(sailCode: String!): BookingProfileWithCurves
+    bookingProfileDimensional(sailCode: String!, breakdown: ProfileBreakdown = none): BookingProfileDimensional
+    bookingProfileDimensionalYoY(sailCode: String!, breakdown: ProfileBreakdown = none, previousYearSailCode: String): BookingProfileDimensionalYoY
+    budgetEndStateComparison(sailCode: String!, breakdown: ProfileBreakdown = market_group): BudgetEndStateComparison
+    reservationBookingCurve(
+      sailCode: String!
+      marketBreakdown: ProfileBreakdown = market_group
+      seriesMode: ReservationCurveSeriesMode = market
+      includeCompetitor: Boolean = false
+    ): ReservationBookingCurve
+    seasonalTradingPack(filters: SeasonalTradingPackFilters): JSON!
+    inventoryTargetProfiles(inventoryItemId: ID!): [InventoryTargetProfile!]!
+    inventoryTargetProfile(id: ID!): InventoryTargetProfile
     
     # Target Profiles
     targetProfiles(filters: TargetProfileFilters): [TargetProfile!]!
@@ -1249,7 +1509,7 @@ export const typeDefs = `#graphql
     syncMetadata: [SyncMetadataRecord!]!
     databaseTables: [DatabaseTableMetadata!]!
     tableMetadata(tableName: String!): DatabaseTableMetadata
-    tableData(tableName: String!, limit: Int, filters: TableDataFilters): [JSON!]!  # Generic query to fetch table rows for review
+    tableData(tableName: String!, limit: Int, filters: TableDataFilters, columns: [String!]): [JSON!]!  # Generic query; optional columns whitelist projection
     backupMetadata: BackupMetadata  # Get database backup status and info
     dataMatch(filters: DataMatchFilters): DataMatchResponse!  # Data completeness cross-tab
     
@@ -1338,6 +1598,8 @@ export const typeDefs = `#graphql
       kind: ProfileSeriesKind!
       modelKey: String
     ): Boolean!
+    upsertInventoryTargetProfile(input: UpsertInventoryTargetProfileInput!): InventoryTargetProfile!
+    deleteInventoryTargetProfile(id: ID!): Boolean!
     
     # Google Search Trends
     trackGoogleSearch(query: String!, trackTrend: Boolean): TrackSearchResult!

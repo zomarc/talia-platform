@@ -3,7 +3,7 @@ import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { GraphQLUtils } from '../lib/apolloClient';
 
 const LandingPage = () => {
-  const { signInWithPassword, error } = useSupabaseAuth();
+  const { signInWithPassword, enterDevSession, isDevMode, error } = useSupabaseAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,25 +31,32 @@ const LandingPage = () => {
     setLoading(true);
     setMessage('');
     try {
-      // Use a standard admin email for development
+      // Prefer local open-access admin (no Supabase). Remote UI + loopback
+      // Supabase cannot authenticate and used to show "Failed to fetch".
+      if (isDevMode && typeof enterDevSession === 'function') {
+        enterDevSession('dev-user-1');
+        GraphQLUtils.setUserContext({
+          role: 'ADMIN',
+          email: 'dev@talia.local',
+          id: 'dev-user-1',
+          taliaUserId: 1000,
+        });
+        setMessage('Signing in as Administrator...');
+        return;
+      }
+
       const adminEmail = 'admin@talia.dev';
       const adminPassword = 'admin123';
-      
-      // Sign in as admin (will create if doesn't exist)
       await signInWithPassword(adminEmail, adminPassword);
-      
-      // Set admin role in localStorage for GraphQL context
-      // Note: Using uppercase ADMIN to match GraphQL enum
       GraphQLUtils.setUserContext({
         role: 'ADMIN',
         email: adminEmail,
         id: 'admin-dev'
       });
-      
       setMessage('Signing in as Administrator...');
     } catch (err) {
       console.error('Admin login error:', err);
-      setMessage('Failed to login as admin. Please try again.');
+      setMessage(err?.message || 'Failed to login as admin. Please try again.');
     } finally {
       setLoading(false);
     }

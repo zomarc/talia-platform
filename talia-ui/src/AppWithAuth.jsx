@@ -13,11 +13,16 @@ const AppContent = () => {
   console.log('✅ useSupabaseAuth:', { hasUser: !!user, loading, hasError: !!error });
 
   if (loading) {
+    const boot = typeof window !== 'undefined' ? window.__taliaBoot : null;
+    const mode = boot?.mode || (import.meta.env.DEV ? 'vite-dev' : 'preview');
     return (
       <div className="talia-auth-screen">
         <div className="talia-auth-center">
           <div className="talia-auth-spinner" />
-          <p className="talia-auth-message">Loading Talia UI...</p>
+          <p className="talia-auth-message">Loading Talia UI…</p>
+          <p className="talia-auth-message" style={{ opacity: 0.75, fontSize: '0.8rem' }}>
+            Auth bootstrap · {mode} · {boot?.host || window.location.host}
+          </p>
         </div>
       </div>
     );

@@ -17,7 +17,7 @@ import { filterByReservationStatus, isCancelledStatus } from './reservationCurre
 const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId }) => {
   const { theme } = useTheme();
   const [selectedCabinFilter, setSelectedCabinFilter] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('booked');
   
   console.log('[ReservationCurrentStateContainer] Component rendering');
   

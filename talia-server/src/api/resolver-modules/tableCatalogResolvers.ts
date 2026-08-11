@@ -31,11 +31,11 @@ export const buildTableCatalogQueryResolvers = ({
         'reservation_promotion', 'published_rates', 'published_rates_changes',
         'published_rates_current_state', 'competitor', 'competitor_current_state',
         'cabin_allocation', 'itinerary', 'gql_cabin_availability', 'sail_header',
-        'ship_cabin', 'ship_cabin_ctg_link', 'market_roll_up', 'ship_inventory_alloc', 'sync_metadata', 'focuses', 'google_trends_data',
+        'ship_cabin', 'ship_cabin_ctg_link', 'ship_cabin_reserve', 'cabin_ctg', 'market_roll_up', 'ship_inventory_alloc', 'sync_metadata', 'focuses', 'google_trends_data',
         'google_trends_search_terms', 'data_refresh_metadata',
         'booking_targets_supplied', 'target_profiles', 'target_mapping_config',
         'inventory_item', 'inventory_item_operational', 'sailing_master', 'sailing_hierarchy',
-        'inventory_status_by_day', 'ship_day_berth_status', 'sailing_physical_day_map',
+        'inventory_status_by_day', 'ship_day_berth_status', 'sail_booking_summary', 'sailing_physical_day_map',
         'inventory_item_profile_curve_point'
       ];
 

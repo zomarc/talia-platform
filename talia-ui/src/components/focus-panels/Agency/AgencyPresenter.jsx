@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions, captureTableScroll } from '../../../lib/tabulatorConfig';
 import { afterTabulatorDataRefresh } from '../../../hooks/useTabulatorLayoutSync';
 import {
   AGENCY_CLEAR_EVENT,
@@ -18,6 +18,29 @@ import {
 } from '../../../lib/tabulatorReferenceSelection';
 import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 import { AGENCY_SELECTION_MODES } from './agencyDirectoryContext';
+
+const formatEur = (value) => {
+  if (value == null || !Number.isFinite(Number(value))) return '';
+  return Number(value).toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: 0,
+  });
+};
+
+const formatPpd = (value) => {
+  if (value == null || !Number.isFinite(Number(value))) return '';
+  return Number(value).toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: 2,
+  });
+};
+
+const formatGuests = (value) => {
+  if (value == null || !Number.isFinite(Number(value))) return '';
+  return Number(value).toLocaleString(undefined, { maximumFractionDigits: 1 });
+};
 
 const AGENCY_COLUMNS = [
   {
@@ -35,6 +58,56 @@ const AGENCY_COLUMNS = [
     titleLong: 'Agency Name',
     headerFilter: 'input',
     minWidth: 220,
+  },
+  {
+    field: 'current_value_eur',
+    title: 'Current Value',
+    titleShort: 'Cur €',
+    titleLong: 'Current Value (EUR)',
+    hozAlign: 'right',
+    sorter: 'number',
+    formatter: (cell) => formatEur(cell.getValue()),
+    headerFilter: 'number',
+  },
+  {
+    field: 'current_ppd',
+    title: 'Current PPD',
+    titleShort: 'Cur PPD',
+    titleLong: 'Current PPD (EUR)',
+    hozAlign: 'right',
+    sorter: 'number',
+    formatter: (cell) => formatPpd(cell.getValue()),
+    headerFilter: 'number',
+  },
+  {
+    field: 'expected_value_eur',
+    title: 'Expected Value',
+    titleShort: 'Exp €',
+    titleLong: 'Expected Value (EUR)',
+    hozAlign: 'right',
+    sorter: 'number',
+    formatter: (cell) => formatEur(cell.getValue()),
+    headerFilter: 'number',
+  },
+  {
+    field: 'expected_ppd',
+    title: 'Expected PPD',
+    titleShort: 'Exp PPD',
+    titleLong: 'Expected PPD (EUR)',
+    hozAlign: 'right',
+    sorter: 'number',
+    formatter: (cell) => formatPpd(cell.getValue()),
+    headerFilter: 'number',
+  },
+  {
+    field: 'current_guests',
+    title: 'Guests',
+    titleShort: 'Gst',
+    titleLong: 'Current Guests',
+    hozAlign: 'right',
+    sorter: 'number',
+    formatter: (cell) => formatGuests(cell.getValue()),
+    headerFilter: 'number',
   },
   {
     field: 'agency_type',
@@ -185,6 +258,9 @@ const AgencyPresenter = ({
   selectedReservationId = null,
   selectedSailCodes = [],
   selectedReferenceSailCode = null,
+  categoryBreakdown = [],
+  cabinCategoryMode = 'real',
+  explorerAgencyId = null,
 }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
@@ -300,7 +376,7 @@ const AgencyPresenter = ({
       instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
         data: [],
         columns: AGENCY_COLUMNS,
-        initialSort: [{ column: 'agency_name', dir: 'asc' }],
+        initialSort: [{ column: 'current_value_eur', dir: 'desc' }],
         height: '100%',
         selectableRows: 1,
         headerFilterLiveFilter: true,
@@ -315,6 +391,7 @@ const AgencyPresenter = ({
         tableBuiltRef.current = true;
         const rows = Array.isArray(dataRef.current) ? dataRef.current : [];
         suppressSelectionEventsRef.current = true;
+        const scroll = captureTableScroll(instanceRef.current);
         const refreshPromise = Promise.resolve(instanceRef.current.replaceData(rows))
           .catch(() => { /* noop */ })
           .finally(() => {
@@ -322,7 +399,7 @@ const AgencyPresenter = ({
             setRecordCount(rows.length);
             if (activeAgencyIdRef.current) focusLinkedAgencyRef.current();
           });
-        afterTabulatorDataRefresh(instanceRef.current, refreshPromise);
+        afterTabulatorDataRefresh(instanceRef.current, refreshPromise, scroll);
       });
 
       instanceRef.current.on('rowClick', (_event, row) => {
@@ -372,6 +449,7 @@ const AgencyPresenter = ({
     if (!table || !tableBuiltRef.current) return;
     const rows = Array.isArray(data) ? data : [];
     suppressSelectionEventsRef.current = true;
+    const scroll = captureTableScroll(table);
     const refreshPromise = Promise.resolve(table.replaceData(rows))
       .catch(() => { /* noop */ })
       .finally(() => {
@@ -381,7 +459,7 @@ const AgencyPresenter = ({
           focusLinkedAgencyRef.current();
         }
       });
-    afterTabulatorDataRefresh(table, refreshPromise);
+    afterTabulatorDataRefresh(table, refreshPromise, scroll);
   }, [data, selectionMode]);
 
   const subtitle = (() => {
@@ -403,6 +481,13 @@ const AgencyPresenter = ({
   const showReservationCriteria = selectionMode === AGENCY_SELECTION_MODES.RESERVATION;
   const showSailCriteria = selectionMode === AGENCY_SELECTION_MODES.SAIL;
 
+  const explorerAgencyRow = useMemo(() => {
+    if (!explorerAgencyId || !data?.length) return null;
+    return data.find((row) => String(row?.agency_id) === String(explorerAgencyId)) || null;
+  }, [data, explorerAgencyId]);
+
+  const categoryModeLabel = cabinCategoryMode === 'group' ? 'cabin group' : 'cabin category';
+
   const onRecordActive = useCallback((rec) => {
     if (!rec) return;
     activeAgencyIdRef.current = String(rec.agency_id);
@@ -417,10 +502,10 @@ const AgencyPresenter = ({
   }, []);
 
   return (
-    <div className="focus-panel talia-report agency-directory-panel" role="region" aria-label="Agency directory">
+    <div className="focus-panel talia-report agency-directory-panel" role="region" aria-label="Agency explorer">
       <header className="talia-report__header">
         <div className="talia-report__header-left">
-          <h2 className="talia-report__title">Agency Directory</h2>
+          <h2 className="talia-report__title">Agency Explorer</h2>
           <p className="talia-report__subtitle">{subtitle}</p>
         </div>
       </header>
@@ -461,6 +546,37 @@ const AgencyPresenter = ({
                   <span className="ms-berth-criteria__value">{selectedSailCodes.join(', ')}</span>
                 </div>
               ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {explorerAgencyRow && (explorerAgencyRow.current_value_eur != null || categoryBreakdown.length > 0) ? (
+        <div className="talia-callout agency-explorer-callout" role="status">
+          <strong>{explorerAgencyRow.agency_name || `Agency ${explorerAgencyId}`}</strong>
+          {' · '}
+          Current {formatEur(explorerAgencyRow.current_value_eur) || '—'}
+          {' / PPD '}
+          {formatPpd(explorerAgencyRow.current_ppd) || '—'}
+          {' · Expected '}
+          {formatEur(explorerAgencyRow.expected_value_eur) || '—'}
+          {' / PPD '}
+          {formatPpd(explorerAgencyRow.expected_ppd) || '—'}
+          {explorerAgencyRow.fit_current_guests != null || explorerAgencyRow.group_current_guests != null ? (
+            <>
+              {' · FIT '}
+              {formatGuests(explorerAgencyRow.fit_current_guests) || '0'}
+              {' / Group '}
+              {formatGuests(explorerAgencyRow.group_current_guests) || '0'}
+            </>
+          ) : null}
+          {categoryBreakdown.length > 0 ? (
+            <div className="agency-explorer-callout__cats">
+              By {categoryModeLabel}
+              {': '}
+              {categoryBreakdown.slice(0, 8).map((entry) => (
+                `${entry.category} ${formatEur(entry.current_value_eur)}`
+              )).join(' · ')}
             </div>
           ) : null}
         </div>

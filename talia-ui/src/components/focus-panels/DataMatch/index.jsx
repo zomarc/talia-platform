@@ -22,13 +22,12 @@ const DataMatchContainer = ({ panelInstanceId, panelComponentId }) => {
     panelComponentId
   });
 
-  // Handle loading state
-  if (loading) {
+  // Initial load only — keep prior content so ReportShell can grey-out while refreshing.
+  if (loading && (!data?.rows || data.rows.length === 0)) {
     return <LoadingSpinner message="Loading data match information..." fullScreen={false} />;
   }
 
-  // Handle error state
-  if (error) {
+  if (error && (!data?.rows || data.rows.length === 0)) {
     return (
       <ErrorMessage 
         error={error} 
@@ -38,8 +37,7 @@ const DataMatchContainer = ({ panelInstanceId, panelComponentId }) => {
     );
   }
 
-  // Handle empty data
-  if (!data || !data.rows || data.rows.length === 0) {
+  if (!loading && (!data?.rows || data.rows.length === 0)) {
     return (
       <div className="focus-panel-empty">
         <p>No data match information available</p>

@@ -118,10 +118,10 @@ export const componentRegistry = {
     component: MasterSailingExplorerContainer,
     panelId: 'master-sailing-explorer',
     category: 'Tables',
-    title: 'Master Sailing Explorer',
+    title: 'Explorer',
     description: 'Master sailings with total booked/capacity and expandable day-by-day breakdown with sub-sailing highlights',
     props: {},
-    dataRequirements: 'Requires master_sail, inventory_item, sailing_hierarchy, ship_day_berth_status (or sail_by_cabin_occupancy), and reservation_current_state',
+    dataRequirements: 'Requires master_sail, inventory_item, sailing_hierarchy, densified ship_day_berth_status (cabin + berth), and sail_booking_summary. reservation_current_state / agency / alloc deferred for distribution hover.',
     events: {
       emits: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT],
       respondsTo: []
@@ -216,7 +216,7 @@ export const componentRegistry = {
     component: CabinDeckInventoryContainer,
     panelId: 'cabin-deck-inventory',
     category: 'Inventory',
-    title: 'Cabin Deck Inventory',
+    title: 'Inventory',
     description: 'Assigned cabins by deck and category with FIT/Group ownership highlights; GTY ONLY holds shown as unassigned group bookings',
     props: {},
     dataRequirements: 'Requires ship_inventory_alloc (from stg.RES_CABIN_ALLOCATION_DETAIL), ship_cabin, ship_cabin_ctg_link (fou.SHIP_CABIN_CTG_LINK). No customer/PII. Owner id is res_id (FIT) or group_id (GROUP).',
@@ -456,7 +456,7 @@ export const componentRegistry = {
     component: ReservationCurrentStateContainer,
     panelId: 'reservation-current-state',
     category: 'Tables',
-    title: 'Reservation Current State',
+    title: 'Reservation',
     description: 'Reservation current state table - reacts to sail selection',
     props: {
       filters: { type: 'object', required: false, description: 'Filter object with sail_code, ship, res_status, etc.' },
@@ -493,7 +493,7 @@ export const componentRegistry = {
     title: 'Real booking profile (+ YoY) — legacy',
     legacy: true,
     description:
-      'Legacy snapshot-based curves (reservation_changes). Prefer Reservation booking curve for MSE-aligned booked cabins and original book dates.',
+      'Legacy snapshot-based curves (reservation_changes). Prefer Reservation Profile for MSE-aligned booked cabins and original book dates.',
     props: {
       sailCode: { type: 'string', required: false, description: 'Sail code (optional if sail is selected in UI)' },
       includeComparison: { type: 'boolean', required: false, description: 'Include year-over-year comparison' },
@@ -510,9 +510,9 @@ export const componentRegistry = {
     component: ReservationBookingCurveContainer,
     panelId: 'reservation-booking-curve',
     category: 'Booking & profiles',
-    title: 'Reservation booking curve',
+    title: 'Reservation Profile',
     description:
-      'Cumulative bookings by original booked date, stacked by market. Booked / capacity match Master Sailing Explorer cabin peaks. Velocity for 7 / 14 / 28 days from reservation data only.',
+      'Cumulative bookings by original booked date, stacked by market. Booked / capacity match Explorer cabin peaks. Velocity for 7 / 14 / 28 days from reservation data only.',
     props: {
       sailCode: { type: 'string', required: false, description: 'Sail code (optional if sail is selected in UI)' },
       theme: { type: 'object', required: false, description: 'Theme object for styling' }

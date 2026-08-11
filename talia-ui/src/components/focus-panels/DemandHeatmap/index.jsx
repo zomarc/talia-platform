@@ -33,13 +33,12 @@ const DemandHeatmapContainer = ({ filters = {} }) => {
     monthsCount: months?.length 
   });
 
-  // Handle loading state
-  if (loading) {
+  // Initial load only — keep prior content so ReportShell can grey-out while refreshing.
+  if (loading && (!data || data.length === 0)) {
     return <LoadingSpinner message="Loading demand heatmap..." fullScreen={false} />;
   }
 
-  // Handle error state
-  if (error) {
+  if (error && (!data || data.length === 0)) {
     return (
       <ErrorMessage 
         error={error} 
@@ -49,8 +48,7 @@ const DemandHeatmapContainer = ({ filters = {} }) => {
     );
   }
 
-  // Handle empty data
-  if (!data || data.length === 0) {
+  if (!loading && (!data || data.length === 0)) {
     return (
       <div className="focus-panel-empty">
         <p>No demand data available</p>

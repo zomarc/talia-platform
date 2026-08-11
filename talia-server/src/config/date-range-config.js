@@ -67,13 +67,29 @@ export function overrideDatasetDateRange(datasetConfig, envDateRange) {
   if (modifiedConfig.tables) {
     Object.keys(modifiedConfig.tables).forEach(tableName => {
       const tableConfig = modifiedConfig.tables[tableName];
-      
+      if (tableConfig.applyIntegrationDateRange === false) {
+        return;
+      }
+
       // Override filters with 'between' operator
       if (tableConfig.filters) {
         tableConfig.filters.forEach(filter => {
           if (filter.operator === 'between') {
             filter.from = envDateRange.from;
             filter.to = envDateRange.to;
+          }
+          if (filter.operator === 'subquery' && typeof filter.subquery === 'string') {
+            filter.subquery = filter.subquery
+              .replaceAll('{{from}}', envDateRange.from)
+              .replaceAll('{{to}}', envDateRange.to)
+              .replace(
+                /(SAIL_DATE_FROM\s*>=\s*')(\d{4}-\d{2}-\d{2})(')/gi,
+                `$1${envDateRange.from}$3`
+              )
+              .replace(
+                /(SAIL_DATE_FROM\s*<=\s*')(\d{4}-\d{2}-\d{2})(')/gi,
+                `$1${envDateRange.to}$3`
+              );
           }
         });
       }

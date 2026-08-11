@@ -13,6 +13,25 @@ export const formatDayMon = (value, fallback = '') => {
   return `${day} ${month}`;
 };
 
+/** Day + month + year, e.g. "23 Jul 2026". Prefer for multi-year data surfaces. */
+export const formatDayMonYear = (value, fallback = '') => {
+  const date = parseDateValue(value);
+  if (!date) return fallback;
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = date.toLocaleString('en-US', { month: 'short' });
+  return `${day} ${month} ${date.getFullYear()}`;
+};
+
+/** Day + month + 2-digit year, e.g. "23 Jul 26". Compact for explorer grids. */
+export const formatDayMonYy = (value, fallback = '') => {
+  const date = parseDateValue(value);
+  if (!date) return fallback;
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = date.toLocaleString('en-US', { month: 'short' });
+  const yy = String(date.getFullYear()).slice(-2);
+  return `${day} ${month} ${yy}`;
+};
+
 export const formatMonYear = (value, fallback = '') => {
   const date = parseDateValue(value);
   if (!date) return fallback;
@@ -63,8 +82,8 @@ export const formatSailDateRange = (fromValue, toValue, fallback = '') => {
   const fromDate = parseDateValue(fromValue);
   const toDate = parseDateValue(toValue);
   if (!fromDate && !toDate) return fallback;
-  if (fromDate && !toDate) return formatDayMon(fromValue, fallback);
-  if (!fromDate && toDate) return formatDayMon(toValue, fallback);
+  if (fromDate && !toDate) return formatDayMonYear(fromValue, fallback);
+  if (!fromDate && toDate) return formatDayMonYear(toValue, fallback);
 
   const fromDay = fromDate.getDate();
   const toDay = toDate.getDate();

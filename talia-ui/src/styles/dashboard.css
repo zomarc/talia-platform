@@ -346,6 +346,23 @@
   pointer-events: none;
 }
 
+/* Shared refresh affordance for all ReportShell panels (pairs with tab spinner). */
+.talia-report-shell--loading .talia-report-shell__content {
+  opacity: 0.48;
+  filter: grayscale(0.35);
+  transition: opacity 120ms ease, filter 120ms ease;
+  pointer-events: none;
+}
+
+.talia-report-shell--loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--theme-bg-solid, #1a1a1a) 28%, transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .talia-report-shell__pause-overlay {
   position: absolute;
   inset: 0;

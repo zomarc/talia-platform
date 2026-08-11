@@ -174,7 +174,7 @@ cd talia-server && npm run start
 
 ### **Versioning Strategy**
 - **x.y.z Format**: Production.BaselineOrFeature.DevRelease
-- **Current Version**: 0.2.0 (Dev Baseline)
+- **Current Version**: 0.3.0 (Dev Baseline)
 - **Development**: Feature releases increment y, testable increments z
 
 ## 📝 **Development Notes**

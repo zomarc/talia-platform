@@ -148,21 +148,32 @@ export const buildPhysicalBerthsFromShipDayRows = (shipDayRows = []) => {
     const dateKey = toDateKey(row?.date);
     if (!shipCode || !sailCode || !dateKey) return;
     const key = `${shipCode}|${sailCode}|${dateKey}`;
-    // Cabin counts here are berth÷2 estimates only — prefer sail_by_cabin_occupancy overlay.
+    const hasCabinAggs = row?.total_cabins != null || row?.occupied_cabins != null;
+    const berthCapacity = toNumber(row?.berth_capacity);
+    const berthsOccupied = toNumber(row?.berths_occupied);
+    const berthsAvailable = row?.berths_available != null
+      ? toNumber(row.berths_available)
+      : Math.max(0, berthCapacity - berthsOccupied);
+    const totalCabins = hasCabinAggs
+      ? Math.max(0, toNumber(row?.total_cabins))
+      : Math.max(0, Math.round(berthCapacity / 2));
+    const occupiedCabins = hasCabinAggs
+      ? Math.max(0, toNumber(row?.occupied_cabins))
+      : Math.max(0, Math.round(berthsOccupied / 2));
+    const availableCabins = hasCabinAggs && row?.available_cabins != null
+      ? Math.max(0, toNumber(row.available_cabins))
+      : Math.max(0, totalCabins - occupiedCabins);
     index.set(key, {
       ship_code: shipCode,
       sail_code: sailCode,
       date: dateKey,
-      total_cabins: Math.max(0, Math.round(toNumber(row?.berth_capacity) / 2)),
-      occupied_cabins: Math.max(0, Math.round(toNumber(row?.berths_occupied) / 2)),
-      available_cabins: Math.max(
-        0,
-        Math.round((toNumber(row?.berth_capacity) - toNumber(row?.berths_occupied)) / 2)
-      ),
-      berth_capacity: toNumber(row?.berth_capacity),
-      berths_occupied: toNumber(row?.berths_occupied),
-      berths_available: toNumber(row?.berths_available),
-      cabin_source: 'berth_estimate',
+      total_cabins: totalCabins,
+      occupied_cabins: occupiedCabins,
+      available_cabins: availableCabins,
+      berth_capacity: berthCapacity,
+      berths_occupied: berthsOccupied,
+      berths_available: berthsAvailable,
+      cabin_source: hasCabinAggs ? 'ship_day_berth_status' : 'berth_estimate',
     });
   });
   return index;
@@ -365,33 +376,65 @@ const resolveMasterPhysicalTotals = ({
     total_cabins: Math.round(peakCabinCapacity),
     booked_cabins: Math.round(peakCabinBooked),
     available_cabins: Math.max(0, Math.round(peakCabinCapacity - peakCabinBooked)),
-    physical_source: departurePhysical?.cabin_source === 'sail_by_cabin_occupancy'
+    physical_source: (
+      departurePhysical?.cabin_source === 'sail_by_cabin_occupancy'
+      || departurePhysical?.cabin_source === 'ship_day_berth_status'
+    )
       ? 'cabin_occupancy+ship_day_berths'
       : 'ship_day_berths',
     physical_sail_code: masterCode,
   };
 };
 
+export const guestsAndGuaranteedFromBookingSummary = (summaryRows = []) => {
+  const guestsBySailCode = new Map();
+  const guaranteedCabinsBySailCode = new Map();
+  asArray(summaryRows).forEach((row) => {
+    const sailCode = String(row?.sail_code || '').trim();
+    if (!sailCode) return;
+    guestsBySailCode.set(sailCode, toNumber(row?.guest_count));
+    guaranteedCabinsBySailCode.set(sailCode, toNumber(row?.guaranteed_cabins));
+  });
+  return { guestsBySailCode, guaranteedCabinsBySailCode };
+};
+
 export const buildMasterSailingExplorerBundle = ({
   masterSailRows,
   inventoryItems,
   reservationRows,
+  bookingSummaryRows,
   hierarchyRows,
   occupancyRows,
   shipDayBerthRows,
 }) => {
-  const masters = buildMasterSailingRows(masterSailRows, inventoryItems, reservationRows);
+  const summaryMaps = bookingSummaryRows?.length
+    ? guestsAndGuaranteedFromBookingSummary(bookingSummaryRows)
+    : null;
+  const reservationRowsForMasters = summaryMaps
+    ? asArray(bookingSummaryRows).map((row) => ({
+      sail_code: row?.sail_code,
+      guest_count: row?.guest_count,
+    }))
+    : reservationRows;
+  const masters = buildMasterSailingRows(masterSailRows, inventoryItems, reservationRowsForMasters);
   const segmentsByMaster = buildSegmentsByMaster(hierarchyRows);
-  const guestsBySailCode = buildGuestsBySailCode(reservationRows);
-  const guaranteedCabinsBySailCode = buildGuaranteedCabinsBySailCode(reservationRows);
+  const guestsBySailCode = summaryMaps
+    ? summaryMaps.guestsBySailCode
+    : buildGuestsBySailCode(reservationRows);
+  const guaranteedCabinsBySailCode = summaryMaps
+    ? summaryMaps.guaranteedCabinsBySailCode
+    : buildGuaranteedCabinsBySailCode(reservationRows);
   const berthIndex = shipDayBerthRows?.length
     ? buildPhysicalBerthsFromShipDayRows(shipDayBerthRows)
     : new Map();
-  const cabinIndex = occupancyRows?.length
+  const berthHasCabinAggs = berthIndex.size > 0 && Array.from(berthIndex.values()).some(
+    (entry) => entry?.cabin_source === 'ship_day_berth_status'
+  );
+  const cabinIndex = (!berthHasCabinAggs && occupancyRows?.length)
     ? buildPhysicalBerthsBySailDate(occupancyRows)
     : new Map();
   const physicalBerthsIndex = berthIndex.size > 0
-    ? mergeCabinOccupancyOntoBerths(berthIndex, cabinIndex)
+    ? (cabinIndex.size > 0 ? mergeCabinOccupancyOntoBerths(berthIndex, cabinIndex) : berthIndex)
     : cabinIndex;
   const dayDetailsByMaster = new Map();
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Chart } from 'chart.js/auto';
-import { getChartColors, getChartOptions } from '../../../lib/chartConfig';
+import { useTheme } from '../../../contexts/ThemeContext';
+import { getChartColors, getChartOptions, getOverlayLegendOptions } from '../../../lib/chartConfig';
 
 /**
  * OccupancyChartPresenter - Weekly occupancy and revenue chart
@@ -11,6 +12,7 @@ import { getChartColors, getChartOptions } from '../../../lib/chartConfig';
 const OccupancyChartPresenter = ({ data }) => {
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
+  const { chartLegendsVisible } = useTheme();
 
   useEffect(() => {
     if (!canvasRef.current) return undefined;
@@ -51,9 +53,7 @@ const OccupancyChartPresenter = ({ data }) => {
       },
       options: getChartOptions.bar({
         plugins: {
-          legend: {
-            position: 'top'
-          }
+          legend: getOverlayLegendOptions({ visible: chartLegendsVisible })
         },
         scales: {
           occupancy: {
@@ -84,7 +84,7 @@ const OccupancyChartPresenter = ({ data }) => {
         chartRef.current = null;
       }
     };
-  }, [data]);
+  }, [chartLegendsVisible, data]);
 
   return (
     <div className="talia-report" role="region" aria-label="Weekly occupancy and revenue">

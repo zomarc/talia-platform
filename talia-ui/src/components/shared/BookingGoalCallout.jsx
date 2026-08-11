@@ -2,12 +2,16 @@ import React from 'react';
 
 /**
  * Short, consistent copy so REAL vs TARGET vs MODEL vs overlay panels are obvious.
- * @param {'REAL'|'REAL_SIMPLE'|'TARGET'|'COMBINED'|'MODEL'|'LEGACY_CHART'} variant
+ * @param {'REAL'|'RESERVATION_CURVE'|'REAL_SIMPLE'|'TARGET'|'COMBINED'|'MODEL'|'LEGACY_CHART'} variant
  */
 const COPY = {
   REAL: {
-    tag: 'Goal ① — REAL',
-    body: 'Trends and KPIs from live booking/reservation data. Use Profile Tools → “Real profile + YoY” for year-over-year on the same chart.',
+    tag: 'Legacy — snapshot profile',
+    body: 'Uses reservation_changes snapshots. Prefer “Reservation booking curve” for MSE-aligned booked cabins and original book dates.',
+  },
+  RESERVATION_CURVE: {
+    tag: 'Goal ① — Reservation curve',
+    body: 'Cumulative bookings by original booked date, split by market. Booked cabins / capacity match Master Sailing Explorer.',
   },
   REAL_SIMPLE: {
     tag: 'Goal ① — REAL (diagnostic)',
@@ -40,7 +44,7 @@ export default function BookingGoalCallout({ variant = 'REAL', includeComparison
       <p className="booking-goal-callout__body">{c.body}</p>
       {includeComparison && variant === 'REAL' && (
         <p className="booking-goal-callout__extra">
-          Year-over-year is enabled for this panel (prior sail is auto-derived unless you pass <code>previousYearSailCode</code>).
+          YoY enabled — treat as illustrative, not a planning baseline.
         </p>
       )}
     </div>

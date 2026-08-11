@@ -50,6 +50,7 @@ export const getDashboardGlobalConfig = () => {
       detailsVisible: true,
       titlesVisible: true,
       calloutsVisible: false,
+      chartLegendsVisible: true,
       actionsVisible: true,
       controlsVisible: true,
       viewScope: 'local',
@@ -91,6 +92,7 @@ export const getDashboardGlobalConfig = () => {
     detailsVisible: getGlobalReportDetailsVisible(),
     titlesVisible: window.__taliaPanelTitlesVisible !== false,
     calloutsVisible: window.__taliaCalloutsVisible === true,
+    chartLegendsVisible: window.__taliaChartLegendsVisible !== false,
     actionsVisible: window.__taliaActionsVisible !== false,
     controlsVisible: window.__taliaControlsVisible === true,
     viewScope: window.__taliaViewScope === 'wide' ? 'wide' : 'local',
@@ -106,6 +108,7 @@ const applyChromeClasses = (config) => {
   root.classList.toggle('talia-tabulator-filters-hidden', config.tabulatorFiltersVisible === false);
   root.classList.toggle('talia-panel-titles-hidden', config.titlesVisible === false);
   root.classList.toggle('talia-callouts-hidden', config.calloutsVisible === false);
+  root.classList.toggle('talia-chart-legends-hidden', config.chartLegendsVisible === false);
   root.classList.toggle('talia-actions-hidden', config.actionsVisible === false);
   root.classList.toggle('talia-controls-hidden', config.controlsVisible !== true);
 };
@@ -117,6 +120,7 @@ const writeWindowSnapshots = (config) => {
   window.__taliaTableLayoutMode = config.tableLayoutMode;
   window.__taliaPanelTitlesVisible = config.titlesVisible;
   window.__taliaCalloutsVisible = config.calloutsVisible;
+  window.__taliaChartLegendsVisible = config.chartLegendsVisible;
   window.__taliaActionsVisible = config.actionsVisible;
   window.__taliaControlsVisible = config.controlsVisible;
   window.__taliaViewScope = config.viewScope;

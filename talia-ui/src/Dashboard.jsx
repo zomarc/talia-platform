@@ -33,6 +33,11 @@ import { ARCADE_GAME_PANEL_COMPONENTS } from "./components/shared/games/arcadeGa
 import { useTheme } from "./contexts/ThemeContext";
 import { DEFAULT_THEME } from "./config/themes.js";
 import { loadUserProfileState, saveUserProfileState } from "./services/data/userProfileState";
+import {
+  applyRegistryTitlesToDockviewLayout,
+  resolveRegistryPanelTitle,
+  syncOpenDockviewPanelTitles,
+} from "./lib/dockviewPanelTitles";
 // Tabulator - using npm package
 import Tabulator from "./lib/tabulatorConfig.js";
 // Chart.js - using npm package
@@ -1120,13 +1125,17 @@ function Dashboard({ user }) {
         apiRef.current.clear();
         
         // Validate layout data structure
-        const layoutData = focus.layoutData.dockviewLayout;
+        const layoutData = applyRegistryTitlesToDockviewLayout(
+          focus.layoutData.dockviewLayout,
+          reportMetadataByPanelId
+        );
         if (!layoutData || typeof layoutData !== 'object') {
           throw new Error('Invalid layout data structure');
         }
         
         // Load the saved Dockview layout directly
         apiRef.current.fromJSON(layoutData);
+        syncOpenDockviewPanelTitles(apiRef.current, reportMetadataByPanelId);
         console.log('✅ Successfully loaded saved layout from database');
         return focus.id;
         
@@ -1147,7 +1156,7 @@ function Dashboard({ user }) {
       alert(errorMsg);
       throw new Error(errorMsg);
     }
-  }, [normalizedUserRole, taliaFocuses, refreshFocuses]);
+  }, [normalizedUserRole, taliaFocuses, refreshFocuses, reportMetadataByPanelId]);
 
   // Focus change handler
   const handleFocusChange = useCallback(async (focusId) => {
@@ -1228,8 +1237,12 @@ function Dashboard({ user }) {
     }
 
     try {
-      // Get current layout from Dockview
-      const currentLayout = apiRef.current.toJSON();
+      // Align tab titles with registry before persisting (renames stick on next load).
+      syncOpenDockviewPanelTitles(apiRef.current, reportMetadataByPanelId);
+      const currentLayout = applyRegistryTitlesToDockviewLayout(
+        apiRef.current.toJSON(),
+        reportMetadataByPanelId
+      );
       console.log('Saving current layout to focus:', focusId, currentLayout);
 
       // Get focus name for status message
@@ -1285,7 +1298,7 @@ function Dashboard({ user }) {
       setStatusMessage('Error saving layout: ' + error.message);
       return false;
     }
-  }, [updateTaliaFocus, taliaFocuses]);
+  }, [updateTaliaFocus, taliaFocuses, reportMetadataByPanelId]);
 
   const handleSaveCurrentFocusSelection = useCallback(async (focusIdFromEvent) => {
     const targetFocusId = focusIdFromEvent || currentFocus;
@@ -1303,10 +1316,14 @@ function Dashboard({ user }) {
     if (layout.panels) {
       Object.entries(layout.panels).forEach(([panelId, panel]) => {
         if (panel.params && panel.params.component) {
+          const componentType = panel.params.component;
           components.push({
             id: panelId,
-            type: panel.params.component,
-            title: panel.params.title || panel.title || 'Panel',
+            type: componentType,
+            title: resolveRegistryPanelTitle(componentType, reportMetadataByPanelId)
+              || panel.params.title
+              || panel.title
+              || 'Panel',
             position: { x: 0, y: 0, width: 6, height: 4 } // Default position
           });
         }
@@ -1314,7 +1331,7 @@ function Dashboard({ user }) {
     }
     
     return components;
-  }, []);
+  }, [reportMetadataByPanelId]);
 
   useEffect(() => () => { 
     initializedRef.current = false; 
@@ -1359,9 +1376,12 @@ function Dashboard({ user }) {
       setStatusMessage(`${panelMetadata.title || title || componentType} is restricted for role ${userRole}`);
       return;
     }
+    const resolvedTitle = resolveRegistryPanelTitle(componentType, reportMetadataByPanelId)
+      || title
+      || 'New Panel';
     const id = "win-" + Date.now();
     try {
-      userActivityTracker.recordPanelAccess(componentType, title || componentType);
+      userActivityTracker.recordPanelAccess(componentType, resolvedTitle || componentType);
     } catch {
       // no-op
     }
@@ -1404,7 +1424,7 @@ function Dashboard({ user }) {
     apiRef.current.addPanel({ 
       id, 
       component: componentType, 
-      title: title || "New Panel",
+      title: resolvedTitle,
       position,
       params: panelParams
     });

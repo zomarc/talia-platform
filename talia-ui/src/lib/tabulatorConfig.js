@@ -202,15 +202,58 @@ const restoreTableScrollIfChanged = (holder, top, left) => {
   if (holder.scrollLeft !== left) holder.scrollLeft = left;
 };
 
+/** Snapshot scroll before replaceData/redraw — Tabulator resets scrollTop synchronously. */
+export const captureTableScroll = (table) => {
+  const holder = getTableScrollHolder(table);
+  return {
+    holder,
+    top: holder?.scrollTop ?? 0,
+    left: holder?.scrollLeft ?? 0,
+  };
+};
+
+export const restoreTableScroll = (snapshot) => {
+  if (!snapshot?.holder) return;
+  restoreTableScrollIfChanged(snapshot.holder, snapshot.top, snapshot.left);
+};
+
+/** Restore a scroll snapshot now and on the next frame (post-layout). */
+export const restoreTableScrollSoon = (snapshot) => {
+  restoreTableScroll(snapshot);
+  if (typeof window !== 'undefined') {
+    window.requestAnimationFrame(() => restoreTableScroll(snapshot));
+  }
+};
+
+/**
+ * Run a table mutation while keeping scroll. Prefer this over replaceData + after*.
+ * refreshFn should start replaceData/setData and may return a Promise.
+ */
+export const runWithPreservedTableScroll = (table, refreshFn) => {
+  const snapshot = captureTableScroll(table);
+  let result;
+  try {
+    result = typeof refreshFn === 'function' ? refreshFn() : null;
+  } catch (error) {
+    restoreTableScrollSoon(snapshot);
+    throw error;
+  }
+  const finish = () => restoreTableScrollSoon(snapshot);
+  if (result && typeof result.then === 'function') {
+    result.then(finish).catch(finish);
+    return result;
+  }
+  finish();
+  return result;
+};
+
 /** One-pass layout refresh; preserve scroll without a second rAF redraw (that caused pixel bounce). */
 const refreshTableLayout = (table) => {
   if (!table) return;
-  const holder = getTableScrollHolder(table);
-  const top = holder?.scrollTop ?? 0;
-  const left = holder?.scrollLeft ?? 0;
+  const snapshot = captureTableScroll(table);
   table.layoutRefresh?.(true);
   table.redraw?.(true);
-  restoreTableScrollIfChanged(holder, top, left);
+  restoreTableScroll(snapshot);
 };
 
 /** Schedule layout refresh after data/visibility changes (safe before tableBuilt). */
@@ -388,11 +431,9 @@ const getWrappedTabulatorClass = () => {
       if (typeof this.redraw === 'function') {
         const originalRedraw = this.redraw.bind(this);
         this.redraw = (...args) => {
-          const holder = getTableScrollHolder(this);
-          const top = holder?.scrollTop ?? 0;
-          const left = holder?.scrollLeft ?? 0;
+          const snapshot = captureTableScroll(this);
           const result = originalRedraw(...args);
-          restoreTableScrollIfChanged(holder, top, left);
+          restoreTableScroll(snapshot);
           return result;
         };
       }

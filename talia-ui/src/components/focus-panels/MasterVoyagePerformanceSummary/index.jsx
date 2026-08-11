@@ -32,13 +32,12 @@ const MasterVoyagePerformanceSummaryContainer = ({ panelInstanceId, panelCompone
     return transformVoyageData(data);
   }, [data]);
 
-  // Handle loading state
-  if (loading) {
+  // Initial load only — keep prior content so ReportShell can grey-out while refreshing.
+  if (loading && (!transformedData || transformedData.length === 0)) {
     return <LoadingSpinner message="Loading voyage performance data..." fullScreen={false} />;
   }
 
-  // Handle error state
-  if (error) {
+  if (error && (!transformedData || transformedData.length === 0)) {
     return (
       <ErrorMessage 
         error={error} 
@@ -48,8 +47,7 @@ const MasterVoyagePerformanceSummaryContainer = ({ panelInstanceId, panelCompone
     );
   }
 
-  // Handle empty data
-  if (!transformedData || transformedData.length === 0) {
+  if (!loading && (!transformedData || transformedData.length === 0)) {
     return (
       <div className="focus-panel-empty">
         <p>No voyage performance data available</p>

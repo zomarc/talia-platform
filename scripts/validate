@@ -19,7 +19,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Monotonic ops token (not a calendar stamp). Bump when validate menu behavior or Instance & keys cross-check changes.
-SCRIPT_VERSION="ops-8"
+SCRIPT_VERSION="ops-9"
 CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
 if [[ -f "${CONFIG_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -811,6 +811,7 @@ confirm_start_demo() {
   echo ""
   echo -e "${BOLD}Start Demo${NC} — publish this laptop to ${GREEN}${PUBLIC_DEV_URL}${NC}"
   echo -e "  ${DIM}Rebuilds vite preview :${LOCAL_PUBLIC_UI_PORT:-4173} and points ngrok at it (not Vite-dev).${NC}"
+  echo -e "  ${DIM}Presenter runs under macOS launchd KeepAlive so it stays up for client demos.${NC}"
   echo -e "  ${DIM}Apex ${PUBLIC_MAIN_URL} shares the same tunnel.${NC}"
   echo ""
   echo -n "Press Enter to publish (or n to cancel): "
@@ -2754,10 +2755,13 @@ check_external_gateway_quick() {
 
 start_local_public_preview() {
   # Bundled vite preview for taliahub.com. Vite-dev module graph over ngrok stalls.
+  # Process is owned by macOS launchd KeepAlive (not this shell) so Cursor/agent
+  # exits cannot reap it — that was causing the Cloudflare holding page.
   local public_port="${LOCAL_PUBLIC_UI_PORT:-4173}"
   local public_url="http://${LOCAL_UI_HOST:-127.0.0.1}:${public_port}/"
   local ui_dir="${ROOT_DIR}/talia-ui"
   local dist_html="${ui_dir}/dist/index.html"
+  local installer="${SCRIPT_DIR}/install-demo-presenter.sh"
 
   if [[ ! -d "$ui_dir" ]]; then
     echo -e "  ${RED}Missing ${ui_dir}${NC}"
@@ -2774,38 +2778,22 @@ start_local_public_preview() {
     return 1
   fi
 
-  local pids
-  pids=$( { lsof -nP -iTCP:"${public_port}" -sTCP:LISTEN -t 2>/dev/null || true; } | tr '\n' ' ')
-  if [[ -n "${pids// /}" ]]; then
-    echo -e "  Restarting existing preview on :${public_port}..."
-    # shellcheck disable=SC2086
-    kill $pids 2>/dev/null || true
-    sleep 1
-    # shellcheck disable=SC2086
-    kill -9 $pids 2>/dev/null || true
+  if [[ ! -x "$installer" ]]; then
+    chmod +x "$installer" "${SCRIPT_DIR}/run-demo-ui-preview.sh" "${SCRIPT_DIR}/run-demo-ngrok.sh" 2>/dev/null || true
   fi
 
-  echo -e "  Starting vite preview on :${public_port}..."
-  # Fully detach so agent/short-lived shells do not reap the preview process.
-  /bin/bash -lc "cd \"${ui_dir}\" && exec nohup npx vite preview --port ${public_port} --host --strictPort >/tmp/talia-ui-preview.log 2>&1 </dev/null" &
-  local launcher_pid=$!
-  sleep 1
-  # Prefer the actual listener PID over the launcher
-  local listen_pid
-  listen_pid=$( { lsof -nP -iTCP:"${public_port}" -sTCP:LISTEN -t 2>/dev/null || true; } | head -1)
-  if [[ -n "$listen_pid" ]]; then
-    echo "$listen_pid" >/tmp/talia-ui-preview.pid
-  elif [[ -n "$launcher_pid" ]]; then
-    echo "$launcher_pid" >/tmp/talia-ui-preview.pid
+  echo -e "  Starting durable presenter (launchd KeepAlive: preview :${public_port} + ngrok)..."
+  if ! "$installer" start; then
+    echo -e "  ${RED}Failed to start durable demo presenter${NC}"
+    return 1
   fi
-  disown "$launcher_pid" 2>/dev/null || true
 
   local attempts=0
   local code="000"
-  while [[ "$attempts" -lt 30 ]]; do
+  while [[ "$attempts" -lt 40 ]]; do
     code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 2 "$public_url" 2>/dev/null || echo "000")
     if [[ "$code" == "200" ]]; then
-      echo -e "  ${GREEN}✓${NC} Public preview UP (${public_url})"
+      echo -e "  ${GREEN}✓${NC} Public preview UP (${public_url}) ${DIM}[launchd KeepAlive]${NC}"
       return 0
     fi
     attempts=$((attempts + 1))
@@ -2864,35 +2852,10 @@ start_ngrok_local() {
   preview_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$public_health_url" 2>/dev/null || echo "000")
   [[ "$preview_code" == "200" ]] && echo -e "${GREEN}OK${NC}" || echo -e "${RED}DOWN${NC} (HTTP $preview_code)"
 
-  local need_start=true
-  if pgrep -f "ngrok .*${LOCAL_NGROK_DOMAIN}" >/dev/null 2>&1; then
-    local current_addr
-    current_addr=$(ngrok_local_tunnel_addr)
-    if [[ "$current_addr" == *":${public_port}"* || "$current_addr" == *"localhost:${public_port}"* ]]; then
-      echo -e "  ${YELLOW}ngrok already running for ${LOCAL_NGROK_DOMAIN} → :${public_port}${NC}"
-      need_start=false
-    else
-      echo -e "  Retargeting ngrok (${current_addr:-unknown} → :${public_port})..."
-      pkill -f "ngrok .*${LOCAL_NGROK_DOMAIN}" 2>/dev/null || true
-      sleep 2
-    fi
-  fi
-
-  if $need_start; then
-    echo -e "  Starting ngrok (${LOCAL_NGROK_DOMAIN} -> ${LOCAL_PUBLIC_UI_URL})..."
-    # Fully detach so short-lived validate shells do not reap the tunnel.
-    /bin/bash -lc "exec nohup ngrok http --url=${LOCAL_NGROK_DOMAIN} --pooling-enabled --basic-auth=${NGROK_BASIC_USER}:${NGROK_BASIC_PASS} ${public_port} >/tmp/ngrok-taliahub.log 2>&1 </dev/null" &
-    local ngrok_launcher=$!
-    sleep 1
-    echo "$ngrok_launcher" >/tmp/ngrok-taliahub.pid
-    disown "$ngrok_launcher" 2>/dev/null || true
-    sleep 1
-  fi
-
   echo -e "  Tunnel:"
   local tunnel_line=""
   local attempts=0
-  while [[ "$attempts" -lt 8 ]]; do
+  while [[ "$attempts" -lt 12 ]]; do
     tunnel_line=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"[^"]*"' | head -1 || true)
     if [[ -n "$tunnel_line" ]]; then
       break
@@ -2906,7 +2869,8 @@ start_ngrok_local() {
     addr=$(ngrok_local_tunnel_addr)
     [[ -n "$addr" ]] && echo -e "  ${DIM}upstream ${addr}${NC}"
   else
-    echo "  Not active"
+    echo "  Not active yet — launchd may still be starting ngrok"
+    echo -e "  ${DIM}Check: ./scripts/install-demo-presenter.sh status${NC}"
     if [[ -f /tmp/ngrok-taliahub.log ]]; then
       echo "  See /tmp/ngrok-taliahub.log for details"
     fi

@@ -43,6 +43,7 @@ test('cabin occupancy overlays berth÷2 estimates for Bk C / Tot C', () => {
     },
   ]);
   assert.equal(berthIndex.get('CJ|CJ07260718|2026-07-18').occupied_cabins, 536);
+  assert.equal(berthIndex.get('CJ|CJ07260718|2026-07-18').cabin_source, 'berth_estimate');
   const cabinIndex = buildPhysicalBerthsBySailDate([
     {
       ship_code: 'CJ',
@@ -62,6 +63,27 @@ test('cabin occupancy overlays berth÷2 estimates for Bk C / Tot C', () => {
   assert.equal(day.cabin_source, 'sail_by_cabin_occupancy');
 });
 
+test('ship_day_berth_status cabin aggregates preferred without occupancy overlay', () => {
+  const berthIndex = buildPhysicalBerthsFromShipDayRows([
+    {
+      ship_code: 'CJ',
+      sail_code: 'CJ07260718',
+      date: '2026-07-18',
+      berth_capacity: 1200,
+      berths_occupied: 900,
+      berths_available: 300,
+      total_cabins: 600,
+      occupied_cabins: 450,
+      available_cabins: 150,
+    },
+  ]);
+  const day = berthIndex.get('CJ|CJ07260718|2026-07-18');
+  assert.equal(day.total_cabins, 600);
+  assert.equal(day.occupied_cabins, 450);
+  assert.equal(day.available_cabins, 150);
+  assert.equal(day.cabin_source, 'ship_day_berth_status');
+});
+
 test('master explorer uses physical berths for booked/capacity not selling guest sums', () => {
   const bundle = buildMasterSailingExplorerBundle({
     masterSailRows: [{
@@ -77,9 +99,9 @@ test('master explorer uses physical berths for booked/capacity not selling guest
       { sail_code: 'CJ07260718', reference_sail_code: 'CJ07260718', sailing_role: 'master', is_operational: true },
       { sail_code: 'CJ07260719', reference_sail_code: 'CJ07260718', sailing_role: 'segment', is_operational: true },
     ],
-    reservationRows: [
-      { sail_code: 'CJ07260718', guest_count: 1973, res_id: 44122 },
-      { sail_code: 'CJ07260719', guest_count: 195, res_probability: 100 },
+    bookingSummaryRows: [
+      { sail_code: 'CJ07260718', guest_count: 1973, guaranteed_cabins: 0 },
+      { sail_code: 'CJ07260719', guest_count: 195, guaranteed_cabins: 97.5 },
     ],
     hierarchyRows: [{
       master_sail_code: 'CJ07260718',
@@ -89,7 +111,30 @@ test('master explorer uses physical berths for booked/capacity not selling guest
       ship_code: 'CJ',
       is_operational: true,
     }],
-    occupancyRows: occupancyFixture,
+    shipDayBerthRows: [
+      {
+        ship_code: 'CJ',
+        sail_code: 'CJ07260718',
+        date: '2026-07-18',
+        berth_capacity: 1200,
+        berths_occupied: 900,
+        berths_available: 300,
+        total_cabins: 600,
+        occupied_cabins: 450,
+        available_cabins: 150,
+      },
+      {
+        ship_code: 'CJ',
+        sail_code: 'CJ07260718',
+        date: '2026-07-19',
+        berth_capacity: 1200,
+        berths_occupied: 840,
+        berths_available: 360,
+        total_cabins: 600,
+        occupied_cabins: 420,
+        available_cabins: 180,
+      },
+    ],
   });
 
   const master = bundle.masters[0];
@@ -110,6 +155,38 @@ test('master explorer uses physical berths for booked/capacity not selling guest
   assert.equal(days[0].booked_cabins, 450);
   assert.equal(days[0].available, 300);
   assert.equal(days[1].booked, 840);
+});
+
+test('master explorer falls back to reservation rows when booking summary absent', () => {
+  const bundle = buildMasterSailingExplorerBundle({
+    masterSailRows: [{
+      sail_code: 'CJ07260718',
+      ship_code: 'CJ',
+      sail_date_from: '2026-07-18',
+      sail_date_to: '2026-07-18',
+      sail_days: 1,
+      is_main: 1,
+    }],
+    inventoryItems: [
+      { sail_code: 'CJ07260718', reference_sail_code: 'CJ07260718', sailing_role: 'master', is_operational: true },
+    ],
+    reservationRows: [
+      { sail_code: 'CJ07260718', guest_count: 100, res_id: 1 },
+    ],
+    hierarchyRows: [],
+    shipDayBerthRows: [{
+      ship_code: 'CJ',
+      sail_code: 'CJ07260718',
+      date: '2026-07-18',
+      berth_capacity: 200,
+      berths_occupied: 100,
+      total_cabins: 100,
+      occupied_cabins: 50,
+      available_cabins: 50,
+    }],
+  });
+  assert.equal(bundle.masters[0].selling_guests_total, 100);
+  assert.equal(bundle.masters[0].booked_cabins, 50);
 });
 
 test('selling segment summaries show guests only', () => {

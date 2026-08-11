@@ -1,8 +1,13 @@
 import React, { useEffect, useState } from "react";
 import ReportEventMeta from "../shared/ReportEventMeta";
-import { REPORT_PANEL_PAUSE_EVENT } from "./eventConstants";
+import { REPORT_PANEL_PAUSE_EVENT, REPORT_PANEL_LOADING_EVENT } from "./eventConstants";
 import usePanelTechnicalMetaVisibility from "../../hooks/usePanelTechnicalMetaVisibility";
 import { isArcadeGamePanelComponent } from "../shared/games/arcadeGamePanelIds";
+import {
+  resolvePanelLoading,
+  panelLoadingEventMatches,
+} from "../../services/panelLoadingState";
+
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
 
 const deriveReportSources = (report) => {
@@ -24,6 +29,9 @@ const ReportShell = ({ report, panelInstanceId, children }) => {
     panelComponentId: report?.panelId,
   });
   const [criteriaVersion, setCriteriaVersion] = useState(0);
+  const [isLoading, setIsLoading] = useState(() => (
+    resolvePanelLoading(panelInstanceId, report?.panelId)
+  ));
   const [isPaused, setIsPaused] = useState(() => {
     const state = window.__taliaPanelPauseState || {};
     if (panelInstanceId && Object.prototype.hasOwnProperty.call(state, panelInstanceId)) {
@@ -62,11 +70,31 @@ const ReportShell = ({ report, panelInstanceId, children }) => {
     return () => window.removeEventListener(REPORT_PANEL_PAUSE_EVENT, handlePauseChange);
   }, [panelInstanceId, report?.panelId]);
 
+  useEffect(() => {
+    setIsLoading(resolvePanelLoading(panelInstanceId, report?.panelId));
+    const handleLoadingChanged = (event) => {
+      const detail = event?.detail || {};
+      if (!panelLoadingEventMatches(panelInstanceId, report?.panelId, detail)) return;
+      setIsLoading(detail.loading === true);
+    };
+    window.addEventListener(REPORT_PANEL_LOADING_EVENT, handleLoadingChanged);
+    return () => window.removeEventListener(REPORT_PANEL_LOADING_EVENT, handleLoadingChanged);
+  }, [panelInstanceId, report?.panelId]);
+
   const isArcadePanel = isArcadeGamePanelComponent(report?.panelId);
   const shellPauseChrome = isPaused && !isArcadePanel;
+  const shellClassName = [
+    'talia-report-shell',
+    shellPauseChrome ? 'talia-report-shell--paused' : '',
+    isLoading ? 'talia-report-shell--loading' : '',
+  ].filter(Boolean).join(' ');
 
   return (
-    <div className={`talia-report-shell ${shellPauseChrome ? 'talia-report-shell--paused' : ''}`}>
+    <div
+      className={shellClassName}
+      aria-busy={isLoading || undefined}
+      data-panel-loading={isLoading ? 'true' : undefined}
+    >
       {showTechnicalMeta && (
         <div className="talia-report-technical-meta">
           <ReportEventMeta

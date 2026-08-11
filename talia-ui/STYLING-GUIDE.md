@@ -194,6 +194,20 @@ When updating a component:
 </div>
 ```
 
+### Report Snapshot (pinned KPI strip)
+Use shared `ReportSnapshot` above scrollable `main.talia-report__content--scroll` (not inside the scroll region):
+```jsx
+import ReportSnapshot from '../shared/ReportSnapshot';
+
+<ReportSnapshot
+  items={[
+    { key: 'booked', label: 'Booked', value: '€48.6M', hint: '25% of budget' },
+  ]}
+/>
+<main className="talia-report__content talia-report__content--scroll">…</main>
+```
+Classes: `.talia-report__snapshot`, `.talia-report__metrics`, `.talia-report__metric` (+ `.talia-metric` atoms).
+
 ## Testing
 
 After making styling changes:

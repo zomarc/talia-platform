@@ -118,6 +118,8 @@
         "[GROUP_ID]",
         "[CURRENCY_CODE]",
         "[CURRENCY_RATE]",
+        "[RES_INIT_DATE]",
+        "[ORIGINAL_INIT_DATE]",
         "[LAST_UPDATED_AT]"
       ],
       "transformKey": "reservations",
@@ -326,6 +328,86 @@
         "column": "id"
       }
     },
+    "cabinCtg": {
+      "type": "direct",
+      "source": "lkp.CABIN_CTG",
+      "target": "cabin_ctg",
+      "columns": [
+        "CABIN",
+        "GENERIC_CATEGORY",
+        "EFFECTIVE_FROM",
+        "EFFECTIVE_TO",
+        "ACTIVE_RECORD_FLAG"
+      ],
+      "transformKey": "cabinCtg",
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "id"
+      }
+    },
+    "budget": {
+      "type": "direct",
+      "source": "lkp.BUDGET",
+      "target": "budget",
+      "columns": [
+        "PASSENGER_TYPE",
+        "LENGTH",
+        "ITINERARY_TYPE",
+        "CABIN",
+        "MARKET",
+        "CHANNEL",
+        "NEW_MARKET_ROLL_UP",
+        "OLD_OLD_MARKET_ROLL_UP",
+        "ACCOUNTING_MONTH",
+        "MASTER_VOYAGE",
+        "MASTER_DEPARTURE_DATE",
+        "PASSENGERS",
+        "PASSENGER_NIGHTS",
+        "CURRENCY",
+        "[FX.1]",
+        "PPPD",
+        "PPPD_EUR",
+        "GROSS_TICKET_REVENUE_LOCAL",
+        "GROSS_TICKET_REVENUE_EUR",
+        "[PRE-EMB_PPPD]",
+        "[PRE-EMB_REVENUE_EUR]",
+        "FY",
+        "BUDGET_NAME",
+        "VERSION",
+        "UNIQUE_ID",
+        "ACTUALS_CODE",
+        "EFFECTIVE_FROM",
+        "EFFECTIVE_TO",
+        "ACTIVE_RECORD_FLAG"
+      ],
+      "transformKey": "budget",
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "id"
+      }
+    },
+    "etlTableParameters": {
+      "type": "direct",
+      "source": "config.ETL_Table_Parameters",
+      "target": "etl_table_parameters",
+      "columns": [
+        "[id]",
+        "[source_schema]",
+        "[source_tablename]",
+        "[target_schema]",
+        "[target_tablename]",
+        "[schema_overwrite_flag]",
+        "[load_type]",
+        "[upsert_id]",
+        "[storeproc]",
+        "[sp_flag]"
+      ],
+      "transformKey": "etlTableParameters",
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "id"
+      }
+    },
     "shipInventoryAlloc": {
       "type": "direct",
       "source": "stg.RES_CABIN_ALLOCATION_DETAIL",
@@ -406,17 +488,50 @@
         "strategy": "delete-all",
         "column": "id"
       }
+    },
+    "shipCabinReserve": {
+      "type": "direct",
+      "source": "stg.SHIP_CABIN_RESERVE",
+      "target": "ship_cabin_reserve",
+      "columns": [
+        "RECORD_ID",
+        "SHIP_CODE",
+        "CABIN_NUMBER",
+        "REL_DAY_FROM",
+        "REL_DAY_TO",
+        "SAIL_DATE_FROM",
+        "SAIL_DATE_TO",
+        "RESERVE_TYPE",
+        "COMMENTS",
+        "GUEST_COUNT",
+        "DEP_REF_ID",
+        "ARR_REF_ID",
+        "ALLOW_SEGMENTS"
+      ],
+      "transformKey": "shipCabinReserve",
+      "isLargeDataset": true,
+      "rowNumberOrder": [
+        "RECORD_ID"
+      ],
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "id"
+      }
     }
   },
   "datasets": {
     "sept-dec-2025": {
-      "description": "Core sailing, reservation, and change data for September through December 2025",
+      "description": "Sail/departure horizon Sep 2025 – Dec 2027 (current bookings + dims). Snapshot-only tables keep a short lookback.",
       "tableSequence": [
         "agency",
         "ships",
         "marketRollUp",
+        "cabinCtg",
+        "budget",
+        "etlTableParameters",
         "shipCabin",
         "shipCabinCtgLink",
+        "shipCabinReserve",
         "masterSail",
         "cabinAvailability",
         "sailByCabinOccupancy",
@@ -446,6 +561,18 @@
             "column": "id"
           }
         },
+        "cabinCtg": {
+          "replace": {
+            "strategy": "delete-all",
+            "column": "id"
+          }
+        },
+        "etlTableParameters": {
+          "replace": {
+            "strategy": "delete-all",
+            "column": "id"
+          }
+        },
         "shipCabin": {
           "replace": {
             "strategy": "delete-all",
@@ -458,20 +585,37 @@
             "column": "id"
           }
         },
+        "shipCabinReserve": {
+          "filters": [
+            {
+              "column": "[SAIL_DATE_FROM]",
+              "operator": "between",
+              "from": "2025-09-01",
+              "to": "2027-12-01"
+            }
+          ],
+          "replace": {
+            "strategy": "delete-range",
+            "column": "sail_date_from",
+            "from": "2025-09-01",
+            "to": "2027-12-01"
+          }
+        },
         "cabinAvailability": {
+          "applyIntegrationDateRange": false,
           "filters": [
             {
               "column": "[Snapshot_Date]",
               "operator": "between",
-              "from": "2025-09-01",
-              "to": "2025-12-31"
+              "from": "2026-05-14",
+              "to": "2026-08-11"
             }
           ],
           "replace": {
             "strategy": "delete-range",
             "column": "snapshot_date",
-            "from": "2025-09-01",
-            "to": "2025-12-31"
+            "from": "2026-05-14",
+            "to": "2026-08-11"
           }
         },
         "reservations": {
@@ -480,14 +624,14 @@
               "column": "[SAIL_DATE_FROM]",
               "operator": "between",
               "from": "2025-09-01",
-              "to": "2025-12-31"
+              "to": "2027-12-01"
             }
           ],
           "replace": {
             "strategy": "delete-range",
             "column": "sail_from_date",
             "from": "2025-09-01",
-            "to": "2025-12-31"
+            "to": "2027-12-01"
           }
         },
         "shipInventoryAlloc": {
@@ -496,14 +640,14 @@
               "column": "[SAIL_DATE_FROM]",
               "operator": "between",
               "from": "2025-09-01",
-              "to": "2025-12-31"
+              "to": "2027-12-01"
             }
           ],
           "replace": {
             "strategy": "delete-range",
             "column": "sail_date_from",
             "from": "2025-09-01",
-            "to": "2025-12-31"
+            "to": "2027-12-01"
           }
         },
         "publishedRates": {
@@ -512,7 +656,7 @@
               "column": "[SNAPSHOT_DATE]",
               "operator": "between",
               "from": "2025-09-01",
-              "to": "2025-12-31"
+              "to": "2027-12-01"
             }
           ]
         },
@@ -522,14 +666,14 @@
               "column": "[Sail_Date_From]",
               "operator": "between",
               "from": "2025-09-01",
-              "to": "2025-12-31"
+              "to": "2027-12-01"
             }
           ],
           "replace": {
             "strategy": "delete-range",
             "column": "sail_date_from",
             "from": "2025-09-01",
-            "to": "2025-12-31"
+            "to": "2027-12-01"
           }
         },
         "reservationChanges": {
@@ -538,14 +682,14 @@
               "column": "[Snapshot_Date]",
               "operator": "between",
               "from": "2025-09-01",
-              "to": "2025-12-31"
+              "to": "2027-12-01"
             }
           ],
           "replace": {
             "strategy": "delete-range",
             "column": "snapshot_date",
             "from": "2025-09-01",
-            "to": "2025-12-31"
+            "to": "2027-12-01"
           }
         },
         "competitor": {
@@ -554,14 +698,14 @@
               "column": "[Snapshot_Date]",
               "operator": "between",
               "from": "2025-09-01",
-              "to": "2025-12-31"
+              "to": "2027-12-01"
             }
           ],
           "replace": {
             "strategy": "delete-range",
             "column": "snapshot_date",
             "from": "2025-09-01",
-            "to": "2025-12-31"
+            "to": "2027-12-01"
           }
         },
         "reservationPromotion": {
@@ -569,7 +713,7 @@
             {
               "column": "[RES_ID]",
               "operator": "subquery",
-              "subquery": "SELECT RES_ID FROM stg.RES_HEADER WHERE SAIL_DATE_FROM >= '2025-09-01' AND SAIL_DATE_FROM <= '2025-12-31'"
+              "subquery": "SELECT RES_ID FROM stg.RES_HEADER WHERE SAIL_DATE_FROM >= '{{from}}' AND SAIL_DATE_FROM <= '{{to}}'"
             }
           ],
           "replace": {
@@ -579,7 +723,7 @@
             "joinColumn": "res_id",
             "dateColumn": "sail_from_date",
             "from": "2025-09-01",
-            "to": "2025-12-31"
+            "to": "2027-12-01"
           }
         },
         "masterSail": {
@@ -588,14 +732,14 @@
               "column": "[Sail_Date_From]",
               "operator": "between",
               "from": "2025-09-01",
-              "to": "2025-12-31"
+              "to": "2027-12-01"
             }
           ],
           "replace": {
             "strategy": "delete-range",
             "column": "sail_date_from",
             "from": "2025-09-01",
-            "to": "2025-12-31"
+            "to": "2027-12-01"
           }
         }
       }
@@ -643,15 +787,15 @@
             {
               "column": "[Snapshot_Date]",
               "operator": "between",
-              "from": "2024-09-01",
-              "to": "2024-12-31"
+              "from": "2023-01-01",
+              "to": "2026-12-31"
             }
           ],
           "replace": {
             "strategy": "delete-range",
             "column": "snapshot_date",
-            "from": "2024-09-01",
-            "to": "2024-12-31"
+            "from": "2023-01-01",
+            "to": "2026-12-31"
           }
         },
         "masterSail": {
@@ -674,3 +818,4 @@
     }
   }
 }
+

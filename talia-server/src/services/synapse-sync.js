@@ -449,12 +449,38 @@ class SynapseSyncService {
     };
 
     const canApplyDateRangeOverride = () => {
+      if (datasetOverrides.applyIntegrationDateRange === false) {
+        return false;
+      }
       const hasBetweenFilter = filters.some((filter) => (
         filter?.operator === 'between' && Boolean(filter?.column)
       ));
       const hasReplaceDateWindow = Boolean(replace?.from && replace?.to);
       const hasRuntimeDateColumn = Boolean(definition?.dateColumn || definition?.supabaseDateColumn);
-      return hasBetweenFilter || hasReplaceDateWindow || hasRuntimeDateColumn;
+      const hasSubqueryDateTemplate = filters.some((filter) => (
+        filter?.operator === 'subquery'
+        && typeof filter?.subquery === 'string'
+        && (filter.subquery.includes('{{from}}') || filter.subquery.includes('{{to}}')
+          || /\d{4}-\d{2}-\d{2}/.test(filter.subquery))
+      ));
+      return hasBetweenFilter || hasReplaceDateWindow || hasRuntimeDateColumn || hasSubqueryDateTemplate;
+    };
+
+    const rewriteSubqueryDates = (subquery, from, to) => {
+      if (!subquery || typeof subquery !== 'string') return subquery;
+      let next = subquery
+        .replaceAll('{{from}}', from)
+        .replaceAll('{{to}}', to);
+      // Legacy hardcoded sail windows in subquery SQL → follow override/dataset range.
+      next = next.replace(
+        /(SAIL_DATE_FROM\s*>=\s*')(\d{4}-\d{2}-\d{2})(')/gi,
+        `$1${from}$3`
+      );
+      next = next.replace(
+        /(SAIL_DATE_FROM\s*<=\s*')(\d{4}-\d{2}-\d{2})(')/gi,
+        `$1${to}$3`
+      );
+      return next;
     };
 
     const applyDateRangeOverride = (overrideRange, sourceLabel) => {
@@ -471,6 +497,9 @@ class SynapseSyncService {
         if (filter.operator === 'between') {
           filter.from = overrideRange.from;
           filter.to = overrideRange.to;
+        }
+        if (filter.operator === 'subquery' && filter.subquery) {
+          filter.subquery = rewriteSubqueryDates(filter.subquery, overrideRange.from, overrideRange.to);
         }
       });
       if (replace && replace.from && replace.to) {
@@ -498,6 +527,23 @@ class SynapseSyncService {
     } else if (dateRange && !uiOverrideApplied) {
       // Using dataset default
       console.log(`📅 Date range from dataset config: ${dateRange.from} to ${dateRange.to}`);
+    }
+
+    // Resolve {{from}}/{{to}} subquery templates against the effective date range
+    // (override path already rewrites; dataset-default path still needs substitution).
+    if (dateRange?.from && dateRange?.to) {
+      let subqueryTouched = false;
+      filters.forEach((filter) => {
+        if (filter.operator === 'subquery' && typeof filter.subquery === 'string'
+          && (filter.subquery.includes('{{from}}') || filter.subquery.includes('{{to}}'))) {
+          filter.subquery = rewriteSubqueryDates(filter.subquery, dateRange.from, dateRange.to);
+          subqueryTouched = true;
+        }
+      });
+      if (subqueryTouched) {
+        whereClause = this.buildWhereClause(filters);
+        selectQuery = `SELECT ${columnsSql} FROM ${definition.source}${whereClause ? ` WHERE ${whereClause}` : ''}`;
+      }
     }
 
     return {
@@ -759,6 +805,65 @@ class SynapseSyncService {
           created_at: currentTime
         }));
 
+      case 'cabinCtg':
+        return data.map(row => ({
+          cabin_code: getField(row, ['CABIN', 'Cabin']) || null,
+          generic_category: getField(row, ['GENERIC_CATEGORY', 'Generic_Category']) || null,
+          effective_from: getField(row, ['EFFECTIVE_FROM', 'Effective_From']) || null,
+          effective_to: getField(row, ['EFFECTIVE_TO', 'Effective_To']) || null,
+          active_record_flag: toNumber(getField(row, ['ACTIVE_RECORD_FLAG', 'Active_Record_Flag'])),
+          created_at: currentTime
+        }));
+
+      case 'budget':
+        return data.map(row => ({
+          passenger_type: getField(row, ['PASSENGER_TYPE', 'Passenger_Type']) || null,
+          length: toNumber(getField(row, ['LENGTH', 'Length'])),
+          itinerary_type: getField(row, ['ITINERARY_TYPE', 'Itinerary_Type']) || null,
+          cabin: getField(row, ['CABIN', 'Cabin']) || null,
+          market: getField(row, ['MARKET', 'Market']) || null,
+          channel: getField(row, ['CHANNEL', 'Channel']) || null,
+          new_market_roll_up: getField(row, ['NEW_MARKET_ROLL_UP', 'New_Market_Roll_Up']) || null,
+          old_old_market_roll_up: getField(row, ['OLD_OLD_MARKET_ROLL_UP', 'Old_Old_Market_Roll_Up']) || null,
+          accounting_month: getField(row, ['ACCOUNTING_MONTH', 'Accounting_Month']) || null,
+          master_voyage: getField(row, ['MASTER_VOYAGE', 'Master_Voyage']) || null,
+          master_departure_date: getField(row, ['MASTER_DEPARTURE_DATE', 'Master_Departure_Date']) || null,
+          passengers: toNumber(getField(row, ['PASSENGERS', 'Passengers'])),
+          passenger_nights: toNumber(getField(row, ['PASSENGER_NIGHTS', 'Passenger_Nights'])),
+          currency: getField(row, ['CURRENCY', 'Currency']) || null,
+          fx_1: toNumber(getField(row, ['FX.1', 'FX_1', 'Fx_1'])),
+          pppd: toNumber(getField(row, ['PPPD', 'Pppd'])),
+          pppd_eur: toNumber(getField(row, ['PPPD_EUR', 'Pppd_Eur'])),
+          gross_ticket_revenue_local: toNumber(getField(row, ['GROSS_TICKET_REVENUE_LOCAL', 'Gross_Ticket_Revenue_Local'])),
+          gross_ticket_revenue_eur: toNumber(getField(row, ['GROSS_TICKET_REVENUE_EUR', 'Gross_Ticket_Revenue_Eur'])),
+          pre_emb_pppd: toNumber(getField(row, ['PRE-EMB_PPPD', 'PRE_EMB_PPPD', 'Pre_Emb_Pppd'])),
+          pre_emb_revenue_eur: toNumber(getField(row, ['PRE_EMB_REVENUE_EUR', 'Pre_Emb_Revenue_Eur'])),
+          fy: toNumber(getField(row, ['FY', 'Fy'])),
+          budget_name: getField(row, ['BUDGET_NAME', 'Budget_Name']) || null,
+          version: getField(row, ['VERSION', 'Version']) || null,
+          unique_id: getField(row, ['UNIQUE_ID', 'Unique_Id']) || null,
+          actuals_code: getField(row, ['ACTUALS_CODE', 'Actuals_Code']) || null,
+          effective_from: getField(row, ['EFFECTIVE_FROM', 'Effective_From']) || null,
+          effective_to: getField(row, ['EFFECTIVE_TO', 'Effective_To']) || null,
+          active_record_flag: toNumber(getField(row, ['ACTIVE_RECORD_FLAG', 'Active_Record_Flag'])),
+          created_at: currentTime
+        }));
+
+      case 'etlTableParameters':
+        return data.map(row => ({
+          etl_id: toNumber(getField(row, ['id', 'ID', 'Id'])),
+          source_schema: getField(row, ['source_schema', 'SOURCE_SCHEMA', 'Source_Schema']) || null,
+          source_tablename: getField(row, ['source_tablename', 'SOURCE_TABLENAME', 'Source_Tablename']) || null,
+          target_schema: getField(row, ['target_schema', 'TARGET_SCHEMA', 'Target_Schema']) || null,
+          target_tablename: getField(row, ['target_tablename', 'TARGET_TABLENAME', 'Target_Tablename']) || null,
+          schema_overwrite_flag: getField(row, ['schema_overwrite_flag', 'SCHEMA_OVERWRITE_FLAG', 'Schema_Overwrite_Flag']) || null,
+          load_type: getField(row, ['load_type', 'LOAD_TYPE', 'Load_Type']) || null,
+          upsert_id: getField(row, ['upsert_id', 'UPSERT_ID', 'Upsert_Id']) || null,
+          storeproc: getField(row, ['storeproc', 'STOREPROC', 'Storeproc']) || null,
+          sp_flag: getField(row, ['sp_flag', 'SP_FLAG', 'Sp_Flag']) || null,
+          created_at: currentTime
+        }));
+
       case 'shipInventoryAlloc':
         return data.map(row => ({
           allocation_id: toNumber(getField(row, ['ALLOCATION_ID', 'Allocation_Id'])),
@@ -830,6 +935,29 @@ class SynapseSyncService {
           created_at: currentTime
         }));
 
+      case 'shipCabinReserve':
+        // Offsale / reserved cabins (STG only for now — capacity reporting).
+        return data.map(row => ({
+          record_id: toNumber(getField(row, ['RECORD_ID', 'Record_Id'])),
+          ship_code: getField(row, ['SHIP_CODE', 'Ship_Code']) || null,
+          cabin_number: getField(row, ['CABIN_NUMBER', 'Cabin_Number']) != null
+            ? String(getField(row, ['CABIN_NUMBER', 'Cabin_Number']))
+            : null,
+          rel_day_from: toNumber(getField(row, ['REL_DAY_FROM', 'Rel_Day_From'])),
+          rel_day_to: toNumber(getField(row, ['REL_DAY_TO', 'Rel_Day_To'])),
+          sail_date_from: toDateOnly(getField(row, ['SAIL_DATE_FROM', 'Sail_Date_From'])),
+          sail_date_to: toDateOnly(getField(row, ['SAIL_DATE_TO', 'Sail_Date_To'])),
+          reserve_type: getField(row, ['RESERVE_TYPE', 'Reserve_Type']) || null,
+          comments: getField(row, ['COMMENTS', 'Comments']) || null,
+          guest_count: toNumber(getField(row, ['GUEST_COUNT', 'Guest_Count'])),
+          dep_ref_id: toNumber(getField(row, ['DEP_REF_ID', 'Dep_Ref_Id'])),
+          arr_ref_id: toNumber(getField(row, ['ARR_REF_ID', 'Arr_Ref_Id'])),
+          allow_segments: getField(row, ['ALLOW_SEGMENTS', 'Allow_Segments']) != null
+            ? String(getField(row, ['ALLOW_SEGMENTS', 'Allow_Segments']))
+            : null,
+          created_at: currentTime
+        }));
+
       case 'cabinAvailability':
         return data.map(row => ({
           snapshot_date: row.Snapshot_Date,
@@ -847,19 +975,38 @@ class SynapseSyncService {
         }));
 
       case 'reservations':
-        return data.map(row => ({
-          // Enrich with foundation reservation attributes when available.
-          // This keeps current stg.RES_HEADER ingestion while reliably filling sail metadata.
-          ...(context.reservationEnrichmentMap?.get(getField(row, ['RES_ID', 'Res_ID'])) || {}),
+        return data.map(row => {
+          const enrichment = context.reservationEnrichmentMap?.get(getField(row, ['RES_ID', 'Res_ID'])) || {};
+          // RES_HEADER rarely carries ticket revenue — prefer Fact_Reservation enrichment when header is empty.
+          const coalesceNum = (headerVal, enrichVal) => {
+            const fromHeader = toNumber(headerVal);
+            if (fromHeader != null) return fromHeader;
+            return enrichVal != null ? Number(enrichVal) : null;
+          };
+          // RES_HEADER PROBABILITY is often stuck at 100 — prefer Fact_Reservation when present.
+          const preferFactProb = (headerVal, enrichVal) => {
+            if (enrichVal != null && Number.isFinite(Number(enrichVal))) return Number(enrichVal);
+            return toNumber(headerVal);
+          };
+          return {
           res_id: getField(row, ['RES_ID', 'Res_ID']),
           res_status: getField(row, ['RES_STATUS', 'Res_Status']) || null,
           source_code: getField(row, ['SOURCE_CODE', 'Source_Code']) || null,
-          res_probability: toNumber(getField(row, ['PROBABILITY', 'Res_Probability'])),
-          pax_type: getField(row, ['PAX_TYPE', 'Pax_Type']) || null,
-          pax_status: getField(row, ['PAX_STATUS', 'Pax_Status']) || null,
+          res_probability: preferFactProb(
+            getField(row, ['PROBABILITY', 'Res_Probability']),
+            enrichment.res_probability
+          ),
+          group_probability: enrichment.group_probability != null
+            ? Number(enrichment.group_probability)
+            : toNumber(getField(row, ['GROUP_PROBABILITY', 'Group_Probability'])),
+          group_id: toNumber(getField(row, ['GROUP_ID', 'Group_ID']))
+            ?? (enrichment.group_id != null ? Number(enrichment.group_id) : null),
+          source_origin: 'res_header',
+          pax_type: getField(row, ['PAX_TYPE', 'Pax_Type']) || enrichment.pax_type || null,
+          pax_status: getField(row, ['PAX_STATUS', 'Pax_Status']) || enrichment.pax_status || null,
           ship: getField(row, ['SHIP_CODE', 'Ship']) || null,
-          sail_code: getField(row, ['SAIL_CODE', 'Sail_code']) || context.reservationEnrichmentMap?.get(getField(row, ['RES_ID', 'Res_ID']))?.sail_code || null,
-          sail_duration: toNumber(getField(row, ['SAIL_DURATION', 'Sail_Duration'])) ?? context.reservationEnrichmentMap?.get(getField(row, ['RES_ID', 'Res_ID']))?.sail_duration ?? (
+          sail_code: getField(row, ['SAIL_CODE', 'Sail_code']) || enrichment.sail_code || null,
+          sail_duration: toNumber(getField(row, ['SAIL_DURATION', 'Sail_Duration'])) ?? enrichment.sail_duration ?? (
             getField(row, ['SAIL_DATE_FROM', 'Sail_From_Date']) && getField(row, ['SAIL_DATE_TO', 'Sail_To_Date'])
               ? Math.max(0, Math.round(
                 (new Date(getField(row, ['SAIL_DATE_TO', 'Sail_To_Date'])).getTime() - new Date(getField(row, ['SAIL_DATE_FROM', 'Sail_From_Date'])).getTime())
@@ -882,6 +1029,8 @@ class SynapseSyncService {
           currency_rate: toNumber(getField(row, ['CURRENCY_RATE', 'Currency_Rate'])),
           guest_count: toNumber(getField(row, ['RES_GUEST_COUNT', 'Guest_Count'])),
           foc_guest_count: toNumber(getField(row, ['FOC_GUEST_COUNT', 'FOC_Guest_Count'])),
+          res_init_date: toDateOnly(getField(row, ['RES_INIT_DATE', 'Res_Init_Date'])),
+          original_init_date: toDateOnly(getField(row, ['ORIGINAL_INIT_DATE', 'Original_Init_Date'])),
           gross_published_fare: toNumber(getField(row, ['GROSS_PUBLISHED_FARE', 'GrossPublishedFare'])),
           gross_selling_fare: toNumber(getField(row, ['GROSS_SELLING_FARE', 'GrossSellingFare'])),
           net_selling_fare: toNumber(getField(row, ['NET_SELLING_FARE', 'NetSellingFare'])),
@@ -889,15 +1038,16 @@ class SynapseSyncService {
           published_discount: toNumber(getField(row, ['PUBLISHED_DISCOUNT', 'PublishedDiscount'])),
           promotional_discounts: toNumber(getField(row, ['PROMOTIONAL_DISCOUNTS', 'PromotionalDiscounts'])),
           total_discounts: toNumber(getField(row, ['TOTAL_DISCOUNTS', 'TotalDiscounts'])),
-          gross_ticket_revenue: toNumber(getField(row, ['GROSS_TICKET_REVENUE', 'GrossTicketRevenue'])),
-          net_ticket_revenue: toNumber(getField(row, ['NET_TICKET_REVENUE', 'NetTicketRevenue'])),
-          net_invoice_revenue: toNumber(getField(row, ['NET_INVOICE_REVENUE', 'NetInvoiceRevenue'])),
-          gross_ticket_revenue_eur: toNumber(getField(row, ['GROSS_TICKET_REVENUE_EUR', 'GrossTicketRevenueEUR'])),
-          net_ticket_revenue_eur: toNumber(getField(row, ['NET_TICKET_REVENUE_EUR', 'NetTicketRevenueEUR'])),
-          net_invoice_revenue_eur: toNumber(getField(row, ['NET_INVOICE_REVENUE_EUR', 'NetInvoiceRevenueEUR'])),
-          total_discounts_eur: toNumber(getField(row, ['TOTAL_DISCOUNTS_EUR', 'TotalDiscountsEUR'])),
+          gross_ticket_revenue: coalesceNum(getField(row, ['GROSS_TICKET_REVENUE', 'GrossTicketRevenue']), enrichment.gross_ticket_revenue),
+          net_ticket_revenue: coalesceNum(getField(row, ['NET_TICKET_REVENUE', 'NetTicketRevenue']), enrichment.net_ticket_revenue),
+          net_invoice_revenue: coalesceNum(getField(row, ['NET_INVOICE_REVENUE', 'NetInvoiceRevenue']), enrichment.net_invoice_revenue),
+          gross_ticket_revenue_eur: coalesceNum(getField(row, ['GROSS_TICKET_REVENUE_EUR', 'GrossTicketRevenueEUR']), enrichment.gross_ticket_revenue_eur),
+          net_ticket_revenue_eur: coalesceNum(getField(row, ['NET_TICKET_REVENUE_EUR', 'NetTicketRevenueEUR']), enrichment.net_ticket_revenue_eur),
+          net_invoice_revenue_eur: coalesceNum(getField(row, ['NET_INVOICE_REVENUE_EUR', 'NetInvoiceRevenueEUR']), enrichment.net_invoice_revenue_eur),
+          total_discounts_eur: coalesceNum(getField(row, ['TOTAL_DISCOUNTS_EUR', 'TotalDiscountsEUR']), enrichment.total_discounts_eur),
           created_at: currentTime
-        }));
+        };
+        });
 
       case 'publishedRates':
         return data.map(row => ({
@@ -1009,27 +1159,31 @@ class SynapseSyncService {
       return enrichment;
     }
 
-    // Keep IN lists conservative for Synapse parser/perf stability.
+    // Current state from dwh.Fact_Reservation (not Fact_Reservation_daily — unreliable).
+    // Weekly history lives in dwh.Fact_Reservation_History (WC_Snapshot_Date = Monday).
     const chunkSize = 2000;
     for (let i = 0; i < normalizedResIds.length; i += chunkSize) {
       const chunk = normalizedResIds.slice(i, i + chunkSize);
       const inClause = chunk.join(', ');
       const query = `
-        WITH latest AS (
-          SELECT
-            frd.Res_ID,
-            frd.Sail_code,
-            frd.Sail_Duration,
-            ROW_NUMBER() OVER (
-              PARTITION BY frd.Res_ID
-              ORDER BY frd.Snapshot_Date DESC
-            ) AS rn
-          FROM fou.FACT_RESERVATION_DAILY frd
-          WHERE frd.Res_ID IN (${inClause})
-        )
-        SELECT Res_ID, Sail_code, Sail_Duration
-        FROM latest
-        WHERE rn = 1
+        SELECT
+          fr.Res_ID,
+          fr.Sail_code,
+          fr.Sail_Duration,
+          fr.Pax_Type,
+          fr.Pax_Status,
+          fr.Res_Probability,
+          fr.Group_Probability,
+          fr.Group_ID,
+          fr.GrossTicketRevenue,
+          fr.NetTicketRevenue,
+          fr.NetInvoiceRevenue,
+          fr.GrossTicketRevenueEUR,
+          fr.NetTicketRevenueEUR,
+          fr.NetInvoiceRevenueEUR,
+          fr.TotalDiscountsEUR
+        FROM dwh.Fact_Reservation fr
+        WHERE fr.Res_ID IN (${inClause})
       `;
 
       const result = await pool.request().query(query);
@@ -1037,7 +1191,19 @@ class SynapseSyncService {
         if (!row?.Res_ID) continue;
         enrichment.set(Number(row.Res_ID), {
           sail_code: row.Sail_code || null,
-          sail_duration: row.Sail_Duration != null ? Number(row.Sail_Duration) : null
+          sail_duration: row.Sail_Duration != null ? Number(row.Sail_Duration) : null,
+          pax_type: row.Pax_Type || null,
+          pax_status: row.Pax_Status || null,
+          res_probability: row.Res_Probability != null ? Number(row.Res_Probability) : null,
+          group_probability: row.Group_Probability != null ? Number(row.Group_Probability) : null,
+          group_id: row.Group_ID != null ? Number(row.Group_ID) : null,
+          gross_ticket_revenue: row.GrossTicketRevenue != null ? Number(row.GrossTicketRevenue) : null,
+          net_ticket_revenue: row.NetTicketRevenue != null ? Number(row.NetTicketRevenue) : null,
+          net_invoice_revenue: row.NetInvoiceRevenue != null ? Number(row.NetInvoiceRevenue) : null,
+          gross_ticket_revenue_eur: row.GrossTicketRevenueEUR != null ? Number(row.GrossTicketRevenueEUR) : null,
+          net_ticket_revenue_eur: row.NetTicketRevenueEUR != null ? Number(row.NetTicketRevenueEUR) : null,
+          net_invoice_revenue_eur: row.NetInvoiceRevenueEUR != null ? Number(row.NetInvoiceRevenueEUR) : null,
+          total_discounts_eur: row.TotalDiscountsEUR != null ? Number(row.TotalDiscountsEUR) : null,
         });
       }
     }

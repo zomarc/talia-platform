@@ -6,12 +6,13 @@
 import React, { useRef, useEffect } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { getOverlayLegendOptions } from '../../../lib/chartConfig';
 
 // Register Chart.js components
 Chart.register(...registerables);
 
 const BuildCurveChart = ({ buildCurves, targetCurves = null, previousYearCurves = null, theme, sailCode }) => {
-  const { fontSize, fontFamily } = useTheme();
+  const { fontSize, fontFamily, chartLegendsVisible } = useTheme();
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
 
@@ -82,9 +83,7 @@ const BuildCurveChart = ({ buildCurves, targetCurves = null, previousYearCurves 
           duration: 0 // Disable animation to prevent shaking
         },
         plugins: {
-          legend: {
-            position: 'top',
-          },
+          legend: getOverlayLegendOptions({ visible: chartLegendsVisible }),
           title: {
             display: true,
             text: `Build Curves: ${sailCode || 'Sailing'}`,
@@ -138,6 +137,7 @@ const BuildCurveChart = ({ buildCurves, targetCurves = null, previousYearCurves 
     theme?.colors?.foreground,
     fontSize,
     fontFamily,
+    chartLegendsVisible,
   ]);
 
   if (!buildCurves || buildCurves.length === 0) {

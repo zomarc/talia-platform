@@ -2,6 +2,12 @@
  * Market roll-up helpers — agency.market → lkp.MARKET_ROLL_UP.new_budget_roll_up.
  */
 
+export const DEFAULT_MARKET_DIMENSION = 'market_group';
+
+export const normalizeMarketDimension = (value) => (
+  value === 'market' ? 'market' : 'market_group'
+);
+
 export const indexMarketRollUpByAgencyMarket = (rows = []) => {
   const map = new Map();
   (rows || []).forEach((row) => {
@@ -31,4 +37,6 @@ export const resolveMarketGroup = (agencyMarket, rollUpIndex) => {
 export default {
   indexMarketRollUpByAgencyMarket,
   resolveMarketGroup,
+  normalizeMarketDimension,
+  DEFAULT_MARKET_DIMENSION,
 };

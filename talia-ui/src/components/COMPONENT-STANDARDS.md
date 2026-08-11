@@ -516,16 +516,17 @@ Global StatusBar criterion `bookedComposition` (`window.__taliaGlobalCriteria.bo
 | `three_way` | FIT · Group booked · Group held (GTY × source probability) |
 | `group_fit_expected` (**default**) | FIT booked · Group = G booked + GTY held expected |
 
-Do not invent Talia group probabilities yet — use `ship_inventory_alloc.probability` via `resolveGroupHoldProbability`. Cabin Deck ownership highlighting is a separate concept.
+Do not invent Talia group probabilities yet — use `resolveDeliveryProbability` / `resolveGroupHoldProbability` from `lib/deliveryProbability.js` (source: `group_probability` / `res_probability` / alloc `probability`). Fact group-OF explode rows (`source_origin=fact_group_alloc`) feed Agency expected value; FIT+Held composition still uses alloc holds for berth occupancy — do not double-count both. Cabin Deck ownership highlighting is a separate concept.
 
 ## Dense row hover previews
 
-Use shared `HoverPreview` (portal chrome) + a panel-specific dense summary component (e.g. `DistributionSummary`, `ReservationHoverSummary`).
+Use shared `HoverPreview` (portal chrome) + a panel-specific dense summary component (e.g. `DistributionSummary`, `ReservationHoverSummary`, `CabinDeckHoverSummary`).
 
 - **Precompute** indexes in the container (`useMemo`) when sail/table data loads — never aggregate inside `rowMouseEnter`.
-- Presenter keeps the index in a **ref** for hot Tabulator handlers; hover state stores only `{ id, rect }`.
-- Clip row rects with `clipAnchorRectToViewport` so wide Tabulator rows do not park the preview off-screen.
+- Presenter keeps the index in a **ref** for hot Tabulator handlers; hover state stores only `{ id, rect }` (or `{ item, rect }` for click-to-open chips).
+- Clip row/chip rects with `clipAnchorRectToViewport` so wide Tabulator rows do not park the preview off-screen.
 - Prefer Appearance **Hover Preview Delay / Opacity** (ThemeContext) for timing and transparency; drop native `title` tooltips on the same rows to avoid doubles.
+- Click selects/links via the message bus; hover only shows the preview and clears when the pointer leaves (same as MSE).
 
 ## Summary
 

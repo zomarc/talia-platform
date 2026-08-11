@@ -1,17 +1,157 @@
 /**
- * Custom hook for fetching booking profile data
- * Provides booking trends and metrics for a specific sailing
+ * Hooks for booking profile (dimensional REAL + optional YoY + budget).
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import bookingProfileService from '../../services/data/bookingProfileService';
+import { REPORT_REFRESH_EVENT } from '../../components/dockview/eventConstants';
+import useReportPanelLoading from '../useReportPanelLoading';
 
 /**
- * Hook for fetching booking profile
- * @param {string} sailCode - Sail code (e.g., "CJ07250901")
- * @param {Object} options - Options { includeComparison: boolean, previousYearSailCode: string }
- * @returns {Object} { data, loading, error, refetch }
+ * Primary hook: inventory-scoped dimensional profile.
  */
+export const useBookingProfileDimensional = (sailCode, options = {}) => {
+  const {
+    breakdown = 'none',
+    includeComparison = false,
+    previousYearSailCode = null,
+    includeBudget = false,
+    budgetBreakdown = null,
+    panelInstanceId = null,
+    panelComponentId = null,
+  } = options;
+
+  const [data, setData] = useState(null);
+  const [budget, setBudget] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useReportPanelLoading(panelInstanceId, panelComponentId, loading);
+
+  const fetchData = async () => {
+    if (!sailCode) {
+      setLoading(false);
+      setData(null);
+      setBudget(null);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      let profileResult;
+      if (includeComparison) {
+        profileResult = await bookingProfileService.fetchDimensionalYoY(
+          sailCode,
+          breakdown,
+          previousYearSailCode
+        );
+      } else {
+        profileResult = await bookingProfileService.fetchDimensional(sailCode, breakdown);
+      }
+      setData(profileResult);
+
+      if (includeBudget) {
+        const budBreak = budgetBreakdown || (breakdown === 'none' ? 'market_group' : breakdown);
+        try {
+          const budgetResult = await bookingProfileService.fetchBudgetComparison(
+            sailCode,
+            budBreak
+          );
+          setBudget(budgetResult);
+        } catch (budgetErr) {
+          console.warn('[useBookingProfileDimensional] budget:', budgetErr);
+          setBudget(null);
+        }
+      } else {
+        setBudget(null);
+      }
+    } catch (err) {
+      console.error('[useBookingProfileDimensional] Error:', err);
+      setError(err);
+      setData(null);
+      setBudget(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [sailCode, breakdown, includeComparison, previousYearSailCode, includeBudget, budgetBreakdown]);
+
+  return { data, budget, loading, error, refetch: fetchData };
+};
+
+/**
+ * Reservation-only booking curve: original book date, MSE-aligned cabins, market stack.
+ */
+export const useReservationBookingCurve = (sailCode, options = {}) => {
+  const {
+    marketBreakdown = 'market_group',
+    seriesMode = 'market',
+    includeCompetitor = false,
+    panelInstanceId = null,
+    panelComponentId = null,
+  } = options;
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useReportPanelLoading(panelInstanceId, panelComponentId, loading);
+
+  const fetchData = useCallback(async () => {
+    if (!sailCode) {
+      setLoading(false);
+      setData(null);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await bookingProfileService.fetchReservationCurve(sailCode, {
+        marketBreakdown,
+        seriesMode,
+        includeCompetitor,
+      });
+      setData(result);
+    } catch (err) {
+      console.error('[useReservationBookingCurve] Error:', err);
+      setError(err);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [sailCode, marketBreakdown, seriesMode, includeCompetitor]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    const handleRefresh = (event) => {
+      const detail = event?.detail || {};
+      const targetPanel = detail.panelId;
+      const targetInstance = detail.panelInstanceId;
+      const targetComponent = detail.panelComponent;
+      const scope = detail.scope;
+      const isGlobal = scope === 'all' || (!targetPanel && !targetInstance && !targetComponent);
+      const isMatch = (
+        (panelComponentId && (targetPanel === panelComponentId || targetComponent === panelComponentId))
+        || (panelInstanceId && targetInstance === panelInstanceId)
+      );
+      if (!isGlobal && !isMatch) return;
+      fetchData();
+    };
+    window.addEventListener(REPORT_REFRESH_EVENT, handleRefresh);
+    return () => window.removeEventListener(REPORT_REFRESH_EVENT, handleRefresh);
+  }, [fetchData, panelComponentId, panelInstanceId]);
+
+  return { data, loading, error, refetch: fetchData };
+};
+
+/** @deprecated Prefer useBookingProfileDimensional */
 export const useBookingProfile = (sailCode, options = {}) => {
   const { includeComparison = false, previousYearSailCode = null } = options;
   const [data, setData] = useState(null);
@@ -24,22 +164,20 @@ export const useBookingProfile = (sailCode, options = {}) => {
       setData(null);
       return;
     }
-
     setLoading(true);
     setError(null);
-    
     try {
       let result;
       if (includeComparison) {
-        const prevSailCode = previousYearSailCode || 
+        const prev =
+          previousYearSailCode ||
           bookingProfileService.generatePreviousYearSailCode(sailCode);
-        result = await bookingProfileService.fetchWithComparison(sailCode, prevSailCode);
+        result = await bookingProfileService.fetchWithComparison(sailCode, prev);
       } else {
         result = await bookingProfileService.fetch(sailCode);
       }
       setData(result);
     } catch (err) {
-      console.error('[useBookingProfile] Error:', err);
       setError(err);
       setData(null);
     } finally {
@@ -51,20 +189,10 @@ export const useBookingProfile = (sailCode, options = {}) => {
     fetchData();
   }, [sailCode, includeComparison, previousYearSailCode]);
 
-  return {
-    data,
-    loading,
-    error,
-    refetch: fetchData
-  };
+  return { data, loading, error, refetch: fetchData };
 };
 
-/**
- * Hook for fetching booking profile with build curves
- * @param {string} sailCode - Sail code
- * @param {Object} options - Options { includeComparison: boolean, previousYearSailCode: string }
- * @returns {Object} { data, loading, error, refetch }
- */
+/** @deprecated Prefer useBookingProfileDimensional */
 export const useBookingProfileWithCurves = (sailCode, options = {}) => {
   const { includeComparison = false, previousYearSailCode = null } = options;
   const [data, setData] = useState(null);
@@ -77,23 +205,20 @@ export const useBookingProfileWithCurves = (sailCode, options = {}) => {
       setData(null);
       return;
     }
-
     setLoading(true);
     setError(null);
-    
     try {
       let result;
       if (includeComparison) {
-        const prevSailCode = previousYearSailCode || 
+        const prev =
+          previousYearSailCode ||
           bookingProfileService.generatePreviousYearSailCode(sailCode);
-        result = await bookingProfileService.fetchWithComparison(sailCode, prevSailCode);
-        // Note: Comparison doesn't include build curves yet, would need to extend
+        result = await bookingProfileService.fetchWithComparison(sailCode, prev);
       } else {
         result = await bookingProfileService.fetchWithBuildCurves(sailCode);
       }
       setData(result);
     } catch (err) {
-      console.error('[useBookingProfileWithCurves] Error:', err);
       setError(err);
       setData(null);
     } finally {
@@ -105,12 +230,5 @@ export const useBookingProfileWithCurves = (sailCode, options = {}) => {
     fetchData();
   }, [sailCode, includeComparison, previousYearSailCode]);
 
-  return {
-    data,
-    loading,
-    error,
-    refetch: fetchData
-  };
+  return { data, loading, error, refetch: fetchData };
 };
-
-

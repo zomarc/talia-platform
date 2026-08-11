@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Chart } from 'chart.js/auto';
-import { getChartOptions, getSeriesColors } from '../../../lib/chartConfig';
+import { useTheme } from '../../../contexts/ThemeContext';
+import { getChartOptions, getOverlayLegendOptions, getSeriesColors } from '../../../lib/chartConfig';
 
 /**
  * RevenueBreakdownPresenter - Revenue mix visualization
@@ -11,6 +12,7 @@ import { getChartOptions, getSeriesColors } from '../../../lib/chartConfig';
 const RevenueBreakdownPresenter = ({ data }) => {
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
+  const { chartLegendsVisible } = useTheme();
 
   const totalRevenue = useMemo(
     () => data.reduce((sum, item) => sum + item.amount, 0),
@@ -43,9 +45,7 @@ const RevenueBreakdownPresenter = ({ data }) => {
       },
       options: getChartOptions.pie({
         plugins: {
-          legend: {
-            position: 'right'
-          }
+          legend: getOverlayLegendOptions({ visible: chartLegendsVisible })
         }
       })
     });
@@ -56,7 +56,7 @@ const RevenueBreakdownPresenter = ({ data }) => {
         chartRef.current = null;
       }
     };
-  }, [data]);
+  }, [chartLegendsVisible, data]);
 
   return (
     <div className="talia-report" role="region" aria-label="Revenue breakdown">

@@ -14,6 +14,22 @@ Edit on `:5173`. Present with **Start Demo** → **https://dev.taliahub.com**.
 
 After UI changes that should appear publicly, re-run `start-demo` (or menu **D**). Apex `taliahub.com` shares the same tunnel; prefer **dev.** for discussion.
 
+**Durable presenter:** Start Demo installs macOS **launchd KeepAlive** agents for vite preview (`:4173`) and ngrok so Cursor/agent shells cannot kill the public origin (that was causing the Cloudflare “Temporarily Unavailable” holding page).
+
+```bash
+./scripts/install-demo-presenter.sh status   # local + gateway probe
+./scripts/install-demo-presenter.sh stop     # end client-demo tunnel on this laptop
+```
+
+**Stability notes for client demos**
+
+| Risk | Mitigation |
+|------|------------|
+| Preview process dies / agent shell exit | launchd KeepAlive (above) |
+| Laptop sleep / lid close | Keep awake while presenting, or use MiniPC / Azure UAT |
+| MiniPC steals reserved domain | Start Demo stops staging ngrok when claiming local |
+| Need always-on without your laptop | Deploy to Azure UAT (`MVP`) or MiniPC Docker prove — not this tunnel |
+
 Roles at a glance: **dev** = laptop discuss · **MiniPC / Azure MVP** = prove-deploy (not customer prod).
 
 ## Goal

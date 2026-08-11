@@ -14,15 +14,15 @@ const SimpleTable = ({ panelInstanceId, panelComponentId }) => {
     limit: 1000
   });
 
-  if (loading) {
+  if (loading && (!data || data.length === 0)) {
     return <LoadingSpinner message="Loading master sail data..." />;
   }
 
-  if (error) {
+  if (error && (!data || data.length === 0)) {
     return <ErrorMessage error={error} title="Error loading master sail data" />;
   }
 
-  if (!data || data.length === 0) {
+  if (!loading && (!data || data.length === 0)) {
     return (
       <div className="talia-empty" role="status">
         <span className="talia-empty__icon" aria-hidden="true">📋</span>

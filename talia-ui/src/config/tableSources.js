@@ -18,6 +18,18 @@ export const tableSources = {
     dateColumns: [],
     syncType: 'marketRollUp'
   },
+  cabin_ctg: {
+    source: 'lkp.CABIN_CTG',
+    type: 'direct',
+    dateColumns: ['effective_from', 'effective_to'],
+    syncType: 'cabinCtg'
+  },
+  etl_table_parameters: {
+    source: 'config.ETL_Table_Parameters',
+    type: 'direct',
+    dateColumns: [],
+    syncType: 'etlTableParameters'
+  },
   ship: {
     source: 'dwh.Dim_Ship',
     type: 'direct',
@@ -44,6 +56,12 @@ export const tableSources = {
     dateColumns: ['eff_sail_from', 'eff_sail_to'],
     syncType: 'shipCabinCtgLink'
   },
+  ship_cabin_reserve: {
+    source: 'stg.SHIP_CABIN_RESERVE',
+    type: 'direct',
+    dateColumns: ['sail_date_from', 'sail_date_to'],
+    syncType: 'shipCabinReserve'
+  },
   cabin_availability: {
     source: 'dwh.Dim_Cabin_Availability',
     type: 'direct',
@@ -51,10 +69,12 @@ export const tableSources = {
     syncType: 'cabin_availability'
   },
   reservation: {
+    // Identity/status from RES_HEADER; EUR ticket revenue enriched from dwh.Fact_Reservation.
+    // Weekly Monday snapshots: dwh.Fact_Reservation_History (not Fact_Reservation_daily).
     source: 'stg.RES_HEADER',
     type: 'direct',
     isLargeDataset: true, // Uses batch loading
-    dateColumns: ['sail_from_date', 'sail_to_date'],
+    dateColumns: ['sail_from_date', 'sail_to_date', 'res_init_date', 'original_init_date'],
     syncType: 'reservation'
   },
   master_sail: {
@@ -185,6 +205,25 @@ export const tableSources = {
     syncType: null,
     loadMethod: 'Import'
   },
+  budget: {
+    source: 'lkp.BUDGET',
+    type: 'synapse',
+    dateColumns: ['accounting_month', 'master_departure_date', 'effective_from', 'effective_to', 'created_at'],
+    syncType: 'budget',
+    loadMethod: 'Sync'
+  },
+  inventory_target_profile: {
+    source: null,
+    type: 'application',
+    dateColumns: ['created_at', 'updated_at'],
+    syncType: null
+  },
+  inventory_target_profile_node: {
+    source: null,
+    type: 'application',
+    dateColumns: ['created_at', 'updated_at'],
+    syncType: null
+  },
   target_profiles: {
     source: null, // Application table - Talia targets (user-edited)
     type: 'application',
@@ -237,7 +276,14 @@ export const tableSources = {
     type: 'application',
     dateColumns: ['date'],
     syncType: null,
-    loadMethod: 'View (physical berths)'
+    loadMethod: 'View (physical berths + cabins)'
+  },
+  sail_booking_summary: {
+    source: null,
+    type: 'application',
+    dateColumns: [],
+    syncType: null,
+    loadMethod: 'View (sail-level booking densify)'
   },
   sailing_physical_day_map: {
     source: null,

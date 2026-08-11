@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
-import { formatDayMon } from '../../../lib/dateFormat';
+import { formatDayMonYear, formatSailDateRange } from '../../../lib/dateFormat';
 
 const dayMs = 1000 * 60 * 60 * 24;
 
@@ -12,14 +12,14 @@ const toTimestamp = (value) => {
 
 const formatDate = (value) => {
   if (!value) return 'N/A';
-  return formatDayMon(value, String(value));
+  return formatDayMonYear(value, String(value));
 };
 
 const formatDateTime = (value) => {
   if (!value) return 'N/A';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  const dateLabel = formatDayMon(date, String(value));
+  const dateLabel = formatDayMonYear(date, String(value));
   const timeLabel = date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -31,9 +31,7 @@ const formatDateTime = (value) => {
 const formatRange = (range) => {
   if (!range || (!range.min && !range.max)) return 'N/A';
   if (range.min === range.max) return formatDate(range.min);
-  const min = range.min ? formatDate(range.min) : 'N/A';
-  const max = range.max ? formatDate(range.max) : 'N/A';
-  return `${min} - ${max}`;
+  return formatSailDateRange(range.min, range.max, 'N/A');
 };
 
 const formatDuration = (durationMs) => {
@@ -169,9 +167,9 @@ const DataManagementTable = ({
           { title: 'Source', field: 'source', minWidth: 120, headerFilter: 'input' },
           { title: 'Load', field: 'loadMethod', hozAlign: 'center', minWidth: 90, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true } },
           { title: 'Rows', field: 'rowCount', hozAlign: 'right', minWidth: 90, sorter: 'number', formatter: (cell) => (cell.getValue() || 0).toLocaleString() },
-          { title: 'Range', field: 'dateRange', minWidth: 140, formatter: (cell) => formatRange(cell.getValue()) },
-          { title: 'Last Sync', field: 'lastSync', minWidth: 140, formatter: (cell) => formatDateTime(cell.getValue()) },
-          { title: 'Latest Data', field: 'latestAvailableData', minWidth: 140, formatter: (cell) => formatDateTime(cell.getValue()) },
+          { title: 'Range', field: 'dateRange', minWidth: 180, formatter: (cell) => formatRange(cell.getValue()) },
+          { title: 'Last Sync', field: 'lastSync', minWidth: 170, formatter: (cell) => formatDateTime(cell.getValue()) },
+          { title: 'Latest Data', field: 'latestAvailableData', minWidth: 170, formatter: (cell) => formatDateTime(cell.getValue()) },
           {
             title: 'Quality',
             field: '_health',

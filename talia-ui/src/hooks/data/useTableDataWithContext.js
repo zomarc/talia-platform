@@ -14,6 +14,7 @@
  * @param {boolean} [options.enabled=true] - Whether the hook is enabled
  * @param {boolean} [options.fetchWithoutContext=true] - Whether to auto-fetch when no event context is available
  * @param {number} [options.cacheTtlMs=15000] - Shared cache TTL for identical requests
+ * @param {string[]} [options.columns] - Optional column projection (server allowlist)
  * @returns {Object} { data, loading, error, refetch, context }
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -21,6 +22,11 @@ import queryTracker from '../../services/data/queryTracker';
 import { SAIL_SELECT_EVENT, SHIP_SELECT_EVENT } from '../../lib/eventBus';
 import { REPORT_PANEL_PAUSE_EVENT, REPORT_REFRESH_EVENT } from '../../components/dockview/eventConstants';
 import { normalizeGlobalDateRangeKey } from '../../lib/globalDateRange';
+import {
+  ALL_DEPARTURE_MONTH_KEY,
+  normalizeGlobalDepartureMonth,
+  rowMatchesDepartureMonth,
+} from '../../lib/globalDepartureMonth';
 import useReportPanelLoading from '../useReportPanelLoading';
 
 const GRAPHQL_URL = '/api/graphql';
@@ -47,8 +53,8 @@ const stableStringify = (value) => {
   return JSON.stringify(value);
 };
 
-const buildRequestKey = (tableName, limit, filters) => (
-  `${tableName || ''}|${String(limit || '')}|${stableStringify(filters || null)}`
+const buildRequestKey = (tableName, limit, filters, columns = null) => (
+  `${tableName || ''}|${String(limit || '')}|${stableStringify(filters || null)}|${stableStringify(columns || null)}`
 );
 
 const buildEffectiveFilters = (currentFilters, staticFilters) => ({
@@ -343,8 +349,33 @@ const applyRealSailingCriteria = (rows) => {
   });
 };
 
+const sameRowRefs = (prev, next) => (
+  Array.isArray(prev)
+  && Array.isArray(next)
+  && prev.length === next.length
+  && prev.every((row, index) => row === next[index])
+);
+
+const applyGlobalDepartureMonthCriteria = (rows, context = null) => {
+  // Explicit sail selection should always win over global month.
+  if (resolveSelectedSailCode(context)) {
+    return rows;
+  }
+  const criteria = window.__taliaGlobalCriteria || null;
+  const monthKey = normalizeGlobalDepartureMonth(criteria?.departureMonth);
+  if (monthKey === ALL_DEPARTURE_MONTH_KEY) return rows;
+  return (rows || []).filter((row) => rowMatchesDepartureMonth(row, monthKey));
+};
+
 const applyGlobalCriteria = (rows, context = null) => (
-  applyRealSailingCriteria(applyGlobalDurationCriteria(applyGlobalDateCriteria(rows, context)))
+  applyRealSailingCriteria(
+    applyGlobalDurationCriteria(
+      applyGlobalDepartureMonthCriteria(
+        applyGlobalDateCriteria(rows, context),
+        context
+      )
+    )
+  )
 );
 
 const isPanelPaused = (panelInstanceId, panelComponentId) => {
@@ -376,6 +407,7 @@ export const useTableDataWithContext = ({
   fetchWithoutContext = true,
   cacheTtlMs = DEFAULT_CACHE_TTL_MS,
   filters: staticFilters = null,
+  columns = null,
 }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -399,6 +431,7 @@ export const useTableDataWithContext = ({
   const fetchWithoutContextRef = useRef(fetchWithoutContext);
   const cacheTtlMsRef = useRef(cacheTtlMs);
   const staticFiltersRef = useRef(staticFilters);
+  const columnsRef = useRef(columns);
   const hasCheckedContextRef = useRef(false);
   const lastIncludeNonRealRef = useRef(window.__taliaGlobalCriteria?.includeNonRealSailings === true);
   const pausedRef = useRef(isPanelPaused(panelInstanceId, panelComponentId));
@@ -419,7 +452,32 @@ export const useTableDataWithContext = ({
     fetchWithoutContextRef.current = fetchWithoutContext;
     cacheTtlMsRef.current = cacheTtlMs;
     staticFiltersRef.current = staticFilters;
-  }, [contextMapper, tableName, limit, enabled, eventName, panelInstanceId, panelComponentId, fetchWithoutContext, cacheTtlMs, staticFilters]);
+    columnsRef.current = columns;
+  }, [contextMapper, tableName, limit, enabled, eventName, panelInstanceId, panelComponentId, fetchWithoutContext, cacheTtlMs, staticFilters, columns]);
+
+  const wasEnabledRef = useRef(enabled);
+
+  // enabled gates network only — never tear down bus listeners (that remount race
+  // re-hydrates from stale persisted sail.select and spins loading forever).
+  useEffect(() => {
+    const wasEnabled = wasEnabledRef.current;
+    wasEnabledRef.current = enabled;
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+    // Refetch only on false → true when a selection is already on the bus.
+    if (wasEnabled) return;
+    const currentContext = contextRef.current;
+    if (!currentContext && !fetchWithoutContextRef.current) return;
+    const filters = currentContext ? extractFiltersRef.current(currentContext) : null;
+    if (!filters && !fetchWithoutContextRef.current) {
+      setLoading(false);
+      return;
+    }
+    lastFiltersRef.current = null;
+    fetchDataRef.current(filters);
+  }, [enabled]);
 
   useEffect(() => {
     contextRef.current = context;
@@ -492,12 +550,29 @@ export const useTableDataWithContext = ({
       return;
     }
 
+    // Selection-driven hooks must not fetch unfiltered when the mapper cannot
+    // yet resolve filters (e.g. alloc waiting on sail_date_from).
+    if (!currentFilters && !fetchWithoutContextRef.current) {
+      setLoading(false);
+      setError(null);
+      rawDataRef.current = [];
+      setData([]);
+      setLoadedFiltersKey(null);
+      lastFiltersRef.current = null;
+      return;
+    }
+
     fetchingRef.current = true;
     lastFiltersRef.current = requestedFiltersKey;
     setLoading(true);
     setError(null);
 
-    const requestKey = buildRequestKey(tableNameRef.current, limitRef.current, effectiveFilters || null);
+    const requestKey = buildRequestKey(
+      tableNameRef.current,
+      limitRef.current,
+      effectiveFilters || null,
+      columnsRef.current
+    );
     const now = Date.now();
     const ttl = Number(cacheTtlMsRef.current || 0);
     if (!bypassCache && ttl > 0) {
@@ -517,15 +592,19 @@ export const useTableDataWithContext = ({
         requestPromise = (async () => {
           let trackQueryFn = null;
           const query = `
-        query GetTableData($tableName: String!, $limit: Int, $filters: TableDataFilters) {
-          tableData(tableName: $tableName, limit: $limit, filters: $filters)
+        query GetTableData($tableName: String!, $limit: Int, $filters: TableDataFilters, $columns: [String!]) {
+          tableData(tableName: $tableName, limit: $limit, filters: $filters, columns: $columns)
         }
       `;
 
+          const columnsArg = Array.isArray(columnsRef.current) && columnsRef.current.length > 0
+            ? columnsRef.current
+            : undefined;
           const variables = {
             tableName: tableNameRef.current,
             limit: limitRef.current,
-            filters: effectiveFilters || undefined
+            filters: effectiveFilters || undefined,
+            columns: columnsArg,
           };
 
           console.log(
@@ -621,15 +700,59 @@ export const useTableDataWithContext = ({
     }
   };
 
-  // Check for existing context on mount (from persisted events)
+  const applyMountContext = (detail, sourceLabel) => {
+    const normalizedDetail = eventNameRef.current === SAIL_SELECT_EVENT
+      ? normalizeSelectionContextDetail(detail)
+      : detail;
+    const newFilters = extractFiltersRef.current(normalizedDetail);
+    if (!normalizedDetail) return false;
+    console.log(`[useTableDataWithContext] Found ${sourceLabel} on mount:`, newFilters);
+    contextRef.current = normalizedDetail;
+    setContext(normalizedDetail);
+    if (newFilters || fetchWithoutContextRef.current) {
+      fetchDataRef.current(newFilters);
+    } else {
+      setLoading(false);
+      setError(null);
+      setData([]);
+      setLoadedFiltersKey(null);
+    }
+    return true;
+  };
+
+  // Check for existing context on mount (live bus first, then persisted disk)
   useEffect(() => {
-    if (!enabled || !eventName || hasCheckedContextRef.current) {
+    if (!eventName || hasCheckedContextRef.current) {
       return;
     }
 
-    // Check for existing context from TestPage's latestEvent or window state
     const checkExistingContext = () => {
       try {
+        // Live message-bus state wins over disk — avoids remount restoring a stale sail.
+        if (eventNameRef.current === SAIL_SELECT_EVENT) {
+          const lastSailEvent = window.lastSailSelectEvent || null;
+          if (lastSailEvent?.detail && applyMountContext(lastSailEvent.detail, 'lastSailSelectEvent')) {
+            hasCheckedContextRef.current = true;
+            return;
+          }
+        }
+
+        if (eventNameRef.current === SHIP_SELECT_EVENT) {
+          const lastShipEvent = window.lastShipSelectEvent || null;
+          if (lastShipEvent?.detail && applyMountContext(lastShipEvent.detail, 'lastShipSelectEvent')) {
+            hasCheckedContextRef.current = true;
+            return;
+          }
+        }
+
+        const testPageEvent = window.latestEvent || null;
+        if (testPageEvent && testPageEvent.name === eventNameRef.current && testPageEvent.detail) {
+          if (applyMountContext(testPageEvent.detail, 'window.latestEvent')) {
+            hasCheckedContextRef.current = true;
+            return;
+          }
+        }
+
         const persistedStores = ['talia:test:lastEvent', 'talia:persisted:lastEvent'];
         for (const storageKey of persistedStores) {
           const persistedEventStr = localStorage.getItem(storageKey);
@@ -637,62 +760,13 @@ export const useTableDataWithContext = ({
           try {
             const persistedEvent = JSON.parse(persistedEventStr);
             if (persistedEvent && persistedEvent.name === eventNameRef.current && persistedEvent.detail) {
-              const newFilters = extractFiltersRef.current(persistedEvent.detail);
-              if (newFilters) {
-                console.log('[useTableDataWithContext] Found persisted context on mount:', newFilters);
-                setContext(persistedEvent.detail);
-                fetchDataRef.current(newFilters);
+              if (applyMountContext(persistedEvent.detail, `persisted:${storageKey}`)) {
                 hasCheckedContextRef.current = true;
                 return;
               }
             }
           } catch (e) {
             console.warn('[useTableDataWithContext] Error parsing persisted event:', e);
-          }
-        }
-
-        // Check TestPage's latestEvent (if available on window)
-        const testPageEvent = window.latestEvent || null;
-        if (testPageEvent && testPageEvent.name === eventNameRef.current && testPageEvent.detail) {
-          const newFilters = extractFiltersRef.current(testPageEvent.detail);
-          if (newFilters) {
-            console.log('[useTableDataWithContext] Found window.latestEvent on mount:', newFilters);
-            setContext(testPageEvent.detail);
-            fetchDataRef.current(newFilters);
-            hasCheckedContextRef.current = true;
-            return;
-          }
-        }
-
-        // Also check for lastSailSelectEvent (for sail events)
-        if (eventNameRef.current === SAIL_SELECT_EVENT) {
-          const lastSailEvent = window.lastSailSelectEvent || null;
-          if (lastSailEvent && lastSailEvent.detail) {
-            const normalizedDetail = normalizeSelectionContextDetail(lastSailEvent.detail);
-            const newFilters = extractFiltersRef.current(normalizedDetail);
-            if (newFilters) {
-              console.log('[useTableDataWithContext] Found lastSailSelectEvent on mount:', newFilters);
-              contextRef.current = normalizedDetail;
-              setContext(normalizedDetail);
-              fetchDataRef.current(newFilters);
-              hasCheckedContextRef.current = true;
-              return;
-            }
-          }
-        }
-
-        if (eventNameRef.current === SHIP_SELECT_EVENT) {
-          const lastShipEvent = window.lastShipSelectEvent || null;
-          if (lastShipEvent && lastShipEvent.detail) {
-            const newFilters = extractFiltersRef.current(lastShipEvent.detail);
-            if (newFilters) {
-              console.log('[useTableDataWithContext] Found lastShipSelectEvent on mount:', newFilters);
-              contextRef.current = lastShipEvent.detail;
-              setContext(lastShipEvent.detail);
-              fetchDataRef.current(newFilters);
-              hasCheckedContextRef.current = true;
-              return;
-            }
           }
         }
       } catch (err) {
@@ -711,14 +785,10 @@ export const useTableDataWithContext = ({
     };
 
     checkExistingContext();
-  }, [enabled, eventName]);
+  }, [eventName]);
 
-  // Listen to event bus - only re-run when eventName or enabled changes
+  // Listen to event bus — stay subscribed even when enabled=false so selects are not dropped.
   useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-
     const currentEventName = eventNameRef.current;
 
     // Create handlers that use refs
@@ -746,14 +816,22 @@ export const useTableDataWithContext = ({
       setContext(contextDetail);
       if (newFilters || fetchWithoutContextRef.current) {
         setLoading(true);
+        scheduleContextFetch(fetchDataRef.current, newFilters);
+      } else {
+        // Mapper cannot resolve filters yet — keep selection, do not fetch unfiltered.
+        setLoading(false);
+        setError(null);
+        rawDataRef.current = [];
+        setData([]);
+        setLoadedFiltersKey(null);
+        lastFiltersRef.current = null;
       }
-      scheduleContextFetch(fetchDataRef.current, newFilters);
 
       if (event.type === SAIL_SELECT_EVENT) {
-        window.lastSailSelectEvent = event;
+        window.lastSailSelectEvent = { type: SAIL_SELECT_EVENT, detail: contextDetail };
       }
       if (event.type === SHIP_SELECT_EVENT) {
-        window.lastShipSelectEvent = event;
+        window.lastShipSelectEvent = { type: SHIP_SELECT_EVENT, detail: eventDetail };
       }
     };
 
@@ -815,95 +893,27 @@ export const useTableDataWithContext = ({
       }
     });
 
-    // Initial fetch: if context was found, it was already fetched in checkExistingContext
-    // If no context found, fetch without filters to show all data
-    // But also check again here in case event was dispatched between context check and listener setup
+    // Race cover: event may have landed between mount-hydration and listener attach.
     if (!hasCheckedContextRef.current) {
-      // Re-check for context one more time (in case event was dispatched between checks)
-      const recheckContext = () => {
-        try {
-          // Check window.latestEvent
-          const testPageEvent = window.latestEvent || null;
-          if (testPageEvent && testPageEvent.name === eventNameRef.current && testPageEvent.detail) {
-            const newFilters = extractFiltersRef.current(testPageEvent.detail);
-            if (newFilters) {
-              console.log('[useTableDataWithContext] Found window.latestEvent in listener setup:', newFilters);
-              setContext(testPageEvent.detail);
-              fetchDataRef.current(newFilters);
-              hasCheckedContextRef.current = true;
-              return;
-            }
-          }
-          // Check persisted app/test event
-          const persistedStores = ['talia:test:lastEvent', 'talia:persisted:lastEvent'];
-          for (const storageKey of persistedStores) {
-            const persistedEventStr = localStorage.getItem(storageKey);
-            if (!persistedEventStr) continue;
-            try {
-              const persistedEvent = JSON.parse(persistedEventStr);
-              if (persistedEvent && persistedEvent.name === eventNameRef.current && persistedEvent.detail) {
-                const newFilters = extractFiltersRef.current(persistedEvent.detail);
-                if (newFilters) {
-                  console.log('[useTableDataWithContext] Found persisted event in listener setup:', newFilters);
-                  setContext(persistedEvent.detail);
-                  fetchDataRef.current(newFilters);
-                  hasCheckedContextRef.current = true;
-                  return;
-                }
-              }
-            } catch (e) {
-              console.warn('[useTableDataWithContext] Error parsing persisted event:', e);
-            }
-          }
-          // Check lastSailSelectEvent
-          if (eventNameRef.current === SAIL_SELECT_EVENT) {
-            const lastSailEvent = window.lastSailSelectEvent || null;
-            if (lastSailEvent && lastSailEvent.detail) {
-              const normalizedDetail = normalizeSelectionContextDetail(lastSailEvent.detail);
-              const newFilters = extractFiltersRef.current(normalizedDetail);
-              if (newFilters) {
-                console.log('[useTableDataWithContext] Found lastSailSelectEvent in listener setup:', newFilters);
-                contextRef.current = normalizedDetail;
-                setContext(normalizedDetail);
-                fetchDataRef.current(newFilters);
-                hasCheckedContextRef.current = true;
-                return;
-              }
-            }
-          }
-          if (eventNameRef.current === SHIP_SELECT_EVENT) {
-            const lastShipEvent = window.lastShipSelectEvent || null;
-            if (lastShipEvent && lastShipEvent.detail) {
-              const newFilters = extractFiltersRef.current(lastShipEvent.detail);
-              if (newFilters) {
-                console.log('[useTableDataWithContext] Found lastShipSelectEvent in listener setup:', newFilters);
-                contextRef.current = lastShipEvent.detail;
-                setContext(lastShipEvent.detail);
-                fetchDataRef.current(newFilters);
-                hasCheckedContextRef.current = true;
-                return;
-              }
-            }
-          }
-        } catch (err) {
-          console.warn('[useTableDataWithContext] Error rechecking context:', err);
-        }
-        // No context found
-        if (fetchWithoutContextRef.current) {
-          fetchDataRef.current(null);
-        } else {
-          setLoading(false);
-          setError(null);
-          setData([]);
-          setLoadedFiltersKey(null);
-        }
+      if (eventNameRef.current === SAIL_SELECT_EVENT && window.lastSailSelectEvent?.detail) {
+        applyMountContext(window.lastSailSelectEvent.detail, 'lastSailSelectEvent(listener)');
         hasCheckedContextRef.current = true;
-      };
-      recheckContext();
+      } else if (eventNameRef.current === SHIP_SELECT_EVENT && window.lastShipSelectEvent?.detail) {
+        applyMountContext(window.lastShipSelectEvent.detail, 'lastShipSelectEvent(listener)');
+        hasCheckedContextRef.current = true;
+      } else if (fetchWithoutContextRef.current) {
+        fetchDataRef.current(null);
+        hasCheckedContextRef.current = true;
+      } else {
+        setLoading(false);
+        setError(null);
+        setData([]);
+        setLoadedFiltersKey(null);
+        hasCheckedContextRef.current = true;
+      }
     }
 
     return () => {
-      // Cleanup listeners on unmount or when dependencies change
       eventNames.forEach(name => {
         window.removeEventListener(name, handleEvent);
         const clearEventName = name.replace('.select', '.clear').replace('.select', '.clear');
@@ -911,11 +921,10 @@ export const useTableDataWithContext = ({
           window.removeEventListener(clearEventName, handleClearEvent);
         }
       });
-      // Reset filters on cleanup so remount can fetch fresh
       lastFiltersRef.current = null;
       hasCheckedContextRef.current = false;
     };
-  }, [eventName, enabled, fetchWithoutContext]); // Only re-run if eventName/enabled behavior changes
+  }, [eventName, fetchWithoutContext]);
 
   // Global criteria handling:
   // - Date/duration apply immediately client-side on current dataset.
@@ -926,11 +935,23 @@ export const useTableDataWithContext = ({
         pendingRefreshOnResumeRef.current = true;
         return;
       }
-      setData(applyGlobalCriteria(rawDataRef.current, contextRef.current));
+      // Re-apply client filters. Keep previous array identity when the visible
+      // row set is unchanged — sail.select republishes criteria and must not
+      // force every panel through replaceData (MSE scroll jump).
+      setData((prev) => {
+        const next = applyGlobalCriteria(rawDataRef.current, contextRef.current);
+        return sameRowRefs(prev, next) ? prev : next;
+      });
 
       const includeNonRealNext = event?.detail?.includeNonRealSailings === true;
 
       if (PUBLISHED_RATES_TABLES_SERVER_DATE_BOUNDS.has(tableNameRef.current)) {
+        // Sail selection used to republish criteria and force a refetch here.
+        // Only refetch when the non-real flag actually changes (date bounds are
+        // already applied inside fetchData from window.__taliaGlobalCriteria).
+        if (includeNonRealNext === lastIncludeNonRealRef.current) {
+          return;
+        }
         lastIncludeNonRealRef.current = includeNonRealNext;
         lastFiltersRef.current = null;
         const currentContext = contextRef.current;

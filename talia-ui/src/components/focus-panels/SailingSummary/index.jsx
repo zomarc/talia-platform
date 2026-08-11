@@ -22,13 +22,12 @@ const SailingSummaryContainer = ({ panelInstanceId, panelComponentId }) => {
     limit: 10000 // Need more data for aggregation
   });
 
-  // Handle loading state
-  if (loading) {
+  // Initial load only — keep prior content so ReportShell can grey-out while refreshing.
+  if (loading && (!data || data.length === 0)) {
     return <LoadingSpinner message="Loading sailing summary data..." fullScreen={false} />;
   }
 
-  // Handle error state
-  if (error) {
+  if (error && (!data || data.length === 0)) {
     return (
       <ErrorMessage 
         error={error} 
@@ -38,8 +37,7 @@ const SailingSummaryContainer = ({ panelInstanceId, panelComponentId }) => {
     );
   }
 
-  // Handle empty data
-  if (!data || data.length === 0) {
+  if (!loading && (!data || data.length === 0)) {
     return (
       <div className="focus-panel-empty">
         <p>No sailing summary data available</p>

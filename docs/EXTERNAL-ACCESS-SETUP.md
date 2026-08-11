@@ -1,24 +1,49 @@
 # External Access Setup (ngrok + Cloudflare)
 
-Single source of truth for exposing **taliahub.com** (and subdomains) with a holding page when the endpoint is offline.
+How to present the laptop stack publicly, and how the Cloudflare Worker + reserved ngrok domain work.
+
+## Day-to-day (preferred)
+
+Edit on `:5173`. Present with **Start Demo** → **https://dev.taliahub.com**.
+
+```bash
+./scripts/validate start-core          # GraphQL + Supabase + Vite-dev :5173
+./scripts/validate start-demo          # or menu D — rebuild preview :4173 + publish
+# open https://dev.taliahub.com
+```
+
+After UI changes that should appear publicly, re-run `start-demo` (or menu **D**). Apex `taliahub.com` shares the same tunnel; prefer **dev.** for discussion.
+
+Roles at a glance: **dev** = laptop discuss · **MiniPC / Azure MVP** = prove-deploy (not customer prod).
 
 ## Goal
 
-- **ngrok running** → `taliahub.com` serves the app
-- **ngrok stopped** → `taliahub.com` serves the holding page
-- **Subdomains** (e.g. `celestyal.taliahub.com`) follow the same behavior
+- **ngrok running** → public hosts serve the app
+- **ngrok stopped** → public hosts serve the holding page
+- **Subdomains** share one reserved ngrok domain via the Worker `HOST_MAP`
 
 ## Architecture (minimal)
 
 ```
-User -> Cloudflare Worker -> ngrok tunnel
+User -> Cloudflare Worker -> ngrok tunnel (reserved: taliahub.com)
                  |
                  +-- if origin fails -> holding page
 ```
 
+Hostnames (browser) → Worker remaps Host → reserved domain:
+
+| Browser URL | Role |
+|-------------|------|
+| **https://dev.taliahub.com** | **Laptop discussion / development portal** (prefer this) |
+| https://taliahub.com | Same tunnel (legacy / bookmarks / staging claim) |
+| https://celestyal.taliahub.com | Alias (same tunnel) |
+| Azure MVP | Direct IP — not via this tunnel (UAT prove-deploy) |
+| MiniPC | Docker prove-deploy; can claim apex when `external-on` target is staging |
+| Customer Azure | Future production |
+
 ## Requirements
 
-- **ngrok** paid plan with **custom domain**
+- **ngrok** paid plan with **custom domain** `taliahub.com`
 - **Cloudflare** zone for `taliahub.com`, DNS records **proxied (orange cloud)**
 - **Worker route**: `*taliahub.com/*` → `taliahub-gateway`
 
@@ -26,19 +51,26 @@ User -> Cloudflare Worker -> ngrok tunnel
 
 ### 1) ngrok domain
 
-1. ngrok Dashboard → **Domains** → add `taliahub.com`
+1. ngrok Dashboard → **Domains** → ensure `taliahub.com` is reserved
 2. Copy the **CNAME target** (example: `xxxxx.ngrok-cname.com`)
+
+You do **not** need a separate ngrok reserved domain for `dev.` — the Worker rewrites Host to `taliahub.com`.
 
 ### 2) Cloudflare DNS
 
-Cloudflare → **DNS**:
-- `taliahub.com` CNAME → ngrok CNAME target (proxied)
-- `www` CNAME → ngrok CNAME target (proxied)
-- `celestyal` CNAME → ngrok CNAME target (proxied)
+Cloudflare → **DNS** (all proxied):
+
+- `taliahub.com` / `@` → ngrok CNAME target (or CF A/AAAA when orange-cloud)
+- `www` → same
+- **`dev`** → same (required for `https://dev.taliahub.com`)
+- `celestyal` → same (optional alias)
+
+If `dev` already resolves to Cloudflare anycast (same as apex), you are done for DNS.
 
 ### 3) Worker route
 
 Cloudflare → **Workers Routes**:
+
 - `*taliahub.com/*` → `taliahub-gateway`
 
 ### 4) Worker config
@@ -46,8 +78,7 @@ Cloudflare → **Workers Routes**:
 Edit `cloudflare-worker/index.js`:
 
 - Set `NGROK_RESOLVE` to the ngrok CNAME target (no scheme)
-- Update `HOST_MAP` if you later want per-customer tunnels
-- Update `HOLDING_HTML` to change the holding page design/copy
+- Keep `HOST_MAP` entries for `dev.taliahub.com`, apex, www, aliases → `taliahub.com`
 
 Deploy:
 
@@ -58,71 +89,51 @@ npx wrangler deploy
 
 ## Local vs staging vs MVP
 
-| Target | How you reach it | Owns `taliahub.com`? |
-|--------|------------------|----------------------|
-| **local** | `http://127.0.0.1:5173` | Only when **local ngrok** is running (`./scripts/validate external-on` with working target `local`) |
-| **staging** (MiniPC) | `http://192.168.1.120:5173` (LAN) | Only when **staging** `ngrok-taliahub` systemd unit is active |
-| **mvp** (Azure) | `http://<MVP_UI_HOST>:5173` from `scripts/config/targets.env` | **Never** via this repo’s validate/ngrok path |
+| Target | How you reach it | Owns reserved ngrok domain? |
+|--------|------------------|------------------------------|
+| **local** | Edit: `http://127.0.0.1:5173`. Public discuss: **https://dev.taliahub.com** (preview `:4173`) | When local ngrok is running (`external-on` + target `local`) |
+| **staging** (MiniPC) | LAN `http://192.168.1.120:5173` — Docker prove | When staging `ngrok-taliahub` is active |
+| **mvp** (your Azure) | `http://<MVP_UI_HOST>:5173` — deploy/UAT prove | **Never** via validate ngrok |
+| **customer Azure** | Future production | Separate instance |
 
-`./scripts/validate set-target …` only sets the **working target** (check / start-core / deploy scope). It does **not** move `taliahub.com`.
+`./scripts/validate set-target …` only sets the **working target** (check / start-core / deploy scope). It does **not** move the tunnel by itself — use `external-on`.
 
-To put the public demo on local:
+### Why local public is preview, not Vite-dev
 
-```bash
-./scripts/validate set-target local
-# UI must be up on :5173
-./scripts/validate external-on   # type ENABLE_NGROK_EXTERNAL
-```
+Vite-dev serves hundreds of ESM modules. Over ngrok + Cloudflare that waterfall often stalls on the HTML boot screen. A production **preview** build serves one bundled JS file and boots reliably.
 
-To stop public demo from this laptop:
+Config (`scripts/config/targets.env`):
+
+- `LOCAL_UI_PORT=5173` — edit / HMR
+- `LOCAL_PUBLIC_UI_PORT=4173` — public presenter
+- `PUBLIC_DEV_URL=https://dev.taliahub.com` — share with clients
+- `PUBLIC_MAIN_URL=https://taliahub.com` — reserved domain / legacy probes
+
+### Switch tunnel owner (advanced)
+
+Menu **5** / `external-on` switches who owns the reserved domain (laptop ↔ MiniPC). Requires typing `ENABLE_NGROK_EXTERNAL`. Prefer **Start Demo** for day-to-day laptop presenting.
+
+To stop public access:
 
 ```bash
 ./scripts/validate external-off
 ```
 
-`external-off` behavior:
-
-1. Stops **local** ngrok immediately (`pkill` for the reserved domain).
-2. Attempts to stop staging `ngrok-taliahub` over SSH with a **2s** connect timeout; soft-fails if MiniPC is unreachable (does not hang).
-3. Re-probes `https://taliahub.com`:
-   - **Holding page (success):** HTTP **503** and `X-TaliaHub-Gateway: fallback` → status `OFF (HOLDING)`.
-   - **Still live:** HTTP 200/302/401/403 or `gateway=proxied` → **ORPHAN** (another host still owns the reserved domain; stop that tunnel in the ngrok dashboard or on MiniPC, then re-run).
-
-If staging MiniPC SSH is unreachable, local stop still completes; reclaim an orphan by stopping the endpoint in the ngrok dashboard, then `external-on` on the laptop when ready.
-
-## Local workflow
-
-Start app:
-
-```bash
-cd talia-ui && npm run dev
-cd talia-server && npm start
-```
-
-Start ngrok (or use validate menu 5):
-
-```bash
-ngrok http --url=taliahub.com 5173
-```
-
-Prefer: `./scripts/validate external-on` after `set-target local` (stops staging ngrok first when SSH works).
-
 ## Verification
 
 ```bash
-curl -sI https://taliahub.com
-curl -sI https://celestyal.taliahub.com
-./scripts/validate status   # shows working target vs public presenter
+curl -sI -u talia:dev2025tal https://dev.taliahub.com
+curl -sS -u talia:dev2025tal https://dev.taliahub.com/ | grep -oE '/assets/index-[^"]+\.js'
+# Expect /assets/index-*.js (preview), not /src/main.jsx (Vite-dev)
+./scripts/validate status
 ```
 
-- **ngrok running** → HTTP 200/302 (or **401** if basic-auth challenge) and `X-TaliaHub-Gateway: proxied`
-- **ngrok stopped** → HTTP **503** + `X-TaliaHub-Gateway: fallback` (holding page)
-- **`validate status` Public row** must agree with the External line (e.g. `vX.Y.Z (LOCAL)` when local holds the domain; `holding page` when offline — not `n/a (DOWN)` while External says UP)
-- **MVP check** → curl `http://$MVP_UI_HOST:5173/` (not taliahub.com)
-- Remote/VPN: staging LAN/SSH probes use **1–2s** timeouts so MiniPC-down fails fast
+- **ngrok running** → HTTP 200/302/401/403 + `X-TaliaHub-Gateway: proxied`
+- **ngrok stopped** → HTTP **503** + `X-TaliaHub-Gateway: fallback`
+- **MVP** → curl Azure IP directly, not taliahub hosts
 
 ## Notes
 
-- All subdomains map to the same tunnel by default (see `HOST_MAP`).
-- If you later add per-customer ngrok custom domains, add them to `HOST_MAP`.
-- Reserved ngrok domain is single-claim: only one of local / staging can present at a time.
+- One reserved ngrok domain (`taliahub.com`): only one of local / MiniPC can claim it at a time.
+- `dev.` is an alias through the Worker, not a second tunnel.
+- Later: `uat.` → Azure, customer production on customer Azure — add DNS + `HOST_MAP` (or separate tunnels) when ready.

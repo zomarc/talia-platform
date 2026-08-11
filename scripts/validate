@@ -56,6 +56,8 @@ STAGING_DIR="${STAGING_DIR:-${STAGING_APP_DIR:-/home/${STAGING_USER}/talia-docke
 STAGING_NGROK_SERVICE="${STAGING_NGROK_SERVICE:-ngrok-taliahub}"
 
 LOCAL_UI_URL="${LOCAL_UI_URL:-http://${LOCAL_UI_HOST:-127.0.0.1}:${LOCAL_UI_PORT:-5173}}"
+LOCAL_PUBLIC_UI_PORT="${LOCAL_PUBLIC_UI_PORT:-4173}"
+LOCAL_PUBLIC_UI_URL="${LOCAL_PUBLIC_UI_URL:-http://${LOCAL_UI_HOST:-127.0.0.1}:${LOCAL_PUBLIC_UI_PORT}}"
 LOCAL_GRAPHQL_URL="${LOCAL_GRAPHQL_URL:-http://${LOCAL_GRAPHQL_HOST:-127.0.0.1}:${LOCAL_GRAPHQL_PORT:-4000}/graphql}"
 LOCAL_SUPABASE_HOST="${LOCAL_SUPABASE_HOST:-127.0.0.1}"
 LOCAL_SUPABASE_KONG_PORT="${LOCAL_SUPABASE_KONG_PORT:-54321}"
@@ -97,6 +99,8 @@ STAGING_REMOTE_DOCKER_COMPOSE="${STAGING_REMOTE_DOCKER_COMPOSE:-docker compose}"
 LOCAL_SUPABASE_DB_CONTAINER="${LOCAL_SUPABASE_DB_CONTAINER:-talia-supabase-db}"
 
 PUBLIC_MAIN_URL="${PUBLIC_MAIN_URL:-https://taliahub.com}"
+# Laptop discussion portal (same ngrok tunnel as apex; Worker remaps Host).
+PUBLIC_DEV_URL="${PUBLIC_DEV_URL:-https://dev.taliahub.com}"
 # Optional: GraphQL URL for public row in "Deployed versions" (defaults to /api/graphql on same host).
 PUBLIC_GRAPHQL_PROBE_URL="${PUBLIC_GRAPHQL_PROBE_URL:-${PUBLIC_MAIN_URL%/}/api/graphql}"
 PUBLIC_SECONDARY_URL="${PUBLIC_SECONDARY_URL:-https://celestyal.taliahub.com}"
@@ -794,6 +798,74 @@ confirm_ngrok_external_start() {
   return 0
 }
 
+# Lighter gate for Start Demo (menu D / start-demo). Choosing Demo is the intent.
+confirm_start_demo() {
+  if [[ "${TALIA_CONFIRM_DEMO:-}" == "1" || "${TALIA_CONFIRM_NGROK:-}" == "ENABLE_NGROK_EXTERNAL" ]]; then
+    return 0
+  fi
+  if [[ ! -t 0 ]]; then
+    echo -e "${RED}Refusing Start Demo (not a TTY).${NC}" >&2
+    echo -e "${YELLOW}To proceed: export TALIA_CONFIRM_DEMO=1${NC}" >&2
+    return 1
+  fi
+  echo ""
+  echo -e "${BOLD}Start Demo${NC} — publish this laptop to ${GREEN}${PUBLIC_DEV_URL}${NC}"
+  echo -e "  ${DIM}Rebuilds vite preview :${LOCAL_PUBLIC_UI_PORT:-4173} and points ngrok at it (not Vite-dev).${NC}"
+  echo -e "  ${DIM}Apex ${PUBLIC_MAIN_URL} shares the same tunnel.${NC}"
+  echo ""
+  echo -n "Press Enter to publish (or n to cancel): "
+  read -r ans
+  if [[ "$ans" == "n" || "$ans" == "N" || "$ans" == "no" || "$ans" == "NO" ]]; then
+    echo -e "${YELLOW}Cancelled — demo not started.${NC}"
+    return 1
+  fi
+  return 0
+}
+
+# One-shot: local discuss portal. Prefer this over generic external-on for client demos.
+start_demo_local() {
+  if ! confirm_start_demo; then
+    return 1
+  fi
+
+  remember_target "local" || true
+
+  echo ""
+  echo -e "${CYAN}${BOLD}Start Demo${NC}${CYAN} — laptop → ${PUBLIC_DEV_URL}${NC}"
+
+  local gql_url="http://${LOCAL_GRAPHQL_HOST:-127.0.0.1}:${LOCAL_GRAPHQL_PORT:-4000}/graphql"
+  local gql_code
+  gql_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 \
+    -H 'Content-Type: application/json' \
+    -d '{"query":"{ __typename }"}' \
+    "$gql_url" 2>/dev/null || echo "000")
+  if [[ "$gql_code" != "200" ]]; then
+    echo -e "  ${YELLOW}GraphQL not healthy on :${LOCAL_GRAPHQL_PORT:-4000} (HTTP ${gql_code}).${NC}"
+    echo -e "  ${DIM}UI can still publish; API calls may fail until you run start-core.${NC}"
+  else
+    echo -e "  ${GREEN}✓${NC} GraphQL OK (:${LOCAL_GRAPHQL_PORT:-4000})"
+  fi
+
+  apply_target_external "local" || return 1
+
+  echo ""
+  echo -e "${BOLD}Demo URL:${NC} ${GREEN}${PUBLIC_DEV_URL}${NC}"
+  echo -e "  ${DIM}Auth: ${NGROK_BASIC_USER:-talia} / (see NGROK_BASIC_PASS)${NC}"
+  echo -e "  ${DIM}Edit stays on http://127.0.0.1:${LOCAL_UI_PORT:-5173} — re-run Start Demo after UI changes.${NC}"
+
+  local headers code gateway
+  headers=$(curl -sSI --max-time 10 -u "${NGROK_BASIC_USER}:${NGROK_BASIC_PASS}" "${PUBLIC_DEV_URL%/}/" 2>/dev/null || true)
+  code=$(echo "$headers" | awk 'NR==1{print $2}')
+  gateway=$(echo "$headers" | awk -F': ' 'tolower($1)=="x-taliahub-gateway"{gsub("\r","",$2); print $2; exit}')
+  [[ -z "$code" ]] && code="000"
+  if [[ "$gateway" == "proxied" && ( "$code" == "200" || "$code" == "302" || "$code" == "401" || "$code" == "403" ) ]]; then
+    echo -e "  ${GREEN}✓${NC} ${PUBLIC_DEV_URL} reachable (HTTP ${code}, gateway=${gateway})"
+  else
+    echo -e "  ${YELLOW}Probe ${PUBLIC_DEV_URL}: HTTP ${code}, gateway=${gateway:-n/a}${NC}"
+    echo -e "  ${DIM}If holding/orphan: stop other ngrok claimers, then re-run Start Demo.${NC}"
+  fi
+}
+
 # Run SSH remote command with a hard wall-clock limit (avoids rare hangs).
 ssh_staging_with_timeout() {
   local sec="$1"
@@ -1095,7 +1167,9 @@ _emit_validate_summary_endpoints() {
     printf "  %s %-9s  %-36s  %s%s\n" " " "" "${mvp_kong_hostport:-${MVP_UI_HOST}:${MVP_SUPABASE_KONG_LIVE_PORT:-${MVP_KONG_PORT:-54321}}} Supabase Kong" "$(quick_up_label "$mvp_sb" "kong")" "${mvp_kong_line_suffix:-}"
   fi
   echo ""
-  printf "  %-10s  %-36s  HTTP %s  gateway=%s\n" "External" "${PUBLIC_MAIN_URL}" "${pub_code}" "${gateway}"
+  printf "  %-10s  %-36s  HTTP %s  gateway=%s\n" "Discuss" "${PUBLIC_DEV_URL}" "${pub_code}" "${gateway}"
+  printf "  %-10s  %-36s  %s\n" "Apex" "${PUBLIC_MAIN_URL}" "${DIM}same tunnel / legacy${NC}"
+  echo -e "  ${DIM}dev = laptop discuss · MiniPC/Azure = prove · not customer prod${NC}"
   echo ""
 }
 
@@ -1268,8 +1342,8 @@ _print_ops_summary_live_header() {
   echo -e "${DIM}Validate script: ${SCRIPT_VERSION}${NC}"
   echo -e "${DIM}Run at (UTC):   ${validate_run_iso}${NC}"
   echo -e "${DIM}Run at (local): ${validate_run_local} · host: ${HOSTNAME}${NC}"
-  echo -e "  ${BOLD}Public demo${NC}: ${PUBLIC_MAIN_URL} (${ext_line})"
-  echo -e "  ${DIM}Working target ≠ public presenter. MVP is ${MVP_UI_URL:-IP:port} only — not ${PUBLIC_MAIN_URL}.${NC}"
+  echo -e "  ${BOLD}Discuss portal${NC}: ${PUBLIC_DEV_URL} (${ext_line})"
+  echo -e "  ${DIM}dev = laptop discuss · MiniPC/Azure = prove · not customer prod · apex ${PUBLIC_MAIN_URL} = same tunnel${NC}"
   rem_disp=$(get_remembered_target)
   [[ -z "$rem_disp" ]] && rem_disp="(default by host)"
   echo -e "  ${DIM}Remembered target: ${rem_disp} (${TARGET_STATE_FILE/#$HOME/~})${NC}"
@@ -1449,8 +1523,8 @@ _print_quick_targets_summary_impl() {
   echo -e "${DIM}Validate script: ${SCRIPT_VERSION}${NC}"
   echo -e "${DIM}Run at (UTC):   ${validate_run_iso}${NC}"
   echo -e "${DIM}Run at (local): ${validate_run_local} · host: ${HOSTNAME}${NC}"
-  echo -e "  ${BOLD}Public demo${NC}: ${PUBLIC_MAIN_URL} (${ext_line})"
-  echo -e "  ${DIM}Working target ≠ public presenter. MVP is ${MVP_UI_URL:-IP:port} only — not ${PUBLIC_MAIN_URL}.${NC}"
+  echo -e "  ${BOLD}Discuss portal${NC}: ${PUBLIC_DEV_URL} (${ext_line})"
+  echo -e "  ${DIM}dev = laptop discuss · MiniPC/Azure = prove · not customer prod · apex ${PUBLIC_MAIN_URL} = same tunnel${NC}"
   local rem_disp
   rem_disp=$(get_remembered_target)
   [[ -z "$rem_disp" ]] && rem_disp="(default by host)"
@@ -1648,29 +1722,30 @@ print_front_page_status() {
     staging_status="DOWN"
   fi
 
-  local_external_label="${PUBLIC_MAIN_URL} (inactive)"
-  staging_external_label="${PUBLIC_MAIN_URL} (inactive)"
+  local_external_label="${PUBLIC_DEV_URL} (inactive; apex ${PUBLIC_MAIN_URL})"
+  staging_external_label="${PUBLIC_DEV_URL} (inactive; apex ${PUBLIC_MAIN_URL})"
   if [[ "$presenter" == "local" ]]; then
-    local_external_label="${PUBLIC_MAIN_URL} (active)"
+    local_external_label="${PUBLIC_DEV_URL} (active; apex ${PUBLIC_MAIN_URL})"
   elif [[ "$presenter" == "staging" ]]; then
-    staging_external_label="${PUBLIC_MAIN_URL} (active)"
+    staging_external_label="${PUBLIC_DEV_URL} (active; apex ${PUBLIC_MAIN_URL})"
   elif [[ "$presenter" == "conflict" ]]; then
-    local_external_label="${PUBLIC_MAIN_URL} (conflict)"
-    staging_external_label="${PUBLIC_MAIN_URL} (conflict)"
+    local_external_label="${PUBLIC_DEV_URL} (conflict; apex ${PUBLIC_MAIN_URL})"
+    staging_external_label="${PUBLIC_DEV_URL} (conflict; apex ${PUBLIC_MAIN_URL})"
   fi
 
   echo -e "  ${BOLD}Front Page Status${NC}"
-  echo -e "  1) ${PUBLIC_MAIN_URL} target: ${BOLD}${presenter}${NC} (gateway=${gateway})"
+  echo -e "  1) Discuss ${PUBLIC_DEV_URL} · tunnel owner: ${BOLD}${presenter}${NC} (gateway=${gateway})"
   echo -e "  2) target version: ${public_version}"
   echo -e "  3) target status: ${target_status} (HTTP ${public_code})"
-  echo -e "  4) local: ${local_status} (HTTP ${local_ui_code}, v${local_ui_version}) | staging: ${staging_status} (HTTP ${staging_ui_code}, v${staging_ui_version}) | mvp: ${mvp_status} (HTTP ${mvp_ui_code})"
+  echo -e "  4) local: ${local_status} (HTTP ${local_ui_code}, v${local_ui_version}) | MiniPC: ${staging_status} (HTTP ${staging_ui_code}, v${staging_ui_version}) | Azure UAT: ${mvp_status} (HTTP ${mvp_ui_code})"
   echo -e "     Remembered target -> ${remembered_target:-none}"
   echo -e "     Local addresses   -> direct: ${local_ui_url} | external: ${local_external_label}"
-  echo -e "     Staging addresses -> direct: ${staging_ui_url} | external: ${staging_external_label}"
+  echo -e "     MiniPC addresses  -> direct: ${staging_ui_url} | external: ${staging_external_label}"
   if [[ "$MVP_VALIDATE" == "1" && -n "$MVP_UI_HOST" ]]; then
-    echo -e "     MVP (Azure)       -> direct: ${MVP_UI_URL}"
+    echo -e "     Azure UAT (MVP)   -> direct: ${MVP_UI_URL}"
   fi
-  echo -e "     External aliases  -> ${PUBLIC_MAIN_URL} | ${PUBLIC_SECONDARY_URL}"
+  echo -e "     Public hosts      -> ${PUBLIC_DEV_URL} (prefer) | ${PUBLIC_MAIN_URL} | ${PUBLIC_SECONDARY_URL}"
+  echo -e "     ${DIM}dev = laptop discuss · MiniPC/Azure = prove · not customer prod${NC}"
   echo ""
 }
 
@@ -1704,20 +1779,22 @@ print_menu() {
   echo -e "${BOLD}Actions (core)${NC}"
   echo ""
 
-  echo -e "  ${GREEN}1)${NC} Set working target (local / staging / MVP — ops scope only, not ${PUBLIC_MAIN_URL})"
+  echo -e "  ${GREEN}D)${NC} ${BOLD}Start Demo${NC} — rebuild laptop preview + publish to ${PUBLIC_DEV_URL}"
+  echo -e "     ${DIM}(safe presenter: vite preview :${LOCAL_PUBLIC_UI_PORT:-4173}, not Vite-dev :${LOCAL_UI_PORT:-5173})${NC}"
+  echo -e "  ${GREEN}1)${NC} Set working target (local / MiniPC / Azure UAT — ops scope only)"
   echo -e "  ${GREEN}2)${NC} Check services (deep check, current target only)"
-  echo -e "  ${GREEN}3)${NC} Start core services (local dev stack or Docker on staging / MVP)"
+  echo -e "  ${GREEN}3)${NC} Start core services (local dev stack or Docker on MiniPC / Azure)"
   echo -e "  ${GREEN}4)${NC} Stop core services (same scope as 3)"
-  echo -e "  ${GREEN}5)${NC} Start external access — ${DIM}ngrok → ${PUBLIC_MAIN_URL} for local|staging only; type ENABLE_NGROK_EXTERNAL${NC}"
-  echo -e "  ${GREEN}6)${NC} Stop external access (local immediate; staging soft-fail; verify holding page)"
+  echo -e "  ${GREEN}5)${NC} Switch public presenter (local ↔ MiniPC) — ${DIM}not the demo path; type ENABLE_NGROK_EXTERNAL${NC}"
+  echo -e "  ${GREEN}6)${NC} Stop external access (local immediate; MiniPC soft-fail; verify holding page)"
   echo ""
   echo -e "${BOLD}Deploy${NC}"
   echo ""
-  echo -e "  ${GREEN}7)${NC} Deploy to staging (local sync)"
+  echo -e "  ${GREEN}7)${NC} Deploy to MiniPC (Docker prove)"
   if [[ -n "${MVP_SSH_HOST:-}" ]]; then
-    echo -e "  ${GREEN}8)${NC} Deploy to MVP (Azure — ${MVP_SSH_HOST})"
+    echo -e "  ${GREEN}8)${NC} Deploy to Azure UAT (MVP prove — ${MVP_SSH_HOST})"
   else
-    echo -e "  ${GREEN}8)${NC} Deploy to MVP (Azure — set MVP_SSH_HOST in targets.env)"
+    echo -e "  ${GREEN}8)${NC} Deploy to Azure UAT (MVP prove — set MVP_SSH_HOST in targets.env)"
   fi
   echo ""
   echo -e "${BOLD}Advanced${NC}"
@@ -1726,9 +1803,9 @@ print_menu() {
   echo -e "  ${GREEN}10)${NC} Refresh quick summary ${DIM}(re-run all endpoint probes — same as startup)${NC}"
   echo -e "  ${GREEN}11)${NC} Summary notes ${DIM}(paths: ${VALIDATE_SUMMARY_PROBE_STATE_FILE/#$HOME/~} · ${VALIDATE_SUMMARY_CACHE_FILE/#$HOME/~})${NC}"
   echo -e "  ${GREEN}12)${NC} Full validation / gateway detail (slower)"
-  echo -e "  ${GREEN}13)${NC} Emergency reboot staging server"
+  echo -e "  ${GREEN}13)${NC} Emergency reboot MiniPC (staging)"
   echo -e "  ${GREEN}14)${NC} Generate executive overview PDF ${DIM}(docs/EXECUTIVE-OVERVIEW.pdf)${NC}"
-  echo -e "  ${DIM}91)${NC} ${DIM}Legacy: enable external (ngrok) for remembered target — same confirmation as (5)${NC}"
+  echo -e "  ${DIM}91)${NC} ${DIM}Legacy: enable external for remembered target — same as (5)${NC}"
   echo ""
   echo -e "  ${YELLOW}0)${NC} Exit"
   echo ""
@@ -2410,13 +2487,14 @@ check_services_for_working_target() {
 set_working_target_interactive() {
   echo ""
   echo -e "${BOLD}Set working target:${NC}"
-  echo -e "  ${DIM}Controls check/start/stop/deploy scope only — not who serves ${PUBLIC_MAIN_URL}.${NC}"
+  echo -e "  ${DIM}Controls check/start/stop/deploy scope only — not who serves ${PUBLIC_DEV_URL}.${NC}"
+  echo -e "  ${DIM}To present: menu D (Start Demo). Menu 5 switches tunnel local ↔ MiniPC.${NC}"
   echo -e "  ${GREEN}1)${NC} Local (this machine’s dev stack)"
-  echo -e "  ${GREEN}2)${NC} Staging (${STAGING_HOST})"
+  echo -e "  ${GREEN}2)${NC} MiniPC / staging (${STAGING_HOST} — Docker prove)"
   if [[ "$MVP_VALIDATE" == "1" && -n "${MVP_SSH_HOST:-}" ]]; then
-    echo -e "  ${GREEN}3)${NC} MVP — Azure (${MVP_SSH_HOST} → ${MVP_UI_URL})"
+    echo -e "  ${GREEN}3)${NC} Azure UAT / MVP prove (${MVP_SSH_HOST} → ${MVP_UI_URL})"
   else
-    echo -e "  ${DIM}3)${NC} ${DIM}MVP (set MVP_VALIDATE=1 and MVP_SSH_HOST in targets.env)${NC}"
+    echo -e "  ${DIM}3)${NC} ${DIM}Azure UAT (set MVP_VALIDATE=1 and MVP_SSH_HOST in targets.env)${NC}"
   fi
   echo -e "  ${YELLOW}0)${NC} Back"
   echo ""
@@ -2426,12 +2504,12 @@ set_working_target_interactive() {
     1|local)
       remember_target "local" || true
       echo -e "${GREEN}Working target saved: LOCAL${NC}"
-      echo -e "${DIM}To point ${PUBLIC_MAIN_URL} here: menu 5 (external-on) after UI is up on :5173.${NC}"
+      echo -e "${DIM}Present with menu D (Start Demo) → ${PUBLIC_DEV_URL} (edit stays on :${LOCAL_UI_PORT:-5173}).${NC}"
       ;;
     2|staging)
       remember_target "staging" || true
-      echo -e "${GREEN}Working target saved: STAGING${NC}"
-      echo -e "${DIM}To point ${PUBLIC_MAIN_URL} at staging: menu 5 (starts ngrok on MiniPC).${NC}"
+      echo -e "${GREEN}Working target saved: STAGING (MiniPC)${NC}"
+      echo -e "${DIM}Tunnel switch: menu 5 → MiniPC. Discuss URL stays ${PUBLIC_DEV_URL} when laptop owns the tunnel.${NC}"
       ;;
     3|mvp)
       if ! is_supported_target "mvp"; then
@@ -2439,8 +2517,8 @@ set_working_target_interactive() {
         return 1
       fi
       remember_target "mvp" || true
-      echo -e "${GREEN}Working target saved: MVP${NC}"
-      echo -e "${YELLOW}MVP is not exposed via ${PUBLIC_MAIN_URL}.${NC} Open ${BOLD}${MVP_UI_URL}${NC} directly."
+      echo -e "${GREEN}Working target saved: MVP (Azure UAT prove)${NC}"
+      echo -e "${YELLOW}Azure is not exposed via ${PUBLIC_DEV_URL}.${NC} Open ${BOLD}${MVP_UI_URL}${NC} directly."
       ;;
     0|back|q|quit) return 0 ;;
     *)
@@ -2583,9 +2661,10 @@ total_status() {
 }
 
 check_external_gateway() {
-  echo -e "${BOLD}External Gateway (${PUBLIC_MAIN_URL}):${NC}"
-  local urls=("${PUBLIC_MAIN_URL%/}/" "${PUBLIC_SECONDARY_URL%/}/")
+  echo -e "${BOLD}External Gateway (discuss ${PUBLIC_DEV_URL}):${NC}"
+  local urls=("${PUBLIC_DEV_URL%/}/" "${PUBLIC_MAIN_URL%/}/" "${PUBLIC_SECONDARY_URL%/}/")
   echo -e ""
+  echo -e "  ${DIM}dev = laptop discuss · MiniPC/Azure = prove · not customer prod${NC}"
   printf "  %-34s  %-10s  %-8s  %s\n" "URL" "STATUS" "HTTP" "DETAILS"
   printf "  %-34s  %-10s  %-8s  %s\n" "----------------------------------" "----------" "--------" "----------------------------"
   for url in "${urls[@]}"; do
@@ -2631,14 +2710,15 @@ check_external_gateway() {
   done
   echo ""
   echo -e "${DIM}Next steps:${NC}"
-  echo -e "  ${DIM}- If DOWN but you expect UP: start services → External gateway.${NC}"
-  echo -e "  ${DIM}- If still DOWN: check UI on localhost:5173 and ngrok status.${NC}"
+  echo -e "  ${DIM}- Prefer Start Demo (menu D / start-demo) → ${PUBLIC_DEV_URL}.${NC}"
+  echo -e "  ${DIM}- If DOWN but you expect UP: start-core → Start Demo (or menu 5 for local↔MiniPC).${NC}"
   echo -e "  ${DIM}- Holding page = HTTP 503 + X-TaliaHub-Gateway: fallback (expected after external-off).${NC}"
 }
 
 check_external_gateway_quick() {
-  echo -e "${BOLD}External gateway (quick):${NC}"
-  local urls=("${PUBLIC_MAIN_URL%/}/" "${PUBLIC_SECONDARY_URL%/}/")
+  echo -e "${BOLD}External gateway (quick — discuss ${PUBLIC_DEV_URL}):${NC}"
+  echo -e "  ${DIM}dev = laptop discuss · MiniPC/Azure = prove · not customer prod${NC}"
+  local urls=("${PUBLIC_DEV_URL%/}/" "${PUBLIC_MAIN_URL%/}/" "${PUBLIC_SECONDARY_URL%/}/")
   for url in "${urls[@]}"; do
     local headers code gateway status detail
     headers=$(curl -sI --max-time 4 "$url" 2>/dev/null || true)
@@ -2672,33 +2752,147 @@ check_external_gateway_quick() {
   echo ""
 }
 
+start_local_public_preview() {
+  # Bundled vite preview for taliahub.com. Vite-dev module graph over ngrok stalls.
+  local public_port="${LOCAL_PUBLIC_UI_PORT:-4173}"
+  local public_url="http://${LOCAL_UI_HOST:-127.0.0.1}:${public_port}/"
+  local ui_dir="${ROOT_DIR}/talia-ui"
+  local dist_html="${ui_dir}/dist/index.html"
+
+  if [[ ! -d "$ui_dir" ]]; then
+    echo -e "  ${RED}Missing ${ui_dir}${NC}"
+    return 1
+  fi
+
+  echo -e "  Building UI for public preview (VITE_ENABLE_DEV_MODE=true)..."
+  if ! (cd "$ui_dir" && VITE_ENABLE_DEV_MODE=true npm run build >/tmp/talia-ui-preview-build.log 2>&1); then
+    echo -e "  ${RED}UI build failed. See /tmp/talia-ui-preview-build.log${NC}"
+    return 1
+  fi
+  if [[ ! -f "$dist_html" ]]; then
+    echo -e "  ${RED}Build succeeded but ${dist_html} is missing${NC}"
+    return 1
+  fi
+
+  local pids
+  pids=$( { lsof -nP -iTCP:"${public_port}" -sTCP:LISTEN -t 2>/dev/null || true; } | tr '\n' ' ')
+  if [[ -n "${pids// /}" ]]; then
+    echo -e "  Restarting existing preview on :${public_port}..."
+    # shellcheck disable=SC2086
+    kill $pids 2>/dev/null || true
+    sleep 1
+    # shellcheck disable=SC2086
+    kill -9 $pids 2>/dev/null || true
+  fi
+
+  echo -e "  Starting vite preview on :${public_port}..."
+  # Fully detach so agent/short-lived shells do not reap the preview process.
+  /bin/bash -lc "cd \"${ui_dir}\" && exec nohup npx vite preview --port ${public_port} --host --strictPort >/tmp/talia-ui-preview.log 2>&1 </dev/null" &
+  local launcher_pid=$!
+  sleep 1
+  # Prefer the actual listener PID over the launcher
+  local listen_pid
+  listen_pid=$( { lsof -nP -iTCP:"${public_port}" -sTCP:LISTEN -t 2>/dev/null || true; } | head -1)
+  if [[ -n "$listen_pid" ]]; then
+    echo "$listen_pid" >/tmp/talia-ui-preview.pid
+  elif [[ -n "$launcher_pid" ]]; then
+    echo "$launcher_pid" >/tmp/talia-ui-preview.pid
+  fi
+  disown "$launcher_pid" 2>/dev/null || true
+
+  local attempts=0
+  local code="000"
+  while [[ "$attempts" -lt 30 ]]; do
+    code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 2 "$public_url" 2>/dev/null || echo "000")
+    if [[ "$code" == "200" ]]; then
+      echo -e "  ${GREEN}✓${NC} Public preview UP (${public_url})"
+      return 0
+    fi
+    attempts=$((attempts + 1))
+    sleep 0.5
+  done
+  echo -e "  ${RED}Preview not healthy on :${public_port} (HTTP ${code}). See /tmp/talia-ui-preview.log${NC}"
+  return 1
+}
+
+ngrok_local_tunnel_addr() {
+  curl -sS --max-time 2 http://127.0.0.1:4040/api/tunnels 2>/dev/null \
+    | python3 -c '
+import sys, json
+try:
+  d = json.load(sys.stdin)
+  for t in d.get("tunnels", []):
+    addr = (t.get("config") or {}).get("addr") or ""
+    if addr:
+      print(addr)
+      break
+except Exception:
+  pass
+' 2>/dev/null || true
+}
+
 start_ngrok_local() {
-  local local_ui_health_url="${LOCAL_UI_URL%/}/"
-  local local_ui_port="${LOCAL_UI_PORT:-5173}"
+  local edit_port="${LOCAL_UI_PORT:-5173}"
+  local public_port="${LOCAL_PUBLIC_UI_PORT:-4173}"
+  local edit_health_url="${LOCAL_UI_URL%/}/"
+  local public_health_url="${LOCAL_PUBLIC_UI_URL%/}/"
+
   if ! command -v ngrok >/dev/null 2>&1; then
     echo -e "${RED}ngrok not found on PATH. Install from https://ngrok.com/download${NC}"
     return 1
   fi
-  echo -n "  UI (localhost:5173): "
-  local ui
-  ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$local_ui_health_url" 2>/dev/null || echo "000")
-  [[ "$ui" == "200" ]] && echo -e "${GREEN}OK${NC}" || echo -e "${YELLOW}Not running${NC} (start talia-ui first)"
 
-  if pgrep -f "ngrok .*${LOCAL_NGROK_DOMAIN}" >/dev/null 2>&1; then
-    echo -e "  ${YELLOW}ngrok already running for ${LOCAL_NGROK_DOMAIN}${NC}"
+  echo -e "${BOLD}Local public presenter:${NC} vite preview :${public_port}"
+  echo -e "  ${DIM}Discuss URL: ${PUBLIC_DEV_URL} (apex ${PUBLIC_MAIN_URL} shares the same tunnel)${NC}"
+  echo -e "  ${DIM}Edit/HMR stays on :${edit_port} — do not tunnel Vite-dev over ngrok.${NC}"
+
+  if ! start_local_public_preview; then
+    return 1
+  fi
+
+  echo -n "  Edit UI (localhost:${edit_port}): "
+  local edit_code
+  edit_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$edit_health_url" 2>/dev/null || echo "000")
+  if [[ "$edit_code" == "200" ]]; then
+    echo -e "${GREEN}OK${NC}"
   else
-    echo -e "  Starting ngrok (${LOCAL_NGROK_DOMAIN} -> ${LOCAL_UI_URL})..."
-    nohup ngrok "http" \
-      "--url=${LOCAL_NGROK_DOMAIN}" \
-      "--basic-auth=${NGROK_BASIC_USER}:${NGROK_BASIC_PASS}" \
-      "${local_ui_port}" >/tmp/ngrok-taliahub.log 2>&1 &
+    echo -e "${YELLOW}Not running${NC} ${DIM}(optional; start-core / npm run dev)${NC}"
+  fi
+
+  echo -n "  Public preview (localhost:${public_port}): "
+  local preview_code
+  preview_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$public_health_url" 2>/dev/null || echo "000")
+  [[ "$preview_code" == "200" ]] && echo -e "${GREEN}OK${NC}" || echo -e "${RED}DOWN${NC} (HTTP $preview_code)"
+
+  local need_start=true
+  if pgrep -f "ngrok .*${LOCAL_NGROK_DOMAIN}" >/dev/null 2>&1; then
+    local current_addr
+    current_addr=$(ngrok_local_tunnel_addr)
+    if [[ "$current_addr" == *":${public_port}"* || "$current_addr" == *"localhost:${public_port}"* ]]; then
+      echo -e "  ${YELLOW}ngrok already running for ${LOCAL_NGROK_DOMAIN} → :${public_port}${NC}"
+      need_start=false
+    else
+      echo -e "  Retargeting ngrok (${current_addr:-unknown} → :${public_port})..."
+      pkill -f "ngrok .*${LOCAL_NGROK_DOMAIN}" 2>/dev/null || true
+      sleep 2
+    fi
+  fi
+
+  if $need_start; then
+    echo -e "  Starting ngrok (${LOCAL_NGROK_DOMAIN} -> ${LOCAL_PUBLIC_UI_URL})..."
+    # Fully detach so short-lived validate shells do not reap the tunnel.
+    /bin/bash -lc "exec nohup ngrok http --url=${LOCAL_NGROK_DOMAIN} --pooling-enabled --basic-auth=${NGROK_BASIC_USER}:${NGROK_BASIC_PASS} ${public_port} >/tmp/ngrok-taliahub.log 2>&1 </dev/null" &
+    local ngrok_launcher=$!
+    sleep 1
+    echo "$ngrok_launcher" >/tmp/ngrok-taliahub.pid
+    disown "$ngrok_launcher" 2>/dev/null || true
     sleep 1
   fi
 
   echo -e "  Tunnel:"
   local tunnel_line=""
   local attempts=0
-  while [[ "$attempts" -lt 6 ]]; do
+  while [[ "$attempts" -lt 8 ]]; do
     tunnel_line=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"[^"]*"' | head -1 || true)
     if [[ -n "$tunnel_line" ]]; then
       break
@@ -2707,7 +2901,10 @@ start_ngrok_local() {
     sleep 1
   done
   if [[ -n "$tunnel_line" ]]; then
-    echo "  ${tunnel_line}"
+    echo "  ${tunnel_line} → :${public_port}"
+    local addr
+    addr=$(ngrok_local_tunnel_addr)
+    [[ -n "$addr" ]] && echo -e "  ${DIM}upstream ${addr}${NC}"
   else
     echo "  Not active"
     if [[ -f /tmp/ngrok-taliahub.log ]]; then
@@ -2985,10 +3182,11 @@ apply_target_external() {
 
 switch_target() {
   echo ""
-  echo -e "${BOLD}Switch public presenter (ngrok → ${PUBLIC_MAIN_URL}):${NC}"
-  echo -e "  ${GREEN}1)${NC} Local (${PUBLIC_MAIN_URL} -> local :5173)"
-  echo -e "  ${GREEN}2)${NC} Staging (${PUBLIC_MAIN_URL} -> staging MiniPC)"
-  echo -e "  ${DIM}MVP is not an option here — use ${MVP_UI_URL:-MVP_UI_URL}${NC}"
+  echo -e "${BOLD}Switch public presenter (ngrok reserved domain → ${PUBLIC_MAIN_URL}):${NC}"
+  echo -e "  ${DIM}Prefer menu D (Start Demo) for laptop → ${PUBLIC_DEV_URL}.${NC}"
+  echo -e "  ${GREEN}1)${NC} Local (${PUBLIC_DEV_URL} discuss / preview :${LOCAL_PUBLIC_UI_PORT:-4173}; edit on :${LOCAL_UI_PORT:-5173})"
+  echo -e "  ${GREEN}2)${NC} MiniPC (${PUBLIC_MAIN_URL} tunnel → staging Docker prove)"
+  echo -e "  ${DIM}Azure UAT is not an option here — use ${MVP_UI_URL:-MVP_UI_URL}${NC}"
   echo -e "  ${YELLOW}0)${NC} Back"
   echo ""
   echo -n -e "${BOLD}Enter target: ${NC}"
@@ -3123,11 +3321,11 @@ check_duplicate_dev_servers() {
 
   local ui_dir="${ROOT_DIR}/talia-ui"
 
-  # Check for multiple Vite processes
+  # Check for multiple Vite processes (pipefail-safe when none match)
   local vite_count
-  vite_count=$(ps aux | grep -E "[v]ite" | grep -v grep | wc -l | tr -d ' ')
+  vite_count=$( { ps aux | grep -E "[v]ite" | grep -v grep || true; } | wc -l | tr -d ' ')
   local vite_pids
-  vite_pids=$(ps aux | grep -E "[v]ite" | grep -v grep | awk '{print $2}' | tr '\n' ' ' | xargs)
+  vite_pids=$( { ps aux | grep -E "[v]ite" | grep -v grep || true; } | awk '{print $2}' | tr '\n' ' ' | xargs)
   local vite_ui_pids=""
   local vite_other_pids=""
   local pid
@@ -3142,10 +3340,11 @@ check_duplicate_dev_servers() {
   done
 
   # Check for processes on dev server ports
+  # NOTE: with pipefail, bare `lsof | wc` fails when nothing listens — treat empty as 0.
   local port_5173 port_5174 port_5175
-  port_5173=$(lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null | wc -l | tr -d ' ')
-  port_5174=$(lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null | wc -l | tr -d ' ')
-  port_5175=$(lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null | wc -l | tr -d ' ')
+  port_5173=$( { lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null || true; } | wc -l | tr -d ' ')
+  port_5174=$( { lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null || true; } | wc -l | tr -d ' ')
+  port_5175=$( { lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null || true; } | wc -l | tr -d ' ')
   local fallback_ports=$((port_5174 + port_5175))
 
   local has_duplicates=false
@@ -3626,6 +3825,9 @@ handle_remote_menu() {
   local choice="$1"
 
   case "$choice" in
+    D|d|demo|start-demo|start_demo)
+      start_demo_local
+      ;;
     1|set-target|target|switch-target|switch)
       set_working_target_interactive
       ;;
@@ -3702,6 +3904,7 @@ handle_cli() {
     db-disk|database-disk|postgres-size) print_database_disk_usage_for_working_target ;;
     start-core|start) start_core_for_working_target ;;
     stop-core|stop-core) stop_core_for_working_target ;;
+    start-demo|demo|start_demo) start_demo_local ;;
     external-on|enable-external) start_external_for_working_target ;;
     external-off|stop-external) stop_external_everywhere ;;
     deploy|deploy-staging) deploy_to_staging_from_local ;;
@@ -3726,7 +3929,8 @@ Talia validate — quick overview by default; heavy checks only from the menu or
   $0 start-core                   UI + GraphQL + Supabase (local) or Docker stack (staging/MVP)
   $0 stop-core                    stop core (ngrok unchanged)
   $0 db-disk                      Postgres size + top 5 public tables for current target
-  $0 external-on                  ngrok → local|staging working target only (not MVP; TTY: ENABLE_NGROK_EXTERNAL)
+  $0 start-demo                   rebuild preview + publish laptop to ${PUBLIC_DEV_URL:-https://dev.taliahub.com} (TTY: Enter; non-TTY: TALIA_CONFIRM_DEMO=1)
+  $0 external-on                  ngrok → local vite preview (:4173) or staging; not MVP (TTY: ENABLE_NGROK_EXTERNAL)
   $0 external-off                 stop local ngrok immediately; soft-fail MiniPC; expect HTTP 503 holding page (or report ORPHAN)
   $0 deploy-staging               local-sync deploy to staging (default UI paths; full stack only if you pick it)
   $0 deploy-mvp                   deploy to MVP (same; wide modes require explicit flags inside the script)

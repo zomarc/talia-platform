@@ -1808,15 +1808,19 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--theme-component-gap-sm);
+  margin-bottom: var(--theme-component-gap-sm);
 }
 
 .target-profile-node__level {
-  min-width: 96px;
-  font-size: 12px;
+  min-width: 6rem;
+  font-size: var(--theme-font-size-sm);
   color: var(--theme-text-secondary);
   text-transform: uppercase;
+}
+
+.target-profile-node .target-profile-node {
+  padding-left: var(--theme-component-padding-lg);
 }
 
 .inventory-target-profile__list ul {
@@ -7028,3 +7032,43 @@
   margin-top: 0.35rem;
   opacity: 0.9;
 }
+
+/* Profile system — chart host uses shared theme chart tokens (same as booking-profile-editor-simple) */
+.profile-compare__chart-host,
+.inventory-target-profile__chart-host {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.profile-compare__chart-host--grow,
+.inventory-target-profile__chart-host--grow {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.profile-compare__chart-host .talia-chart,
+.inventory-target-profile__chart-host .talia-chart {
+  position: relative;
+  flex: 1 1 auto;
+  height: var(--theme-chart-height);
+  min-height: var(--theme-chart-min-height);
+  padding: var(--theme-component-padding-md);
+  min-width: 0;
+}
+
+.profile-compare__chart-host--grow .talia-chart,
+.inventory-target-profile__chart-host--grow .talia-chart {
+  height: 100%;
+}
+
+.mse-target-review {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 600;
+}
+.mse-target-review--behind { color: #b91c1c; }
+.mse-target-review--on { color: #15803d; }
+.mse-target-review--ahead { color: #1d4ed8; }

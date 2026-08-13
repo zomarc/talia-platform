@@ -9,6 +9,19 @@ const GET_INVENTORY_ITEMS = gql`
       sailCode
       referenceSailCode
       shipCode
+      shipName
+    }
+  }
+`;
+
+const UPSERT_INVENTORY_ITEM = gql`
+  mutation UpsertInventoryItemForTarget($input: InventoryItemInput!) {
+    upsertInventoryItem(input: $input) {
+      id
+      sailCode
+      referenceSailCode
+      shipCode
+      shipName
     }
   }
 `;
@@ -93,19 +106,90 @@ class InventoryProfileSeriesService {
       const { data } = await trackedApolloQuery({
         client: apolloClient,
         query: GET_INVENTORY_ITEMS,
-        variables: { filters: { ...filters, limit: 1 } },
+        variables: { filters: { ...filters, limit: 5 } },
         component: 'Inventory Profile Series',
         purpose: 'Resolve inventory item by sail code',
         tableName: 'inventory_item',
         options: { fetchPolicy: 'network-only' },
       });
-      return data?.inventoryItems?.[0] || null;
+      const rows = data?.inventoryItems || [];
+      // Prefer master / exact sail_code match when several rows share a reference.
+      const exact = rows.find((r) => String(r.sailCode || '').trim() === code);
+      return exact || rows[0] || null;
     };
 
     const bySail = await tryFilters({ sailCode: code });
     if (bySail?.id) return bySail;
     const byReference = await tryFilters({ referenceSailCode: code });
     return byReference?.id ? byReference : null;
+  }
+
+  /**
+   * Ensure an inventory_item exists for a sail so target profiles can be saved.
+   * Creates a lightweight master row when hierarchy sync has not yet materialised one.
+   */
+  async ensureInventoryItemForSail({
+    sailCode,
+    referenceSailCode = null,
+    shipCode = null,
+    shipName = null,
+  } = {}) {
+    const code = String(sailCode || '').trim();
+    if (!code) throw new Error('sailCode is required');
+
+    const existing = await this.findInventoryItemBySailCode(code);
+    if (existing?.id) return existing;
+
+    let resolvedShipCode = shipCode;
+    let resolvedShipName = shipName;
+    if (!resolvedShipCode) {
+      try {
+        const { trackedFetchGraphql } = await import('./trackedGraphql.js');
+        const data = await trackedFetchGraphql({
+          query: `
+            query MasterSailForInventory($tableName: String!, $limit: Int, $filters: TableDataFilters) {
+              tableData(tableName: $tableName, limit: $limit, filters: $filters)
+            }
+          `,
+          variables: {
+            tableName: 'master_sail',
+            limit: 1,
+            filters: { sail_code: code },
+          },
+          component: 'Target Profile Editor',
+          purpose: 'Resolve ship for inventory_item ensure',
+          tableName: 'master_sail',
+        });
+        const row = data?.tableData?.[0];
+        if (row) {
+          resolvedShipCode = row.ship_code || null;
+          resolvedShipName = resolvedShipName || row.ship_name || null;
+        }
+      } catch {
+        // optional enrichment
+      }
+    }
+
+    const ref = String(referenceSailCode || code).trim();
+    const { data } = await trackedApolloMutate({
+      client: apolloClient,
+      mutation: UPSERT_INVENTORY_ITEM,
+      variables: {
+        input: {
+          sailCode: code,
+          referenceSailCode: ref,
+          shipCode: resolvedShipCode || undefined,
+          shipName: resolvedShipName || undefined,
+          sailingRole: 'master',
+          isOperational: true,
+          sourceTable: 'target-profile-editor',
+        },
+      },
+      component: 'Target Profile Editor',
+      purpose: 'Ensure inventory_item for target profile',
+      tableName: 'inventory_item',
+    });
+    return data?.upsertInventoryItem || null;
   }
 
   async fetchSeriesForInventoryItem(inventoryItemId) {

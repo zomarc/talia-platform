@@ -826,6 +826,7 @@ export const typeDefs = `#graphql
     profileScope: String!
     ownerKey: String
     lastEditedBy: String
+    isActive: Boolean!
     nodes: [InventoryTargetProfileNode!]!
     createdAt: String
     updatedAt: String
@@ -849,7 +850,152 @@ export const typeDefs = `#graphql
     name: String!
     perspective: String!
     description: String
+    isActive: Boolean
     nodes: [InventoryTargetProfileNodeInput!]!
+  }
+
+  enum ProfileMatchMode {
+    lazy
+    manual
+  }
+
+  type ProfileModelMap {
+    id: ID!
+    inventoryItemId: ID!
+    modelInventoryItemId: ID
+    modelSailCode: String
+    matchMode: ProfileMatchMode!
+    notes: String
+    confidence: Float
+    matchedDow: Int
+    matchedDuration: Int
+    metadata: JSON
+    lastEditedBy: String
+    createdAt: String
+    updatedAt: String
+  }
+
+  input UpsertProfileModelMapInput {
+    inventoryItemId: ID!
+    matchMode: ProfileMatchMode!
+    modelSailCode: String
+    notes: String
+    confidence: Float
+    matchedDow: Int
+    matchedDuration: Int
+    metadata: JSON
+  }
+
+  type ProfileLfPoint {
+    weekLabel: String
+    weeksUntilSailing: Int
+    bookings: Float
+    guests: Float
+    lfPct: Float
+  }
+
+  type ProfileSeriesSummary {
+    sailCode: String
+    referenceSailCode: String
+    sailDate: String
+    shipCode: String
+    shipName: String
+    bookedCabins: Int
+    totalCabins: Int
+    loadFactorPct: Float
+    reservationBookings: Int
+    reservationGuests: Int
+    daysUntilSailing: Int
+    series: [ProfileLfPoint!]!
+  }
+
+  type ProfileModelCandidate {
+    sailCode: String!
+    sailDate: String
+    shipCode: String
+    shipName: String
+    sailDays: Int
+    isMain: Boolean
+    packageType: String
+    dayDiff: Int
+  }
+
+  type ProfileCompareResult {
+    sailCode: String!
+    referenceSailCode: String
+    inventoryItemId: ID
+    shipCode: String
+    shipName: String
+    sailDate: String
+    matchMode: ProfileMatchMode!
+    peerSource: String
+    modelSailCode: String
+    modelMap: ProfileModelMap
+    real: ProfileSeriesSummary
+    model: ProfileSeriesSummary
+    activeTarget: InventoryTargetProfile
+    targetSeries: [ProfileLfPoint!]!
+    targetSource: String
+    budget: BudgetEndStateComparison
+    candidates: [ProfileModelCandidate!]!
+  }
+
+  type ProfileTargetReviewStatus {
+    sailCode: String!
+    referenceSailCode: String
+    inventoryItemId: ID
+    status: String!
+    actualLfPct: Float
+    targetLfPct: Float
+    gapPp: Float
+    activeTargetId: ID
+    activeTargetName: String
+  }
+
+  enum ProfileAggGroupBy {
+    ship_month
+    dow_duration
+  }
+
+  input ProfileAggregationFilters {
+    groupBy: ProfileAggGroupBy = ship_month
+    shipCode: String
+    monthFrom: String
+    monthTo: String
+  }
+
+  type ProfileAggregationRow {
+    dimensionKey: String!
+    dimensionLabel: String!
+    shipCode: String
+    shipName: String
+    month: String
+    dow: String
+    durationBucket: String
+    sailCount: Int!
+    withActiveTarget: Int!
+    withManualModel: Int!
+    withLazyModel: Int!
+    sailCodes: [String!]!
+  }
+
+  type ProfileAggregationResult {
+    groupBy: ProfileAggGroupBy!
+    rows: [ProfileAggregationRow!]!
+    message: String
+  }
+
+  type ProfileBackfillResult {
+    fromDate: String!
+    toDate: String
+    dryRun: Boolean!
+    considered: Int!
+    created: Int!
+    skippedExisting: Int!
+    skippedNoCurve: Int!
+    failed: Int!
+    sampleSailCodes: [String!]!
+    message: String
   }
 
   # Target Profile Types
@@ -1483,6 +1629,11 @@ export const typeDefs = `#graphql
     seasonalTradingPack(filters: SeasonalTradingPackFilters): JSON!
     inventoryTargetProfiles(inventoryItemId: ID!): [InventoryTargetProfile!]!
     inventoryTargetProfile(id: ID!): InventoryTargetProfile
+    profileModelMap(inventoryItemId: ID!): ProfileModelMap
+    profileCompare(sailCode: String!, includeBudget: Boolean = true, includeTarget: Boolean = true): ProfileCompareResult!
+    profileModelCandidates(sailCode: String!): [ProfileModelCandidate!]!
+    profileTargetReviewStatuses(sailCodes: [String!]!, behindPp: Float, aheadPp: Float): [ProfileTargetReviewStatus!]!
+    profileAggregations(filters: ProfileAggregationFilters): ProfileAggregationResult!
     
     # Target Profiles
     targetProfiles(filters: TargetProfileFilters): [TargetProfile!]!
@@ -1600,6 +1751,10 @@ export const typeDefs = `#graphql
     ): Boolean!
     upsertInventoryTargetProfile(input: UpsertInventoryTargetProfileInput!): InventoryTargetProfile!
     deleteInventoryTargetProfile(id: ID!): Boolean!
+    setActiveInventoryTargetProfile(id: ID!): InventoryTargetProfile!
+    upsertProfileModelMap(input: UpsertProfileModelMapInput!): ProfileModelMap!
+    clearProfileModelMap(inventoryItemId: ID!): Boolean!
+    backfillTargetProfiles(fromDate: String, toDate: String, dryRun: Boolean, limit: Int): ProfileBackfillResult!
     
     # Google Search Trends
     trackGoogleSearch(query: String!, trackTrend: Boolean): TrackSearchResult!

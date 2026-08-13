@@ -90,7 +90,8 @@ const HOLDING_HTML = `<!DOCTYPE html>
 
 // ngrok DNS target hostname (no scheme)
 const NGROK_RESOLVE = '3gdvs2ekygjh8etb5.2yicxjompem9a7yrz.ngrok-cname.com';
-const ORIGIN_TIMEOUT_MS = 8000;
+// Laptop tunnels can spike under CF→ngrok latency; 8s was flipping clients to holding.
+const ORIGIN_TIMEOUT_MS = 20000;
 
 // Map public hostnames to the ngrok reserved domain Host header.
 // Laptop discuss URL is https://dev.taliahub.com — same tunnel as apex (single reserved domain).

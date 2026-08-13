@@ -20,6 +20,8 @@ import ReservationCurrentStateContainer from './ReservationCurrentState';
 import GroupBookingReviewContainer from './GroupBookingReview';
 import BookingProfileContainer from './BookingProfile';
 import ReservationBookingCurveContainer from './ReservationBookingCurve';
+import ProfileCompareContainer from './ProfileCompare';
+import ProfileAggregationsContainer from './ProfileAggregations';
 import SeasonalTradingPackContainer from './SeasonalTradingPack';
 import TargetProfileEditorContainer from './TargetProfileEditor';
 import InventoryTargetProfileEditorContainer from './InventoryTargetProfileEditor';
@@ -523,6 +525,39 @@ export const componentRegistry = {
     showInReports: true,
     filePath: 'src/components/focus-panels/ReservationBookingCurve/index.jsx'
   },
+  ProfileCompare: {
+    component: ProfileCompareContainer,
+    panelId: 'profile-compare',
+    category: 'Booking & profiles',
+    title: 'Sailing Profile',
+    description:
+      'REAL booking curve vs model prior (lazy peer or manual map). Optional active target overlay and budget end-state gap.',
+    props: {
+      sailCode: { type: 'string', required: false, description: 'Sail code' },
+      theme: { type: 'object', required: false, description: 'Theme object' }
+    },
+    dataRequirements: 'GraphQL profileCompare + profile_model_map',
+    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
+    supportsRefresh: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/ProfileCompare/index.jsx'
+  },
+  ProfileAggregations: {
+    component: ProfileAggregationsContainer,
+    panelId: 'profile-aggregations',
+    category: 'Booking & profiles',
+    title: 'Profile Aggregations',
+    description:
+      'Read-only coverage by ship × month or DOW × duration: sails with active targets and model map modes.',
+    props: {
+      theme: { type: 'object', required: false, description: 'Theme object' }
+    },
+    dataRequirements: 'GraphQL profileAggregations',
+    events: { emits: [], respondsTo: [] },
+    supportsRefresh: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/ProfileAggregations/index.jsx'
+  },
   SeasonalTradingPack: {
     component: SeasonalTradingPackContainer,
     panelId: 'seasonal-trading-pack',
@@ -543,15 +578,16 @@ export const componentRegistry = {
     component: InventoryTargetProfileEditorContainer,
     panelId: 'inventory-target-profile-editor',
     category: 'Booking & profiles',
-    title: 'Nested LF target profiles',
+    title: 'Target Profile Editor',
     description:
-      'Multi-perspective nested load-factor targets per inventory item (voyage → market group → market → currency). Manager+ to save.',
+      'Define and activate named load-factor goal curves per inventory item (voyage → market group → market → currency; optional weeks-to-sail). Manager+ to save.',
     props: {
       sailCode: { type: 'string', required: false, description: 'Sail code' },
       theme: { type: 'object', required: false, description: 'Theme object' }
     },
     dataRequirements: 'inventory_target_profile + inventory_item',
     events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
+    supportsRefresh: true,
     showInReports: true,
     filePath: 'src/components/focus-panels/InventoryTargetProfileEditor/index.jsx'
   },

@@ -1,5 +1,6 @@
 /**
- * Default Talia header logo — bundled by Vite so it resolves with any `base` path (unlike /public-only assets).
+ * Bundled raster fallback (custom uploads / legacy). Default header uses
+ * theme-colored `TaliaBrandMark` when no custom logo URL is set.
  */
 import bundledDefaultLogo from '../assets/talia-default-logo.png?url';
 

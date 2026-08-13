@@ -29,6 +29,7 @@ const PROFILE_FIELDS = `
   profileScope
   ownerKey
   lastEditedBy
+  isActive
   createdAt
   updatedAt
   nodes { ${NODE_FIELDS} }
@@ -56,6 +57,14 @@ const DELETE_PROFILE = gql`
   }
 `;
 
+const SET_ACTIVE = gql`
+  mutation SetActiveInventoryTargetProfile($id: ID!) {
+    setActiveInventoryTargetProfile(id: $id) {
+      ${PROFILE_FIELDS}
+    }
+  }
+`;
+
 class InventoryTargetProfileService {
   async list(inventoryItemId) {
     if (!inventoryItemId) return [];
@@ -63,7 +72,7 @@ class InventoryTargetProfileService {
       client: apolloClient,
       query: LIST_PROFILES,
       variables: { inventoryItemId: String(inventoryItemId) },
-      component: 'Inventory Target Profile',
+      component: 'Target Profile Editor',
       purpose: 'List nested LF target profiles',
       tableName: 'inventory_target_profile',
       options: { fetchPolicy: 'network-only' },
@@ -76,7 +85,7 @@ class InventoryTargetProfileService {
       client: apolloClient,
       mutation: UPSERT_PROFILE,
       variables: { input },
-      component: 'Inventory Target Profile',
+      component: 'Target Profile Editor',
       purpose: 'Upsert nested LF target profile',
       tableName: 'inventory_target_profile',
     });
@@ -88,11 +97,23 @@ class InventoryTargetProfileService {
       client: apolloClient,
       mutation: DELETE_PROFILE,
       variables: { id: String(id) },
-      component: 'Inventory Target Profile',
+      component: 'Target Profile Editor',
       purpose: 'Delete nested LF target profile',
       tableName: 'inventory_target_profile',
     });
     return data?.deleteInventoryTargetProfile;
+  }
+
+  async setActive(id) {
+    const { data } = await trackedApolloMutate({
+      client: apolloClient,
+      mutation: SET_ACTIVE,
+      variables: { id: String(id) },
+      component: 'Target Profile Editor',
+      purpose: 'Activate target profile',
+      tableName: 'inventory_target_profile',
+    });
+    return data?.setActiveInventoryTargetProfile;
   }
 }
 

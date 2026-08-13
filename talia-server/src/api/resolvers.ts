@@ -3053,6 +3053,58 @@ export const resolvers = {
       }
     },
 
+    profileModelMap: async (_parent: any, args: any) => {
+      try {
+        return await supabaseDataService.getProfileModelMap(args?.inventoryItemId);
+      } catch (error) {
+        console.error('Error fetching profile model map:', error);
+        throw error;
+      }
+    },
+
+    profileCompare: async (_parent: any, args: any) => {
+      const { sailCode, includeBudget, includeTarget } = args;
+      try {
+        return await supabaseDataService.getProfileCompare(sailCode, {
+          includeBudget: includeBudget !== false,
+          includeTarget: includeTarget !== false,
+        });
+      } catch (error) {
+        console.error('Error fetching profile compare:', error);
+        throw error;
+      }
+    },
+
+    profileModelCandidates: async (_parent: any, args: any) => {
+      try {
+        return await supabaseDataService.listModelCandidates(args?.sailCode);
+      } catch (error) {
+        console.error('Error listing profile model candidates:', error);
+        return [];
+      }
+    },
+
+    profileTargetReviewStatuses: async (_parent: any, args: any) => {
+      try {
+        return await supabaseDataService.getProfileTargetReviewStatuses(args?.sailCodes || [], {
+          behindPp: args?.behindPp,
+          aheadPp: args?.aheadPp,
+        });
+      } catch (error) {
+        console.error('Error fetching profile target review statuses:', error);
+        throw error;
+      }
+    },
+
+    profileAggregations: async (_parent: any, args: any) => {
+      try {
+        return await supabaseDataService.getProfileAggregations(args?.filters || {});
+      } catch (error) {
+        console.error('Error fetching profile aggregations:', error);
+        throw error;
+      }
+    },
+
     targetProfiles: async (parent: any, args: any) => {
       const { filters = {} } = args;
       try {
@@ -4412,6 +4464,68 @@ export const resolvers = {
         return await supabaseDataService.deleteInventoryTargetProfile(args?.id);
       } catch (error) {
         console.error('Error deleting inventory target profile:', error);
+        throw error;
+      }
+    },
+
+    setActiveInventoryTargetProfile: async (_parent: any, args: any, context: any) => {
+      try {
+        if (!canEditTaliaIntel(context)) {
+          throw new Error('Only MANAGER or ADMIN may activate target profiles');
+        }
+        return await supabaseDataService.setActiveInventoryTargetProfile(
+          args?.id,
+          intelAuditStamp(context)
+        );
+      } catch (error) {
+        console.error('Error activating inventory target profile:', error);
+        throw error;
+      }
+    },
+
+    upsertProfileModelMap: async (_parent: any, args: any, context: any) => {
+      try {
+        if (!canEditTaliaIntel(context)) {
+          throw new Error('Only MANAGER or ADMIN may update profile model maps');
+        }
+        return await supabaseDataService.upsertProfileModelMap(
+          args?.input || {},
+          intelAuditStamp(context)
+        );
+      } catch (error) {
+        console.error('Error upserting profile model map:', error);
+        throw error instanceof Error ? error : new Error(error?.message || 'Failed to save model map');
+      }
+    },
+
+    clearProfileModelMap: async (_parent: any, args: any, context: any) => {
+      try {
+        if (!canEditTaliaIntel(context)) {
+          throw new Error('Only MANAGER or ADMIN may clear profile model maps');
+        }
+        return await supabaseDataService.clearProfileModelMap(args?.inventoryItemId);
+      } catch (error) {
+        console.error('Error clearing profile model map:', error);
+        throw error instanceof Error ? error : new Error(error?.message || 'Failed to clear model map');
+      }
+    },
+
+    backfillTargetProfiles: async (_parent: any, args: any, context: any) => {
+      try {
+        if (!canEditTaliaIntel(context)) {
+          throw new Error('Only MANAGER or ADMIN may backfill target profiles');
+        }
+        return await supabaseDataService.backfillTargetProfiles(
+          {
+            fromDate: args?.fromDate || '2026-06-01',
+            toDate: args?.toDate,
+            dryRun: args?.dryRun === true,
+            limit: args?.limit,
+          },
+          intelAuditStamp(context)
+        );
+      } catch (error) {
+        console.error('Error backfilling target profiles:', error);
         throw error;
       }
     },

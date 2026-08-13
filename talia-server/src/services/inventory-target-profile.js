@@ -32,6 +32,7 @@ function mapProfile(row, nodes = []) {
     profileScope: row.profile_scope,
     ownerKey: row.owner_key,
     lastEditedBy: row.last_edited_by,
+    isActive: Boolean(row.is_active),
     nodes: nodes.map(mapNode),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -94,6 +95,7 @@ export async function upsertInventoryTargetProfile(client, input, editorKey = nu
   const inventoryItemId = Number(input.inventoryItemId);
   if (!inventoryItemId) throw new Error('inventoryItemId is required');
 
+  const wantActive = input.isActive === true;
   const payload = {
     inventory_item_id: inventoryItemId,
     name: input.name,
@@ -105,6 +107,9 @@ export async function upsertInventoryTargetProfile(client, input, editorKey = nu
     last_edited_by: editorKey || null,
     updated_at: new Date().toISOString(),
   };
+  if (input.isActive != null) {
+    payload.is_active = wantActive;
+  }
 
   let profileRow;
   if (input.id) {
@@ -130,6 +135,18 @@ export async function upsertInventoryTargetProfile(client, input, editorKey = nu
       .single();
     if (error) throw error;
     profileRow = data;
+  }
+
+  if (wantActive && profileRow?.id) {
+    await client
+      .from('inventory_target_profile')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('inventory_item_id', inventoryItemId)
+      .neq('id', profileRow.id);
+    await client
+      .from('inventory_target_profile')
+      .update({ is_active: true, updated_at: new Date().toISOString() })
+      .eq('id', profileRow.id);
   }
 
   const nodes = Array.isArray(input.nodes) ? input.nodes : [];
@@ -200,4 +217,28 @@ export async function deleteInventoryTargetProfile(client, id) {
   const { error } = await client.from('inventory_target_profile').delete().eq('id', id);
   if (error) throw error;
   return true;
+}
+
+/** Activate one target profile for its inventory item (clears other actives). */
+export async function setActiveInventoryTargetProfile(client, id, editorKey = null) {
+  const profile = await getInventoryTargetProfile(client, id);
+  if (!profile) throw new Error('Target profile not found');
+  const inventoryItemId = Number(profile.inventoryItemId);
+
+  await client
+    .from('inventory_target_profile')
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq('inventory_item_id', inventoryItemId);
+
+  const { error } = await client
+    .from('inventory_target_profile')
+    .update({
+      is_active: true,
+      last_edited_by: editorKey || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id);
+  if (error) throw error;
+
+  return getInventoryTargetProfile(client, id);
 }

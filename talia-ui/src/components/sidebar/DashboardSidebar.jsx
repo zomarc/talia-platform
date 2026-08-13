@@ -4,7 +4,8 @@ import UserProfile from "../UserProfile";
 import { isAdmin } from "../../utils/roleUtils";
 import { FocusSelector } from "../focus-management";
 import { useTheme } from "../../contexts/ThemeContext";
-import { DEFAULT_HEADER_LOGO_SRC, resolveAppPublicUrl } from "../../lib/headerLogoAsset";
+import { resolveAppPublicUrl } from "../../lib/headerLogoAsset";
+import TaliaBrandMark from "../shared/TaliaBrandMark";
 import {
   DASHBOARD_DETAILS_VISIBILITY_EVENT,
   DASHBOARD_FILTER_VISIBILITY_EVENT,
@@ -134,12 +135,10 @@ function DashboardSidebar({
     return resolveAppPublicUrl(path);
   };
 
-  const effectiveHeaderLogoPreviewSrc = () => {
-    if (!headerLogoVisible) return '';
-    const t = String(headerLogoUrl || '').trim();
-    if (t) return resolveCustomLogoPreviewSrc(headerLogoUrl);
-    return DEFAULT_HEADER_LOGO_SRC;
-  };
+  const customHeaderLogoPreviewSrc = headerLogoVisible
+    ? resolveCustomLogoPreviewSrc(headerLogoUrl)
+    : '';
+  const useDefaultTaliaBrandPreview = headerLogoVisible && !customHeaderLogoPreviewSrc;
 
   const handleHeaderLogoFile = (event) => {
     const file = event.target.files?.[0];
@@ -420,12 +419,28 @@ function DashboardSidebar({
                   ② Imported targets
                 </button>
               </TaliaTooltip>
-              <TaliaTooltip content="Nested load-factor target profiles — multiple perspectives per voyage (Manager+)." placement="bottom-left" delayMs={180}>
+              <TaliaTooltip content="Sailing Profile: REAL vs model prior (lazy/manual map), optional active target + budget gap" placement="bottom-left" delayMs={180}>
                 <button
                   className="dashboard-btn"
-                  onClick={() => onAddPanel('inventory-target-profile-editor', 'Nested LF target profiles', { reportId: 'inventory-target-profile-editor' })}
+                  onClick={() => onAddPanel('profile-compare', 'Sailing Profile', { reportId: 'profile-compare' })}
                 >
-                  Nested LF targets
+                  Sailing Profile
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Target Profile Editor — define/activate LF goal curves per voyage (Manager+)." placement="bottom-left" delayMs={180}>
+                <button
+                  className="dashboard-btn"
+                  onClick={() => onAddPanel('inventory-target-profile-editor', 'Target Profile Editor', { reportId: 'inventory-target-profile-editor' })}
+                >
+                  Target profiles
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Read-only profile coverage by ship×month or DOW×duration" placement="bottom-left" delayMs={180}>
+                <button
+                  className="dashboard-btn"
+                  onClick={() => onAddPanel('profile-aggregations', 'Profile Aggregations', { reportId: 'profile-aggregations' })}
+                >
+                  Profile aggregations
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Overlay REAL, imported TARGET, BUDGET, and inventory MODEL on one chart" placement="bottom-left" delayMs={180}>
@@ -769,7 +784,7 @@ function DashboardSidebar({
                   Logo hidden — enable &quot;Show header logo&quot; above to display the default or custom image.
                 </p>
               ) : null}
-              {headerLogoVisible && effectiveHeaderLogoPreviewSrc() ? (
+              {headerLogoVisible && (useDefaultTaliaBrandPreview || customHeaderLogoPreviewSrc) ? (
                 <div
                   className="dashboard-header-logo-preview"
                   style={{
@@ -785,19 +800,28 @@ function DashboardSidebar({
                   }}
                 >
                   <span className="dashboard-form-hint" style={{ margin: 0 }}>
-                    {String(headerLogoUrl || '').trim() ? 'Preview (custom)' : 'Preview (default Talia logo)'}
+                    {customHeaderLogoPreviewSrc
+                      ? 'Preview (custom)'
+                      : 'Preview (default Talia logo — theme color)'}
                   </span>
-                  <img
-                    src={effectiveHeaderLogoPreviewSrc()}
-                    alt=""
-                    style={{
-                      maxHeight: 48,
-                      maxWidth: 200,
-                      width: 'auto',
-                      height: 'auto',
-                      objectFit: 'contain',
-                    }}
-                  />
+                  {useDefaultTaliaBrandPreview ? (
+                    <TaliaBrandMark
+                      className="status-bar__brand-mark status-bar__brand-mark--talia"
+                      style={{ height: 40, maxHeight: 48, maxWidth: 200 }}
+                    />
+                  ) : (
+                    <img
+                      src={customHeaderLogoPreviewSrc}
+                      alt=""
+                      style={{
+                        maxHeight: 48,
+                        maxWidth: 200,
+                        width: 'auto',
+                        height: 'auto',
+                        objectFit: 'contain',
+                      }}
+                    />
+                  )}
                 </div>
               ) : null}
               <label className="dashboard-form-label" htmlFor="talia-header-logo-url" style={{ marginTop: 'var(--theme-component-gap-md)' }}>Or logo URL</label>

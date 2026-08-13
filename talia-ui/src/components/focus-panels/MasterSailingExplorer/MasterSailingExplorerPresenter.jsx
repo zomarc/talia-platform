@@ -363,6 +363,37 @@ const MasterSailingExplorerPresenter = ({
         headerSort: false,
       },
       {
+        field: 'target_review_status',
+        titleShort: 'vs Tgt',
+        titleLong: 'Actual cabin LF vs active target (behind / on / ahead)',
+        hozAlign: 'center',
+        width: 88,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (row?.row_type === 'day') return '';
+          const status = row?.target_review_status;
+          if (!status || status === 'unknown') return '—';
+          const gap = row?.target_gap_pp;
+          const gapTxt = gap != null && Number.isFinite(Number(gap))
+            ? ` ${Number(gap) > 0 ? '+' : ''}${Number(gap).toFixed(0)}`
+            : '';
+          const label =
+            status === 'behind' ? `▼${gapTxt}` : status === 'ahead' ? `▲${gapTxt}` : `●${gapTxt}`;
+          const el = document.createElement('span');
+          el.className = `mse-target-review mse-target-review--${status}`;
+          el.textContent = label;
+          el.title = [
+            row?.target_profile_name ? `Target: ${row.target_profile_name}` : null,
+            row?.target_lf_pct != null ? `Goal ${Number(row.target_lf_pct).toFixed(1)}%` : null,
+            status,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          return el;
+        },
+        headerSort: false,
+      },
+      {
         field: 'berth_capacity',
         titleShort: 'Cap B',
         titleLong: 'Capacity (berths)',

@@ -2,6 +2,22 @@
 
 Unified architecture for actual, supplied target, finance budget, and Talia nested LF targets.
 
+## Profile vocabulary (canonical)
+
+| Term | Meaning |
+|------|---------|
+| **Profile** | Curve from 0 → endpoint (weeks-to-sail or book-date axis) |
+| **Physical profile** | Profile for an `inventory_item` that could/was/may be sold |
+| **History profile** | Physical profile that happened (past sail) |
+| **Model profile** | Adjustable, assignable history profile used as prior for future |
+| **Target profile** | Editable goal curve for future events (`inventory_target_profile`, active flag) |
+| **Budget profile** | Financial end-state / performance measure (`budget` table; week curve deferred) |
+
+Sail ↔ model binding: `profile_model_map` (`lazy` default via prior-year peer, or `manual` override).
+Compare UI: **Sailing Profile** (`ProfileCompare`) — REAL vs model (+ optional active target overlay, budget gap).
+
+Aggregation views (read-only): ship × month and DOW × duration via `profileAggregations`.
+
 ## Implementation Status
 
 - [x] Target data loading in Data Management (Import target CSV)
@@ -12,7 +28,10 @@ Unified architecture for actual, supplied target, finance budget, and Talia nest
 - [x] Market / market group / currency breakdown
 - [x] YoY weeks-to-sail overlay (illustrative; peer resolution)
 - [x] Finance budget table + sync config (`lkp.BUDGET` → `budget`) end-state comparison
-- [x] Nested LF target profiles (`inventory_target_profile` + nodes), multi-perspective
+- [x] Nested LF target profiles (`inventory_target_profile` + nodes), multi-perspective + **is_active**
+- [x] Model map (`profile_model_map`) + ProfileCompare GraphQL
+- [x] MSE review highlight vs active target (`profileTargetReviewStatuses`)
+- [x] Multi-level aggregations (`profileAggregations`) — counts / coverage, not full curves
 - [ ] Generic mapping config UI (visual, editable)
 - [ ] Budget shaped onto week curve (future)
 - [ ] Forecast (deferred)
@@ -21,11 +40,14 @@ Unified architecture for actual, supplied target, finance budget, and Talia nest
 
 | Stream | Source | Storage | Notes |
 |--------|--------|---------|-------|
-| **REAL** | `reservation` + `reservation_changes` via inventory scope | Runtime | Master + segment `sail_codes` |
+| **REAL** | `reservation` (+ cabin occupancy for LF end) | Runtime | Reservation Booking Curve / ProfileCompare |
+| **Model prior** | History peer sail | `profile_model_map` + lazy finder | ±21d same ship year-1 |
 | **Supplied TARGET** | CSV import | `booking_targets_supplied` | Company targets |
 | **Finance BUDGET** | `lkp.BUDGET` sync | `budget` | End-state pax by voyage × market × roll-up × currency |
-| **Nested LF MODEL** | UI editor | `inventory_target_profile` (+ nodes) | Many perspectives per inventory item |
+| **Target profile** | UI editor | `inventory_target_profile` (+ nodes) | Named goals; one `is_active` per item |
 | **Legacy MODEL** | Graph editor | `inventory_item_profile_curve_point` | Absolute bookings/guests |
 | **Legacy** | — | `target_profiles` | Read-compat only |
+
+Do **not** overload `target_mapping_config` (CSV column map only).
 
 See also: [talia-ui/docs/BOOKING_PROFILE_GOALS.md](talia-ui/docs/BOOKING_PROFILE_GOALS.md).

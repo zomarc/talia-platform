@@ -35,7 +35,8 @@ import {
 import { enforceDashboardUiState, publishDashboardGlobalConfig } from '../../services/dashboardUiState';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useFocusManagement } from '../../hooks/useFocusManagement';
-import { DEFAULT_HEADER_LOGO_SRC, resolveAppPublicUrl } from '../../lib/headerLogoAsset';
+import { resolveAppPublicUrl } from '../../lib/headerLogoAsset';
+import TaliaBrandMark from './TaliaBrandMark';
 import { GLOBAL_DATE_RANGE_OPTIONS, normalizeGlobalDateRangeKey, resolveGlobalDateRange } from '../../lib/globalDateRange';
 import {
   ALL_DEPARTURE_MONTH_KEY,
@@ -302,21 +303,21 @@ const StatusBar = ({
     return GLOBAL_DISPLAY_CURRENCY_OPTIONS;
   }, [defaultDisplayCurrency]);
 
-  const resolvedHeaderLogoSrc = useMemo(() => {
+  const customHeaderLogoSrc = useMemo(() => {
     if (!headerLogoVisible) return '';
     const raw = String(headerLogoUrl || '').trim();
-    if (raw) {
-      if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw;
-      const path = raw.startsWith('/') ? raw.slice(1) : raw;
-      return resolveAppPublicUrl(path);
-    }
-    return DEFAULT_HEADER_LOGO_SRC;
+    if (!raw) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw;
+    const path = raw.startsWith('/') ? raw.slice(1) : raw;
+    return resolveAppPublicUrl(path);
   }, [headerLogoUrl, headerLogoVisible]);
+
+  const useDefaultTaliaBrandMark = headerLogoVisible && !customHeaderLogoSrc;
 
   const [headerLogoBroken, setHeaderLogoBroken] = useState(false);
   useEffect(() => {
     setHeaderLogoBroken(false);
-  }, [resolvedHeaderLogoSrc]);
+  }, [customHeaderLogoSrc]);
   const [showDetails, setShowDetails] = useState(false);
   const [displayMessage, setDisplayMessage] = useState(statusMessage);
   const [isMessageFading, setIsMessageFading] = useState(false);
@@ -1662,20 +1663,25 @@ const StatusBar = ({
           )}
         </div>
 
-        {resolvedHeaderLogoSrc && !headerLogoBroken && !headerLogoSuppressed && (
+        {((useDefaultTaliaBrandMark && !headerLogoSuppressed)
+          || (customHeaderLogoSrc && !headerLogoBroken && !headerLogoSuppressed)) && (
           <div
             className="status-bar__brand"
             role="img"
             aria-label="Header logo"
           >
-            <img
-              key={resolvedHeaderLogoSrc}
-              className="status-bar__brand-mark"
-              src={resolvedHeaderLogoSrc}
-              alt=""
-              decoding="async"
-              onError={() => setHeaderLogoBroken(true)}
-            />
+            {useDefaultTaliaBrandMark ? (
+              <TaliaBrandMark className="status-bar__brand-mark status-bar__brand-mark--talia" />
+            ) : (
+              <img
+                key={customHeaderLogoSrc}
+                className="status-bar__brand-mark"
+                src={customHeaderLogoSrc}
+                alt=""
+                decoding="async"
+                onError={() => setHeaderLogoBroken(true)}
+              />
+            )}
           </div>
         )}
 

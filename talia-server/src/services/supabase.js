@@ -13,7 +13,19 @@ import {
   getInventoryTargetProfile,
   upsertInventoryTargetProfile,
   deleteInventoryTargetProfile,
+  setActiveInventoryTargetProfile,
 } from './inventory-target-profile.js';
+import {
+  getProfileModelMap,
+  resolveModelPeer,
+  upsertProfileModelMap,
+  clearProfileModelMap,
+  listModelCandidates,
+} from './profile-model-map.js';
+import { getProfileCompare } from './profile-compare.js';
+import { getProfileTargetReviewStatuses } from './profile-review.js';
+import { getProfileAggregations } from './profile-aggregations.js';
+import { backfillTargetProfiles } from './profile-backfill.js';
 
 // Supabase configuration
 const SUPABASE_CONFIG = {
@@ -972,6 +984,46 @@ export class SupabaseDataService {
     return deleteInventoryTargetProfile(this.client, id);
   }
 
+  async setActiveInventoryTargetProfile(id, editorKey = null) {
+    return setActiveInventoryTargetProfile(this.client, id, editorKey);
+  }
+
+  async getProfileModelMap(inventoryItemId) {
+    return getProfileModelMap(this.client, inventoryItemId);
+  }
+
+  async resolveModelPeer(sailCode) {
+    return resolveModelPeer(this.client, sailCode);
+  }
+
+  async upsertProfileModelMap(input, editorKey = null) {
+    return upsertProfileModelMap(this.client, input, editorKey);
+  }
+
+  async clearProfileModelMap(inventoryItemId) {
+    return clearProfileModelMap(this.client, inventoryItemId);
+  }
+
+  async listModelCandidates(sailCode, options = {}) {
+    return listModelCandidates(this.client, sailCode, options);
+  }
+
+  async getProfileCompare(sailCode, options = {}) {
+    return getProfileCompare(this.client, sailCode, options);
+  }
+
+  async getProfileTargetReviewStatuses(sailCodes, options = {}) {
+    return getProfileTargetReviewStatuses(this.client, sailCodes, options);
+  }
+
+  async getProfileAggregations(options = {}) {
+    return getProfileAggregations(this.client, options);
+  }
+
+  async backfillTargetProfiles(options = {}, editorKey = null) {
+    return backfillTargetProfiles(this.client, options, editorKey);
+  }
+
   /**
    * Get all target profiles with optional filters
    * @param {Object} filters - Filter options
@@ -1479,6 +1531,23 @@ export class SupabaseDataService {
           .select('*')
           .eq('sail_code', payload.sail_code)
           .eq('mmsi', payload.mmsi)
+          .limit(1)
+          .maybeSingle();
+        existing = data || null;
+      } else if (payload.sail_code) {
+        const { data } = await this.client
+          .from('inventory_item')
+          .select('*')
+          .eq('sail_code', payload.sail_code)
+          .limit(1)
+          .maybeSingle();
+        existing = data || null;
+      } else if (payload.reference_sail_code) {
+        const { data } = await this.client
+          .from('inventory_item')
+          .select('*')
+          .eq('reference_sail_code', payload.reference_sail_code)
+          .eq('sailing_role', 'master')
           .limit(1)
           .maybeSingle();
         existing = data || null;

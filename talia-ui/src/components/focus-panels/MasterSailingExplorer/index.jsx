@@ -8,6 +8,7 @@ import {
 } from '../../../lib/bookedComposition';
 import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 import { setInventoryItems } from '../../../services/data/inventoryReferenceService';
+import profileCompareService from '../../../services/data/profileCompareService';
 import PanelDataState from '../../shared/PanelDataState';
 import { indexDistributionBundlesBySailCode } from '../Distribution/distributionTransform';
 import MasterSailingExplorerPresenter from './MasterSailingExplorerPresenter';
@@ -312,6 +313,82 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
     || hierarchyError
     || shipDayError;
 
+  const [reviewBySail, setReviewBySail] = useState(() => new Map());
+
+  useEffect(() => {
+    const masters = explorerBundle?.masters || [];
+    if (!masters.length) {
+      setReviewBySail(new Map());
+      return undefined;
+    }
+    let cancelled = false;
+    const sailCodes = masters
+      .map((m) => String(m?.sail_code || '').trim())
+      .filter(Boolean)
+      .slice(0, 120);
+    const actualLfPctBySail = {};
+    masters.forEach((m) => {
+      const code = String(m?.sail_code || '').trim();
+      if (!code || m?.actual_booked_pct == null) return;
+      actualLfPctBySail[code] = Number(m.actual_booked_pct);
+    });
+
+    (async () => {
+      try {
+        // Pass actuals via query isn't supported server-side yet — client merges gap using local LF.
+        const statuses = await profileCompareService.fetchReviewStatuses(sailCodes);
+        if (cancelled) return;
+        const map = new Map();
+        statuses.forEach((s) => {
+          const code = String(s.sailCode || '').trim();
+          if (!code) return;
+          const actual = actualLfPctBySail[code] ?? s.actualLfPct;
+          const target = s.targetLfPct;
+          let status = s.status;
+          let gapPp = s.gapPp;
+          if (actual != null && target != null) {
+            gapPp = Math.round((actual - target) * 100) / 100;
+            if (gapPp < -3) status = 'behind';
+            else if (gapPp > 3) status = 'ahead';
+            else status = 'on';
+          }
+          map.set(code, {
+            ...s,
+            actualLfPct: actual,
+            gapPp,
+            status,
+          });
+          if (s.referenceSailCode) map.set(String(s.referenceSailCode), map.get(code));
+        });
+        setReviewBySail(map);
+      } catch (err) {
+        console.warn('[MSE] profile review statuses:', err?.message || err);
+        if (!cancelled) setReviewBySail(new Map());
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [explorerBundle?.masters]);
+
+  const mastersWithReview = useMemo(() => {
+    const masters = explorerBundle?.masters || [];
+    if (!reviewBySail.size) return masters;
+    return masters.map((m) => {
+      const code = String(m?.sail_code || '').trim();
+      const review = reviewBySail.get(code);
+      if (!review) return m;
+      return {
+        ...m,
+        target_review_status: review.status,
+        target_lf_pct: review.targetLfPct,
+        target_gap_pp: review.gapPp,
+        target_profile_name: review.activeTargetName,
+      };
+    });
+  }, [explorerBundle?.masters, reviewBySail]);
+
   const handleRefresh = () => {
     refetchMasterSail();
     refetchInventory();
@@ -337,7 +414,7 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
       onRetry={handleRefresh}
     >
       <MasterSailingExplorerPresenter
-        masters={explorerBundle.masters}
+        masters={mastersWithReview}
         dayDetailsByMaster={explorerBundle.dayDetailsByMaster}
         distributionBySailCode={distributionBySailCode}
         distributionLoading={

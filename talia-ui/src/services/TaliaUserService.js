@@ -13,6 +13,7 @@ const GET_TALIA_USERS_QUERY = gql`
       id
       taliaUserId
       email
+      role
       createdAt
       updatedAt
       lastLoginAt
@@ -26,9 +27,22 @@ const GET_TALIA_USER_BY_EMAIL_QUERY = gql`
       id
       taliaUserId
       email
+      role
       createdAt
       updatedAt
       lastLoginAt
+    }
+  }
+`;
+
+const UPDATE_TALIA_USER_ROLE_MUTATION = gql`
+  mutation UpdateTaliaUserRole($email: String, $taliaUserId: Int, $role: String!) {
+    updateTaliaUserRole(email: $email, taliaUserId: $taliaUserId, role: $role) {
+      id
+      taliaUserId
+      email
+      role
+      updatedAt
     }
   }
 `;
@@ -89,7 +103,8 @@ class TaliaUserService {
         taliaUserId: user.taliaUserId,
         email: user.email,
         name: user.email?.split('@')[0] || 'Unknown',
-        taliaRole: this.determineRoleFromEmail(user.email),
+        role: String(user.role || this.determineRoleFromEmail(user.email) || 'USER').toUpperCase(),
+        taliaRole: String(user.role || this.determineRoleFromEmail(user.email) || 'USER').toLowerCase(),
         isActive: true,
         createdAt: user.createdAt || user.lastLoginAt,
         lastLoginAt: user.lastLoginAt || null,
@@ -331,6 +346,19 @@ class TaliaUserService {
       console.error('❌ Error deleting user:', error);
       return false;
     }
+  }
+
+  async updateTaliaUserRole({ email = null, taliaUserId = null, role }) {
+    const nextRole = String(role || 'USER').trim().toUpperCase();
+    const { data } = await apolloClient.mutate({
+      mutation: UPDATE_TALIA_USER_ROLE_MUTATION,
+      variables: {
+        email: email || undefined,
+        taliaUserId: taliaUserId != null ? Number(taliaUserId) : undefined,
+        role: nextRole,
+      },
+    });
+    return data?.updateTaliaUserRole || null;
   }
 }
 

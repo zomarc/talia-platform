@@ -16,6 +16,7 @@ export const typeDefs = `#graphql
     id: ID!
     taliaUserId: Int!
     email: String!
+    role: String!
     createdAt: String!
     updatedAt: String!
     lastLoginAt: String
@@ -776,6 +777,9 @@ export const typeDefs = `#graphql
     capacitySource: String
     reservationBookings: Int!
     reservationGuests: Int!
+    bookedGuests: Int
+    contractedGuests: Int
+    estimatedGuests: Float
     bookDateField: String!
     missingBookDates: Int!
     velocity: ReservationVelocity!
@@ -783,6 +787,8 @@ export const typeDefs = `#graphql
     competitor: ReservationCompetitorSnapshot
     series: [DimensionalSeries!]!
     totals: [DimensionalCurvePoint!]!
+    contractSeries: [DimensionalSeries!]
+    contractMessage: String
     composition: [ProfileCompositionSlice!]!
     maxWeeks: Int!
     daysUntilSailing: Int
@@ -1678,6 +1684,9 @@ export const typeDefs = `#graphql
     taliaUiThemeRegistry: TaliaUiThemeRegistryPayload!
     columnTerminologyDefinitions: [ColumnTerminologyDefinition!]!
     userProfileState(userId: String): JSON
+    roleCriteria(role: String!): JSON
+    roleComponentOps(role: String!): JSON
+    effectiveGlobalCriteria(userId: String, role: String): JSON
     gameScore(gameId: String!, userId: String): GameScore!
     gameLeaderboard(gameId: String!, limitTop: Int, limitRecent: Int): GameLeaderboard!
     gameScoreBoard(gameId: String, limitTop: Int, limitRecent: Int): GameScoreBoard!
@@ -1706,8 +1715,12 @@ export const typeDefs = `#graphql
     
     # User Management
     updateUserPreferences(input: UserPreferencesInput!): User!
+    updateTaliaUserRole(email: String, taliaUserId: Int, role: String!): TaliaUser!
     logUiActivityEvent(input: UiActivityEventInput!): Boolean!
     purgeUiActivityEvents(olderThanHours: Int!): Int!
+    saveRoleCriteria(role: String!, criteria: JSON!): JSON
+    saveRoleComponentOps(role: String!, ops: JSON!): JSON
+    saveUserCriteriaOverride(userId: String!, criteria: JSON!, locked: Boolean): JSON
     
     # Focus Preferences
     updateFocusPreference(focusId: ID!, preferences: FocusPreferenceInput!): FocusPreference!

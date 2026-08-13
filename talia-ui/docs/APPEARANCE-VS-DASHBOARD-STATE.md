@@ -6,9 +6,9 @@ Authoritative product model — keep these boundaries in code and in naming.
 
 ## 1. User and role
 
-- A **`talia_user`** has a **role** (Talia role), e.g. `USER`, `MANAGER`, `ADMIN`, … — see `src/utils/roleUtils.js` (`normalizeRole`, `isAdmin`, …) and auth / `GraphQLUtils.getUserRole`.
-
-- The **ADMIN** role is intended to have access to **all functions** (privileged panels, advanced header, admin surfaces) — enforced via the same role checks (`isAdmin`, `canAccessPrivilegedPanels`, registry access, etc.).
+- A **`talia_user`** has a durable **`role`** column (`GUEST` | `USER` | `MANAGER` | `ADMIN` | `SUPER_USER`) — see migration `20260813180000_talia_users_role.sql`, GraphQL `TaliaUser.role` / `updateTaliaUserRole`, and auth (`SupabaseAuthContext` prefers DB role over email heuristics).
+- Helpers: `src/utils/roleUtils.js` (`normalizeRole`, `isAdmin`, `canAccessPrivilegedPanels`, `canConfigureComponentOperations`, `hasRole`).
+- **ADMIN / SUPER_USER** may configure Operations chrome and role baselines; end users do **not** see Operations toggles in the tab Options menu.
 
 ---
 
@@ -28,27 +28,36 @@ Legacy code name **`focus-panels/`** = **registry report components** (implement
 
 - **Theme / style** is **only a presentation layer**: **appearance** — how the app looks and reads (palette, typography, spacing, chrome visibility, formatting prefs such as default display currency, …).
 
-- It should stay **self-contained and clear**: configure and persist **appearance** through **`ThemeContext.jsx`**, **`DashboardSidebar`** (primary), GraphQL **`appearanceSettings`**, plus baseline **`theme.css`** / `applyTheme()` in `main.jsx`. It does **not** define which panels are in a focus, and it is **not** the channel for **data filters** (that is global criteria + bus).
+- It should stay **self-contained and clear**: configure and persist **appearance** through **`ThemeContext.jsx`**, **`DashboardSidebar`** (primary), GraphQL **`appearanceSettings`**, plus baseline **`theme.css`** / `applyTheme()` in `main.jsx`. It does **not** define which panels are in a focus, and it is **not** the channel for **data filters** (that is global criteria + bus). **Do not** park Views/Operations or role criteria in ThemeContext.
 
 ---
 
-## 4. Global criteria and dashboard globalConfig (per user → all reports via bus)
+## 4. Global criteria (role baseline → user deltas → bus)
 
-- **Global criteria** are **set per user** (saved with user profile / dashboard state, e.g. `StatusBar` + `saveUserProfileState` patch `globalCriteria`, and `window.__taliaGlobalCriteria`).
+- **Role** defines **baseline global criteria** (`config_setting` / `ui_profile` key `role_criteria:{ROLE}`), edited in Admin → **Role Criteria**.
+- **User** inherits that baseline and may personalize **deltas** (`ui_profile` `state:{userId}.globalCriteria`).
+- **Admin override** for a user: `adminCriteriaOverride` (+ optional `adminCriteriaLocked`) via `saveUserCriteriaOverride`.
+- **Effective criteria** = `merge(roleCriteria, userDeltas)` or admin override when present — loaded by StatusBar via `effectiveGlobalCriteria` / `roleCriteriaService.js`, then published on the bus.
+- They **must propagate to all reports** via `talia:dashboard.globalConfig` / `__taliaGlobalCriteria`.
 
-- They **must propagate to all reports** (and any subscriber) via the **message bus**.
+**Unified UI + criteria channel:** `talia:dashboard.globalConfig` (`publishDashboardGlobalConfig` / `window.__taliaDashboardGlobalConfig` in `services/dashboardUiState.js`). Payload includes table layout, filter/details/titles/callouts chrome, `viewScope`, `criteria`, `activePanelId`.
 
-- **Unified UI + criteria channel:** `talia:dashboard.globalConfig` (`publishDashboardGlobalConfig` / `window.__taliaDashboardGlobalConfig` in `services/dashboardUiState.js`). Payload includes:
+Components and framework listeners (**especially Tabulator fit** in `tabulatorConfig.js`) **ALWAYS conform** to the latest `globalConfig`.
 
-  - `tableLayoutMode` (`best` | `width` | `data`)
-  - chrome toggles: `filtersVisible`, `tabulatorFiltersVisible`, `detailsVisible`, `titlesVisible`, `calloutsVisible`, `actionsVisible`, `controlsVisible`
-  - `viewScope`, `criteria`, `activePanelId`
+---
 
-- Components and framework listeners (**especially Tabulator fit** in `tabulatorConfig.js`) **ALWAYS conform** to the latest `globalConfig`. Fit is re-applied when a Dockview tab becomes active (`talia:report.activePanelChanged`) so hidden-panel refreshes cannot poison column widths.
+## 5. Per-component Views vs Operations
 
-- Legacy aliases still fire from the same publish for compatibility: `talia:dashboard.globalCriteria`, `talia:dashboard.tableLayout`, filter/details/viewScope visibility events.
+| Layer | Meaning | Who can change | Persistence |
+|--------|---------|----------------|-------------|
+| **Views** | Presentation (Nested/Flat, Details, Segments, …) | Any user who can open the component (non-restrictive) | `componentOptions.{panelId}.views` on user profile |
+| **Operations** | Capabilities (show filters, column filters, allocate, …) | Capability allowed by role (+ optional role allow-list); **Options menu to enable/disable** is Admin+ only | Role allow-list `role_component_ops:{ROLE}`; optional admin ops prefs on user profile |
 
-- **Separation:** appearance tokens (ThemeContext CSS variables) stay presentation-only. **Which filters / fit / chrome toggles apply right now** is the **bus payload**, not Theme by itself.
+- Tab chrome: active dock tab **Options** (⚙) — Views for everyone; Operations section only when `canConfigureComponentOperations(role)`.
+- Catalog: `lib/componentOptionsCatalog.js` + optional `registry.options`; hook `useComponentOptions`.
+- Global StatusBar **Operations** visibility toggle is **retired** (replaced by per-component Options).
+
+**Component access by role:** registry `allowedRoles` and/or `minRole` via `canRoleAccessComponent` (Dashboard add-panel / sidebar gates).
 
 ---
 
@@ -56,12 +65,12 @@ Legacy code name **`focus-panels/`** = **registry report components** (implement
 
 | Concept | Definition | Main implementation |
 |--------|------------|----------------------|
-| **`talia_user` + role** | User carries a role; ADMIN → all functions | Auth, `roleUtils`, registry / header gates |
-| **Focus** | Layout of panels/components = work surface | `focusesByRole`, `GraphQLFocusService`, Dockview, `__taliaFocusState` |
-| **Theme / style** | Presentation / appearance only | `theme.css`, `ThemeContext`, sidebar, `appearanceSettings` |
-| **Role → reports/focuses** | Configurable access list | Existing focus / registry / role configuration |
-| **Global criteria / UI config** | Per-user filters + chrome + fit → **all** reports via bus | `talia:dashboard.globalConfig`, `__taliaDashboardGlobalConfig`, aliases for criteria/layout |
-
+| **`talia_user` + role** | Durable role on user; ADMIN/SUPER configure ops | DB column, GraphQL, auth, `roleUtils`, Admin Users table |
+| **Focus** | Layout of panels/components = work surface | `focusesByRole`, Dockview |
+| **Theme / style** | Presentation / appearance only | `ThemeContext`, `appearanceSettings` |
+| **Role → criteria** | Baseline always applied; user deltas; admin override | `roleCriteria`, `effectiveGlobalCriteria`, StatusBar |
+| **Views / Operations** | Per-component Options; Views free; Ops role-gated | Tab Options, `useComponentOptions`, Admin Role Criteria |
+| **Component ACL** | `allowedRoles` / `minRole` on registry | `canRoleAccessComponent` |
 Optional refactors later: rename `ThemeContext` → `AppearanceContext`, rename `focus-panels/*` → `report-panels/*`. This document is the behavioral contract regardless of filenames.
 
 ---

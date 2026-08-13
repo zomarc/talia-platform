@@ -185,6 +185,33 @@
   border-bottom: 1px solid color-mix(in srgb, var(--theme-border-light) 16%, transparent) !important;
 }
 
+/* During fit-data sampling, measure unwrapped content so long IDs/badges set real widths. */
+.tabulator.tabulator--fit-sampling .tabulator-cell {
+  white-space: nowrap !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
+
+/* Column totals footer (native ColumnCalcs / bottomCalc via withColumnTotal). */
+.tabulator .tabulator-footer .tabulator-calcs-holder {
+  background: color-mix(in srgb, var(--theme-bg-elevated, #1a1f2e) 88%, var(--theme-accent, #5b9bd5) 12%) !important;
+  border-top: 1px solid color-mix(in srgb, var(--theme-border, rgba(255, 255, 255, 0.2)) 70%, transparent) !important;
+}
+
+.tabulator .tabulator-footer .tabulator-calcs-holder .tabulator-row.tabulator-calcs {
+  background: transparent !important;
+  font-weight: 700 !important;
+}
+
+.tabulator .tabulator-footer .tabulator-calcs-holder .tabulator-row.tabulator-calcs .tabulator-cell {
+  color: var(--theme-fg, #fff) !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  border-bottom: 0 !important;
+}
+
 .tabulator .tabulator-row .tabulator-cell:first-child {
   padding-left: calc(var(--theme-table-cell-padding-x) + 2px);
 }

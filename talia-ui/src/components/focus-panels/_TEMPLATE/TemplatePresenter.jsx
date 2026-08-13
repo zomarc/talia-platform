@@ -29,6 +29,8 @@
 
 import React, { useCallback, useRef, useEffect, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
+// Optional column footer totals: withColumnTotal({ field: 'id', ... }, 'count')
+// Optional: withColumnTotal({ field: 'amount', ... }, 'sum', { precision: 2 })
 import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 
 /**
@@ -42,6 +44,8 @@ const TemplatePresenter = ({ data, panelInstanceId, panelComponentId }) => {
 
   // Column definitions using Tabulator's native features
   // TODO: Replace with your actual column definitions
+  // Totals: wrap a column with withColumnTotal(col, 'count'|'sum'|..., { precision? })
+  // so the footer tracks active/filtered rows (see COMPONENT-STANDARDS § Tabulator).
   const columns = [
     { 
       field: "id", 
@@ -49,6 +53,7 @@ const TemplatePresenter = ({ data, panelInstanceId, panelComponentId }) => {
       titleLong: "Record identifier",
       width: 100,
       headerFilter: "input"
+      // Example: wrap this object with withColumnTotal(..., 'count') for a row-count footer
     },
     { 
       field: "name", 

@@ -63,7 +63,8 @@ const summarizeUserEvents = (events) => {
 };
 
 const TaliaUserTable = () => {
-  const { devUsers = [] } = useSupabaseAuth();
+  const { devUsers = [], user: authUser } = useSupabaseAuth();
+  const canAssignRole = ['ADMIN', 'SUPER_USER', 'SUPERUSER'].includes(String(authUser?.role || '').toUpperCase());
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -72,6 +73,7 @@ const TaliaUserTable = () => {
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sharedEvents, setSharedEvents] = useState([]);
+  const [roleSavingId, setRoleSavingId] = useState(null);
   const tableElRef = useRef(null);
   const tableRef = useRef(null);
   const detailTableElRef = useRef(null);
@@ -140,7 +142,7 @@ const TaliaUserTable = () => {
         taliaUserId: user.taliaUserId,
         email: user.email,
         name: user.name || user.email.split('@')[0] || '',
-        role: roleByEmail.get(String(user.email).toLowerCase()) || 'USER',
+        role: String(user.role || roleByEmail.get(String(user.email).toLowerCase()) || 'USER').toUpperCase(),
         lastLogin: formatDayMon(user.lastLoginAt, 'N/A'),
         createdAt: formatDayMon(user.createdAt, 'N/A'),
         source: user.id?.startsWith('dev-user-') ? 'DEV' : 'DB'
@@ -165,6 +167,28 @@ const TaliaUserTable = () => {
     return dbRows;
   }, [users, devUsers, sharedEvents]);
 
+  const handleRoleChange = async (row, nextRole) => {
+    if (!canAssignRole || !row?.email) return;
+    const role = String(nextRole || 'USER').toUpperCase();
+    setRoleSavingId(row.id);
+    try {
+      await taliaUserService.updateTaliaUserRole({
+        email: row.email,
+        taliaUserId: row.taliaUserId,
+        role,
+      });
+      setUsers((prev) => (prev || []).map((entry) => (
+        entry.id === row.id || entry.email === row.email
+          ? { ...entry, role, taliaRole: role.toLowerCase() }
+          : entry
+      )));
+    } catch (err) {
+      console.error('Failed to update user role:', err);
+      setError(err?.message || 'Failed to update role');
+    } finally {
+      setRoleSavingId(null);
+    }
+  };
   const selectedUser = useMemo(
     () => rows.find((row) => row.id === selectedUserId) || rows[0] || null,
     [rows, selectedUserId]
@@ -336,7 +360,33 @@ const TaliaUserTable = () => {
             { title: 'Talia ID', field: 'taliaUserId', width: 100, hozAlign: 'center' },
             { title: 'Email', field: 'email', headerFilter: 'input' },
             { title: 'Name', field: 'name', headerFilter: 'input' },
-            { title: 'Role', field: 'role', width: 110, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true } },
+            {
+              title: 'Role',
+              field: 'role',
+              width: 130,
+              headerFilter: 'list',
+              headerFilterParams: { valuesLookup: true, clearable: true },
+              formatter: (cell) => {
+                const value = String(cell.getValue() || 'USER').toUpperCase();
+                if (!canAssignRole) return value;
+                const row = cell.getRow()?.getData?.() || {};
+                const busy = roleSavingId === row.id;
+                return `<select class="talia-user-role-select" data-user-id="${row.id || ''}" ${busy ? 'disabled' : ''}>
+                  ${['GUEST', 'USER', 'MANAGER', 'ADMIN', 'SUPER_USER'].map((role) => (
+                    `<option value="${role}" ${role === value ? 'selected' : ''}>${role}</option>`
+                  )).join('')}
+                </select>`;
+              },
+              cellClick: (event, cell) => {
+                const select = event?.target?.closest?.('select.talia-user-role-select');
+                if (!select) return;
+                event.stopPropagation();
+                select.onchange = async (changeEvent) => {
+                  const nextRole = changeEvent?.target?.value;
+                  await handleRoleChange(cell.getRow()?.getData?.() || {}, nextRole);
+                };
+              },
+            },
             { title: 'Last Access', field: 'lastAccessAt', width: 120, formatter: (cell) => formatDayMon(cell.getValue(), '—') },
             { title: 'Reports', field: 'reportSummary', headerFilter: 'input' },
             { title: 'Avg Perf', field: 'avgPerfMs', width: 100, hozAlign: 'center', formatter: (cell) => Number.isFinite(cell.getValue()) ? `${cell.getValue()}ms` : '—' },

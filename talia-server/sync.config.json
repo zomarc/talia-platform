@@ -213,6 +213,25 @@
         "[Snapshot_Date]"
       ]
     },
+    "factReservationHistory": {
+      "type": "derived",
+      "handler": "factReservationHistory",
+      "source": "dwh.Fact_Reservation_History",
+      "target": "sail_booking_monday",
+      "dateColumn": "WC_Snapshot_Date",
+      "supabaseDateColumn": "snapshot_date",
+      "columns": [
+        "WC_Snapshot_Date",
+        "Res_ID",
+        "Res_Status",
+        "Group_ID",
+        "Sail_code",
+        "Guest_Count",
+        "Res_Probability",
+        "Group_Probability",
+        "Sail_From_Date"
+      ]
+    },
     "masterSail": {
       "type": "direct",
       "source": "dwh.Dim_Master_Sail",
@@ -540,6 +559,7 @@
         "shipInventoryAlloc",
         "publishedRates",
         "reservationChanges",
+        "factReservationHistory",
         "competitor"
       ],
       "tables": {
@@ -751,7 +771,8 @@
         "ships",
         "masterSail",
         "reservations",
-        "reservationChanges"
+        "reservationChanges",
+        "factReservationHistory"
       ],
       "tables": {
         "agency": {

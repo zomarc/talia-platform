@@ -526,6 +526,27 @@
   gap: 2px;
 }
 
+.talia-dv-tab__options-heading {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--theme-text-muted, #888);
+  padding: 6px 10px 2px;
+}
+
+.talia-dv-tab__options-menu .talia-dv-tab__export-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.talia-report-filters--hidden {
+  display: none !important;
+}
+
 /* Portaled below the tab bar so overflow:hidden cannot clip CSV/PDF choices */
 .talia-dv-tab__export-menu--portal {
   position: fixed;

@@ -32,6 +32,9 @@ const SHIP_DAY_BERTH_COLUMNS = [
 const BOOKING_SUMMARY_COLUMNS = [
   'sail_code',
   'guest_count',
+  'booked_guests',
+  'contracted_guests',
+  'estimated_guests',
   'guaranteed_cabins',
 ];
 

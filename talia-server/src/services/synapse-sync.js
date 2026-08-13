@@ -27,6 +27,8 @@ import { SyncMetadataService } from './sync-metadata-service.js';
 import { syncEventEmitter } from './sync-event-emitter.js';
 import { getDateRange, getDateRangeConfigSummary } from '../config/date-range-config.js';
 import { getSyncConfigNameForTable, getSyncTypeForTable } from '../config/table-mappings.js';
+import { syncFactGroupOfReservations } from './fact-group-of-sync.js';
+import { syncFactReservationHistoryMondays } from './fact-reservation-history-sync.js';
 
 const require = createRequire(import.meta.url);
 const syncConfig = require('../../sync.config.json');
@@ -1683,11 +1685,30 @@ class SynapseSyncService {
         }
       }
 
-      // Post-processing note: For reservations table, sail_code should be populated via migration
-      // The migration 20251210182348_populate_reservation_sail_code.sql will backfill sail_code
-      // from master_sail table. New reservations will get sail_code on next migration run.
+      // After RES_HEADER replace+insert: re-ingest Fact_Reservation synthetic group-OF rows
+      // (delete-range would have wiped prior fact_group_alloc in the sail window).
       if (runtime.tableName === 'reservations' && totalProcessed > 0) {
-        logger?.info(`ℹ️  Note: Run migration to populate sail_code in reservation table from master_sail`);
+        const dateFrom = runtime.dateRange?.from || runtime.dateRange?.dateFrom;
+        const dateTo = runtime.dateRange?.to || runtime.dateRange?.dateTo;
+        if (dateFrom && dateTo && this.synapseConfig) {
+          try {
+            logger?.info(`🔗 Ingesting Fact_Reservation synthetic group-OF (${dateFrom}→${dateTo})…`);
+            const ofResult = await syncFactGroupOfReservations({
+              supabaseClient: supabaseDataService.client,
+              synapseConfig: this.synapseConfig,
+              dateFrom,
+              dateTo,
+              logger,
+            });
+            logger?.info(
+              `✅ fact_group_alloc upserted ${ofResult.inserted?.toLocaleString?.() ?? ofResult.inserted}`
+            );
+          } catch (ofError) {
+            logger?.warn(`⚠️  Fact group-OF ingest failed: ${ofError.message}`);
+          }
+        } else {
+          logger?.warn('⚠️  Skipped fact_group_alloc ingest (missing date range or Synapse config)');
+        }
       }
 
       if (runtime.tableName === 'masterSail' && totalProcessed > 0) {
@@ -2375,6 +2396,41 @@ class SynapseSyncService {
             dataset: runtime.datasetName
           }
         );
+      }
+
+      case 'factReservationHistory': {
+        if (!runtime.dateRange) {
+          throw new Error('factReservationHistory requires a date range in the configuration');
+        }
+        const start = Date.now();
+        logger?.info(
+          `📅 Densifying Fact_Reservation_History Mondays → sail_booking_monday (${runtime.dateRange.from}→${runtime.dateRange.to})`
+        );
+        const histResult = await syncFactReservationHistoryMondays({
+          synapseConfig: this.synapseConfig,
+          supabaseClient: supabaseDataService.client,
+          dateFrom: runtime.dateRange.from,
+          dateTo: runtime.dateRange.to,
+          logger,
+        });
+        const duration = Date.now() - start;
+        await SyncMetadataService.updateSyncMetadata(
+          supabaseDataService.client,
+          'fact_reservation_history',
+          null,
+          null,
+          histResult.upserted || 0,
+          0,
+          duration,
+          runtime.datasetName
+        );
+        return {
+          tableName: runtime.tableName,
+          success: true,
+          recordsProcessed: histResult.upserted || 0,
+          duration,
+          message: `Densified ${histResult.upserted || 0} sail×Monday rows from Fact_Reservation_History`,
+        };
       }
 
       case 'publishedRates': {

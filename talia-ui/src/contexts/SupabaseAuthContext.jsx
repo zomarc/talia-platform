@@ -47,7 +47,13 @@ export const SupabaseAuthProvider = ({ children }) => {
     || import.meta.env.VITE_ENABLE_DEV_MODE === 'true'
     || (supabaseIsLoopback && !pageIsLoopback);
 
-  const resolveUserRole = (email) => {
+  const resolveUserRole = (email, dbRole = null) => {
+    const fromDb = String(dbRole || '').trim().toUpperCase();
+    if (fromDb === 'SUPERUSER') return 'SUPER_USER';
+    if (['GUEST', 'USER', 'MANAGER', 'ADMIN', 'SUPER_USER'].includes(fromDb)) {
+      return fromDb;
+    }
+
     const normalizedEmail = String(email || '').toLowerCase().trim();
     if (!normalizedEmail) return 'USER';
     if (normalizedEmail === 'admin@talia.dev') return 'ADMIN';
@@ -186,6 +192,7 @@ export const SupabaseAuthProvider = ({ children }) => {
           id: supabaseUser.id,
           talia_user_id: taliaUserId,
           email: supabaseUser.email,
+          role: resolveUserRole(supabaseUser.email),
           last_login_at: new Date().toISOString()
         })
         .select()
@@ -243,7 +250,7 @@ export const SupabaseAuthProvider = ({ children }) => {
           
           if (!isMounted) return;
           
-          const userRole = resolveUserRole(session.user.email);
+          const userRole = resolveUserRole(session.user.email, taliaUser?.role);
           
           // Set role in localStorage for GraphQL context
           GraphQLUtils.setUserContext({

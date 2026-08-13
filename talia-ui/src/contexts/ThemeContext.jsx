@@ -253,7 +253,8 @@ export const ThemeProvider = ({ children }) => {
   const [tabInactiveIntensity, setTabInactiveIntensity] = useState(35);
   const [panelTitlesVisible, setPanelTitlesVisible] = useState(true);
   const [actionsVisible, setActionsVisible] = useState(true);
-  const [controlsVisible, setControlsVisible] = useState(true);
+  /** Panel operation controls (`talia-report__controls`) — opt-in; Views live in tab Options. */
+  const [controlsVisible, setControlsVisible] = useState(false);
   const [menuDisappearMs, setMenuDisappearMs] = useState(
     normalizeMenuDisappearMs(undefined, 5000)
   );

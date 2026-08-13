@@ -244,39 +244,47 @@ export const buildSellingSegmentSummaries = ({
   segments = [],
   guestsBySailCode,
   guaranteedCabinsBySailCode,
+  bookedGuestsBySailCode,
+  contractedGuestsBySailCode,
+  estimatedGuestsBySailCode,
 }) => {
   const masterCode = String(masterRow?.sail_code || '').trim();
   const summaries = [];
 
-  segments.forEach((segment) => {
-    const guests = guestsBySailCode.get(segment.sail_code) || 0;
-    const guaranteedCabins = guaranteedCabinsBySailCode?.get(segment.sail_code) || 0;
+  const pushSummary = (sailCode, base) => {
+    const guests = guestsBySailCode.get(sailCode) || 0;
+    const guaranteedCabins = guaranteedCabinsBySailCode?.get(sailCode) || 0;
     summaries.push({
-      sail_code: segment.sail_code,
+      sail_code: sailCode,
       guests,
       guaranteed_cabins: guaranteedCabins,
+      booked_guests: bookedGuestsBySailCode?.get(sailCode) ?? guests,
+      contracted_guests: contractedGuestsBySailCode?.get(sailCode) || 0,
+      estimated_guests: estimatedGuestsBySailCode?.get(sailCode) || 0,
       is_booking: guests > 0,
       is_active: true,
+      layer: 'selling',
+      ...base,
+    });
+  };
+
+  segments.forEach((segment) => {
+    pushSummary(segment.sail_code, {
       sail_date_from: segment.sail_date_from,
       sail_date_to: segment.sail_date_to,
-      layer: 'selling',
     });
   });
 
   const masterGuests = guestsBySailCode.get(masterCode) || 0;
-  const masterGuaranteedCabins = guaranteedCabinsBySailCode?.get(masterCode) || 0;
   if (masterGuests > 0 || summaries.length === 0) {
-    summaries.unshift({
-      sail_code: masterCode,
-      guests: masterGuests,
-      guaranteed_cabins: masterGuaranteedCabins,
-      is_booking: masterGuests > 0,
-      is_active: true,
+    pushSummary(masterCode, {
       sail_date_from: masterRow?.sail_date_from,
       sail_date_to: masterRow?.sail_date_to,
-      layer: 'selling',
       is_master: true,
     });
+    // move master to front
+    const masterSummary = summaries.pop();
+    summaries.unshift(masterSummary);
   }
 
   return summaries;
@@ -389,13 +397,26 @@ const resolveMasterPhysicalTotals = ({
 export const guestsAndGuaranteedFromBookingSummary = (summaryRows = []) => {
   const guestsBySailCode = new Map();
   const guaranteedCabinsBySailCode = new Map();
+  const bookedGuestsBySailCode = new Map();
+  const contractedGuestsBySailCode = new Map();
+  const estimatedGuestsBySailCode = new Map();
   asArray(summaryRows).forEach((row) => {
     const sailCode = String(row?.sail_code || '').trim();
     if (!sailCode) return;
-    guestsBySailCode.set(sailCode, toNumber(row?.guest_count));
+    const booked = toNumber(row?.booked_guests ?? row?.guest_count);
+    guestsBySailCode.set(sailCode, booked);
+    bookedGuestsBySailCode.set(sailCode, booked);
+    contractedGuestsBySailCode.set(sailCode, toNumber(row?.contracted_guests));
+    estimatedGuestsBySailCode.set(sailCode, toNumber(row?.estimated_guests));
     guaranteedCabinsBySailCode.set(sailCode, toNumber(row?.guaranteed_cabins));
   });
-  return { guestsBySailCode, guaranteedCabinsBySailCode };
+  return {
+    guestsBySailCode,
+    guaranteedCabinsBySailCode,
+    bookedGuestsBySailCode,
+    contractedGuestsBySailCode,
+    estimatedGuestsBySailCode,
+  };
 };
 
 export const buildMasterSailingExplorerBundle = ({
@@ -424,6 +445,9 @@ export const buildMasterSailingExplorerBundle = ({
   const guaranteedCabinsBySailCode = summaryMaps
     ? summaryMaps.guaranteedCabinsBySailCode
     : buildGuaranteedCabinsBySailCode(reservationRows);
+  const bookedGuestsBySailCode = summaryMaps?.bookedGuestsBySailCode || guestsBySailCode;
+  const contractedGuestsBySailCode = summaryMaps?.contractedGuestsBySailCode || new Map();
+  const estimatedGuestsBySailCode = summaryMaps?.estimatedGuestsBySailCode || new Map();
   const berthIndex = shipDayBerthRows?.length
     ? buildPhysicalBerthsFromShipDayRows(shipDayBerthRows)
     : new Map();
@@ -446,6 +470,9 @@ export const buildMasterSailingExplorerBundle = ({
       segments,
       guestsBySailCode,
       guaranteedCabinsBySailCode,
+      bookedGuestsBySailCode,
+      contractedGuestsBySailCode,
+      estimatedGuestsBySailCode,
     });
     const dayDetails = buildDayDetailsForMaster({
       masterRow,
@@ -463,6 +490,15 @@ export const buildMasterSailingExplorerBundle = ({
 
     const selling_guests_total = segmentSummaries.reduce((sum, s) => sum + (s.guests || 0), 0);
     const guaranteed_cabins = segmentSummaries.reduce((sum, s) => sum + (s.guaranteed_cabins || 0), 0);
+    const booked_guests = Math.round(
+      segmentSummaries.reduce((sum, s) => sum + (s.booked_guests || 0), 0)
+    );
+    const contracted_guests = Math.round(
+      segmentSummaries.reduce((sum, s) => sum + (s.contracted_guests || 0), 0)
+    );
+    const estimated_guests = Math.round(
+      segmentSummaries.reduce((sum, s) => sum + (s.estimated_guests || 0), 0) * 10
+    ) / 10;
     const actual_booked_pct = physicalTotals.total_cabins > 0
       ? (physicalTotals.booked_cabins / physicalTotals.total_cabins) * 100
       : null;
@@ -486,6 +522,9 @@ export const buildMasterSailingExplorerBundle = ({
       booked_cabins: physicalTotals.booked_cabins,
       available_cabins: physicalTotals.available_cabins,
       guaranteed_cabins: Math.round(guaranteed_cabins),
+      booked_guests,
+      contracted_guests,
+      estimated_guests,
       actual_booked_pct,
       potential_booked_pct,
       booking_upside_pct,

@@ -10,6 +10,11 @@ import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import { formatDayMon } from './dateFormat';
 import { normalizeColumnHeaderAlignment } from './tabulatorColumnAlignment';
 import { observeTabulatorFieldTerminology, resolveGlobalTabulatorLabel } from './tabulatorColumnLabelDictionary';
+export {
+  withColumnTotal,
+  formatColumnTotalInteger,
+  formatColumnTotalNumber,
+} from './tabulatorColumnTotals';
 import {
   DASHBOARD_DETAILS_VISIBILITY_EVENT,
   DASHBOARD_GLOBAL_CONFIG_EVENT,
@@ -247,11 +252,105 @@ export const runWithPreservedTableScroll = (table, refreshFn) => {
   return result;
 };
 
+/** Fit-data modes only sample visible / 1 rows natively — expand from the first N rows. */
+const FIT_DATA_SAMPLE_ROWS = 100;
+const FIT_DATA_MAX_COL_WIDTH = 480;
+
+const isFitDataLayout = (layout) => String(layout || '').startsWith('fitData');
+
+/**
+ * Materialize the first N display rows (with nowrap) so Tabulator fitToData
+ * sees synthetic badges / long IDs that may not be in the initial viewport sample.
+ */
+const sampleFitDataColumnWidths = (table, sampleSize = FIT_DATA_SAMPLE_ROWS) => {
+  if (!table || !isFitDataLayout(table.options?.layout)) return;
+
+  const displayRows = typeof table.rowManager?.getDisplayRows === 'function'
+    ? table.rowManager.getDisplayRows()
+    : [];
+  const rows = displayRows
+    .filter((row) => row && row.type !== 'group')
+    .slice(0, sampleSize);
+  if (!rows.length) return;
+
+  const tableElement = table.rowManager?.tableElement;
+  const host = table.element;
+  if (!tableElement || !host) return;
+
+  host.classList.add('tabulator--fit-sampling');
+  const staged = [];
+
+  try {
+    rows.forEach((row) => {
+      try {
+        row.generateCells?.();
+        const rowEl = row.getElement?.();
+        if (!rowEl) return;
+        if (rowEl.parentNode) return; // already rendered / measurable in place
+        (row.cells || []).forEach((cell) => {
+          const cellEl = cell.getElement?.();
+          if (cellEl && !cellEl.parentNode) rowEl.appendChild(cellEl);
+        });
+        tableElement.appendChild(rowEl);
+        staged.push(rowEl);
+      } catch {
+        // ignore individual row measure failures
+      }
+    });
+
+    const columns = Array.isArray(table.columnManager?.columnsByIndex)
+      ? table.columnManager.columnsByIndex
+      : [];
+    const visible = columns.filter((column) => column?.visible);
+    const stretchLast = table.options?.layout === 'fitDataStretch'
+      ? visible[visible.length - 1]
+      : null;
+
+    visible.forEach((column) => {
+      if (column === stretchLast) return;
+      try {
+        column.reinitializeWidth?.(true);
+        const width = column.getWidth?.() || 0;
+        if (width > FIT_DATA_MAX_COL_WIDTH) {
+          column.setWidth?.(FIT_DATA_MAX_COL_WIDTH);
+        }
+      } catch {
+        // noop
+      }
+    });
+
+    if (stretchLast) {
+      try {
+        const tableWidth = table.rowManager?.element?.clientWidth || 0;
+        const colsWidth = visible.reduce((sum, column) => sum + (column.getWidth?.() || 0), 0);
+        const gap = tableWidth - colsWidth + (stretchLast.getWidth?.() || 0);
+        if (gap > (stretchLast.getWidth?.() || 0)) {
+          stretchLast.setWidth?.(gap);
+        } else {
+          stretchLast.reinitializeWidth?.(true);
+        }
+      } catch {
+        // noop
+      }
+    }
+  } finally {
+    staged.forEach((el) => {
+      try {
+        el.parentNode?.removeChild(el);
+      } catch {
+        // noop
+      }
+    });
+    host.classList.remove('tabulator--fit-sampling');
+  }
+};
+
 /** One-pass layout refresh; preserve scroll without a second rAF redraw (that caused pixel bounce). */
 const refreshTableLayout = (table) => {
   if (!table) return;
   const snapshot = captureTableScroll(table);
   table.layoutRefresh?.(true);
+  sampleFitDataColumnWidths(table);
   table.redraw?.(true);
   restoreTableScroll(snapshot);
 };

@@ -552,7 +552,7 @@ const CabinDeckInventoryPresenter = ({
       </header>
 
       {hasSailSelection && (
-        <div className="talia-report__controls" aria-label="Cabin deck inventory controls">
+        <div className="talia-report__actions-bar" aria-label="Cabin deck view">
           <button
             type="button"
             className={`talia-btn ${compactBlocks ? 'talia-btn--primary' : 'talia-btn--secondary'}`}

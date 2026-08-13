@@ -52,7 +52,7 @@ export const getDashboardGlobalConfig = () => {
       calloutsVisible: false,
       chartLegendsVisible: true,
       actionsVisible: true,
-      controlsVisible: true,
+      controlsVisible: false,
       viewScope: 'local',
       criteria: null,
       activePanelId: null,

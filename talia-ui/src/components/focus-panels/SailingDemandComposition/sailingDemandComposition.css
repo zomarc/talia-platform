@@ -1,0 +1,57 @@
+.sailing-demand__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 8px 12px 12px;
+}
+
+.sailing-demand__card {
+  border: 1px solid var(--theme-border, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--theme-surface, #1a1f2a) 88%, transparent);
+}
+
+.sailing-demand__card-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.sailing-demand__card-sub {
+  margin: 4px 0 10px;
+  font-size: 0.75rem;
+  opacity: 0.75;
+}
+
+.sailing-demand__metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  margin: 0;
+}
+
+.sailing-demand__metrics dt {
+  margin: 0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.65;
+}
+
+.sailing-demand__metrics dd {
+  margin: 2px 0 0;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.sailing-demand__tomorrow {
+  margin: 0 12px 12px;
+}
+
+@media (max-width: 900px) {
+  .sailing-demand__grid {
+    grid-template-columns: 1fr;
+  }
+}

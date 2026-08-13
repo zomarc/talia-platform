@@ -69,8 +69,9 @@ export const tableSources = {
     syncType: 'cabin_availability'
   },
   reservation: {
-    // Identity/status from RES_HEADER; EUR ticket revenue enriched from dwh.Fact_Reservation.
-    // Weekly Monday snapshots: dwh.Fact_Reservation_History (not Fact_Reservation_daily).
+    // Point-in-time named bookings from RES_HEADER. Fact_Reservation enriches probs/EUR
+    // and supplies synthetic group-OF res_ids (source_origin=fact_group_alloc) post-sync.
+    // Weekly Mondays: dwh.Fact_Reservation_History → sail_booking_monday (not Fact_Reservation_daily).
     source: 'stg.RES_HEADER',
     type: 'direct',
     isLargeDataset: true, // Uses batch loading
@@ -90,16 +91,26 @@ export const tableSources = {
     syncType: 'sail_by_cabin_occupancy'
   },
   reservation_changes: {
-    source: 'fou.Fact_Reservation_daily',
+    // Snapshot deltas for profiles (RES_HEADER_SNAPSHOT). Do not use Fact_Reservation_daily.
+    source: 'stg.RES_HEADER_SNAPSHOT',
     type: 'derived',
     dateColumns: ['snapshot_date'],
     syncType: 'reservation_changes'
   },
   reservation_current_state: {
-    source: 'fou.Fact_Reservation_daily',
+    // Latest snapshot state derived with reservation_changes (not Fact_Reservation_daily).
+    source: 'stg.RES_HEADER_SNAPSHOT',
     type: 'derived',
     dateColumns: ['snapshot_date'],
     syncType: 'reservation_changes' // Shares sync metadata with reservation_changes
+  },
+  sail_booking_monday: {
+    // Monday densify from dwh.Fact_Reservation_History (WC_Snapshot_Date).
+    source: 'dwh.Fact_Reservation_History',
+    type: 'derived',
+    dateColumns: ['snapshot_date'],
+    syncType: 'fact_reservation_history',
+    loadMethod: 'Derived densify (sail × Monday Booked/Contracted/Estimated)'
   },
   published_rates: {
     source: 'fou.GQL_PUBLISHED_RATES',
@@ -279,11 +290,11 @@ export const tableSources = {
     loadMethod: 'View (physical berths + cabins)'
   },
   sail_booking_summary: {
-    source: null,
+    source: 'public.reservation',
     type: 'application',
     dateColumns: [],
     syncType: null,
-    loadMethod: 'View (sail-level booking densify)'
+    loadMethod: 'View (sail-level Booked/Contracted/Estimated densify)'
   },
   sailing_physical_day_map: {
     source: null,

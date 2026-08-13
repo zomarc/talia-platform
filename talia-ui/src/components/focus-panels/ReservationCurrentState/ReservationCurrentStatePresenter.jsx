@@ -10,7 +10,7 @@
  */
 
 import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react';
-import { initTabulator, getTabulatorOptions, captureTableScroll } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions, captureTableScroll, withColumnTotal } from '../../../lib/tabulatorConfig';
 import { afterTabulatorDataRefresh } from '../../../hooks/useTabulatorLayoutSync';
 import { formatDayMon, formatSailDateRange } from '../../../lib/dateFormat';
 import { clipAnchorRectToViewport } from '../../../lib/clipAnchorRect';
@@ -83,26 +83,37 @@ const ReservationCurrentStatePresenter = ({
 
   // Column definitions using Tabulator's native features
   const columns = useMemo(() => ([
-    { 
-      field: "res_id", 
+    withColumnTotal({
+      field: "res_id",
       title: "Res ID",
-      width: 110,
+      // Floor for 12-digit id + SYN badge + history count (fixed width is stripped in global fit).
+      minWidth: 176,
       headerFilter: "input",
       formatter: (cell) => {
         const value = cell.getValue();
         const rowData = cell.getRow()?.getData?.() || {};
         const resId = value ? Math.floor(value).toString() : '';
+        const origin = String(rowData.source_origin || '').trim();
+        const synthetic = origin === 'fact_group_alloc'
+          || (rowData.group_id != null
+            && resId
+            && String(resId).startsWith(String(rowData.group_id))
+            && String(resId).length >= String(rowData.group_id).length + 4
+            && ['OF', 'OPTION', 'QT', 'QUOTE'].includes(String(rowData.res_status || '').toUpperCase()));
         // Rich HoverPreview replaces native title tooltips (avoid double tooltips).
         const historyCount = Number.parseInt(rowData.history_count, 10) || 0;
+        const synBadge = synthetic
+          ? '<span class="reservation-current-state__synthetic-badge" title="Synthetic group-OF res_id">SYN</span>'
+          : '';
         if (!historyCount) {
-          return `<span class="reservation-current-state__res-id-cell">${resId}</span>`;
+          return `<span class="reservation-current-state__res-id-cell">${resId}</span>${synBadge}`;
         }
         const intensityClass = historyCount >= 5
           ? 'reservation-current-state__history-count--5'
           : `reservation-current-state__history-count--${historyCount}`;
-        return `<span class="reservation-current-state__res-id-cell">${resId}</span><span class="reservation-current-state__history-count ${intensityClass}" title="${historyCount} history records">${historyCount}</span>`;
+        return `<span class="reservation-current-state__res-id-cell">${resId}</span>${synBadge}<span class="reservation-current-state__history-count ${intensityClass}" title="${historyCount} history records">${historyCount}</span>`;
       }
-    },
+    }, 'count'),
     { 
       field: "res_status", 
       title: "Status",
@@ -111,6 +122,19 @@ const ReservationCurrentStatePresenter = ({
       headerFilterParams: {
         valuesLookup: true
       }
+    },
+    {
+      field: "source_origin",
+      title: "Origin",
+      width: 100,
+      headerFilter: "autocomplete",
+      headerFilterParams: { valuesLookup: true },
+      formatter: (cell) => {
+        const value = String(cell.getValue() || '').trim();
+        if (value === 'fact_group_alloc') return 'Synthetic';
+        if (value === 'res_header') return 'Header';
+        return value || '';
+      },
     },
     { 
       field: "sail_from_date", 
@@ -130,8 +154,8 @@ const ReservationCurrentStatePresenter = ({
         valuesLookup: true
       }
     },
-    { 
-      field: "guest_count", 
+    withColumnTotal({
+      field: "guest_count",
       title: "Guest Count",
       hozAlign: "right",
       headerFilter: "number",
@@ -145,9 +169,9 @@ const ReservationCurrentStatePresenter = ({
           maximumFractionDigits: 2
         });
       }
-    },
-    { 
-      field: "gross_selling_fare", 
+    }, 'sum', { precision: 1 }),
+    withColumnTotal({
+      field: "gross_selling_fare",
       title: "Gross Selling Fare",
       hozAlign: "right",
       headerFilter: "number",
@@ -155,9 +179,9 @@ const ReservationCurrentStatePresenter = ({
         const value = cell.getValue();
         return value ? parseFloat(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
       }
-    },
-    { 
-      field: "net_selling_fare", 
+    }, 'sum', { precision: 2 }),
+    withColumnTotal({
+      field: "net_selling_fare",
       title: "Net Selling Fare",
       hozAlign: "right",
       headerFilter: "number",
@@ -165,9 +189,9 @@ const ReservationCurrentStatePresenter = ({
         const value = cell.getValue();
         return value ? parseFloat(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
       }
-    },
-    { 
-      field: "net_ticket_revenue_eur", 
+    }, 'sum', { precision: 2 }),
+    withColumnTotal({
+      field: "net_ticket_revenue_eur",
       title: "Net Revenue (EUR)",
       hozAlign: "right",
       headerFilter: "number",
@@ -175,7 +199,7 @@ const ReservationCurrentStatePresenter = ({
         const value = cell.getValue();
         return value ? parseFloat(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
       }
-    },
+    }, 'sum', { precision: 2 }),
     { 
       field: "agency_id", 
       title: "Agency ID",
@@ -515,8 +539,27 @@ const ReservationCurrentStatePresenter = ({
           className={`talia-btn ${statusFilter === 'booked' ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
           aria-pressed={statusFilter === 'booked'}
           onClick={() => onStatusFilterChange?.('booked')}
+          title="Named / materialised bookings only"
         >
           Booked
+        </button>
+        <button
+          type="button"
+          className={`talia-btn ${statusFilter === 'estimated' ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+          aria-pressed={statusFilter === 'estimated'}
+          onClick={() => onStatusFilterChange?.('estimated')}
+          title="Named booked plus expected groups and offers"
+        >
+          Estimated
+        </button>
+        <button
+          type="button"
+          className={`talia-btn ${statusFilter === 'synthetic' ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+          aria-pressed={statusFilter === 'synthetic'}
+          onClick={() => onStatusFilterChange?.('synthetic')}
+          title="Warehouse synthetic group-OF res_id rows only"
+        >
+          Synthetic
         </button>
         <button
           type="button"

@@ -12,17 +12,11 @@ const ACTIVE_RES_SAIL_TO_COLUMN = 'SAIL_DATE_TO';
 
 const resolveReservationSourceColumns = (source = '') => {
   const normalized = String(source || '').toLowerCase();
+  // Fact_Reservation_daily is unreliable — never use its column map.
   if (normalized.includes('fact_reservation_daily')) {
-    return {
-      resId: 'Res_ID',
-      sailFromDate: 'Sail_From_Date',
-      sailToDate: 'Sail_To_Date',
-      snapshotDate: 'Snapshot_Date',
-      sailCode: 'Sail_code',
-      agencyId: 'Agency_ID',
-      groupId: 'Group_ID',
-      guestCount: 'Guest_Count'
-    };
+    throw new Error(
+      'fou.Fact_Reservation_daily is not supported. Use stg.RES_HEADER_SNAPSHOT for changes, dwh.Fact_Reservation_History (Mondays) for over-time, and dwh.Fact_Reservation for synthetic group-OF.'
+    );
   }
   return {
     resId: 'RES_ID',

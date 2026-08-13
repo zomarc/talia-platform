@@ -808,6 +808,8 @@ const THEME_REGISTRY_SETTING_KEY = 'theme_registry';
 const THEME_ASSET_OVERRIDES_SETTING_KEY = 'theme_asset_overrides';
 const COLUMN_TERMINOLOGY_DEFINITIONS_KEY = 'column_terminology_definitions';
 const USER_PROFILE_CATEGORY = 'ui_profile';
+const ROLE_CRITERIA_KEY_PREFIX = 'role_criteria:';
+const ROLE_COMPONENT_OPS_KEY_PREFIX = 'role_component_ops:';
 const GAME_SETTINGS_CATEGORY = 'ui_game';
 const DEFAULT_GAME_ID = 'breakout';
 const INTEGRATIONS_CATEGORY = 'integrations';
@@ -822,6 +824,29 @@ const gameSettingKey = (base: string, userId?: string | null) =>
 const normalizeGameId = (value: any) => String(value || DEFAULT_GAME_ID).trim().toLowerCase();
 const normalizeUserId = (value: any) => String(value || 'dev-user-1').trim();
 const userProfileStateKey = (userId: string) => `state:${normalizeUserId(userId)}`;
+const normalizeRoleKey = (value: any) => {
+  const role = String(value || 'USER').trim().toUpperCase();
+  if (role === 'SUPERUSER') return 'SUPER_USER';
+  return role || 'USER';
+};
+const roleCriteriaKey = (role: string) => `${ROLE_CRITERIA_KEY_PREFIX}${normalizeRoleKey(role)}`;
+const roleComponentOpsKey = (role: string) => `${ROLE_COMPONENT_OPS_KEY_PREFIX}${normalizeRoleKey(role)}`;
+
+const asPlainObject = (raw: any) => (
+  raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
+);
+
+/** Role baseline + user deltas; adminOverride (if present) wins entirely for criteria. */
+const mergeEffectiveCriteria = (roleCriteria: any, userState: any) => {
+  const role = asPlainObject(roleCriteria);
+  const state = asPlainObject(userState);
+  const override = asPlainObject(state.adminCriteriaOverride);
+  if (Object.keys(override).length > 0) {
+    return { ...role, ...override };
+  }
+  const deltas = asPlainObject(state.globalCriteria);
+  return { ...role, ...deltas };
+};
 
 const gameScoreKey = (gameId: string, userId: string) => `score:${normalizeGameId(gameId)}:${normalizeUserId(userId)}`;
 
@@ -2665,6 +2690,45 @@ export const resolvers = {
       }
     },
 
+    roleCriteria: async (_parent: any, args: any) => {
+      const role = normalizeRoleKey(args?.role);
+      try {
+        return asPlainObject(
+          await configService.getSetting(USER_PROFILE_CATEGORY, roleCriteriaKey(role))
+        );
+      } catch (error: any) {
+        console.error('Error getting role criteria:', error);
+        return {};
+      }
+    },
+
+    roleComponentOps: async (_parent: any, args: any) => {
+      const role = normalizeRoleKey(args?.role);
+      try {
+        return asPlainObject(
+          await configService.getSetting(USER_PROFILE_CATEGORY, roleComponentOpsKey(role))
+        );
+      } catch (error: any) {
+        console.error('Error getting role component ops:', error);
+        return {};
+      }
+    },
+
+    effectiveGlobalCriteria: async (_parent: any, args: any) => {
+      const uid = normalizeUserId(args?.userId);
+      const role = normalizeRoleKey(args?.role);
+      try {
+        const [roleCriteria, userState] = await Promise.all([
+          configService.getSetting(USER_PROFILE_CATEGORY, roleCriteriaKey(role)),
+          configService.getSetting(USER_PROFILE_CATEGORY, userProfileStateKey(uid)),
+        ]);
+        return mergeEffectiveCriteria(roleCriteria, userState);
+      } catch (error: any) {
+        console.error('Error getting effective global criteria:', error);
+        return {};
+      }
+    },
+
     breakoutScore: async (parent: any, args: any) => {
       const uid = normalizeUserId(args.userId);
       try {
@@ -4247,13 +4311,26 @@ export const resolvers = {
           userId: uid,
           updatedAt: new Date().toISOString()
         };
+        // Deep-merge nested maps when present so componentOptions patches do not wipe siblings.
+        if (patch.componentOptions && typeof patch.componentOptions === 'object') {
+          merged.componentOptions = {
+            ...asPlainObject(current.componentOptions),
+            ...asPlainObject(patch.componentOptions),
+          };
+        }
+        if (patch.globalCriteria && typeof patch.globalCriteria === 'object') {
+          merged.globalCriteria = {
+            ...asPlainObject(current.globalCriteria),
+            ...asPlainObject(patch.globalCriteria),
+          };
+        }
         await configService.upsertSetting(
           USER_PROFILE_CATEGORY,
           userProfileStateKey(uid),
           merged,
           {
             displayName: `UI User Profile State (${uid})`,
-            description: 'User-scoped UI state (focus, criteria, high-score snapshot)'
+            description: 'User-scoped UI state (focus, criteria, component options, high-score snapshot)'
           }
         );
         return merged;
@@ -4261,6 +4338,84 @@ export const resolvers = {
         console.error('Error saving user profile state:', error);
         throw new Error(`Failed to save user profile state: ${error.message}`);
       }
+    },
+
+    saveRoleCriteria: async (_parent: any, args: any, context: any) => {
+      const requesterRole = normalizeRoleKey(context?.user?.role || context?.role);
+      if (requesterRole !== 'ADMIN' && requesterRole !== 'SUPER_USER') {
+        throw new Error('Only Admin can save role criteria');
+      }
+      const role = normalizeRoleKey(args?.role);
+      const criteria = asPlainObject(args?.criteria);
+      const stamped = {
+        ...criteria,
+        role,
+        updatedAt: new Date().toISOString(),
+      };
+      await configService.upsertSetting(
+        USER_PROFILE_CATEGORY,
+        roleCriteriaKey(role),
+        stamped,
+        {
+          displayName: `Role global criteria (${role})`,
+          description: 'Baseline global criteria always applied for users with this role',
+        }
+      );
+      return stamped;
+    },
+
+    saveRoleComponentOps: async (_parent: any, args: any, context: any) => {
+      const requesterRole = normalizeRoleKey(context?.user?.role || context?.role);
+      if (requesterRole !== 'ADMIN' && requesterRole !== 'SUPER_USER') {
+        throw new Error('Only Admin can save role component operations');
+      }
+      const role = normalizeRoleKey(args?.role);
+      const ops = asPlainObject(args?.ops);
+      const stamped = {
+        ...ops,
+        role,
+        updatedAt: new Date().toISOString(),
+      };
+      await configService.upsertSetting(
+        USER_PROFILE_CATEGORY,
+        roleComponentOpsKey(role),
+        stamped,
+        {
+          displayName: `Role component operations (${role})`,
+          description: 'Which Operations capabilities are allowed for this role per component',
+        }
+      );
+      return stamped;
+    },
+
+    saveUserCriteriaOverride: async (_parent: any, args: any, context: any) => {
+      const requesterRole = normalizeRoleKey(context?.user?.role || context?.role);
+      if (requesterRole !== 'ADMIN' && requesterRole !== 'SUPER_USER') {
+        throw new Error('Only Admin can override user criteria');
+      }
+      const uid = normalizeUserId(args?.userId);
+      const criteria = asPlainObject(args?.criteria);
+      const locked = args?.locked === true;
+      const current = normalizeUserProfileState(
+        await configService.getSetting(USER_PROFILE_CATEGORY, userProfileStateKey(uid))
+      );
+      const merged = {
+        ...current,
+        userId: uid,
+        adminCriteriaOverride: criteria,
+        adminCriteriaLocked: locked,
+        updatedAt: new Date().toISOString(),
+      };
+      await configService.upsertSetting(
+        USER_PROFILE_CATEGORY,
+        userProfileStateKey(uid),
+        merged,
+        {
+          displayName: `UI User Profile State (${uid})`,
+          description: 'User-scoped UI state including admin criteria override',
+        }
+      );
+      return merged;
     },
 
     saveBreakoutScore: async (parent: any, args: any) => {

@@ -9,7 +9,9 @@
  */
 export const normalizeRole = (role) => {
   if (!role) return 'USER';
-  return role.toUpperCase();
+  const normalized = String(role).toUpperCase();
+  if (normalized === 'SUPERUSER') return 'SUPER_USER';
+  return normalized;
 };
 
 /**
@@ -51,6 +53,16 @@ export const canAccessPrivilegedPanels = (role) => {
 };
 
 /**
+ * Admin/Dev can configure Operations (enable/disable capability chrome) in tab Options.
+ * End users do not see this control surface.
+ * @param {string} role
+ * @returns {boolean}
+ */
+export const canConfigureComponentOperations = (role) => {
+  return isAdmin(role) || isSuperUser(role);
+};
+
+/**
  * Check if user has required role or higher
  * @param {string} userRole - User's role
  * @param {string} requiredRole - Required role
@@ -58,15 +70,17 @@ export const canAccessPrivilegedPanels = (role) => {
  */
 export const hasRole = (userRole, requiredRole) => {
   const roleHierarchy = {
-    'GUEST': 0,
-    'USER': 1,
-    'MANAGER': 2,
-    'ADMIN': 3
+    GUEST: 0,
+    USER: 1,
+    MANAGER: 2,
+    ADMIN: 3,
+    SUPER_USER: 4,
+    SUPERUSER: 4,
   };
-  
+
   const userLevel = roleHierarchy[normalizeRole(userRole)] || 0;
   const requiredLevel = roleHierarchy[normalizeRole(requiredRole)] || 0;
-  
+
   return userLevel >= requiredLevel;
 };
 
@@ -81,4 +95,3 @@ export const canEditTaliaIntel = (role) => {
   if (r === 'SUPER_USER' || r === 'SUPERUSER') return true;
   return hasRole(role, 'MANAGER');
 };
-

@@ -79,13 +79,37 @@ const ReservationBookingCurvePresenter = ({
       chartInstanceRef.current = null;
     }
 
-    const labels =
-      data.totals?.map((p) => p.weekLabel) ||
-      data.series?.[0]?.points?.map((p) => p.weekLabel) ||
-      [];
+    const contractSeries = Array.isArray(data.contractSeries) ? data.contractSeries : [];
+    const useContractDemo = contractSeries.length > 0;
+    const labels = useContractDemo
+      ? (contractSeries[0]?.points?.map((p) => p.weekLabel) || [])
+      : (
+        data.totals?.map((p) => p.weekLabel) ||
+        data.series?.[0]?.points?.map((p) => p.weekLabel) ||
+        []
+      );
     const series = Array.isArray(data.series) ? data.series : [];
-    const datasets =
-      series.length > 0
+    const contractColors = {
+      Booked: '#3b82f6',
+      Estimated: '#f59e0b',
+      Contracted: '#94a3b8',
+    };
+    const datasets = useContractDemo
+      ? contractSeries.map((s) => {
+          const color = contractColors[s.dimensionKey] || colorForDimensionKey(s.dimensionKey);
+          return {
+            label: s.dimensionKey,
+            data: (s.points || []).map((p) => p.guests ?? p.bookings ?? 0),
+            borderColor: color,
+            backgroundColor: withAlpha(color, '22'),
+            fill: false,
+            tension: 0.2,
+            pointRadius: 2,
+            pointHoverRadius: 4,
+            borderWidth: 2,
+          };
+        })
+      : series.length > 0
         ? series.map((s) => {
             const color = colorForDimensionKey(s.dimensionKey);
             return {
@@ -119,9 +143,13 @@ const ReservationBookingCurvePresenter = ({
     const peakBookings = Math.max(
       0,
       ...(data.totals || []).map((p) => Number(p.bookings) || 0),
-      ...(series.flatMap((s) => (s.points || []).map((p) => Number(p.bookings) || 0)))
+      ...(series.flatMap((s) => (s.points || []).map((p) => Number(p.bookings) || 0))),
+      ...(contractSeries.flatMap((s) => (s.points || []).map((p) => Number(p.guests ?? p.bookings) || 0)))
     );
-    const todayIndex = resolveTodayWeekIndex(data.totals || [], data.daysUntilSailing);
+    const todayIndex = resolveTodayWeekIndex(
+      useContractDemo ? (contractSeries[0]?.points || []) : (data.totals || []),
+      data.daysUntilSailing
+    );
 
     chartInstanceRef.current = new Chart(ctx, {
       type: 'line',
@@ -148,14 +176,16 @@ const ReservationBookingCurvePresenter = ({
             callbacks: {
               footer: (items) => {
                 const total = items.reduce((sum, it) => sum + (Number(it.raw) || 0), 0);
-                return `Total ${total.toLocaleString()} bookings`;
+                return useContractDemo
+                  ? `Sum ${total.toLocaleString()} guests`
+                  : `Total ${total.toLocaleString()} bookings`;
               },
             },
           },
         },
         scales: {
           x: {
-            stacked: true,
+            stacked: !useContractDemo,
             ticks: {
               maxRotation: 0,
               autoSkip: true,
@@ -165,12 +195,12 @@ const ReservationBookingCurvePresenter = ({
             grid: { display: false },
           },
           y: {
-            stacked: true,
+            stacked: !useContractDemo,
             beginAtZero: true,
             suggestedMax: hasCapacity ? Math.max(capacity, peakBookings) * 1.05 : undefined,
             title: {
               display: true,
-              text: 'Cumulative bookings',
+              text: useContractDemo ? 'Guests (Monday snapshots)' : 'Cumulative bookings',
               font: { size: 11, family: fontFamily },
             },
             ticks: { font: { size: 10, family: fontFamily } },
@@ -234,8 +264,26 @@ const ReservationBookingCurvePresenter = ({
 
   const metrics = [
     {
-      key: 'booked',
+      key: 'booked-guests',
       label: 'Booked',
+      value: fmt(data?.bookedGuests),
+      hint: 'real guests',
+    },
+    {
+      key: 'estimated-guests',
+      label: 'Estimated',
+      value: fmt(data?.estimatedGuests, 1),
+      hint: 'contr × prob',
+    },
+    {
+      key: 'contracted-guests',
+      label: 'Contracted',
+      value: fmt(data?.contractedGuests),
+      hint: 'group OF face',
+    },
+    {
+      key: 'booked',
+      label: 'Bk C',
       value: fmt(data?.bookedCabins),
       hint: 'MSE cabins',
     },
@@ -321,6 +369,12 @@ const ReservationBookingCurvePresenter = ({
           <span className="talia-report-filters__label">Competitor</span>
         </label>
       </div>
+
+      {data?.contractMessage ? (
+        <div className="talia-callout booking-profile__callout" role="status">
+          {data.contractMessage}
+        </div>
+      ) : null}
 
       {data?.missingBookDates > 0 ? (
         <div className="talia-callout booking-profile__callout" role="status">

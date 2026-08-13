@@ -52,7 +52,7 @@ const ComponentName = ({ data, theme, onRefresh }) => {
 
 Every focus-panel report uses the same **shell elements**. Use the standard CSS classes so global header visibility toggles work without per-panel logic.
 
-**Do not call panel filter rows “Controls”.** In Talia vocabulary, `.talia-report-filters` are report/application filters, while panel operations belong in `.talia-report__controls` + `.talia-report__actions-bar` and are governed together by the **Operations** visibility toggle.
+**Do not call panel filter rows “Controls”.** In Talia vocabulary, `.talia-report-filters` are report/application filters. **Views** (Nested/Flat, Details, …) are non-restrictive per-component prefs via tab **Options**. **Operations** (filters, allocate, …) are role-gated; Admin configures them — end users do not see that Options section. In-panel `.talia-report__controls` / `.talia-report__actions-bar` follow those Options.
 
 ```
 ┌─ .talia-report ─────────────────────────────────────────────┐
@@ -66,7 +66,7 @@ Every focus-panel report uses the same **shell elements**. Use the standard CSS 
 ├─────────────────────────────────────────────────────────────┤
 │ .talia-report__controls (0+)                                │
 ├─────────────────────────────────────────────────────────────┤
-│ .talia-report__actions-bar             [Operations toggle]  │
+│ .talia-report__actions-bar             [Actions / Ops]      │
 ├─────────────────────────────────────────────────────────────┤
 │ section.talia-report__snapshot (0|1)   [pinned KPIs]        │
 │   (flex-shrink: 0 — does not scroll)                        │
@@ -78,7 +78,7 @@ Every focus-panel report uses the same **shell elements**. Use the standard CSS 
 │   (.tabulator-header-filter = Column filters toggle)        │
 └─────────────────────────────────────────────────────────────┘
 
-StatusBar global criteria / focus / visibility strips are independent of **Operations**
+StatusBar global criteria / focus / visibility strips are independent of per-component Options.
 (each has its own header toggle). Only panel `.talia-report__controls` hides under
 `talia-controls-hidden`.
 ```
@@ -92,11 +92,12 @@ StatusBar global criteria / focus / visibility strips are independent of **Opera
 | **Talia filters** | Application-level filter row in report shell (not panel controls) | `.talia-report-filters` (+ `__group`, `__label`, `__input`) | **Filters** | `localStorage` `taliaHeaderFiltersVisible` |
 | **Column filters** | Native Tabulator column header filters | `headerFilter` columns → `.tabulator-header-filter` | **Column filters** | `localStorage` `taliaHeaderTabulatorFiltersVisible` |
 | **Callout** | Extra informational note / guidance (usually hidden) | `.talia-callout` | **Callouts** | Appearance profile `calloutsVisible` |
-| **Controls** | In-panel operation controls (Expand/Collapse, view modes, group toggles) | panel `.talia-report__controls` | *(with Operations)* | Appearance profile `controlsVisible` |
-| **Actions** | Panel operation actions (Refresh, Export, …) | `.talia-report__actions-bar` (preferred); legacy compact: `.talia-report__actions` in header | **Operations** | Appearance profile `actionsVisible` |
+| **Controls** | In-panel view/ops chrome (Expand/Collapse, Nested/Flat, …) | panel `.talia-report__controls` | Tab **Options** (Views) | User profile `componentOptions` |
+| **Actions** | Panel actions (Refresh, product Export, …) | `.talia-report__actions-bar` (preferred); legacy compact: `.talia-report__actions` in header | Tab **Options** (Ops) / role | Role ops allow-list + Admin Options |
 | **Snapshot** | Pinned KPI strip above scrollable body (Booked, Velocity, …) | `ReportSnapshot` → `section.talia-report__snapshot` + `.talia-report__metrics` / `.talia-metric` | — | — |
-| **Details** | User-facing *extra* data blocks (header ≣); never the primary table/chart | `ReportDataDetails` + `usePanelDetailsVisibility` | **Details** (≣ btn) | `localStorage` `taliaGlobalReportDetailsVisible` |
+| **Details** | User-facing *extra* data blocks (header ≣); never the primary table/chart | `ReportDataDetails` + `usePanelDetailsVisibility` | **Details** (≣ btn) / Views | `localStorage` + component Options |
 | **Technical meta** | Dev/diagnostic block (dock tab ⓘ) | `ReportEventMeta` via `usePanelTechnicalMetaVisibility` | Tab ⓘ only | In-memory `__taliaPanelTechnicalMetaVisibility` |
+| **Panel Options** | Views + Operations menu on active dock tab | Tab **⚙** (`useComponentOptions`) | Tab ⚙ | User profile + role criteria/ops |
 | **Data export** | CSV / print-PDF of visible table rows for verification | `lib/panelDataExport.js` + `supportsDataExport` | Tab **⬇** (next to ⓘ) | `window.__taliaPanelDataExport` |
 | **Content** | Primary body (table, chart, map) | `main.talia-report__content`; with Snapshot use `talia-report__content--scroll` so only the body scrolls | — | — |
 
@@ -293,6 +294,9 @@ const MyComponent = () => {
 - For grouped tables that need tab-header controls, set `supportsGroupActions: true` in `registry.js` and register presenter actions in `window.__taliaPanelGroupActions`
 - For **table data export** (CSV / print-PDF for verification), set `supportsDataExport: true` in `registry.js` and register via `registerPanelDataExport` from `lib/panelDataExport.js` (dock tab **⬇** next to ⓘ). Prefer `payloadFromTabulator(table, title)` so export uses **visible/filtered** rows. This is distinct from product Export in `.talia-report__actions-bar` (e.g. Project Summary PDF).
 - Do not hardcode table `layout` in panel code unless you intentionally opt out with `enforceGlobalLayout: false`
+- **Column totals (footer):** define per-column with `withColumnTotal` from `lib/tabulatorConfig` (native Tabulator `bottomCalc`). Totals recalculate from **active/filtered rows** (panel filters that `replaceData`, plus header filters). Do not invent custom footer markup or per-panel sum loops. Opt out of calcs on a table with `columnCalcs: false` if needed.
+  - Kinds: `count` | `sum` | `avg` | `min` | `max` | `unique`
+  - Example: `withColumnTotal({ field: 'guest_count', ... }, 'sum', { precision: 1 })`
 - **Single-row record form:** when the presenter’s data array has exactly one row, render `ReportTableOrRecord` / `ReportRecordForm` (`components/shared/ReportRecordForm.jsx`) instead of the visible table. Keep the Tabulator host mounted but hidden so the instance is not destroyed. Reuses column `titleLong`/`title` and formatters via `lib/reportRecordForm.js`. Opt out a column with `excludeFromRecordForm: true`. Skip matrix/heatmap panels.
 
 **Grouped Tab Header Controls (optional):**

@@ -46,6 +46,9 @@ import {
 import { extractSailCodeFromEvent, SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../lib/eventBus';
 import userActivityTracker from '../../services/userActivityTracker';
 import { loadUserProfileState, saveUserProfileState } from '../../services/data/userProfileState';
+import { loadEffectiveGlobalCriteria } from '../../services/data/roleCriteriaService';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
+import { canConfigureComponentOperations } from '../../utils/roleUtils';
 import TaliaTooltip from './TaliaTooltip';
 // CSS imported globally in main.jsx
 const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
@@ -268,10 +271,6 @@ const StatusBar = ({
     applyAppearanceStyleSelectKey,
     panelTitlesVisible,
     setPanelTitlesVisible,
-    actionsVisible,
-    setActionsVisible,
-    controlsVisible,
-    setControlsVisible,
     menuDisappearMs,
     calloutsVisible,
     setCalloutsVisible,
@@ -284,6 +283,9 @@ const StatusBar = ({
     tableLayoutMode: themeTableLayoutMode,
     setTableLayoutMode: setThemeTableLayoutMode,
   } = useTheme();
+  const { user: authUser } = useSupabaseAuth();
+  const effectiveUserRole = userRole || authUser?.role || 'USER';
+  const canAdminOpsChrome = canConfigureComponentOperations(effectiveUserRole);
 
   const { focuses: canonicalFocuses, currentFocus: currentFocusObject } = useFocusManagement();
   const catalogFocusOptions = useMemo(
@@ -444,11 +446,10 @@ const StatusBar = ({
     ? canUseAdvancedControls
     : canUseAdvancedHeader(userRole);
   const isDataManagementActive = activePanelComponent === 'data-management-panel';
-  const showDataAdminActions = actionsVisible === true;
+  const showDataAdminActions = canAdminOpsChrome === true;
   const showDataAdminFilters = filtersVisible === true;
   const showDataAdminStrip = hasAdvancedControls
     && isDataManagementActive
-    && controlsVisible === true
     && (showDataAdminActions || showDataAdminFilters);
 
   /** Hide centered logo while any top header strip / panel is open (avoids overlap). */
@@ -843,13 +844,6 @@ const StatusBar = ({
     setChartLegendsVisible(nextVisible);
   };
 
-  const handleActionsToggle = () => {
-    const nextVisible = !actionsVisible;
-    userActivityTracker.recordHeaderAction('operations-toggle', { status: nextVisible ? 'show' : 'hide' });
-    setActionsVisible(nextVisible);
-    setControlsVisible(nextVisible);
-  };
-
   const clearRefreshTimer = () => {
     if (refreshPhaseTimerRef.current) {
       window.clearTimeout(refreshPhaseTimerRef.current);
@@ -1167,8 +1161,11 @@ const StatusBar = ({
       try {
         const profileState = await loadUserProfileState({ component: 'StatusBar' });
         window.__taliaUserProfileState = profileState || {};
-        const criteria = profileState?.globalCriteria;
-        if (criteria && typeof criteria === 'object') {
+        const criteria = await loadEffectiveGlobalCriteria({
+          role: effectiveUserRole,
+          component: 'StatusBar',
+        });
+        if (criteria && typeof criteria === 'object' && Object.keys(criteria).length) {
           const nextRange = TEST_DEFAULT_GLOBAL_RANGE_KEY;
           const nextDuration = typeof criteria.durationKey === 'string' ? criteria.durationKey : '';
           setGlobalDateRange(nextRange);
@@ -1221,7 +1218,7 @@ const StatusBar = ({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [effectiveUserRole, setDefaultDisplayCurrency]);
 
   const globalSailSelectionRef = useRef(globalSailSelection);
   globalSailSelectionRef.current = globalSailSelection;
@@ -1833,18 +1830,6 @@ const StatusBar = ({
                 >
                   <span>Legends</span>
                   {chartLegendsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
-                </button>
-              </TaliaTooltip>
-              <TaliaTooltip content="Show or hide panel operations (actions + controls) across all reports" placement="bottom-left" delayMs={180}>
-                <button
-                  type="button"
-                  role="menuitemcheckbox"
-                  aria-checked={actionsVisible && controlsVisible}
-                  className={`status-bar__visibility-option ${(actionsVisible && controlsVisible) ? 'status-bar__visibility-option--active' : ''}`}
-                  onClick={handleActionsToggle}
-                >
-                  <span>Operations</span>
-                  {(actionsVisible && controlsVisible) ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Show or hide panel titles globally" placement="bottom-left" delayMs={180}>

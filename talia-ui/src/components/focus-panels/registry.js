@@ -18,6 +18,7 @@ import ItineraryList from './ItineraryList';
 import ItineraryExtract from './ItineraryExtract';
 import ReservationCurrentStateContainer from './ReservationCurrentState';
 import GroupBookingReviewContainer from './GroupBookingReview';
+import SailingDemandCompositionContainer from './SailingDemandComposition';
 import BookingProfileContainer from './BookingProfile';
 import ReservationBookingCurveContainer from './ReservationBookingCurve';
 import ProfileCompareContainer from './ProfileCompare';
@@ -132,6 +133,17 @@ export const componentRegistry = {
     supportsGroupActions: true,
     supportsDataExport: true,
     showInReports: true,
+    options: {
+      views: [
+        { id: 'viewMode', label: 'Nested', type: 'choice', choices: ['nested', 'flat'], default: 'nested' },
+        { id: 'segments', label: 'Segments', type: 'boolean', default: false },
+        { id: 'details', label: 'Details', type: 'boolean', default: false },
+      ],
+      operations: [
+        { id: 'showFilters', label: 'Show filters', type: 'boolean', default: true, minRole: 'USER' },
+        { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true, minRole: 'USER' },
+      ],
+    },
     filePath: 'src/components/focus-panels/MasterSailingExplorer/index.jsx'
   },
   ShipDayBerth: {
@@ -213,6 +225,7 @@ export const componentRegistry = {
     },
     supportsRefresh: true,
     showInReports: true,
+    minRole: 'MANAGER',
     filePath: 'src/components/focus-panels/CapacityValidation/index.jsx'
   },
   CabinDeckInventory: {
@@ -229,6 +242,16 @@ export const componentRegistry = {
     },
     supportsRefresh: true,
     showInReports: true,
+    options: {
+      views: [
+        { id: 'details', label: 'Details', type: 'boolean', default: false },
+      ],
+      operations: [
+        { id: 'allocate', label: 'Allocate', type: 'boolean', default: true, minRole: 'MANAGER' },
+        { id: 'showFilters', label: 'Show filters', type: 'boolean', default: true, minRole: 'USER' },
+        { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true, minRole: 'USER' },
+      ],
+    },
     filePath: 'src/components/focus-panels/CabinDeckInventory/index.jsx'
   },
   ProjectSummary: {
@@ -489,6 +512,23 @@ export const componentRegistry = {
     supportsRefresh: true,
     showInReports: true,
     filePath: 'src/components/focus-panels/GroupBookingReview/index.jsx'
+  },
+  SailingDemandComposition: {
+    component: SailingDemandCompositionContainer,
+    panelId: 'sailing-demand-composition',
+    category: 'Booking & profiles',
+    title: 'Sailing Demand',
+    description:
+      'Booked (named) vs Estimated (contracted × probability) vs Contracted (all groups + offers), with EUR revenue — sail-scoped demo.',
+    props: {},
+    dataRequirements: 'Requires reservation (RES_HEADER + Fact group-OF). Responds to talia:sail.select.',
+    events: {
+      emits: [],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+    },
+    supportsRefresh: true,
+    showInReports: true,
+    filePath: 'src/components/focus-panels/SailingDemandComposition/index.jsx'
   },
   BookingProfile: {
     component: BookingProfileContainer,
@@ -1091,11 +1131,25 @@ export const getComponentsByCategory = () => {
 };
 
 export const canRoleAccessComponent = (metadata, role = 'USER') => {
+  const normalizedRole = String(role || 'USER').toUpperCase();
+  // minRole: hierarchy floor (GUEST < USER < MANAGER < ADMIN < SUPER_USER)
+  if (metadata?.minRole) {
+    const roleHierarchy = {
+      GUEST: 0,
+      USER: 1,
+      MANAGER: 2,
+      ADMIN: 3,
+      SUPER_USER: 4,
+      SUPERUSER: 4,
+    };
+    const userLevel = roleHierarchy[normalizedRole === 'SUPERUSER' ? 'SUPER_USER' : normalizedRole] ?? 0;
+    const requiredLevel = roleHierarchy[String(metadata.minRole).toUpperCase()] ?? 0;
+    if (userLevel < requiredLevel) return false;
+  }
   const allowed = metadata?.allowedRoles;
   if (!Array.isArray(allowed) || allowed.length === 0) {
     return true;
   }
-  const normalizedRole = String(role || 'USER').toUpperCase();
   const normalizedAllowed = allowed.map((entry) => String(entry || '').toUpperCase());
   if (normalizedAllowed.includes(normalizedRole)) {
     return true;

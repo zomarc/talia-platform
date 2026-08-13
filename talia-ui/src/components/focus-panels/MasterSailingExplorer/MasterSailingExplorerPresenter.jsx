@@ -12,6 +12,7 @@ import {
   payloadFromTabulator,
   registerPanelDataExport,
 } from '../../../lib/panelDataExport';
+import { useComponentOptions } from '../../../hooks/useComponentOptions';
 import {
   buildExplorerDisplayRows,
   masterRowMatchesReference,
@@ -115,8 +116,14 @@ const MasterSailingExplorerPresenter = ({
   const distributionBySailCodeRef = useRef(distributionBySailCode);
   const onDistributionIntentRef = useRef(onDistributionIntent);
   const [expandedMasters, setExpandedMasters] = useState(() => new Set());
-  const [segmentsVisible, setSegmentsVisible] = useState(false);
-  const [viewMode, setViewMode] = useState('nested'); // nested = month→ship groups; flat = date-sorted list
+  const {
+    viewsState,
+    setView,
+    operations,
+  } = useComponentOptions(panelComponentId || 'master-sailing-explorer');
+  const viewMode = viewsState.viewMode === 'flat' ? 'flat' : 'nested';
+  const segmentsVisible = viewsState.segments === true;
+  const showFilters = operations.find((op) => op.id === 'showFilters')?.enabled !== false;
   const [hoverPreview, setHoverPreview] = useState(null);
   const departureMonth = useGlobalDepartureMonth();
   const previousDepartureMonthRef = useRef(departureMonth);
@@ -127,8 +134,8 @@ const MasterSailingExplorerPresenter = ({
     previousDepartureMonthRef.current = departureMonth;
     if (departureMonth === ALL_DEPARTURE_MONTH_KEY) return;
     if (prev === departureMonth) return;
-    setViewMode('flat');
-  }, [departureMonth]);
+    setView('viewMode', 'flat');
+  }, [departureMonth, setView]);
 
   useEffect(() => {
     distributionBySailCodeRef.current = distributionBySailCode;
@@ -298,6 +305,33 @@ const MasterSailingExplorerPresenter = ({
         hozAlign: 'right',
         width: 104,
         formatter: (cell) => formatCount(cell.getRow().getData()?.booked_cabins),
+        headerSort: false,
+      },
+      {
+        field: 'booked_guests',
+        titleShort: 'Booked',
+        titleLong: 'Booked guests (real / materialised)',
+        hozAlign: 'right',
+        width: 96,
+        formatter: (cell) => formatCount(cell.getRow().getData()?.booked_guests),
+        headerSort: false,
+      },
+      {
+        field: 'estimated_guests',
+        titleShort: 'Est',
+        titleLong: 'Estimated guests (contracted × probability)',
+        hozAlign: 'right',
+        width: 88,
+        formatter: (cell) => formatCount(cell.getRow().getData()?.estimated_guests),
+        headerSort: false,
+      },
+      {
+        field: 'contracted_guests',
+        titleShort: 'Contr',
+        titleLong: 'Contracted guests (synthetic group OF face)',
+        hozAlign: 'right',
+        width: 96,
+        formatter: (cell) => formatCount(cell.getRow().getData()?.contracted_guests),
         headerSort: false,
       },
       {
@@ -886,7 +920,7 @@ const MasterSailingExplorerPresenter = ({
           </p>
         </div>
       </header>
-      <div className="master-sailing-panel__filters talia-report-filters">
+      <div className={`master-sailing-panel__filters talia-report-filters${showFilters ? '' : ' talia-report-filters--hidden'}`}>
         {FILTER_FIELDS.map(([field, label]) => (
           <label key={field} className="master-sailing-panel__filter talia-report-filters__group">
             <span className="talia-report-filters__label">{label}</span>
@@ -902,31 +936,7 @@ const MasterSailingExplorerPresenter = ({
           </label>
         ))}
       </div>
-      <div className="talia-report__controls" aria-label="Master sailing explorer controls">
-        <button
-          type="button"
-          className={`talia-btn ${viewMode === 'nested' ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
-          aria-pressed={viewMode === 'nested'}
-          onClick={() => setViewMode('nested')}
-        >
-          Nested
-        </button>
-        <button
-          type="button"
-          className={`talia-btn ${viewMode === 'flat' ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
-          aria-pressed={viewMode === 'flat'}
-          onClick={() => setViewMode('flat')}
-        >
-          Flat
-        </button>
-        <button
-          type="button"
-          className={`talia-btn ${segmentsVisible ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
-          aria-pressed={segmentsVisible}
-          onClick={() => setSegmentsVisible((prev) => !prev)}
-        >
-          Segments
-        </button>
+      <div className="talia-report__actions-bar" aria-label="Master sailing explorer actions">
         <button type="button" className="talia-btn talia-btn--secondary" onClick={expandAllMasters}>
           Expand all days
         </button>

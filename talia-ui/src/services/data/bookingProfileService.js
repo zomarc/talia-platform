@@ -266,10 +266,14 @@ const GET_RESERVATION_BOOKING_CURVE = gql`
       capacitySource
       reservationBookings
       reservationGuests
+      bookedGuests
+      contractedGuests
+      estimatedGuests
       bookDateField
       missingBookDates
       maxWeeks
       daysUntilSailing
+      contractMessage
       velocity {
         pastWeek { label days bookings guests bookingsPerDay guestsPerDay }
         pastTwoWeeks { label days bookings guests bookingsPerDay guestsPerDay }
@@ -298,6 +302,15 @@ const GET_RESERVATION_BOOKING_CURVE = gql`
         message
       }
       series {
+        dimensionKey
+        points {
+          weekLabel
+          weeksUntilSailing
+          bookings
+          guests
+        }
+      }
+      contractSeries {
         dimensionKey
         points {
           weekLabel

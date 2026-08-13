@@ -176,6 +176,10 @@ const ReservationCurrentStateContainer = ({ panelInstanceId, panelComponentId })
       return {
         ...(reservation || {}),
         ...(currentRow || {}),
+        // Prefer reservation lineage fields (current_state may omit them).
+        source_origin: reservation?.source_origin ?? currentRow?.source_origin ?? null,
+        pax_type: reservation?.pax_type ?? currentRow?.pax_type ?? null,
+        group_id: reservation?.group_id ?? currentRow?.group_id ?? null,
         // Keep guest_count from current_state when available (latest snapshot state).
         guest_count: currentRow?.guest_count ?? reservation?.guest_count ?? null,
         history_count: key ? (historyCountByResId.get(key) || 0) : 0,

@@ -371,7 +371,7 @@ const InventoryTargetProfilePresenter = ({
         </div>
       ) : null}
 
-      <div className="talia-report__controls" aria-label="Target curve controls">
+      <div className="talia-report__actions-bar" aria-label="Target curve actions">
         <button type="button" className="talia-btn talia-btn--secondary" onClick={() => addWeekPoint()}>
           + Week point
         </button>

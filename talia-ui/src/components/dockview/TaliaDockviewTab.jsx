@@ -19,6 +19,8 @@ import {
   resolvePanelDataExport,
   runPanelDataExport,
 } from "../../lib/panelDataExport";
+import { useComponentOptions } from "../../hooks/useComponentOptions";
+import reportRegistry from "../focus-panels/registry";
 
 const SIDE_EXPAND_DECISION_TIMEOUT_MS = 3000;
 
@@ -71,6 +73,20 @@ const TaliaDockviewTab = ({
   const isReportTab = !!panelComponent && reportPanelIds?.has?.(panelComponent);
   const hasGroupActions = !!panelComponent && groupActionPanelIds?.has?.(panelComponent);
   const hasDataExport = !!panelComponent && dataExportPanelIds?.has?.(panelComponent);
+  const registryOptions = reportRegistry?.[panelComponent]?.options || null;
+  const componentOptionsId = reportRegistry?.[panelComponent]?.panelId || panelComponent || '';
+  const {
+    views: optionViews,
+    operations: optionOperations,
+    showOperationsMenu,
+    hasOptions,
+    setView,
+    setOperation,
+  } = useComponentOptions(isReportTab ? componentOptionsId : '', registryOptions);
+  const [showOptionsMenu, setShowOptionsMenu] = React.useState(false);
+  const optionsButtonRef = React.useRef(null);
+  const optionsMenuRef = React.useRef(null);
+  const [optionsMenuPos, setOptionsMenuPos] = React.useState(null);
   const [_isMaximized, setIsMaximized] = React.useState(() => panelApi?.isMaximized?.() ?? false);
   const [layoutCycleState, setLayoutCycleState] = React.useState(0); // 0: original, 1: side-expand window, 2: full-expand, 3: side-expand restore
   const layoutCycleRef = React.useRef({
@@ -466,8 +482,31 @@ const TaliaDockviewTab = ({
   }, [showExportMenu]);
 
   React.useEffect(() => {
+    if (!showOptionsMenu) return undefined;
+    const onPointerDown = (event) => {
+      const menu = optionsMenuRef.current;
+      const button = optionsButtonRef.current;
+      if (menu?.contains?.(event.target) || button?.contains?.(event.target)) return;
+      setShowOptionsMenu(false);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setShowOptionsMenu(false);
+    };
+    const onResize = () => setShowOptionsMenu(false);
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('resize', onResize);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [showOptionsMenu]);
+
+  React.useEffect(() => {
     if (!isPrimaryActive) {
       setShowExportMenu(false);
+      setShowOptionsMenu(false);
       setShowCloseConfirm(false);
     }
   }, [isPrimaryActive]);
@@ -476,12 +515,30 @@ const TaliaDockviewTab = ({
     event.stopPropagation();
     const button = event.currentTarget;
     const rect = button?.getBoundingClientRect?.();
+    setShowOptionsMenu(false);
     setShowExportMenu((open) => {
       if (open) return false;
       if (rect) {
         setExportMenuPos({
           top: Math.round(rect.bottom + 4),
           left: Math.round(Math.max(8, rect.right - 88)),
+        });
+      }
+      return true;
+    });
+  };
+
+  const handleToggleOptionsMenu = (event) => {
+    event.stopPropagation();
+    const button = event.currentTarget;
+    const rect = button?.getBoundingClientRect?.();
+    setShowExportMenu(false);
+    setShowOptionsMenu((open) => {
+      if (open) return false;
+      if (rect) {
+        setOptionsMenuPos({
+          top: Math.round(rect.bottom + 4),
+          left: Math.round(Math.max(8, rect.right - 180)),
         });
       }
       return true;
@@ -546,6 +603,92 @@ const TaliaDockviewTab = ({
       </span>
       {isPrimaryActive && (
       <div className="talia-dv-tab__actions">
+            {isReportTab && hasOptions && (
+              <div className="talia-dv-tab__export">
+                <button
+                  ref={optionsButtonRef}
+                  type="button"
+                  className="talia-dv-tab__button talia-dv-tab__button--options"
+                  title="Panel Options (Views / Operations)"
+                  aria-label="Panel Options"
+                  aria-expanded={showOptionsMenu}
+                  aria-haspopup="menu"
+                  onClick={handleToggleOptionsMenu}
+                >
+                  ⚙
+                </button>
+                {showOptionsMenu && optionsMenuPos && createPortal(
+                  <div
+                    ref={optionsMenuRef}
+                    className="talia-dv-tab__export-menu talia-dv-tab__export-menu--portal talia-dv-tab__options-menu"
+                    role="menu"
+                    aria-label="Panel options"
+                    style={{ top: optionsMenuPos.top, left: optionsMenuPos.left, minWidth: 180 }}
+                  >
+                    {optionViews.length > 0 && (
+                      <>
+                        <div className="talia-dv-tab__options-heading">Views</div>
+                        {optionViews.map((entry) => {
+                          // Booleans: tick only when on. Choice: label is the active mode, always ticked.
+                          const checked = entry.type === 'choice'
+                            ? true
+                            : entry.value === true;
+                          const onToggle = () => {
+                            if (entry.type === 'choice' && Array.isArray(entry.choices) && entry.choices.length >= 2) {
+                              const next = entry.value === entry.choices[0] ? entry.choices[1] : entry.choices[0];
+                              setView(entry.id, next);
+                              return;
+                            }
+                            setView(entry.id, !entry.value);
+                          };
+                          const label = entry.type === 'choice' && entry.id === 'viewMode'
+                            ? (entry.value === 'flat' ? 'Flat' : 'Nested')
+                            : entry.label;
+                          return (
+                            <button
+                              key={`view-${entry.id}`}
+                              type="button"
+                              className="talia-dv-tab__export-menu-item"
+                              role="menuitemcheckbox"
+                              aria-checked={Boolean(checked)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onToggle();
+                              }}
+                            >
+                              <span>{label}</span>
+                              {checked ? <span aria-hidden="true">✓</span> : null}
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
+                    {showOperationsMenu && optionOperations.length > 0 && (
+                      <>
+                        <div className="talia-dv-tab__options-heading">Operations</div>
+                        {optionOperations.map((entry) => (
+                          <button
+                            key={`op-${entry.id}`}
+                            type="button"
+                            className="talia-dv-tab__export-menu-item"
+                            role="menuitemcheckbox"
+                            aria-checked={entry.enabled === true}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setOperation(entry.id, !entry.enabled);
+                            }}
+                          >
+                            <span>{entry.label}</span>
+                            {entry.enabled ? <span aria-hidden="true">✓</span> : null}
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </div>,
+                  document.body
+                )}
+              </div>
+            )}
             {isReportTab && (
               <button
                 type="button"

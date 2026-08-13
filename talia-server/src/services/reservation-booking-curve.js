@@ -5,6 +5,12 @@
 
 import { resolveVoyageScope } from './booking-profile-dimensional.js';
 import { classifyPassengerType } from '../lib/paxType.js';
+import { loadSailBookingMondaySeries } from './fact-reservation-history-sync.js';
+import {
+  isSyntheticGroupOfRow,
+  resolveDeliveryProbability,
+  RESERVATION_SOURCE_ORIGIN,
+} from '../lib/deliveryProbability.js';
 
 function clean(value) {
   if (value == null) return null;
@@ -110,7 +116,7 @@ async function fetchScopedReservations(client, sailCodes) {
       const { data, error } = await client
         .from('reservation')
         .select(
-          'res_id, sail_code, agency_id, agency_market, guest_count, res_status, res_init_date, original_init_date, sail_from_date, sail_to_date, sail_duration, pax_type, net_ticket_revenue_eur, gross_ticket_revenue_eur, net_ticket_revenue, gross_ticket_revenue, net_selling_fare, gross_selling_fare, currency'
+          'res_id, sail_code, agency_id, agency_market, guest_count, res_status, res_init_date, original_init_date, sail_from_date, sail_to_date, sail_duration, pax_type, group_id, source_origin, res_probability, group_probability, net_ticket_revenue_eur, gross_ticket_revenue_eur, net_ticket_revenue, gross_ticket_revenue, net_selling_fare, gross_selling_fare, currency'
         )
         .in('sail_code', batch)
         .range(page * pageSize, (page + 1) * pageSize - 1);
@@ -241,6 +247,79 @@ function dimensionKeyOf(res, ctx) {
 
 /** Cap left edge so long-lead bookings do not create an unreadable axis. */
 const MAX_WEEKS_AXIS = 52;
+
+function buildContractSeriesFromMondays(mondayRows, sailCodes, sailDateKey) {
+  const codeSet = new Set((sailCodes || []).map((c) => String(c).trim()).filter(Boolean));
+  const byMonday = new Map();
+  (mondayRows || []).forEach((row) => {
+    const sail = String(row.sail_code || '').trim();
+    if (!codeSet.has(sail)) return;
+    const monday = toDateKey(row.snapshot_date);
+    if (!monday) return;
+    const cur = byMonday.get(monday) || { booked: 0, contracted: 0, estimated: 0 };
+    cur.booked += Number(row.booked_guests) || 0;
+    cur.contracted += Number(row.contracted_guests) || 0;
+    cur.estimated += Number(row.estimated_guests) || 0;
+    byMonday.set(monday, cur);
+  });
+
+  const mondays = [...byMonday.keys()].sort();
+  if (!mondays.length) return { contractSeries: [], contractMessage: 'No Fact_Reservation_History Mondays densified yet — sync factReservationHistory.' };
+
+  const toPoints = (metric) => mondays.map((monday) => {
+    const daysOut = sailDateKey ? daysBetween(monday, sailDateKey) : 0;
+    const weeksUntil = Math.min(MAX_WEEKS_AXIS, Math.max(0, Math.ceil(daysOut / 7)));
+    const guests = Math.round(byMonday.get(monday)?.[metric] || 0);
+    return {
+      week: weeksUntil,
+      weeksUntilSailing: weeksUntil,
+      weekLabel: `W-${weeksUntil}`,
+      asOfDate: monday,
+      bookings: guests,
+      guests,
+      loadFactorPct: null,
+    };
+  });
+
+  return {
+    contractSeries: [
+      { dimensionKey: 'Booked', points: toPoints('booked') },
+      { dimensionKey: 'Estimated', points: toPoints('estimated') },
+      { dimensionKey: 'Contracted', points: toPoints('contracted') },
+    ],
+    contractMessage: null,
+  };
+}
+
+function summarizeTodayContractMetrics(reservations) {
+  let booked = 0;
+  let contracted = 0;
+  let estimated = 0;
+  (reservations || []).forEach((row) => {
+    const status = String(row.res_status || '').toUpperCase();
+    if (status === 'CX' || status === 'CANCELLED' || status === 'CANCELED') return;
+    const guests = Number(row.guest_count) || 0;
+    if (guests <= 0) return;
+    const synthetic = isSyntheticGroupOfRow(row)
+      || String(row.source_origin || '').trim() === RESERVATION_SOURCE_ORIGIN.FACT_GROUP_ALLOC;
+    const pax = String(row.pax_type || '').trim().toUpperCase();
+    const isOffer = ['OF', 'OPTION', 'QT', 'QUOTE', 'WL', 'WAITLIST', 'WAIT'].includes(status);
+    const isGroup = pax.startsWith('G') || synthetic;
+    const isContracted = isGroup || isOffer;
+    if ((status === 'BK' || status === 'BOOKED' || status === 'BKD') && !synthetic) {
+      booked += guests;
+    }
+    if (isContracted) {
+      contracted += guests;
+      estimated += guests * (resolveDeliveryProbability(row) / 100);
+    }
+  });
+  return {
+    bookedGuests: Math.round(booked),
+    contractedGuests: Math.round(contracted),
+    estimatedGuests: Math.round(estimated * 10) / 10,
+  };
+}
 
 function buildAreaSeries(reservations, sailDateKey, dimCtx) {
   const byDimWeek = new Map();
@@ -537,12 +616,13 @@ export async function getReservationBookingCurve(client, sailCode, options = {})
   const sailDateKey = toDateKey(scope.sailDate);
   const masterSailCode = scope.referenceSailCode || scope.requestedSailCode;
 
-  const [agencyIndex, rollUpIndex, reservations, mse, groupIdIndex] = await Promise.all([
+  const [agencyIndex, rollUpIndex, reservations, mse, groupIdIndex, mondayRows] = await Promise.all([
     loadAgencyIndex(client),
     loadMarketRollUpIndex(client),
     fetchScopedReservations(client, scope.sailCodes),
     loadMseCabinTotals(client, scope.shipCode, masterSailCode),
     loadGroupIdByResId(client, scope.sailCodes),
+    loadSailBookingMondaySeries(client, scope.sailCodes),
   ]);
 
   const active = reservations.filter((r) => {
@@ -562,6 +642,13 @@ export async function getReservationBookingCurve(client, sailCode, options = {})
     active,
     sailDateKey,
     dimCtx
+  );
+
+  const todayContract = summarizeTodayContractMetrics(active);
+  const { contractSeries, contractMessage } = buildContractSeriesFromMondays(
+    mondayRows,
+    scope.sailCodes,
+    sailDateKey
   );
 
   const todayKey = toDateKey(new Date());
@@ -655,6 +742,11 @@ export async function getReservationBookingCurve(client, sailCode, options = {})
     competitor,
     series,
     totals,
+    contractSeries,
+    contractMessage,
+    bookedGuests: todayContract.bookedGuests,
+    contractedGuests: todayContract.contractedGuests,
+    estimatedGuests: todayContract.estimatedGuests,
     composition,
     maxWeeks,
     daysUntilSailing: sailDateKey

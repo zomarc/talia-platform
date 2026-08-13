@@ -81,10 +81,6 @@ function DashboardSidebar({
     setTabInactiveIntensity,
     panelTitlesVisible,
     setPanelTitlesVisible,
-    actionsVisible,
-    setActionsVisible,
-    controlsVisible,
-    setControlsVisible,
     menuDisappearMs,
     setMenuDisappearMs,
     hoverPreviewDelayMs,
@@ -913,20 +909,12 @@ function DashboardSidebar({
               <div className="dashboard-form-hint">Uses the shared panel header selector for all components that follow Talia report standards.</div>
             </div>
             <div className="dashboard-form-group">
-              <label className="dashboard-form-label">Operations</label>
-              <label className="dashboard-form-checkbox">
-                <input
-                  type="checkbox"
-                  checked={actionsVisible && controlsVisible}
-                  onChange={(event) => {
-                    const next = event.target.checked;
-                    setActionsVisible(next);
-                    setControlsVisible(next);
-                  }}
-                />
-                <span>Show panel operations (actions + controls) across reports</span>
-              </label>
-              <div className="dashboard-form-hint">Matches the Operations toggle in the top header visibility menu.</div>
+              <label className="dashboard-form-label">Panel Options</label>
+              <div className="dashboard-form-hint">
+                Views (flat/nested/details) and Operations are configured per active dock tab via
+                the tab <strong>Options</strong> menu. Operations chrome is Admin-only; end users
+                inherit role capabilities without seeing that menu section.
+              </div>
             </div>
             <div className="dashboard-form-group">
               <label className="dashboard-form-label">Disappear Time: {menuDisappearMs} ms</label>

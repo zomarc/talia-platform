@@ -678,6 +678,7 @@ export class SupabaseDataService {
           id: supabaseUserId,
           talia_user_id: taliaUserId,
           email: email,
+          role: 'USER',
           last_login_at: new Date().toISOString()
         })
         .select()
@@ -714,6 +715,30 @@ export class SupabaseDataService {
       console.error('Error querying talia_user:', error);
       throw error;
     }
+  }
+
+  async updateTaliaUserRoleByEmail(email, role) {
+    const normalizedRole = String(role || 'USER').trim().toUpperCase();
+    const { data, error } = await this.client
+      .from('talia_users')
+      .update({ role: normalizedRole })
+      .eq('email', email)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data || null;
+  }
+
+  async updateTaliaUserRoleByTaliaId(taliaUserId, role) {
+    const normalizedRole = String(role || 'USER').trim().toUpperCase();
+    const { data, error } = await this.client
+      .from('talia_users')
+      .update({ role: normalizedRole })
+      .eq('talia_user_id', taliaUserId)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data || null;
   }
 
   // ===== User Focus Preferences =====

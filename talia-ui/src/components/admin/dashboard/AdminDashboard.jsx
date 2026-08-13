@@ -8,6 +8,7 @@ import UserMappingTable from '../users/UserMappingTable';
 import TaliaUserTable from '../users/TaliaUserTable';
 import AdminAccessManager from './AdminAccessManager';
 import AdminThemesPanel from './AdminThemesPanel';
+import AdminRoleCriteriaPanel from './AdminRoleCriteriaPanel';
 import AdminLogsPanel from '../logs/AdminLogsPanel';
 import { useTaliaFocusManagement } from '../../../hooks/useTaliaFocusManagement';
 import '../admin.css';
@@ -52,6 +53,9 @@ const AdminDashboard = ({ skipAuth = false }) => {
         <button className={`admin-tab ${activeTab === 'themes' ? 'admin-tab-active' : ''}`} onClick={() => setActiveTab('themes')}>
           Themes
         </button>
+        <button className={`admin-tab ${activeTab === 'role-criteria' ? 'admin-tab-active' : ''}`} onClick={() => setActiveTab('role-criteria')}>
+          Role Criteria
+        </button>
         <button className={`admin-tab ${activeTab === 'logs' ? 'admin-tab-active' : ''}`} onClick={() => setActiveTab('logs')}>
           Logs
         </button>
@@ -62,6 +66,7 @@ const AdminDashboard = ({ skipAuth = false }) => {
         {activeTab === 'users' && <TaliaUserTable />}
         {activeTab === 'mapping' && <UserMappingTable />}
         {activeTab === 'themes' && <AdminThemesPanel />}
+        {activeTab === 'role-criteria' && <AdminRoleCriteriaPanel />}
         {activeTab === 'logs' && <AdminLogsPanel />}
       </main>
     </div>

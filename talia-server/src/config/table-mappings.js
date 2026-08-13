@@ -20,6 +20,7 @@ const tableAliasToConfigMap = {
   published_rates_changes: 'publishedRates',
   published_rates_current_state: 'publishedRates',
   competitor_current_state: 'competitor',
+  sail_booking_monday: 'factReservationHistory',
 };
 
 const tableDateColumns = {
@@ -41,6 +42,7 @@ const tableDateColumns = {
   sail_by_cabin_occupancy: ['sail_date_from', 'sail_itinerary_date'],
   reservation_changes: ['snapshot_date'],
   reservation_current_state: ['snapshot_date'],
+  sail_booking_monday: ['snapshot_date'],
   published_rates: ['snapshot_date', 'departure_date'],
   published_rates_changes: ['snapshot_date', 'departure_date'],
   published_rates_current_state: ['snapshot_date', 'departure_date'],

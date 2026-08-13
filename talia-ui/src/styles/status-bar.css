@@ -586,7 +586,6 @@ html.talia-theme-palette-light .status-bar {
   padding: var(--theme-padding-xs) var(--theme-padding-sm);
   border-radius: var(--theme-radius-sm);
   font-size: var(--theme-font-size-sm);
-  animation: slideIn 0.3s ease-out;
   opacity: 1;
   transition: opacity 0.8s ease;
 }

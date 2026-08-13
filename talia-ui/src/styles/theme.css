@@ -42,8 +42,17 @@
   --theme-header-text: color-mix(in srgb, var(--theme-fg) 92%, var(--theme-text-secondary));
   --theme-header-font-size: var(--theme-font-size-lg);
   --theme-header-font-weight: 600;
-  --theme-tab-header-font-size: clamp(8px, calc(var(--theme-font-size) + 0px), 12px);
+  --theme-tab-header-font-size: var(--theme-font-size);
   --theme-tab-header-font-weight: 700;
+  --theme-tab-action-size: calc(var(--theme-tab-header-font-size) + 8px);
+  --theme-tab-row-height: calc(var(--theme-tab-action-size) + 14px);
+  --theme-tab-strip-bg: rgba(255, 255, 255, 0.04);
+  --theme-tab-inactive-bg: rgba(176, 141, 87, 0.14);
+  --theme-tab-hover-bg: rgba(176, 141, 87, 0.24);
+  --theme-tab-active-bg: rgba(176, 141, 87, 0.45);
+  --theme-tab-border: rgba(176, 141, 87, 0.28);
+  --theme-tab-inactive-fg: rgba(176, 141, 87, 0.62);
+  --theme-tab-active-accent: rgba(176, 141, 87, 0.92);
   --theme-group-label-font-size: var(--theme-header-font-size);
   --theme-group-label-font-weight: var(--theme-header-font-weight);
   

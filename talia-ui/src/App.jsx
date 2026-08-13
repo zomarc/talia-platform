@@ -2337,7 +2337,7 @@ function App() {
           --dv-panelview-background: #ffffff;
           --dv-tab-divider-color: transparent;
           --dv-tab-close-button-hover-background: rgba(176, 141, 87, 0.15);
-          --dv-tab-outline-color: #b08d57;
+          --dv-tab-outline-color: transparent;
           --dv-scrollbar-slider-background: rgba(176, 141, 87, 0.45);
           --dv-scrollbar-slider-hover-background: rgba(176, 141, 87, 0.65);
         }
@@ -2347,10 +2347,13 @@ function App() {
           padding: 6px 10px;
           font-weight: 600;
           background: #f5efe6;
+          box-shadow: none;
+          outline: none;
         }
         .dockview-theme-talia .dv-tab.active {
           background: #fff;
-          box-shadow: inset 0 -2px 0 #b08d57;
+          box-shadow: none;
+          outline: none;
         }
         
         .dockview-theme-dark {

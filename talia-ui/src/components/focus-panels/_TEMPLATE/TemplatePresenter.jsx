@@ -188,6 +188,16 @@ const TemplatePresenter = ({ data, panelInstanceId, panelComponentId }) => {
     // };
   }, [panelComponentId, panelInstanceId]);
 
+  // OPTIONAL: register dock-tab data export (CSV / PDF) when supportsDataExport: true.
+  useEffect(() => {
+    // import { payloadFromTabulator, registerPanelDataExport } from '../../../lib/panelDataExport';
+    // return registerPanelDataExport({
+    //   panelInstanceId,
+    //   panelComponentId: panelComponentId || 'your-panel-id',
+    //   getPayload: () => payloadFromTabulator(instanceRef.current, 'Template'),
+    // });
+  }, [panelComponentId, panelInstanceId]);
+
   // Mirror rowSelectionChanged emit when the form activates for a single row.
   const onRecordActive = useCallback((rec) => {
     if (!rec) return;

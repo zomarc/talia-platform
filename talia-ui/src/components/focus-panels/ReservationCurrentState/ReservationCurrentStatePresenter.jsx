@@ -25,6 +25,10 @@ import {
   emitReservationClear,
   emitReservationSelect,
 } from '../../../lib/eventBus';
+import {
+  payloadFromTabulator,
+  registerPanelDataExport,
+} from '../../../lib/panelDataExport';
 
 /**
  * Presentational component for reservation current state
@@ -364,6 +368,25 @@ const ReservationCurrentStatePresenter = ({
       }
     };
   }, [columns, panelComponentId]);
+
+  // Framework tab Export (CSV / PDF) — visible/filtered Tabulator rows.
+  useEffect(() => {
+    const componentKey = panelComponentId || 'reservation-current-state';
+    return registerPanelDataExport({
+      panelInstanceId,
+      panelComponentId: componentKey,
+      getPayload: () => {
+        const table = instanceRef.current;
+        if (!table) return null;
+        const payload = payloadFromTabulator(table, 'Reservation');
+        if (payload?.rows?.length) return payload;
+        // Fallback: raw prop data if Tabulator active set is empty/unavailable
+        const rows = Array.isArray(dataRef.current) ? dataRef.current : [];
+        if (!rows.length || !payload?.columns?.length) return payload;
+        return { ...payload, rows };
+      },
+    });
+  }, [panelComponentId, panelInstanceId]);
 
   // Keep row selection in sync when cabin (or another panel) drives reservation select/clear.
   useEffect(() => {

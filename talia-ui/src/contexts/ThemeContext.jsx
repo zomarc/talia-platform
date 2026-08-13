@@ -244,6 +244,13 @@ export const ThemeProvider = ({ children }) => {
   const [tableHeaderColorHex, setTableHeaderColorHex] = useState('#3f5784');
   const [cardColorHex, setCardColorHex] = useState('#252a37');
   const [tableHeaderIntensity, setTableHeaderIntensity] = useState(60);
+  const [tabContrastIntensity, setTabContrastIntensity] = useState(55);
+  /** Active dock-tab tint (default warm amber — the previous helpful “orange” cue). */
+  const [tabColorHex, setTabColorHex] = useState('#b08d57');
+  /** Tab title size as % of Appearance font size (100 = same as general font). */
+  const [tabFontScalePercent, setTabFontScalePercent] = useState(100);
+  /** How strongly inactive tabs show a dim wash of the active tab color. */
+  const [tabInactiveIntensity, setTabInactiveIntensity] = useState(35);
   const [panelTitlesVisible, setPanelTitlesVisible] = useState(true);
   const [actionsVisible, setActionsVisible] = useState(true);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -375,6 +382,10 @@ export const ThemeProvider = ({ children }) => {
     tableHeaderColorHex,
     cardColorHex,
     tableHeaderIntensity,
+    tabContrastIntensity,
+    tabColorHex,
+    tabFontScalePercent,
+    tabInactiveIntensity,
     panelTitlesVisible,
     actionsVisible,
     controlsVisible,
@@ -392,7 +403,7 @@ export const ThemeProvider = ({ children }) => {
     headerLogoUrl,
     headerLogoVisible,
     customBackgroundHex,
-  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, hoverPreviewDelayMs, hoverPreviewOpacity, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, chartLegendsVisible, gameSoundEnabled, defaultDisplayCurrency, tableLayoutMode, headerLogoUrl, headerLogoVisible, customBackgroundHex]);
+  }), [fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, tabContrastIntensity, tabColorHex, tabFontScalePercent, tabInactiveIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, hoverPreviewDelayMs, hoverPreviewOpacity, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, chartLegendsVisible, gameSoundEnabled, defaultDisplayCurrency, tableLayoutMode, headerLogoUrl, headerLogoVisible, customBackgroundHex]);
 
   const applyAppearanceSettings = (settings) => {
     if (!settings || typeof settings !== 'object') return false;
@@ -437,6 +448,10 @@ export const ThemeProvider = ({ children }) => {
     if (settings.tableHeaderColorHex) setTableHeaderColorHex(settings.tableHeaderColorHex);
     if (settings.cardColorHex) setCardColorHex(settings.cardColorHex);
     if (Number.isFinite(settings.tableHeaderIntensity)) setTableHeaderIntensity(settings.tableHeaderIntensity);
+    if (Number.isFinite(settings.tabContrastIntensity)) setTabContrastIntensity(settings.tabContrastIntensity);
+    if (settings.tabColorHex) setTabColorHex(settings.tabColorHex);
+    if (Number.isFinite(settings.tabFontScalePercent)) setTabFontScalePercent(settings.tabFontScalePercent);
+    if (Number.isFinite(settings.tabInactiveIntensity)) setTabInactiveIntensity(settings.tabInactiveIntensity);
     if (Object.prototype.hasOwnProperty.call(settings, 'panelTitlesVisible')) {
       setPanelTitlesVisible(settings.panelTitlesVisible !== false);
     }
@@ -568,6 +583,10 @@ export const ThemeProvider = ({ children }) => {
     setTableHeaderColorHex('#3f5784');
     setCardColorHex('#252a37');
     setTableHeaderIntensity(60);
+    setTabContrastIntensity(55);
+    setTabColorHex('#b08d57');
+    setTabFontScalePercent(100);
+    setTabInactiveIntensity(35);
     setPanelTitlesVisible(true);
     setActionsVisible(true);
     setControlsVisible(true);
@@ -862,7 +881,7 @@ export const ThemeProvider = ({ children }) => {
         clearTimeout(saveSettingsTimerRef.current);
       }
     };
-  }, [appearanceDbLoaded, appearanceUserId, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, customBackgroundHex, headerLogoUrl, headerLogoVisible, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, hoverPreviewDelayMs, hoverPreviewOpacity, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, chartLegendsVisible, gameSoundEnabled, defaultDisplayCurrency, tableLayoutMode, activeAppearanceProfileId]);
+  }, [appearanceDbLoaded, appearanceUserId, fontFamily, fontSize, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, evenRowIntensity, cardColorIntensity, componentPadding, bgColor, customBackgroundHex, headerLogoUrl, headerLogoVisible, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, tabContrastIntensity, tabColorHex, tabFontScalePercent, tabInactiveIntensity, panelTitlesVisible, actionsVisible, controlsVisible, menuDisappearMs, hoverPreviewDelayMs, hoverPreviewOpacity, sidebarAutoCloseEnabled, sidebarAutoCloseMs, sidebarDisplayMode, calloutsVisible, chartLegendsVisible, gameSoundEnabled, defaultDisplayCurrency, tableLayoutMode, activeAppearanceProfileId]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -960,6 +979,17 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-table-font-size', `${tableFontSize}px`);
     root.style.setProperty('--theme-table-font-family', selectedFont.value);
     root.style.setProperty('--theme-table-header-font-size', `${tableFontSize}px`);
+
+    // Dock tab font (proportional to Appearance font size)
+    const tabScale = Math.max(70, Math.min(140, Number(tabFontScalePercent) || 100)) / 100;
+    const tabFontPx = Math.max(8, Math.round(fontSize * tabScale));
+    root.style.setProperty('--theme-tab-header-font-size', `${tabFontPx}px`);
+    // Row height = action controls + vertical padding so the title stays centered
+    // when active-tab chrome appears (no vertical jump).
+    const tabActionSize = Math.max(18, tabFontPx + 8);
+    const tabRowHeight = tabActionSize + 14;
+    root.style.setProperty('--theme-tab-action-size', `${tabActionSize}px`);
+    root.style.setProperty('--theme-tab-row-height', `${tabRowHeight}px`);
 
     // Table sizing - keep rows/headers proportional to font size
     const tableRowHeight = Math.max(18, Math.round(fontSize * 2));
@@ -1181,6 +1211,42 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-tabulator-header-text', `rgba(${headerTextR}, ${headerTextG}, ${headerTextB}, ${headerTextAlpha})`);
     root.style.setProperty('--theme-card-bg', `rgba(${cardRgb.join(',')}, ${lerp(0.40, 1.00, tc)})`);
 
+    // Dock tab strip (Appearance → Tab color / contrast / inactive dim)
+    // Note: local `lerp` already returns a string via toFixed(2).
+    const tTab = tabContrastIntensity / 100;
+    const tInactive = tabInactiveIntensity / 100;
+    const tabRgb = hexToRgb(tabColorHex) || [176, 141, 87];
+    // Inactive = dim wash of the same tab color (not a neutral grey).
+    root.style.setProperty(
+      '--theme-tab-inactive-bg',
+      `rgba(${tabRgb.join(',')}, ${lerp(0.08, 0.32, tInactive)})`
+    );
+    root.style.setProperty(
+      '--theme-tab-hover-bg',
+      `rgba(${tabRgb.join(',')}, ${lerp(0.16, 0.40, Math.max(tInactive, tTab * 0.6))})`
+    );
+    root.style.setProperty(
+      '--theme-tab-active-bg',
+      `rgba(${tabRgb.join(',')}, ${lerp(0.28, 0.58, tTab)})`
+    );
+    root.style.setProperty(
+      '--theme-tab-border',
+      `rgba(${tabRgb.join(',')}, ${lerp(0.18, 0.48, Math.max(tInactive, tTab * 0.5))})`
+    );
+    root.style.setProperty(
+      '--theme-tab-inactive-fg',
+      `rgba(${tabRgb.join(',')}, ${lerp(0.45, 0.78, tInactive)})`
+    );
+    root.style.setProperty(
+      '--theme-tab-active-accent',
+      `rgba(${tabRgb.join(',')}, ${lerp(0.70, 1, tTab)})`
+    );
+    if (lightPalette) {
+      root.style.setProperty('--theme-tab-strip-bg', `rgba(15, 23, 42, ${lerp(0.02, 0.055, tTab)})`);
+    } else {
+      root.style.setProperty('--theme-tab-strip-bg', `rgba(255, 255, 255, ${lerp(0.02, 0.07, tTab)})`);
+    }
+
     // Elevated surfaces blend background base with card accent tint
     if (lightPalette) {
       const elR = lerpInt(g2[0], 255, 0.25);
@@ -1199,7 +1265,7 @@ export const ThemeProvider = ({ children }) => {
     // Re-sync Chart.js globals with current CSS variables
     initChartDefaults();
 
-  }, [fontSize, selectedFont, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, bgColor, customBackgroundHex, menuDisappearMs, hoverPreviewDelayMs, hoverPreviewOpacity, mergedTaliaUiThemes]);
+  }, [fontSize, selectedFont, textIntensity, groupColorIntensity, rowColorIntensity, oddRowIntensity, cardColorIntensity, evenRowIntensity, componentPadding, accentColor, rowAccentColor, cardAccentColor, groupColorHex, rowHoverColorHex, oddRowColorHex, evenRowColorHex, tableHeaderColorHex, cardColorHex, tableHeaderIntensity, tabContrastIntensity, tabColorHex, tabFontScalePercent, tabInactiveIntensity, bgColor, customBackgroundHex, menuDisappearMs, hoverPreviewDelayMs, hoverPreviewOpacity, mergedTaliaUiThemes]);
 
   const applyAppearanceStyleSelectKey = (rawNext) => {
     const key =
@@ -1288,6 +1354,14 @@ export const ThemeProvider = ({ children }) => {
     setCardColorHex,
     tableHeaderIntensity,
     setTableHeaderIntensity,
+    tabContrastIntensity,
+    setTabContrastIntensity,
+    tabColorHex,
+    setTabColorHex,
+    tabFontScalePercent,
+    setTabFontScalePercent,
+    tabInactiveIntensity,
+    setTabInactiveIntensity,
     panelTitlesVisible,
     setPanelTitlesVisible,
     actionsVisible,

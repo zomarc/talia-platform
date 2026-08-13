@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { DockviewDefaultTab } from "dockview";
 import {
   DOCKVIEW_MAXIMIZE_STATE_EVENT,
@@ -14,6 +15,10 @@ import {
   setPanelTechnicalMetaVisible,
 } from "../../services/panelTechnicalMetaState";
 import { resolvePanelLoading } from "../../services/panelLoadingState";
+import {
+  resolvePanelDataExport,
+  runPanelDataExport,
+} from "../../lib/panelDataExport";
 
 const SIDE_EXPAND_DECISION_TIMEOUT_MS = 3000;
 
@@ -53,12 +58,19 @@ const getGroupIdsInSameVisualSide = (dockviewApi, targetGroupId) => {
   );
 };
 
-const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateToken, ...props }) => {
+const TaliaDockviewTab = ({
+  reportPanelIds,
+  groupActionPanelIds,
+  dataExportPanelIds,
+  maximizeStateToken,
+  ...props
+}) => {
   const panelApi = props?.api;
   const panelId = panelApi?.id;
   const panelComponent = panelApi?.component;
   const isReportTab = !!panelComponent && reportPanelIds?.has?.(panelComponent);
   const hasGroupActions = !!panelComponent && groupActionPanelIds?.has?.(panelComponent);
+  const hasDataExport = !!panelComponent && dataExportPanelIds?.has?.(panelComponent);
   const [_isMaximized, setIsMaximized] = React.useState(() => panelApi?.isMaximized?.() ?? false);
   const [layoutCycleState, setLayoutCycleState] = React.useState(0); // 0: original, 1: side-expand window, 2: full-expand, 3: side-expand restore
   const layoutCycleRef = React.useRef({
@@ -84,6 +96,10 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
     .filter(Boolean)
     .join(" ");
   const [showCloseConfirm, setShowCloseConfirm] = React.useState(false);
+  const [showExportMenu, setShowExportMenu] = React.useState(false);
+  const [exportMenuPos, setExportMenuPos] = React.useState(null);
+  const exportMenuRef = React.useRef(null);
+  const exportButtonRef = React.useRef(null);
   const [isPrimaryActive, setIsPrimaryActive] = React.useState(false);
   const [isPaused, setIsPaused] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(() => resolvePanelLoading(panelId, panelComponent));
@@ -427,6 +443,77 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
     );
   };
 
+  React.useEffect(() => {
+    if (!showExportMenu) return undefined;
+    const onPointerDown = (event) => {
+      const menu = exportMenuRef.current;
+      const button = exportButtonRef.current;
+      if (menu?.contains?.(event.target) || button?.contains?.(event.target)) return;
+      setShowExportMenu(false);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setShowExportMenu(false);
+    };
+    const onResize = () => setShowExportMenu(false);
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('resize', onResize);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [showExportMenu]);
+
+  React.useEffect(() => {
+    if (!isPrimaryActive) {
+      setShowExportMenu(false);
+      setShowCloseConfirm(false);
+    }
+  }, [isPrimaryActive]);
+
+  const handleToggleExportMenu = (event) => {
+    event.stopPropagation();
+    const button = event.currentTarget;
+    const rect = button?.getBoundingClientRect?.();
+    setShowExportMenu((open) => {
+      if (open) return false;
+      if (rect) {
+        setExportMenuPos({
+          top: Math.round(rect.bottom + 4),
+          left: Math.round(Math.max(8, rect.right - 88)),
+        });
+      }
+      return true;
+    });
+  };
+
+  const handleExportFormat = (format) => (event) => {
+    event.stopPropagation();
+    setShowExportMenu(false);
+    const registered = resolvePanelDataExport(panelId, panelComponent);
+    if (!registered?.getPayload) {
+      try {
+        window.__taliaStatus?.setStatusMessage?.('Nothing to export');
+      } catch { /* noop */ }
+      return;
+    }
+    try {
+      runPanelDataExport(format, registered.getPayload);
+      try {
+        window.__taliaStatus?.setStatusMessage?.(
+          format === 'pdf' ? 'Opening print dialog for PDF…' : 'CSV downloaded'
+        );
+      } catch { /* noop */ }
+    } catch (err) {
+      const message = err?.message || 'Export failed';
+      console.error('[TaliaDockviewTab] export failed', err);
+      try {
+        window.__taliaStatus?.setStatusMessage?.(`Error: ${message}`);
+      } catch { /* noop */ }
+    }
+  };
+
   const cycleLabel = `Group view level ${groupCycleDepth} of ${groupCycleMaxDepth}`;
   const cycleIcon = groupCycleDepth === 0
     ? '⊟'
@@ -457,68 +544,113 @@ const TaliaDockviewTab = ({ reportPanelIds, groupActionPanelIds, maximizeStateTo
       <span className={indicatorClassName} title={indicatorTitle} aria-label={indicatorTitle}>
         {indicatorSymbol}
       </span>
+      {isPrimaryActive && (
       <div className="talia-dv-tab__actions">
-        {isReportTab && (
-          <button
-            type="button"
-            className="talia-dv-tab__button talia-dv-tab__button--technical"
-            title="Technical info (events, sources) — dev/admin; not the same as header data details"
-            aria-label="Toggle technical panel information"
-            onClick={handleToggleTechnicalMeta}
-          >
-            ⓘ
-          </button>
-        )}
-        {hasGroupActions && (
-          <button
-            type="button"
-            className="talia-dv-tab__button talia-dv-tab__button--group"
-            title={`${cycleLabel} (click to cycle)`}
-            aria-label={`${cycleLabel}. Click to cycle group expansion.`}
-            onClick={handleGroupAction('cycle')}
-          >
-            {cycleIcon}
-          </button>
-        )}
-        <button
-          type="button"
-          className={layoutButtonClassName}
-          title={layoutTitle}
-          aria-label={layoutTitle}
-          onClick={handleLayoutToggle}
-          onDoubleClick={(event) => event.stopPropagation()}
-        >
-          {layoutGlyph}
-        </button>
-        <button
-          type="button"
-          className="talia-dv-tab__button talia-dv-tab__button--primary"
-          title="Close tab"
-          aria-label="Close tab"
-          onClick={handlePrimaryAction}
-          onDoubleClick={(event) => event.stopPropagation()}
-        >
-          X
-        </button>
-        {showCloseConfirm && (
-          <div className="talia-dv-tab__inline-confirm" role="group" aria-label="Confirm close panel">
+            {isReportTab && (
+              <button
+                type="button"
+                className="talia-dv-tab__button talia-dv-tab__button--technical"
+                title="Technical info (events, sources) — dev/admin; not the same as header data details"
+                aria-label="Toggle technical panel information"
+                onClick={handleToggleTechnicalMeta}
+              >
+                ⓘ
+              </button>
+            )}
+            {hasDataExport && (
+              <div className="talia-dv-tab__export">
+                <button
+                  ref={exportButtonRef}
+                  type="button"
+                  className="talia-dv-tab__button talia-dv-tab__button--export"
+                  title="Export table data (visible/filtered rows) — CSV or PDF"
+                  aria-label="Export table data"
+                  aria-expanded={showExportMenu}
+                  aria-haspopup="menu"
+                  onClick={handleToggleExportMenu}
+                >
+                  ⬇
+                </button>
+                {showExportMenu && exportMenuPos && createPortal(
+                  <div
+                    ref={exportMenuRef}
+                    className="talia-dv-tab__export-menu talia-dv-tab__export-menu--portal"
+                    role="menu"
+                    aria-label="Export format"
+                    style={{ top: exportMenuPos.top, left: exportMenuPos.left }}
+                  >
+                    <button
+                      type="button"
+                      className="talia-dv-tab__export-menu-item"
+                      role="menuitem"
+                      onClick={handleExportFormat('csv')}
+                    >
+                      CSV
+                    </button>
+                    <button
+                      type="button"
+                      className="talia-dv-tab__export-menu-item"
+                      role="menuitem"
+                      onClick={handleExportFormat('pdf')}
+                    >
+                      PDF
+                    </button>
+                  </div>,
+                  document.body
+                )}
+              </div>
+            )}
+            {hasGroupActions && (
+              <button
+                type="button"
+                className="talia-dv-tab__button talia-dv-tab__button--group"
+                title={`${cycleLabel} (click to cycle)`}
+                aria-label={`${cycleLabel}. Click to cycle group expansion.`}
+                onClick={handleGroupAction('cycle')}
+              >
+                {cycleIcon}
+              </button>
+            )}
             <button
               type="button"
-              className="talia-dv-tab__confirm-btn talia-dv-tab__confirm-btn--danger"
-              onClick={handleConfirmClose}
+              className={layoutButtonClassName}
+              title={layoutTitle}
+              aria-label={layoutTitle}
+              onClick={handleLayoutToggle}
+              onDoubleClick={(event) => event.stopPropagation()}
             >
-              Yes
+              {layoutGlyph}
             </button>
             <button
               type="button"
-              className="talia-dv-tab__confirm-btn"
-              onClick={handleCancelClose}
+              className="talia-dv-tab__button talia-dv-tab__button--primary"
+              title="Close tab"
+              aria-label="Close tab"
+              onClick={handlePrimaryAction}
+              onDoubleClick={(event) => event.stopPropagation()}
             >
-              No
+              X
             </button>
-          </div>
-        )}
+            {showCloseConfirm && (
+              <div className="talia-dv-tab__inline-confirm" role="group" aria-label="Confirm close panel">
+                <button
+                  type="button"
+                  className="talia-dv-tab__confirm-btn talia-dv-tab__confirm-btn--danger"
+                  onClick={handleConfirmClose}
+                >
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  className="talia-dv-tab__confirm-btn"
+                  onClick={handleCancelClose}
+                >
+                  No
+                </button>
+              </div>
+            )}
       </div>
+      )}
     </div>
   );
 };

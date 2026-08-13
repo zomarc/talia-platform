@@ -97,6 +97,7 @@ StatusBar global criteria / focus / visibility strips are independent of **Opera
 | **Snapshot** | Pinned KPI strip above scrollable body (Booked, Velocity, …) | `ReportSnapshot` → `section.talia-report__snapshot` + `.talia-report__metrics` / `.talia-metric` | — | — |
 | **Details** | User-facing *extra* data blocks (header ≣); never the primary table/chart | `ReportDataDetails` + `usePanelDetailsVisibility` | **Details** (≣ btn) | `localStorage` `taliaGlobalReportDetailsVisible` |
 | **Technical meta** | Dev/diagnostic block (dock tab ⓘ) | `ReportEventMeta` via `usePanelTechnicalMetaVisibility` | Tab ⓘ only | In-memory `__taliaPanelTechnicalMetaVisibility` |
+| **Data export** | CSV / print-PDF of visible table rows for verification | `lib/panelDataExport.js` + `supportsDataExport` | Tab **⬇** (next to ⓘ) | `window.__taliaPanelDataExport` |
 | **Content** | Primary body (table, chart, map) | `main.talia-report__content`; with Snapshot use `talia-report__content--scroll` so only the body scrolls | — | — |
 
 ### Root `<html>` classes (visibility)
@@ -290,6 +291,7 @@ const MyComponent = () => {
 - Emit events on row selection: `talia:componentname.select`
 - **Persistent selection indicator:** use `createReferenceRowFormatter` / `refreshReferenceRowClasses` from `lib/tabulatorReferenceSelection.js` so the active row keeps class `tabulator-row--reference` across data refresh. Shared left accent bar styling lives in `tabulator-theme.css` (`--theme-table-row-selected-accent`). Panels with `selectableRows: 1` get the same bar via `.tabulator-selected`.
 - For grouped tables that need tab-header controls, set `supportsGroupActions: true` in `registry.js` and register presenter actions in `window.__taliaPanelGroupActions`
+- For **table data export** (CSV / print-PDF for verification), set `supportsDataExport: true` in `registry.js` and register via `registerPanelDataExport` from `lib/panelDataExport.js` (dock tab **⬇** next to ⓘ). Prefer `payloadFromTabulator(table, title)` so export uses **visible/filtered** rows. This is distinct from product Export in `.talia-report__actions-bar` (e.g. Project Summary PDF).
 - Do not hardcode table `layout` in panel code unless you intentionally opt out with `enforceGlobalLayout: false`
 - **Single-row record form:** when the presenter’s data array has exactly one row, render `ReportTableOrRecord` / `ReportRecordForm` (`components/shared/ReportRecordForm.jsx`) instead of the visible table. Keep the Tabulator host mounted but hidden so the instance is not destroyed. Reuses column `titleLong`/`title` and formatters via `lib/reportRecordForm.js`. Opt out a column with `excludeFromRecordForm: true`. Skip matrix/heatmap panels.
 
@@ -301,6 +303,24 @@ const MyComponent = () => {
   - `panelInstanceId` (instance key, when available)
 - Expose `getCycleState()` returning `{ depth, maxDepth }` so tab icon/tooltip reflects current state
 - Cleanup registrations on unmount to avoid stale handlers
+
+**Panel data export (optional, dock tab ⬇):**
+- Opt in with `supportsDataExport: true` in `registry.js`
+- Register in the presenter:
+
+```jsx
+import { payloadFromTabulator, registerPanelDataExport } from '../../../lib/panelDataExport';
+
+useEffect(() => {
+  return registerPanelDataExport({
+    panelInstanceId,
+    panelComponentId,
+    getPayload: () => payloadFromTabulator(instanceRef.current, 'My Panel'),
+  });
+}, [panelInstanceId, panelComponentId]);
+```
+
+- Tab chrome shows **⬇** → CSV | PDF (print dialog). Do not put export inside `ReportEventMeta` (tab ⓘ remains technical meta only).
 
 **Example:**
 ```jsx

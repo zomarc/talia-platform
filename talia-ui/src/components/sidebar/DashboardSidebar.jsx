@@ -71,6 +71,14 @@ function DashboardSidebar({
     setCardColorHex,
     tableHeaderIntensity,
     setTableHeaderIntensity,
+    tabContrastIntensity,
+    setTabContrastIntensity,
+    tabColorHex,
+    setTabColorHex,
+    tabFontScalePercent,
+    setTabFontScalePercent,
+    tabInactiveIntensity,
+    setTabInactiveIntensity,
     panelTitlesVisible,
     setPanelTitlesVisible,
     actionsVisible,
@@ -646,6 +654,59 @@ function DashboardSidebar({
                 </TaliaTooltip>
               </div>
               <div className="dashboard-form-hint">Controls Tabulator header background for all tables globally.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">
+                Tab font: {Math.max(8, Math.round(fontSize * (Math.max(70, Math.min(140, tabFontScalePercent)) / 100)))}px
+                {' '}({tabFontScalePercent}% of {fontSize}px)
+              </label>
+              <input
+                type="range"
+                min="70"
+                max="140"
+                step="5"
+                value={tabFontScalePercent}
+                onChange={(event) => setTabFontScalePercent(Number(event.target.value))}
+                className="dashboard-form-input dashboard-form-input--range"
+              />
+              <div className="dashboard-form-hint">Dock tab title size, scaled from Appearance font size.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Tab contrast: {tabContrastIntensity}%</label>
+              <div className="dashboard-form-control-row">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={tabContrastIntensity}
+                  onChange={(event) => setTabContrastIntensity(Number(event.target.value))}
+                  className="dashboard-form-input dashboard-form-input--range dashboard-form-input--range-inline"
+                />
+                <TaliaTooltip content="Select active tab color" placement="bottom-left" delayMs={180}>
+                  <input
+                    type="color"
+                    className="dashboard-form-color-input"
+                    value={tabColorHex}
+                    onChange={(event) => setTabColorHex(event.target.value)}
+                    aria-label="Active tab color"
+                  />
+                </TaliaTooltip>
+              </div>
+              <div className="dashboard-form-hint">Active dock tab fill strength and color.</div>
+            </div>
+            <div className="dashboard-form-group">
+              <label className="dashboard-form-label">Inactive tab dim: {tabInactiveIntensity}%</label>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={tabInactiveIntensity}
+                onChange={(event) => setTabInactiveIntensity(Number(event.target.value))}
+                className="dashboard-form-input dashboard-form-input--range"
+              />
+              <div className="dashboard-form-hint">How strongly unselected tabs show a dim version of the tab color.</div>
             </div>
             <div className="dashboard-form-group">
               <label className="dashboard-form-label">Card Intensity: {cardColorIntensity}%</label>

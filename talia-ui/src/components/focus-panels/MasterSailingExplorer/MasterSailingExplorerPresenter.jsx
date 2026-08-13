@@ -9,6 +9,10 @@ import { useGlobalDepartureMonth } from '../../../hooks/useGlobalDepartureMonth'
 import DistributionSummary from '../../shared/DistributionSummary';
 import HoverPreview from '../../shared/HoverPreview';
 import {
+  payloadFromTabulator,
+  registerPanelDataExport,
+} from '../../../lib/panelDataExport';
+import {
   buildExplorerDisplayRows,
   masterRowMatchesReference,
   resolveSelectionReferenceCode,
@@ -819,6 +823,24 @@ const MasterSailingExplorerPresenter = ({
     panelComponentId,
     panelInstanceId,
   ]);
+
+  // Dock-tab Export (CSV / PDF) — visible/filtered Tabulator rows.
+  useEffect(() => {
+    const componentKey = panelComponentId || 'master-sailing-explorer';
+    return registerPanelDataExport({
+      panelInstanceId,
+      panelComponentId: componentKey,
+      getPayload: () => {
+        const table = instanceRef.current;
+        if (!table) return null;
+        const payload = payloadFromTabulator(table, 'Master Sailing Explorer');
+        if (payload?.rows?.length) return payload;
+        const rows = Array.isArray(displayRowsRef.current) ? displayRowsRef.current : [];
+        if (!rows.length || !payload?.columns?.length) return payload;
+        return { ...payload, rows };
+      },
+    });
+  }, [panelComponentId, panelInstanceId]);
 
   useEffect(() => {
     const handleGroupAction = (event) => {

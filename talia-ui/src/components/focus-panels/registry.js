@@ -130,6 +130,7 @@ export const componentRegistry = {
     },
     supportsRefresh: true,
     supportsGroupActions: true,
+    supportsDataExport: true,
     showInReports: true,
     filePath: 'src/components/focus-panels/MasterSailingExplorer/index.jsx'
   },
@@ -470,6 +471,7 @@ export const componentRegistry = {
       respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, cabinSelect, cabinClear]
     },
     showInReports: true,
+    supportsDataExport: true,
     filePath: 'src/components/focus-panels/ReservationCurrentState/index.jsx'
   },
   GroupBookingReview: {

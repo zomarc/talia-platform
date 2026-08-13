@@ -959,6 +959,15 @@ function Dashboard({ user }) {
       ),
     []
   );
+  const dataExportPanelIds = React.useMemo(
+    () =>
+      new Set(
+        Object.values(reportRegistry)
+          .filter((report) => report.panelId && report.supportsDataExport)
+          .map((report) => report.panelId)
+      ),
+    []
+  );
 
   const [isSidebarInteractionActive, setIsSidebarInteractionActive] = useState(false);
   const [hasSidebarInteraction, setHasSidebarInteraction] = useState(false);
@@ -1523,10 +1532,11 @@ function Dashboard({ user }) {
         {...props}
         reportPanelIds={reportPanelIds}
         groupActionPanelIds={groupActionPanelIds}
+        dataExportPanelIds={dataExportPanelIds}
         maximizeStateToken={isGroupMaximized}
       />
     ),
-    [reportPanelIds, groupActionPanelIds, isGroupMaximized]
+    [reportPanelIds, groupActionPanelIds, dataExportPanelIds, isGroupMaximized]
   );
 
   const onReady = useCallback((event) => {

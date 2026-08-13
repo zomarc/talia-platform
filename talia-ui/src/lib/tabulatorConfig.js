@@ -357,15 +357,37 @@ const ensureLayoutListenerBound = () => {
     applyAllVisible();
   });
 
-  // Only flush tables that deferred layout while hidden. Activating an already-
-  // visible grid panel must not redraw every sibling (scroll bounce / missed click).
-  window.addEventListener(REPORT_ACTIVE_PANEL_EVENT, () => {
+  // Re-apply the current global fit when the active dock tab changes.
+  // Deferred-only flush missed tables that measured while the host was the
+  // wrong size (or never set pendingLayoutRefresh), which left the wrong fit.
+  window.addEventListener(REPORT_ACTIVE_PANEL_EVENT, (event) => {
+    const activePanelId = event?.detail?.activePanelId
+      || window.__taliaActivePanelId
+      || null;
     window.requestAnimationFrame(() => {
-      tableInstances.forEach((table) => {
-        const meta = tableMeta.get(table);
-        if (!meta?.pendingLayoutRefresh) return;
-        if (!isTableHostVisible(table)) return;
-        applyLayoutModeToTable(table, { force: true });
+      window.requestAnimationFrame(() => {
+        tableInstances.forEach((table) => {
+          const meta = tableMeta.get(table);
+          const visible = isTableHostVisible(table);
+          if (!visible) {
+            if (meta) meta.pendingLayoutRefresh = true;
+            return;
+          }
+          const belongsToActivePanel = Boolean(
+            activePanelId
+            && meta?.panelInstanceId
+            && meta.panelInstanceId === activePanelId
+          );
+          // Prefer the active panel's tables; also flush any deferred refresh and
+          // any visible table that never registered a panel id (common today).
+          if (
+            belongsToActivePanel
+            || meta?.pendingLayoutRefresh
+            || !meta?.panelInstanceId
+          ) {
+            applyLayoutModeToTable(table, { force: true });
+          }
+        });
       });
     });
   });

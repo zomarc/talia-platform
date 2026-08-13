@@ -43,69 +43,85 @@
   --dv-panelview-background: #ffffff;
   --dv-tab-divider-color: transparent;
   --dv-tab-close-button-hover-background: rgba(176, 141, 87, 0.15);
-  --dv-tab-outline-color: #b08d57;
+  --dv-tab-outline-color: transparent;
   --dv-scrollbar-slider-background: rgba(176, 141, 87, 0.45);
   --dv-scrollbar-slider-hover-background: rgba(176, 141, 87, 0.65);
 }
 
 .dockview-theme-talia .dv-tabs {
-  gap: 2px;
-  min-height: calc(var(--theme-tab-header-font-size) + 14px);
-  height: calc(var(--theme-tab-header-font-size) + 14px);
+  gap: 4px;
+  min-height: var(--theme-tab-row-height, calc(var(--theme-tab-header-font-size) + 18px));
+  height: var(--theme-tab-row-height, calc(var(--theme-tab-header-font-size) + 18px));
   align-items: stretch;
+  padding: 0 4px;
 }
 
 .dockview-theme-talia .dv-tab {
-  border-radius: 10px 10px 0 0;
-  padding:
-    calc((var(--theme-tab-header-font-size) * 0.02) + 1px)
-    calc(var(--theme-tab-header-font-size) * 0.45)
-    calc((var(--theme-tab-header-font-size) * 0.02) - 2px);
-  min-height: calc(var(--theme-tab-header-font-size) + 12px);
-  height: calc(var(--theme-tab-header-font-size) + 12px);
+  border-radius: 8px 8px 0 0;
+  padding: 0 calc(var(--theme-tab-header-font-size) * 0.4);
+  min-height: var(--theme-tab-row-height, calc(var(--theme-tab-header-font-size) + 14px));
+  height: var(--theme-tab-row-height, calc(var(--theme-tab-header-font-size) + 14px));
   font-size: var(--theme-tab-header-font-size) !important;
   font-weight: var(--theme-tab-header-font-weight);
-  color: color-mix(in srgb, var(--theme-fg) 92%, var(--theme-text-secondary));
-  background: color-mix(in srgb, var(--theme-warning) 7%, var(--theme-bg-elevated));
-  border: none;
-  line-height: 1.05;
+  color: var(--theme-tab-inactive-fg, color-mix(in srgb, var(--theme-fg) 72%, var(--theme-text-secondary)));
+  background: var(--theme-tab-inactive-bg, var(--theme-glass));
+  border: 1px solid var(--theme-tab-border, var(--theme-border-light));
+  border-bottom-color: transparent;
+  line-height: 1;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .dockview-theme-talia .dv-tab.active,
 .dockview-theme-talia .dv-tab.dv-active-tab,
 .dockview-theme-talia .dv-tab[aria-selected="true"] {
-  background: color-mix(in srgb, var(--theme-warning) 45%, var(--theme-bg-solid));
-  color: var(--theme-header-text);
+  background: var(--theme-tab-active-bg, var(--theme-accent-light));
+  color: var(--theme-header-text, var(--theme-fg));
+  border-color: var(--theme-tab-border, var(--theme-border));
+  border-bottom-color: transparent;
   box-shadow: none;
+  outline: none;
 }
 
 .dashboard-dockview .dv-tabs-and-actions-container {
-  background: color-mix(in srgb, var(--theme-warning) 7%, var(--theme-bg-elevated)) !important;
-  border-bottom: none !important;
-  min-height: calc(var(--theme-tab-header-font-size) + 14px);
-  height: calc(var(--theme-tab-header-font-size) + 14px);
+  background: var(--theme-tab-strip-bg, var(--theme-bg-elevated)) !important;
+  border-bottom: 1px solid var(--theme-tab-border, var(--theme-border-light)) !important;
+  min-height: var(--theme-tab-row-height, calc(var(--theme-tab-header-font-size) + 18px));
+  height: var(--theme-tab-row-height, calc(var(--theme-tab-header-font-size) + 18px));
   align-items: stretch;
 }
 
 .dashboard-dockview .dv-tab {
-  background: color-mix(in srgb, var(--theme-warning) 7%, var(--theme-bg-elevated)) !important;
-  border: none !important;
-  color: color-mix(in srgb, var(--theme-fg) 92%, var(--theme-text-secondary)) !important;
-  min-height: calc(var(--theme-tab-header-font-size) + 12px) !important;
-  height: calc(var(--theme-tab-header-font-size) + 12px) !important;
+  background: var(--theme-tab-inactive-bg, var(--theme-glass)) !important;
+  border: 1px solid var(--theme-tab-border, var(--theme-border-light)) !important;
+  border-bottom-color: transparent !important;
+  color: var(--theme-tab-inactive-fg, color-mix(in srgb, var(--theme-fg) 72%, var(--theme-text-secondary))) !important;
+  min-height: var(--theme-tab-row-height, calc(var(--theme-tab-header-font-size) + 14px)) !important;
+  height: var(--theme-tab-row-height, calc(var(--theme-tab-header-font-size) + 14px)) !important;
+  box-sizing: border-box;
+  display: flex !important;
+  align-items: center !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .dashboard-dockview .dv-tab:hover {
-  background: color-mix(in srgb, var(--theme-warning) 18%, var(--theme-bg-solid)) !important;
-  color: var(--theme-header-text) !important;
+  background: var(--theme-tab-hover-bg, var(--theme-glass-hover)) !important;
+  color: var(--theme-header-text, var(--theme-fg)) !important;
 }
 
 .dashboard-dockview .dv-tab.active,
 .dashboard-dockview .dv-tab.dv-active-tab,
 .dashboard-dockview .dv-tab[aria-selected="true"] {
-  background: color-mix(in srgb, var(--theme-warning) 45%, var(--theme-bg-solid)) !important;
-  color: var(--theme-header-text) !important;
+  background: var(--theme-tab-active-bg, var(--theme-accent-light)) !important;
+  color: var(--theme-header-text, var(--theme-fg)) !important;
+  border-color: var(--theme-tab-border, var(--theme-border)) !important;
+  border-bottom-color: transparent !important;
   box-shadow: none !important;
+  outline: none !important;
 }
 
 .dashboard-dockview .talia-dv-tab__active-indicator {
@@ -113,16 +129,17 @@
   align-items: center;
   justify-content: center;
   margin-left: 4px;
-  margin-top: 1px;
-  color: color-mix(in srgb, var(--theme-warning) 78%, #ffffff);
+  margin-top: 0;
+  color: var(--theme-tab-active-accent, var(--theme-accent));
   font-size: calc(var(--theme-tab-header-font-size) - 1px);
   line-height: 1;
   pointer-events: none;
   min-width: 8px;
+  flex-shrink: 0;
 }
 
 .dashboard-dockview .talia-dv-tab__active-indicator--active {
-  color: color-mix(in srgb, var(--theme-warning) 82%, #ffffff);
+  color: var(--theme-tab-active-accent, var(--theme-accent));
 }
 
 .dashboard-dockview .talia-dv-tab__active-indicator--paused {
@@ -130,7 +147,7 @@
 }
 
 .dashboard-dockview .talia-dv-tab__active-indicator--available {
-  color: color-mix(in srgb, var(--theme-text-muted) 85%, #ffffff);
+  color: var(--theme-text-muted);
 }
 
 .dashboard-dockview .talia-dv-tab__loading-indicator {
@@ -141,7 +158,7 @@
   margin-left: 4px;
   margin-top: 1px;
   border: 2px solid color-mix(in srgb, var(--theme-text-muted) 35%, transparent);
-  border-top-color: color-mix(in srgb, var(--theme-warning) 82%, #ffffff);
+  border-top-color: var(--theme-tab-active-accent, var(--theme-accent));
   border-radius: 50%;
   animation: talia-spin 0.8s linear infinite;
   pointer-events: none;
@@ -155,7 +172,7 @@
 .dashboard-dockview .dv-tab .dv-tab-content,
 .dashboard-dockview .dv-default-tab-content {
   font-size: var(--theme-tab-header-font-size) !important;
-  line-height: 1.05 !important;
+  line-height: 1 !important;
 }
 
 .dockview-theme-dark {
@@ -310,25 +327,35 @@
   align-items: center;
   width: 100%;
   min-width: 0;
+  height: 100%;
 }
 
 .dashboard-dockview .talia-dv-tab .dv-default-tab {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 100%;
 }
 
 .dashboard-dockview .talia-dv-tab__actions {
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 4px;
-  margin-left: 4px;
-  margin-top: 1px;
+  margin-left: 6px;
+  margin-top: 0;
   position: relative;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  height: var(--theme-tab-action-size, calc(var(--theme-tab-header-font-size) + 8px));
+  box-sizing: border-box;
 }
 
 .dashboard-dockview .talia-dv-tab__button {
-  border: 1px solid var(--theme-border-light, rgba(0, 0, 0, 0.16));
-  background: color-mix(in srgb, var(--theme-warning) 8%, var(--theme-glass));
+  border: 1px solid color-mix(in srgb, var(--theme-tab-active-accent, var(--theme-tab-border, var(--theme-border-light))) 55%, transparent);
+  background: color-mix(in srgb, var(--theme-tab-active-accent, #b08d57) 14%, var(--theme-glass));
   color: inherit;
   border-radius: 4px;
   font-size: inherit;
@@ -346,21 +373,13 @@
   pointer-events: none;
 }
 
-/* Shared refresh affordance for all ReportShell panels (pairs with tab spinner). */
+/* Loading cue is the dock-tab spinner — keep panel content stable (no grey flash). */
 .talia-report-shell--loading .talia-report-shell__content {
-  opacity: 0.48;
-  filter: grayscale(0.35);
-  transition: opacity 120ms ease, filter 120ms ease;
   pointer-events: none;
 }
 
 .talia-report-shell--loading::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, var(--theme-bg-solid, #1a1a1a) 28%, transparent);
-  pointer-events: none;
-  z-index: 1;
+  display: none;
 }
 
 .talia-report-shell__pause-overlay {
@@ -388,8 +407,8 @@
 }
 
 .dashboard-dockview .dv-tab:not(.active):not(.dv-active-tab):not([aria-selected="true"]) .talia-dv-tab__button {
-  background: color-mix(in srgb, var(--theme-warning) 4%, var(--theme-glass));
-  border-color: color-mix(in srgb, var(--theme-border-light) 88%, transparent);
+  background: color-mix(in srgb, var(--theme-tab-active-accent, #b08d57) 8%, var(--theme-glass));
+  border-color: color-mix(in srgb, var(--theme-tab-border, var(--theme-border-light)) 88%, transparent);
   color: var(--theme-text-muted);
   opacity: 0.70;
 }
@@ -397,13 +416,13 @@
 .dashboard-dockview .dv-tab.active .talia-dv-tab__button,
 .dashboard-dockview .dv-tab.dv-active-tab .talia-dv-tab__button,
 .dashboard-dockview .dv-tab[aria-selected="true"] .talia-dv-tab__button {
-  background: color-mix(in srgb, var(--theme-warning) 10%, var(--theme-glass));
-  color: var(--theme-header-text);
+  background: color-mix(in srgb, var(--theme-tab-active-accent, #b08d57) 16%, var(--theme-glass));
+  color: var(--theme-header-text, var(--theme-fg));
   opacity: 1;
 }
 
 .dashboard-dockview .talia-dv-tab__button:hover {
-  background: color-mix(in srgb, var(--theme-warning) 12%, var(--theme-glass-hover, rgba(0, 0, 0, 0.06)));
+  background: color-mix(in srgb, var(--theme-tab-active-accent, #b08d57) 24%, var(--theme-glass-hover, rgba(0, 0, 0, 0.06)));
 }
 
 .dashboard-dockview .talia-dv-tab__button--primary {
@@ -472,6 +491,74 @@
   align-items: center;
   justify-content: center;
   font-size: var(--theme-font-size-xs);
+}
+
+.dashboard-dockview .talia-dv-tab__export {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dashboard-dockview .talia-dv-tab__button--export {
+  min-width: calc(var(--theme-tab-header-font-size) + 6px);
+  width: calc(var(--theme-tab-header-font-size) + 6px);
+  height: calc(var(--theme-tab-header-font-size) + 6px);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--theme-font-size-xs);
+}
+
+.dashboard-dockview .talia-dv-tab__export-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10050;
+  min-width: 88px;
+  padding: 4px;
+  border-radius: 6px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated, var(--theme-bg-solid));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Portaled below the tab bar so overflow:hidden cannot clip CSV/PDF choices */
+.talia-dv-tab__export-menu--portal {
+  position: fixed;
+  right: auto;
+  z-index: 100000;
+  min-width: 88px;
+  padding: 4px;
+  border-radius: 6px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated, var(--theme-bg-solid, #1a1a2e));
+  color: var(--theme-fg, #e8e8f0);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.talia-dv-tab__export-menu--portal .talia-dv-tab__export-menu-item,
+.dashboard-dockview .talia-dv-tab__export-menu-item {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: calc(var(--theme-font-size, 13px) - 1px);
+  line-height: 1.2;
+}
+
+.talia-dv-tab__export-menu--portal .talia-dv-tab__export-menu-item:hover,
+.dashboard-dockview .talia-dv-tab__export-menu-item:hover {
+  background: var(--theme-hover, rgba(91, 155, 213, 0.25));
 }
 
 .dashboard-dockview .talia-dv-tab__inline-confirm {

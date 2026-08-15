@@ -789,6 +789,10 @@ export const typeDefs = `#graphql
     totals: [DimensionalCurvePoint!]!
     contractSeries: [DimensionalSeries!]
     contractMessage: String
+    """Active inventory target densified onto the Monday week axis (guest estimate from LF%)."""
+    targetSeries: [DimensionalCurvePoint!]
+    targetSource: String
+    activeTargetName: String
     composition: [ProfileCompositionSlice!]!
     maxWeeks: Int!
     daysUntilSailing: Int

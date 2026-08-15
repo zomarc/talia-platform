@@ -2,8 +2,9 @@
  * Seasonal Trading Pack presenter — clear stacked sections + PDF export.
  */
 
-import React, { useState } from 'react';
-import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import React, { useEffect, useState } from 'react';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
+import { registerPanelDataExport } from '../../../lib/panelDataExport';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import ReportSnapshot from '../../shared/ReportSnapshot';
 import { exportSeasonalTradingPackPdf } from './exportSeasonalTradingPackPdf';
@@ -56,10 +57,11 @@ const SeasonalTradingPackPresenter = ({
   panelComponentId,
 }) => {
   const [exportError, setExportError] = useState(null);
-  const [showDetails] = usePanelDetailsVisibility({
-    panelInstanceId,
-    panelComponentId: panelComponentId || 'seasonal-trading-pack',
-  });
+  const componentKey = panelComponentId || 'seasonal-trading-pack';
+  const { showSnapshot, showDetails, showFilters } = useReportShellOptions(
+    componentKey,
+    panelInstanceId
+  );
 
   const matrix = metric === 'pax' ? data?.paxMatrix : data?.revMatrix;
   const narrativeBullets = data?.narrative?.bullets || [];
@@ -70,6 +72,34 @@ const SeasonalTradingPackPresenter = ({
   const wow = data?.trading?.wow;
   const cumulative = data?.trading?.cumulative;
   const facts = data?.narrative?.facts;
+
+  useEffect(() => {
+    return registerPanelDataExport({
+      panelInstanceId,
+      panelComponentId: componentKey,
+      getPayload: () => {
+        const labels = matrix?.monthLabels || [];
+        const rows = matrix?.rows || [];
+        if (!rows.length) return null;
+        const columns = [
+          { field: 'metric', title: 'Metric' },
+          ...labels.map((label, idx) => ({ field: `m${idx}`, title: label })),
+          { field: 'total', title: 'Grand Total' },
+        ];
+        return {
+          title: `Seasonal Trading Pack ${fyLabel || data?.fyLabel || ''}`.trim(),
+          columns,
+          rows: rows.map((row) => {
+            const out = { metric: row.label, total: row.total };
+            (row.values || []).forEach((value, idx) => {
+              out[`m${idx}`] = value;
+            });
+            return out;
+          }),
+        };
+      },
+    });
+  }, [componentKey, data?.fyLabel, fyLabel, matrix, panelInstanceId]);
 
   const metrics = [
     {
@@ -152,7 +182,10 @@ const SeasonalTradingPackPresenter = ({
         </p>
       </header>
 
-      <div className="talia-report-filters" aria-label="Trading pack filters">
+      <div
+        className={`talia-report-filters${showFilters ? '' : ' talia-report-filters--hidden'}`}
+        aria-label="Trading pack filters"
+      >
         <label className="talia-report-filters__group">
           <span className="talia-report-filters__label">FY</span>
           <input
@@ -246,8 +279,9 @@ const SeasonalTradingPackPresenter = ({
       </div>
 
       <ReportSnapshot
-        title="Snapshot"
+        title={null}
         ariaLabel="Trading pack KPIs"
+        visible={showSnapshot}
         items={metrics}
       />
 

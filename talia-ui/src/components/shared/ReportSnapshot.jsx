@@ -3,9 +3,11 @@ import React from 'react';
 /**
  * Pinned KPI strip for report shells — sits above scrollable `talia-report__content`.
  * See COMPONENT-STANDARDS § Report Shell Vocabulary → Snapshot.
+ * Visibility: gate with component Options Views → Snapshot (`useComponentOptions`).
  *
  * @param {string} [title='Snapshot']
  * @param {Array<{ key: string, label: string, value: React.ReactNode, hint?: React.ReactNode, tone?: 'positive'|'negative'|'neutral', trend?: 'up'|'down'|'flat'|null }>} items
+ * @param {boolean} [visible=true] when false, render nothing (Views toggle)
  * @param {string} [ariaLabel]
  * @param {string} [className]
  */
@@ -30,10 +32,11 @@ const TrendIndicator = ({ trend }) => {
 const ReportSnapshot = ({
   title = 'Snapshot',
   items = [],
+  visible = true,
   ariaLabel,
   className = '',
 }) => {
-  if (!items.length) return null;
+  if (!visible || !items.length) return null;
 
   const combined = ['talia-report__snapshot', className].filter(Boolean).join(' ');
 

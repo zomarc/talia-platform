@@ -9,7 +9,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import HoverPreview from '../../shared/HoverPreview';
 import CabinDeckHoverSummary from '../../shared/CabinDeckHoverSummary';
-import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import { clipAnchorRectToViewport } from '../../../lib/clipAnchorRect';
 import { ALLOCATE_MODE, allocateGtyPreview } from './cabinDeckAllocate.js';
 import { findCabinItemForReservation } from './cabinDeckInventoryTransform.js';
@@ -279,10 +279,11 @@ const CabinDeckInventoryPresenter = ({
   bundleRef.current = bundle;
   allocateModeRef.current = allocateMode;
   selectedCabinKeyRef.current = selectedCabinKey;
-  const [showDetails] = usePanelDetailsVisibility({
-    panelInstanceId,
+  const { showDetails, operations } = useReportShellOptions(
     panelComponentId,
-  });
+    panelInstanceId
+  );
+  const allocateEnabled = operations.find((op) => op.id === 'allocate')?.enabled !== false;
 
   const allocateResult = useMemo(
     () => (allocateMode && bundle ? allocateGtyPreview(bundle, { mode: allocateMode }) : null),
@@ -572,7 +573,7 @@ const CabinDeckInventoryPresenter = ({
         </div>
       )}
 
-      {hasSailSelection && !scopeLoading && gtyTotal > 0 && (
+      {hasSailSelection && !scopeLoading && gtyTotal > 0 && allocateEnabled && (
         <div className="talia-report__actions-bar" aria-label="GTY allocate preview">
           <button
             type="button"

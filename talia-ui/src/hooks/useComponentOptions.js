@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { loadUserProfileState, saveUserProfileState } from '../services/data/userProfileState';
 import { loadRoleComponentOps } from '../services/data/roleCriteriaService';
@@ -12,6 +12,8 @@ import {
 import { canConfigureComponentOperations } from '../utils/roleUtils';
 
 export const COMPONENT_OPTIONS_CHANGED_EVENT = 'talia:component.optionsChanged';
+
+const PERSIST_DEBOUNCE_MS = 200;
 
 /**
  * User × component Views prefs + role-gated Operations.
@@ -31,6 +33,11 @@ export function useComponentOptions(componentId, registryOptions = null) {
   const [opsState, setOpsState] = useState({});
   const [roleOpsAllow, setRoleOpsAllow] = useState({});
   const [hydrated, setHydrated] = useState(false);
+  const viewsRef = useRef(viewsState);
+  const opsRef = useRef(opsState);
+  const persistTimerRef = useRef(null);
+  viewsRef.current = viewsState;
+  opsRef.current = opsState;
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +78,13 @@ export function useComponentOptions(componentId, registryOptions = null) {
     return () => window.removeEventListener(COMPONENT_OPTIONS_CHANGED_EVENT, handleChanged);
   }, [key]);
 
+  useEffect(() => () => {
+    if (persistTimerRef.current) {
+      window.clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+  }, []);
+
   const publish = useCallback((nextViews, nextOps) => {
     if (!key) return;
     window.dispatchEvent(new CustomEvent(COMPONENT_OPTIONS_CHANGED_EVENT, {
@@ -78,9 +92,8 @@ export function useComponentOptions(componentId, registryOptions = null) {
     }));
   }, [key]);
 
-  const persist = useCallback(async (nextViews, nextOps) => {
+  const persistNow = useCallback(async (nextViews, nextOps) => {
     if (!key) return;
-    publish(nextViews, nextOps);
     const patch = {
       componentOptions: {
         [key]: {
@@ -100,29 +113,46 @@ export function useComponentOptions(componentId, registryOptions = null) {
         componentOptions: {
           ...(window.__taliaUserProfileState?.componentOptions || {}),
           ...(saved?.componentOptions || {}),
+          [key]: {
+            views: nextViews,
+            operations: nextOps,
+          },
         },
       };
     } catch (error) {
       console.warn('[useComponentOptions] save failed:', error?.message || error);
     }
-  }, [key, publish]);
+  }, [key]);
+
+  const schedulePersist = useCallback((nextViews, nextOps) => {
+    if (!key) return;
+    publish(nextViews, nextOps);
+    if (persistTimerRef.current) window.clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = window.setTimeout(() => {
+      persistTimerRef.current = null;
+      // Always flush the latest ref values (avoids rapid-toggle races).
+      persistNow(viewsRef.current, opsRef.current);
+    }, PERSIST_DEBOUNCE_MS);
+  }, [key, persistNow, publish]);
 
   const setView = useCallback((id, value) => {
     setViewsState((prev) => {
       const next = { ...prev, [id]: value };
-      persist(next, opsState);
+      viewsRef.current = next;
+      schedulePersist(next, opsRef.current);
       return next;
     });
-  }, [opsState, persist]);
+  }, [schedulePersist]);
 
   const setOperation = useCallback((id, value) => {
     if (!canConfigureComponentOperations(role)) return;
     setOpsState((prev) => {
       const next = { ...prev, [id]: value };
-      persist(viewsState, next);
+      opsRef.current = next;
+      schedulePersist(viewsRef.current, next);
       return next;
     });
-  }, [persist, role, viewsState]);
+  }, [role, schedulePersist]);
 
   const views = useMemo(() => (
     (catalog.views || []).map((def) => ({

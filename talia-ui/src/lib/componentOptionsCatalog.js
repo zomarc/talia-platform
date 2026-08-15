@@ -1,11 +1,17 @@
 /**
  * Per-component Views / Operations catalog and helpers.
- * Views = non-restrictive personalization. Operations = role-gated capabilities.
+ * Views = non-restrictive personalization (Snapshot / Details / Filters / …).
+ * Operations = role-gated capabilities (Allocate, …) — admin Options only.
  */
 
 import { hasRole, canConfigureComponentOperations, normalizeRole } from '../utils/roleUtils';
 
 /** @typedef {{ id: string, label: string, type?: 'boolean'|'choice', choices?: string[], default?: unknown, minRole?: string }} ComponentOptionDef */
+
+/** Shared view defs — panels opt in via catalog / registry.options */
+export const VIEW_SNAPSHOT = { id: 'snapshot', label: 'Snapshot', type: 'boolean', default: true };
+export const VIEW_DETAILS = { id: 'details', label: 'Details', type: 'boolean', default: true };
+export const VIEW_FILTERS = { id: 'filters', label: 'Filters', type: 'boolean', default: true };
 
 /**
  * Default catalog keyed by panelComponentId (registry panelId).
@@ -16,29 +22,42 @@ export const DEFAULT_COMPONENT_OPTIONS = {
     views: [
       { id: 'viewMode', label: 'Nested', type: 'choice', choices: ['nested', 'flat'], default: 'nested' },
       { id: 'segments', label: 'Segments', type: 'boolean', default: false },
-      { id: 'details', label: 'Details', type: 'boolean', default: false },
+      VIEW_FILTERS,
     ],
     operations: [
-      { id: 'showFilters', label: 'Show filters', type: 'boolean', default: true, minRole: 'USER' },
       { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true, minRole: 'USER' },
     ],
   },
+  'reservation-booking-curve': {
+    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS],
+    operations: [],
+  },
+  'profile-compare': {
+    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS],
+    operations: [],
+  },
+  'inventory-target-profile-editor': {
+    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS],
+    operations: [],
+  },
+  'booking-profile': {
+    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS],
+    operations: [],
+  },
+  'seasonal-trading-pack': {
+    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS],
+    operations: [],
+  },
   'reservation-current-state': {
-    views: [
-      { id: 'details', label: 'Details', type: 'boolean', default: false },
-    ],
+    views: [VIEW_DETAILS, VIEW_FILTERS],
     operations: [
-      { id: 'showFilters', label: 'Show filters', type: 'boolean', default: true, minRole: 'USER' },
       { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true, minRole: 'USER' },
     ],
   },
   'cabin-deck-inventory': {
-    views: [
-      { id: 'details', label: 'Details', type: 'boolean', default: false },
-    ],
+    views: [VIEW_DETAILS, VIEW_FILTERS],
     operations: [
       { id: 'allocate', label: 'Allocate', type: 'boolean', default: true, minRole: 'MANAGER' },
-      { id: 'showFilters', label: 'Show filters', type: 'boolean', default: true, minRole: 'USER' },
       { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true, minRole: 'USER' },
     ],
   },

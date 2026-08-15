@@ -39,6 +39,11 @@ import { resolveAppPublicUrl } from '../../lib/headerLogoAsset';
 import TaliaBrandMark from './TaliaBrandMark';
 import { GLOBAL_DATE_RANGE_OPTIONS, normalizeGlobalDateRangeKey, resolveGlobalDateRange } from '../../lib/globalDateRange';
 import {
+  DEFAULT_DEMAND_UNIT,
+  DEMAND_UNIT_OPTIONS,
+  normalizeDemandUnit,
+} from '../../lib/demandUnit';
+import {
   ALL_DEPARTURE_MONTH_KEY,
   filterDepartureMonthOptionsForDateWindow,
   normalizeGlobalDepartureMonth,
@@ -101,6 +106,11 @@ const GLOBAL_CABIN_CATEGORY_MODE_OPTIONS = [
   { key: 'real', label: 'Real' },
   { key: 'group', label: 'Group' },
 ];
+
+const GLOBAL_DEMAND_UNIT_OPTIONS = DEMAND_UNIT_OPTIONS.map((option) => ({
+  key: option.key,
+  label: option.label,
+}));
 
 const normalizeMarketDimension = (value) => (
   value === 'market' ? 'market' : 'market_group'
@@ -401,6 +411,9 @@ const StatusBar = ({
   ));
   const [cabinCategoryMode, setCabinCategoryMode] = useState(() => (
     normalizeCabinCategoryMode(window.__taliaGlobalCriteria?.cabinCategoryMode)
+  ));
+  const [demandUnit, setDemandUnit] = useState(() => (
+    normalizeDemandUnit(window.__taliaGlobalCriteria?.demandUnit ?? DEFAULT_DEMAND_UNIT)
   ));
   const [refreshPhase, setRefreshPhase] = useState('active'); // active -> all -> cooldown
   const [tableLayoutMode, setTableLayoutMode] = useState(() => {
@@ -918,6 +931,12 @@ const StatusBar = ({
     setCabinCategoryMode(next);
   };
 
+  const handleDemandUnitChange = (nextValue) => {
+    const next = normalizeDemandUnit(nextValue);
+    userActivityTracker.recordHeaderAction('demand-unit', { demandUnit: next });
+    setDemandUnit(next);
+  };
+
   const dispatchDataManagementCommand = (eventName, detail = {}) => {
     window.dispatchEvent(new CustomEvent(eventName, {
       detail: {
@@ -1189,6 +1208,9 @@ const StatusBar = ({
           if (Object.prototype.hasOwnProperty.call(criteria, 'cabinCategoryMode')) {
             setCabinCategoryMode(normalizeCabinCategoryMode(criteria.cabinCategoryMode));
           }
+          if (Object.prototype.hasOwnProperty.call(criteria, 'demandUnit')) {
+            setDemandUnit(normalizeDemandUnit(criteria.demandUnit));
+          }
           const savedCurrency = typeof criteria.defaultDisplayCurrency === 'string'
             ? criteria.defaultDisplayCurrency.trim().toUpperCase()
             : '';
@@ -1260,6 +1282,7 @@ const StatusBar = ({
       marketDimension: normalizeMarketDimension(marketDimension),
       bookedComposition: normalizeBookedComposition(bookedComposition),
       cabinCategoryMode: normalizeCabinCategoryMode(cabinCategoryMode),
+      demandUnit: normalizeDemandUnit(demandUnit),
       defaultDisplayCurrency: String(defaultDisplayCurrency || '').trim().toUpperCase() || 'USD',
       ...range
     };
@@ -1277,7 +1300,7 @@ const StatusBar = ({
     }
     window.__taliaGlobalCriteria = criteria;
     publishDashboardGlobalConfig({ criteria });
-  }, [globalDateRange, departureMonth, globalDuration, activeOnly, marketDimension, bookedComposition, cabinCategoryMode, defaultDisplayCurrency]);
+  }, [globalDateRange, departureMonth, globalDuration, activeOnly, marketDimension, bookedComposition, cabinCategoryMode, demandUnit, defaultDisplayCurrency]);
 
   // Sail selection updates the window snapshot only — listeners already got sail.select.
   useEffect(() => {
@@ -1313,6 +1336,7 @@ const StatusBar = ({
         marketDimension: normalizeMarketDimension(marketDimension),
         bookedComposition: normalizeBookedComposition(bookedComposition),
         cabinCategoryMode: normalizeCabinCategoryMode(cabinCategoryMode),
+        demandUnit: normalizeDemandUnit(demandUnit),
         defaultDisplayCurrency: String(defaultDisplayCurrency || '').trim().toUpperCase() || 'USD',
         ...resolveGlobalDateRange(globalDateRange),
       };
@@ -1329,7 +1353,7 @@ const StatusBar = ({
         criteriaSaveTimerRef.current = null;
       }
     };
-  }, [profileCriteriaHydrated, globalDateRange, departureMonth, globalDuration, activeOnly, marketDimension, bookedComposition, cabinCategoryMode, defaultDisplayCurrency, globalSailSelection]);
+  }, [profileCriteriaHydrated, globalDateRange, departureMonth, globalDuration, activeOnly, marketDimension, bookedComposition, cabinCategoryMode, demandUnit, defaultDisplayCurrency, globalSailSelection]);
 
   useEffect(() => {
     enforceDashboardUiState({ dispatchEvents: true });
@@ -1623,6 +1647,19 @@ const StatusBar = ({
                         value={cabinCategoryMode}
                         onChange={handleCabinCategoryModeChange}
                         aria-label="Cabin category mode"
+                        autoCloseMs={menuDisappearMs}
+                      />
+                    </label>
+                    </TaliaTooltip>
+                    <TaliaTooltip content="Demand volumes: Pax (guests/berths) or Cabins (guests÷2 presentation). Math stays at guests." placement="bottom-left" delayMs={180}>
+                    <label className="status-bar__header-range">
+                      <span className="status-bar__header-range-label">Unit</span>
+                      <HeaderCriteriaMenuSelect
+                        id="status-bar-global-demand-unit"
+                        options={GLOBAL_DEMAND_UNIT_OPTIONS}
+                        value={demandUnit}
+                        onChange={handleDemandUnitChange}
+                        aria-label="Demand unit Pax or Cabins"
                         autoCloseMs={menuDisappearMs}
                       />
                     </label>

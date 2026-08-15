@@ -558,8 +558,8 @@ const TaliaDockviewTab = ({
     try {
       runPanelDataExport(format, registered.getPayload);
       try {
-        window.__taliaStatus?.setStatusMessage?.(
-          format === 'pdf' ? 'Opening print dialog for PDF…' : 'CSV downloaded'
+          window.__taliaStatus?.setStatusMessage?.(
+          format === 'pdf' ? 'Opening print dialog…' : 'Exported to CSV'
         );
       } catch { /* noop */ }
     } catch (err) {
@@ -706,8 +706,8 @@ const TaliaDockviewTab = ({
                   ref={exportButtonRef}
                   type="button"
                   className="talia-dv-tab__button talia-dv-tab__button--export"
-                  title="Export table data (visible/filtered rows) — CSV or PDF"
-                  aria-label="Export table data"
+                  title="Export to CSV or PDF"
+                  aria-label="Export to CSV or PDF"
                   aria-expanded={showExportMenu}
                   aria-haspopup="menu"
                   onClick={handleToggleExportMenu}
@@ -719,7 +719,7 @@ const TaliaDockviewTab = ({
                     ref={exportMenuRef}
                     className="talia-dv-tab__export-menu talia-dv-tab__export-menu--portal"
                     role="menu"
-                    aria-label="Export format"
+                    aria-label="Export to"
                     style={{ top: exportMenuPos.top, left: exportMenuPos.left }}
                   >
                     <button
@@ -728,7 +728,7 @@ const TaliaDockviewTab = ({
                       role="menuitem"
                       onClick={handleExportFormat('csv')}
                     >
-                      CSV
+                      Export to CSV
                     </button>
                     <button
                       type="button"
@@ -736,7 +736,7 @@ const TaliaDockviewTab = ({
                       role="menuitem"
                       onClick={handleExportFormat('pdf')}
                     >
-                      PDF
+                      Export to PDF
                     </button>
                   </div>,
                   document.body

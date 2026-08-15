@@ -6,7 +6,7 @@ import React, { useRef, useEffect } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { formatDayMon } from '../../../lib/dateFormat';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import { getOverlayLegendOptions, getProfileSeriesColors, taliaHorizontalReferenceLinePlugin, taliaVerticalReferenceLinePlugin, resolveTodayWeekIndex } from '../../../lib/chartConfig';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import ReportSnapshot from '../../shared/ReportSnapshot';
@@ -58,10 +58,11 @@ const BookingProfilePresenter = ({
   const { fontSize, fontFamily, chartLegendsVisible } = useTheme();
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
-  const [showDetails] = usePanelDetailsVisibility({
-    panelInstanceId,
-    panelComponentId: panelComponentId || 'booking-profile',
-  });
+  const componentKey = panelComponentId || 'booking-profile';
+  const { showSnapshot, showDetails, showFilters } = useReportShellOptions(
+    componentKey,
+    panelInstanceId
+  );
 
   const isYoY = Boolean(data?.currentYear);
   const current = isYoY ? data.currentYear : data;
@@ -344,7 +345,10 @@ const BookingProfilePresenter = ({
         </div>
       </header>
 
-      <div className="talia-report-filters" aria-label="Profile filters">
+      <div
+        className={`talia-report-filters${showFilters ? '' : ' talia-report-filters--hidden'}`}
+        aria-label="Profile filters"
+      >
         <label className="talia-report-filters__group">
           <span className="talia-report-filters__label">Breakdown</span>
           <select
@@ -410,8 +414,9 @@ const BookingProfilePresenter = ({
       ) : null}
 
       <ReportSnapshot
-        title="Snapshot"
+        title={null}
         ariaLabel="Profile metrics"
+        visible={showSnapshot}
         items={metrics}
       />
 

@@ -1571,16 +1571,18 @@
   min-height: 0;
   flex: 1;
   padding: 0 12px 12px;
+  overflow: hidden;
 }
 
+/* Chart always fills remaining space below Snapshot / filters / callouts */
 .booking-profile__chart-host {
   position: relative;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   width: 100%;
-  min-height: 220px;
-  height: 260px;
-  max-height: 340px;
-  padding: 8px 10px 4px;
+  min-height: 180px;
+  height: auto;
+  max-height: none;
+  padding: 6px 8px 4px;
   border: 1px solid var(--theme-border);
   border-radius: 6px;
   background: var(--theme-glass);
@@ -1593,6 +1595,24 @@
   height: 100% !important;
 }
 
+/* Pinned below the chart — toggled via Views → Details; not scrolled away */
+.booking-profile > .booking-profile__details,
+.booking-profile > .talia-report-data-details.booking-profile__details {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  max-height: 38%;
+  margin: 0 12px 10px;
+  overflow: hidden;
+}
+
+.booking-profile > .booking-profile__details[hidden],
+.booking-profile > .talia-report-data-details.booking-profile__details[hidden] {
+  display: none !important;
+}
+
 .booking-profile__details {
   display: flex;
   flex-direction: column;
@@ -1601,6 +1621,9 @@
 
 .booking-profile__section {
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .booking-profile__section-title {
@@ -1608,11 +1631,14 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--theme-fg);
+  flex-shrink: 0;
 }
 
 .booking-profile__table-wrap {
   overflow: auto;
-  max-height: 220px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
   border: 1px solid var(--theme-border);
   border-radius: 6px;
 }
@@ -2397,7 +2423,12 @@
 /* Wrapper from ReportDataDetails.jsx — panels gate data tables/grids with this + hook */
 .talia-report-data-details {
   flex-shrink: 0;
+  min-width: 0;
   min-height: 0;
+}
+
+.talia-report-data-details[hidden] {
+  display: none !important;
 }
 
 /* Dock tab ⓘ — ReportEventMeta technical strip */
@@ -7066,14 +7097,8 @@
 .inventory-target-profile__chart-host {
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  min-width: 0;
-  min-height: 0;
-}
-
-.profile-compare__chart-host--grow,
-.inventory-target-profile__chart-host--grow {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -7081,15 +7106,10 @@
 .inventory-target-profile__chart-host .talia-chart {
   position: relative;
   flex: 1 1 auto;
-  height: var(--theme-chart-height);
+  height: 100%;
   min-height: var(--theme-chart-min-height);
   padding: var(--theme-component-padding-md);
   min-width: 0;
-}
-
-.profile-compare__chart-host--grow .talia-chart,
-.inventory-target-profile__chart-host--grow .talia-chart {
-  height: 100%;
 }
 
 .mse-target-review {

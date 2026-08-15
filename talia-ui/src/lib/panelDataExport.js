@@ -1,6 +1,6 @@
 /**
- * Framework panel data export — CSV download + print-to-PDF table.
- * Used by dock-tab Export when a panel registers window.__taliaPanelDataExport.
+ * Framework panel data export — Export to CSV / PDF via dock-tab ⬇.
+ * Used when a panel registers window.__taliaPanelDataExport.
  */
 
 const escHtml = (value) => String(value ?? '')

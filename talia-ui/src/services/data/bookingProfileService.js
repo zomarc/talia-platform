@@ -319,6 +319,15 @@ const GET_RESERVATION_BOOKING_CURVE = gql`
           guests
         }
       }
+      targetSeries {
+        weekLabel
+        weeksUntilSailing
+        bookings
+        guests
+        loadFactorPct
+      }
+      targetSource
+      activeTargetName
       totals {
         weekLabel
         weeksUntilSailing

@@ -14,7 +14,7 @@ import { initTabulator, getTabulatorOptions, captureTableScroll, withColumnTotal
 import { afterTabulatorDataRefresh } from '../../../hooks/useTabulatorLayoutSync';
 import { formatDayMon, formatSailDateRange } from '../../../lib/dateFormat';
 import { clipAnchorRectToViewport } from '../../../lib/clipAnchorRect';
-import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 import HoverPreview from '../../shared/HoverPreview';
@@ -60,10 +60,10 @@ const ReservationCurrentStatePresenter = ({
   hoverByResIdRef.current = hoverByResId;
   const [historyFilter, setHistoryFilter] = useState('all');
   const [hoverPreview, setHoverPreview] = useState(null);
-  const [showDetails] = usePanelDetailsVisibility({
-    panelInstanceId,
-    panelComponentId: panelComponentId || 'reservation-current-state',
-  });
+  const { showDetails, showFilters } = useReportShellOptions(
+    panelComponentId || 'reservation-current-state',
+    panelInstanceId
+  );
 
   // Sail scope change clears reservation via eventBus; sync table selection without re-emitting.
   useEffect(() => {
@@ -533,7 +533,10 @@ const ReservationCurrentStatePresenter = ({
 
   return (
     <div className="focus-panel reservation-current-state talia-report">
-      <div className="reservation-current-state__filters talia-report-filters" aria-label="Reservation status filter">
+      <div
+        className={`reservation-current-state__filters talia-report-filters${showFilters ? '' : ' talia-report-filters--hidden'}`}
+        aria-label="Reservation status filter"
+      >
         <button
           type="button"
           className={`talia-btn ${statusFilter === 'booked' ? 'talia-btn--primary' : 'talia-btn--secondary'}`}

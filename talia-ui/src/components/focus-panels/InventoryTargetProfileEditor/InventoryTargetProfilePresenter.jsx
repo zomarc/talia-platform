@@ -3,8 +3,10 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
+import { registerPanelDataExport } from '../../../lib/panelDataExport';
 import ReportDataDetails from '../../shared/ReportDataDetails';
+import ReportSnapshot from '../../shared/ReportSnapshot';
 import TargetProfileCurveEditor from './TargetProfileCurveEditor';
 import {
   minimiseTargetWaypoints,
@@ -67,10 +69,11 @@ const InventoryTargetProfilePresenter = ({
   const [draft, setDraft] = useState(emptyDraft());
   const [selectedId, setSelectedId] = useState(null);
   const [usingSuggestion, setUsingSuggestion] = useState(false);
-  const [showDetails] = usePanelDetailsVisibility({
-    panelInstanceId,
-    panelComponentId: panelComponentId || 'inventory-target-profile-editor',
-  });
+  const componentKey = panelComponentId || 'inventory-target-profile-editor';
+  const { showSnapshot, showDetails, showFilters } = useReportShellOptions(
+    componentKey,
+    panelInstanceId
+  );
 
   useEffect(() => {
     if (profiles.length) {
@@ -197,6 +200,53 @@ const InventoryTargetProfilePresenter = ({
     .filter((n) => n.dimensionLevel === 'voyage' && n.weeksUntilSailing != null)
     .sort((a, b) => Number(b.weeksUntilSailing) - Number(a.weeksUntilSailing));
 
+  const endLf = weekNodes.find((n) => Number(n.weeksUntilSailing) === 0)?.lfPct
+    ?? weekNodes[weekNodes.length - 1]?.lfPct
+    ?? null;
+  const snapshotItems = [
+    {
+      key: 'name',
+      label: 'Profile',
+      value: draft.name || '—',
+      hint: draft.perspective || '',
+    },
+    {
+      key: 'end-lf',
+      label: 'End LF',
+      value: endLf != null ? `${Number(endLf).toLocaleString(undefined, { maximumFractionDigits: 1 })}%` : '—',
+      hint: 'sail week',
+    },
+    {
+      key: 'points',
+      label: 'Points',
+      value: String(weekNodes.length),
+      hint: draft.isActive ? 'active' : 'draft',
+    },
+  ];
+
+  useEffect(() => {
+    return registerPanelDataExport({
+      panelInstanceId,
+      panelComponentId: componentKey,
+      getPayload: () => {
+        if (!weekNodes.length) return null;
+        return {
+          title: `Target Profile ${draft.name || sailCode || ''}`.trim(),
+          columns: [
+            { field: 'weeksUntilSailing', title: 'Weeks to sail' },
+            { field: 'weekLabel', title: 'Label' },
+            { field: 'lfPct', title: 'LF%' },
+          ],
+          rows: weekNodes.map((n) => ({
+            weeksUntilSailing: n.weeksUntilSailing,
+            weekLabel: n.weekLabel,
+            lfPct: n.lfPct,
+          })),
+        };
+      },
+    });
+  }, [componentKey, draft.name, panelInstanceId, sailCode, weekNodes]);
+
   const renderTree = (node) => (
     <div key={node.tempKey} className="target-profile-node">
       <div className="target-profile-node__row">
@@ -277,7 +327,10 @@ const InventoryTargetProfilePresenter = ({
         </div>
       </header>
 
-      <div className="talia-report-filters" aria-label="Target profile fields">
+      <div
+        className={`talia-report-filters${showFilters ? '' : ' talia-report-filters--hidden'}`}
+        aria-label="Target profile fields"
+      >
         <label className="talia-report-filters__group">
           <span className="talia-report-filters__label">Name</span>
           <input
@@ -480,10 +533,15 @@ const InventoryTargetProfilePresenter = ({
         ) : null}
       </div>
 
-      <main className={`talia-report__content${showDetails ? ' talia-report__content--scroll' : ''}`}>
-        <div
-          className={`inventory-target-profile__chart-host${showDetails ? '' : ' inventory-target-profile__chart-host--grow'}`}
-        >
+      <ReportSnapshot
+        title={null}
+        ariaLabel="Target profile metrics"
+        visible={showSnapshot}
+        items={snapshotItems}
+      />
+
+      <main className="talia-report__content talia-report__content--scroll">
+        <div className="inventory-target-profile__chart-host">
           <TargetProfileCurveEditor
             weekNodes={weekNodes}
             realSeries={overlaySeries?.real || []}

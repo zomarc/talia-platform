@@ -11,6 +11,7 @@ import {
   resolveDeliveryProbability,
   RESERVATION_SOURCE_ORIGIN,
 } from '../lib/deliveryProbability.js';
+import { listInventoryTargetProfiles } from './inventory-target-profile.js';
 
 function clean(value) {
   if (value == null) return null;
@@ -245,10 +246,63 @@ function dimensionKeyOf(res, ctx) {
   return market;
 }
 
-/** Cap left edge so long-lead bookings do not create an unreadable axis. */
-const MAX_WEEKS_AXIS = 52;
+function densifyTargetSeriesLocal(profile) {
+  if (!profile) return [];
+  const nodes = (profile.nodes || []).filter(
+    (n) =>
+      n.dimensionLevel === 'voyage'
+      && n.weeksUntilSailing != null
+      && Number.isFinite(Number(n.weeksUntilSailing))
+  );
+  if (!nodes.length) {
+    const voyage = (profile.nodes || []).find((n) => n.dimensionLevel === 'voyage');
+    if (!voyage) return [];
+    return [{ weeksUntilSailing: 0, lfPct: round2(voyage.lfPct) }];
+  }
+  return [...nodes]
+    .sort((a, b) => Number(b.weeksUntilSailing) - Number(a.weeksUntilSailing))
+    .map((n) => ({
+      weeksUntilSailing: Number(n.weeksUntilSailing),
+      lfPct: round2(n.lfPct),
+    }));
+}
 
-function buildContractSeriesFromMondays(mondayRows, sailCodes, sailDateKey) {
+function interpolateLfOntoWeeksLocal(points = [], weeks = []) {
+  const sorted = [...(points || [])]
+    .filter((p) => p?.lfPct != null && p?.weeksUntilSailing != null)
+    .sort((a, b) => Number(b.weeksUntilSailing) - Number(a.weeksUntilSailing));
+  if (!sorted.length || !weeks?.length) return [];
+
+  return weeks.map((week) => {
+    const w = Number(week);
+    const exact = sorted.find((p) => Number(p.weeksUntilSailing) === w);
+    let lfPct;
+    if (exact) {
+      lfPct = round2(exact.lfPct);
+    } else {
+      let earlier = null;
+      let later = null;
+      sorted.forEach((p) => {
+        const pw = Number(p.weeksUntilSailing);
+        if (pw > w && (!earlier || pw < Number(earlier.weeksUntilSailing))) earlier = p;
+        if (pw < w && (!later || pw > Number(later.weeksUntilSailing))) later = p;
+      });
+      if (earlier && later) {
+        const span = Number(earlier.weeksUntilSailing) - Number(later.weeksUntilSailing);
+        const t = span === 0 ? 0 : (Number(earlier.weeksUntilSailing) - w) / span;
+        lfPct = round2(Number(earlier.lfPct) + t * (Number(later.lfPct) - Number(earlier.lfPct)));
+      } else {
+        lfPct = round2((earlier || later).lfPct);
+      }
+    }
+    return { weeksUntilSailing: w, lfPct };
+  });
+}
+
+/** Soft display hint only — never collapse many Mondays onto one tick. */
+const MAX_WEEKS_AXIS_HINT = 104;
+
+function buildContractSeriesFromMondays(mondayRows, sailCodes, sailDateKey, options = {}) {
   const codeSet = new Set((sailCodes || []).map((c) => String(c).trim()).filter(Boolean));
   const byMonday = new Map();
   (mondayRows || []).forEach((row) => {
@@ -264,30 +318,66 @@ function buildContractSeriesFromMondays(mondayRows, sailCodes, sailDateKey) {
   });
 
   const mondays = [...byMonday.keys()].sort();
-  if (!mondays.length) return { contractSeries: [], contractMessage: 'No Fact_Reservation_History Mondays densified yet — sync factReservationHistory.' };
-
-  const toPoints = (metric) => mondays.map((monday) => {
-    const daysOut = sailDateKey ? daysBetween(monday, sailDateKey) : 0;
-    const weeksUntil = Math.min(MAX_WEEKS_AXIS, Math.max(0, Math.ceil(daysOut / 7)));
-    const guests = Math.round(byMonday.get(monday)?.[metric] || 0);
+  if (!mondays.length) {
     return {
-      week: weeksUntil,
-      weeksUntilSailing: weeksUntil,
-      weekLabel: `W-${weeksUntil}`,
-      asOfDate: monday,
-      bookings: guests,
-      guests,
-      loadFactorPct: null,
+      contractSeries: [],
+      contractMessage: 'No Fact_Reservation_History Mondays densified yet — sync factReservationHistory.',
+      axisWeeks: [],
     };
+  }
+
+  // Collapse each Monday onto its true weeks-before-sail (no 52-week label pile-up).
+  const byWeek = new Map();
+  mondays.forEach((monday) => {
+    const daysOut = sailDateKey ? daysBetween(monday, sailDateKey) : 0;
+    const weeksUntil = Math.max(0, Math.round(daysOut / 7));
+    // Later Monday at the same week wins (closer to that week’s as-of).
+    byWeek.set(weeksUntil, {
+      ...(byWeek.get(weeksUntil) || {}),
+      ...byMonday.get(monday),
+      asOfDate: monday,
+    });
   });
+
+  let maxWeek = Math.max(0, ...byWeek.keys());
+  const daysUntil = Number(options.daysUntilSailing);
+  if (Number.isFinite(daysUntil) && daysUntil > 0) {
+    maxWeek = Math.max(maxWeek, Math.ceil(daysUntil / 7));
+  }
+  // Always extend to sail date (week 0). Soft-cap only extreme left tails for readability.
+  maxWeek = Math.min(Math.max(maxWeek, 0), MAX_WEEKS_AXIS_HINT);
+
+  const axisWeeks = [];
+  for (let w = maxWeek; w >= 0; w -= 1) axisWeeks.push(w);
+
+  const densifyMetric = (metric) => {
+    let last = null;
+    return axisWeeks.map((weeksUntil) => {
+      if (byWeek.has(weeksUntil)) {
+        last = Math.round(byWeek.get(weeksUntil)?.[metric] || 0);
+      }
+      const guests = last == null ? 0 : last;
+      return {
+        week: weeksUntil,
+        weeksUntilSailing: weeksUntil,
+        // Numeric tick; axis title explains “Week −N”.
+        weekLabel: String(weeksUntil),
+        asOfDate: byWeek.get(weeksUntil)?.asOfDate || null,
+        bookings: guests,
+        guests,
+        loadFactorPct: null,
+      };
+    });
+  };
 
   return {
     contractSeries: [
-      { dimensionKey: 'Booked', points: toPoints('booked') },
-      { dimensionKey: 'Estimated', points: toPoints('estimated') },
-      { dimensionKey: 'Contracted', points: toPoints('contracted') },
+      { dimensionKey: 'Booked', points: densifyMetric('booked') },
+      { dimensionKey: 'Estimated', points: densifyMetric('estimated') },
+      { dimensionKey: 'Contracted', points: densifyMetric('contracted') },
     ],
     contractMessage: null,
+    axisWeeks,
   };
 }
 
@@ -333,7 +423,7 @@ function buildAreaSeries(reservations, sailDateKey, dimCtx) {
     withBookDate += 1;
     const daysOut = daysBetween(bookDate, sailDateKey);
     const weeksUntil = Math.min(
-      MAX_WEEKS_AXIS,
+      MAX_WEEKS_AXIS_HINT,
       Math.max(0, Math.ceil(daysOut / 7))
     );
     maxWeeks = Math.max(maxWeeks, weeksUntil);
@@ -645,13 +735,18 @@ export async function getReservationBookingCurve(client, sailCode, options = {})
   );
 
   const todayContract = summarizeTodayContractMetrics(active);
-  const { contractSeries, contractMessage } = buildContractSeriesFromMondays(
+  const todayKey = toDateKey(new Date());
+  const daysUntilSailing = sailDateKey
+    ? Math.ceil(daysBetween(todayKey, sailDateKey))
+    : null;
+
+  const { contractSeries, contractMessage, axisWeeks } = buildContractSeriesFromMondays(
     mondayRows,
     scope.sailCodes,
-    sailDateKey
+    sailDateKey,
+    { daysUntilSailing }
   );
 
-  const todayKey = toDateKey(new Date());
   const velocity = velocityWindows(active, todayKey);
   const revenue = buildRevenueSummary(active);
 
@@ -666,6 +761,45 @@ export async function getReservationBookingCurve(client, sailCode, options = {})
     bookedCabins != null && totalCabins > 0
       ? round2((bookedCabins / totalCabins) * 100)
       : null;
+
+  // Active inventory target → guest curve (LF% × capacity × guests/cabin).
+  let targetSeries = [];
+  let activeTarget = null;
+  let targetSource = null;
+  try {
+    if (scope.inventoryItemId) {
+      const profiles = await listInventoryTargetProfiles(client, scope.inventoryItemId);
+      activeTarget = (profiles || []).find((p) => p.isActive) || null;
+      if (activeTarget) {
+        const rawTarget = densifyTargetSeriesLocal(activeTarget);
+        const weeks = (axisWeeks?.length
+          ? axisWeeks
+          : (contractSeries[0]?.points || []).map((p) => p.weeksUntilSailing)
+        ).filter((w) => w != null);
+        const lfSeries = interpolateLfOntoWeeksLocal(rawTarget, weeks);
+        const guestsPerCabin = bookedCabins > 0 && reservationGuests > 0
+          ? reservationGuests / bookedCabins
+          : 2;
+        const capacityForTarget = Number(totalCabins) > 0 ? Number(totalCabins) : null;
+        targetSeries = lfSeries.map((p) => {
+          const lf = Number(p.lfPct);
+          const guests = capacityForTarget != null && Number.isFinite(lf)
+            ? Math.round((lf / 100) * capacityForTarget * guestsPerCabin)
+            : null;
+          return {
+            weeksUntilSailing: p.weeksUntilSailing,
+            weekLabel: String(p.weeksUntilSailing ?? ''),
+            lfPct: p.lfPct,
+            guests,
+            bookings: guests,
+          };
+        });
+        targetSource = 'active';
+      }
+    }
+  } catch (err) {
+    console.warn('[reservation-booking-curve] target overlay skipped:', err?.message || err);
+  }
 
   const composition = [];
   const byDim = new Map();
@@ -744,13 +878,28 @@ export async function getReservationBookingCurve(client, sailCode, options = {})
     totals,
     contractSeries,
     contractMessage,
+    targetSeries: (targetSeries || []).map((p) => ({
+      weekLabel: String(p.weekLabel ?? p.weeksUntilSailing ?? ''),
+      weeksUntilSailing: Number(p.weeksUntilSailing) || 0,
+      bookings: Number.isFinite(Number(p.bookings)) ? Math.round(Number(p.bookings)) : 0,
+      guests: Number.isFinite(Number(p.guests)) ? Math.round(Number(p.guests)) : 0,
+      loadFactorPct: p.lfPct != null ? Number(p.lfPct) : null,
+    })),
+    targetSource,
+    activeTargetName: activeTarget?.name || null,
+    activeTarget: activeTarget
+      ? {
+          id: activeTarget.id,
+          name: activeTarget.name,
+          perspective: activeTarget.perspective,
+          isActive: activeTarget.isActive,
+        }
+      : null,
     bookedGuests: todayContract.bookedGuests,
     contractedGuests: todayContract.contractedGuests,
     estimatedGuests: todayContract.estimatedGuests,
     composition,
     maxWeeks,
-    daysUntilSailing: sailDateKey
-      ? Math.ceil(daysBetween(todayKey, sailDateKey))
-      : null,
+    daysUntilSailing,
   };
 }

@@ -6,7 +6,15 @@ import React, { useEffect, useRef } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { formatDayMon } from '../../../lib/dateFormat';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
+import { useGlobalDemandUnit } from '../../../hooks/useGlobalDemandUnit';
+import {
+  DEMAND_UNIT_CABINS,
+  demandUnitAxisTitle,
+  demandUnitNoun,
+  demandUnitShortLabel,
+  toDemandVolume,
+} from '../../../lib/demandUnit';
 import {
   getOverlayLegendOptions,
   taliaHorizontalReferenceLinePlugin,
@@ -14,6 +22,7 @@ import {
   resolveTodayWeekIndex,
 } from '../../../lib/chartConfig';
 import { colorForDimensionKey } from '../../../lib/reservationDimensions';
+import { registerPanelDataExport } from '../../../lib/panelDataExport';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import ReportSnapshot from '../../shared/ReportSnapshot';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
@@ -66,10 +75,53 @@ const ReservationBookingCurvePresenter = ({
   const { fontSize, fontFamily, chartLegendsVisible } = useTheme();
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
-  const [showDetails] = usePanelDetailsVisibility({
-    panelInstanceId,
-    panelComponentId: panelComponentId || 'reservation-booking-curve',
-  });
+  const demandUnit = useGlobalDemandUnit();
+  const demandNoun = demandUnitNoun(demandUnit);
+  const showCapacityLine = demandUnit === DEMAND_UNIT_CABINS;
+  const componentKey = panelComponentId || 'reservation-booking-curve';
+  const { showSnapshot, showDetails, showFilters } = useReportShellOptions(
+    componentKey,
+    panelInstanceId
+  );
+
+  // Chart.js needs an explicit resize when Snapshot/Details change host size.
+  useEffect(() => {
+    const chart = chartInstanceRef.current;
+    if (!chart) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        chart.resize();
+      } catch {
+        // ignore
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [showSnapshot, showDetails]);
+
+  useEffect(() => {
+    const unitLabel = demandUnitShortLabel(demandUnit);
+    return registerPanelDataExport({
+      panelInstanceId,
+      panelComponentId: componentKey,
+      getPayload: () => {
+        const rows = Array.isArray(data?.composition) ? data.composition : [];
+        if (!rows.length) return null;
+        return {
+          title: `Reservation Profile ${data?.referenceSailCode || sailCode || ''}`.trim(),
+          columns: [
+            { field: 'dimensionKey', title: 'Market group' },
+            { field: 'bookings', title: 'Bookings' },
+            { field: 'volume', title: unitLabel },
+          ],
+          rows: rows.map((row) => ({
+            dimensionKey: row.dimensionKey,
+            bookings: row.bookings,
+            volume: toDemandVolume(row.guests, demandUnit),
+          })),
+        };
+      },
+    });
+  }, [componentKey, data, demandUnit, panelInstanceId, sailCode]);
 
   useEffect(() => {
     if (!chartRef.current || !data) return;
@@ -79,10 +131,15 @@ const ReservationBookingCurvePresenter = ({
       chartInstanceRef.current = null;
     }
 
+    const presentGuests = (value) => toDemandVolume(value, demandUnit);
     const contractSeries = Array.isArray(data.contractSeries) ? data.contractSeries : [];
+    const targetSeries = Array.isArray(data.targetSeries) ? data.targetSeries : [];
     const useContractDemo = contractSeries.length > 0;
+    const axisPoints = useContractDemo
+      ? (contractSeries[0]?.points || [])
+      : (data.totals || []);
     const labels = useContractDemo
-      ? (contractSeries[0]?.points?.map((p) => p.weekLabel) || [])
+      ? axisPoints.map((p) => (Number(p.weeksUntilSailing) === 0 ? '0' : String(p.weeksUntilSailing ?? p.weekLabel ?? '')))
       : (
         data.totals?.map((p) => p.weekLabel) ||
         data.series?.[0]?.points?.map((p) => p.weekLabel) ||
@@ -99,7 +156,7 @@ const ReservationBookingCurvePresenter = ({
           const color = contractColors[s.dimensionKey] || colorForDimensionKey(s.dimensionKey);
           return {
             label: s.dimensionKey,
-            data: (s.points || []).map((p) => p.guests ?? p.bookings ?? 0),
+            data: (s.points || []).map((p) => presentGuests(p.guests ?? p.bookings ?? 0)),
             borderColor: color,
             backgroundColor: withAlpha(color, '22'),
             fill: false,
@@ -138,18 +195,49 @@ const ReservationBookingCurvePresenter = ({
             },
           ];
 
+    if (useContractDemo && targetSeries.length) {
+      const byWeek = new Map(
+        targetSeries
+          .filter((p) => p?.weeksUntilSailing != null)
+          .map((p) => [Number(p.weeksUntilSailing), presentGuests(p.guests ?? p.bookings)])
+      );
+      const targetLabel = data?.activeTargetName
+        ? `Target · ${data.activeTargetName}`
+        : 'Target';
+      datasets.push({
+        label: targetLabel,
+        data: axisPoints.map((p) => {
+          const w = Number(p.weeksUntilSailing);
+          const v = byWeek.get(w);
+          return v == null ? null : v;
+        }),
+        borderColor: '#a78bfa',
+        backgroundColor: 'transparent',
+        borderDash: [6, 4],
+        fill: false,
+        tension: 0.2,
+        pointRadius: 0,
+        pointHoverRadius: 3,
+        borderWidth: 2,
+        spanGaps: true,
+      });
+    }
+
     const capacity = Number(data?.totalCabins);
-    const hasCapacity = Number.isFinite(capacity) && capacity > 0;
+    const hasCapacity = showCapacityLine && Number.isFinite(capacity) && capacity > 0;
     const peakBookings = Math.max(
       0,
       ...(data.totals || []).map((p) => Number(p.bookings) || 0),
       ...(series.flatMap((s) => (s.points || []).map((p) => Number(p.bookings) || 0))),
-      ...(contractSeries.flatMap((s) => (s.points || []).map((p) => Number(p.guests ?? p.bookings) || 0)))
+      ...(contractSeries.flatMap((s) => (s.points || []).map((p) => Number(presentGuests(p.guests ?? p.bookings)) || 0))),
+      ...(targetSeries.map((p) => Number(presentGuests(p.guests ?? p.bookings)) || 0))
     );
-    const todayIndex = resolveTodayWeekIndex(
-      useContractDemo ? (contractSeries[0]?.points || []) : (data.totals || []),
-      data.daysUntilSailing
-    );
+    const daysUntil = data.daysUntilSailing;
+    let todayIndex = resolveTodayWeekIndex(axisPoints, daysUntil);
+    // Always show Today when we know days-to-sail; clamp onto axis if outside.
+    if (todayIndex == null && axisPoints.length && daysUntil != null && Number.isFinite(Number(daysUntil))) {
+      todayIndex = Number(daysUntil) <= 0 ? axisPoints.length - 1 : 0;
+    }
 
     chartInstanceRef.current = new Chart(ctx, {
       type: 'line',
@@ -174,10 +262,17 @@ const ReservationBookingCurvePresenter = ({
             : { display: false },
           tooltip: {
             callbacks: {
+              title: (items) => {
+                const idx = items?.[0]?.dataIndex;
+                const w = axisPoints[idx]?.weeksUntilSailing;
+                if (w == null) return items?.[0]?.label || '';
+                if (Number(w) === 0) return 'Sail (Week −0)';
+                return `Week −${w}`;
+              },
               footer: (items) => {
                 const total = items.reduce((sum, it) => sum + (Number(it.raw) || 0), 0);
                 return useContractDemo
-                  ? `Sum ${total.toLocaleString()} guests`
+                  ? `Sum ${total.toLocaleString()} ${demandNoun}`
                   : `Total ${total.toLocaleString()} bookings`;
               },
             },
@@ -186,11 +281,21 @@ const ReservationBookingCurvePresenter = ({
         scales: {
           x: {
             stacked: !useContractDemo,
+            title: {
+              display: useContractDemo,
+              text: 'Week −N (weeks before sail)',
+              font: { size: 10, family: fontFamily },
+            },
             ticks: {
               maxRotation: 0,
               autoSkip: true,
-              maxTicksLimit: 14,
+              maxTicksLimit: 16,
               font: { size: 10, family: fontFamily },
+              callback(value) {
+                const label = this.getLabelForValue(value);
+                if (label === '0' || label === 0) return 'Sail';
+                return label;
+              },
             },
             grid: { display: false },
           },
@@ -200,7 +305,9 @@ const ReservationBookingCurvePresenter = ({
             suggestedMax: hasCapacity ? Math.max(capacity, peakBookings) * 1.05 : undefined,
             title: {
               display: true,
-              text: useContractDemo ? 'Guests (Monday snapshots)' : 'Cumulative bookings',
+              text: useContractDemo
+                ? demandUnitAxisTitle(demandUnit, { monday: true })
+                : 'Cumulative bookings',
               font: { size: 11, family: fontFamily },
             },
             ticks: { font: { size: 10, family: fontFamily } },
@@ -215,11 +322,12 @@ const ReservationBookingCurvePresenter = ({
         chartInstanceRef.current = null;
       }
     };
-  }, [chartLegendsVisible, data, fontSize, fontFamily]);
+  }, [chartLegendsVisible, data, demandNoun, demandUnit, fontSize, fontFamily, showCapacityLine]);
 
   const v = data?.velocity || {};
   const revenue = data?.revenue;
   const competitor = data?.competitor;
+  const unitLabel = demandUnitShortLabel(demandUnit);
   const subtitleParts = [
     data?.referenceSailCode || sailCode,
     data?.shipName,
@@ -229,6 +337,7 @@ const ReservationBookingCurvePresenter = ({
       ? `${data.sailCodes.length} codes`
       : null,
     marketBreakdown === 'market' ? 'by market' : 'by market group',
+    unitLabel,
   ].filter(Boolean);
 
   const velocityMetrics = [
@@ -266,19 +375,19 @@ const ReservationBookingCurvePresenter = ({
     {
       key: 'booked-guests',
       label: 'Booked',
-      value: fmt(data?.bookedGuests),
-      hint: 'real guests',
+      value: fmt(toDemandVolume(data?.bookedGuests, demandUnit)),
+      hint: `real ${demandNoun}`,
     },
     {
       key: 'estimated-guests',
       label: 'Estimated',
-      value: fmt(data?.estimatedGuests, 1),
+      value: fmt(toDemandVolume(data?.estimatedGuests, demandUnit), 1),
       hint: 'contr × prob',
     },
     {
       key: 'contracted-guests',
       label: 'Contracted',
-      value: fmt(data?.contractedGuests),
+      value: fmt(toDemandVolume(data?.contractedGuests, demandUnit)),
       hint: 'group OF face',
     },
     {
@@ -289,12 +398,12 @@ const ReservationBookingCurvePresenter = ({
     },
     {
       key: 'capacity',
-      label: 'Capacity',
+      label: showCapacityLine ? 'Capacity' : 'Capacity (cabins)',
       value: fmt(data?.totalCabins),
       hint:
         data?.loadFactorPct != null
           ? `${data.loadFactorPct}% LF`
-          : 'MSE cabins',
+          : 'inventory cabins',
     },
     ...velocityMetrics,
   ];
@@ -339,7 +448,10 @@ const ReservationBookingCurvePresenter = ({
 
       <BookingGoalCallout variant="RESERVATION_CURVE" />
 
-      <div className="talia-report-filters" aria-label="Curve filters">
+      <div
+        className={`talia-report-filters${showFilters ? '' : ' talia-report-filters--hidden'}`}
+        aria-label="Curve filters"
+      >
         <label className="talia-report-filters__group">
           <span className="talia-report-filters__label">Series</span>
           <select
@@ -387,12 +499,13 @@ const ReservationBookingCurvePresenter = ({
       ) : null}
 
       <ReportSnapshot
-        title="Snapshot"
+        title={null}
         ariaLabel="Booking curve metrics"
+        visible={showSnapshot}
         items={metrics}
       />
 
-      <main className="talia-report__content talia-report__content--scroll booking-profile__content">
+      <main className={`talia-report__content booking-profile__content${showDetails ? ' booking-profile__content--with-details' : ''}`}>
         {showCompetitor ? (
           <div className="talia-callout booking-profile__callout reservation-booking-curve__competitor" role="status">
             {competitor?.ourMinFarePp != null || competitor?.competitorMedianPp != null ? (
@@ -418,45 +531,48 @@ const ReservationBookingCurvePresenter = ({
           </div>
         ) : null}
 
-        <div className="booking-profile__chart-host" aria-label={chartLabel}>
+        <div
+          className="booking-profile__chart-host"
+          aria-label={chartLabel}
+        >
           <canvas ref={chartRef} />
         </div>
-
-        <ReportDataDetails
-          visible={showDetails}
-          as="section"
-          className="booking-profile__details"
-          aria-label="Distribution details"
-        >
-          {data?.composition?.length ? (
-            <div className="booking-profile__section">
-              <h3 className="booking-profile__section-title">
-                Current distribution · {compositionLabel}
-              </h3>
-              <div className="booking-profile__table-wrap">
-                <table className="booking-profile__table talia-table">
-                  <thead>
-                    <tr>
-                      <th>{compositionLabel}</th>
-                      <th>Bookings</th>
-                      <th>Guests</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.composition.map((row) => (
-                      <tr key={row.dimensionKey}>
-                        <td>{row.dimensionKey}</td>
-                        <td>{row.bookings.toLocaleString()}</td>
-                        <td>{row.guests.toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : null}
-        </ReportDataDetails>
       </main>
+
+      <ReportDataDetails
+        visible={showDetails}
+        as="section"
+        className="booking-profile__details"
+        aria-label="Distribution details"
+      >
+        {data?.composition?.length ? (
+          <div className="booking-profile__section">
+            <h3 className="booking-profile__section-title">
+              Current distribution · {compositionLabel}
+            </h3>
+            <div className="booking-profile__table-wrap">
+              <table className="booking-profile__table talia-table">
+                <thead>
+                  <tr>
+                    <th>{compositionLabel}</th>
+                    <th>Bookings</th>
+                    <th>{demandUnitShortLabel(demandUnit)}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.composition.map((row) => (
+                    <tr key={row.dimensionKey}>
+                      <td>{row.dimensionKey}</td>
+                      <td>{row.bookings.toLocaleString()}</td>
+                      <td>{(toDemandVolume(row.guests, demandUnit) ?? 0).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
+      </ReportDataDetails>
     </div>
   );
 };

@@ -7,13 +7,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { formatDayMon } from '../../../lib/dateFormat';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import {
   getOverlayLegendOptions,
   getProfileSeriesColors,
   taliaVerticalReferenceLinePlugin,
   resolveTodayWeekIndex,
 } from '../../../lib/chartConfig';
+import { registerPanelDataExport } from '../../../lib/panelDataExport';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import ReportSnapshot from '../../shared/ReportSnapshot';
 import { interpolateLfOntoWeeks } from '../../../hooks/data/useProfileCompare';
@@ -76,11 +77,11 @@ const ProfileComparePresenter = ({
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
   const [typedModel, setTypedModel] = useState('');
-  const [showDetails] = usePanelDetailsVisibility({
-    panelInstanceId,
-    panelComponentId: panelComponentId || 'profile-compare',
-  });
-
+  const componentKey = panelComponentId || 'profile-compare';
+  const { showSnapshot, showDetails, showFilters } = useReportShellOptions(
+    componentKey,
+    panelInstanceId
+  );
   const realSeries = data?.real?.series || [];
   const modelSeries = data?.model?.series || [];
   const targetSeries = data?.targetSeries || [];
@@ -91,6 +92,41 @@ const ProfileComparePresenter = ({
   const targetEndLf = targetSeries.length
     ? targetSeries[targetSeries.length - 1]?.lfPct
     : null;
+
+  useEffect(() => {
+    const chart = chartInstanceRef.current;
+    if (!chart) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      try { chart.resize(); } catch { /* ignore */ }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [showSnapshot, showDetails]);
+
+  useEffect(() => {
+    return registerPanelDataExport({
+      panelInstanceId,
+      panelComponentId: componentKey,
+      getPayload: () => {
+        const weeks = mergeWeekAxis(realSeries, modelSeries, targetSeries).weeks;
+        if (!weeks.length) return null;
+        return {
+          title: `Sailing Profile ${sailCode || ''}`.trim(),
+          columns: [
+            { field: 'week', title: 'Week' },
+            { field: 'realLf', title: 'REAL LF%' },
+            { field: 'modelLf', title: 'Model LF%' },
+            { field: 'targetLf', title: 'Target LF%' },
+          ],
+          rows: weeks.map((w) => ({
+            week: w === 0 ? 'Sail' : `W-${w}`,
+            realLf: lfAtWeek(realSeries, w, data?.real?.loadFactorPct),
+            modelLf: lfAtWeek(modelSeries, w, data?.model?.loadFactorPct),
+            targetLf: lfAtWeek(targetSeries, w),
+          })),
+        };
+      },
+    });
+  }, [componentKey, data, modelSeries, panelInstanceId, realSeries, sailCode, targetSeries]);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -321,7 +357,10 @@ const ProfileComparePresenter = ({
       </header>
 
       {picking ? (
-        <div className="talia-report-filters" aria-label="Optional model sail code">
+        <div
+          className={`talia-report-filters${showFilters ? '' : ' talia-report-filters--hidden'}`}
+          aria-label="Optional model sail code"
+        >
           <label className="talia-report-filters__group">
             <span className="talia-report-filters__label">Or type a sail</span>
             <input
@@ -406,12 +445,10 @@ const ProfileComparePresenter = ({
         ) : null}
       </div>
 
-      <ReportSnapshot title="Snapshot" ariaLabel="Profile metrics" items={snapshotItems} />
+      <ReportSnapshot title={null} ariaLabel="Profile metrics" visible={showSnapshot} items={snapshotItems} />
 
-      <main className={`talia-report__content${showDetails ? ' talia-report__content--scroll' : ''}`}>
-        <div
-          className={`profile-compare__chart-host${showDetails ? '' : ' profile-compare__chart-host--grow'}`}
-        >
+      <main className="talia-report__content talia-report__content--scroll">
+        <div className="profile-compare__chart-host">
           <div className="talia-chart">
             <canvas
               ref={chartRef}

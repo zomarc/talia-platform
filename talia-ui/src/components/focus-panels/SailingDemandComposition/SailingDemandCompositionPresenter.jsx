@@ -1,4 +1,9 @@
 import React from 'react';
+import { useGlobalDemandUnit } from '../../../hooks/useGlobalDemandUnit';
+import {
+  demandUnitShortLabel,
+  toDemandVolume,
+} from '../../../lib/demandUnit';
 
 const fmt = (n, digits = 0) => {
   const v = Number(n);
@@ -15,18 +20,14 @@ const fmtEur = (n) => {
   return `€${Math.round(v).toLocaleString()}`;
 };
 
-const MetricCard = ({ title, subtitle, guests, cabins, revenueEur, rows }) => (
+const MetricCard = ({ title, subtitle, volume, volumeLabel, revenueEur, rows }) => (
   <div className="sailing-demand__card" role="group" aria-label={title}>
     <h3 className="sailing-demand__card-title">{title}</h3>
     <p className="sailing-demand__card-sub">{subtitle}</p>
     <dl className="sailing-demand__metrics">
       <div>
-        <dt>Guests</dt>
-        <dd>{fmt(guests, 1)}</dd>
-      </div>
-      <div>
-        <dt>Cabins (≈)</dt>
-        <dd>{fmt(cabins, 1)}</dd>
+        <dt>{volumeLabel}</dt>
+        <dd>{fmt(volume, 1)}</dd>
       </div>
       <div>
         <dt>Revenue</dt>
@@ -42,6 +43,7 @@ const MetricCard = ({ title, subtitle, guests, cabins, revenueEur, rows }) => (
 
 /**
  * Presenter — Booked / Estimated / Contracted for selected sailing.
+ * Guest totals stay canonical; StatusBar Unit only changes presentation.
  */
 const SailingDemandCompositionPresenter = ({
   sailCode = '',
@@ -49,6 +51,8 @@ const SailingDemandCompositionPresenter = ({
   composition = null,
   note = null,
 }) => {
+  const demandUnit = useGlobalDemandUnit();
+  const volumeLabel = demandUnitShortLabel(demandUnit);
   const booked = composition?.booked || {};
   const estimated = composition?.estimated || {};
   const contracted = composition?.contracted || {};
@@ -66,6 +70,8 @@ const SailingDemandCompositionPresenter = ({
             {[sailCode || 'Select a sailing', shipName].filter(Boolean).join(' · ')}
             {' · '}
             Booked = named BK · Contracted = groups + offers · Estimated = contracted × probability
+            {' · '}
+            Volume as {volumeLabel} (from guests)
           </p>
         </div>
       </header>
@@ -83,24 +89,24 @@ const SailingDemandCompositionPresenter = ({
           <MetricCard
             title="Booked"
             subtitle="Named / materialised bookings"
-            guests={booked.guests}
-            cabins={booked.cabins}
+            volume={toDemandVolume(booked.guests, demandUnit)}
+            volumeLabel={volumeLabel}
             revenueEur={booked.revenueEur}
             rows={booked.rows}
           />
           <MetricCard
             title="Estimated"
             subtitle="Contracted × delivery probability"
-            guests={estimated.guests}
-            cabins={estimated.cabins}
+            volume={toDemandVolume(estimated.guests, demandUnit)}
+            volumeLabel={volumeLabel}
             revenueEur={estimated.revenueEur}
             rows={estimated.rows}
           />
           <MetricCard
             title="Contracted"
             subtitle="All groups + offers (face)"
-            guests={contracted.guests}
-            cabins={contracted.cabins}
+            volume={toDemandVolume(contracted.guests, demandUnit)}
+            volumeLabel={volumeLabel}
             revenueEur={contracted.revenueEur}
             rows={contracted.rows}
           />

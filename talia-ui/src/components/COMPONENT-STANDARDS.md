@@ -13,7 +13,8 @@ This document outlines the standards and patterns for building components in the
 7. [No Overrides Policy](#no-overrides-policy)
 8. [Component Template](#component-template)
 9. [Booked composition (FIT / Group)](#booked-composition-fit--group)
-10. [Dense row hover previews](#dense-row-hover-previews)
+10. [Demand unit (Pax / Cabins)](#demand-unit-pax--cabins)
+11. [Dense row hover previews](#dense-row-hover-previews)
 
 ## Component Structure
 
@@ -94,11 +95,11 @@ StatusBar global criteria / focus / visibility strips are independent of per-com
 | **Callout** | Extra informational note / guidance (usually hidden) | `.talia-callout` | **Callouts** | Appearance profile `calloutsVisible` |
 | **Controls** | In-panel view/ops chrome (Expand/Collapse, Nested/Flat, …) | panel `.talia-report__controls` | Tab **Options** (Views) | User profile `componentOptions` |
 | **Actions** | Panel actions (Refresh, product Export, …) | `.talia-report__actions-bar` (preferred); legacy compact: `.talia-report__actions` in header | Tab **Options** (Ops) / role | Role ops allow-list + Admin Options |
-| **Snapshot** | Pinned KPI strip above scrollable body (Booked, Velocity, …) | `ReportSnapshot` → `section.talia-report__snapshot` + `.talia-report__metrics` / `.talia-metric` | — | — |
-| **Details** | User-facing *extra* data blocks (header ≣); never the primary table/chart | `ReportDataDetails` + `usePanelDetailsVisibility` | **Details** (≣ btn) / Views | `localStorage` + component Options |
+| **Snapshot** | Pinned KPI strip above scrollable body (Booked, Velocity, …) | `ReportSnapshot` → `section.talia-report__snapshot` + `.talia-report__metrics` / `.talia-metric` | Tab **Options** → Views → **Snapshot** | User profile `componentOptions` |
+| **Details** | User-facing *extra* data blocks (header ≣); never the primary table/chart | `ReportDataDetails` + `useReportShellOptions` / `usePanelDetailsVisibility` | Tab **Options** → Views → **Details** (+ header ≣) | User profile `componentOptions` + `localStorage` |
 | **Technical meta** | Dev/diagnostic block (dock tab ⓘ) | `ReportEventMeta` via `usePanelTechnicalMetaVisibility` | Tab ⓘ only | In-memory `__taliaPanelTechnicalMetaVisibility` |
-| **Panel Options** | Views + Operations menu on active dock tab | Tab **⚙** (`useComponentOptions`) | Tab ⚙ | User profile + role criteria/ops |
-| **Data export** | CSV / print-PDF of visible table rows for verification | `lib/panelDataExport.js` + `supportsDataExport` | Tab **⬇** (next to ⓘ) | `window.__taliaPanelDataExport` |
+| **Panel Options** | Views + Operations menu on active dock tab | Tab **⚙** (`useComponentOptions` / `useReportShellOptions`) | Tab ⚙ | User profile + role criteria/ops |
+| **Data export** | Export to CSV / PDF of the panel’s registered payload | `lib/panelDataExport.js` + `supportsDataExport` | Tab **⬇** (next to ⓘ) — **Export to CSV** / **Export to PDF** | `window.__taliaPanelDataExport` |
 | **Content** | Primary body (table, chart, map) | `main.talia-report__content`; with Snapshot use `talia-report__content--scroll` so only the body scrolls | — | — |
 
 ### Root `<html>` classes (visibility)
@@ -113,6 +114,8 @@ StatusBar global criteria / focus / visibility strips are independent of per-com
 | Controls | `talia-controls-hidden` |
 
 Details use `ReportDataDetails` / `visible={showDetails}` for **secondary** blocks only — not a root CSS class. Primary Tabulator/chart hosts stay mounted in `talia-report__content`.
+
+**Views chrome (generic):** use `useReportShellOptions(panelComponentId, panelInstanceId)` for `showSnapshot`, `showDetails`, and `showFilters`. Persist via user profile `componentOptions`. Header **Filters** (`talia-filters-hidden`) remains a global override; per-panel Views → **Filters** uses `.talia-report-filters--hidden`. Header ≣ Details ANDs with Views → Details.
 
 ### Standard shell markup order
 
@@ -152,7 +155,7 @@ Follow **Agency** / **Published Rates** (filters → callout → controls → ac
 - Put **Talia filters** in their own row — never mix into the title block (except legacy panels not yet migrated).
 - Put **Controls** (Expand/Collapse, group toggles) in `.talia-report__controls` — toggled with global **Operations**.
 - Put **Actions** (Refresh, Export) in `.talia-report__actions-bar` — toggled with global **Operations**.
-- Put **Snapshot** KPIs in `ReportSnapshot` / `.talia-report__snapshot` as a sibling **above** `main` — do not place them inside scrollable content. Pair with `talia-report__content--scroll`.
+- Put **Snapshot** KPIs in `ReportSnapshot` / `.talia-report__snapshot` as a sibling **above** `main` — do not place them inside scrollable content. Pair with `talia-report__content--scroll`. Gate with `useReportShellOptions` → `showSnapshot` (`visible={showSnapshot}`).
 - **Column filters** need no panel markup; set `headerFilter` on Tabulator columns.
 - Gate **secondary detail blocks** with `ReportDataDetails` when the panel has header **Details** (≣) content (history, editors, extra tables). Do **not** wrap the primary table/chart — that destroys one-shot Tabulator/chart instances when Details is toggled off.
 - Do **not** use header ≣ for technical meta; do **not** use tab ⓘ for user data tables.
@@ -541,6 +544,18 @@ Global StatusBar criterion `bookedComposition` (`window.__taliaGlobalCriteria.bo
 | `group_fit_expected` (**default**) | FIT booked · Group = G booked + GTY held expected |
 
 Do not invent Talia group probabilities yet — use `resolveDeliveryProbability` / `resolveGroupHoldProbability` from `lib/deliveryProbability.js` (source: `group_probability` / `res_probability` / alloc `probability`). Fact group-OF explode rows (`source_origin=fact_group_alloc`) feed Agency expected value; FIT+Held composition still uses alloc holds for berth occupancy — do not double-count both. Cabin Deck ownership highlighting is a separate concept.
+
+## Demand unit (Pax / Cabins)
+
+**Calculate once at guests; unit is presentation only.**
+
+- Canonical demand math stays at **pax** = guests / berths from `guest_count` (RES_HEADER + Fact). Densify, sync, GraphQL, and transforms keep guest series/fields as source of truth.
+- StatusBar **Unit** (`demandUnit`: `pax` | `cabins`, default **`cabins`**) only changes display. Subscribe with `useGlobalDemandUnit` (`hooks/useGlobalDemandUnit.js`). Convert with `toDemandVolume(guests, unit)` from `lib/demandUnit.js` (`guests / 2` for cabins).
+- Never branch densify/sync/GraphQL on presentation unit. Never show dual primary demand grains in one tile/column.
+- Inventory facts stay cabins: Capacity, Bk C, Cabin Deck, LF. Cap reference lines show in cabins mode; hide or clearly relabel in pax mode.
+- Revenue (EUR) stays on pax economics; volume tiles/series follow the presentation unit.
+
+First-wave consumers: Master Sailing Explorer (Booked / Est / Contr), Reservation Profile (snapshot + Monday chart), Sailing Demand Composition.
 
 ## Dense row hover previews
 

@@ -137,10 +137,9 @@ export const componentRegistry = {
       views: [
         { id: 'viewMode', label: 'Nested', type: 'choice', choices: ['nested', 'flat'], default: 'nested' },
         { id: 'segments', label: 'Segments', type: 'boolean', default: false },
-        { id: 'details', label: 'Details', type: 'boolean', default: false },
+        { id: 'filters', label: 'Filters', type: 'boolean', default: true },
       ],
       operations: [
-        { id: 'showFilters', label: 'Show filters', type: 'boolean', default: true, minRole: 'USER' },
         { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true, minRole: 'USER' },
       ],
     },
@@ -244,11 +243,11 @@ export const componentRegistry = {
     showInReports: true,
     options: {
       views: [
-        { id: 'details', label: 'Details', type: 'boolean', default: false },
+        { id: 'details', label: 'Details', type: 'boolean', default: true },
+        { id: 'filters', label: 'Filters', type: 'boolean', default: true },
       ],
       operations: [
         { id: 'allocate', label: 'Allocate', type: 'boolean', default: true, minRole: 'MANAGER' },
-        { id: 'showFilters', label: 'Show filters', type: 'boolean', default: true, minRole: 'USER' },
         { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true, minRole: 'USER' },
       ],
     },
@@ -565,6 +564,15 @@ export const componentRegistry = {
     events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
     supportsRefresh: true,
     showInReports: true,
+    supportsDataExport: true,
+    options: {
+      views: [
+        { id: 'snapshot', label: 'Snapshot', type: 'boolean', default: true },
+        { id: 'details', label: 'Details', type: 'boolean', default: true },
+        { id: 'filters', label: 'Filters', type: 'boolean', default: true },
+      ],
+      operations: [],
+    },
     filePath: 'src/components/focus-panels/ReservationBookingCurve/index.jsx'
   },
   ProfileCompare: {
@@ -582,6 +590,15 @@ export const componentRegistry = {
     events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
     supportsRefresh: true,
     showInReports: true,
+    supportsDataExport: true,
+    options: {
+      views: [
+        { id: 'snapshot', label: 'Snapshot', type: 'boolean', default: true },
+        { id: 'details', label: 'Details', type: 'boolean', default: true },
+        { id: 'filters', label: 'Filters', type: 'boolean', default: true },
+      ],
+      operations: [],
+    },
     filePath: 'src/components/focus-panels/ProfileCompare/index.jsx'
   },
   ProfileAggregations: {
@@ -614,6 +631,15 @@ export const componentRegistry = {
     events: { emits: [], respondsTo: [] },
     supportsRefresh: true,
     showInReports: true,
+    supportsDataExport: true,
+    options: {
+      views: [
+        { id: 'snapshot', label: 'Snapshot', type: 'boolean', default: true },
+        { id: 'details', label: 'Details', type: 'boolean', default: true },
+        { id: 'filters', label: 'Filters', type: 'boolean', default: true },
+      ],
+      operations: [],
+    },
     filePath: 'src/components/focus-panels/SeasonalTradingPack/index.jsx'
   },
   InventoryTargetProfileEditor: {
@@ -631,6 +657,15 @@ export const componentRegistry = {
     events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
     supportsRefresh: true,
     showInReports: true,
+    supportsDataExport: true,
+    options: {
+      views: [
+        { id: 'snapshot', label: 'Snapshot', type: 'boolean', default: true },
+        { id: 'details', label: 'Details', type: 'boolean', default: true },
+        { id: 'filters', label: 'Filters', type: 'boolean', default: true },
+      ],
+      operations: [],
+    },
     filePath: 'src/components/focus-panels/InventoryTargetProfileEditor/index.jsx'
   },
   TargetProfileEditor: {

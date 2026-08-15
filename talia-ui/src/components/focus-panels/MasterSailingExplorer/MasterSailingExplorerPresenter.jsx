@@ -6,13 +6,18 @@ import { formatDayMonYy, formatMonYear } from '../../../lib/dateFormat';
 import { clipAnchorRectToViewport } from '../../../lib/clipAnchorRect';
 import { ALL_DEPARTURE_MONTH_KEY } from '../../../lib/globalDepartureMonth';
 import { useGlobalDepartureMonth } from '../../../hooks/useGlobalDepartureMonth';
+import { useGlobalDemandUnit } from '../../../hooks/useGlobalDemandUnit';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
+import {
+  demandUnitNoun,
+  toDemandVolume,
+} from '../../../lib/demandUnit';
 import DistributionSummary from '../../shared/DistributionSummary';
 import HoverPreview from '../../shared/HoverPreview';
 import {
   payloadFromTabulator,
   registerPanelDataExport,
 } from '../../../lib/panelDataExport';
-import { useComponentOptions } from '../../../hooks/useComponentOptions';
 import {
   buildExplorerDisplayRows,
   masterRowMatchesReference,
@@ -119,13 +124,17 @@ const MasterSailingExplorerPresenter = ({
   const {
     viewsState,
     setView,
-    operations,
-  } = useComponentOptions(panelComponentId || 'master-sailing-explorer');
+    showFilters,
+  } = useReportShellOptions(
+    panelComponentId || 'master-sailing-explorer',
+    panelInstanceId
+  );
   const viewMode = viewsState.viewMode === 'flat' ? 'flat' : 'nested';
   const segmentsVisible = viewsState.segments === true;
-  const showFilters = operations.find((op) => op.id === 'showFilters')?.enabled !== false;
   const [hoverPreview, setHoverPreview] = useState(null);
   const departureMonth = useGlobalDepartureMonth();
+  const demandUnit = useGlobalDemandUnit();
+  const demandNoun = demandUnitNoun(demandUnit);
   const previousDepartureMonthRef = useRef(departureMonth);
 
   // When a global departure month is chosen, prefer Flat (keeps Nested available).
@@ -310,28 +319,34 @@ const MasterSailingExplorerPresenter = ({
       {
         field: 'booked_guests',
         titleShort: 'Booked',
-        titleLong: 'Booked guests (real / materialised)',
+        titleLong: `Booked ${demandNoun} (real / materialised; presentation from guests)`,
         hozAlign: 'right',
         width: 96,
-        formatter: (cell) => formatCount(cell.getRow().getData()?.booked_guests),
+        formatter: (cell) => formatCount(
+          toDemandVolume(cell.getRow().getData()?.booked_guests, demandUnit)
+        ),
         headerSort: false,
       },
       {
         field: 'estimated_guests',
         titleShort: 'Est',
-        titleLong: 'Estimated guests (contracted × probability)',
+        titleLong: `Estimated ${demandNoun} (contracted × probability; presentation from guests)`,
         hozAlign: 'right',
         width: 88,
-        formatter: (cell) => formatCount(cell.getRow().getData()?.estimated_guests),
+        formatter: (cell) => formatCount(
+          toDemandVolume(cell.getRow().getData()?.estimated_guests, demandUnit)
+        ),
         headerSort: false,
       },
       {
         field: 'contracted_guests',
         titleShort: 'Contr',
-        titleLong: 'Contracted guests (synthetic group OF face)',
+        titleLong: `Contracted ${demandNoun} (synthetic group OF face; presentation from guests)`,
         hozAlign: 'right',
         width: 96,
-        formatter: (cell) => formatCount(cell.getRow().getData()?.contracted_guests),
+        formatter: (cell) => formatCount(
+          toDemandVolume(cell.getRow().getData()?.contracted_guests, demandUnit)
+        ),
         headerSort: false,
       },
       {
@@ -460,7 +475,7 @@ const MasterSailingExplorerPresenter = ({
     );
 
     return baseColumns;
-  }, [handleExpandToggle, segmentsVisible, viewMode]);
+  }, [demandNoun, demandUnit, handleExpandToggle, segmentsVisible, viewMode]);
 
   const openOnlyMonthGroup = useCallback((targetGroup) => {
     const table = instanceRef.current;
@@ -858,7 +873,7 @@ const MasterSailingExplorerPresenter = ({
     panelInstanceId,
   ]);
 
-  // Dock-tab Export (CSV / PDF) — visible/filtered Tabulator rows.
+  // Dock-tab Export to CSV / PDF — registered payload (e.g. visible/filtered rows).
   useEffect(() => {
     const componentKey = panelComponentId || 'master-sailing-explorer';
     return registerPanelDataExport({

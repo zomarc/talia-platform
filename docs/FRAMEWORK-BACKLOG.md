@@ -63,9 +63,19 @@ Generated from live code audit + docs scan (Jul 2026). Prefer this over stale `N
 
 ## Review checklist (tomorrow)
 
+### Architecture — Vite / discuss portal (always flaky)
+
+- Review why Vite-dev (`:5173`) keeps dying / conflicting with Start Demo preview (`:4173`) and agent shells.
+- Confirm durable presenter (launchd KeepAlive) + preview-only public path remains the rule; document restart SOP.
+- Decide: single entry (`validate start-core` / `start-demo`) vs ad-hoc `npm run dev` so Cursor agents cannot strand half the stack.
+
+### Product / UI verify
+
 1. Open focus with MSE + Distribution + Capacity Validation + Cabin Deck Inventory + RCS.
 2. Select sailing → Distribution market **groups** fill; Cabin Deck shows decks + GTY holds; Capacity Validation row fills; no MSE scroll jump.
 3. Select booking → MSE stays put; Agency filters; Distribution unchanged until sail changes.
 4. Toggle Filters/Details → tables do not full-refresh.
 5. Click sailing once after activating another panel → single-click select.
 6. On Cabin Deck chips: FIT shows `Res {id}`, GROUP shows `Group {id}`, GTY ONLY listed under unassigned.
+7. Reservation Profile chart: Today line + axis to Sail (0); numeric Week −N ticks; Target overlay when active.
+8. Metric reconcile one sail: Booked / Estimated / Contracted across MSE, Demand, Reservation filters, Profile Mondays.

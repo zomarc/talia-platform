@@ -107,10 +107,21 @@ const ProfileComparePresenter = ({
       panelInstanceId,
       panelComponentId: componentKey,
       getPayload: () => {
+        let chartImage = null;
+        try {
+          const chart = chartInstanceRef.current;
+          if (chart && typeof chart.toBase64Image === 'function') {
+            chartImage = chart.toBase64Image('image/png', 1);
+          }
+        } catch {
+          chartImage = null;
+        }
+
         const weeks = mergeWeekAxis(realSeries, modelSeries, targetSeries).weeks;
-        if (!weeks.length) return null;
+        if (!weeks.length && !chartImage) return null;
         return {
           title: `Sailing Profile ${sailCode || ''}`.trim(),
+          chartImage,
           columns: [
             { field: 'week', title: 'Week' },
             { field: 'realLf', title: 'REAL LF%' },

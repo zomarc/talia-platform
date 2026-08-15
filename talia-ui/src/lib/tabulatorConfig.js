@@ -9,12 +9,32 @@
 import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import { formatDayMon } from './dateFormat';
 import { normalizeColumnHeaderAlignment } from './tabulatorColumnAlignment';
-import { observeTabulatorFieldTerminology, resolveGlobalTabulatorLabel } from './tabulatorColumnLabelDictionary';
+import { observeTabulatorFieldTerminology, resolveGlobalTabulatorLabel, resolveGlobalTabulatorDisplayKind } from './tabulatorColumnLabelDictionary';
+import {
+  createNumberDisplayFormatter,
+  createNumberDisplayTotalFormatter,
+  displayDecimalsForKind,
+  isNumberDisplayKind,
+} from './numberDisplay';
 export {
   withColumnTotal,
   formatColumnTotalInteger,
   formatColumnTotalNumber,
+  setTabulatorColumnTotalsVisible,
 } from './tabulatorColumnTotals';
+import { setTabulatorColumnTotalsVisible as applyColumnTotalsVisible } from './tabulatorColumnTotals';
+export {
+  formatDisplayNumber,
+  formatExactNumber,
+  createNumberDisplayFormatter,
+  NUMBER_DISPLAY_KINDS,
+} from './numberDisplay';
+import {
+  getComponentOptionsCatalog,
+  resolveViewValue,
+  VIEW_TOTALS,
+} from './componentOptionsCatalog';
+import { COMPONENT_OPTIONS_CHANGED_EVENT } from './componentOptionsEvents';
 import {
   DASHBOARD_DETAILS_VISIBILITY_EVENT,
   DASHBOARD_GLOBAL_CONFIG_EVENT,
@@ -99,6 +119,61 @@ const applyGlobalCompactFormatters = (columns = []) => {
       // Global compact display rule: package values render as first token + ellipsis.
       // Full value remains available through the native tooltip/title attribute.
       next.formatter = formatCompactPackageCell;
+    }
+
+    return next;
+  });
+};
+
+/**
+ * Apply semantic number display (money / pct / count / …) from the field dictionary.
+ * Exact value stays on hover title. Opt out with displayKind: false.
+ * Does not replace an existing cell formatter unless displayKind is set explicitly
+ * on the column (so complex HTML formatters stay intact).
+ */
+const applyGlobalNumberDisplayFormatters = (columns = []) => {
+  if (!Array.isArray(columns)) return columns;
+  return columns.map((column) => {
+    if (!column || typeof column !== 'object') return column;
+    const next = { ...column };
+
+    if (Array.isArray(next.columns)) {
+      next.columns = applyGlobalNumberDisplayFormatters(next.columns);
+    }
+
+    if (isPackageField(next.field)) return next;
+
+    const explicitKind = Object.prototype.hasOwnProperty.call(next, 'displayKind')
+      ? next.displayKind
+      : undefined;
+    delete next.displayKind;
+
+    if (explicitKind === false || explicitKind === null) return next;
+
+    const kind = explicitKind != null && explicitKind !== ''
+      ? String(explicitKind).trim().toLowerCase()
+      : resolveGlobalTabulatorDisplayKind(next.field);
+
+    if (!isNumberDisplayKind(kind)) return next;
+
+    // Preserve bespoke cell formatters unless the column opted into a display kind.
+    if (typeof next.formatter !== 'function' || explicitKind != null) {
+      next.formatter = createNumberDisplayFormatter(kind);
+      next.hozAlign = next.hozAlign || 'right';
+    }
+
+    // Footer totals: match grid display kind (calcs still use full precision).
+    if (next.bottomCalc) {
+      next.bottomCalcFormatter = createNumberDisplayTotalFormatter(kind);
+      next.bottomCalcFormatterParams = { displayKind: kind };
+      if (next.bottomCalcParams && typeof next.bottomCalcParams === 'object') {
+        next.bottomCalcParams = {
+          ...next.bottomCalcParams,
+          precision: displayDecimalsForKind(kind),
+        };
+      } else if (!['count', 'unique'].includes(String(next.bottomCalc))) {
+        next.bottomCalcParams = { precision: displayDecimalsForKind(kind) };
+      }
     }
 
     return next;
@@ -429,6 +504,40 @@ export const flushVisibleTabulatorLayouts = () => {
   });
 };
 
+const catalogHasTotalsView = (componentId) => {
+  const key = String(componentId || '');
+  if (!key) return false;
+  const catalog = getComponentOptionsCatalog(key);
+  return (catalog.views || []).some((view) => view?.id === 'totals');
+};
+
+const resolveTotalsVisibleForComponent = (componentId, viewsState = null) => {
+  const state = viewsState && typeof viewsState === 'object'
+    ? viewsState
+    : (window.__taliaUserProfileState?.componentOptions?.[componentId]?.views || {});
+  return resolveViewValue(state, VIEW_TOTALS) !== false;
+};
+
+/** Apply Views → Totals to all live tables for a panelComponentId. */
+export const applyTabulatorColumnTotalsForComponent = (componentId, viewsState = null) => {
+  const key = String(componentId || '');
+  if (!key || !catalogHasTotalsView(key)) return;
+  const visible = resolveTotalsVisibleForComponent(key, viewsState);
+  tableInstances.forEach((table) => {
+    const meta = tableMeta.get(table);
+    if (meta?.panelComponentId !== key) return;
+    applyColumnTotalsVisible(table, visible);
+  });
+};
+
+const applyTabulatorColumnTotalsForTable = (table) => {
+  if (!table) return;
+  const meta = tableMeta.get(table);
+  const componentId = meta?.panelComponentId;
+  if (!componentId || !catalogHasTotalsView(componentId)) return;
+  applyColumnTotalsVisible(table, resolveTotalsVisibleForComponent(componentId));
+};
+
 const ensureLayoutListenerBound = () => {
   if (!isBrowser() || hasBoundLayoutListener) return;
   hasBoundLayoutListener = true;
@@ -501,6 +610,15 @@ const ensureLayoutListenerBound = () => {
       tableInstances.forEach((table) => scheduleTabulatorLayoutRefresh(table));
     });
   });
+
+  // Views → Totals: immediate ColumnCalcs show/hide (no tab switch / CSS gap).
+  window.addEventListener(COMPONENT_OPTIONS_CHANGED_EVENT, (event) => {
+    const detail = event?.detail || {};
+    const componentId = detail.componentId;
+    if (!componentId || !catalogHasTotalsView(componentId)) return;
+    applyTabulatorColumnTotalsForComponent(componentId, detail.views);
+  });
+
   window.addEventListener('resize', () => {
     applyAllVisible();
   });
@@ -572,6 +690,7 @@ const getWrappedTabulatorClass = () => {
         }
         applyLayoutModeToTable(this, { force: isTableHostVisible(this) });
         scheduleTabulatorLayoutRefresh(this);
+        applyTabulatorColumnTotalsForTable(this);
       });
       this.on?.('groupVisibilityChanged', () => {
         refreshTableLayout(this);
@@ -624,7 +743,8 @@ export const getTabulatorOptions = (options = {}) => {
         : ''
     );
   const titledColumns = rawColumns ? normalizeColumnTitles(rawColumns, { panelComponentId }) : null;
-  const compactColumns = titledColumns ? applyGlobalCompactFormatters(titledColumns) : null;
+  const numberColumns = titledColumns ? applyGlobalNumberDisplayFormatters(titledColumns) : null;
+  const compactColumns = numberColumns ? applyGlobalCompactFormatters(numberColumns) : null;
   const alignedColumns = compactColumns ? normalizeColumnHeaderAlignment(compactColumns) : null;
   const sourceColumns = ignoreGlobalLayout ? alignedColumns : stripFixedWidths(alignedColumns);
   const panelInstanceId = typeof options.panelInstanceId === 'string' && options.panelInstanceId.trim()

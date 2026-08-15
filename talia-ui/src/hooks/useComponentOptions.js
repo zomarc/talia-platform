@@ -5,13 +5,15 @@ import { loadRoleComponentOps } from '../services/data/roleCriteriaService';
 import {
   canShowOperationsOptionsMenu,
   filterOperationsForRole,
+  filterViewsForRole,
   getComponentOptionsCatalog,
   resolveOperationEnabled,
   resolveViewValue,
 } from '../lib/componentOptionsCatalog';
+import { COMPONENT_OPTIONS_CHANGED_EVENT } from '../lib/componentOptionsEvents';
 import { canConfigureComponentOperations } from '../utils/roleUtils';
 
-export const COMPONENT_OPTIONS_CHANGED_EVENT = 'talia:component.optionsChanged';
+export { COMPONENT_OPTIONS_CHANGED_EVENT } from '../lib/componentOptionsEvents';
 
 const PERSIST_DEBOUNCE_MS = 200;
 
@@ -154,12 +156,13 @@ export function useComponentOptions(componentId, registryOptions = null) {
     });
   }, [role, schedulePersist]);
 
-  const views = useMemo(() => (
-    (catalog.views || []).map((def) => ({
+  const views = useMemo(() => {
+    const allowed = filterViewsForRole(catalog.views, role, roleOpsAllow, key);
+    return allowed.map((def) => ({
       ...def,
       value: resolveViewValue(viewsState, def),
-    }))
-  ), [catalog.views, viewsState]);
+    }));
+  }, [catalog.views, key, role, roleOpsAllow, viewsState]);
 
   const operations = useMemo(() => {
     const allowed = filterOperationsForRole(catalog.operations, role, roleOpsAllow, key);

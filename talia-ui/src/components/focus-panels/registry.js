@@ -494,6 +494,16 @@ export const componentRegistry = {
     },
     showInReports: true,
     supportsDataExport: true,
+    options: {
+      views: [
+        { id: 'details', label: 'Details', type: 'boolean', default: true },
+        { id: 'filters', label: 'Filters', type: 'boolean', default: true },
+        { id: 'totals', label: 'Totals', type: 'boolean', default: true, minRole: 'USER' },
+      ],
+      operations: [
+        { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true, minRole: 'USER' },
+      ],
+    },
     filePath: 'src/components/focus-panels/ReservationCurrentState/index.jsx'
   },
   GroupBookingReview: {

@@ -12,6 +12,7 @@
 import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react';
 import { initTabulator, getTabulatorOptions, captureTableScroll, withColumnTotal } from '../../../lib/tabulatorConfig';
 import { afterTabulatorDataRefresh } from '../../../hooks/useTabulatorLayoutSync';
+import { useTabulatorColumnTotals } from '../../../hooks/useTabulatorColumnTotals';
 import { formatDayMon, formatSailDateRange } from '../../../lib/dateFormat';
 import { clipAnchorRectToViewport } from '../../../lib/clipAnchorRect';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
@@ -60,10 +61,14 @@ const ReservationCurrentStatePresenter = ({
   hoverByResIdRef.current = hoverByResId;
   const [historyFilter, setHistoryFilter] = useState('all');
   const [hoverPreview, setHoverPreview] = useState(null);
-  const { showDetails, showFilters } = useReportShellOptions(
+  const [tableReadyToken, setTableReadyToken] = useState(0);
+  const { showDetails, showFilters, showTotals } = useReportShellOptions(
     panelComponentId || 'reservation-current-state',
     panelInstanceId
   );
+
+  // Views → Totals → native ColumnCalcs (also applied framework-wide via tabulatorConfig).
+  useTabulatorColumnTotals(instanceRef, showTotals, tableReadyToken);
 
   // Sail scope change clears reservation via eventBus; sync table selection without re-emitting.
   useEffect(() => {
@@ -159,47 +164,25 @@ const ReservationCurrentStatePresenter = ({
       title: "Guest Count",
       hozAlign: "right",
       headerFilter: "number",
-      formatter: (cell) => {
-        const value = cell.getValue();
-        if (value == null || value === '') return '';
-        const numeric = Number.parseFloat(value);
-        if (!Number.isFinite(numeric)) return '';
-        return numeric.toLocaleString('en-US', {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 2
-        });
-      }
-    }, 'sum', { precision: 1 }),
+    }, 'sum'),
     withColumnTotal({
       field: "gross_selling_fare",
       title: "Gross Selling Fare",
       hozAlign: "right",
       headerFilter: "number",
-      formatter: (cell) => {
-        const value = cell.getValue();
-        return value ? parseFloat(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
-      }
-    }, 'sum', { precision: 2 }),
+    }, 'sum'),
     withColumnTotal({
       field: "net_selling_fare",
       title: "Net Selling Fare",
       hozAlign: "right",
       headerFilter: "number",
-      formatter: (cell) => {
-        const value = cell.getValue();
-        return value ? parseFloat(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
-      }
-    }, 'sum', { precision: 2 }),
+    }, 'sum'),
     withColumnTotal({
       field: "net_ticket_revenue_eur",
       title: "Net Revenue (EUR)",
       hozAlign: "right",
       headerFilter: "number",
-      formatter: (cell) => {
-        const value = cell.getValue();
-        return value ? parseFloat(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
-      }
-    }, 'sum', { precision: 2 }),
+    }, 'sum'),
     { 
       field: "agency_id", 
       title: "Agency ID",
@@ -308,6 +291,7 @@ const ReservationCurrentStatePresenter = ({
 
         instanceRef.current.on('tableBuilt', () => {
           tableBuiltRef.current = true;
+          setTableReadyToken((n) => n + 1);
           applyTableData(instanceRef.current);
         });
 

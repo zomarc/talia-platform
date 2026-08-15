@@ -104,10 +104,25 @@ const ReservationBookingCurvePresenter = ({
       panelInstanceId,
       panelComponentId: componentKey,
       getPayload: () => {
+        let chartImage = null;
+        try {
+          const chart = chartInstanceRef.current;
+          if (chart && typeof chart.toBase64Image === 'function') {
+            chartImage = chart.toBase64Image('image/png', 1);
+          } else if (chartRef.current && typeof chartRef.current.toDataURL === 'function') {
+            chartImage = chartRef.current.toDataURL('image/png');
+          }
+        } catch {
+          chartImage = null;
+        }
+
         const rows = Array.isArray(data?.composition) ? data.composition : [];
-        if (!rows.length) return null;
+        if (!rows.length && !chartImage) return null;
+
         return {
           title: `Reservation Profile ${data?.referenceSailCode || sailCode || ''}`.trim(),
+          subtitle: data?.shipName || undefined,
+          chartImage,
           columns: [
             { field: 'dimensionKey', title: 'Market group' },
             { field: 'bookings', title: 'Bookings' },

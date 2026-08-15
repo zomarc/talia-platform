@@ -1,6 +1,7 @@
 /**
  * Global Tabulator column label dictionary.
  * Keeps headers compact while preserving full semantic labels via headerTooltip.
+ * Optional `display` = semantic number kind (money | pct | count | quantity | rate).
  */
 
 const FIELD_LABELS = {
@@ -18,28 +19,28 @@ const FIELD_LABELS = {
   route: { short: 'Route', long: 'Route' },
   cabin_type: { short: 'Cab T', long: 'Cabin type' },
   cabin_category: { short: 'Cab Cat', long: 'Cabin category' },
-  guest_count: { short: 'Gst', long: 'Guest count' },
-  gross_selling_fare: { short: 'Gross SF', long: 'Gross selling fare' },
-  net_selling_fare: { short: 'Net SF', long: 'Net selling fare' },
-  net_ticket_revenue_eur: { short: 'Net Rev EUR', long: 'Net ticket revenue (EUR)' },
-  gross_ticket_revenue: { short: 'Gross Rev', long: 'Gross ticket revenue' },
-  net_ticket_revenue: { short: 'Net Rev', long: 'Net ticket revenue' },
+  guest_count: { short: 'Gst', long: 'Guest count', display: 'quantity' },
+  gross_selling_fare: { short: 'Gross SF', long: 'Gross selling fare', display: 'money' },
+  net_selling_fare: { short: 'Net SF', long: 'Net selling fare', display: 'money' },
+  net_ticket_revenue_eur: { short: 'Net Rev EUR', long: 'Net ticket revenue (EUR)', display: 'money' },
+  gross_ticket_revenue: { short: 'Gross Rev', long: 'Gross ticket revenue', display: 'money' },
+  net_ticket_revenue: { short: 'Net Rev', long: 'Net ticket revenue', display: 'money' },
   agency_id: { short: 'Agcy', long: 'Agency ID' },
   currency: { short: 'Cur', long: 'Currency' },
   pax_status: { short: 'PAX St', long: 'Passenger status' },
-  booked_cabins: { short: 'Bk C', long: 'Booked cabins' },
-  total_cabins: { short: 'Tot C', long: 'Total cabins' },
-  available_cabins: { short: 'Avl C', long: 'Available cabins' },
-  guaranteed_cabins: { short: 'Res C', long: 'Reserved cabins (group × probability)' },
-  booked_guests: { short: 'Booked', long: 'Booked guests (real / materialised)' },
-  contracted_guests: { short: 'Contr', long: 'Contracted guests (synthetic group OF face)' },
-  estimated_guests: { short: 'Est', long: 'Estimated guests (contracted × probability)' },
-  actual_booked_pct: { short: 'Bk%', long: 'Actual booked cabins %' },
-  potential_booked_pct: { short: 'Pot%', long: 'Potential booked cabins % (booked + reserved)' },
-  booking_upside_pct: { short: 'Up%', long: 'Upside % (potential - actual)' },
-  berth_capacity: { short: 'Cap B', long: 'Capacity (berths)' },
-  berths_occupied: { short: 'Bk B', long: 'Booked (berths)' },
-  berths_available: { short: 'Avl B', long: 'Available (berths)' },
+  booked_cabins: { short: 'Bk C', long: 'Booked cabins', display: 'count' },
+  total_cabins: { short: 'Tot C', long: 'Total cabins', display: 'count' },
+  available_cabins: { short: 'Avl C', long: 'Available cabins', display: 'count' },
+  guaranteed_cabins: { short: 'Res C', long: 'Reserved cabins (group × probability)', display: 'quantity' },
+  booked_guests: { short: 'Booked', long: 'Booked guests (real / materialised)', display: 'quantity' },
+  contracted_guests: { short: 'Contr', long: 'Contracted guests (synthetic group OF face)', display: 'quantity' },
+  estimated_guests: { short: 'Est', long: 'Estimated guests (contracted × probability)', display: 'quantity' },
+  actual_booked_pct: { short: 'Bk%', long: 'Actual booked cabins %', display: 'pct' },
+  potential_booked_pct: { short: 'Pot%', long: 'Potential booked cabins % (booked + reserved)', display: 'pct' },
+  booking_upside_pct: { short: 'Up%', long: 'Upside % (potential - actual)', display: 'pct' },
+  berth_capacity: { short: 'Cap B', long: 'Capacity (berths)', display: 'count' },
+  berths_occupied: { short: 'Bk B', long: 'Booked (berths)', display: 'count' },
+  berths_available: { short: 'Avl B', long: 'Available (berths)', display: 'count' },
 };
 
 /** Map synthetic/formatter-only column fields onto canonical dictionary keys. */
@@ -78,6 +79,25 @@ export const resolveGlobalTabulatorLabel = ({ field, title }) => {
   return { short, long };
 };
 
+/**
+ * Semantic number display kind for a field (money | pct | count | quantity | rate).
+ * Column defs may override with `displayKind`; use `displayKind: false` to opt out.
+ * @param {string} field
+ * @returns {string|null}
+ */
+export const resolveGlobalTabulatorDisplayKind = (field) => {
+  const key = resolveCanonicalTabulatorField(field);
+  if (!key) return null;
+  const override = overrideFieldLabels.get(key);
+  if (override && Object.prototype.hasOwnProperty.call(override, 'display')) {
+    const kind = override.display;
+    return kind ? String(kind).trim().toLowerCase() : null;
+  }
+  const base = FIELD_LABELS[key];
+  const kind = base?.display;
+  return kind ? String(kind).trim().toLowerCase() : null;
+};
+
 export const observeTabulatorFieldTerminology = ({ field, title, mapped, componentId }) => {
   const key = resolveCanonicalTabulatorField(field);
   if (!key) return;
@@ -106,8 +126,13 @@ export const setGlobalTabulatorLabelOverrides = (definitions = []) => {
     if (!field) return;
     const short = String(entry?.shortLabel || entry?.short || '').trim();
     const long = String(entry?.longLabel || entry?.long || '').trim();
-    if (!short && !long) return;
-    overrideFieldLabels.set(field, { short, long });
+    const display = entry?.display != null ? String(entry.display).trim().toLowerCase() : '';
+    if (!short && !long && !display) return;
+    overrideFieldLabels.set(field, {
+      ...(short ? { short } : {}),
+      ...(long ? { long } : {}),
+      ...(display ? { display } : {}),
+    });
   });
 };
 
@@ -123,6 +148,7 @@ export const getGlobalTabulatorDictionaryRows = () => (
       field,
       short: override.short || labels.short || '',
       long: override.long || labels.long || '',
+      display: override.display || labels.display || '',
       source: overrideFieldLabels.has(field) ? 'override' : 'base',
       status: 'mapped',
       };

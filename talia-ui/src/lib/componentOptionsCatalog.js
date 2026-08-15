@@ -12,6 +12,8 @@ import { hasRole, canConfigureComponentOperations, normalizeRole } from '../util
 export const VIEW_SNAPSHOT = { id: 'snapshot', label: 'Snapshot', type: 'boolean', default: true };
 export const VIEW_DETAILS = { id: 'details', label: 'Details', type: 'boolean', default: true };
 export const VIEW_FILTERS = { id: 'filters', label: 'Filters', type: 'boolean', default: true };
+/** Tabulator column-calc footer — opt in only on tables that use `withColumnTotal`. */
+export const VIEW_TOTALS = { id: 'totals', label: 'Totals', type: 'boolean', default: true, minRole: 'USER' };
 
 /**
  * Default catalog keyed by panelComponentId (registry panelId).
@@ -49,7 +51,7 @@ export const DEFAULT_COMPONENT_OPTIONS = {
     operations: [],
   },
   'reservation-current-state': {
-    views: [VIEW_DETAILS, VIEW_FILTERS],
+    views: [VIEW_DETAILS, VIEW_FILTERS, VIEW_TOTALS],
     operations: [
       { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true, minRole: 'USER' },
     ],
@@ -91,6 +93,15 @@ export const isOperationAllowedForRole = (opDef, role, roleOpsAllow = null, comp
 export const filterOperationsForRole = (operations, role, roleOpsAllow = null, componentId = null) => (
   (Array.isArray(operations) ? operations : []).filter((op) => (
     isOperationAllowedForRole(op, role, roleOpsAllow, componentId)
+  ))
+);
+
+/** Same allow-list / minRole rules as Operations (roleOpsAllow[componentId][viewId]). */
+export const isViewAllowedForRole = isOperationAllowedForRole;
+
+export const filterViewsForRole = (views, role, roleOpsAllow = null, componentId = null) => (
+  (Array.isArray(views) ? views : []).filter((view) => (
+    isViewAllowedForRole(view, role, roleOpsAllow, componentId)
   ))
 );
 

@@ -133,28 +133,57 @@ export function exportPanelDataCsv(payload) {
 
 /**
  * Print-iframe PDF (browser Save as PDF). No PDF library.
- * @param {{ title?: string, columns: { field: string, title?: string }[], rows: object[] }} payload
+ * Optional `chartImage` (data URL / Chart.js toBase64Image) is rendered above the table.
+ * @param {{ title?: string, subtitle?: string, columns?: { field: string, title?: string }[], rows?: object[], chartImage?: string|null }} payload
  */
 export function exportPanelDataPdf(payload) {
   const title = String(payload?.title || 'Export');
+  const subtitle = payload?.subtitle != null ? String(payload.subtitle) : '';
   const columns = Array.isArray(payload?.columns) ? payload.columns.filter((c) => c?.field) : [];
   const rows = Array.isArray(payload?.rows) ? payload.rows : [];
-  if (!columns.length || !rows.length) {
+  const chartImage = typeof payload?.chartImage === 'string' && payload.chartImage.startsWith('data:image/')
+    ? payload.chartImage
+    : null;
+
+  const hasTable = columns.length > 0 && rows.length > 0;
+  if (!hasTable && !chartImage) {
     throw new Error('Nothing to export');
   }
 
   const exportTitle = buildExportFilename(title, 'pdf').replace(/\.pdf$/i, '');
   const generatedAt = new Date().toLocaleString();
 
-  const thead = columns.map((c) => `<th>${escHtml(c.title || c.field)}</th>`).join('');
-  const tbody = rows.map((row) => {
-    const cells = columns.map((c) => {
-      const raw = row?.[c.field];
-      const text = raw == null ? '' : (typeof raw === 'object' ? JSON.stringify(raw) : String(raw));
-      return `<td>${escHtml(text)}</td>`;
-    }).join('');
-    return `<tr>${cells}</tr>`;
-  }).join('');
+  const thead = hasTable
+    ? columns.map((c) => `<th>${escHtml(c.title || c.field)}</th>`).join('')
+    : '';
+  const tbody = hasTable
+    ? rows.map((row) => {
+      const cells = columns.map((c) => {
+        const raw = row?.[c.field];
+        const text = raw == null ? '' : (typeof raw === 'object' ? JSON.stringify(raw) : String(raw));
+        return `<td>${escHtml(text)}</td>`;
+      }).join('');
+      return `<tr>${cells}</tr>`;
+    }).join('')
+    : '';
+
+  const metaParts = [];
+  if (hasTable) metaParts.push(`${rows.length} row${rows.length === 1 ? '' : 's'}`);
+  if (chartImage) metaParts.push('chart');
+  metaParts.push(`exported ${generatedAt}`);
+
+  const chartBlock = chartImage
+    ? `<figure class="chart"><img src="${chartImage}" alt="Chart" /></figure>`
+    : '';
+  const tableBlock = hasTable
+    ? `<table>
+    <thead><tr>${thead}</tr></thead>
+    <tbody>${tbody}</tbody>
+  </table>`
+    : '';
+  const subtitleBlock = subtitle
+    ? `<p class="subtitle">${escHtml(subtitle)}</p>`
+    : '';
 
   const html = `<!doctype html>
 <html lang="en">
@@ -175,10 +204,27 @@ export function exportPanelDataPdf(payload) {
       margin: 0 0 4px;
       font-weight: 650;
     }
+    .subtitle {
+      font-size: 12px;
+      color: #333;
+      margin: 0 0 6px;
+    }
     .meta {
       font-size: 11px;
       color: #444;
       margin: 0 0 12px;
+    }
+    .chart {
+      margin: 0 0 14px;
+      padding: 0;
+    }
+    .chart img {
+      display: block;
+      width: 100%;
+      max-height: 420px;
+      object-fit: contain;
+      background: #fff;
+      border: 1px solid #ddd;
     }
     table {
       width: 100%;
@@ -204,11 +250,10 @@ export function exportPanelDataPdf(payload) {
 </head>
 <body>
   <h1>${escHtml(title)}</h1>
-  <p class="meta">${rows.length} row${rows.length === 1 ? '' : 's'} · exported ${escHtml(generatedAt)}</p>
-  <table>
-    <thead><tr>${thead}</tr></thead>
-    <tbody>${tbody}</tbody>
-  </table>
+  ${subtitleBlock}
+  <p class="meta">${escHtml(metaParts.join(' · '))}</p>
+  ${chartBlock}
+  ${tableBlock}
 </body>
 </html>`;
 
@@ -248,30 +293,42 @@ export function exportPanelDataPdf(payload) {
   frameDoc.write(html);
   frameDoc.close();
 
+  // Data-URL images decode sync; short delay still helps print layout settle.
+  const delayMs = chartImage ? 120 : 80;
   if (frameDoc.readyState === 'complete') {
-    window.setTimeout(triggerPrint, 80);
+    window.setTimeout(triggerPrint, delayMs);
   } else {
-    iframe.addEventListener('load', () => window.setTimeout(triggerPrint, 80), { once: true });
+    iframe.addEventListener('load', () => window.setTimeout(triggerPrint, delayMs), { once: true });
   }
 }
 
 /**
  * @param {'csv'|'pdf'} format
- * @param {() => ({ title?: string, columns: object[], rows: object[] } | null | undefined)} getPayload
+ * @param {() => ({ title?: string, columns?: object[], rows?: object[], chartImage?: string|null } | null | undefined)} getPayload
  */
 export function runPanelDataExport(format, getPayload) {
   const payload = typeof getPayload === 'function' ? getPayload() : getPayload;
-  if (!payload || !Array.isArray(payload.columns) || !Array.isArray(payload.rows)) {
+  if (!payload || typeof payload !== 'object') {
     throw new Error('Nothing to export');
   }
-  if (!payload.columns.length || !payload.rows.length) {
-    throw new Error('Nothing to export');
-  }
+  const columns = Array.isArray(payload.columns) ? payload.columns : [];
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  const chartImage = typeof payload.chartImage === 'string' && payload.chartImage.startsWith('data:image/')
+    ? payload.chartImage
+    : null;
+
   if (format === 'pdf') {
-    exportPanelDataPdf(payload);
+    if ((!columns.length || !rows.length) && !chartImage) {
+      throw new Error('Nothing to export');
+    }
+    exportPanelDataPdf({ ...payload, columns, rows, chartImage });
     return;
   }
-  exportPanelDataCsv(payload);
+
+  if (!columns.length || !rows.length) {
+    throw new Error('Nothing to export');
+  }
+  exportPanelDataCsv({ ...payload, columns, rows });
 }
 
 /**

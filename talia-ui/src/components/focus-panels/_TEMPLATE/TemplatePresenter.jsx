@@ -29,8 +29,14 @@
 
 import React, { useCallback, useRef, useEffect, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
-// Optional column footer totals: withColumnTotal({ field: 'id', ... }, 'count')
-// Optional: withColumnTotal({ field: 'amount', ... }, 'sum', { precision: 2 })
+// Optional column footer totals:
+//   import { withColumnTotal } from '../../../lib/tabulatorConfig';
+//   withColumnTotal({ field: 'id', ... }, 'count')
+// Number display: add `display: 'money'|'pct'|'count'|'quantity'|'rate'` on the field
+//   in tabulatorColumnLabelDictionary (applied by getTabulatorOptions; exact on hover).
+// Views → Totals (catalog VIEW_TOTALS + panelComponentId on getTabulatorOptions):
+//   import { useTabulatorColumnTotals } from '../../../hooks/useTabulatorColumnTotals';
+//   useTabulatorColumnTotals(instanceRef, showTotals, tableReadyToken);
 import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 
 /**

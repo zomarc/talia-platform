@@ -97,6 +97,7 @@ StatusBar global criteria / focus / visibility strips are independent of per-com
 | **Actions** | Panel actions (Refresh, product Export, …) | `.talia-report__actions-bar` (preferred); legacy compact: `.talia-report__actions` in header | Tab **Options** (Ops) / role | Role ops allow-list + Admin Options |
 | **Snapshot** | Pinned KPI strip above scrollable body (Booked, Velocity, …) | `ReportSnapshot` → `section.talia-report__snapshot` + `.talia-report__metrics` / `.talia-metric` | Tab **Options** → Views → **Snapshot** | User profile `componentOptions` |
 | **Details** | User-facing *extra* data blocks (header ≣); never the primary table/chart | `ReportDataDetails` + `useReportShellOptions` / `usePanelDetailsVisibility` | Tab **Options** → Views → **Details** (+ header ≣) | User profile `componentOptions` + `localStorage` |
+| **Totals** | Tabulator column-calc footer (`withColumnTotal`) | native ColumnCalcs via `setTabulatorColumnTotalsVisible` | Tab **Options** → Views → **Totals** | User profile `componentOptions` (opt-in `VIEW_TOTALS`; role `minRole` / ops allow-list) |
 | **Technical meta** | Dev/diagnostic block (dock tab ⓘ) | `ReportEventMeta` via `usePanelTechnicalMetaVisibility` | Tab ⓘ only | In-memory `__taliaPanelTechnicalMetaVisibility` |
 | **Panel Options** | Views + Operations menu on active dock tab | Tab **⚙** (`useComponentOptions` / `useReportShellOptions`) | Tab ⚙ | User profile + role criteria/ops |
 | **Data export** | Export to CSV / PDF of the panel’s registered payload | `lib/panelDataExport.js` + `supportsDataExport` | Tab **⬇** (next to ⓘ) — **Export to CSV** / **Export to PDF** | `window.__taliaPanelDataExport` |
@@ -115,7 +116,7 @@ StatusBar global criteria / focus / visibility strips are independent of per-com
 
 Details use `ReportDataDetails` / `visible={showDetails}` for **secondary** blocks only — not a root CSS class. Primary Tabulator/chart hosts stay mounted in `talia-report__content`.
 
-**Views chrome (generic):** use `useReportShellOptions(panelComponentId, panelInstanceId)` for `showSnapshot`, `showDetails`, and `showFilters`. Persist via user profile `componentOptions`. Header **Filters** (`talia-filters-hidden`) remains a global override; per-panel Views → **Filters** uses `.talia-report-filters--hidden`. Header ≣ Details ANDs with Views → Details.
+**Views chrome (generic):** use `useReportShellOptions(panelComponentId, panelInstanceId)` for `showSnapshot`, `showDetails`, `showFilters`, and `showTotals`. Persist via user profile `componentOptions`. Header **Filters** (`talia-filters-hidden`) remains a global override; per-panel Views → **Filters** uses `.talia-report-filters--hidden`. Header ≣ Details ANDs with Views → Details. Views → **Totals** (`VIEW_TOTALS`): pass `panelComponentId` into `getTabulatorOptions` so `tabulatorConfig` applies `setTabulatorColumnTotalsVisible` on Options change and `tableBuilt`; presenters may also call `useTabulatorColumnTotals(instanceRef, showTotals)`. Do **not** hide the footer with CSS (leaves a blank gap) or rewrite the Tabulator host `className` in React.
 
 ### Standard shell markup order
 
@@ -288,7 +289,16 @@ const MyComponent = () => {
   - `tabulatorConfig` auto-applies this, and also defaults `headerTooltip` to `title` when no long name is provided
   - Global field-level defaults live in `lib/tabulatorColumnLabelDictionary.js` and are applied automatically across components
 - Global compact text policy: package columns (`package_name` / `package`) are rendered as first word + `...` with full value on hover title (applied centrally in `tabulatorConfig`)
-- Enforcement rule: when adding a new table component, prefer dictionary-backed fields in `tabulatorColumnLabelDictionary`; if a field is new, add it to the dictionary in the same change
+- **Number display kinds (presentation only):** map fields to `money` | `pct` | `count` | `quantity` | `rate` in `tabulatorColumnLabelDictionary` (`display: 'money'`). Applied centrally by `getTabulatorOptions` via `lib/numberDisplay.js`:
+  - **money** → whole numbers in the grid; exact cents on hover
+  - **pct** → ≥1 decimal
+  - **count** → integers
+  - **quantity** → up to 1 decimal, trailing zeros trimmed (guests)
+  - **rate** → 2 decimals
+  - Opt out a column with `displayKind: false`; force a kind with `displayKind: 'money'`
+  - Footer calcs still sum full precision; footer **display** follows the same kind
+  - CSV/PDF export keeps raw values
+- Enforcement rule: when adding a new table component, prefer dictionary-backed fields in `tabulatorColumnLabelDictionary`; if a field is new, add it to the dictionary in the same change (include `display` when numeric)
 - Shared definitions rule: maintain two per-field notes in the Column Terminology admin panel:
   - **User definition** (business/user-facing meaning)
   - **Admin/Dev definition** (technical/internal meaning)
@@ -297,9 +307,9 @@ const MyComponent = () => {
 - For grouped tables that need tab-header controls, set `supportsGroupActions: true` in `registry.js` and register presenter actions in `window.__taliaPanelGroupActions`
 - For **table data export** (CSV / print-PDF for verification), set `supportsDataExport: true` in `registry.js` and register via `registerPanelDataExport` from `lib/panelDataExport.js` (dock tab **⬇** next to ⓘ). Prefer `payloadFromTabulator(table, title)` so export uses **visible/filtered** rows. This is distinct from product Export in `.talia-report__actions-bar` (e.g. Project Summary PDF).
 - Do not hardcode table `layout` in panel code unless you intentionally opt out with `enforceGlobalLayout: false`
-- **Column totals (footer):** define per-column with `withColumnTotal` from `lib/tabulatorConfig` (native Tabulator `bottomCalc`). Totals recalculate from **active/filtered rows** (panel filters that `replaceData`, plus header filters). Do not invent custom footer markup or per-panel sum loops. Opt out of calcs on a table with `columnCalcs: false` if needed.
+- **Column totals (footer):** define per-column with `withColumnTotal` from `lib/tabulatorConfig` (native Tabulator `bottomCalc`). Totals recalculate from **active/filtered rows** (panel filters that `replaceData`, plus header filters). Do not invent custom footer markup or per-panel sum loops. Opt out of calcs on a table with `columnCalcs: false` if needed. Gate visibility with Views → **Totals** (`VIEW_TOTALS` in catalog + `showTotals` from `useReportShellOptions`); apply with `setTabulatorColumnTotalsVisible` / `useTabulatorColumnTotals` (Tabulator `removeCalcs` / `reinitializeCalcs` + `recalc` — never CSS-hide the footer).
   - Kinds: `count` | `sum` | `avg` | `min` | `max` | `unique`
-  - Example: `withColumnTotal({ field: 'guest_count', ... }, 'sum', { precision: 1 })`
+  - Example: `withColumnTotal({ field: 'guest_count', ... }, 'sum')` — footer display follows the field’s dictionary `display` kind
 - **Single-row record form:** when the presenter’s data array has exactly one row, render `ReportTableOrRecord` / `ReportRecordForm` (`components/shared/ReportRecordForm.jsx`) instead of the visible table. Keep the Tabulator host mounted but hidden so the instance is not destroyed. Reuses column `titleLong`/`title` and formatters via `lib/reportRecordForm.js`. Opt out a column with `excludeFromRecordForm: true`. Skip matrix/heatmap panels.
 
 **Grouped Tab Header Controls (optional):**
@@ -328,6 +338,7 @@ useEffect(() => {
 ```
 
 - Tab chrome shows **⬇** → CSV | PDF (print dialog). Do not put export inside `ReportEventMeta` (tab ⓘ remains technical meta only).
+- PDF may include an optional `chartImage` data URL (e.g. Chart.js `toBase64Image()`) rendered above the table. CSV ignores the chart.
 
 **Example:**
 ```jsx

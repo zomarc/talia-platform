@@ -138,16 +138,8 @@
   flex-shrink: 0;
 }
 
-.dashboard-dockview .talia-dv-tab__active-indicator--active {
-  color: var(--theme-tab-active-accent, var(--theme-accent));
-}
-
 .dashboard-dockview .talia-dv-tab__active-indicator--paused {
   color: color-mix(in srgb, var(--theme-danger) 76%, #ffffff);
-}
-
-.dashboard-dockview .talia-dv-tab__active-indicator--available {
-  color: var(--theme-text-muted);
 }
 
 .dashboard-dockview .talia-dv-tab__loading-indicator {

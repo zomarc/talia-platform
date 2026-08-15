@@ -192,7 +192,9 @@
   word-break: normal !important;
 }
 
-/* Column totals footer (native ColumnCalcs / bottomCalc via withColumnTotal). */
+/* Column totals footer (native ColumnCalcs / bottomCalc via withColumnTotal).
+ * Visibility is toggled via setTabulatorColumnTotalsVisible (removeCalcs /
+ * reinitializeCalcs) — do not hide the footer with CSS (leaves a blank gap). */
 .tabulator .tabulator-footer .tabulator-calcs-holder {
   background: color-mix(in srgb, var(--theme-bg-elevated, #1a1f2e) 88%, var(--theme-accent, #5b9bd5) 12%) !important;
   border-top: 1px solid color-mix(in srgb, var(--theme-border, rgba(255, 255, 255, 0.2)) 70%, transparent) !important;

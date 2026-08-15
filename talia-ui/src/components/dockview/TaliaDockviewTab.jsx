@@ -86,6 +86,9 @@ const TaliaDockviewTab = ({
   const [showOptionsMenu, setShowOptionsMenu] = React.useState(false);
   const optionsButtonRef = React.useRef(null);
   const optionsMenuRef = React.useRef(null);
+  const optionsLeaveTimerRef = React.useRef(null);
+  /** After a Views/Ops toggle, dismiss on pointer leave (not on the click itself). */
+  const optionsCloseOnLeaveRef = React.useRef(false);
   const [optionsMenuPos, setOptionsMenuPos] = React.useState(null);
   const [_isMaximized, setIsMaximized] = React.useState(() => panelApi?.isMaximized?.() ?? false);
   const [layoutCycleState, setLayoutCycleState] = React.useState(0); // 0: original, 1: side-expand window, 2: full-expand, 3: side-expand restore
@@ -487,12 +490,19 @@ const TaliaDockviewTab = ({
       const menu = optionsMenuRef.current;
       const button = optionsButtonRef.current;
       if (menu?.contains?.(event.target) || button?.contains?.(event.target)) return;
+      optionsCloseOnLeaveRef.current = false;
       setShowOptionsMenu(false);
     };
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') setShowOptionsMenu(false);
+      if (event.key === 'Escape') {
+        optionsCloseOnLeaveRef.current = false;
+        setShowOptionsMenu(false);
+      }
     };
-    const onResize = () => setShowOptionsMenu(false);
+    const onResize = () => {
+      optionsCloseOnLeaveRef.current = false;
+      setShowOptionsMenu(false);
+    };
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
     window.addEventListener('resize', onResize);
@@ -503,13 +513,44 @@ const TaliaDockviewTab = ({
     };
   }, [showOptionsMenu]);
 
+  React.useEffect(() => () => {
+    if (optionsLeaveTimerRef.current) {
+      window.clearTimeout(optionsLeaveTimerRef.current);
+      optionsLeaveTimerRef.current = null;
+    }
+  }, []);
+
+  const cancelOptionsLeaveClose = React.useCallback(() => {
+    if (optionsLeaveTimerRef.current) {
+      window.clearTimeout(optionsLeaveTimerRef.current);
+      optionsLeaveTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleOptionsLeaveClose = React.useCallback(() => {
+    if (!optionsCloseOnLeaveRef.current) return;
+    cancelOptionsLeaveClose();
+    optionsLeaveTimerRef.current = window.setTimeout(() => {
+      optionsLeaveTimerRef.current = null;
+      if (!optionsCloseOnLeaveRef.current) return;
+      optionsCloseOnLeaveRef.current = false;
+      setShowOptionsMenu(false);
+    }, 120);
+  }, [cancelOptionsLeaveClose]);
+
+  const armOptionsCloseOnLeave = React.useCallback(() => {
+    optionsCloseOnLeaveRef.current = true;
+  }, []);
+
   React.useEffect(() => {
     if (!isPrimaryActive) {
       setShowExportMenu(false);
+      optionsCloseOnLeaveRef.current = false;
+      cancelOptionsLeaveClose();
       setShowOptionsMenu(false);
       setShowCloseConfirm(false);
     }
-  }, [isPrimaryActive]);
+  }, [isPrimaryActive, cancelOptionsLeaveClose]);
 
   const handleToggleExportMenu = (event) => {
     event.stopPropagation();
@@ -533,8 +574,13 @@ const TaliaDockviewTab = ({
     const button = event.currentTarget;
     const rect = button?.getBoundingClientRect?.();
     setShowExportMenu(false);
+    cancelOptionsLeaveClose();
     setShowOptionsMenu((open) => {
-      if (open) return false;
+      if (open) {
+        optionsCloseOnLeaveRef.current = false;
+        return false;
+      }
+      optionsCloseOnLeaveRef.current = false;
       if (rect) {
         setOptionsMenuPos({
           top: Math.round(rect.bottom + 4),
@@ -577,16 +623,6 @@ const TaliaDockviewTab = ({
     : groupCycleDepth >= groupCycleMaxDepth
       ? '⊠'
       : '⊞';
-  const indicatorSymbol = isPaused ? '=' : (isPrimaryActive ? '*' : '0');
-  const indicatorTitle = isPaused
-    ? 'Panel paused (press P to resume)'
-    : (isPrimaryActive ? 'Active panel' : 'Available panel');
-  const indicatorClassName = [
-    'talia-dv-tab__active-indicator',
-    isPaused ? 'talia-dv-tab__active-indicator--paused' : '',
-    isPrimaryActive ? 'talia-dv-tab__active-indicator--active' : '',
-    !isPaused && !isPrimaryActive ? 'talia-dv-tab__active-indicator--available' : '',
-  ].filter(Boolean).join(' ');
 
   return (
     <div className={`talia-dv-tab ${isPrimaryActive ? "talia-dv-tab--primary-active" : ""} ${isLoading ? "talia-dv-tab--loading" : ""}`}>
@@ -598,9 +634,15 @@ const TaliaDockviewTab = ({
           aria-label="Loading data"
         />
       )}
-      <span className={indicatorClassName} title={indicatorTitle} aria-label={indicatorTitle}>
-        {indicatorSymbol}
-      </span>
+      {isPaused && (
+        <span
+          className="talia-dv-tab__active-indicator talia-dv-tab__active-indicator--paused"
+          title="Panel paused (press P to resume)"
+          aria-label="Panel paused (press P to resume)"
+        >
+          =
+        </span>
+      )}
       {isPrimaryActive && (
       <div className="talia-dv-tab__actions">
             {isReportTab && hasOptions && (
@@ -614,6 +656,8 @@ const TaliaDockviewTab = ({
                   aria-expanded={showOptionsMenu}
                   aria-haspopup="menu"
                   onClick={handleToggleOptionsMenu}
+                  onMouseEnter={cancelOptionsLeaveClose}
+                  onMouseLeave={scheduleOptionsLeaveClose}
                 >
                   ⚙
                 </button>
@@ -624,6 +668,8 @@ const TaliaDockviewTab = ({
                     role="menu"
                     aria-label="Panel options"
                     style={{ top: optionsMenuPos.top, left: optionsMenuPos.left, minWidth: 180 }}
+                    onMouseEnter={cancelOptionsLeaveClose}
+                    onMouseLeave={scheduleOptionsLeaveClose}
                   >
                     {optionViews.length > 0 && (
                       <>
@@ -637,9 +683,11 @@ const TaliaDockviewTab = ({
                             if (entry.type === 'choice' && Array.isArray(entry.choices) && entry.choices.length >= 2) {
                               const next = entry.value === entry.choices[0] ? entry.choices[1] : entry.choices[0];
                               setView(entry.id, next);
+                              armOptionsCloseOnLeave();
                               return;
                             }
                             setView(entry.id, !entry.value);
+                            armOptionsCloseOnLeave();
                           };
                           const label = entry.type === 'choice' && entry.id === 'viewMode'
                             ? (entry.value === 'flat' ? 'Flat' : 'Nested')
@@ -676,6 +724,7 @@ const TaliaDockviewTab = ({
                             onClick={(event) => {
                               event.stopPropagation();
                               setOperation(entry.id, !entry.enabled);
+                              armOptionsCloseOnLeave();
                             }}
                           >
                             <span>{entry.label}</span>

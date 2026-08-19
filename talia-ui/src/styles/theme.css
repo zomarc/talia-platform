@@ -104,8 +104,8 @@
   --theme-table-row-even: transparent;
   --theme-table-row-odd: rgba(255, 255, 255, 0.04);
   --theme-table-row-hover: rgba(91, 155, 213, 0.18);
-  --theme-table-row-selected: rgba(91, 155, 213, 0.35);
-  --theme-table-row-selected-hover: rgba(91, 155, 213, 0.45);
+  --theme-table-row-selected: rgba(91, 155, 213, 0.55);
+  --theme-table-row-selected-hover: rgba(91, 155, 213, 0.68);
   --theme-table-row-selected-accent: var(--theme-accent, #5b9bd5);
 
   /* Card/panel accent shading (linked to row intensity) */

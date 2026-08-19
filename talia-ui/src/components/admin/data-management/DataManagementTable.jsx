@@ -199,17 +199,21 @@ const DataManagementTable = ({
           {
             title: 'Actions',
             field: '_actions',
-            minWidth: 170,
+            minWidth: 210,
             formatter: (cell) => {
               const row = cell.getRow().getData();
               if (row.hasSyncConfig !== true) return '<span class="dm-action-placeholder">—</span>';
               const statusBusy = statusLoadingTable === row.tableName;
+              const stopButton = row._isSyncing
+                ? '<button class="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--danger" data-action="stop" title="Stop this sync">⏹</button>'
+                : '';
               return `
                 <div class="talia-action-group dm-actions-inline">
                   <button class="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--neutral" data-action="status" ${statusBusy ? 'disabled' : ''}>${statusBusy ? '⏳' : '🧾'}</button>
                   <button class="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--success" data-action="review" ${reviewLoading ? 'disabled' : ''}>${reviewLoading ? '⏳' : '👁️'}</button>
                   <button class="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--primary" data-action="sync" ${row._isSyncing ? 'disabled' : ''}>${row._isSyncing ? '⏳' : '🔄'}</button>
                   <button class="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--warning" data-action="full" ${row._isSyncing ? 'disabled' : ''}>${row._isSyncing ? '⏳' : '⚡'}</button>
+                  ${stopButton}
                 </div>`;
             },
             cellClick: (event, cell) => {
@@ -221,6 +225,7 @@ const DataManagementTable = ({
               if (action === 'review') tableActions.handleReview(row);
               if (action === 'sync') tableActions.handleIncrementalSync(row);
               if (action === 'full') tableActions.handleFullSync(row);
+              if (action === 'stop') tableActions.handleStop(row);
             },
           },
         ],

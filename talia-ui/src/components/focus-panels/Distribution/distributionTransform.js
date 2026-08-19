@@ -58,8 +58,37 @@ export const resolveDistributionCapacity = (
     ? String(referenceSailCode).trim()
     : (codes[0] || null);
 
+  const fromCapacityView = (code) => {
+    if (!code) return null;
+    const rows = (occupancyRows || []).filter(
+      (row) => String(row?.sail_code || '').trim() === code
+        && (row?.sellable_berths != null || row?.nameplate_berths != null)
+    );
+    if (!rows.length) return null;
+    let peakSellable = 0;
+    let peakCabins = 0;
+    let peakDate = null;
+    rows.forEach((row) => {
+      const sellable = Number(row?.sellable_berths ?? row?.berth_capacity) || 0;
+      if (sellable > peakSellable) {
+        peakSellable = sellable;
+        peakCabins = Number(row?.sellable_cabins ?? row?.total_cabins) || 0;
+        peakDate = row?.date || row?.sail_itinerary_date || null;
+      }
+    });
+    if (!(peakSellable > 0)) return null;
+    return {
+      capacityBerths: peakSellable,
+      capacityCabins: peakCabins || null,
+      sourceSail: code,
+      peakDate,
+    };
+  };
+
   const fromCode = (code) => {
     if (!code) return null;
+    const fromView = fromCapacityView(code);
+    if (fromView) return fromView;
     const summary = summarizeCabinOccupancyBerths(occupancyRows, { sailCode: code });
     if (summary?.capacity == null) return null;
     return {

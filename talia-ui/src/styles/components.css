@@ -265,12 +265,17 @@
   display: none !important;
 }
 
-/* Compact HTML chart legends (non-Chart.js) — hide via global Legends toggle */
+/* Compact HTML chart legends (non-Chart.js) — hide via global Legends or panel Options */
 .talia-chart-legends-hidden .talia-chart-legend,
 .talia-chart-legends-hidden .demand-heatmap__legend,
 .talia-chart-legends-hidden .cabin-deck__legend,
 .talia-chart-legends-hidden .cabin-deck__legend-list,
-.talia-chart-legends-hidden .published-rates-grid__legend {
+.talia-chart-legends-hidden .published-rates-grid__legend,
+.talia-report.talia-report--legends-hidden .talia-chart-legend,
+.talia-report.talia-report--legends-hidden .demand-heatmap__legend,
+.talia-report.talia-report--legends-hidden .cabin-deck__legend,
+.talia-report.talia-report--legends-hidden .cabin-deck__legend-list,
+.talia-report.talia-report--legends-hidden .published-rates-grid__legend {
   display: none !important;
 }
 
@@ -302,8 +307,15 @@
 }
 
 /* Panel operation controls only — StatusBar criteria/focus/visibility have their own header toggles. */
-.talia-controls-hidden .talia-report__controls {
+.talia-controls-hidden .talia-report__controls,
+.talia-report.talia-report--controls-hidden .talia-report__controls {
   display: none !important;
+}
+
+.talia-report.talia-report--column-filters-hidden .tabulator-header .tabulator-col .tabulator-header-filter {
+  display: none !important;
+  min-height: 0;
+  margin-top: 0;
 }
 
 /* ============================================================================
@@ -471,6 +483,12 @@
   border-color: color-mix(in srgb, var(--theme-warning) 75%, var(--theme-border-light));
   background: color-mix(in srgb, var(--theme-warning) 24%, transparent);
   color: color-mix(in srgb, var(--theme-warning) 85%, var(--theme-fg));
+}
+
+.talia-action-btn--danger {
+  border-color: color-mix(in srgb, #ff6b35 75%, var(--theme-border-light));
+  background: color-mix(in srgb, #ff6b35 24%, transparent);
+  color: color-mix(in srgb, #ff6b35 85%, var(--theme-fg));
 }
 
 /* ============================================================================
@@ -1644,7 +1662,7 @@
 
 .talia-hover-preview {
   position: fixed;
-  z-index: 1200;
+  z-index: 10040;
   max-width: min(360px, calc(100vw - 16px));
   padding: 0;
   border-radius: var(--theme-radius-sm, 6px);

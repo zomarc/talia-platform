@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import OccupancyChartPresenter from './OccupancyChartPresenter';
 
-const OccupancyChart = () => {
+const OccupancyChart = ({ panelInstanceId, panelComponentId }) => {
   const weeklyData = useMemo(() => ([
     { day: 'Mon', occupancy: 92, revenue: 18500 },
     { day: 'Tue', occupancy: 88, revenue: 17200 },
@@ -12,7 +12,13 @@ const OccupancyChart = () => {
     { day: 'Sun', occupancy: 94, revenue: 19200 }
   ]), []);
 
-  return <OccupancyChartPresenter data={weeklyData} />;
+  return (
+    <OccupancyChartPresenter
+      data={weeklyData}
+      panelInstanceId={panelInstanceId}
+      panelComponentId={panelComponentId}
+    />
+  );
 };
 
 export default OccupancyChart;

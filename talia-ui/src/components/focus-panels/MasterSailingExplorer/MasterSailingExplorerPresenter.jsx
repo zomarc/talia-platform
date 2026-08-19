@@ -13,6 +13,7 @@ import {
   toDemandVolume,
 } from '../../../lib/demandUnit';
 import DistributionSummary from '../../shared/DistributionSummary';
+import MsePerformanceSummary from '../../shared/MsePerformanceSummary';
 import HoverPreview from '../../shared/HoverPreview';
 import {
   payloadFromTabulator,
@@ -125,14 +126,25 @@ const MasterSailingExplorerPresenter = ({
     viewsState,
     setView,
     showFilters,
+    showControls,
+    showTooltip,
+    tooltipView,
+    reportShellClassName,
   } = useReportShellOptions(
     panelComponentId || 'master-sailing-explorer',
     panelInstanceId
   );
   const viewMode = viewsState.viewMode === 'flat' ? 'flat' : 'nested';
   const segmentsVisible = viewsState.segments === true;
+  const showTooltipRef = useRef(showTooltip);
+  const tooltipViewRef = useRef(tooltipView);
+  showTooltipRef.current = showTooltip;
+  tooltipViewRef.current = tooltipView;
   const [hoverPreview, setHoverPreview] = useState(null);
   const departureMonth = useGlobalDepartureMonth();
+  useEffect(() => {
+    if (!showTooltip) setHoverPreview(null);
+  }, [showTooltip]);
   const demandUnit = useGlobalDemandUnit();
   const demandNoun = demandUnitNoun(demandUnit);
   const previousDepartureMonthRef = useRef(departureMonth);
@@ -301,10 +313,19 @@ const MasterSailingExplorerPresenter = ({
       {
         field: 'total_cabins',
         titleShort: 'Tot C',
-        titleLong: 'Total cabins',
+        titleLong: 'Nameplate cabins',
         hozAlign: 'right',
         width: 96,
         formatter: (cell) => formatCount(cell.getRow().getData()?.total_cabins),
+        headerSort: false,
+      },
+      {
+        field: 'offsale_cabins',
+        titleShort: 'Off C',
+        titleLong: 'Offsale / blocked cabins',
+        hozAlign: 'right',
+        width: 88,
+        formatter: (cell) => formatCount(cell.getRow().getData()?.offsale_cabins),
         headerSort: false,
       },
       {
@@ -368,8 +389,8 @@ const MasterSailingExplorerPresenter = ({
           const row = cell.getRow().getData();
           const pct = row?.row_type === 'day'
             ? (
-              Number(row?.total_cabins) > 0
-                ? (Number(row?.booked_cabins || 0) / Number(row?.total_cabins)) * 100
+              Number(row?.sellable_cabins || row?.total_cabins) > 0
+                ? (Number(row?.booked_cabins || 0) / Number(row?.sellable_cabins || row?.total_cabins)) * 100
                 : null
             )
             : row?.actual_booked_pct;
@@ -387,8 +408,8 @@ const MasterSailingExplorerPresenter = ({
           const row = cell.getRow().getData();
           const pct = row?.row_type === 'day'
             ? (
-              Number(row?.total_cabins) > 0
-                ? ((Number(row?.booked_cabins || 0) + Number(row?.guaranteed_cabins || 0)) / Number(row?.total_cabins)) * 100
+              Number(row?.sellable_cabins || row?.total_cabins) > 0
+                ? ((Number(row?.booked_cabins || 0) + Number(row?.guaranteed_cabins || 0)) / Number(row?.sellable_cabins || row?.total_cabins)) * 100
                 : null
             )
             : row?.potential_booked_pct;
@@ -406,8 +427,8 @@ const MasterSailingExplorerPresenter = ({
           const row = cell.getRow().getData();
           const pct = row?.row_type === 'day'
             ? (
-              Number(row?.total_cabins) > 0
-                ? ((Number(row?.guaranteed_cabins || 0) / Number(row?.total_cabins)) * 100)
+              Number(row?.sellable_cabins || row?.total_cabins) > 0
+                ? ((Number(row?.guaranteed_cabins || 0) / Number(row?.sellable_cabins || row?.total_cabins)) * 100)
                 : null
             )
             : row?.booking_upside_pct;
@@ -673,7 +694,9 @@ const MasterSailingExplorerPresenter = ({
           resizableColumns: true,
           movableColumns: true,
           pagination: false,
+          panelInstanceId,
           panelComponentId: panelComponentId || 'master-sailing-explorer',
+          exportTitle: 'Master Sailing Explorer',
           ...(viewMode === 'nested'
             ? {
               groupBy: GROUP_BY,
@@ -743,6 +766,10 @@ const MasterSailingExplorerPresenter = ({
         });
 
         instanceRef.current.on('rowMouseEnter', (event, row) => {
+          if (!showTooltipRef.current) {
+            setHoverPreview(null);
+            return;
+          }
           const rowData = row.getData();
           if (rowData?.row_type !== 'master') {
             setHoverPreview(null);
@@ -753,7 +780,9 @@ const MasterSailingExplorerPresenter = ({
             setHoverPreview(null);
             return;
           }
-          onDistributionIntentRef.current?.();
+          if (tooltipViewRef.current !== 'performance') {
+            onDistributionIntentRef.current?.();
+          }
           const element = row.getElement?.();
           const rowRect = element?.getBoundingClientRect?.();
           const rect = clipAnchorRectToViewport(rowRect, tableRef.current);
@@ -763,6 +792,7 @@ const MasterSailingExplorerPresenter = ({
           }
           setHoverPreview({
             sailCode,
+            row: rowData,
             rect,
             x: Number.isFinite(event?.clientX) ? event.clientX : null,
             y: Number.isFinite(event?.clientY) ? event.clientY : null,
@@ -926,7 +956,7 @@ const MasterSailingExplorerPresenter = ({
   ]);
 
   return (
-    <div className="focus-panel talia-report master-sailing-panel ms-explorer-panel">
+    <div className={`focus-panel talia-report master-sailing-panel ms-explorer-panel${reportShellClassName ? ` ${reportShellClassName}` : ''}`}>
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Master Sailing Explorer</h2>
@@ -951,22 +981,27 @@ const MasterSailingExplorerPresenter = ({
           </label>
         ))}
       </div>
-      <div className="talia-report__actions-bar" aria-label="Master sailing explorer actions">
-        <button type="button" className="talia-btn talia-btn--secondary" onClick={expandAllMasters}>
-          Expand all days
-        </button>
-        <button type="button" className="talia-btn talia-btn--secondary" onClick={collapseAllMasters}>
-          Collapse days
-        </button>
-      </div>
+      {showControls ? (
+        <div className="talia-report__controls" aria-label="Master sailing explorer controls">
+          <button type="button" className="talia-btn talia-btn--secondary" onClick={expandAllMasters}>
+            Expand all days
+          </button>
+          <button type="button" className="talia-btn talia-btn--secondary" onClick={collapseAllMasters}>
+            Collapse days
+          </button>
+        </div>
+      ) : null}
       <div ref={tableRef} className="focus-panel__table master-sailing-table ms-explorer-table" />
       <HoverPreview
-        open={Boolean(hoverPreview?.sailCode)}
+        open={Boolean(showTooltip && hoverPreview?.sailCode)}
         anchorRect={hoverPreview?.rect || null}
+        containRef={tableRef}
         placement="right"
         onRequestClose={() => setHoverPreview(null)}
       >
-        {hoverPreview?.sailCode && distributionBySailCode?.get?.(hoverPreview.sailCode) ? (
+        {tooltipView === 'performance' ? (
+          <MsePerformanceSummary row={hoverPreview?.row || null} />
+        ) : hoverPreview?.sailCode && distributionBySailCode?.get?.(hoverPreview.sailCode) ? (
           <DistributionSummary
             bundle={distributionBySailCode.get(hoverPreview.sailCode)}
             dense
@@ -975,7 +1010,7 @@ const MasterSailingExplorerPresenter = ({
             bookedComposition={bookedComposition}
           />
         ) : hoverPreview?.sailCode && distributionLoading ? (
-          <div className="ms-explorer-hover-loading" style={{ padding: '8px 12px', fontSize: '12px' }}>
+          <div className="ms-explorer-hover-loading">
             Loading distribution…
           </div>
         ) : null}

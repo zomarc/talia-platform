@@ -1737,6 +1737,7 @@ export const typeDefs = `#graphql
     
     # Data Sync
     syncTable(tableName: String!, dataset: String, forceFullSync: Boolean): SyncResult!
+    cancelSync(tableName: String): SyncCancelResult!
     syncInventoryStatus(dateFrom: String!, dateTo: String!): SyncResult!
     
     # Configuration Management
@@ -1800,7 +1801,16 @@ export const typeDefs = `#graphql
     recordsProcessed: Int
     duration: Int
     error: String
+    cancelled: Boolean
     detailedLogs: [String!]
+  }
+
+  type SyncCancelResult {
+    success: Boolean!
+    tableName: String
+    cancelledCount: Int!
+    runningTables: [String!]!
+    message: String!
   }
 
   type SyncStatus {

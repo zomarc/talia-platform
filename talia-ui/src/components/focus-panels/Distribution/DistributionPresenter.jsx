@@ -5,6 +5,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Chart } from 'chart.js/auto';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import { getChartColors, getChartOptions, getOverlayLegendOptions, initChartDefaults } from '../../../lib/chartConfig';
 import { colorForDimensionKey } from '../../../lib/reservationDimensions';
 import DistributionSummary from '../../shared/DistributionSummary';
@@ -141,8 +142,14 @@ const DistributionPresenter = ({
   selectedReferenceSailCode = null,
   marketDimension = 'market_group',
   bookedComposition = 'group_fit_expected',
+  panelComponentId = null,
+  panelInstanceId = null,
 }) => {
   const { chartLegendsVisible } = useTheme();
+  const { showLegends, reportShellClassName } = useReportShellOptions(
+    panelComponentId || 'distribution',
+    panelInstanceId
+  );
   const channelRef = useRef(null);
   const marketRef = useRef(null);
   const groupRef = useRef(null);
@@ -172,7 +179,7 @@ const DistributionPresenter = ({
         {
           title: 'Channel',
           valueMode: 'absolute',
-          legendsVisible: chartLegendsVisible,
+          legendsVisible: chartLegendsVisible && showLegends,
           capacityBerths,
         }
       );
@@ -182,7 +189,7 @@ const DistributionPresenter = ({
         {
           title: marketTitle,
           valueMode: 'percent',
-          legendsVisible: chartLegendsVisible,
+          legendsVisible: chartLegendsVisible && showLegends,
           capacityBerths,
         }
       );
@@ -192,7 +199,7 @@ const DistributionPresenter = ({
         {
           title: groupFitTitle,
           valueMode: 'absolute',
-          legendsVisible: chartLegendsVisible,
+          legendsVisible: chartLegendsVisible && showLegends,
           capacityBerths,
         }
       );
@@ -207,7 +214,7 @@ const DistributionPresenter = ({
       });
       chartsRef.current = [];
     };
-  }, [bundle, capacityBerths, chartLegendsVisible, groupFitTitle, hasSailSelection, marketTitle, scopeLoading]);
+  }, [bundle, capacityBerths, chartLegendsVisible, showLegends, groupFitTitle, hasSailSelection, marketTitle, scopeLoading]);
 
   const scopeLabel = selectedReferenceSailCode
     || (selectedSailCodes.length ? selectedSailCodes.join(', ') : null);
@@ -216,7 +223,7 @@ const DistributionPresenter = ({
     && !(bundle?.marketSlices || []).some((s) => Number(s?.value) > 0);
 
   return (
-    <div className="focus-panel talia-report distribution-panel distribution-panel--compact" role="region" aria-label="Distribution">
+    <div className={`focus-panel talia-report distribution-panel distribution-panel--compact${reportShellClassName ? ` ${reportShellClassName}` : ''}`} role="region" aria-label="Distribution">
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Distribution</h2>

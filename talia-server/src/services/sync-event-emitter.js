@@ -72,6 +72,20 @@ class SyncEventEmitter extends EventEmitter {
     });
   }
 
+  emitCancelled(tableName, cancelData = {}) {
+    this.emit(`sync-${tableName}`, {
+      type: 'cancelled',
+      tableName,
+      timestamp: new Date().toISOString(),
+      data: {
+        success: false,
+        cancelled: true,
+        message: cancelData.message || `Sync cancelled for ${tableName}`,
+        ...cancelData,
+      }
+    });
+  }
+
   /**
    * Subscribe to events for a specific table
    * @param {string} tableName - The table to subscribe to

@@ -3,6 +3,7 @@ export const createTableActions = ({
   setReviewData,
   addClientLog,
   handleSync,
+  handleStopSync,
   logIdCounterRef,
   reviewLimit = 100
 }) => {
@@ -40,9 +41,19 @@ export const createTableActions = ({
     handleSync(table.tableName, true);
   };
 
+  const handleStop = (table) => {
+    logEvent({
+      type: 'warning',
+      message: `⏹ Stopping sync for "${table.tableName}"...`,
+      tableName: table.tableName
+    });
+    handleStopSync?.(table.tableName);
+  };
+
   return {
     handleReview,
     handleIncrementalSync,
-    handleFullSync
+    handleFullSync,
+    handleStop,
   };
 };

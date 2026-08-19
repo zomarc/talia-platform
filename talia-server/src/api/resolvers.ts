@@ -3893,6 +3893,7 @@ export const resolvers = {
           recordsProcessed: result.recordsProcessed || null,
           duration: result.duration || null,
           error: result.error || null,
+          cancelled: result.cancelled === true,
           detailedLogs: result.detailedLogs || []
         };
       } catch (error: any) {
@@ -3903,9 +3904,24 @@ export const resolvers = {
           message: `Sync failed: ${error.message}`,
           recordsProcessed: null,
           duration: null,
-          error: error.message
+          error: error.message,
+          cancelled: false,
         };
       }
+    },
+
+    cancelSync: async (_parent: any, args: any) => {
+      const tableName = typeof args?.tableName === 'string' && args.tableName.trim()
+        ? args.tableName.trim()
+        : null;
+      const result = synapseSyncService.requestSyncCancel(tableName);
+      return {
+        success: result.success,
+        tableName: result.tableName,
+        cancelledCount: result.cancelledCount,
+        runningTables: result.runningTables || [],
+        message: result.message,
+      };
     },
 
     syncInventoryStatus: async (parent: any, args: any) => {

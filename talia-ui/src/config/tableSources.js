@@ -142,6 +142,13 @@ export const tableSources = {
     dateColumns: ['snapshot_date', 'departure_date'],
     syncType: 'competitor'
   },
+  competitor_benchmark: {
+    source: 'dwh.vw_Competitor_Benchmarking',
+    type: 'direct',
+    isLargeDataset: true,
+    dateColumns: ['departure_date'],
+    syncType: 'competitorBenchmark'
+  },
   cabin_allocation: {
     source: null, // Not in sync config
     type: 'unknown',
@@ -288,6 +295,13 @@ export const tableSources = {
     dateColumns: ['date'],
     syncType: null,
     loadMethod: 'View (physical berths + cabins)'
+  },
+  ship_day_capacity: {
+    source: null,
+    type: 'application',
+    dateColumns: ['date'],
+    syncType: null,
+    loadMethod: 'View (nameplate + offsale + sellable)'
   },
   sail_booking_summary: {
     source: 'public.reservation',

@@ -8,6 +8,7 @@ import SubpanelExpandButton from '../../shared/SubpanelExpandButton';
 import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
 import { formatDayMon } from '../../../lib/dateFormat';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 
 const ALL_PROMOS = 'All Promos';
 const ALL_RATE_TYPES = 'All Rate Types';
@@ -48,9 +49,13 @@ const RATE_TYPE_CLASS = {
 
 const getRateTypeClass = (rateType) => RATE_TYPE_CLASS[rateType] || 'published-rates-grid__sparkline-path--other';
 
-const PublishedRatesGridPresenter = ({ data, selectedSailCode }) => {
+const PublishedRatesGridPresenter = ({ data, selectedSailCode, panelInstanceId = null, panelComponentId = null }) => {
   const { expandedKey, toggleExpandedKey } = useSubpanelExpansion(null);
   const { defaultDisplayCurrency } = useTheme();
+  const { reportShellClassName } = useReportShellOptions(
+    panelComponentId || 'published-rates-grid',
+    panelInstanceId
+  );
   const [selectedPromo, setSelectedPromo] = React.useState(ALL_PROMOS);
   const [selectedRateType, setSelectedRateType] = React.useState(ALL_RATE_TYPES);
   const [selectedCurrency, setSelectedCurrency] = React.useState(ALL_CURRENCIES);
@@ -299,7 +304,7 @@ const PublishedRatesGridPresenter = ({ data, selectedSailCode }) => {
   const isSectionVisible = (sectionKey) => !expandedKey || expandedKey === sectionKey;
 
   return (
-    <div className={`talia-report published-rates-grid ${expandedKey ? 'published-rates-grid--focused' : ''}`}>
+    <div className={`talia-report published-rates-grid ${expandedKey ? 'published-rates-grid--focused' : ''}${reportShellClassName ? ` ${reportShellClassName}` : ''}`}>
       <header className="talia-report__header published-rates-grid__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title published-rates-grid__title">Published Rates Grid</h2>

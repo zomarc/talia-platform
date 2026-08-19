@@ -1,7 +1,15 @@
 /**
  * Framework panel data export — Export to CSV / PDF via dock-tab ⬇.
  * Used when a panel registers window.__taliaPanelDataExport.
+ * Tabulator tables auto-register from tabulatorConfig when panel IDs are passed.
  */
+
+export const PANEL_DATA_EXPORT_CHANGED_EVENT = 'talia:panel.dataExportChanged';
+
+const notifyPanelDataExportChanged = () => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(PANEL_DATA_EXPORT_CHANGED_EVENT));
+};
 
 const escHtml = (value) => String(value ?? '')
   .replace(/&/g, '&amp;')
@@ -110,6 +118,23 @@ export function payloadFromTabulator(table, title = 'Export') {
   return {
     title: String(title || 'Export'),
     columns,
+    rows: Array.isArray(rows) ? rows : [],
+  };
+}
+
+/**
+ * Build export payload from plain row objects (non-Tabulator panels).
+ * @param {string} title
+ * @param {{ field: string, title?: string }[]} columns
+ * @param {Record<string, unknown>[]} rows
+ */
+export function payloadFromRows(title, columns, rows) {
+  const cols = (Array.isArray(columns) ? columns : [])
+    .filter((c) => c?.field)
+    .map((c) => ({ field: String(c.field), title: String(c.title || c.field) }));
+  return {
+    title: String(title || 'Export'),
+    columns: cols,
     rows: Array.isArray(rows) ? rows : [],
   };
 }
@@ -343,6 +368,7 @@ export function registerPanelDataExport({ panelInstanceId, panelComponentId, get
   const instanceKey = panelInstanceId || null;
   if (componentKey) window.__taliaPanelDataExport[componentKey] = entry;
   if (instanceKey) window.__taliaPanelDataExport[instanceKey] = entry;
+  notifyPanelDataExportChanged();
 
   return () => {
     if (!window.__taliaPanelDataExport) return;
@@ -352,6 +378,7 @@ export function registerPanelDataExport({ panelInstanceId, panelComponentId, get
     if (instanceKey && window.__taliaPanelDataExport[instanceKey] === entry) {
       delete window.__taliaPanelDataExport[instanceKey];
     }
+    notifyPanelDataExportChanged();
   };
 }
 

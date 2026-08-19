@@ -11,6 +11,7 @@ import HoverPreview from '../../shared/HoverPreview';
 import CabinDeckHoverSummary from '../../shared/CabinDeckHoverSummary';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import { clipAnchorRectToViewport } from '../../../lib/clipAnchorRect';
+import { payloadFromRows, registerPanelDataExport } from '../../../lib/panelDataExport';
 import { ALLOCATE_MODE, allocateGtyPreview } from './cabinDeckAllocate.js';
 import { findCabinItemForReservation } from './cabinDeckInventoryTransform.js';
 import {
@@ -28,6 +29,9 @@ const STATUS_LEGEND = [
   { key: 'gty', label: 'GTY', hint: 'booked, no cabin' },
   { key: 'gty-fit', label: 'GTY fit', hint: 'local allocate preview' },
   { key: 'empty', label: 'Empty', hint: 'physical, unallocated' },
+  { key: 'offsale', label: 'Offsale', hint: 'blocked — out of sellable' },
+  { key: 'segment', label: 'Segment hold', hint: 'port-pair / segment, still sellable' },
+  { key: 'constrained', label: 'Constrained', hint: 'HANDICAP / VIP, still sellable' },
   { key: 'assigned', label: 'Other', hint: 'other owner type' },
 ];
 
@@ -279,7 +283,7 @@ const CabinDeckInventoryPresenter = ({
   bundleRef.current = bundle;
   allocateModeRef.current = allocateMode;
   selectedCabinKeyRef.current = selectedCabinKey;
-  const { showDetails, operations } = useReportShellOptions(
+  const { showDetails, showControls, showTooltip, reportShellClassName, operations } = useReportShellOptions(
     panelComponentId,
     panelInstanceId
   );
@@ -327,6 +331,10 @@ const CabinDeckInventoryPresenter = ({
   };
 
   const showCabinPreview = (item, chipEl) => {
+    if (!showTooltip) {
+      setCabinPreview(null);
+      return;
+    }
     const chipRect = chipEl?.getBoundingClientRect?.() || null;
     const rect = clipAnchorRectToViewport(chipRect, panelRef.current);
     if (!rect || rect.width <= 0 || rect.height <= 0) {
@@ -336,9 +344,64 @@ const CabinDeckInventoryPresenter = ({
     setCabinPreview({ item, rect });
   };
 
+  useEffect(() => {
+    const componentKey = panelComponentId || 'cabin-deck-inventory';
+    return registerPanelDataExport({
+      panelInstanceId,
+      panelComponentId: componentKey,
+      getPayload: () => {
+        const source = displayBundleRef.current || bundleRef.current;
+        const deckRows = source?.decks || [];
+        const rows = [];
+        deckRows.forEach((deck) => {
+          (deck.categories || []).forEach((cat) => {
+            (cat.cabins || []).forEach((cabin) => {
+              rows.push({
+                deck: deck.deck,
+                category: cat.category,
+                cabin_number: cabin.cabin_number,
+                status: cabin.status_label || cabin.status_key,
+                owner: cabin.owner_label,
+                occupancy: cabin.occupancy,
+                probability: cabin.probability,
+                reserve_type: cabin.reserve_type,
+              });
+            });
+          });
+        });
+        (source?.gtyHolds || []).forEach((hold) => {
+          rows.push({
+            deck: 'GTY',
+            category: hold.cabin_category,
+            cabin_number: '',
+            status: hold.status_label || hold.status_key,
+            owner: hold.owner_label,
+            occupancy: hold.occupancy,
+            probability: hold.probability,
+            reserve_type: hold.reserve_type,
+          });
+        });
+        return payloadFromRows('Inventory', [
+          { field: 'deck', title: 'Deck' },
+          { field: 'category', title: 'Category' },
+          { field: 'cabin_number', title: 'Cabin' },
+          { field: 'status', title: 'Status' },
+          { field: 'owner', title: 'Owner' },
+          { field: 'occupancy', title: 'Occupancy' },
+          { field: 'probability', title: 'Probability' },
+          { field: 'reserve_type', title: 'Reserve' },
+        ], rows);
+      },
+    });
+  }, [panelComponentId, panelInstanceId]);
+
   const hideCabinPreview = () => {
     setCabinPreview(null);
   };
+
+  useEffect(() => {
+    if (!showTooltip) setCabinPreview(null);
+  }, [showTooltip]);
 
   const selectCabin = (item, chipEl) => {
     const key = cabinItemKey(item);
@@ -524,7 +587,7 @@ const CabinDeckInventoryPresenter = ({
   return (
     <div
       ref={panelRef}
-      className="focus-panel talia-report cabin-deck-panel"
+      className={`focus-panel talia-report cabin-deck-panel${reportShellClassName ? ` ${reportShellClassName}` : ''}`}
       role="region"
       aria-label="Cabin Deck Inventory"
     >
@@ -552,8 +615,8 @@ const CabinDeckInventoryPresenter = ({
         </div>
       </header>
 
-      {hasSailSelection && (
-        <div className="talia-report__actions-bar" aria-label="Cabin deck view">
+      {hasSailSelection && showControls && (
+        <div className="talia-report__controls" aria-label="Cabin deck view">
           <button
             type="button"
             className={`talia-btn ${compactBlocks ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
@@ -707,6 +770,7 @@ const CabinDeckInventoryPresenter = ({
                     <li>Physical cabins from <code>fou.SHIP_CABIN</code>.</li>
                     <li>Default category from <code>fou.SHIP_CABIN_CTG_LINK</code> (no customer fields).</li>
                     <li>Ownership from <code>stg.RES_CABIN_ALLOCATION_DETAIL</code> (FIT/Group/GTY · probability).</li>
+                    <li>Offsale / segment holds from <code>stg.SHIP_CABIN_RESERVE</code> overlapping the sail window.</li>
                     <li>
                       GTY Allocate is local only — Priority fills highest probability first;
                       By probability places ~sum(p/100) rooms per category.
@@ -805,8 +869,9 @@ const CabinDeckInventoryPresenter = ({
       </main>
 
       <HoverPreview
-        open={Boolean(cabinPreview?.item)}
+        open={Boolean(showTooltip && cabinPreview?.item)}
         anchorRect={cabinPreview?.rect || null}
+        containRef={contentRef}
         placement="right"
         onRequestClose={hideCabinPreview}
       >

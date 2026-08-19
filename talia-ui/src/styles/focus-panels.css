@@ -6862,6 +6862,27 @@
   color: var(--theme-text-muted);
 }
 
+.cabin-deck__chip--offsale,
+.cabin-deck__legend-item.cabin-deck__chip--offsale {
+  background: color-mix(in srgb, var(--theme-danger, #c62828) 16%, transparent);
+  border-color: color-mix(in srgb, var(--theme-danger, #c62828) 45%, transparent);
+  color: var(--theme-fg);
+}
+
+.cabin-deck__chip--segment,
+.cabin-deck__legend-item.cabin-deck__chip--segment {
+  background: color-mix(in srgb, var(--theme-info, #1565c0) 12%, transparent);
+  border-color: color-mix(in srgb, var(--theme-info, #1565c0) 40%, transparent);
+  color: var(--theme-fg);
+}
+
+.cabin-deck__chip--constrained,
+.cabin-deck__legend-item.cabin-deck__chip--constrained {
+  background: color-mix(in srgb, var(--theme-warning, #ff9800) 14%, transparent);
+  border-color: color-mix(in srgb, var(--theme-warning, #ff9800) 42%, transparent);
+  color: var(--theme-fg);
+}
+
 .cabin-deck__chip--assigned,
 .cabin-deck__legend-item.cabin-deck__chip--assigned {
   background: color-mix(in srgb, var(--theme-fg) 12%, transparent);

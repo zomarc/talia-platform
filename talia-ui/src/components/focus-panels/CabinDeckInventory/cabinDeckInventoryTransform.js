@@ -12,6 +12,11 @@ import {
   isGroupOwner,
   resolveAllocationStatus,
 } from '../../../lib/shipInventoryAlloc.js';
+import {
+  CABIN_RESERVE_KIND,
+  indexCabinReservesForSail,
+  summarizeCabinReserves,
+} from '../../../lib/shipCabinReserve.js';
 
 const toDateKey = (value) => {
   if (!value) return null;
@@ -153,6 +158,31 @@ const resolveEmptyCategory = (cabinKey, categoryLinkIndex) => {
   return linked || 'Open';
 };
 
+const applyReserveToCabinItem = (item, reserve) => {
+  if (!item || !reserve) return item;
+  if (reserve.kind === CABIN_RESERVE_KIND.OFFSALE) {
+    return {
+      ...item,
+      is_empty: false,
+      is_offsale: true,
+      status_key: 'offsale',
+      status_label: reserve.reserve_type || 'Offsale',
+      owner_label: reserve.reserve_type || 'Offsale',
+      reserve_kind: reserve.kind,
+      reserve_type: reserve.reserve_type,
+    };
+  }
+  return {
+    ...item,
+    is_offsale: false,
+    status_key: reserve.kind,
+    status_label: reserve.reserve_type || reserve.kind,
+    owner_label: reserve.reserve_type || item.owner_label,
+    reserve_kind: reserve.kind,
+    reserve_type: reserve.reserve_type,
+  };
+};
+
 const buildEmptyCabinItem = (meta, counters, cabinKey, categoryLinkIndex) => {
   const cabinNumber = meta.cabin_number;
   const { deckNumber, deckSource } = resolveDeckMeta(cabinNumber, meta, counters);
@@ -211,6 +241,7 @@ export const buildCabinDeckInventoryBundle = ({
   cabinCategoryLinkRows = [],
   occupancyRows = [],
   reservationRows = [],
+  reserveRows = [],
   shipCode = null,
   sailCode = null,
   sailDateFrom = null,
@@ -226,6 +257,11 @@ export const buildCabinDeckInventoryBundle = ({
     sailCode,
     sailDateFrom,
   });
+  const reserveIndex = indexCabinReservesForSail(reserveRows, {
+    shipCode,
+    dateKey: sailDateFrom,
+  });
+  const reserveSummary = summarizeCabinReserves(reserveIndex);
 
   const gtyHolds = [];
   const assigned = [];
@@ -277,6 +313,11 @@ export const buildCabinDeckInventoryBundle = ({
       is_gty: gty,
       is_empty: false,
       is_gty_fit: false,
+      reserve_kind: cabinKey ? (reserveIndex.get(cabinKey)?.kind || null) : null,
+      reserve_type: cabinKey ? (reserveIndex.get(cabinKey)?.reserve_type || null) : null,
+      is_offsale: cabinKey
+        ? reserveIndex.get(cabinKey)?.kind === CABIN_RESERVE_KIND.OFFSALE
+        : false,
     };
 
     if (!cabinNumber) {
@@ -290,7 +331,10 @@ export const buildCabinDeckInventoryBundle = ({
   const emptyCabins = [];
   cabinIndex.forEach((meta, cabinKey) => {
     if (assignedKeys.has(cabinKey)) return;
-    const item = buildEmptyCabinItem(meta, counters, cabinKey, categoryLinkIndex);
+    const item = applyReserveToCabinItem(
+      buildEmptyCabinItem(meta, counters, cabinKey, categoryLinkIndex),
+      reserveIndex.get(cabinKey)
+    );
     if (item.link_cabin_category) counters.emptiesLinked += 1;
     else counters.emptiesOpenFallback += 1;
     emptyCabins.push(item);
@@ -312,18 +356,21 @@ export const buildCabinDeckInventoryBundle = ({
         .map(([category, cabins]) => ({
           category,
           cabins: sortCabins(cabins),
-          booked_count: cabins.filter((c) => !c.is_empty).length,
+          booked_count: cabins.filter((c) => !c.is_empty && !c.is_offsale).length,
           empty_count: cabins.filter((c) => c.is_empty).length,
+          offsale_count: cabins.filter((c) => c.is_offsale).length,
           over_alloc: 0,
         }));
       const cabinCount = categories.reduce((sum, cat) => sum + cat.cabins.length, 0);
       const emptyCount = categories.reduce((sum, cat) => sum + cat.empty_count, 0);
+      const offsaleCount = categories.reduce((sum, cat) => sum + (cat.offsale_count || 0), 0);
       return {
         deck,
         categories,
         cabin_count: cabinCount,
         empty_count: emptyCount,
-        booked_count: cabinCount - emptyCount,
+        offsale_count: offsaleCount,
+        booked_count: cabinCount - emptyCount - offsaleCount,
       };
     });
 
@@ -334,7 +381,9 @@ export const buildCabinDeckInventoryBundle = ({
   });
 
   const assignedCount = assigned.length;
-  const emptyCount = emptyCabins.length;
+  const emptyCount = emptyCabins.filter((c) => c.is_empty).length;
+  const offsaleCount = emptyCabins.filter((c) => c.is_offsale).length
+    + assigned.filter((c) => c.is_offsale).length;
   const gtyCount = gtyHolds.length;
   const bookedLikeCount = assignedCount + gtyCount;
   const occupancyBooked = occupancy.occupied_cabins || 0;
@@ -362,6 +411,10 @@ export const buildCabinDeckInventoryBundle = ({
       allocation_count: filtered.length,
       assigned_count: assignedCount,
       empty_count: emptyCount,
+      offsale_count: offsaleCount,
+      reserve_offsale: reserveSummary.offsale,
+      reserve_segment: reserveSummary.segment,
+      reserve_constrained: reserveSummary.constrained,
       physical_cabin_count: cabinIndex.size,
       gty_count: gtyCount,
       booked_like_count: bookedLikeCount,

@@ -54,6 +54,16 @@ const TableActions = ({
       >
         {isSyncing ? '⏳' : getPanelActionDefinition(PANEL_ACTION_IDS.FULL)?.icon}
       </button>
+      {isSyncing ? (
+        <button
+          onClick={() => tableActions.handleStop(table)}
+          className="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--danger"
+          title={getPanelActionDefinition(PANEL_ACTION_IDS.STOP)?.title}
+          aria-label={getPanelActionDefinition(PANEL_ACTION_IDS.STOP)?.label}
+        >
+          {getPanelActionDefinition(PANEL_ACTION_IDS.STOP)?.icon}
+        </button>
+      ) : null}
     </div>
   );
 };

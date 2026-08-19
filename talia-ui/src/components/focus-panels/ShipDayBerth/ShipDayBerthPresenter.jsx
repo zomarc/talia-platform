@@ -1,19 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { formatDayMon } from '../../../lib/dateFormat';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import { filterDayRowsByScope, scopeNeedsGroupExpansion } from './shipDayBerthTransform';
 import { ReportTableOrRecord } from '../../shared/ReportRecordForm';
 
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
-const VIEW_MODE_STORAGE_KEY = 'talia.ship-day-berth.viewMode';
-
-const readStoredViewMode = () => {
-  try {
-    return localStorage.getItem(VIEW_MODE_STORAGE_KEY) === 'table' ? 'table' : 'nested';
-  } catch {
-    return 'nested';
-  }
-};
 
 const GROUP_BY = [
   (rowData) => rowData?.ship_group_label || 'Unknown ship',
@@ -63,16 +55,20 @@ const ShipDayBerthPresenter = ({
   const pendingGroupActionRef = useRef(null);
   const dayRowsRef = useRef(dayRows);
   const [search, setSearch] = useState('');
-  const [viewMode, setViewModeState] = useState(readStoredViewMode);
-
+  const {
+    viewsState,
+    setView,
+    showFilters,
+    showControls,
+    reportShellClassName,
+  } = useReportShellOptions(
+    panelComponentId || 'ship-day-berth',
+    panelInstanceId
+  );
+  const viewMode = viewsState.viewMode === 'flat' ? 'flat' : 'nested';
   const setViewMode = useCallback((mode) => {
-    setViewModeState(mode);
-    try {
-      localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
-    } catch {
-      // Ignore storage errors (private mode, quota, etc.)
-    }
-  }, []);
+    setView('viewMode', mode === 'table' ? 'flat' : mode);
+  }, [setView]);
 
   const isNestedView = viewMode === 'nested';
 
@@ -138,9 +134,17 @@ const ShipDayBerthPresenter = ({
     },
     {
       field: 'capacity',
-      title: 'Capacity (berths)',
+      title: 'Nameplate (berths)',
       hozAlign: 'right',
-      width: 130,
+      width: 140,
+      headerSort: false,
+      formatter: (cell) => formatCount(cell.getValue()),
+    },
+    {
+      field: 'offsale',
+      title: 'Offsale',
+      hozAlign: 'right',
+      width: 90,
       headerSort: false,
       formatter: (cell) => formatCount(cell.getValue()),
     },
@@ -268,6 +272,9 @@ const ShipDayBerthPresenter = ({
           resizableColumns: true,
           movableColumns: true,
           pagination: false,
+          panelInstanceId,
+          panelComponentId: panelComponentId || 'ship-day-berth',
+          exportTitle: 'Ship Day Berths',
           groupBy: isNestedView ? GROUP_BY : false,
           groupStartOpen: isNestedView ? [true, false] : false,
           groupHeader: isNestedView ? groupHeaders : undefined,
@@ -373,7 +380,7 @@ const ShipDayBerthPresenter = ({
     : `${shipCount} ships · ${dayCount} ship-days`;
 
   return (
-    <div className="focus-panel talia-report master-sailing-panel ms-explorer-panel ms-berth-panel">
+    <div className={`focus-panel talia-report master-sailing-panel ms-explorer-panel ms-berth-panel${reportShellClassName ? ` ${reportShellClassName}` : ''}`}>
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Ship × Day Berths</h2>
@@ -382,7 +389,7 @@ const ShipDayBerthPresenter = ({
           </p>
         </div>
       </header>
-      <div className="master-sailing-panel__filters talia-report-filters ms-berth-filters">
+      <div className={`master-sailing-panel__filters talia-report-filters ms-berth-filters${showFilters ? '' : ' talia-report-filters--hidden'}`}>
         {selectedScope && (
           <div className="ms-berth-criteria" aria-label="Linked selection criteria">
             <div className="ms-berth-criteria__item">
@@ -432,6 +439,7 @@ const ShipDayBerthPresenter = ({
           />
         </label>
       </div>
+      {showControls ? (
       <div className="talia-report__controls" aria-label="Ship day berth controls">
         <button
           type="button"
@@ -445,9 +453,9 @@ const ShipDayBerthPresenter = ({
           type="button"
           className={`talia-btn ${!isNestedView ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
           aria-pressed={!isNestedView}
-          onClick={() => setViewMode('table')}
+          onClick={() => setViewMode('flat')}
         >
-          Table
+          Flat
         </button>
         {isNestedView && (
           <>
@@ -460,6 +468,7 @@ const ShipDayBerthPresenter = ({
           </>
         )}
       </div>
+      ) : null}
       <ReportTableOrRecord
         data={filteredRows}
         columns={columns}

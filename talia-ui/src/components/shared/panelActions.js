@@ -3,6 +3,7 @@ export const PANEL_ACTION_IDS = Object.freeze({
   REVIEW: 'review',
   SYNC: 'sync',
   FULL: 'full',
+  STOP: 'stop',
   UPDATE: 'update',
   DETAIL: 'detail',
 });
@@ -12,6 +13,7 @@ export const PANEL_ACTION_SEQUENCE = Object.freeze([
   PANEL_ACTION_IDS.REVIEW,
   PANEL_ACTION_IDS.SYNC,
   PANEL_ACTION_IDS.FULL,
+  PANEL_ACTION_IDS.STOP,
   PANEL_ACTION_IDS.UPDATE,
   PANEL_ACTION_IDS.DETAIL,
 ]);
@@ -44,6 +46,13 @@ export const PANEL_ACTION_DEFINITIONS = Object.freeze({
     icon: '⚡',
     tone: 'warning',
     title: 'Run full refresh',
+  },
+  [PANEL_ACTION_IDS.STOP]: {
+    id: PANEL_ACTION_IDS.STOP,
+    label: 'Stop',
+    icon: '⏹',
+    tone: 'danger',
+    title: 'Stop the running table sync',
   },
   [PANEL_ACTION_IDS.UPDATE]: {
     id: PANEL_ACTION_IDS.UPDATE,

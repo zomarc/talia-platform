@@ -22,6 +22,7 @@ import {
   DATA_MANAGEMENT_REFRESH_EVENT,
   DATA_MANAGEMENT_SELECT_TABLE_EVENT,
   DATA_MANAGEMENT_TABLE_ACTION_EVENT,
+  DATA_MANAGEMENT_STOP_SYNC_EVENT,
   DASHBOARD_DETAILS_VISIBILITY_EVENT,
   DASHBOARD_FILTER_VISIBILITY_EVENT,
   DASHBOARD_TABULATOR_FILTER_VISIBILITY_EVENT,
@@ -236,8 +237,8 @@ const HeaderCriteriaMenuSelect = ({
         aria-expanded={open}
         aria-label={ariaLabel}
       >
-        <span className="status-bar__menu-select-value">{selected?.label || '—'}</span>
-        <span className="status-bar__menu-select-caret" aria-hidden="true">▾</span>
+        <span className="status-bar__menu-select-value">{selected?.label || '�'}</span>
+        <span className="status-bar__menu-select-caret" aria-hidden="true">?</span>
       </button>
       {open && (
         <div className={`status-bar__menu-select-menu ${isFading ? 'status-bar__menu-select-menu--fading' : ''}`} role="menu" aria-label={ariaLabel}>
@@ -253,7 +254,7 @@ const HeaderCriteriaMenuSelect = ({
                 onClick={() => handleOptionSelect(option.key)}
               >
                 <span>{option.label}</span>
-                {isSelected ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                {isSelected ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
               </button>
             );
           })}
@@ -453,6 +454,8 @@ const StatusBar = ({
     rangeSaving: false,
     bulkSyncing: false,
     bulkMode: null,
+    runningSyncCount: 0,
+    stoppingSync: false,
     backupLoading: false,
   });
   const hasAdvancedControls = typeof canUseAdvancedControls === 'boolean'
@@ -763,7 +766,7 @@ const StatusBar = ({
 
   const handleFocusTopDoubleClick = (event) => {
     event?.preventDefault?.();
-    // Two clicks already toggled open→closed; cycle focus and leave strip closed.
+    // Two clicks already toggled open?closed; cycle focus and leave strip closed.
     handleCycleFocus();
     userActivityTracker.recordHeaderAction('focus-next', { status: 'double-click' });
   };
@@ -968,6 +971,10 @@ const StatusBar = ({
     });
   };
 
+  const handleDataMgmtStopSync = () => {
+    dispatchDataManagementCommand(DATA_MANAGEMENT_STOP_SYNC_EVENT);
+  };
+
   const handleDataMgmtBackup = () => {
     dispatchDataManagementCommand(DATA_MANAGEMENT_BACKUP_EVENT);
   };
@@ -1163,6 +1170,8 @@ const StatusBar = ({
         rangeSaving: detail.rangeSaving === true,
         bulkSyncing: detail.bulkSyncing === true,
         bulkMode: detail.bulkMode || null,
+        runningSyncCount: Number(detail.runningSyncCount) || 0,
+        stoppingSync: detail.stoppingSync === true,
         backupLoading: detail.backupStatus?.loading === true,
       });
     };
@@ -1267,7 +1276,7 @@ const StatusBar = ({
     };
   }, []);
 
-  // Date/duration/composition criteria — do NOT depend on sail selection.
+  // Date/duration/composition criteria � do NOT depend on sail selection.
   // Sail.select must not republish globalCriteria (that forced every report to refresh).
   useEffect(() => {
     const range = resolveGlobalDateRange(globalDateRange || TEST_DEFAULT_GLOBAL_RANGE_KEY);
@@ -1302,7 +1311,7 @@ const StatusBar = ({
     publishDashboardGlobalConfig({ criteria });
   }, [globalDateRange, departureMonth, globalDuration, activeOnly, marketDimension, bookedComposition, cabinCategoryMode, demandUnit, defaultDisplayCurrency]);
 
-  // Sail selection updates the window snapshot only — listeners already got sail.select.
+  // Sail selection updates the window snapshot only � listeners already got sail.select.
   useEffect(() => {
     if (!window.__taliaGlobalCriteria || typeof window.__taliaGlobalCriteria !== 'object') {
       window.__taliaGlobalCriteria = window.__taliaGlobalCriteria || {};
@@ -1398,13 +1407,13 @@ const StatusBar = ({
     if (!range || (!range.min && !range.max)) return 'N/A';
     const min = range.min ? String(range.min).split('T')[0] : 'N/A';
     const max = range.max ? String(range.max).split('T')[0] : 'N/A';
-    return min === max ? min : `${min} → ${max}`;
+    return min === max ? min : `${min} ? ${max}`;
   };
   const dataRangeText = formatRange(dataStatus?.globalRange);
   const dataLastSyncText = dataStatus?.lastSync
     ? new Date(dataStatus.lastSync).toLocaleString()
     : 'N/A';
-  const refreshButtonLabel = refreshPhase === 'active' ? '↻' : (refreshPhase === 'all' ? '↻↻' : '✓');
+  const refreshButtonLabel = refreshPhase === 'active' ? '?' : (refreshPhase === 'all' ? '??' : '?');
   const refreshButtonTitle = refreshPhase === 'active'
     ? 'Refresh active panel (click again within 5s for all panels)'
     : refreshPhase === 'all'
@@ -1437,7 +1446,7 @@ const StatusBar = ({
                   onClick={handleSidebarToggle}
                   aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
                 >
-                  {sidebarCollapsed ? '☰' : '◧'}
+                  {sidebarCollapsed ? '?' : '?'}
                 </button>
               </TaliaTooltip>
               <span className="status-bar__leading-separator" aria-hidden="true" />
@@ -1449,7 +1458,7 @@ const StatusBar = ({
                     onClick={handleCriteriaToggle}
                     aria-label={criteriaVisible ? 'Hide global criteria controls' : 'Show global criteria controls'}
                   >
-                    <span className="status-bar__icon-search" aria-hidden="true">🔍</span>
+                    <span className="status-bar__icon-search" aria-hidden="true">??</span>
                   </button>
                 </TaliaTooltip>
                 {hasAdvancedControls && (
@@ -1466,7 +1475,7 @@ const StatusBar = ({
                         aria-label={focusControlsOpen ? 'Hide focus controls' : 'Show focus controls'}
                         aria-expanded={focusControlsOpen}
                       >
-                        ◎
+                        ?
                       </button>
                     </TaliaTooltip>
                   </div>
@@ -1528,7 +1537,7 @@ const StatusBar = ({
                                 aria-label="Save current focus"
                                 onClick={handleSaveFocusAction}
                               >
-                                💾
+                                ??
                               </button>
                             </TaliaTooltip>
                             {showSaveFocusConfirm && (
@@ -1651,7 +1660,7 @@ const StatusBar = ({
                       />
                     </label>
                     </TaliaTooltip>
-                    <TaliaTooltip content="Demand volumes: Pax (guests/berths) or Cabins (guests÷2 presentation). Math stays at guests." placement="bottom-left" delayMs={180}>
+                    <TaliaTooltip content="Demand volumes: Pax (guests/berths) or Cabins (guests�2 presentation). Math stays at guests." placement="bottom-left" delayMs={180}>
                     <label className="status-bar__header-range">
                       <span className="status-bar__header-range-label">Unit</span>
                       <HeaderCriteriaMenuSelect
@@ -1724,7 +1733,7 @@ const StatusBar = ({
           {/* Status Message (temporary) */}
           {displayMessage && (
             <div className={`status-bar__message status-bar__message--success ${isMessageFading ? 'status-bar__message--fading' : ''}`}>
-              <span className="status-bar__icon">✓</span>
+              <span className="status-bar__icon">?</span>
               <span className="status-bar__text">{displayMessage}</span>
             </div>
           )}
@@ -1757,7 +1766,7 @@ const StatusBar = ({
                         {currentEventSummary.identifier && ` - ${currentEventSummary.identifier}`}
                       </span>
                       <span className="status-bar__timestamp">{currentEventSummary.timestamp}</span>
-                      <span className="status-bar__expand">{showDetails ? '▲' : '▼'}</span>
+                      <span className="status-bar__expand">{showDetails ? '?' : '?'}</span>
                     </div>
                     </TaliaTooltip>
                   )}
@@ -1830,7 +1839,7 @@ const StatusBar = ({
                   onClick={handleFiltersToggle}
                 >
                   <span>Filters</span>
-                  {filtersVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                  {filtersVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Show or hide native Tabulator column header filters on all tables" placement="bottom-left" delayMs={180}>
@@ -1842,7 +1851,7 @@ const StatusBar = ({
                   onClick={handleTabulatorFiltersToggle}
                 >
                   <span>Column filters</span>
-                  {tabulatorFiltersVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                  {tabulatorFiltersVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Show or hide informational callouts across all reports" placement="bottom-left" delayMs={180}>
@@ -1854,10 +1863,10 @@ const StatusBar = ({
                   onClick={handleCalloutsToggle}
                 >
                   <span>Callouts</span>
-                  {calloutsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                  {calloutsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
                 </button>
               </TaliaTooltip>
-              <TaliaTooltip content="Show or hide compact chart legends across reports" placement="bottom-left" delayMs={180}>
+              <TaliaTooltip content="Show or hide compact chart legends on all reports. Tab Options can hide legends on one panel." placement="bottom-left" delayMs={180}>
                 <button
                   type="button"
                   role="menuitemcheckbox"
@@ -1866,7 +1875,7 @@ const StatusBar = ({
                   onClick={handleChartLegendsToggle}
                 >
                   <span>Legends</span>
-                  {chartLegendsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                  {chartLegendsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Show or hide panel titles globally" placement="bottom-left" delayMs={180}>
@@ -1878,7 +1887,7 @@ const StatusBar = ({
                   onClick={handlePanelTitlesToggle}
                 >
                   <span>Titles</span>
-                  {panelTitlesVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                  {panelTitlesVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Show or hide data details on all report panels" placement="bottom-left" delayMs={180}>
@@ -1890,7 +1899,7 @@ const StatusBar = ({
                   onClick={handleDetailsToggle}
                 >
                   <span>Details</span>
-                  {detailsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                  {detailsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Use adaptive best-fit table layout" placement="bottom-left" delayMs={180}>
@@ -1902,7 +1911,7 @@ const StatusBar = ({
                   onClick={() => handleTableLayoutSelect('best')}
                 >
                   <span>Best Fit</span>
-                  {tableLayoutMode === 'best' ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                  {tableLayoutMode === 'best' ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Use width-fit table layout" placement="bottom-left" delayMs={180}>
@@ -1914,7 +1923,7 @@ const StatusBar = ({
                   onClick={() => handleTableLayoutSelect('width')}
                 >
                   <span>Fit Width</span>
-                  {tableLayoutMode === 'width' ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                  {tableLayoutMode === 'width' ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Use data-fit table layout" placement="bottom-left" delayMs={180}>
@@ -1926,7 +1935,7 @@ const StatusBar = ({
                   onClick={() => handleTableLayoutSelect('data')}
                 >
                   <span>Fit Data</span>
-                  {tableLayoutMode === 'data' ? <span className="status-bar__menu-select-check" aria-hidden="true">✓</span> : null}
+                  {tableLayoutMode === 'data' ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
                 </button>
               </TaliaTooltip>
             </div>
@@ -1941,7 +1950,7 @@ const StatusBar = ({
                   onClick={handleVisibilityToggle}
                   aria-label={visibilityControlsOpen ? 'Hide visibility controls' : 'Show visibility controls'}
                 >
-                  👁
+                  ??
                 </button>
               </TaliaTooltip>
             </div>
@@ -2025,7 +2034,7 @@ const StatusBar = ({
                   disabled={dataMgmtState.rangeSaving}
                   aria-label="Save integration date range"
                 >
-                  {dataMgmtState.rangeSaving ? '⏳' : '✓'}
+                  {dataMgmtState.rangeSaving ? '?' : '?'}
                 </button>
               </TaliaTooltip>
             </>
@@ -2040,7 +2049,7 @@ const StatusBar = ({
                   aria-label="Status for selected table"
                   disabled={!dataMgmtState.selectedTable}
                 >
-                  🧾
+                  ??
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Review selected table rows" placement="bottom-left" delayMs={180}>
@@ -2051,7 +2060,7 @@ const StatusBar = ({
                   aria-label="Review selected table rows"
                   disabled={!dataMgmtState.selectedTable}
                 >
-                  👁️
+                  ???
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Sync selected table" placement="bottom-left" delayMs={180}>
@@ -2062,7 +2071,7 @@ const StatusBar = ({
                   aria-label="Sync selected table"
                   disabled={!dataMgmtState.selectedTable}
                 >
-                  🔄
+                  ??
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Full update selected table" placement="bottom-left" delayMs={180}>
@@ -2073,7 +2082,7 @@ const StatusBar = ({
                   aria-label="Full update selected table"
                   disabled={!dataMgmtState.selectedTable}
                 >
-                  ⚡
+                  ?
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Sync all configured tables" placement="bottom-left" delayMs={180}>
@@ -2084,7 +2093,7 @@ const StatusBar = ({
                   disabled={dataMgmtState.bulkSyncing}
                   aria-label="Sync all configured tables"
                 >
-                  ↻
+                  ?
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Full update all configured tables" placement="bottom-left" delayMs={180}>
@@ -2095,7 +2104,18 @@ const StatusBar = ({
                   disabled={dataMgmtState.bulkSyncing}
                   aria-label="Full update all configured tables"
                 >
-                  ⚡
+                  ?
+                </button>
+              </TaliaTooltip>
+              <TaliaTooltip content="Stop the running table sync" placement="bottom-left" delayMs={180}>
+                <button
+                  type="button"
+                  className="status-bar__header-btn status-bar__header-btn--danger"
+                  onClick={handleDataMgmtStopSync}
+                  disabled={!dataMgmtState.bulkSyncing && !(dataMgmtState.runningSyncCount > 0)}
+                  aria-label="Stop the running table sync"
+                >
+                  {dataMgmtState.stoppingSync ? '�' : '?'}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Backup tools" placement="bottom-left" delayMs={180}>
@@ -2106,7 +2126,7 @@ const StatusBar = ({
                   disabled={dataMgmtState.backupLoading}
                   aria-label="Backup tools"
                 >
-                  {dataMgmtState.backupLoading ? '⏳' : '💾'}
+                  {dataMgmtState.backupLoading ? '?' : '??'}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Refresh Data Management state" placement="bottom-left" delayMs={180}>
@@ -2116,7 +2136,7 @@ const StatusBar = ({
                   onClick={handleDataMgmtRefresh}
                   aria-label="Refresh Data Management state"
                 >
-                  ⟳
+                  ?
                 </button>
               </TaliaTooltip>
             </>
@@ -2134,7 +2154,7 @@ const StatusBar = ({
                 className="status-bar__details-close"
                 onClick={() => setShowDetails(false)}
               >
-                ×
+                �
               </button>
             </TaliaTooltip>
           </div>

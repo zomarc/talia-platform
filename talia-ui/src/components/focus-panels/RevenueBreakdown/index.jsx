@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import RevenueBreakdownPresenter from './RevenueBreakdownPresenter';
 
-const RevenueBreakdown = () => {
+const RevenueBreakdown = ({ panelInstanceId, panelComponentId }) => {
   const revenueData = useMemo(() => ([
     { category: 'Cabins', amount: 65800, percentage: 51.6 },
     { category: 'Food & Beverage', amount: 28900, percentage: 22.7 },
@@ -10,7 +10,13 @@ const RevenueBreakdown = () => {
     { category: 'Excursions', amount: 7750, percentage: 6.1 }
   ]), []);
 
-  return <RevenueBreakdownPresenter data={revenueData} />;
+  return (
+    <RevenueBreakdownPresenter
+      data={revenueData}
+      panelInstanceId={panelInstanceId}
+      panelComponentId={panelComponentId}
+    />
+  );
 };
 
 export default RevenueBreakdown;

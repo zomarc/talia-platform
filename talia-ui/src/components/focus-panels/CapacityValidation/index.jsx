@@ -40,7 +40,7 @@ const CapacityValidationContainer = ({ panelInstanceId, panelComponentId }) => {
     loading: berthLoading,
     error: berthError,
   } = useTableDataWithContext({
-    tableName: 'ship_day_berth_status',
+    tableName: 'ship_day_capacity',
     eventName: SAIL_SELECT_EVENT,
     panelInstanceId,
     panelComponentId,
@@ -101,6 +101,23 @@ const CapacityValidationContainer = ({ panelInstanceId, panelComponentId }) => {
     panelComponentId,
     fetchWithoutContext: true,
     limit: 50,
+  });
+
+  const {
+    data: reserveRows,
+    loading: reserveLoading,
+    error: reserveError,
+  } = useTableDataWithContext({
+    tableName: 'ship_cabin_reserve',
+    eventName: SAIL_SELECT_EVENT,
+    panelInstanceId,
+    panelComponentId,
+    contextMapper: (detail) => {
+      const ship = detail?.canonical_scope?.ship_code || detail?.ship_code || null;
+      return ship ? { ship_code: String(ship).trim() } : null;
+    },
+    fetchWithoutContext: false,
+    limit: 50000,
   });
 
   const {
@@ -172,6 +189,7 @@ const CapacityValidationContainer = ({ panelInstanceId, panelComponentId }) => {
       inventoryDayRows: inventoryDayRows || [],
       ships: ships || [],
       reservationRows: reservationRows || [],
+      reserveRows: reserveRows || [],
     });
   }, [
     berthRows,
@@ -182,6 +200,7 @@ const CapacityValidationContainer = ({ panelInstanceId, panelComponentId }) => {
     occupancyRows,
     referenceSailCode,
     reservationRows,
+    reserveRows,
     sailCodes,
     scopePending,
     shipCode,
@@ -197,6 +216,7 @@ const CapacityValidationContainer = ({ panelInstanceId, panelComponentId }) => {
       || cabinLoading
       || occupancyLoading
       || inventoryLoading
+      || reserveLoading
       || scopePending
     ));
   const error = reservationsError
@@ -205,7 +225,8 @@ const CapacityValidationContainer = ({ panelInstanceId, panelComponentId }) => {
     || occupancyError
     || inventoryError
     || shipsError
-    || masterError;
+    || masterError
+    || reserveError;
 
   return (
     <PanelDataState

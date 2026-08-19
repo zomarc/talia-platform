@@ -3,6 +3,11 @@
  * Each metric states table, derivation, grain, and scope. Never sum master+segment berths.
  */
 
+import {
+  indexCabinReservesForSail,
+  summarizeCabinReserves,
+} from '../../../lib/shipCabinReserve.js';
+
 const asNumber = (value) => {
   const n = Number.parseFloat(value);
   return Number.isFinite(n) ? n : null;
@@ -271,6 +276,7 @@ export const buildCapacityValidationLedger = ({
   inventoryDayRows = [],
   ships = [],
   reservationRows = [],
+  reserveRows = [],
 } = {}) => {
   const reference = referenceSailCode
     || (sailCodes.length ? sailCodes[0] : null)
@@ -279,13 +285,28 @@ export const buildCapacityValidationLedger = ({
   const departure = toDateKey(masterSailRow?.sail_date_from);
 
   const mseBerthRows = filterRows(berthRows, { sailCode: reference, shipCode });
-  const mseCap = peakByField(mseBerthRows, 'berth_capacity');
-  const mseOcc = peakByField(mseBerthRows, 'berths_occupied');
-  const mseAvailRaw = peakByField(mseBerthRows, 'berths_available');
-  // Prefer capacity − occupied (MSE style) so cabins/berths stay on the same peak.
-  const mseAvail = mseCap.value != null && mseOcc.value != null
-    ? Math.max(0, mseCap.value - mseOcc.value)
-    : mseAvailRaw.value;
+  const mseCap = peakByField(mseBerthRows, 'nameplate_berths')?.value != null
+    ? peakByField(mseBerthRows, 'nameplate_berths')
+    : peakByField(mseBerthRows, 'berth_capacity');
+  const mseOcc = peakByField(mseBerthRows, 'occupied_berths')?.value != null
+    ? peakByField(mseBerthRows, 'occupied_berths')
+    : peakByField(mseBerthRows, 'berths_occupied');
+  const mseSellable = peakByField(mseBerthRows, 'sellable_berths');
+  const mseOffsale = peakByField(mseBerthRows, 'offsale_berths');
+  const mseAvailRaw = peakByField(mseBerthRows, 'available_berths')?.value != null
+    ? peakByField(mseBerthRows, 'available_berths')
+    : peakByField(mseBerthRows, 'berths_available');
+  const mseAvail = mseSellable.value != null && mseOcc.value != null
+    ? Math.max(0, mseSellable.value - mseOcc.value)
+    : (mseCap.value != null && mseOcc.value != null
+      ? Math.max(0, mseCap.value - mseOcc.value)
+      : mseAvailRaw.value);
+
+  const reserveIndex = indexCabinReservesForSail(reserveRows, {
+    shipCode,
+    dateKey: departure,
+  });
+  const reserveSummary = summarizeCabinReserves(reserveIndex);
 
   const occSummary = summarizeCabinOccupancyBerths(occupancyRows, {
     sailCode: reference,
@@ -317,8 +338,8 @@ export const buildCapacityValidationLedger = ({
     sourceRow({
       id: 'mse-physical',
       name: 'MSE physical',
-      table: 'ship_day_berth_status',
-      how: 'Peak day · reference sail only (what MSE shows)',
+      table: 'ship_day_capacity',
+      how: 'Peak day nameplate · reference sail only (what MSE Tot C / Cap B show)',
       highlight: true,
       kind: 'physical',
       capacity: pair(berthsToCabins(mseCapBerths), mseCapBerths),
@@ -330,6 +351,41 @@ export const buildCapacityValidationLedger = ({
       ].filter(Boolean).join(' · ') || null,
       warn: mseBerthRows.length === 0
         ? 'No berth rows for reference sail — MSE may fall back to cabin occupancy.'
+        : null,
+    }),
+    sourceRow({
+      id: 'sellable-capacity',
+      name: 'Sellable capacity',
+      table: 'ship_day_capacity',
+      how: 'Nameplate minus offsale · peak day · reference sail (LF denominator)',
+      kind: 'physical',
+      capacity: pair(
+        formatNumber(peakByField(mseBerthRows, 'sellable_cabins').value),
+        formatNumber(mseSellable.value)
+      ),
+      booked: pair(berthsToCabins(mseOccBerths), mseOccBerths),
+      available: pair(berthsToCabins(mseAvailBerths), mseAvailBerths),
+      detail: mseSellable.peakDate ? `peak ${mseSellable.peakDate}` : null,
+    }),
+    sourceRow({
+      id: 'offsale-reserve',
+      name: 'Offsale / blocked',
+      table: 'ship_cabin_reserve',
+      how: 'Distinct cabins overlapping sail date · types RESERVED / BROKEN / OOO / EMERGENCY / WAREHOUSE / CREW / OVER',
+      kind: 'physical',
+      capacity: pair(
+        formatNumber(peakByField(mseBerthRows, 'offsale_cabins').value) ?? reserveSummary.offsale,
+        formatNumber(mseOffsale.value)
+      ),
+      booked: pair(null, null),
+      available: pair(null, null),
+      detail: [
+        `${reserveSummary.offsale} offsale`,
+        `${reserveSummary.segment} segment holds`,
+        `${reserveSummary.constrained} constrained`,
+      ].join(' · '),
+      warn: reserveSummary.segment > 0
+        ? 'Segment / port-pair holds stay in nameplate and are not subtracted.'
         : null,
     }),
     sourceRow({

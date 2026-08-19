@@ -31,7 +31,6 @@ const AdminRoleCriteriaPanel = () => {
         setCriteriaText(JSON.stringify(criteriaBody, null, 2));
         setOpsText(JSON.stringify(Object.keys(opsBody).length ? opsBody : {
           'cabin-deck-inventory': { allocate: role !== 'GUEST' && role !== 'USER' },
-          'master-sailing-explorer': { columnFilters: true },
         }, null, 2));
         setStatus('');
       } catch (error) {

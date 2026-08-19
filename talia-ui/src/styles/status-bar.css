@@ -412,6 +412,12 @@ html.talia-theme-palette-light .status-bar {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-warning) 35%, transparent);
 }
 
+.status-bar__header-btn--danger {
+  color: #fff;
+  border-color: color-mix(in srgb, #ff6b35 55%, var(--theme-border-strong));
+  background: color-mix(in srgb, #ff6b35 78%, var(--theme-bg-solid));
+}
+
 .status-bar__header-btn--focus {
   font-size: 13px;
 }

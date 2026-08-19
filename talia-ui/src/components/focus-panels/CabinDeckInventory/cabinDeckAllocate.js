@@ -88,7 +88,7 @@ export const allocateGtyPreview = (bundle, options = {}) => {
       const key = normalizeCategory(cat.category);
       if (!emptiesByCategory.has(key)) emptiesByCategory.set(key, []);
       (cat.cabins || []).forEach((cabin) => {
-        if (cabin.is_empty) emptiesByCategory.get(key).push(cabin);
+        if (cabin.is_empty && !cabin.is_offsale) emptiesByCategory.get(key).push(cabin);
       });
     });
   });

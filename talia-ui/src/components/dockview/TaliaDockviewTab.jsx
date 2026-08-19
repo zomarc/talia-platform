@@ -16,10 +16,12 @@ import {
 } from "../../services/panelTechnicalMetaState";
 import { resolvePanelLoading } from "../../services/panelLoadingState";
 import {
+  PANEL_DATA_EXPORT_CHANGED_EVENT,
   resolvePanelDataExport,
   runPanelDataExport,
 } from "../../lib/panelDataExport";
 import { useComponentOptions } from "../../hooks/useComponentOptions";
+import { resolveChoiceLabel } from "../../lib/componentOptionsCatalog";
 import reportRegistry from "../focus-panels/registry";
 
 const SIDE_EXPAND_DECISION_TIMEOUT_MS = 3000;
@@ -72,9 +74,24 @@ const TaliaDockviewTab = ({
   const panelComponent = panelApi?.component;
   const isReportTab = !!panelComponent && reportPanelIds?.has?.(panelComponent);
   const hasGroupActions = !!panelComponent && groupActionPanelIds?.has?.(panelComponent);
-  const hasDataExport = !!panelComponent && dataExportPanelIds?.has?.(panelComponent);
-  const registryOptions = reportRegistry?.[panelComponent]?.options || null;
-  const componentOptionsId = reportRegistry?.[panelComponent]?.panelId || panelComponent || '';
+  const [exportRegistered, setExportRegistered] = React.useState(
+    () => Boolean(resolvePanelDataExport(panelId, panelComponent))
+  );
+  React.useEffect(() => {
+    const sync = () => setExportRegistered(Boolean(resolvePanelDataExport(panelId, panelComponent)));
+    sync();
+    window.addEventListener(PANEL_DATA_EXPORT_CHANGED_EVENT, sync);
+    return () => window.removeEventListener(PANEL_DATA_EXPORT_CHANGED_EVENT, sync);
+  }, [panelId, panelComponent]);
+  const hasDataExport = Boolean(
+    (panelComponent && dataExportPanelIds?.has?.(panelComponent))
+    || exportRegistered
+  );
+  const registryEntry = reportRegistry?.[panelComponent]
+    || Object.values(reportRegistry || {}).find((entry) => entry?.panelId === panelComponent)
+    || null;
+  const registryOptions = registryEntry?.options || null;
+  const componentOptionsId = registryEntry?.panelId || panelComponent || '';
   const {
     views: optionViews,
     operations: optionOperations,
@@ -675,13 +692,14 @@ const TaliaDockviewTab = ({
                       <>
                         <div className="talia-dv-tab__options-heading">Views</div>
                         {optionViews.map((entry) => {
-                          // Booleans: tick only when on. Choice: label is the active mode, always ticked.
-                          const checked = entry.type === 'choice'
+                          const isChoice = entry.type === 'choice';
+                          const checked = isChoice
                             ? true
                             : entry.value === true;
                           const onToggle = () => {
                             if (entry.type === 'choice' && Array.isArray(entry.choices) && entry.choices.length >= 2) {
-                              const next = entry.value === entry.choices[0] ? entry.choices[1] : entry.choices[0];
+                              const idx = entry.choices.indexOf(entry.value);
+                              const next = entry.choices[((idx < 0 ? 0 : idx) + 1) % entry.choices.length];
                               setView(entry.id, next);
                               armOptionsCloseOnLeave();
                               return;
@@ -689,23 +707,30 @@ const TaliaDockviewTab = ({
                             setView(entry.id, !entry.value);
                             armOptionsCloseOnLeave();
                           };
-                          const label = entry.type === 'choice' && entry.id === 'viewMode'
-                            ? (entry.value === 'flat' ? 'Flat' : 'Nested')
+                          const label = entry.type === 'choice'
+                            ? resolveChoiceLabel(entry, entry.value)
                             : entry.label;
                           return (
                             <button
                               key={`view-${entry.id}`}
                               type="button"
-                              className="talia-dv-tab__export-menu-item"
-                              role="menuitemcheckbox"
-                              aria-checked={Boolean(checked)}
+                              className={`talia-dv-tab__export-menu-item${isChoice ? ' talia-dv-tab__export-menu-item--choice' : ' talia-dv-tab__export-menu-item--toggle'}`}
+                              role={isChoice ? 'menuitem' : 'menuitemcheckbox'}
+                              aria-checked={isChoice ? undefined : Boolean(checked)}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 onToggle();
                               }}
                             >
                               <span>{label}</span>
-                              {checked ? <span aria-hidden="true">✓</span> : null}
+                              {isChoice ? (
+                                <span className="talia-dv-tab__option-cycle" aria-hidden="true">⇄</span>
+                              ) : (
+                                <span
+                                  className={`talia-dv-tab__option-switch${checked ? ' talia-dv-tab__option-switch--on' : ''}`}
+                                  aria-hidden="true"
+                                />
+                              )}
                             </button>
                           );
                         })}
@@ -718,7 +743,7 @@ const TaliaDockviewTab = ({
                           <button
                             key={`op-${entry.id}`}
                             type="button"
-                            className="talia-dv-tab__export-menu-item"
+                            className="talia-dv-tab__export-menu-item talia-dv-tab__export-menu-item--toggle"
                             role="menuitemcheckbox"
                             aria-checked={entry.enabled === true}
                             onClick={(event) => {
@@ -728,7 +753,10 @@ const TaliaDockviewTab = ({
                             }}
                           >
                             <span>{entry.label}</span>
-                            {entry.enabled ? <span aria-hidden="true">✓</span> : null}
+                            <span
+                              className={`talia-dv-tab__option-switch${entry.enabled ? ' talia-dv-tab__option-switch--on' : ''}`}
+                              aria-hidden="true"
+                            />
                           </button>
                         ))}
                       </>

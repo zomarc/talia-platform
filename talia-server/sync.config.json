@@ -306,6 +306,53 @@
         "[Ship_Name]"
       ]
     },
+    "competitorBenchmark": {
+      "type": "direct",
+      "source": "dwh.vw_Competitor_Benchmarking",
+      "target": "competitor_benchmark",
+      "columns": [
+        "Snapshot_Date",
+        "Is_Latest_Snapshot",
+        "Source_Market",
+        "Cruise_Line_Code",
+        "Ship_Code",
+        "Cruise_Line_Name",
+        "Source_Ship_Name",
+        "Departure_Date",
+        "Cruise_Duration",
+        "Departure_Port",
+        "Source_Destination",
+        "Cabin_Type",
+        "PPPD",
+        "Total_Rate_PP_EUR",
+        "Itinerary_Code",
+        "Three_Port_Match",
+        "Currency_Code",
+        "Rate_Type"
+      ],
+      "transformKey": "competitorBenchmark",
+      "dateColumn": "Departure_Date",
+      "supabaseDateColumn": "departure_date",
+      "isLargeDataset": true,
+      "defaultFilters": [
+        {
+          "column": "[Is_Latest_Snapshot]",
+          "operator": "equals",
+          "value": "Y"
+        }
+      ],
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "id",
+        "keepDeleteAll": true
+      },
+      "rowNumberOrder": [
+        "[Departure_Date]",
+        "[Cruise_Line_Code]",
+        "[Ship_Code]",
+        "[Cabin_Type]"
+      ]
+    },
     "reservationPromotion": {
       "type": "direct",
       "source": "stg.RES_PROMOTION",
@@ -560,7 +607,8 @@
         "publishedRates",
         "reservationChanges",
         "factReservationHistory",
-        "competitor"
+        "competitor",
+        "competitorBenchmark"
       ],
       "tables": {
         "agency": {
@@ -726,6 +774,21 @@
             "column": "snapshot_date",
             "from": "2025-09-01",
             "to": "2027-12-01"
+          }
+        },
+        "competitorBenchmark": {
+          "filters": [
+            {
+              "column": "[Departure_Date]",
+              "operator": "between",
+              "from": "2025-09-01",
+              "to": "2027-12-01"
+            }
+          ],
+          "replace": {
+            "strategy": "delete-all",
+            "column": "id",
+            "keepDeleteAll": true
           }
         },
         "reservationPromotion": {

@@ -535,6 +535,44 @@
   width: 100%;
 }
 
+.talia-dv-tab__option-switch {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--theme-fg) 22%, var(--theme-border));
+  background: color-mix(in srgb, var(--theme-fg) 14%, transparent);
+  position: relative;
+}
+
+.talia-dv-tab__option-switch::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--theme-fg, #e8e8f0);
+  transition: transform 0.12s ease;
+}
+
+.talia-dv-tab__option-switch--on {
+  background: color-mix(in srgb, var(--theme-accent, #5b9bd5) 72%, transparent);
+  border-color: var(--theme-accent, #5b9bd5);
+}
+
+.talia-dv-tab__option-switch--on::after {
+  transform: translateX(12px);
+}
+
+.talia-dv-tab__option-cycle {
+  flex: 0 0 auto;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--theme-text-muted, #9aa8bc);
+}
+
 .talia-report-filters--hidden {
   display: none !important;
 }

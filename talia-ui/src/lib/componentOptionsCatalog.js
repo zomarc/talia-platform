@@ -1,19 +1,83 @@
 /**
  * Per-component Views / Operations catalog and helpers.
- * Views = non-restrictive personalization (Snapshot / Details / Filters / …).
+ * Views = non-restrictive personalization (Filters / Nested / Tooltip / …).
  * Operations = role-gated capabilities (Allocate, …) — admin Options only.
  */
 
 import { hasRole, canConfigureComponentOperations, normalizeRole } from '../utils/roleUtils';
 
-/** @typedef {{ id: string, label: string, type?: 'boolean'|'choice', choices?: string[], default?: unknown, minRole?: string }} ComponentOptionDef */
+/** @typedef {{ id: string, label: string, type?: 'boolean'|'choice', choices?: string[], choiceLabels?: Record<string, string>, default?: unknown, minRole?: string }} ComponentOptionDef */
 
 /** Shared view defs — panels opt in via catalog / registry.options */
 export const VIEW_SNAPSHOT = { id: 'snapshot', label: 'Snapshot', type: 'boolean', default: true };
 export const VIEW_DETAILS = { id: 'details', label: 'Details', type: 'boolean', default: true };
 export const VIEW_FILTERS = { id: 'filters', label: 'Filters', type: 'boolean', default: true };
+export const VIEW_COLUMN_FILTERS = { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true };
+export const VIEW_CONTROLS = { id: 'controls', label: 'Controls', type: 'boolean', default: true };
 /** Tabulator column-calc footer — opt in only on tables that use `withColumnTotal`. */
 export const VIEW_TOTALS = { id: 'totals', label: 'Totals', type: 'boolean', default: true, minRole: 'USER' };
+export const VIEW_LEGENDS = { id: 'legends', label: 'Legends', type: 'boolean', default: true };
+export const VIEW_NESTED = {
+  id: 'viewMode',
+  label: 'Nested',
+  type: 'choice',
+  choices: ['nested', 'flat'],
+  default: 'nested',
+  choiceLabels: { nested: 'Nested', flat: 'Flat' },
+};
+export const VIEW_TOOLTIP = { id: 'tooltip', label: 'Tooltip', type: 'boolean', default: true };
+export const VIEW_TOOLTIP_MSE = {
+  id: 'tooltipView',
+  label: 'Tooltip view',
+  type: 'choice',
+  choices: ['distribution', 'performance'],
+  default: 'distribution',
+  choiceLabels: { distribution: 'Distribution', performance: 'Performance' },
+};
+
+const VIEW_MENU_ORDER = [
+  'viewMode',
+  'filters',
+  'columnFilters',
+  'controls',
+  'snapshot',
+  'details',
+  'totals',
+  'legends',
+  'tooltip',
+  'tooltipView',
+];
+
+export const sortComponentViews = (views) => {
+  const list = Array.isArray(views) ? [...views] : [];
+  return list.sort((a, b) => {
+    const ai = VIEW_MENU_ORDER.indexOf(a?.id);
+    const bi = VIEW_MENU_ORDER.indexOf(b?.id);
+    const ao = ai === -1 ? VIEW_MENU_ORDER.length : ai;
+    const bo = bi === -1 ? VIEW_MENU_ORDER.length : bi;
+    if (ao !== bo) return ao - bo;
+    return String(a?.label || a?.id || '').localeCompare(String(b?.label || b?.id || ''));
+  });
+};
+
+export const resolveChoiceLabel = (def, value) => {
+  if (!def) return '';
+  if (def.choiceLabels && value != null && def.choiceLabels[value]) return def.choiceLabels[value];
+  if (def.id === 'viewMode') return value === 'flat' ? 'Flat' : 'Nested';
+  return def.label || String(value || '');
+};
+
+export const buildReportShellClassName = (baseClassName, {
+  showColumnFilters = true,
+  showControls = true,
+  showLegends = true,
+} = {}) => {
+  const parts = String(baseClassName || '').split(/\s+/).filter(Boolean);
+  if (!showColumnFilters) parts.push('talia-report--column-filters-hidden');
+  if (!showControls) parts.push('talia-report--controls-hidden');
+  if (!showLegends) parts.push('talia-report--legends-hidden');
+  return parts.join(' ');
+};
 
 /**
  * Default catalog keyed by panelComponentId (registry panelId).
@@ -22,28 +86,30 @@ export const VIEW_TOTALS = { id: 'totals', label: 'Totals', type: 'boolean', def
 export const DEFAULT_COMPONENT_OPTIONS = {
   'master-sailing-explorer': {
     views: [
-      { id: 'viewMode', label: 'Nested', type: 'choice', choices: ['nested', 'flat'], default: 'nested' },
+      VIEW_NESTED,
       { id: 'segments', label: 'Segments', type: 'boolean', default: false },
       VIEW_FILTERS,
+      VIEW_COLUMN_FILTERS,
+      VIEW_CONTROLS,
+      VIEW_TOOLTIP,
+      VIEW_TOOLTIP_MSE,
     ],
-    operations: [
-      { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true, minRole: 'USER' },
-    ],
+    operations: [],
   },
   'reservation-booking-curve': {
-    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS],
+    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
     operations: [],
   },
   'profile-compare': {
-    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS],
+    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
     operations: [],
   },
   'inventory-target-profile-editor': {
-    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS],
+    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
     operations: [],
   },
   'booking-profile': {
-    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS],
+    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
     operations: [],
   },
   'seasonal-trading-pack': {
@@ -51,17 +117,50 @@ export const DEFAULT_COMPONENT_OPTIONS = {
     operations: [],
   },
   'reservation-current-state': {
-    views: [VIEW_DETAILS, VIEW_FILTERS, VIEW_TOTALS],
-    operations: [
-      { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true, minRole: 'USER' },
-    ],
+    views: [VIEW_DETAILS, VIEW_FILTERS, VIEW_COLUMN_FILTERS, VIEW_TOTALS, VIEW_TOOLTIP],
+    operations: [],
   },
   'cabin-deck-inventory': {
-    views: [VIEW_DETAILS, VIEW_FILTERS],
+    views: [VIEW_DETAILS, VIEW_CONTROLS, VIEW_TOOLTIP, VIEW_LEGENDS],
     operations: [
       { id: 'allocate', label: 'Allocate', type: 'boolean', default: true, minRole: 'MANAGER' },
-      { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true, minRole: 'USER' },
     ],
+  },
+  'ship-day-berth': {
+    views: [VIEW_NESTED, VIEW_FILTERS, VIEW_COLUMN_FILTERS, VIEW_CONTROLS],
+    operations: [],
+  },
+  'distribution': {
+    views: [VIEW_LEGENDS],
+    operations: [],
+  },
+  'booking-target-chart': {
+    views: [VIEW_LEGENDS],
+    operations: [],
+  },
+  'occupancy-chart': {
+    views: [VIEW_LEGENDS],
+    operations: [],
+  },
+  'revenue-breakdown': {
+    views: [VIEW_LEGENDS],
+    operations: [],
+  },
+  'demand-heatmap': {
+    views: [VIEW_LEGENDS],
+    operations: [],
+  },
+  'demand-heatmap-with-trends': {
+    views: [VIEW_LEGENDS],
+    operations: [],
+  },
+  'published-rates-grid': {
+    views: [VIEW_LEGENDS],
+    operations: [],
+  },
+  'competitor-benchmark': {
+    views: [VIEW_DETAILS, VIEW_COLUMN_FILTERS],
+    operations: [],
   },
 };
 
@@ -70,7 +169,7 @@ export const getComponentOptionsCatalog = (componentId, registryOptions = null) 
   const fromRegistry = registryOptions && typeof registryOptions === 'object' ? registryOptions : null;
   const fallback = DEFAULT_COMPONENT_OPTIONS[key] || { views: [], operations: [] };
   return {
-    views: Array.isArray(fromRegistry?.views) ? fromRegistry.views : (fallback.views || []),
+    views: sortComponentViews(Array.isArray(fromRegistry?.views) ? fromRegistry.views : (fallback.views || [])),
     operations: Array.isArray(fromRegistry?.operations) ? fromRegistry.operations : (fallback.operations || []),
   };
 };

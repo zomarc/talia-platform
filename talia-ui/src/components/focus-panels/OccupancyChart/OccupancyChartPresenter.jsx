@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Chart } from 'chart.js/auto';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import { getChartColors, getChartOptions, getOverlayLegendOptions } from '../../../lib/chartConfig';
 
 /**
@@ -9,10 +10,14 @@ import { getChartColors, getChartOptions, getOverlayLegendOptions } from '../../
  * @param {Object} props
  * @param {Array} props.data - Weekly occupancy data
  */
-const OccupancyChartPresenter = ({ data }) => {
+const OccupancyChartPresenter = ({ data, panelInstanceId = null, panelComponentId = null }) => {
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
   const { chartLegendsVisible } = useTheme();
+  const { showLegends, reportShellClassName } = useReportShellOptions(
+    panelComponentId || 'occupancy-chart',
+    panelInstanceId
+  );
 
   useEffect(() => {
     if (!canvasRef.current) return undefined;
@@ -53,7 +58,7 @@ const OccupancyChartPresenter = ({ data }) => {
       },
       options: getChartOptions.bar({
         plugins: {
-          legend: getOverlayLegendOptions({ visible: chartLegendsVisible })
+          legend: getOverlayLegendOptions({ visible: chartLegendsVisible && showLegends })
         },
         scales: {
           occupancy: {
@@ -84,10 +89,10 @@ const OccupancyChartPresenter = ({ data }) => {
         chartRef.current = null;
       }
     };
-  }, [chartLegendsVisible, data]);
+  }, [chartLegendsVisible, showLegends, data]);
 
   return (
-    <div className="talia-report" role="region" aria-label="Weekly occupancy and revenue">
+    <div className={`talia-report${reportShellClassName ? ` ${reportShellClassName}` : ''}`} role="region" aria-label="Weekly occupancy and revenue">
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Weekly Occupancy & Revenue</h2>

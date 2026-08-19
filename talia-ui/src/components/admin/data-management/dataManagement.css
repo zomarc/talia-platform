@@ -730,13 +730,13 @@
 }
 
 .dm-action-header__sync-live {
-  min-width: 240px;
-  max-width: min(34vw, 360px);
+  min-width: 280px;
+  max-width: min(42vw, 440px);
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   grid-template-areas:
-    "label value"
-    "track value";
+    "label value stop"
+    "track value stop";
   gap: 4px 8px;
   align-items: center;
   padding: 8px 10px;
@@ -802,6 +802,11 @@
   color: var(--theme-accent);
   min-width: 38px;
   text-align: right;
+}
+
+.dm-action-header__sync-live .dm-btn--danger {
+  grid-area: stop;
+  white-space: nowrap;
 }
 
 .dm-action-header__stat {

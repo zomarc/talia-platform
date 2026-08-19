@@ -177,13 +177,13 @@ async function loadMseCabinTotals(client, shipCode, masterSailCode) {
   }
 
   const { data, error } = await client
-    .from('sail_by_cabin_occupancy')
-    .select('occupied_cabins, total_cabins, sail_itinerary_date')
+    .from('ship_day_capacity')
+    .select('occupied_cabins, sellable_cabins, total_cabins, date')
     .eq('ship_code', shipCode)
     .eq('sail_code', masterSailCode);
 
   if (error) {
-    console.warn('[reservation-booking-curve] occupancy:', error.message);
+    console.warn('[reservation-booking-curve] capacity:', error.message);
     return { bookedCabins: null, totalCabins: null, source: null };
   }
 
@@ -191,26 +191,19 @@ async function loadMseCabinTotals(client, shipCode, masterSailCode) {
     return { bookedCabins: null, totalCabins: null, source: null };
   }
 
-  const byDate = new Map();
-  data.forEach((row) => {
-    const dateKey = toDateKey(row.sail_itinerary_date) || '_';
-    const cur = byDate.get(dateKey) || { occupied: 0, total: 0 };
-    cur.occupied += Number(row.occupied_cabins) || 0;
-    cur.total += Number(row.total_cabins) || 0;
-    byDate.set(dateKey, cur);
-  });
-
   let peakBooked = 0;
-  let peakTotal = 0;
-  byDate.forEach((day) => {
-    peakBooked = Math.max(peakBooked, day.occupied);
-    peakTotal = Math.max(peakTotal, day.total);
+  let peakSellable = 0;
+  data.forEach((row) => {
+    peakBooked = Math.max(peakBooked, Number(row.occupied_cabins) || 0);
+    const sellable = Number(row.sellable_cabins);
+    const nameplate = Number(row.total_cabins) || 0;
+    peakSellable = Math.max(peakSellable, Number.isFinite(sellable) ? sellable : nameplate);
   });
 
   return {
     bookedCabins: Math.round(peakBooked),
-    totalCabins: Math.round(peakTotal),
-    source: 'sail_by_cabin_occupancy',
+    totalCabins: Math.round(peakSellable),
+    source: 'ship_day_capacity',
   };
 }
 

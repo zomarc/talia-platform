@@ -32,3 +32,4 @@ export const DATA_MANAGEMENT_BACKUP_EVENT = 'talia:dataManagement.backup';
 export const DATA_MANAGEMENT_REFRESH_EVENT = 'talia:dataManagement.refresh';
 export const DATA_MANAGEMENT_SELECT_TABLE_EVENT = 'talia:dataManagement.selectTable';
 export const DATA_MANAGEMENT_TABLE_ACTION_EVENT = 'talia:dataManagement.tableAction';
+export const DATA_MANAGEMENT_STOP_SYNC_EVENT = 'talia:dataManagement.stopSync';

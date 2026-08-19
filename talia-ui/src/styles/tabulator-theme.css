@@ -129,32 +129,50 @@
   background: var(--theme-table-row-hover) !important;
 }
 
-/* Persistent reference / Tabulator-selected row highlight */
-.tabulator .tabulator-row.tabulator-selected,
-.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected,
-.tabulator .tabulator-row.tabulator-row--reference,
-.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row--reference {
+/* Persistent reference / Tabulator-selected row highlight.
+   Even/odd cell rules use :not(.tabulator-group) — match that specificity so the
+   full row (not only the left accent bar) takes the selected fill. */
+.tabulator .tabulator-row.tabulator-selected:not(.tabulator-group),
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected:not(.tabulator-group),
+.tabulator .tabulator-row.tabulator-row--reference:not(.tabulator-group),
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row--reference:not(.tabulator-group),
+.tabulator .tabulator-row.tabulator-row-even.tabulator-selected:not(.tabulator-group),
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row-even.tabulator-selected:not(.tabulator-group),
+.tabulator .tabulator-row.tabulator-row-odd.tabulator-selected:not(.tabulator-group),
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row-odd.tabulator-selected:not(.tabulator-group),
+.tabulator .tabulator-row.tabulator-row-even.tabulator-row--reference:not(.tabulator-group),
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row-even.tabulator-row--reference:not(.tabulator-group),
+.tabulator .tabulator-row.tabulator-row-odd.tabulator-row--reference:not(.tabulator-group),
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row-odd.tabulator-row--reference:not(.tabulator-group) {
   background: var(--theme-table-row-selected, var(--theme-accent-light)) !important;
 }
 
-.tabulator .tabulator-row.tabulator-selected .tabulator-cell,
-.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected .tabulator-cell,
-.tabulator .tabulator-row.tabulator-row--reference .tabulator-cell,
-.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row--reference .tabulator-cell {
+.tabulator .tabulator-row.tabulator-selected:not(.tabulator-group) .tabulator-cell,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected:not(.tabulator-group) .tabulator-cell,
+.tabulator .tabulator-row.tabulator-row--reference:not(.tabulator-group) .tabulator-cell,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row--reference:not(.tabulator-group) .tabulator-cell,
+.tabulator .tabulator-row.tabulator-row-even.tabulator-selected:not(.tabulator-group) .tabulator-cell,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row-even.tabulator-selected:not(.tabulator-group) .tabulator-cell,
+.tabulator .tabulator-row.tabulator-row-odd.tabulator-selected:not(.tabulator-group) .tabulator-cell,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row-odd.tabulator-selected:not(.tabulator-group) .tabulator-cell,
+.tabulator .tabulator-row.tabulator-row-even.tabulator-row--reference:not(.tabulator-group) .tabulator-cell,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row-even.tabulator-row--reference:not(.tabulator-group) .tabulator-cell,
+.tabulator .tabulator-row.tabulator-row-odd.tabulator-row--reference:not(.tabulator-group) .tabulator-cell,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row-odd.tabulator-row--reference:not(.tabulator-group) .tabulator-cell {
   background: var(--theme-table-row-selected, var(--theme-accent-light)) !important;
 }
 
-.tabulator .tabulator-row.tabulator-selected:hover,
-.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected:hover,
-.tabulator .tabulator-row.tabulator-row--reference:hover,
-.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row--reference:hover {
+.tabulator .tabulator-row.tabulator-selected:not(.tabulator-group):hover,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected:not(.tabulator-group):hover,
+.tabulator .tabulator-row.tabulator-row--reference:not(.tabulator-group):hover,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row--reference:not(.tabulator-group):hover {
   background: var(--theme-table-row-selected-hover, var(--theme-table-row-selected, var(--theme-accent-light))) !important;
 }
 
-.tabulator .tabulator-row.tabulator-selected:hover .tabulator-cell,
-.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected:hover .tabulator-cell,
-.tabulator .tabulator-row.tabulator-row--reference:hover .tabulator-cell,
-.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row--reference:hover .tabulator-cell {
+.tabulator .tabulator-row.tabulator-selected:not(.tabulator-group):hover .tabulator-cell,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected:not(.tabulator-group):hover .tabulator-cell,
+.tabulator .tabulator-row.tabulator-row--reference:not(.tabulator-group):hover .tabulator-cell,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row--reference:not(.tabulator-group):hover .tabulator-cell {
   background: var(--theme-table-row-selected-hover, var(--theme-table-row-selected, var(--theme-accent-light))) !important;
 }
 
@@ -382,6 +400,11 @@
 
 .ms-explorer-panel .master-sailing-panel__actions {
   grid-column: auto;
+}
+
+.ms-explorer-hover-loading {
+  padding: 8px 12px;
+  font-size: 12px;
 }
 
 .ms-explorer-table .ms-explorer-row--day:not(.tabulator-selected):not(.tabulator-row--reference):not(:hover) {

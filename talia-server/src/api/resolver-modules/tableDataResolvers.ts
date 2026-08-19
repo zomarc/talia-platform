@@ -9,6 +9,16 @@ const TABLE_DATA_COLUMN_ALLOWLIST: Record<string, ReadonlySet<string>> = {
     'berth_capacity', 'berths_occupied', 'berths_available',
     'total_cabins', 'occupied_cabins', 'available_cabins', 'cabin_categories',
   ]),
+  ship_day_capacity: new Set([
+    'ship_code', 'sail_code', 'date',
+    'nameplate_cabins', 'nameplate_berths',
+    'offsale_cabins', 'offsale_berths',
+    'sellable_cabins', 'sellable_berths',
+    'occupied_cabins', 'occupied_berths',
+    'available_cabins', 'available_berths',
+    'cabin_categories',
+    'berth_capacity', 'berths_occupied', 'berths_available', 'total_cabins',
+  ]),
   sail_booking_summary: new Set([
     'sail_code', 'guest_count', 'guaranteed_cabins',
   ]),
@@ -72,11 +82,13 @@ export const buildTableDataQueryResolvers = ({
         || tableName === 'reservation_current_state'
         || tableName === 'sail_booking_summary'
         || tableName === 'ship_day_berth_status'
+        || tableName === 'ship_day_capacity'
         || tableName === 'sail_by_cabin_occupancy'
         || tableName === 'ship_cabin'
         || tableName === 'ship_cabin_ctg_link'
         || tableName === 'ship_cabin_reserve'
-        || tableName === 'cabin_ctg';
+        || tableName === 'cabin_ctg'
+        || tableName === 'competitor_benchmark';
       const expandedLimit = largeTable
         ? Math.min(Math.max(baseLimit, 100), 150000)
         : (includeNonRealSailings ? baseLimit : Math.min(Math.max(baseLimit * 3, baseLimit), 5000));
@@ -165,6 +177,14 @@ export const buildTableDataQueryResolvers = ({
         if (filters.status) {
           query = query.eq('status', filters.status);
           console.log(`[tableData] Applied filter: status = ${filters.status}`);
+        }
+        if (filters.is_latest_snapshot) {
+          query = query.eq('is_latest_snapshot', filters.is_latest_snapshot);
+          console.log(`[tableData] Applied filter: is_latest_snapshot = ${filters.is_latest_snapshot}`);
+        }
+        if (filters.cabin_type) {
+          query = query.eq('cabin_type', filters.cabin_type);
+          console.log(`[tableData] Applied filter: cabin_type = ${filters.cabin_type}`);
         }
         if (filters.is_main !== undefined && filters.is_main !== null && String(filters.is_main).trim() !== '') {
           query = query.eq('is_main', Number(filters.is_main));

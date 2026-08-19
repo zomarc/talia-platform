@@ -48,6 +48,7 @@ const tableDateColumns = {
   published_rates_current_state: ['snapshot_date', 'departure_date'],
   competitor: ['snapshot_date', 'departure_date'],
   competitor_current_state: ['snapshot_date', 'departure_date'],
+  competitor_benchmark: ['snapshot_date', 'departure_date'],
   inventory_status_by_day: ['snapshot_date', 'sail_date'],
   google_trends_data: ['date'],
   google_trends_search_terms: ['created_at', 'updated_at'],

@@ -11,7 +11,7 @@ import DemandHeatmapWithSearchTrendsPresenter from './DemandHeatmapWithSearchTre
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 
-const DemandHeatmapWithSearchTrendsContainer = ({ filters = {} }) => {
+const DemandHeatmapWithSearchTrendsContainer = ({ filters = {}, panelInstanceId, panelComponentId }) => {
   console.log('[DemandHeatmapWithSearchTrendsContainer] Component rendering with filters:', filters);
   
   // Fetch both data sources
@@ -128,6 +128,8 @@ const DemandHeatmapWithSearchTrendsContainer = ({ filters = {} }) => {
       searchTrends={searchTrends}
       combinedData={combinedData}
       containsMockData={containsMockData}
+      panelInstanceId={panelInstanceId}
+      panelComponentId={panelComponentId}
       onRefresh={() => {
         refetchHeatmap();
         refetchTrends();

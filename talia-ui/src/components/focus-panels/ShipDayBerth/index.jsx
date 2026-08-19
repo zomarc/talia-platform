@@ -31,7 +31,7 @@ const ShipDayBerthContainer = ({ panelInstanceId, panelComponentId }) => {
     error: berthError,
     refetch: refetchBerths,
   } = useTableDataWithContext({
-    tableName: 'ship_day_berth_status',
+    tableName: 'ship_day_capacity',
     eventName: null,
     panelInstanceId,
     panelComponentId,

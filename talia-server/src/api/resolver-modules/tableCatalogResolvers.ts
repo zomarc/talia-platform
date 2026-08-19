@@ -29,13 +29,13 @@ export const buildTableCatalogQueryResolvers = ({
         'agency', 'ship', 'cabin_availability', 'reservation', 'master_sail',
         'sail_by_cabin_occupancy', 'reservation_changes', 'reservation_current_state',
         'reservation_promotion', 'published_rates', 'published_rates_changes',
-        'published_rates_current_state', 'competitor', 'competitor_current_state',
+        'published_rates_current_state', 'competitor', 'competitor_current_state', 'competitor_benchmark',
         'cabin_allocation', 'itinerary', 'gql_cabin_availability', 'sail_header',
         'ship_cabin', 'ship_cabin_ctg_link', 'ship_cabin_reserve', 'cabin_ctg', 'market_roll_up', 'ship_inventory_alloc', 'sync_metadata', 'focuses', 'google_trends_data',
         'google_trends_search_terms', 'data_refresh_metadata',
         'booking_targets_supplied', 'target_profiles', 'target_mapping_config',
         'inventory_item', 'inventory_item_operational', 'sailing_master', 'sailing_hierarchy',
-        'inventory_status_by_day', 'ship_day_berth_status', 'sail_booking_summary', 'sail_booking_monday', 'sailing_physical_day_map',
+        'inventory_status_by_day', 'ship_day_berth_status', 'ship_day_capacity', 'sail_booking_summary', 'sail_booking_monday', 'sailing_physical_day_map',
         'inventory_item_profile_curve_point'
       ];
 

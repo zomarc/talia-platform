@@ -56,6 +56,6 @@ assert(byId['cabin-availability'].capacity.cabins === 90, 'cabin units');
 assert(byId['cabin-availability'].capacity.berths === 180, 'cabin berths');
 assert(byId['guests-selling'].booked.berths === 150, 'guests');
 assert(byId['mse-physical'].highlight === true, 'mse highlighted');
-assert(byId['mse-physical'].table === 'ship_day_berth_status', 'table');
+assert(byId['mse-physical'].table === 'ship_day_capacity', 'table');
 
 console.log('capacityValidationTransform.test.mjs: ok');

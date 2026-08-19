@@ -168,8 +168,12 @@ export const buildShipDayRows = (shipDayBerthRows = [], shipRows = []) => {
     const dateKey = toDateKey(row?.date);
     if (!shipCode || !dateKey) return;
 
-    const capacity = toNumber(row?.berth_capacity);
-    const occupied = toNumber(row?.berths_occupied);
+    const capacity = toNumber(row?.nameplate_berths ?? row?.berth_capacity);
+    const occupied = toNumber(row?.occupied_berths ?? row?.berths_occupied);
+    const sellable = row?.sellable_berths != null
+      ? toNumber(row.sellable_berths)
+      : capacity;
+    const offsale = toNumber(row?.offsale_berths);
     const sailCode = String(row?.sail_code || '').trim();
 
     const key = `${shipCode}|${dateKey}`;
@@ -183,11 +187,15 @@ export const buildShipDayRows = (shipDayBerthRows = [], shipRows = []) => {
       ship_group_label: shipNames.get(shipCode) || shipCode,
       capacity: 0,
       occupied: 0,
+      sellable: 0,
+      offsale: 0,
       sail_codes: new Set(),
     };
 
     existing.capacity = Math.max(existing.capacity, capacity);
     existing.occupied = Math.max(existing.occupied, occupied);
+    existing.sellable = Math.max(existing.sellable, sellable);
+    existing.offsale = Math.max(existing.offsale, offsale);
     if (sailCode) existing.sail_codes.add(sailCode);
     dayIndex.set(key, existing);
   });
@@ -196,13 +204,17 @@ export const buildShipDayRows = (shipDayBerthRows = [], shipRows = []) => {
     .map((entry) => {
       const capacity = Math.round(entry.capacity);
       const occupied = Math.round(entry.occupied);
-      const available = Math.max(0, capacity - occupied);
+      const sellable = Math.round(entry.sellable || capacity);
+      const offsale = Math.round(entry.offsale || 0);
+      const available = Math.max(0, sellable - occupied);
       return {
         ...entry,
         capacity,
         occupied,
+        sellable,
+        offsale,
         available,
-        occupancy_pct: capacity > 0 ? (occupied / capacity) * 100 : null,
+        occupancy_pct: sellable > 0 ? (occupied / sellable) * 100 : null,
         sail_codes: Array.from(entry.sail_codes).sort(),
       };
     })

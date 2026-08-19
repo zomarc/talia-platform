@@ -31,6 +31,7 @@ import {
   DATA_MANAGEMENT_REFRESH_EVENT,
   DATA_MANAGEMENT_SELECT_TABLE_EVENT,
   DATA_MANAGEMENT_TABLE_ACTION_EVENT,
+  DATA_MANAGEMENT_STOP_SYNC_EVENT,
 } from '../../dockview/eventConstants';
 import '../../../themes/dataMode.css';
 import '../admin.css';
@@ -106,6 +107,7 @@ export const DataManagementPanelCore = ({
   const [bulkSyncing, setBulkSyncing] = useState(false);
   const [bulkMode, setBulkMode] = useState(null);
   const [bulkSummary, setBulkSummary] = useState(null);
+  const [stoppingSync, setStoppingSync] = useState(false);
   const [backupStatus, setBackupStatus] = useState({ 
     lastBackup: null, 
     recentBackups: [], 
@@ -120,6 +122,7 @@ export const DataManagementPanelCore = ({
   const allActivityLogEndRef = useRef(null);
   const logIdCounterRef = useRef(0); // Counter for unique log IDs
   const tableActionsRef = useRef(null);
+  const stopRequestedRef = useRef(false);
 
   // Helper function to add client log (also adds to unified activity log)
   const addClientLog = (logEntry) => {
@@ -797,10 +800,65 @@ The backup will be saved to: talia-server/backups/`;
     }
   };
 
+  const handleStopSync = async (tableName = null) => {
+    stopRequestedRef.current = true;
+    setStoppingSync(true);
+    const label = tableName || 'all running tables';
+    addClientLog({
+      id: `${Date.now()}-${++logIdCounterRef.current}`,
+      timestamp: new Date(),
+      type: 'warning',
+      message: `⏹ Stop requested for ${tableName ? `"${tableName}"` : 'all running table syncs'}...`,
+      tableName: tableName || 'System',
+    });
+    try {
+      const mutation = `
+        mutation CancelSync($tableName: String) {
+          cancelSync(tableName: $tableName) {
+            success
+            tableName
+            cancelledCount
+            runningTables
+            message
+          }
+        }
+      `;
+      const response = await fetch(getGraphQLEndpoint(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: mutation,
+          variables: { tableName: tableName || null },
+        }),
+      });
+      const result = await response.json();
+      const payload = result?.data?.cancelSync;
+      const gqlError = result?.errors?.[0]?.message;
+      addClientLog({
+        id: `${Date.now()}-${++logIdCounterRef.current}`,
+        timestamp: new Date(),
+        type: payload?.success ? 'warning' : 'error',
+        message: payload?.message || gqlError || `Stop request failed for ${label}`,
+        tableName: tableName || 'System',
+      });
+    } catch (error) {
+      addClientLog({
+        id: `${Date.now()}-${++logIdCounterRef.current}`,
+        timestamp: new Date(),
+        type: 'error',
+        message: `Failed to stop sync: ${error.message}`,
+        tableName: tableName || 'System',
+      });
+    } finally {
+      setStoppingSync(false);
+    }
+  };
+
   const handleSyncAll = async (forceFullSync) => {
     if (bulkSyncing) return;
     const syncableTables = tables.filter((t) => t?.hasSyncConfig === true);
     if (syncableTables.length === 0) return;
+    stopRequestedRef.current = false;
     setBulkSummary(null);
     setBulkSyncing(true);
     setBulkMode(forceFullSync ? 'full' : 'sync');
@@ -813,18 +871,24 @@ The backup will be saved to: talia-server/backups/`;
     });
     const startedAt = Date.now();
     const results = [];
+    let stoppedEarly = false;
     for (const table of syncableTables) {
-      // Sequential to avoid overlapping syncs
-      // Capture per-table result to produce an explicit integration summary.
-      // This keeps failures visible even when logs are noisy.
+      if (stopRequestedRef.current) {
+        stoppedEarly = true;
+        break;
+      }
       const result = await handleSync(table.tableName, forceFullSync, { enforceUiState: false });
       results.push({
         tableName: table.tableName,
         ...(result || { success: false, error: 'No result returned by sync handler' })
       });
+      if (result?.cancelled || stopRequestedRef.current) {
+        stoppedEarly = true;
+        break;
+      }
     }
     const successCount = results.filter((entry) => entry.success).length;
-    const failed = results.filter((entry) => !entry.success);
+    const failed = results.filter((entry) => !entry.success && !entry.cancelled);
     const completedAt = Date.now();
     const summary = {
       mode: forceFullSync ? 'full' : 'sync',
@@ -835,10 +899,19 @@ The backup will be saved to: talia-server/backups/`;
       successCount,
       failedCount: failed.length,
       failed,
+      stoppedEarly,
       results
     };
     setBulkSummary(summary);
-    if (failed.length > 0) {
+    if (stoppedEarly) {
+      addClientLog({
+        id: `${Date.now()}-${++logIdCounterRef.current}`,
+        timestamp: new Date(),
+        type: 'warning',
+        message: `⏹ ${summary.mode === 'full' ? 'Full update' : 'Sync'} stopped after ${results.length}/${syncableTables.length} tables.`,
+        tableName: 'System'
+      });
+    } else if (failed.length > 0) {
       addClientLog({
         id: `${Date.now()}-${++logIdCounterRef.current}`,
         timestamp: new Date(),
@@ -885,6 +958,8 @@ The backup will be saved to: talia-server/backups/`;
         syncableTableNames,
         bulkSyncing,
         bulkMode,
+        runningSyncCount,
+        stoppingSync,
         backupStatus: {
           loading: backupStatus.loading,
           lastBackup: backupStatus.lastBackup,
@@ -902,6 +977,8 @@ The backup will be saved to: talia-server/backups/`;
     tables,
     bulkSyncing,
     bulkMode,
+    runningSyncCount,
+    stoppingSync,
     backupStatus.loading,
     backupStatus.lastBackup,
     backupStatus.status,
@@ -999,7 +1076,19 @@ The backup will be saved to: talia-server/backups/`;
           return;
         }
         await tableActionsRef.current?.handleFullSync?.(table);
+      } else if (action === 'stop') {
+        await handleStopSync(tableName);
       }
+    };
+
+    const handleStopSyncEvent = (event) => {
+      const detail = event?.detail || {};
+      const targetComponent = detail.panelComponent || null;
+      if (targetComponent && targetComponent !== panelComponentId) return;
+      const tableName = typeof detail.tableName === 'string' && detail.tableName.trim()
+        ? detail.tableName.trim()
+        : null;
+      handleStopSync(tableName);
     };
 
     window.addEventListener(DATA_MANAGEMENT_SET_RANGE_EVENT, handleSetRange);
@@ -1008,6 +1097,7 @@ The backup will be saved to: talia-server/backups/`;
     window.addEventListener(DATA_MANAGEMENT_REFRESH_EVENT, handleRefreshEvent);
     window.addEventListener(DATA_MANAGEMENT_SELECT_TABLE_EVENT, handleSelectTableEvent);
     window.addEventListener(DATA_MANAGEMENT_TABLE_ACTION_EVENT, handleTableActionEvent);
+    window.addEventListener(DATA_MANAGEMENT_STOP_SYNC_EVENT, handleStopSyncEvent);
     return () => {
       window.removeEventListener(DATA_MANAGEMENT_SET_RANGE_EVENT, handleSetRange);
       window.removeEventListener(DATA_MANAGEMENT_SYNC_ALL_EVENT, handleSyncAllEvent);
@@ -1015,6 +1105,7 @@ The backup will be saved to: talia-server/backups/`;
       window.removeEventListener(DATA_MANAGEMENT_REFRESH_EVENT, handleRefreshEvent);
       window.removeEventListener(DATA_MANAGEMENT_SELECT_TABLE_EVENT, handleSelectTableEvent);
       window.removeEventListener(DATA_MANAGEMENT_TABLE_ACTION_EVENT, handleTableActionEvent);
+      window.removeEventListener(DATA_MANAGEMENT_STOP_SYNC_EVENT, handleStopSyncEvent);
     };
   }, [panelComponentId, rangeDraft.from, rangeDraft.to, handleSyncAll, refetch, tables]);
 
@@ -1096,6 +1187,7 @@ The backup will be saved to: talia-server/backups/`;
             recordsProcessed
             duration
             error
+            cancelled
             detailedLogs
           }
         }
@@ -1224,6 +1316,42 @@ The backup will be saved to: talia-server/backups/`;
               }, 2000);
               
               // Clear progress after a delay
+              setTimeout(() => {
+                setSyncProgress(prev => {
+                  const newProgress = { ...prev };
+                  delete newProgress[tableName];
+                  return newProgress;
+                });
+              }, 5000);
+            } else if (data.type === 'cancelled') {
+              const cancelled = data.data || {};
+              setSyncProgress(prev => ({
+                ...prev,
+                [tableName]: {
+                  current: 0,
+                  total: 100,
+                  percentage: 0,
+                  type: 'cancelled',
+                  message: cancelled.message || 'Sync cancelled',
+                }
+              }));
+              addServerLog({
+                id: `${Date.now()}-${++logIdCounterRef.current}`,
+                timestamp: new Date(data.timestamp),
+                message: `⏹ ${cancelled.message || 'Sync cancelled'}`,
+                tableName,
+                source: 'server',
+                type: 'warning'
+              });
+              if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+              }
+              setSyncingTables(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(tableName);
+                return newSet;
+              });
               setTimeout(() => {
                 setSyncProgress(prev => {
                   const newProgress = { ...prev };
@@ -1501,6 +1629,21 @@ The backup will be saved to: talia-server/backups/`;
       // Check sync result
       // Note: Logs are now handled via SSE in real-time, so detailedLogs from GraphQL response
       // are not needed. The SSE stream provides all logs as they happen.
+      if (result.data?.syncTable?.cancelled) {
+        addClientLog({
+          id: `${Date.now()}-${++logIdCounterRef.current}`,
+          timestamp: new Date(),
+          type: 'warning',
+          message: `⏹ ${result.data.syncTable.message || `Sync cancelled for "${tableName}"`}`,
+          tableName
+        });
+        return {
+          success: false,
+          cancelled: true,
+          message: result.data.syncTable.message,
+        };
+      }
+
       if (result.data?.syncTable?.success) {
         const syncResult = result.data.syncTable;
         const totalDuration = Date.now() - syncStartTime;
@@ -1716,6 +1859,7 @@ The backup will be saved to: talia-server/backups/`;
     setReviewData,
     addClientLog,
     handleSync,
+    handleStopSync,
     logIdCounterRef
   });
   tableActionsRef.current = tableActions;
@@ -1826,6 +1970,8 @@ The backup will be saved to: talia-server/backups/`;
         formatDateRange={formatDateRange}
         lastActivityLog={lastActivityLog}
         syncBlock={syncBlock}
+        stoppingSync={stoppingSync}
+        onStopSync={() => handleStopSync()}
       />
 
       <FiltersBar

@@ -157,8 +157,9 @@ input sail_code or ship_code
         ▼
 inventory_item  →  reference_sail_code, ship_code, sail_codes[], sailing_role
         │
-        ├── physical facts:  filter ship_day_berth_status by ship_code
-        │                    highlight sail_codes ∈ voyage
+        ├── physical facts:  filter ship_day_capacity by ship_code
+        │                    (nameplate / offsale / sellable / occupied / available)
+        │                    highlight sail_codes ∈ voyage; never sum master + segments
         └── selling facts:   filter reservations / rates / master_sail
                              by reference_sail_code or sail_codes
 ```
@@ -178,6 +179,24 @@ inventory_item  →  reference_sail_code, ship_code, sail_codes[], sailing_role
 - Don't use `master_sail` alone as the cross-panel canonical key.
 - Don't duplicate hierarchy rules in panel transforms (use `inventoryReference`
   / `inventoryReferenceService` for selections; use DB views for SQL reports).
+
+### Canonical capacity (`ship_day_capacity`)
+
+Current and historic capacity share one voyage-day formula. Occupancy is already
+historic by itinerary date; `ship_cabin_reserve` windows overlay the same dates.
+
+| Field | Meaning |
+|-------|---------|
+| nameplate | Physical occupancy totals (Tot C / Cap B) |
+| offsale | Distinct cabins whose reserve window overlaps the date and type is offsale (`RESERVED`, `BROKEN`, `OUT OF ORDER`, `EMERGENCY`, `WAREHOUSE`, `CREW`, `OVER`) |
+| sellable | nameplate minus offsale — load-factor denominator |
+| occupied | Occupancy |
+| available | sellable minus occupied |
+
+Segment / port-pair holds and `HANDICAP` / `VIP*` stay visible on Cabin Deck but
+do **not** reduce sellable. Attach physical numbers to `reference_sail_code` only
+— never sum master + segments. MSE `Res C` (`guaranteed_cabins`) is a selling hold,
+not Seaware offsale.
 
 ---
 
@@ -204,6 +223,8 @@ Configured in `talia-ui/src/config/tableSources.js`:
 | `inventory_item_operational` | `application` | — | View |
 | `sailing_master` / `sailing_hierarchy` | `application` | — | View |
 | `ship_day_berth_status` | `application` | — | View over `sail_by_cabin_occupancy` |
+| `ship_day_capacity` | `application` | — | View: nameplate + offsale + sellable by ship x sail x itinerary date |
+| `ship_cabin_reserve` | `direct` | `stg.SHIP_CABIN_RESERVE` | Synapse sync (offsale / segment / constrained holds) |
 
 ---
 
@@ -213,6 +234,7 @@ Configured in `talia-ui/src/config/tableSources.js`:
 |---------|----------|
 | Schema + refresh RPC + views | `talia-server/supabase/migrations/20260708100000_inventory_item_sailing_hierarchy.sql` |
 | Physical berth view + selling day map | `talia-server/supabase/migrations/20260708120000_ship_day_berth_status.sql` |
+| Canonical capacity (nameplate + offsale + sellable) | `talia-server/supabase/migrations/20260818180000_ship_day_capacity.sql` |
 | Original identity table | `talia-server/supabase/migrations/20260302000000_create_inventoy_item_and_memos.sql` |
 | `reference_sail_code` column | `talia-server/supabase/migrations/20260311000000_add_reference_sail_code_to_inventory_item.sql` |
 | Sync → refresh hook | `talia-server/src/services/synapse-sync.js` |

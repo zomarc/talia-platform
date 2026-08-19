@@ -7,6 +7,7 @@
 
 import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 
 /**
  * Helper function to generate heatmap level based on value.
@@ -41,11 +42,17 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
   searchTrends, 
   combinedData,
   containsMockData,
+  panelInstanceId = null,
+  panelComponentId = null,
 }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
   const initializedRef = useRef(false);
   const [showTrends, setShowTrends] = useState(true);
+  const { reportShellClassName } = useReportShellOptions(
+    panelComponentId || 'demand-heatmap-with-trends',
+    panelInstanceId
+  );
 
   // Calculate max value for color scaling
   const maxValue = useMemo(() => {
@@ -208,7 +215,7 @@ const DemandHeatmapWithSearchTrendsPresenter = ({
   }, [combinedData, heatmapData]);
 
   return (
-    <div className="demand-heatmap talia-report">
+    <div className={`demand-heatmap talia-report${reportShellClassName ? ` ${reportShellClassName}` : ''}`}>
       {/* Header */}
       <header className="demand-heatmap__header talia-report__header">
         <div className="talia-report__header-left">

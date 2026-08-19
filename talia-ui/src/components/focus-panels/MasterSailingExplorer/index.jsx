@@ -17,7 +17,7 @@ import { buildMasterSailingExplorerBundle } from './masterSailingExplorerTransfo
 const MASTER_SAIL_FILTERS = { is_main: 1 };
 const INVENTORY_FILTERS = { is_operational: true };
 
-const SHIP_DAY_BERTH_COLUMNS = [
+const SHIP_DAY_CAPACITY_COLUMNS = [
   'ship_code',
   'sail_code',
   'date',
@@ -27,6 +27,12 @@ const SHIP_DAY_BERTH_COLUMNS = [
   'total_cabins',
   'occupied_cabins',
   'available_cabins',
+  'nameplate_cabins',
+  'nameplate_berths',
+  'offsale_cabins',
+  'offsale_berths',
+  'sellable_cabins',
+  'sellable_berths',
 ];
 
 const BOOKING_SUMMARY_COLUMNS = [
@@ -158,12 +164,12 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
     error: shipDayError,
     refetch: refetchShipDay,
   } = useTableDataWithContext({
-    tableName: 'ship_day_berth_status',
+    tableName: 'ship_day_capacity',
     eventName: null,
     panelInstanceId,
     panelComponentId,
     contextMapper: () => null,
-    columns: SHIP_DAY_BERTH_COLUMNS,
+    columns: SHIP_DAY_CAPACITY_COLUMNS,
     limit: 60000,
   });
 

@@ -25,6 +25,7 @@ const TargetProfileCurveEditor = ({
   weekNodes = [],
   realSeries = [],
   modelSeries = [],
+  showLegends = true,
   onChangeLf,
   onMovePoint,
   onAddPoint,
@@ -124,7 +125,7 @@ const TargetProfileCurveEditor = ({
         animation: false,
         interaction: { mode: 'nearest', intersect: false, axis: 'x' },
         plugins: {
-          legend: getOverlayLegendOptions({ visible: chartLegendsVisible }),
+          legend: getOverlayLegendOptions({ visible: chartLegendsVisible && showLegends }),
           tooltip: {
             enabled: true,
             callbacks: {
@@ -365,7 +366,7 @@ const TargetProfileCurveEditor = ({
         chartRef.current = null;
       }
     };
-  }, [axisWeeks.join(','), realSeries, modelSeries, chartLegendsVisible, fontSize, fontFamily]);
+  }, [axisWeeks.join(','), realSeries, modelSeries, chartLegendsVisible, showLegends, fontSize, fontFamily]);
 
   useEffect(() => {
     const chart = chartRef.current;

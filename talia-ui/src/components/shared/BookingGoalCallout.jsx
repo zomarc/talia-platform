@@ -11,7 +11,7 @@ const COPY = {
   },
   RESERVATION_CURVE: {
     tag: 'Goal ① — Reservation curve',
-    body: 'Cumulative bookings by original booked date, split by market. Booked cabins / capacity match Master Sailing Explorer.',
+    body: 'Totals: Booked, Estimated, and Contracted (overlapping — not a stack). Planning demand is Booked + Estimated vs sellable capacity. Series splits Booked only by Market / Channel / Pax.',
   },
   REAL_SIMPLE: {
     tag: 'Goal ① — REAL (diagnostic)',

@@ -79,7 +79,12 @@ const PublishedRatesGridContainer = ({ panelInstanceId, panelComponentId }) => {
       }
       onRetry={selectedSailCode ? refetch : null}
     >
-      <PublishedRatesGridPresenter data={normalizedData} selectedSailCode={selectedSailCode} />
+      <PublishedRatesGridPresenter
+        data={normalizedData}
+        selectedSailCode={selectedSailCode}
+        panelInstanceId={panelInstanceId}
+        panelComponentId={panelComponentId}
+      />
     </PanelDataState>
   );
 };

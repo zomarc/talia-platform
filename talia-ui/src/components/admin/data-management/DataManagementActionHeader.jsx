@@ -32,6 +32,8 @@ const DataManagementActionHeader = ({
   formatDateRange = (r) => (r?.min && r?.max ? `${r.min} - ${r.max}` : 'N/A'),
   lastActivityLog = null,
   syncBlock = null,
+  stoppingSync = false,
+  onStopSync = null,
   children = null,
 }) => {
   const isSyncActive = runningSyncCount > 0 || bulkSyncing === true || Boolean(syncBlock);
@@ -163,6 +165,15 @@ const DataManagementActionHeader = ({
               <div className="dm-action-header__sync-live-fill" style={{ width: `${syncPercent}%` }} />
             </div>
             <div className="dm-action-header__sync-live-value">{syncPercent}%</div>
+            <button
+              type="button"
+              className="talia-btn talia-btn--small dm-btn--danger"
+              onClick={() => onStopSync?.()}
+              disabled={stoppingSync || !onStopSync}
+              title="Stop the running table sync"
+            >
+              {stoppingSync ? 'Stopping…' : '⏹ Stop'}
+            </button>
           </div>
         )}
       </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Chart } from 'chart.js/auto';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import { getChartOptions, getOverlayLegendOptions, getSeriesColors } from '../../../lib/chartConfig';
 
 /**
@@ -9,10 +10,14 @@ import { getChartOptions, getOverlayLegendOptions, getSeriesColors } from '../..
  * @param {Object} props
  * @param {Array} props.data - Revenue category data
  */
-const RevenueBreakdownPresenter = ({ data }) => {
+const RevenueBreakdownPresenter = ({ data, panelInstanceId = null, panelComponentId = null }) => {
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
   const { chartLegendsVisible } = useTheme();
+  const { showLegends, reportShellClassName } = useReportShellOptions(
+    panelComponentId || 'revenue-breakdown',
+    panelInstanceId
+  );
 
   const totalRevenue = useMemo(
     () => data.reduce((sum, item) => sum + item.amount, 0),
@@ -45,7 +50,7 @@ const RevenueBreakdownPresenter = ({ data }) => {
       },
       options: getChartOptions.pie({
         plugins: {
-          legend: getOverlayLegendOptions({ visible: chartLegendsVisible })
+          legend: getOverlayLegendOptions({ visible: chartLegendsVisible && showLegends })
         }
       })
     });
@@ -56,10 +61,10 @@ const RevenueBreakdownPresenter = ({ data }) => {
         chartRef.current = null;
       }
     };
-  }, [chartLegendsVisible, data]);
+  }, [chartLegendsVisible, showLegends, data]);
 
   return (
-    <div className="talia-report" role="region" aria-label="Revenue breakdown">
+    <div className={`talia-report${reportShellClassName ? ` ${reportShellClassName}` : ''}`} role="region" aria-label="Revenue breakdown">
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Revenue Breakdown</h2>

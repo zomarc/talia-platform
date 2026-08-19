@@ -40,6 +40,7 @@ const ReservationBookingCurveContainer = ({
   const [sailCode, setSailCode] = useState(sailFromParams);
   const marketBreakdown = useGlobalMarketDimension();
   const [seriesMode, setSeriesMode] = useState(params.seriesMode || 'market');
+  const [chartMode, setChartMode] = useState(params.chartMode || 'totals');
   const [showRevenue, setShowRevenue] = useState(params.showRevenue === true);
   const [showCompetitor, setShowCompetitor] = useState(params.showCompetitor === true);
 
@@ -133,6 +134,8 @@ const ReservationBookingCurveContainer = ({
       theme={theme}
       seriesMode={seriesMode}
       onSeriesModeChange={setSeriesMode}
+      chartMode={chartMode}
+      onChartModeChange={setChartMode}
       showRevenue={showRevenue}
       onShowRevenueChange={setShowRevenue}
       showCompetitor={showCompetitor}

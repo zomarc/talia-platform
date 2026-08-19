@@ -79,3 +79,13 @@ Generated from live code audit + docs scan (Jul 2026). Prefer this over stale `N
 6. On Cabin Deck chips: FIT shows `Res {id}`, GROUP shows `Group {id}`, GTY ONLY listed under unassigned.
 7. Reservation Profile chart: Today line + axis to Sail (0); numeric Week −N ticks; Target overlay when active.
 8. Metric reconcile one sail: Booked / Estimated / Contracted across MSE, Demand, Reservation filters, Profile Mondays.
+
+### After 2026-08-15 UI commit (`5c203f0`) — continue
+
+Published to **https://dev.taliahub.com** via Start Demo (rebuild `:4173` + ngrok) on 2026-08-17.
+
+1. **Smoke:** Reservation Views → Totals instant on/off (no blank footer); Net Rev EUR whole numbers + exact on hover.
+2. **Number display sweep:** drop redundant per-panel numeric formatters; fill missing dictionary `display:` kinds (MSE / Agency / …).
+3. **PDF (optional):** Snapshot KPIs in Reservation Profile PDF; chart export on Target Profile if useful.
+4. **Column Terminology (later):** only if ops need display-kind overrides without a deploy.
+5. **Push** `main` when ready (local was ahead of origin at demo time).

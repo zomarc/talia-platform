@@ -59,7 +59,7 @@ const BookingProfilePresenter = ({
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
   const componentKey = panelComponentId || 'booking-profile';
-  const { showSnapshot, showDetails, showFilters } = useReportShellOptions(
+  const { showSnapshot, showDetails, showFilters, showLegends, reportShellClassName } = useReportShellOptions(
     componentKey,
     panelInstanceId
   );
@@ -183,7 +183,7 @@ const BookingProfilePresenter = ({
         interaction: { mode: 'index', intersect: false },
         layout: { padding: { top: 4, right: 8, bottom: 0, left: 0 } },
         plugins: {
-          legend: getOverlayLegendOptions({ visible: chartLegendsVisible }),
+          legend: getOverlayLegendOptions({ visible: chartLegendsVisible && showLegends }),
           taliaHorizontalReferenceLine: capacityRef
             ? capacityRef
             : { display: false },
@@ -245,7 +245,7 @@ const BookingProfilePresenter = ({
         chartInstanceRef.current = null;
       }
     };
-  }, [current, previous, budget, breakdown, metric, theme, fontFamily, fontSize, chartLegendsVisible]);
+  }, [current, previous, budget, breakdown, metric, theme, fontFamily, fontSize, chartLegendsVisible, showLegends]);
 
   const subtitle = [
     current?.referenceSailCode || sailCode,
@@ -337,7 +337,7 @@ const BookingProfilePresenter = ({
   }
 
   return (
-    <div className="focus-panel talia-report booking-profile" role="region" aria-label="Booking profile">
+    <div className={`focus-panel talia-report booking-profile${reportShellClassName ? ` ${reportShellClassName}` : ''}`} role="region" aria-label="Booking profile">
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Real Booking Profile</h2>

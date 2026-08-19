@@ -85,7 +85,7 @@ class SynapseSyncService {
     console.log(`📊 Default dataset: ${this.defaultDataset || 'none'}`);
     
     // Store active sync logs for real-time polling
-    // Format: { tableName: { logger: SyncLogger, startTime: number, status: 'running'|'completed'|'failed' } }
+    // Format: { tableName: { logger, startTime, status, cancelRequested, pool, uiTableName } }
     this.activeSyncs = new Map();
     
     // Separate connection pool for status checks (to avoid interfering with sync operations)
@@ -139,6 +139,126 @@ class SynapseSyncService {
    */
   clearSyncStatus(tableName) {
     this.activeSyncs.delete(tableName);
+  }
+
+  findActiveSync(tableName) {
+    if (!tableName) return null;
+    if (this.activeSyncs.has(tableName)) {
+      return { key: tableName, info: this.activeSyncs.get(tableName) };
+    }
+    const mapped = getSyncConfigNameForTable(tableName);
+    if (mapped && this.activeSyncs.has(mapped)) {
+      return { key: mapped, info: this.activeSyncs.get(mapped) };
+    }
+    for (const [key, info] of this.activeSyncs.entries()) {
+      if (info?.uiTableName === tableName) {
+        return { key, info };
+      }
+    }
+    return null;
+  }
+
+  isSyncCancelledError(error) {
+    return Boolean(
+      error
+      && (error.code === 'SYNC_CANCELLED' || error.name === 'SyncAbortedError')
+    );
+  }
+
+  toSyncCancelledError(tableName, cause = null) {
+    const error = new Error(`Sync cancelled for ${tableName}`);
+    error.name = 'SyncAbortedError';
+    error.code = 'SYNC_CANCELLED';
+    if (cause) error.cause = cause;
+    return error;
+  }
+
+  isCancelRequested(tableName) {
+    const resolved = this.findActiveSync(tableName);
+    return Boolean(resolved?.info?.cancelRequested);
+  }
+
+  throwIfSyncCancelled(tableName) {
+    if (this.isCancelRequested(tableName)) {
+      throw this.toSyncCancelledError(tableName);
+    }
+  }
+
+  trackSyncPool(tableName, pool) {
+    const resolved = this.findActiveSync(tableName);
+    if (resolved?.info) {
+      resolved.info.pool = pool || null;
+    }
+  }
+
+  async createTrackedConnection(tableName) {
+    this.throwIfSyncCancelled(tableName);
+    const pool = await this.createConnection();
+    this.trackSyncPool(tableName, pool);
+    return pool;
+  }
+
+  listRunningSyncs() {
+    return [...this.activeSyncs.entries()]
+      .filter(([, info]) => info?.status === 'running' || info?.status === 'cancelling')
+      .map(([key, info]) => ({
+        tableName: info.uiTableName || key,
+        syncConfigName: key,
+        status: info.status,
+        startTime: info.startTime,
+      }));
+  }
+
+  /**
+   * Cooperative cancel: flag the run, drop the Synapse pool so the in-flight
+   * query fails, then the batch loop exits. Does not wait for teardown.
+   */
+  requestSyncCancel(tableName = null) {
+    const targets = tableName
+      ? [this.findActiveSync(tableName)].filter(Boolean)
+      : [...this.activeSyncs.entries()]
+        .filter(([, info]) => info?.status === 'running' || info?.status === 'cancelling')
+        .map(([key, info]) => ({ key, info }));
+
+    if (targets.length === 0) {
+      return {
+        success: false,
+        cancelledCount: 0,
+        tableName: tableName || null,
+        runningTables: [],
+        message: tableName
+          ? `No running sync found for ${tableName}`
+          : 'No running table syncs to stop',
+      };
+    }
+
+    const runningTables = [];
+    targets.forEach(({ key, info }) => {
+      info.cancelRequested = true;
+      info.status = 'cancelling';
+      runningTables.push(info.uiTableName || key);
+      try {
+        info.logger?.warn?.(`⛔ Stop requested for ${info.uiTableName || key}`);
+      } catch {
+        // ignore logger failures during cancel
+      }
+      const pool = info.pool;
+      if (pool) {
+        Promise.resolve()
+          .then(() => pool.close())
+          .catch(() => {});
+      }
+    });
+
+    return {
+      success: true,
+      cancelledCount: runningTables.length,
+      tableName: tableName || runningTables[0] || null,
+      runningTables,
+      message: runningTables.length === 1
+        ? `Stop requested for ${runningTables[0]}`
+        : `Stop requested for ${runningTables.length} running syncs`,
+    };
   }
 
   listConfiguredTables() {
@@ -606,20 +726,21 @@ class SynapseSyncService {
     }
 
     const table = runtime.targetTable;
-    if (replace.strategy === 'delete-all' && runtime.uiOverrideApplied) {
-      const column = replace.column || runtime.supabaseDateColumn || runtime.dateColumn;
-      if (column && runtime.dateRange?.from && runtime.dateRange?.to) {
+    // delete-all uses `column` as a non-null wipe key (usually `id`), not a date.
+    // A UI date window must never range-delete on that key.
+    if (replace.strategy === 'delete-all' && runtime.uiOverrideApplied && replace.keepDeleteAll !== true) {
+      const dateColumn = runtime.supabaseDateColumn;
+      if (dateColumn && dateColumn !== 'id' && runtime.dateRange?.from && runtime.dateRange?.to) {
         replace = {
           ...replace,
           strategy: 'delete-range',
-          column,
+          column: dateColumn,
           from: runtime.dateRange.from,
           to: runtime.dateRange.to
         };
-        console.log(`🛑 UI date range set; converting delete-all to delete-range on ${table} (${column})...`);
+        console.log(`🛑 UI date range set; converting delete-all to delete-range on ${table} (${dateColumn})...`);
       } else {
-        console.warn(`⚠️  UI date range set but no date column found for ${table}. Skipping delete-all to preserve historical data.`);
-        return;
+        console.log(`ℹ️  UI date range set; keeping delete-all on ${table} (no supabase date column).`);
       }
     }
 
@@ -960,6 +1081,46 @@ class SynapseSyncService {
           created_at: currentTime
         }));
 
+      case 'competitorBenchmark':
+        return data.map(row => ({
+          snapshot_date: toDateOnly(getField(row, ['Snapshot_Date', 'SNAPSHOT_DATE'])),
+          is_latest_snapshot: getField(row, ['Is_Latest_Snapshot', 'IS_LATEST_SNAPSHOT']) || null,
+          wc_snapshot_date: toDateOnly(getField(row, ['WC_Snapshot_Date', 'WC_SNAPSHOT_DATE'])),
+          source_market: getField(row, ['Source_Market', 'SOURCE_MARKET']) || null,
+          cruise_line_code: getField(row, ['Cruise_Line_Code', 'CRUISE_LINE_CODE']) || null,
+          ship_code: getField(row, ['Ship_Code', 'SHIP_CODE']) || null,
+          cruise_line_name: getField(row, ['Cruise_Line_Name', 'CRUISE_LINE_NAME']) || null,
+          website: getField(row, ['Website', 'WEBSITE']) || null,
+          source_ship_name: getField(row, ['Source_Ship_Name', 'SOURCE_SHIP_NAME']) || null,
+          departure_date: toDateOnly(getField(row, ['Departure_Date', 'DEPARTURE_DATE'])),
+          wc_departure_date: toDateOnly(getField(row, ['WC_Departure_Date', 'WC_DEPARTURE_DATE'])),
+          disembark_date: toDateOnly(getField(row, ['Disembark_Date', 'DISEMBARK_DATE'])),
+          cruise_duration: toNumber(getField(row, ['Cruise_Duration', 'CRUISE_DURATION'])),
+          departure_country: getField(row, ['Departure_Country', 'DEPARTURE_COUNTRY']) || null,
+          departure_port: getField(row, ['Departure_Port', 'DEPARTURE_PORT']) || null,
+          disembarkation_port: getField(row, ['Disembarkation_Port', 'DISEMBARKATION_PORT']) || null,
+          disembarkation_port_unlocode: getField(row, ['Disembarkation_Port_UNLOCODE', 'DISEMBARKATION_PORT_UNLOCODE']) || null,
+          source_destination: getField(row, ['Source_Destination', 'SOURCE_DESTINATION']) || null,
+          cabin_type: getField(row, ['Cabin_Type', 'CABIN_TYPE']) || null,
+          rate_pp: toNumber(getField(row, ['Rate_PP', 'RATE_PP'])),
+          port_charges_gratuity: toNumber(getField(row, ['Port_Charges_Gratuity', 'PORT_CHARGES_GRATUITY'])),
+          total_rate_pp: toNumber(getField(row, ['Total_Rate_PP', 'TOTAL_RATE_PP'])),
+          pppd: toNumber(getField(row, ['PPPD'])),
+          total_rate_pp_eur: toNumber(getField(row, ['Total_Rate_PP_EUR', 'TOTAL_RATE_PP_EUR'])),
+          itinerary_port_content: getField(row, ['Itinerary_Port_Content', 'ITINERARY_PORT_CONTENT']) || null,
+          itinerary_code: getField(row, ['Itinerary_Code', 'ITINERARY_CODE']) || null,
+          three_port_match: getField(row, ['Three_Port_Match', 'THREE_PORT_MATCH']) || null,
+          has_home_port: getField(row, ['Has_Home_Port', 'HAS_HOME_PORT']) || null,
+          source_currency: getField(row, ['Source_Currency', 'SOURCE_CURRENCY']) || null,
+          currency_code: getField(row, ['Currency_Code', 'CURRENCY_CODE']) || null,
+          available_offer: getField(row, ['Available_Offer', 'AVAILABLE_OFFER']) || null,
+          availability: getField(row, ['Availability', 'AVAILABILITY']) || null,
+          source: getField(row, ['Source', 'SOURCE']) || null,
+          frequency: getField(row, ['Frequency', 'FREQUENCY']) || null,
+          rate_type: getField(row, ['Rate_Type', 'RATE_TYPE']) || null,
+          created_at: currentTime
+        }));
+
       case 'cabinAvailability':
         return data.map(row => ({
           snapshot_date: row.Snapshot_Date,
@@ -1245,7 +1406,7 @@ class SynapseSyncService {
     let pool = null;
 
     try {
-      pool = await this.createConnection();
+      pool = await this.createTrackedConnection(runtime.tableName);
       logger?.info(`✅ Connected to Synapse for ${runtime.tableName}`);
 
       // Execute query with retry logic for connection errors
@@ -1254,6 +1415,7 @@ class SynapseSyncService {
       const maxRetries = 2;
       
       while (retryCount <= maxRetries) {
+        this.throwIfSyncCancelled(runtime.tableName);
         try {
           // Check connection health before query
           try {
@@ -1267,7 +1429,7 @@ class SynapseSyncService {
                 // Ignore
               }
             }
-            pool = await this.createConnection();
+            pool = await this.createTrackedConnection(runtime.tableName);
             logger?.info(`✅ Reconnected to Synapse`);
           }
           
@@ -1279,7 +1441,10 @@ class SynapseSyncService {
                                    queryError.message?.includes('Connection is closed') ||
                                    queryError.message?.includes('connection is closed');
           
-          if (isConnectionError && retryCount < maxRetries) {
+          if (this.isCancelRequested(runtime.tableName) || this.isSyncCancelledError(queryError)) {
+              throw this.toSyncCancelledError(runtime.tableName, queryError);
+            }
+            if (isConnectionError && retryCount < maxRetries) {
             retryCount++;
             logger?.warn(`⚠️  Connection closed during query (attempt ${retryCount}/${maxRetries}), reconnecting...`);
             
@@ -1291,7 +1456,7 @@ class SynapseSyncService {
                   // Ignore
                 }
               }
-              pool = await this.createConnection();
+              pool = await this.createTrackedConnection(runtime.tableName);
               logger?.info(`✅ Reconnected to Synapse, retrying query (attempt ${retryCount})...`);
               await new Promise(resolve => setTimeout(resolve, 1000));
               continue;
@@ -1428,6 +1593,9 @@ class SynapseSyncService {
       };
 
     } catch (error) {
+      if (this.isSyncCancelledError(error) || this.isCancelRequested(runtime.tableName)) {
+        throw this.toSyncCancelledError(runtime.tableName, error);
+      }
       // Only enhance connection errors - preserve original message for others
       const isConnectionError = 
         error.code === 'ETIMEOUT' ||
@@ -1483,7 +1651,7 @@ class SynapseSyncService {
     let totalProcessed = 0;
 
     try {
-      pool = await this.createConnection();
+      pool = await this.createTrackedConnection(runtime.tableName);
       logger?.info(`✅ Connected to Synapse for ${runtime.tableName}`);
 
       await this.applyReplaceStrategy(runtime);
@@ -1497,6 +1665,7 @@ class SynapseSyncService {
       const maxRetries = 2;
       
       while (retryCount <= maxRetries) {
+        this.throwIfSyncCancelled(runtime.tableName);
         try {
           // Check connection health before query
           try {
@@ -1510,7 +1679,7 @@ class SynapseSyncService {
                 // Ignore
               }
             }
-            pool = await this.createConnection();
+            pool = await this.createTrackedConnection(runtime.tableName);
             logger?.info(`✅ Reconnected to Synapse for count query`);
           }
           
@@ -1521,7 +1690,10 @@ class SynapseSyncService {
                                    queryError.message?.includes('Connection is closed') ||
                                    queryError.message?.includes('connection is closed');
           
-          if (isConnectionError && retryCount < maxRetries) {
+          if (this.isCancelRequested(runtime.tableName) || this.isSyncCancelledError(queryError)) {
+              throw this.toSyncCancelledError(runtime.tableName, queryError);
+            }
+            if (isConnectionError && retryCount < maxRetries) {
             retryCount++;
             logger?.warn(`⚠️  Connection closed during count query (attempt ${retryCount}/${maxRetries}), reconnecting...`);
             
@@ -1533,7 +1705,7 @@ class SynapseSyncService {
                   // Ignore
                 }
               }
-              pool = await this.createConnection();
+              pool = await this.createTrackedConnection(runtime.tableName);
               logger?.info(`✅ Reconnected to Synapse, retrying count query (attempt ${retryCount})...`);
               await new Promise(resolve => setTimeout(resolve, 1000));
               continue;
@@ -1565,6 +1737,7 @@ class SynapseSyncService {
 
       const totalBatches = Math.ceil(totalRecords / BATCH_SIZE);
       for (let offset = 0; offset < totalRecords; offset += BATCH_SIZE) {
+        this.throwIfSyncCancelled(runtime.tableName);
         const batchNumber = Math.floor(offset / BATCH_SIZE) + 1;
         const batchQuery = this.buildBatchQuery(runtime, offset, BATCH_SIZE);
         // Logger automatically emits events via eventEmitter
@@ -1576,6 +1749,7 @@ class SynapseSyncService {
         const maxRetries = 2;
         
         while (retryCount <= maxRetries) {
+          this.throwIfSyncCancelled(runtime.tableName);
           try {
             // Check connection health right before query (catches race conditions)
             try {
@@ -1590,7 +1764,7 @@ class SynapseSyncService {
                   // Ignore
                 }
               }
-              pool = await this.createConnection();
+              pool = await this.createTrackedConnection(runtime.tableName);
               logger?.info(`✅ Reconnected to Synapse for batch ${batchNumber}`);
             }
             
@@ -1604,6 +1778,9 @@ class SynapseSyncService {
                                      queryError.message?.includes('Connection is closed') ||
                                      queryError.message?.includes('connection is closed');
             
+            if (this.isCancelRequested(runtime.tableName) || this.isSyncCancelledError(queryError)) {
+              throw this.toSyncCancelledError(runtime.tableName, queryError);
+            }
             if (isConnectionError && retryCount < maxRetries) {
               retryCount++;
               logger?.warn(`⚠️  Connection closed during batch ${batchNumber} query (attempt ${retryCount}/${maxRetries}), reconnecting...`);
@@ -1619,7 +1796,7 @@ class SynapseSyncService {
                 }
                 
                 // Create new connection
-                pool = await this.createConnection();
+                pool = await this.createTrackedConnection(runtime.tableName);
                 logger?.info(`✅ Reconnected to Synapse, retrying batch ${batchNumber} (attempt ${retryCount})...`);
                 
                 // Wait a moment before retrying to let connection stabilize
@@ -1750,6 +1927,9 @@ class SynapseSyncService {
       };
 
     } catch (error) {
+      if (this.isSyncCancelledError(error) || this.isCancelRequested(runtime.tableName)) {
+        throw this.toSyncCancelledError(runtime.tableName, error);
+      }
       // Only enhance connection errors - preserve original message for others
       const isConnectionError = 
         error.code === 'ETIMEOUT' ||
@@ -1843,7 +2023,7 @@ class SynapseSyncService {
       
       // STEP 3: Connect to Synapse FIRST (before checking metadata)
       // This ensures we have a connection pool that won't be closed by getLatestSnapshotDate
-      pool = await this.createConnection();
+      pool = await this.createTrackedConnection(runtime.tableName);
       logger?.info(`✅ Connected to Synapse for ${runtime.tableName}`);
       
       // Get latest snapshot date from source (using the existing pool)
@@ -2013,6 +2193,7 @@ class SynapseSyncService {
       let batchNumber = 1;
 
       for (let offset = 0; offset < totalRecords; offset += BATCH_SIZE) {
+        this.throwIfSyncCancelled(runtime.tableName);
         const batchQuery = `
           SELECT *
           FROM (
@@ -2031,6 +2212,7 @@ class SynapseSyncService {
         const maxRetries = 2;
         
         while (retryCount <= maxRetries) {
+          this.throwIfSyncCancelled(runtime.tableName);
           try {
             // Check connection health right before query (catches race conditions)
             try {
@@ -2045,7 +2227,7 @@ class SynapseSyncService {
                   // Ignore
                 }
               }
-              pool = await this.createConnection();
+              pool = await this.createTrackedConnection(runtime.tableName);
               logger?.info(`✅ Reconnected to Synapse for batch ${batchNumber}`);
             }
             
@@ -2082,6 +2264,9 @@ class SynapseSyncService {
                                      queryError.message?.includes('ConnectionError') ||
                                      queryError.message?.includes('RequestError');
             
+            if (this.isCancelRequested(runtime.tableName) || this.isSyncCancelledError(queryError)) {
+              throw this.toSyncCancelledError(runtime.tableName, queryError);
+            }
             if (isConnectionError && retryCount < maxRetries) {
               retryCount++;
               logger?.warn(`⚠️  Connection closed during batch ${batchNumber} query (attempt ${retryCount}/${maxRetries}), reconnecting...`);
@@ -2097,7 +2282,7 @@ class SynapseSyncService {
                 }
                 
                 // Create new connection
-                pool = await this.createConnection();
+                pool = await this.createTrackedConnection(runtime.tableName);
                 logger?.info(`✅ Reconnected to Synapse, retrying batch ${batchNumber} (attempt ${retryCount})...`);
                 
                 // Wait a moment before retrying to let connection stabilize
@@ -2249,6 +2434,9 @@ class SynapseSyncService {
         detailedLogs: logger?.getLogs() || []
       };
     } catch (error) {
+      if (this.isSyncCancelledError(error) || this.isCancelRequested(runtime.tableName)) {
+        throw this.toSyncCancelledError(runtime.tableName, error);
+      }
       // CRITICAL: Log original error FIRST before any enhancement
       // This ensures we see the real error in logs and UI
       const originalError = error;
@@ -2505,7 +2693,10 @@ class SynapseSyncService {
     this.activeSyncs.set(tableName, {
       logger,
       startTime,
-      status: 'running'
+      status: 'running',
+      cancelRequested: false,
+      pool: null,
+      uiTableName: eventTableName,
     });
     
     try {
@@ -2559,6 +2750,33 @@ class SynapseSyncService {
       
       return result;
     } catch (error) {
+      if (this.isSyncCancelledError(error) || this.isCancelRequested(tableName)) {
+        const finalDuration = Date.now() - startTime;
+        logger.warn(`⛔ Sync cancelled for ${tableName} after ${finalDuration}ms`);
+        const syncInfo = this.activeSyncs.get(tableName);
+        if (syncInfo) {
+          syncInfo.status = 'cancelled';
+        }
+        syncEventEmitter.emitCancelled(eventTableName, {
+          success: false,
+          cancelled: true,
+          recordsProcessed: 0,
+          duration: finalDuration,
+          message: `Sync cancelled for ${tableName}`,
+        });
+        this.activeSyncs.delete(tableName);
+        return {
+          success: false,
+          cancelled: true,
+          tableName,
+          message: `Sync cancelled for ${tableName}`,
+          recordsProcessed: 0,
+          duration: finalDuration,
+          error: null,
+          detailedLogs: logger.getLogs(),
+        };
+      }
+
       // CRITICAL: Log original error details - don't enhance here
       // The error may have already been enhanced in syncDerivedTableWithBatching
       // If it has originalError, use that; otherwise use the error itself

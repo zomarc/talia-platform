@@ -7,6 +7,7 @@
 import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import { getChartColors, getOverlayLegendOptions, getSeriesColors } from '../../../lib/chartConfig';
 import { formatDayMon, formatDateTime } from '../../../lib/dateFormat';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
@@ -48,6 +49,10 @@ const BookingTargetChartPresenter = ({
   panelComponentId,
 }) => {
   const { theme, fontSize, fontFamily, chartLegendsVisible } = useTheme();
+  const { showLegends, reportShellClassName } = useReportShellOptions(
+    panelComponentId || 'booking-target-chart',
+    panelInstanceId
+  );
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
 
@@ -244,7 +249,7 @@ const BookingTargetChartPresenter = ({
         maintainAspectRatio: false,
         animation: { duration: 0 },
         plugins: {
-          legend: getOverlayLegendOptions({ visible: chartLegendsVisible }),
+          legend: getOverlayLegendOptions({ visible: chartLegendsVisible && showLegends }),
           title: {
             display: false,
           },
@@ -296,6 +301,7 @@ const BookingTargetChartPresenter = ({
     fontSize,
     fontFamily,
     chartLegendsVisible,
+    showLegends,
   ]);
 
   const sailOptions = [
@@ -313,7 +319,7 @@ const BookingTargetChartPresenter = ({
   ].filter(Boolean).join(' · ');
 
   return (
-    <div className="focus-panel talia-report booking-target-chart" role="region" aria-label="Booking target chart">
+    <div className={`focus-panel talia-report booking-target-chart${reportShellClassName ? ` ${reportShellClassName}` : ''}`} role="region" aria-label="Booking target chart">
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Booking Target Chart</h2>

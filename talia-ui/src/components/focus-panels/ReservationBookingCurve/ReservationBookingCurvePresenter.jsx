@@ -64,6 +64,8 @@ const ReservationBookingCurvePresenter = ({
   sailCode,
   seriesMode = 'market',
   onSeriesModeChange,
+  chartMode = 'totals',
+  onChartModeChange,
   showRevenue = false,
   onShowRevenueChange,
   showCompetitor = false,
@@ -79,7 +81,7 @@ const ReservationBookingCurvePresenter = ({
   const demandNoun = demandUnitNoun(demandUnit);
   const showCapacityLine = demandUnit === DEMAND_UNIT_CABINS;
   const componentKey = panelComponentId || 'reservation-booking-curve';
-  const { showSnapshot, showDetails, showFilters } = useReportShellOptions(
+  const { showSnapshot, showDetails, showFilters, showLegends, reportShellClassName } = useReportShellOptions(
     componentKey,
     panelInstanceId
   );
@@ -149,11 +151,11 @@ const ReservationBookingCurvePresenter = ({
     const presentGuests = (value) => toDemandVolume(value, demandUnit);
     const contractSeries = Array.isArray(data.contractSeries) ? data.contractSeries : [];
     const targetSeries = Array.isArray(data.targetSeries) ? data.targetSeries : [];
-    const useContractDemo = contractSeries.length > 0;
-    const axisPoints = useContractDemo
+    const useDemandTotals = chartMode !== 'series' && contractSeries.length > 0;
+    const axisPoints = useDemandTotals
       ? (contractSeries[0]?.points || [])
       : (data.totals || []);
-    const labels = useContractDemo
+    const labels = useDemandTotals
       ? axisPoints.map((p) => (Number(p.weeksUntilSailing) === 0 ? '0' : String(p.weeksUntilSailing ?? p.weekLabel ?? '')))
       : (
         data.totals?.map((p) => p.weekLabel) ||
@@ -166,7 +168,7 @@ const ReservationBookingCurvePresenter = ({
       Estimated: '#f59e0b',
       Contracted: '#94a3b8',
     };
-    const datasets = useContractDemo
+    const datasets = useDemandTotals
       ? contractSeries.map((s) => {
           const color = contractColors[s.dimensionKey] || colorForDimensionKey(s.dimensionKey);
           return {
@@ -186,7 +188,7 @@ const ReservationBookingCurvePresenter = ({
             const color = colorForDimensionKey(s.dimensionKey);
             return {
               label: s.dimensionKey,
-              data: (s.points || []).map((p) => p.bookings ?? 0),
+              data: (s.points || []).map((p) => presentGuests(p.guests ?? p.bookings ?? 0)),
               borderColor: color,
               backgroundColor: withAlpha(color, '99'),
               fill: true,
@@ -210,7 +212,7 @@ const ReservationBookingCurvePresenter = ({
             },
           ];
 
-    if (useContractDemo && targetSeries.length) {
+    if (useDemandTotals && targetSeries.length) {
       const byWeek = new Map(
         targetSeries
           .filter((p) => p?.weeksUntilSailing != null)
@@ -262,7 +264,7 @@ const ReservationBookingCurvePresenter = ({
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: getOverlayLegendOptions({ visible: chartLegendsVisible }),
+          legend: getOverlayLegendOptions({ visible: chartLegendsVisible && showLegends }),
           taliaHorizontalReferenceLine: hasCapacity
             ? {
                 value: capacity,
@@ -285,19 +287,28 @@ const ReservationBookingCurvePresenter = ({
                 return `Week −${w}`;
               },
               footer: (items) => {
+                if (useDemandTotals) {
+                  const byLabel = new Map(
+                    (items || []).map((it) => [String(it.dataset?.label || ''), Number(it.raw) || 0])
+                  );
+                  const booked = byLabel.get('Booked') || 0;
+                  const estimated = [...byLabel.entries()].reduce((sum, [label, value]) => (
+                    label.startsWith('Estimated') ? sum + value : sum
+                  ), 0);
+                  const demand = booked + estimated;
+                  return `Demand ${demand.toLocaleString()} ${demandNoun} (Booked + Estimated)`;
+                }
                 const total = items.reduce((sum, it) => sum + (Number(it.raw) || 0), 0);
-                return useContractDemo
-                  ? `Sum ${total.toLocaleString()} ${demandNoun}`
-                  : `Total ${total.toLocaleString()} bookings`;
+                return `Total ${total.toLocaleString()} ${demandNoun}`;
               },
             },
           },
         },
         scales: {
           x: {
-            stacked: !useContractDemo,
+            stacked: !useDemandTotals,
             title: {
-              display: useContractDemo,
+              display: useDemandTotals,
               text: 'Week −N (weeks before sail)',
               font: { size: 10, family: fontFamily },
             },
@@ -315,14 +326,12 @@ const ReservationBookingCurvePresenter = ({
             grid: { display: false },
           },
           y: {
-            stacked: !useContractDemo,
+            stacked: !useDemandTotals,
             beginAtZero: true,
             suggestedMax: hasCapacity ? Math.max(capacity, peakBookings) * 1.05 : undefined,
             title: {
               display: true,
-              text: useContractDemo
-                ? demandUnitAxisTitle(demandUnit, { monday: true })
-                : 'Cumulative bookings',
+              text: demandUnitAxisTitle(demandUnit, { monday: useDemandTotals }),
               font: { size: 11, family: fontFamily },
             },
             ticks: { font: { size: 10, family: fontFamily } },
@@ -337,7 +346,7 @@ const ReservationBookingCurvePresenter = ({
         chartInstanceRef.current = null;
       }
     };
-  }, [chartLegendsVisible, data, demandNoun, demandUnit, fontSize, fontFamily, showCapacityLine]);
+  }, [chartLegendsVisible, chartMode, data, demandNoun, demandUnit, fontSize, fontFamily, showCapacityLine, showLegends]);
 
   const v = data?.velocity || {};
   const revenue = data?.revenue;
@@ -406,6 +415,15 @@ const ReservationBookingCurvePresenter = ({
       hint: 'group OF face',
     },
     {
+      key: 'demand-guests',
+      label: 'Demand',
+      value: fmt(toDemandVolume(
+        (Number(data?.bookedGuests) || 0) + (Number(data?.estimatedGuests) || 0),
+        demandUnit
+      ), 1),
+      hint: 'Booked + Estimated',
+    },
+    {
       key: 'booked',
       label: 'Bk C',
       value: fmt(data?.bookedCabins),
@@ -413,12 +431,12 @@ const ReservationBookingCurvePresenter = ({
     },
     {
       key: 'capacity',
-      label: showCapacityLine ? 'Capacity' : 'Capacity (cabins)',
+      label: 'Capacity',
       value: fmt(data?.totalCabins),
       hint:
         data?.loadFactorPct != null
-          ? `${data.loadFactorPct}% LF`
-          : 'inventory cabins',
+          ? `${data.loadFactorPct}% LF · sellable`
+          : 'sellable cabins',
     },
     ...velocityMetrics,
   ];
@@ -450,7 +468,7 @@ const ReservationBookingCurvePresenter = ({
 
   return (
     <div
-      className="focus-panel talia-report booking-profile reservation-booking-curve"
+      className={`focus-panel talia-report booking-profile reservation-booking-curve${reportShellClassName ? ` ${reportShellClassName}` : ''}`}
       role="region"
       aria-label="Reservation booking curve"
     >
@@ -468,10 +486,22 @@ const ReservationBookingCurvePresenter = ({
         aria-label="Curve filters"
       >
         <label className="talia-report-filters__group">
+          <span className="talia-report-filters__label">Chart</span>
+          <select
+            className="talia-report-filters__input"
+            value={chartMode}
+            onChange={(e) => onChartModeChange?.(e.target.value)}
+          >
+            <option value="totals">Totals</option>
+            <option value="series">Series</option>
+          </select>
+        </label>
+        <label className="talia-report-filters__group">
           <span className="talia-report-filters__label">Series</span>
           <select
             className="talia-report-filters__input"
             value={seriesMode}
+            disabled={chartMode !== 'series'}
             onChange={(e) => onSeriesModeChange?.(e.target.value)}
           >
             <option value="market">{marketSeriesLabel}</option>

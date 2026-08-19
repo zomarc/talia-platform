@@ -189,6 +189,20 @@ const CabinDeckInventoryContainer = ({ panelInstanceId, panelComponentId }) => {
   });
 
   const {
+    data: reserveRows,
+    loading: reserveLoading,
+    error: reserveError,
+  } = useTableDataWithContext({
+    tableName: 'ship_cabin_reserve',
+    eventName: SAIL_SELECT_EVENT,
+    panelInstanceId,
+    panelComponentId,
+    contextMapper: mapSailToShipFilters,
+    fetchWithoutContext: false,
+    limit: 50000,
+  });
+
+  const {
     data: reservationRows,
     loading: reservationsLoading,
     error: reservationsError,
@@ -286,6 +300,7 @@ const CabinDeckInventoryContainer = ({ panelInstanceId, panelComponentId }) => {
       cabinCategoryLinkRows: cabinCategoryLinkRows || [],
       occupancyRows: occupancyRows || [],
       reservationRows: reservationRows || [],
+      reserveRows: reserveRows || [],
       shipCode,
       sailCode: referenceSailCode,
       sailDateFrom,
@@ -302,6 +317,7 @@ const CabinDeckInventoryContainer = ({ panelInstanceId, panelComponentId }) => {
     occupancyRows,
     referenceSailCode,
     reservationRows,
+    reserveRows,
     sailDateFrom,
     scopedAllocationRows,
     shipCabinRows,
@@ -317,6 +333,7 @@ const CabinDeckInventoryContainer = ({ panelInstanceId, panelComponentId }) => {
     || ((allocLoading || allocScopePending) && !(shipCabinRows?.length) && !allocScopeStuck)
   );
   const hardError = allocError || cabinError || linkError || masterError
+    || reserveError
     || (allocScopeStuck
       ? new Error('Cabin allocations did not load for this sailing. Try refresh or re-select the sail.')
       : null);
@@ -340,7 +357,7 @@ const CabinDeckInventoryContainer = ({ panelInstanceId, panelComponentId }) => {
         sailDateFrom={sailDateFrom}
         truncations={truncations}
         softErrors={softErrors}
-        reconciliationLoading={Boolean(occupancyLoading || reservationsLoading)}
+        reconciliationLoading={Boolean(occupancyLoading || reservationsLoading || reserveLoading)}
         panelInstanceId={panelInstanceId}
         panelComponentId={panelComponentId}
       />

@@ -36,6 +36,10 @@ import {
 } from './componentOptionsCatalog';
 import { COMPONENT_OPTIONS_CHANGED_EVENT } from './componentOptionsEvents';
 import {
+  payloadFromTabulator,
+  registerPanelDataExport,
+} from './panelDataExport';
+import {
   DASHBOARD_DETAILS_VISIBILITY_EVENT,
   DASHBOARD_GLOBAL_CONFIG_EVENT,
   DASHBOARD_TABLE_LAYOUT_EVENT,
@@ -635,11 +639,13 @@ const registerTableInstance = (table, baseColumns = null, ids = {}) => {
       dataLayoutBound: false,
       panelInstanceId: ids.panelInstanceId || null,
       panelComponentId: ids.panelComponentId || null,
+      exportTitle: ids.exportTitle || null,
     });
   } else {
     const meta = tableMeta.get(table);
     if (ids.panelInstanceId) meta.panelInstanceId = ids.panelInstanceId;
     if (ids.panelComponentId) meta.panelComponentId = ids.panelComponentId;
+    if (ids.exportTitle) meta.exportTitle = ids.exportTitle;
   }
   tableInstances.add(table);
 };
@@ -658,13 +664,15 @@ const getWrappedTabulatorClass = () => {
       const baseColumns = processed.__taliaBaseColumns || incomingOptions.columns || null;
       const panelInstanceId = processed.__taliaPanelInstanceId || null;
       const panelComponentId = processed.__taliaPanelComponentId || null;
+      const exportTitle = processed.__taliaExportTitle || null;
       delete processed.__taliaProcessedOptions;
       delete processed.__taliaBaseColumns;
       delete processed.__taliaPanelInstanceId;
       delete processed.__taliaPanelComponentId;
+      delete processed.__taliaExportTitle;
       super(element, processed);
 
-      registerTableInstance(this, baseColumns, { panelInstanceId, panelComponentId });
+      registerTableInstance(this, baseColumns, { panelInstanceId, panelComponentId, exportTitle });
       bindTableDataLayoutRefresh(this);
       // Sibling panel reflows often resize the host; Tabulator redraw resets scrollTop.
       if (typeof this.redraw === 'function') {
@@ -691,11 +699,22 @@ const getWrappedTabulatorClass = () => {
         applyLayoutModeToTable(this, { force: isTableHostVisible(this) });
         scheduleTabulatorLayoutRefresh(this);
         applyTabulatorColumnTotalsForTable(this);
+        const exportMeta = tableMeta.get(this);
+        if (exportMeta?.panelComponentId || exportMeta?.panelInstanceId) {
+          exportMeta.unregisterExport?.();
+          exportMeta.unregisterExport = registerPanelDataExport({
+            panelInstanceId: exportMeta.panelInstanceId,
+            panelComponentId: exportMeta.panelComponentId,
+            getPayload: () => payloadFromTabulator(this, exportMeta.exportTitle || exportMeta.panelComponentId || 'Export'),
+          });
+        }
       });
       this.on?.('groupVisibilityChanged', () => {
         refreshTableLayout(this);
       });
       this.on?.('tableDestroyed', () => {
+        const gone = tableMeta.get(this);
+        gone?.unregisterExport?.();
         tableInstances.delete(this);
       });
     }
@@ -750,12 +769,16 @@ export const getTabulatorOptions = (options = {}) => {
   const panelInstanceId = typeof options.panelInstanceId === 'string' && options.panelInstanceId.trim()
     ? options.panelInstanceId.trim()
     : null;
+  const exportTitle = typeof options.exportTitle === 'string' && options.exportTitle.trim()
+    ? options.exportTitle.trim()
+    : null;
 
   const {
     enforceGlobalLayout: _enforceGlobalLayout,
     layout: _layout,
     panelComponentId: _panelComponentId,
     panelInstanceId: _panelInstanceId,
+    exportTitle: _exportTitle,
     ...restOptions
   } = options;
 
@@ -768,6 +791,7 @@ export const getTabulatorOptions = (options = {}) => {
     __taliaBaseColumns: sourceColumns ? [...sourceColumns] : null,
     __taliaPanelInstanceId: panelInstanceId,
     __taliaPanelComponentId: panelComponentId || null,
+    __taliaExportTitle: exportTitle,
   };
 };
 

@@ -78,7 +78,7 @@ const ProfileComparePresenter = ({
   const chartInstanceRef = useRef(null);
   const [typedModel, setTypedModel] = useState('');
   const componentKey = panelComponentId || 'profile-compare';
-  const { showSnapshot, showDetails, showFilters } = useReportShellOptions(
+  const { showSnapshot, showDetails, showFilters, showLegends, reportShellClassName } = useReportShellOptions(
     componentKey,
     panelInstanceId
   );
@@ -265,7 +265,7 @@ const ProfileComparePresenter = ({
         onClick: (evt, elements, chart) => selectFromEvent(chart, elements),
         plugins: {
           legend: {
-            ...getOverlayLegendOptions({ visible: chartLegendsVisible || picking }),
+            ...getOverlayLegendOptions({ visible: (chartLegendsVisible && showLegends) || picking }),
             onClick: (evt, legendItem, legend) => {
               const chart = legend.chart;
               const ds = chart.data.datasets[legendItem.datasetIndex];
@@ -308,6 +308,7 @@ const ProfileComparePresenter = ({
     overlaySeries,
     picking,
     chartLegendsVisible,
+    showLegends,
     fontSize,
     fontFamily,
   ]);
@@ -349,7 +350,7 @@ const ProfileComparePresenter = ({
     : [];
 
   return (
-    <div className="focus-panel talia-report profile-compare" role="region" aria-label="Sailing Profile">
+    <div className={`focus-panel talia-report profile-compare${reportShellClassName ? ` ${reportShellClassName}` : ''}`} role="region" aria-label="Sailing Profile">
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Sailing Profile</h2>

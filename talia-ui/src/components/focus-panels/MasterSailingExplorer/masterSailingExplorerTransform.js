@@ -163,6 +163,24 @@ export const buildPhysicalBerthsFromShipDayRows = (shipDayRows = []) => {
     const availableCabins = hasCabinAggs && row?.available_cabins != null
       ? Math.max(0, toNumber(row.available_cabins))
       : Math.max(0, totalCabins - occupiedCabins);
+    const nameplateCabins = row?.nameplate_cabins != null
+      ? Math.max(0, toNumber(row.nameplate_cabins))
+      : totalCabins;
+    const nameplateBerths = row?.nameplate_berths != null
+      ? Math.max(0, toNumber(row.nameplate_berths))
+      : berthCapacity;
+    const sellableCabins = row?.sellable_cabins != null
+      ? Math.max(0, toNumber(row.sellable_cabins))
+      : nameplateCabins;
+    const sellableBerths = row?.sellable_berths != null
+      ? Math.max(0, toNumber(row.sellable_berths))
+      : nameplateBerths;
+    const offsaleCabins = row?.offsale_cabins != null
+      ? Math.max(0, toNumber(row.offsale_cabins))
+      : 0;
+    const offsaleBerths = row?.offsale_berths != null
+      ? Math.max(0, toNumber(row.offsale_berths))
+      : 0;
     index.set(key, {
       ship_code: shipCode,
       sail_code: sailCode,
@@ -173,7 +191,15 @@ export const buildPhysicalBerthsFromShipDayRows = (shipDayRows = []) => {
       berth_capacity: berthCapacity,
       berths_occupied: berthsOccupied,
       berths_available: berthsAvailable,
-      cabin_source: hasCabinAggs ? 'ship_day_berth_status' : 'berth_estimate',
+      nameplate_cabins: nameplateCabins,
+      nameplate_berths: nameplateBerths,
+      sellable_cabins: sellableCabins,
+      sellable_berths: sellableBerths,
+      offsale_cabins: offsaleCabins,
+      offsale_berths: offsaleBerths,
+      cabin_source: hasCabinAggs
+        ? (row?.sellable_cabins != null ? 'ship_day_capacity' : 'ship_day_berth_status')
+        : 'berth_estimate',
     });
   });
   return index;
@@ -323,10 +349,16 @@ export const buildDayDetailsForMaster = ({
       day_label: dateKey,
       booked: Math.round(physical.berths_occupied),
       capacity: Math.round(physical.berth_capacity),
-      available: Math.round(physical.berths_available),
+      available: Math.round(
+        physical.berths_available
+        ?? Math.max(0, (physical.sellable_berths || physical.berth_capacity) - physical.berths_occupied)
+      ),
       booked_cabins: Math.round(physical.occupied_cabins || 0),
       total_cabins: Math.round(physical.total_cabins || 0),
       available_cabins: Math.round(physical.available_cabins || 0),
+      offsale_cabins: Math.round(physical.offsale_cabins || 0),
+      sellable_cabins: Math.round(physical.sellable_cabins || physical.total_cabins || 0),
+      sellable_berths: Math.round(physical.sellable_berths || physical.berth_capacity || 0),
       guaranteed_cabins: Math.round(
         activeSellingSegments.reduce((sum, summary) => sum + (summary.guaranteed_cabins || 0), 0)
       ),
@@ -369,27 +401,40 @@ const resolveMasterPhysicalTotals = ({
   let peakOccupied = departurePhysical?.berths_occupied || 0;
   let peakCabinCapacity = departurePhysical?.total_cabins || 0;
   let peakCabinBooked = departurePhysical?.occupied_cabins || 0;
+  let peakSellableCabins = departurePhysical?.sellable_cabins || peakCabinCapacity;
+  let peakSellableBerths = departurePhysical?.sellable_berths || peakCapacity;
+  let peakOffsaleCabins = departurePhysical?.offsale_cabins || 0;
 
   asArray(dayDetails).forEach((day) => {
     peakCapacity = Math.max(peakCapacity, day.capacity || 0);
     peakOccupied = Math.max(peakOccupied, day.booked || 0);
     peakCabinCapacity = Math.max(peakCabinCapacity, day.total_cabins || 0);
     peakCabinBooked = Math.max(peakCabinBooked, day.booked_cabins || 0);
+    peakSellableCabins = Math.max(peakSellableCabins, day.sellable_cabins || 0);
+    peakSellableBerths = Math.max(peakSellableBerths, day.sellable_berths || 0);
+    peakOffsaleCabins = Math.max(peakOffsaleCabins, day.offsale_cabins || 0);
   });
+
+  const sellableCabins = Math.round(peakSellableCabins || peakCabinCapacity);
+  const sellableBerths = Math.round(peakSellableBerths || peakCapacity);
 
   return {
     total_capacity: Math.round(peakCapacity),
     total_booked: Math.round(peakOccupied),
-    total_available: Math.max(0, Math.round(peakCapacity - peakOccupied)),
+    total_available: Math.max(0, sellableBerths - Math.round(peakOccupied)),
     total_cabins: Math.round(peakCabinCapacity),
     booked_cabins: Math.round(peakCabinBooked),
-    available_cabins: Math.max(0, Math.round(peakCabinCapacity - peakCabinBooked)),
+    available_cabins: Math.max(0, sellableCabins - Math.round(peakCabinBooked)),
+    offsale_cabins: Math.round(peakOffsaleCabins),
+    sellable_cabins: sellableCabins,
+    sellable_berths: sellableBerths,
     physical_source: (
       departurePhysical?.cabin_source === 'sail_by_cabin_occupancy'
       || departurePhysical?.cabin_source === 'ship_day_berth_status'
+      || departurePhysical?.cabin_source === 'ship_day_capacity'
     )
-      ? 'cabin_occupancy+ship_day_berths'
-      : 'ship_day_berths',
+      ? 'cabin_occupancy+ship_day_capacity'
+      : 'ship_day_capacity',
     physical_sail_code: masterCode,
   };
 };
@@ -453,6 +498,7 @@ export const buildMasterSailingExplorerBundle = ({
     : new Map();
   const berthHasCabinAggs = berthIndex.size > 0 && Array.from(berthIndex.values()).some(
     (entry) => entry?.cabin_source === 'ship_day_berth_status'
+      || entry?.cabin_source === 'ship_day_capacity'
   );
   const cabinIndex = (!berthHasCabinAggs && occupancyRows?.length)
     ? buildPhysicalBerthsBySailDate(occupancyRows)
@@ -499,11 +545,12 @@ export const buildMasterSailingExplorerBundle = ({
     const estimated_guests = Math.round(
       segmentSummaries.reduce((sum, s) => sum + (s.estimated_guests || 0), 0) * 10
     ) / 10;
-    const actual_booked_pct = physicalTotals.total_cabins > 0
-      ? (physicalTotals.booked_cabins / physicalTotals.total_cabins) * 100
+    const lfDenom = physicalTotals.sellable_cabins || physicalTotals.total_cabins;
+    const actual_booked_pct = lfDenom > 0
+      ? (physicalTotals.booked_cabins / lfDenom) * 100
       : null;
-    const potential_booked_pct = physicalTotals.total_cabins > 0
-      ? ((physicalTotals.booked_cabins + guaranteed_cabins) / physicalTotals.total_cabins) * 100
+    const potential_booked_pct = lfDenom > 0
+      ? ((physicalTotals.booked_cabins + guaranteed_cabins) / lfDenom) * 100
       : null;
     const booking_upside_pct = (
       actual_booked_pct != null && potential_booked_pct != null
@@ -528,9 +575,14 @@ export const buildMasterSailingExplorerBundle = ({
       actual_booked_pct,
       potential_booked_pct,
       booking_upside_pct,
-      occupancy_pct: physicalTotals.total_capacity > 0
-        ? (physicalTotals.total_booked / physicalTotals.total_capacity) * 100
-        : null,
+      occupancy_pct: physicalTotals.sellable_berths > 0
+        ? (physicalTotals.total_booked / physicalTotals.sellable_berths) * 100
+        : (physicalTotals.total_capacity > 0
+          ? (physicalTotals.total_booked / physicalTotals.total_capacity) * 100
+          : null),
+      offsale_cabins: physicalTotals.offsale_cabins,
+      sellable_cabins: physicalTotals.sellable_cabins,
+      sellable_berths: physicalTotals.sellable_berths,
       selling_guests_total,
       physical_sail_code: physicalTotals.physical_sail_code,
       segment_codes: segments.map((segment) => segment.sail_code),

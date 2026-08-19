@@ -91,7 +91,7 @@ const DistributionContainer = ({ panelInstanceId, panelComponentId }) => {
     loading: occupancyLoading,
     error: occupancyError,
   } = useTableDataWithContext({
-    tableName: 'sail_by_cabin_occupancy',
+    tableName: 'ship_day_capacity',
     eventName: SAIL_SELECT_EVENT,
     panelInstanceId,
     panelComponentId,

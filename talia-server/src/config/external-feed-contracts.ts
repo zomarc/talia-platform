@@ -32,6 +32,29 @@ export const EXTERNAL_FEED_CONTRACTS: ExternalFeedContract[] = [
     ]
   },
   {
+    feedKey: 'competitor_benchmark',
+    domain: 'competitor',
+    owner: 'pricing-intel',
+    requiredFreshnessMinutes: 240,
+    staleAfterMinutes: 720,
+    requiredFields: [
+      'snapshot_date',
+      'cruise_line_name',
+      'source_ship_name',
+      'departure_date',
+      'cruise_duration',
+      'cabin_type',
+      'currency_code'
+    ],
+    keyFields: ['snapshot_date', 'cruise_line_code', 'ship_code', 'departure_date', 'cabin_type', 'source_market'],
+    reliabilityRules: [
+      'Separate from competitor_current_state (stg.COMPETITOR).',
+      'Sync only Is_Latest_Snapshot = Y; historical scrape days are not needed for the panel.',
+      'Date window is Departure_Date (voyage), not Snapshot_Date (scrape).',
+      'ship_code is the competitor ship, not inventory_item.ship_code.'
+    ]
+  },
+  {
     feedKey: 'ship_position_logs',
     domain: 'ship_location',
     owner: 'ops-intel',

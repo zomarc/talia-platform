@@ -32,6 +32,7 @@ import BookingTargetDataSimple from './BookingTargetDataSimple';
 import BookingCombinedDataSimple from './BookingCombinedDataSimple';
 import BookingTargetProfileEditorSimple from './BookingTargetProfileEditorSimple';
 import CompetitorPricingContainer from './CompetitorPricing';
+import CompetitorBenchmarkContainer from './CompetitorBenchmark';
 import DemandHeatmapContainer from './DemandHeatmap';
 import DemandHeatmapWithSearchTrendsContainer from './DemandHeatmapWithSearchTrends';
 import GoogleSearchContainer from './GoogleSearch';
@@ -64,6 +65,18 @@ import DataDebugView from '../TestPage/DataDebugView';
 import DataTypesValidation from '../dev/DataTypesValidation';
 import AdminDashboard from '../admin/dashboard/AdminDashboard';
 import { SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, SHIP_SELECT_EVENT, SHIP_CLEAR_EVENT } from '../../lib/eventBus';
+import {
+  VIEW_COLUMN_FILTERS,
+  VIEW_CONTROLS,
+  VIEW_DETAILS,
+  VIEW_FILTERS,
+  VIEW_LEGENDS,
+  VIEW_NESTED,
+  VIEW_SNAPSHOT,
+  VIEW_TOOLTIP,
+  VIEW_TOOLTIP_MSE,
+  VIEW_TOTALS,
+} from '../../lib/componentOptionsCatalog';
 
 const publishedRatesSelect = 'talia:publishedRates.select';
 const publishedRatesClear = 'talia:publishedRates.clear';
@@ -124,7 +137,7 @@ export const componentRegistry = {
     title: 'Explorer',
     description: 'Master sailings with total booked/capacity and expandable day-by-day breakdown with sub-sailing highlights',
     props: {},
-    dataRequirements: 'Requires master_sail, inventory_item, sailing_hierarchy, densified ship_day_berth_status (cabin + berth), and sail_booking_summary. reservation_current_state / agency / alloc deferred for distribution hover.',
+    dataRequirements: 'Requires master_sail, inventory_item, sailing_hierarchy, densified ship_day_capacity (nameplate + offsale + sellable), and sail_booking_summary. reservation_current_state / agency / alloc deferred for distribution hover.',
     events: {
       emits: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT],
       respondsTo: []
@@ -135,13 +148,15 @@ export const componentRegistry = {
     showInReports: true,
     options: {
       views: [
-        { id: 'viewMode', label: 'Nested', type: 'choice', choices: ['nested', 'flat'], default: 'nested' },
+        VIEW_NESTED,
         { id: 'segments', label: 'Segments', type: 'boolean', default: false },
-        { id: 'filters', label: 'Filters', type: 'boolean', default: true },
+        VIEW_FILTERS,
+        VIEW_COLUMN_FILTERS,
+        VIEW_CONTROLS,
+        VIEW_TOOLTIP,
+        VIEW_TOOLTIP_MSE,
       ],
-      operations: [
-        { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true, minRole: 'USER' },
-      ],
+      operations: [],
     },
     filePath: 'src/components/focus-panels/MasterSailingExplorer/index.jsx'
   },
@@ -152,14 +167,19 @@ export const componentRegistry = {
     title: 'Ship × Day Berths',
     description: 'Physical berth capacity, occupancy, and availability per ship and calendar day (operations grain, separate from selling structure)',
     props: {},
-    dataRequirements: 'Requires ship_day_berth_status view, ship table, and inventory_item (canonical link). Resolves selections via inventory_item.reference_sail_code.',
+    dataRequirements: 'Requires ship_day_capacity view, ship table, and inventory_item (canonical link). Resolves selections via inventory_item.reference_sail_code.',
     events: {
       emits: [],
       respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, SHIP_SELECT_EVENT, SHIP_CLEAR_EVENT],
     },
     supportsRefresh: true,
     supportsGroupActions: true,
+    supportsDataExport: true,
     showInReports: true,
+    options: {
+      views: [VIEW_NESTED, VIEW_FILTERS, VIEW_COLUMN_FILTERS, VIEW_CONTROLS],
+      operations: [],
+    },
     filePath: 'src/components/focus-panels/ShipDayBerth/index.jsx'
   },
   SimpleTable: {
@@ -208,6 +228,10 @@ export const componentRegistry = {
     },
     supportsRefresh: true,
     showInReports: true,
+    options: {
+      views: [VIEW_LEGENDS],
+      operations: [],
+    },
     filePath: 'src/components/focus-panels/Distribution/index.jsx'
   },
   CapacityValidation: {
@@ -217,7 +241,7 @@ export const componentRegistry = {
     title: 'Capacity Validation',
     description: 'Vertical source ledger of capacity, booked, and availability for one sailing — each value shows table, derivation, grain, and scope for manual reconciliation with MSE',
     props: {},
-    dataRequirements: 'Requires master_sail, ship_day_berth_status, cabin_availability, inventory_status_by_day, ship, reservation_current_state. Linked via sail.select.',
+    dataRequirements: 'Requires master_sail, ship_day_capacity, cabin_availability, inventory_status_by_day, ship, reservation_current_state, ship_cabin_reserve. Linked via sail.select.',
     events: {
       emits: [],
       respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
@@ -234,21 +258,18 @@ export const componentRegistry = {
     title: 'Inventory',
     description: 'Assigned cabins by deck and category with FIT/Group ownership highlights; GTY ONLY holds shown as unassigned group bookings',
     props: {},
-    dataRequirements: 'Requires ship_inventory_alloc (from stg.RES_CABIN_ALLOCATION_DETAIL), ship_cabin, ship_cabin_ctg_link (fou.SHIP_CABIN_CTG_LINK). No customer/PII. Owner id is res_id (FIT) or group_id (GROUP).',
+    dataRequirements: 'Requires ship_inventory_alloc (from stg.RES_CABIN_ALLOCATION_DETAIL), ship_cabin, ship_cabin_ctg_link, ship_cabin_reserve. No customer/PII. Owner id is res_id (FIT) or group_id (GROUP). Offsale cabins excluded from empty / GTY-fit.',
     events: {
       emits: [cabinSelect, cabinClear],
       respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, reservationSelect, reservationClear, cabinClear]
     },
     supportsRefresh: true,
     showInReports: true,
+    supportsDataExport: true,
     options: {
-      views: [
-        { id: 'details', label: 'Details', type: 'boolean', default: true },
-        { id: 'filters', label: 'Filters', type: 'boolean', default: true },
-      ],
+      views: [VIEW_DETAILS, VIEW_CONTROLS, VIEW_TOOLTIP, VIEW_LEGENDS],
       operations: [
         { id: 'allocate', label: 'Allocate', type: 'boolean', default: true, minRole: 'MANAGER' },
-        { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true, minRole: 'USER' },
       ],
     },
     filePath: 'src/components/focus-panels/CabinDeckInventory/index.jsx'
@@ -323,6 +344,10 @@ export const componentRegistry = {
     },
     supportsRefresh: true,
     showInReports: true,
+    options: {
+      views: [VIEW_LEGENDS],
+      operations: [],
+    },
     filePath: 'src/components/focus-panels/PublishedRatesGrid/index.jsx'
   },
   OccupancyChart: {
@@ -337,6 +362,10 @@ export const componentRegistry = {
     dataRequirements: 'Requires occupancy data',
     events: { emits: [], respondsTo: [] },
     showInReports: true,
+    options: {
+      views: [VIEW_LEGENDS],
+      operations: [],
+    },
     filePath: 'src/components/focus-panels/OccupancyChart/index.jsx'
   },
   RevenueBreakdown: {
@@ -351,6 +380,10 @@ export const componentRegistry = {
     dataRequirements: 'Requires revenue data',
     events: { emits: [], respondsTo: [] },
     showInReports: true,
+    options: {
+      views: [VIEW_LEGENDS],
+      operations: [],
+    },
     filePath: 'src/components/focus-panels/RevenueBreakdown/index.jsx'
   },
   SailingSummary: {
@@ -495,14 +528,8 @@ export const componentRegistry = {
     showInReports: true,
     supportsDataExport: true,
     options: {
-      views: [
-        { id: 'details', label: 'Details', type: 'boolean', default: true },
-        { id: 'filters', label: 'Filters', type: 'boolean', default: true },
-        { id: 'totals', label: 'Totals', type: 'boolean', default: true, minRole: 'USER' },
-      ],
-      operations: [
-        { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true, minRole: 'USER' },
-      ],
+      views: [VIEW_DETAILS, VIEW_FILTERS, VIEW_COLUMN_FILTERS, VIEW_TOTALS, VIEW_TOOLTIP],
+      operations: [],
     },
     filePath: 'src/components/focus-panels/ReservationCurrentState/index.jsx'
   },
@@ -565,22 +592,18 @@ export const componentRegistry = {
     category: 'Booking & profiles',
     title: 'Reservation Profile',
     description:
-      'Cumulative bookings by original booked date, stacked by market. Booked / capacity match Explorer cabin peaks. Velocity for 7 / 14 / 28 days from reservation data only.',
+      'Voyage Totals (Booked / Estimated / Contracted + Target) or Series (Booked by Market / Channel / Pax). Capacity is sellable cabins (nameplate minus offsale).',
     props: {
       sailCode: { type: 'string', required: false, description: 'Sail code (optional if sail is selected in UI)' },
       theme: { type: 'object', required: false, description: 'Theme object for styling' }
     },
-    dataRequirements: 'GraphQL reservationBookingCurve (reservation + sail_by_cabin_occupancy)',
+    dataRequirements: 'GraphQL reservationBookingCurve (reservation + ship_day_capacity)',
     events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
     supportsRefresh: true,
     showInReports: true,
     supportsDataExport: true,
     options: {
-      views: [
-        { id: 'snapshot', label: 'Snapshot', type: 'boolean', default: true },
-        { id: 'details', label: 'Details', type: 'boolean', default: true },
-        { id: 'filters', label: 'Filters', type: 'boolean', default: true },
-      ],
+      views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
       operations: [],
     },
     filePath: 'src/components/focus-panels/ReservationBookingCurve/index.jsx'
@@ -602,11 +625,7 @@ export const componentRegistry = {
     showInReports: true,
     supportsDataExport: true,
     options: {
-      views: [
-        { id: 'snapshot', label: 'Snapshot', type: 'boolean', default: true },
-        { id: 'details', label: 'Details', type: 'boolean', default: true },
-        { id: 'filters', label: 'Filters', type: 'boolean', default: true },
-      ],
+      views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
       operations: [],
     },
     filePath: 'src/components/focus-panels/ProfileCompare/index.jsx'
@@ -669,11 +688,7 @@ export const componentRegistry = {
     showInReports: true,
     supportsDataExport: true,
     options: {
-      views: [
-        { id: 'snapshot', label: 'Snapshot', type: 'boolean', default: true },
-        { id: 'details', label: 'Details', type: 'boolean', default: true },
-        { id: 'filters', label: 'Filters', type: 'boolean', default: true },
-      ],
+      views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
       operations: [],
     },
     filePath: 'src/components/focus-panels/InventoryTargetProfileEditor/index.jsx'
@@ -712,6 +727,10 @@ export const componentRegistry = {
     dataRequirements: 'CSV target data (BOOKINGTARGET_*.csv) or target profiles; GraphQL bookingProfileWithCurves',
     events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
     showInReports: true,
+    options: {
+      views: [VIEW_LEGENDS],
+      operations: [],
+    },
     filePath: 'src/components/focus-panels/BookingTargetChart/index.jsx'
   },
   BookingCurrentDataSimple: {
@@ -777,6 +796,29 @@ export const componentRegistry = {
     showInReports: true,
     filePath: 'src/components/focus-panels/CompetitorPricing/index.jsx'
   },
+  CompetitorBenchmark: {
+    component: CompetitorBenchmarkContainer,
+    panelId: 'competitor-benchmark',
+    category: 'Dashboards',
+    title: 'Competitor Benchmark',
+    description: 'RateGain DWH benchmark (vw_Competitor_Benchmarking). Separate from Competitor Pricing.',
+    props: {
+      theme: { type: 'object', required: false, description: 'Theme object for styling' }
+    },
+    dataRequirements: 'Requires competitor_benchmark (dwh.vw_Competitor_Benchmarking). Sail.select scopes by departure month; competitor ship_code is not Celestyal.',
+    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT] },
+    supportsRefresh: true,
+    showInReports: true,
+    supportsDataExport: true,
+    options: {
+      views: [
+        { ...VIEW_DETAILS, default: false },
+        VIEW_COLUMN_FILTERS,
+      ],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/CompetitorBenchmark/index.jsx'
+  },
   DemandHeatmap: {
     component: DemandHeatmapContainer,
     panelId: 'demand-heatmap',
@@ -791,6 +833,10 @@ export const componentRegistry = {
     dataRequirements: 'Uses aggregated demand_heatmap_data table',
     events: { emits: [], respondsTo: [] },
     showInReports: true,
+    options: {
+      views: [VIEW_LEGENDS],
+      operations: [],
+    },
     filePath: 'src/components/focus-panels/DemandHeatmap/index.jsx'
   },
   DemandHeatmapWithSearchTrends: {
@@ -807,6 +853,10 @@ export const componentRegistry = {
     dataRequirements: 'Uses aggregated demand_heatmap_data table',
     events: { emits: [], respondsTo: [] },
     showInReports: true,
+    options: {
+      views: [VIEW_LEGENDS],
+      operations: [],
+    },
     filePath: 'src/components/focus-panels/DemandHeatmapWithSearchTrends/index.jsx'
   },
   GoogleSearch: {

@@ -10,7 +10,7 @@ import DemandHeatmapPresenter from './DemandHeatmapPresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 
-const DemandHeatmapContainer = ({ filters = {} }) => {
+const DemandHeatmapContainer = ({ filters = {}, panelInstanceId, panelComponentId }) => {
   console.log('[DemandHeatmapContainer] Component rendering with filters:', filters);
   
   const { data, months, containsMockData, loading, error, refetch } = useDemandHeatmap(filters);
@@ -68,6 +68,8 @@ const DemandHeatmapContainer = ({ filters = {} }) => {
       data={data}
       months={months}
       onRefresh={refetch}
+      panelInstanceId={panelInstanceId}
+      panelComponentId={panelComponentId}
     />
   );
 };

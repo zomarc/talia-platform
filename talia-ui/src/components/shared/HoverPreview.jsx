@@ -1,69 +1,13 @@
 /**
  * Portal hover surface for rich React content (not text-only TaliaTooltip).
  * Opacity + appear delay come from Appearance (ThemeContext) by default.
+ * Position is clamped to the window so the card can extend past the panel.
  */
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-
-const measurePosition = ({
-  bubbleEl,
-  anchorRect,
-  x,
-  y,
-  placement,
-}) => {
-  const bw = bubbleEl.offsetWidth || 280;
-  const bh = bubbleEl.offsetHeight || 120;
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const pad = 8;
-  const gap = 8;
-
-  let top = pad;
-  let left = pad;
-
-  if (anchorRect) {
-    if (placement === 'top') {
-      left = anchorRect.left;
-      top = anchorRect.top - bh - gap;
-    } else if (placement === 'left') {
-      left = anchorRect.left - bw - gap;
-      top = anchorRect.top;
-    } else if (placement === 'bottom') {
-      left = anchorRect.left;
-      top = anchorRect.bottom + gap;
-    } else {
-      // right (default): sit just outside the visible selection edge
-      left = anchorRect.right + gap;
-      top = anchorRect.top + ((anchorRect.height || 0) / 2) - (bh / 2);
-    }
-
-    if (placement === 'right' && left + bw > vw - pad) {
-      left = Math.max(pad, anchorRect.left - bw - gap);
-    } else if (placement === 'left' && left < pad) {
-      left = Math.min(vw - bw - pad, anchorRect.right + gap);
-    }
-
-    if (top + bh > vh - pad) {
-      top = Math.max(pad, vh - bh - pad);
-    }
-    if (top < pad) top = pad;
-    left = clamp(left, pad, Math.max(pad, vw - bw - pad));
-  } else if (x != null && y != null) {
-    left = Number(x) + 12;
-    top = Number(y) + 12;
-    if (left + bw > vw - pad) left = Math.max(pad, Number(x) - bw - 12);
-    if (top + bh > vh - pad) top = Math.max(pad, Number(y) - bh - 12);
-    left = clamp(left, pad, Math.max(pad, vw - bw - pad));
-    top = clamp(top, pad, Math.max(pad, vh - bh - pad));
-  }
-
-  return { top, left, ready: true };
-};
+import { measureHoverPreviewPosition } from '../../lib/hoverPreviewPosition';
 
 /**
  * @param {{
@@ -73,6 +17,7 @@ const measurePosition = ({
  *   y?: number | null,
  *   delayMs?: number | null,
  *   placement?: 'right' | 'left' | 'bottom' | 'top',
+ *   containRef?: { current: Element | null } | null,
  *   children?: React.ReactNode,
  *   className?: string,
  *   onRequestClose?: () => void,
@@ -85,6 +30,7 @@ const HoverPreview = ({
   y = null,
   delayMs = null,
   placement = 'right',
+  containRef = null,
   children = null,
   className = '',
   onRequestClose,
@@ -127,15 +73,24 @@ const HoverPreview = ({
   }, [open, effectiveDelayMs, children]);
 
   useLayoutEffect(() => {
-    if (!visible || !bubbleRef.current) return;
-    setCoords(measurePosition({
-      bubbleEl: bubbleRef.current,
-      anchorRect,
-      x,
-      y,
-      placement,
-    }));
-  }, [visible, anchorRect, x, y, placement, children]);
+    if (!visible || !bubbleRef.current) return undefined;
+    const place = () => {
+      setCoords(measureHoverPreviewPosition({
+        bubbleEl: bubbleRef.current,
+        anchorRect,
+        x,
+        y,
+        placement,
+        containEl: containRef?.current || null,
+      }));
+    };
+    place();
+    const bubble = bubbleRef.current;
+    if (typeof ResizeObserver === 'undefined' || !bubble) return undefined;
+    const observer = new ResizeObserver(() => place());
+    observer.observe(bubble);
+    return () => observer.disconnect();
+  }, [visible, anchorRect, x, y, placement, children, containRef]);
 
   useEffect(() => {
     if (!visible) return undefined;

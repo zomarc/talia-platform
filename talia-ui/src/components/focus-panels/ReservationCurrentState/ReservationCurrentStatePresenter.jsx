@@ -62,10 +62,16 @@ const ReservationCurrentStatePresenter = ({
   const [historyFilter, setHistoryFilter] = useState('all');
   const [hoverPreview, setHoverPreview] = useState(null);
   const [tableReadyToken, setTableReadyToken] = useState(0);
-  const { showDetails, showFilters, showTotals } = useReportShellOptions(
+  const { showDetails, showFilters, showTotals, showTooltip, reportShellClassName } = useReportShellOptions(
     panelComponentId || 'reservation-current-state',
     panelInstanceId
   );
+  const showTooltipRef = useRef(showTooltip);
+  showTooltipRef.current = showTooltip;
+
+  useEffect(() => {
+    if (!showTooltip) setHoverPreview(null);
+  }, [showTooltip]);
 
   // Views → Totals → native ColumnCalcs (also applied framework-wide via tabulatorConfig).
   useTabulatorColumnTotals(instanceRef, showTotals, tableReadyToken);
@@ -286,7 +292,9 @@ const ReservationCurrentStatePresenter = ({
           headerFilterLiveFilter: true,
           headerFilterLiveFilterDelay: 300,
           pagination: false,
+          panelInstanceId,
           panelComponentId: panelComponentId || 'reservation-current-state',
+          exportTitle: 'Reservation',
         }));
 
         instanceRef.current.on('tableBuilt', () => {
@@ -336,6 +344,10 @@ const ReservationCurrentStatePresenter = ({
         });
 
         instanceRef.current.on('rowMouseEnter', (_event, row) => {
+          if (!showTooltipRef.current) {
+            setHoverPreview(null);
+            return;
+          }
           const rowData = row?.getData?.() || {};
           const resId = rowData.res_id != null ? String(rowData.res_id) : '';
           if (!resId || !hoverByResIdRef.current?.get?.(resId)) {
@@ -516,7 +528,7 @@ const ReservationCurrentStatePresenter = ({
   };
 
   return (
-    <div className="focus-panel reservation-current-state talia-report">
+    <div className={`focus-panel reservation-current-state talia-report${reportShellClassName ? ` ${reportShellClassName}` : ''}`}>
       <div
         className={`reservation-current-state__filters talia-report-filters${showFilters ? '' : ' talia-report-filters--hidden'}`}
         aria-label="Reservation status filter"
@@ -651,8 +663,9 @@ const ReservationCurrentStatePresenter = ({
         )}
       </ReportDataDetails>
       <HoverPreview
-        open={Boolean(hoverPreview?.resId)}
+        open={Boolean(showTooltip && hoverPreview?.resId)}
         anchorRect={hoverPreview?.rect || null}
+        containRef={tableRef}
         placement="right"
         onRequestClose={() => setHoverPreview(null)}
       >

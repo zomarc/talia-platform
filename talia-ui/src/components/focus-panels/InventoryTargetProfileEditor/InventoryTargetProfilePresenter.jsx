@@ -70,7 +70,7 @@ const InventoryTargetProfilePresenter = ({
   const [selectedId, setSelectedId] = useState(null);
   const [usingSuggestion, setUsingSuggestion] = useState(false);
   const componentKey = panelComponentId || 'inventory-target-profile-editor';
-  const { showSnapshot, showDetails, showFilters } = useReportShellOptions(
+  const { showSnapshot, showDetails, showFilters, showLegends, reportShellClassName } = useReportShellOptions(
     componentKey,
     panelInstanceId
   );
@@ -312,7 +312,7 @@ const InventoryTargetProfilePresenter = ({
 
   return (
     <div
-      className="focus-panel talia-report inventory-target-profile"
+      className={`focus-panel talia-report inventory-target-profile${reportShellClassName ? ` ${reportShellClassName}` : ''}`}
       role="region"
       aria-label="Target Profile Editor"
     >
@@ -549,7 +549,7 @@ const InventoryTargetProfilePresenter = ({
             onChangeLf={(tempKey, lfPct) => updateNode(tempKey, { lfPct })}
             onMovePoint={(tempKey, patch) => updateNode(tempKey, patch)}
             onAddPoint={(week, lfPct) => addWeekPoint(week, lfPct)}
-            onRemovePoint={removeNode}
+            showLegends={showLegends}
           />
         </div>
 

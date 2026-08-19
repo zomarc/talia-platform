@@ -91,16 +91,18 @@ StatusBar global criteria / focus / visibility strips are independent of per-com
 | **Title** | Panel name in report header | `header.talia-report__header` → `h2.talia-report__title` | **Titles** | Appearance profile `panelTitlesVisible` |
 | **Subtitle** | Metadata line under title (counts, source) | `p.talia-report__subtitle` (inside header; hidden with Title) | *(with Titles)* | — |
 | **Talia filters** | Application-level filter row in report shell (not panel controls) | `.talia-report-filters` (+ `__group`, `__label`, `__input`) | **Filters** | `localStorage` `taliaHeaderFiltersVisible` |
-| **Column filters** | Native Tabulator column header filters | `headerFilter` columns → `.tabulator-header-filter` | **Column filters** | `localStorage` `taliaHeaderTabulatorFiltersVisible` |
+| **Column filters** | Native Tabulator column header filters | `headerFilter` columns → `.tabulator-header-filter` | Tab **Options** → Views → **Column filters** (global header remains an override) | User profile `componentOptions` |
 | **Callout** | Extra informational note / guidance (usually hidden) | `.talia-callout` | **Callouts** | Appearance profile `calloutsVisible` |
-| **Controls** | In-panel view/ops chrome (Expand/Collapse, Nested/Flat, …) | panel `.talia-report__controls` | Tab **Options** (Views) | User profile `componentOptions` |
+| **Legends** | Chart.js overlay legends and HTML legend strips | `getOverlayLegendOptions` / `.talia-chart-legend` | Tab **Options** → Views → **Legends** (StatusBar **Legends** remains a global override) | User profile `componentOptions` + appearance `chartLegendsVisible` |
+| **Controls** | In-panel view/ops chrome (Expand/Collapse, Nested/Flat buttons, …) | panel `.talia-report__controls` | Tab **Options** → Views → **Controls** | User profile `componentOptions` |
 | **Actions** | Panel actions (Refresh, product Export, …) | `.talia-report__actions-bar` (preferred); legacy compact: `.talia-report__actions` in header | Tab **Options** (Ops) / role | Role ops allow-list + Admin Options |
 | **Snapshot** | Pinned KPI strip above scrollable body (Booked, Velocity, …) | `ReportSnapshot` → `section.talia-report__snapshot` + `.talia-report__metrics` / `.talia-metric` | Tab **Options** → Views → **Snapshot** | User profile `componentOptions` |
 | **Details** | User-facing *extra* data blocks (header ≣); never the primary table/chart | `ReportDataDetails` + `useReportShellOptions` / `usePanelDetailsVisibility` | Tab **Options** → Views → **Details** (+ header ≣) | User profile `componentOptions` + `localStorage` |
 | **Totals** | Tabulator column-calc footer (`withColumnTotal`) | native ColumnCalcs via `setTabulatorColumnTotalsVisible` | Tab **Options** → Views → **Totals** | User profile `componentOptions` (opt-in `VIEW_TOTALS`; role `minRole` / ops allow-list) |
 | **Technical meta** | Dev/diagnostic block (dock tab ⓘ) | `ReportEventMeta` via `usePanelTechnicalMetaVisibility` | Tab ⓘ only | In-memory `__taliaPanelTechnicalMetaVisibility` |
 | **Panel Options** | Views + Operations menu on active dock tab | Tab **⚙** (`useComponentOptions` / `useReportShellOptions`) | Tab ⚙ | User profile + role criteria/ops |
-| **Data export** | Export to CSV / PDF of the panel’s registered payload | `lib/panelDataExport.js` + `supportsDataExport` | Tab **⬇** (next to ⓘ) — **Export to CSV** / **Export to PDF** | `window.__taliaPanelDataExport` |
+| **Data export** | Export to CSV / PDF of the panel’s registered payload | `lib/panelDataExport.js` — Tabulator tables auto-register when `panelComponentId` is passed to `getTabulatorOptions`; non-table panels call `registerPanelDataExport` | Tab **⬇** (next to ⓘ) — **Export to CSV** / **Export to PDF** | `window.__taliaPanelDataExport` |
+| **Tooltip** | Dense row/chip HoverPreview | `HoverPreview` + panel summary; Views → **Tooltip** (+ optional **Tooltip view** choice) | Tab **Options** → Views | User profile `componentOptions` |
 | **Content** | Primary body (table, chart, map) | `main.talia-report__content`; with Snapshot use `talia-report__content--scroll` so only the body scrolls | — | — |
 
 ### Root `<html>` classes (visibility)
@@ -111,12 +113,13 @@ StatusBar global criteria / focus / visibility strips are independent of per-com
 | Filters | `talia-filters-hidden` |
 | Column filters | `talia-tabulator-filters-hidden` |
 | Callouts | `talia-callouts-hidden` |
+| Legends | `talia-chart-legends-hidden` |
 | Actions | `talia-actions-hidden` |
 | Controls | `talia-controls-hidden` |
 
 Details use `ReportDataDetails` / `visible={showDetails}` for **secondary** blocks only — not a root CSS class. Primary Tabulator/chart hosts stay mounted in `talia-report__content`.
 
-**Views chrome (generic):** use `useReportShellOptions(panelComponentId, panelInstanceId)` for `showSnapshot`, `showDetails`, `showFilters`, and `showTotals`. Persist via user profile `componentOptions`. Header **Filters** (`talia-filters-hidden`) remains a global override; per-panel Views → **Filters** uses `.talia-report-filters--hidden`. Header ≣ Details ANDs with Views → Details. Views → **Totals** (`VIEW_TOTALS`): pass `panelComponentId` into `getTabulatorOptions` so `tabulatorConfig` applies `setTabulatorColumnTotalsVisible` on Options change and `tableBuilt`; presenters may also call `useTabulatorColumnTotals(instanceRef, showTotals)`. Do **not** hide the footer with CSS (leaves a blank gap) or rewrite the Tabulator host `className` in React.
+**Views chrome (generic):** use `useReportShellOptions(panelComponentId, panelInstanceId)` for `showSnapshot`, `showDetails`, `showFilters`, `showTotals`, and `showLegends`. Persist via user profile `componentOptions`. Header **Filters** (`talia-filters-hidden`) remains a global override; per-panel Views → **Filters** uses `.talia-report-filters--hidden`. Header ≣ Details ANDs with Views → Details. StatusBar **Legends** (`talia-chart-legends-hidden`) remains a global override; per-panel Views → **Legends** uses `.talia-report--legends-hidden` and Chart.js `visible: chartLegendsVisible && showLegends`. Views → **Totals** (`VIEW_TOTALS`): pass `panelComponentId` into `getTabulatorOptions` so `tabulatorConfig` applies `setTabulatorColumnTotalsVisible` on Options change and `tableBuilt`; presenters may also call `useTabulatorColumnTotals(instanceRef, showTotals)`. Do **not** hide the footer with CSS (leaves a blank gap) or rewrite the Tabulator host `className` in React.
 
 ### Standard shell markup order
 
@@ -303,7 +306,7 @@ const MyComponent = () => {
   - **User definition** (business/user-facing meaning)
   - **Admin/Dev definition** (technical/internal meaning)
 - Emit events on row selection: `talia:componentname.select`
-- **Persistent selection indicator:** use `createReferenceRowFormatter` / `refreshReferenceRowClasses` from `lib/tabulatorReferenceSelection.js` so the active row keeps class `tabulator-row--reference` across data refresh. Shared left accent bar styling lives in `tabulator-theme.css` (`--theme-table-row-selected-accent`). Panels with `selectableRows: 1` get the same bar via `.tabulator-selected`.
+- **Persistent selection indicator:** use `createReferenceRowFormatter` / `refreshReferenceRowClasses` from `lib/tabulatorReferenceSelection.js` so the active row keeps class `tabulator-row--reference` across data refresh. Shared **full-row** selected fill plus left accent bar live in `tabulator-theme.css` (`--theme-table-row-selected`, `--theme-table-row-selected-accent`). Panels with `selectableRows: 1` get the same treatment via `.tabulator-selected`.
 - For grouped tables that need tab-header controls, set `supportsGroupActions: true` in `registry.js` and register presenter actions in `window.__taliaPanelGroupActions`
 - For **table data export** (CSV / print-PDF for verification), set `supportsDataExport: true` in `registry.js` and register via `registerPanelDataExport` from `lib/panelDataExport.js` (dock tab **⬇** next to ⓘ). Prefer `payloadFromTabulator(table, title)` so export uses **visible/filtered** rows. This is distinct from product Export in `.talia-report__actions-bar` (e.g. Project Summary PDF).
 - Do not hardcode table `layout` in panel code unless you intentionally opt out with `enforceGlobalLayout: false`
@@ -576,6 +579,7 @@ Use shared `HoverPreview` (portal chrome) + a panel-specific dense summary compo
 - Presenter keeps the index in a **ref** for hot Tabulator handlers; hover state stores only `{ id, rect }` (or `{ item, rect }` for click-to-open chips).
 - Clip row/chip rects with `clipAnchorRectToViewport` so wide Tabulator rows do not park the preview off-screen.
 - Prefer Appearance **Hover Preview Delay / Opacity** (ThemeContext) for timing and transparency; drop native `title` tooltips on the same rows to avoid doubles.
+- Gate with Views → **Tooltip** (`VIEW_TOOLTIP` / `showTooltip` from `useReportShellOptions`). Optional **Tooltip view** (`tooltipView` choice) switches among a small set of summaries (e.g. MSE Distribution vs Performance).
 - Click selects/links via the message bus; hover only shows the preview and clears when the pointer leaves (same as MSE).
 
 ## Summary

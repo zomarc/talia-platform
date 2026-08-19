@@ -105,18 +105,20 @@ export async function resolveVoyageScope(client, sailCode) {
 
   if (shipCode) {
     const { data: berthRows } = await client
-      .from('ship_day_berth_status')
-      .select('berth_capacity, sail_code, date')
+      .from('ship_day_capacity')
+      .select('sellable_berths, berth_capacity, sail_code, date')
       .eq('ship_code', shipCode)
       .in('sail_code', sailCodes.length ? sailCodes : [referenceSailCode])
       .order('date', { ascending: true })
       .limit(50);
 
     if (berthRows?.length) {
-      const caps = berthRows.map((r) => Number(r.berth_capacity) || 0).filter((n) => n > 0);
+      const caps = berthRows
+        .map((r) => Number(r.sellable_berths ?? r.berth_capacity) || 0)
+        .filter((n) => n > 0);
       if (caps.length) {
         capacity = Math.max(...caps);
-        capacitySource = 'ship_day_berth_status';
+        capacitySource = 'ship_day_capacity';
       }
     }
 

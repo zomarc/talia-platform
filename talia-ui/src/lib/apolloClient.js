@@ -391,6 +391,19 @@ export const FOCUS_MUTATIONS = {
         recordsProcessed
         duration
         error
+        cancelled
+      }
+    }
+  `,
+
+  CANCEL_SYNC: gql`
+    mutation CancelSync($tableName: String) {
+      cancelSync(tableName: $tableName) {
+        success
+        tableName
+        cancelledCount
+        runningTables
+        message
       }
     }
   `

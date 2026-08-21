@@ -19,7 +19,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Monotonic ops token (not a calendar stamp). Bump when validate menu behavior or Instance & keys cross-check changes.
-SCRIPT_VERSION="ops-11"
+SCRIPT_VERSION="ops-13"
 CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
 if [[ -f "${CONFIG_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -276,6 +276,23 @@ collect_ui_fallback_port_pids() {
 get_pid_cwd() {
   local pid="$1"
   lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1
+}
+
+# vite preview :4173 is the demo presenter; vite-dev :5173 is the edit server.
+# They must coexist. Duplicate cleanup only targets extra 5173 / forbidden 5174–5175.
+vite_pid_is_preview() {
+  local pid="$1"
+  local args
+  args=$(ps -p "$pid" -o args= 2>/dev/null || true)
+  [[ "$args" == *preview* ]]
+}
+
+kill_pid_list() {
+  local pids="$1"
+  [[ -z "$pids" ]] && return 0
+  kill $pids 2>/dev/null || true
+  sleep 1
+  kill -9 $pids 2>/dev/null || true
 }
 
 stop_port_processes() {
@@ -2121,8 +2138,6 @@ print_front_screen_status() {
 }
 
 start_local_services() {
-  local local_ui_health_url="${LOCAL_UI_URL%/}/"
-  local local_graphql_health_url="${LOCAL_GRAPHQL_URL%/}"
   echo -e "${BOLD}Starting local services:${NC}"
 
   if [[ ! -d "${ROOT_DIR}/talia-ui" ]] || [[ ! -d "${ROOT_DIR}/talia-server" ]]; then
@@ -2137,22 +2152,12 @@ start_local_services() {
   check_duplicate_dev_servers true
   check_local_code_origin true
 
-  local ui_code
-  ui_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$local_ui_health_url" 2>/dev/null || echo "000")
-  if [[ "$ui_code" == "200" ]]; then
-    echo -e "  ${GREEN}✓${NC} UI already running (port 5173)"
-  else
-    echo -e "  Starting UI (talia-ui)..."
-    (cd "${ROOT_DIR}/talia-ui" && nohup npm run dev >/tmp/talia-ui.log 2>&1 & echo $! > .dev-server.pid)
-  fi
+  local installer="${SCRIPT_DIR}/install-local-dev.sh"
+  chmod +x "$installer" "${SCRIPT_DIR}/run-local-ui-dev.sh" "${SCRIPT_DIR}/run-local-graphql.sh" 2>/dev/null || true
 
-  local gql_code
-  gql_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$local_graphql_health_url" 2>/dev/null || echo "000")
-  if [[ "$gql_code" == "200" || "$gql_code" == "400" ]]; then
-    echo -e "  ${GREEN}✓${NC} GraphQL already running (port 4000)"
-  else
-    echo -e "  Starting GraphQL (talia-server)..."
-    (cd "${ROOT_DIR}/talia-server" && nohup npm run start >/tmp/talia-server.log 2>&1 & echo $! > .dev-server.pid)
+  echo -e "  Starting UI + GraphQL (launchd KeepAlive; Supabase stays on Docker)..."
+  if ! "$installer" start; then
+    echo -e "  ${RED}✗ Durable local stack failed. See /tmp/talia-ui.log and /tmp/talia-server.log${NC}"
   fi
 
   sleep 2
@@ -2703,7 +2708,7 @@ complete_check() {
       if [[ -f "${SCRIPT_DIR}/validate-staging.sh" ]]; then
         run_script "validate-staging.sh" "local"
       else
-        check_duplicate_dev_servers true
+        check_duplicate_dev_servers false
         check_local_services
       fi
       check_external_gateway
@@ -2913,7 +2918,7 @@ start_ngrok_local() {
   if [[ "$edit_code" == "200" ]]; then
     echo -e "${GREEN}OK${NC}"
   else
-    echo -e "${YELLOW}Not running${NC} ${DIM}(optional; start-core / npm run dev)${NC}"
+    echo -e "${YELLOW}Not running${NC} ${DIM}(start-core installs launchd KeepAlive on :${edit_port})${NC}"
   fi
 
   echo -n "  Public preview (localhost:${public_port}): "
@@ -2996,24 +3001,25 @@ stop_ngrok_local() {
 
 stop_local_dev_services() {
   echo -e "${BOLD}Stopping local dev services (UI/API):${NC}"
-  if command -v lsof >/dev/null 2>&1; then
+  if [[ -x "${SCRIPT_DIR}/install-local-dev.sh" ]]; then
+    "${SCRIPT_DIR}/install-local-dev.sh" stop || true
+  elif command -v lsof >/dev/null 2>&1; then
     local pids
-    pids=$(lsof -ti:5173,4000 2>/dev/null | tr '\n' ' ' | xargs)
-    stop_port_processes "$pids" "processes on ports 5173/4000"
+    pids=$(lsof -ti:5173 2>/dev/null | tr '\n' ' ' | xargs)
+    stop_port_processes "$pids" "processes on port 5173"
+  fi
+  if command -v lsof >/dev/null 2>&1; then
+    local api_pids
+    api_pids=$(lsof -ti:4000 2>/dev/null | tr '\n' ' ' | xargs)
+    stop_port_processes "$api_pids" "processes on port 4000"
   else
-    echo -e "  ${YELLOW}lsof not available; skipping port-based stop${NC}"
+    echo -e "  ${YELLOW}lsof not available; skipping GraphQL stop${NC}"
   fi
 }
 
 stop_local_services() {
   echo -e "${BOLD}Stopping local services:${NC}"
-  if command -v lsof >/dev/null 2>&1; then
-    local pids
-    pids=$(lsof -ti:5173,4000 2>/dev/null | tr '\n' ' ' | xargs)
-    stop_port_processes "$pids" "processes on ports 5173/4000"
-  else
-    echo -e "  ${YELLOW}lsof not available; skipping port-based stop${NC}"
-  fi
+  stop_local_dev_services
   stop_ngrok_local
 }
 
@@ -3406,6 +3412,8 @@ enable_remembered_target_external() {
 
 check_duplicate_dev_servers() {
   local auto_fix="${1:-false}"
+  local ui_port="${LOCAL_UI_PORT:-5173}"
+  local preview_port="${LOCAL_PUBLIC_UI_PORT:-4173}"
   echo -e "${BOLD}Dev Server Instances:${NC}"
 
   if ! command -v lsof >/dev/null 2>&1; then
@@ -3415,98 +3423,78 @@ check_duplicate_dev_servers() {
 
   local ui_dir="${ROOT_DIR}/talia-ui"
 
-  # Check for multiple Vite processes (pipefail-safe when none match)
-  local vite_count
-  vite_count=$( { ps aux | grep -E "[v]ite" | grep -v grep || true; } | wc -l | tr -d ' ')
-  local vite_pids
+  local vite_pids pid cwd
   vite_pids=$( { ps aux | grep -E "[v]ite" | grep -v grep || true; } | awk '{print $2}' | tr '\n' ' ' | xargs)
-  local vite_ui_pids=""
+  local vite_dev_pids=""
+  local vite_preview_pids=""
   local vite_other_pids=""
-  local pid
   for pid in $vite_pids; do
-    local cwd
+    if vite_pid_is_preview "$pid"; then
+      vite_preview_pids="${vite_preview_pids} ${pid}"
+      continue
+    fi
     cwd=$(get_pid_cwd "$pid")
     if [[ -n "$cwd" && "$cwd" == "$ui_dir"* ]]; then
-      vite_ui_pids="${vite_ui_pids} ${pid}"
+      vite_dev_pids="${vite_dev_pids} ${pid}"
     else
       vite_other_pids="${vite_other_pids} ${pid}"
     fi
   done
 
-  # Check for processes on dev server ports
-  # NOTE: with pipefail, bare `lsof | wc` fails when nothing listens — treat empty as 0.
-  local port_5173 port_5174 port_5175
-  port_5173=$( { lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null || true; } | wc -l | tr -d ' ')
+  local port_5173 port_5174 port_5175 port_preview
+  port_5173=$( { lsof -nP -iTCP:"${ui_port}" -sTCP:LISTEN -t 2>/dev/null || true; } | wc -l | tr -d ' ')
   port_5174=$( { lsof -nP -iTCP:5174 -sTCP:LISTEN -t 2>/dev/null || true; } | wc -l | tr -d ' ')
   port_5175=$( { lsof -nP -iTCP:5175 -sTCP:LISTEN -t 2>/dev/null || true; } | wc -l | tr -d ' ')
+  port_preview=$( { lsof -nP -iTCP:"${preview_port}" -sTCP:LISTEN -t 2>/dev/null || true; } | wc -l | tr -d ' ')
   local fallback_ports=$((port_5174 + port_5175))
 
   local has_duplicates=false
-  local vite_ui_count
-  vite_ui_count=$(echo "$vite_ui_pids" | wc -w | tr -d ' ')
-  [[ "$vite_ui_count" -gt 1 ]] && has_duplicates=true
+  local vite_dev_count
+  vite_dev_count=$(echo "$vite_dev_pids" | wc -w | tr -d ' ')
+  [[ "$vite_dev_count" -gt 1 ]] && has_duplicates=true
   [[ "$port_5173" -gt 1 ]] && has_duplicates=true
   [[ "$fallback_ports" -gt 0 ]] && has_duplicates=true
 
   if $has_duplicates && [[ "$auto_fix" == "true" ]]; then
-    echo -e "  ${YELLOW}⚠️  Duplicate/forbidden UI servers detected. Enforcing single-server rule on 5173...${NC}"
-    local port_pids fallback_pids
+    echo -e "  ${YELLOW}⚠️  Extra Vite-dev / forbidden fallback ports — cleaning 5174/5175 and extra :${ui_port} only (preview :${preview_port} kept)${NC}"
+    kill_pid_list "$(collect_ui_fallback_port_pids)"
+    local port_pids keep extras
     port_pids=$(collect_ui_port_pids)
-    fallback_pids=$(collect_ui_fallback_port_pids)
-    if [[ -n "$fallback_pids" ]]; then
-      kill $fallback_pids 2>/dev/null || true
-      sleep 1
-      kill -9 $fallback_pids 2>/dev/null || true
-    fi
-    if [[ -n "$port_pids" ]]; then
-      kill $port_pids 2>/dev/null || true
-      sleep 1
-      kill -9 $port_pids 2>/dev/null || true
-    fi
-    if [[ -n "$vite_ui_pids" ]]; then
-      kill $vite_ui_pids 2>/dev/null || true
-      sleep 1
-      kill -9 $vite_ui_pids 2>/dev/null || true
-    fi
-    echo -e "  ${GREEN}✓${NC} Stopped all Vite/dev-port processes"
+    keep=$(echo "$port_pids" | awk '{print $1}')
+    extras=$(echo "$port_pids" | awk '{for (i=2;i<=NF;i++) printf "%s ", $i}')
+    kill_pid_list "$extras"
+    local extra_dev=""
+    for pid in $vite_dev_pids; do
+      [[ "$pid" == "$keep" ]] && continue
+      extra_dev="${extra_dev} ${pid}"
+    done
+    kill_pid_list "$extra_dev"
+    echo -e "  ${GREEN}✓${NC} Duplicate Vite-dev cleaned; demo preview untouched"
     return 0
   fi
 
-  if [[ "$vite_ui_count" -gt 1 ]]; then
-    echo -e "  ${RED}⚠️  Multiple Talia UI Vite processes detected: ${vite_ui_count}${NC}"
-    echo -e "  ${YELLOW}   PIDs: ${vite_ui_pids}${NC}"
-    echo -e "  ${DIM}   Run: pkill -f 'vite' && cd talia-ui && npm run dev${NC}"
+  if [[ "$vite_dev_count" -gt 1 ]]; then
+    echo -e "  ${RED}⚠️  Multiple Talia UI Vite-dev processes: ${vite_dev_count}${NC}"
+    echo -e "  ${YELLOW}   PIDs: ${vite_dev_pids}${NC}"
     return 1
-  elif [[ "$vite_ui_count" -eq 1 ]]; then
-    echo -e "  ${GREEN}✓${NC} Vite processes: ${vite_ui_count} (OK)"
+  elif [[ "$vite_dev_count" -eq 1 ]]; then
+    echo -e "  ${GREEN}✓${NC} Vite-dev: 1 on :${ui_port} (edit)"
   else
-    echo -e "  ${YELLOW}⚠️  No Vite processes found${NC}"
+    echo -e "  ${YELLOW}⚠️  No Vite-dev on :${ui_port}${NC}"
+  fi
+
+  if [[ "$port_preview" -gt 0 || -n "${vite_preview_pids// /}" ]]; then
+    echo -e "  ${GREEN}✓${NC} Vite preview :${preview_port} (demo presenter — allowed with edit server)"
   fi
 
   if [[ "$port_5173" -gt 1 || "$fallback_ports" -gt 0 ]]; then
-    echo -e "  ${RED}⚠️  UI port rule violation: only one server on 5173 is allowed${NC}"
-    echo -e "  ${YELLOW}   Port 5173 listeners: ${port_5173}${NC}"
-    if [[ "$port_5173" -gt 0 ]]; then
-      local pids_5173
-      pids_5173=$(lsof -ti:5173 2>/dev/null | tr '\n' ' ' | xargs)
-      echo -e "  ${YELLOW}   Port 5173: ${port_5173} process(es) - PIDs: ${pids_5173}${NC}"
-    fi
-    if [[ "$port_5174" -gt 0 ]]; then
-      local pids_5174
-      pids_5174=$(lsof -ti:5174 2>/dev/null | tr '\n' ' ' | xargs)
-      echo -e "  ${YELLOW}   Port 5174 (forbidden): ${port_5174} process(es) - PIDs: ${pids_5174}${NC}"
-    fi
-    if [[ "$port_5175" -gt 0 ]]; then
-      local pids_5175
-      pids_5175=$(lsof -ti:5175 2>/dev/null | tr '\n' ' ' | xargs)
-      echo -e "  ${YELLOW}   Port 5175 (forbidden): ${port_5175} process(es) - PIDs: ${pids_5175}${NC}"
-    fi
-    echo -e "  ${DIM}   Run: lsof -ti:5174,5175 | xargs kill -9${NC}"
+    echo -e "  ${RED}⚠️  UI port rule: one listener on :${ui_port}; 5174/5175 forbidden${NC}"
+    echo -e "  ${YELLOW}   :${ui_port} listeners: ${port_5173} · 5174: ${port_5174} · 5175: ${port_5175}${NC}"
     return 1
   elif [[ "$port_5173" -eq 1 ]]; then
-    echo -e "  ${GREEN}✓${NC} Dev server ports: single process on port 5173 (OK)"
+    echo -e "  ${GREEN}✓${NC} Edit UI :${ui_port} (OK)"
   else
-    echo -e "  ${YELLOW}⚠️  No process on UI port 5173${NC}"
+    echo -e "  ${YELLOW}⚠️  No process on UI port ${ui_port}${NC}"
   fi
 
   return 0
@@ -3759,7 +3747,7 @@ handle_remote_menu_legacy() {
         echo ""
         
         # Check for duplicate dev servers first
-        check_duplicate_dev_servers true
+        check_duplicate_dev_servers false
         echo ""
         
         echo -n "  GraphQL (localhost:4000): "
@@ -3834,7 +3822,7 @@ handle_remote_menu_legacy() {
       echo ""
       
       # Check for duplicate dev servers first
-      check_duplicate_dev_servers true
+      check_duplicate_dev_servers false
       echo ""
       
       echo -e "  ${BOLD}Services:${NC}"

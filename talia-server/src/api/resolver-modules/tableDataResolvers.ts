@@ -20,7 +20,14 @@ const TABLE_DATA_COLUMN_ALLOWLIST: Record<string, ReadonlySet<string>> = {
     'berth_capacity', 'berths_occupied', 'berths_available', 'total_cabins',
   ]),
   sail_booking_summary: new Set([
-    'sail_code', 'guest_count', 'guaranteed_cabins',
+    'sail_code',
+    'guest_count',
+    'booked_guests',
+    'booked_fit_guests',
+    'booked_group_guests',
+    'contracted_guests',
+    'estimated_guests',
+    'guaranteed_cabins',
   ]),
   reservation_current_state: new Set([
     'res_id', 'sail_code', 'agency_id', 'group_id', 'guest_count',

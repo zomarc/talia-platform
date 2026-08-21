@@ -31,7 +31,7 @@ class ErrorBoundary extends React.Component {
             <div className="error-boundary__header">
               <h1 className="error-boundary__title">🚨 Application Error</h1>
               <p className="error-boundary__subtitle">
-                Something went wrong in the authentication system
+                Something went wrong while rendering this view
               </p>
             </div>
 

@@ -34,6 +34,15 @@ export const VIEW_TOOLTIP_MSE = {
   default: 'distribution',
   choiceLabels: { distribution: 'Distribution', performance: 'Performance' },
 };
+/** Ship × Day Pressure — bar fill: master/segment vs FIT/Group */
+export const VIEW_BAR_SPLIT = {
+  id: 'barSplit',
+  label: 'Bar split',
+  type: 'choice',
+  choices: ['master_segment', 'fit_group'],
+  default: 'master_segment',
+  choiceLabels: { master_segment: 'Master / Segment', fit_group: 'FIT / Group' },
+};
 
 const VIEW_MENU_ORDER = [
   'viewMode',
@@ -46,8 +55,8 @@ const VIEW_MENU_ORDER = [
   'legends',
   'tooltip',
   'tooltipView',
+  'barSplit',
 ];
-
 export const sortComponentViews = (views) => {
   const list = Array.isArray(views) ? [...views] : [];
   return list.sort((a, b) => {
@@ -128,6 +137,10 @@ export const DEFAULT_COMPONENT_OPTIONS = {
   },
   'ship-day-berth': {
     views: [VIEW_NESTED, VIEW_FILTERS, VIEW_COLUMN_FILTERS, VIEW_CONTROLS],
+    operations: [],
+  },
+  'ship-day-pressure': {
+    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_CONTROLS, VIEW_TOOLTIP, VIEW_LEGENDS, VIEW_BAR_SPLIT],
     operations: [],
   },
   'distribution': {

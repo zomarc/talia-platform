@@ -2,6 +2,7 @@ import SailingTableContainer from './SailingTable';
 import MasterSailingContainer from './MasterSailing';
 import MasterSailingExplorerContainer from './MasterSailingExplorer';
 import ShipDayBerthContainer from './ShipDayBerth';
+import ShipDayPressureContainer from './ShipDayPressure';
 import SimpleTable from './SimpleTable';
 import KPICards from './KPICards';
 import PublishedRates from './PublishedRates';
@@ -76,6 +77,7 @@ import {
   VIEW_TOOLTIP,
   VIEW_TOOLTIP_MSE,
   VIEW_TOTALS,
+  VIEW_BAR_SPLIT,
 } from '../../lib/componentOptionsCatalog';
 
 const publishedRatesSelect = 'talia:publishedRates.select';
@@ -181,6 +183,27 @@ export const componentRegistry = {
       operations: [],
     },
     filePath: 'src/components/focus-panels/ShipDayBerth/index.jsx'
+  },
+  ShipDayPressure: {
+    component: ShipDayPressureContainer,
+    panelId: 'ship-day-pressure',
+    category: 'Tables',
+    title: 'Ship × Day Pressure',
+    description: 'WIP compact grid of true sellable vs booked / expected / contracted by ship-day. Flags dead beds from short products blocking longer voyages and low-probability group holds.',
+    props: {},
+    dataRequirements: 'Requires ship_day_capacity, inventory_item, master_sail, sail_booking_summary, sail_by_cabin_occupancy, ship. Physical MAX on ship-day; demand exploded onto occupancy dates; blocking from cabin-category loading.',
+    events: {
+      emits: [SAIL_SELECT_EVENT, SHIP_SELECT_EVENT],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, SHIP_SELECT_EVENT, SHIP_CLEAR_EVENT],
+    },
+    supportsRefresh: true,
+    supportsDataExport: true,
+    showInReports: true,
+    options: {
+      views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_CONTROLS, VIEW_TOOLTIP, VIEW_LEGENDS, VIEW_BAR_SPLIT],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/ShipDayPressure/index.jsx'
   },
   SimpleTable: {
     component: SimpleTable,

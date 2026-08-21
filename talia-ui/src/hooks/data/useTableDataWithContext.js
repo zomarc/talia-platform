@@ -27,6 +27,7 @@ import {
   normalizeGlobalDepartureMonth,
   rowMatchesDepartureMonth,
 } from '../../lib/globalDepartureMonth';
+import { rowMatchesGlobalShip } from '../../lib/globalShipFilter';
 import useReportPanelLoading from '../useReportPanelLoading';
 
 const GRAPHQL_URL = '/api/graphql';
@@ -367,14 +368,29 @@ const applyGlobalDepartureMonthCriteria = (rows, context = null) => {
   return (rows || []).filter((row) => rowMatchesDepartureMonth(row, monthKey));
 };
 
-const applyGlobalCriteria = (rows, context = null) => (
-  applyRealSailingCriteria(
-    applyGlobalDurationCriteria(
-      applyGlobalDepartureMonthCriteria(
-        applyGlobalDateCriteria(rows, context),
-        context
+const applyGlobalShipCriteria = (rows, context = null, tableName = null) => {
+  // Explicit sail selection should always win over global ship filter.
+  if (resolveSelectedSailCode(context)) {
+    return rows;
+  }
+  // Never filter the ship dimension itself — StatusBar / panels need the full list.
+  if (tableName === 'ship') return rows;
+  const criteria = window.__taliaGlobalCriteria || null;
+  return (rows || []).filter((row) => rowMatchesGlobalShip(row, criteria?.shipCode));
+};
+
+const applyGlobalCriteria = (rows, context = null, tableName = null) => (
+  applyGlobalShipCriteria(
+    applyRealSailingCriteria(
+      applyGlobalDurationCriteria(
+        applyGlobalDepartureMonthCriteria(
+          applyGlobalDateCriteria(rows, context),
+          context
+        )
       )
-    )
+    ),
+    context,
+    tableName
   )
 );
 
@@ -491,7 +507,7 @@ export const useTableDataWithContext = ({
 
   const commitLoadedData = (rows, filtersKey) => {
     rawDataRef.current = rows || [];
-    setData(applyGlobalCriteria(rawDataRef.current, contextRef.current));
+    setData(applyGlobalCriteria(rawDataRef.current, contextRef.current, tableNameRef.current));
     setLoadedFiltersKey(filtersKey);
   };
 
@@ -939,7 +955,7 @@ export const useTableDataWithContext = ({
       // row set is unchanged — sail.select republishes criteria and must not
       // force every panel through replaceData (MSE scroll jump).
       setData((prev) => {
-        const next = applyGlobalCriteria(rawDataRef.current, contextRef.current);
+        const next = applyGlobalCriteria(rawDataRef.current, contextRef.current, tableNameRef.current);
         return sameRowRefs(prev, next) ? prev : next;
       });
 

@@ -286,6 +286,15 @@ html.talia-theme-palette-light .status-bar {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-warning) 8%, transparent);
 }
 
+.status-bar__header-btn svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: inherit;
+  opacity: 0.95;
+}
+
 .status-bar__header-btn--criteria {
   width: 48px;
   min-width: 48px;

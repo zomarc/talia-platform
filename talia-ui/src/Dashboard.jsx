@@ -49,6 +49,40 @@ const debugLog = (message, data = null) => {
   console.log(`[App Debug] ${message}`, data || '');
 };
 
+const findTopLeftDockviewGroup = (api) => {
+  const groups = api?.groups || [];
+  if (!groups.length) return null;
+  let best = groups[0];
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const group of groups) {
+    const el = group.element;
+    if (!el || typeof el.getBoundingClientRect !== 'function') continue;
+    const rect = el.getBoundingClientRect();
+    const score = (rect.top * 100000) + rect.left;
+    if (score < bestScore) {
+      bestScore = score;
+      best = group;
+    }
+  }
+  return best;
+};
+
+const topLeftAddPanelPosition = (api) => {
+  const group = findTopLeftDockviewGroup(api);
+  const firstPanel = group?.panels?.[0];
+  if (firstPanel?.id) {
+    return { referencePanel: firstPanel.id, direction: 'within', index: 0 };
+  }
+  if (group?.id) {
+    return { referenceGroup: group.id, direction: 'within', index: 0 };
+  }
+  const fallbackId = api?.panels?.[0]?.id;
+  if (fallbackId) {
+    return { referencePanel: fallbackId, direction: 'within', index: 0 };
+  }
+  return null;
+};
+
 const toggleDockviewPanelLayout = (panelApi, dockviewApi) => {
   if (!panelApi) return;
   const currentlyMaximized = panelApi?.isMaximized?.() ?? false;
@@ -829,6 +863,7 @@ function Dashboard({ user }) {
         <ReportShell
           report={report}
           panelInstanceId={props?.api?.id || props?.params?.panel?.id || report.panelId}
+          panelApi={props?.api || null}
         >
           <Component
             {...props}
@@ -1395,40 +1430,7 @@ function Dashboard({ user }) {
       // no-op
     }
     
-    // Get existing panels using toJSON method
-    let position = null;
-    try {
-      const layout = apiRef.current.toJSON();
-      if (layout.panels && Object.keys(layout.panels).length > 0) {
-        // Get the currently active panel or the last panel
-        const activeGroup = layout.activeGroup;
-        let referencePanelId = null;
-        let direction = "right"; // Default direction
-        
-        if (activeGroup && layout.panels[activeGroup]) {
-          // Use the active panel as reference
-          referencePanelId = activeGroup;
-        } else {
-          // Fallback to the last panel
-          const panelIds = Object.keys(layout.panels);
-          referencePanelId = panelIds[panelIds.length - 1];
-        }
-        
-        if (referencePanelId) {
-          // Smart positioning: alternate between right and below for better layout
-          const panelCount = Object.keys(layout.panels).length;
-          if (panelCount % 2 === 0) {
-            direction = "below"; // Even panels go below
-          } else {
-            direction = "right"; // Odd panels go to the right
-          }
-          
-          position = { referencePanel: referencePanelId, direction };
-        }
-      }
-    } catch (e) {
-      console.warn('Could not get existing panels:', e);
-    }
+    let position = topLeftAddPanelPosition(apiRef.current);
     
     apiRef.current.addPanel({ 
       id, 

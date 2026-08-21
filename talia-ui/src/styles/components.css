@@ -170,9 +170,14 @@
   color: var(--theme-delta-negative);
 }
 
-/* Scrollable body when Snapshot (or other pinned chrome) sits above content */
+/* Scrollable body when Snapshot (or other pinned chrome) sits above content.
+   Keep X-scroll inside Tabulator so frozen leading columns stay pinned. */
 .talia-report__content--scroll {
   overflow: auto !important;
+}
+
+.talia-report__content--scroll:has(.tabulator) {
+  overflow-x: hidden !important;
 }
 
 .talia-report__controls {

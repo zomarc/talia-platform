@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ReportEventMeta from "../shared/ReportEventMeta";
 import { REPORT_PANEL_PAUSE_EVENT, REPORT_PANEL_LOADING_EVENT } from "./eventConstants";
 import usePanelTechnicalMetaVisibility from "../../hooks/usePanelTechnicalMetaVisibility";
@@ -7,6 +7,7 @@ import {
   resolvePanelLoading,
   panelLoadingEventMatches,
 } from "../../services/panelLoadingState";
+import { activateDockviewPanel } from "../../lib/activateDockviewPanel";
 
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
 
@@ -20,7 +21,8 @@ const deriveReportSources = (report) => {
   return [];
 };
 
-const ReportShell = ({ report, panelInstanceId, children }) => {
+const ReportShell = ({ report, panelInstanceId, panelApi = null, children }) => {
+  const shellRef = useRef(null);
   const emits = report?.events?.emits || [];
   const respondsTo = Array.from(new Set([...(report?.events?.respondsTo || []), DASHBOARD_GLOBAL_CRITERIA_EVENT]));
   const sources = deriveReportSources(report);
@@ -81,6 +83,24 @@ const ReportShell = ({ report, panelInstanceId, children }) => {
     return () => window.removeEventListener(REPORT_PANEL_LOADING_EVENT, handleLoadingChanged);
   }, [panelInstanceId, report?.panelId]);
 
+  // One gesture = activate this report + interact with its data (row/chart click).
+  // Capture-phase pointerdown runs before Tabulator handlers so Dockview chrome
+  // is already active when the selection event fires.
+  useEffect(() => {
+    const node = shellRef.current;
+    if (!node) return undefined;
+    const onPointerDownCapture = (event) => {
+      if (event.button !== 0) return;
+      if (panelApi) {
+        activateDockviewPanel(panelApi);
+        return;
+      }
+      activateDockviewPanel(panelInstanceId);
+    };
+    node.addEventListener('pointerdown', onPointerDownCapture, true);
+    return () => node.removeEventListener('pointerdown', onPointerDownCapture, true);
+  }, [panelApi, panelInstanceId]);
+
   const isArcadePanel = isArcadeGamePanelComponent(report?.panelId);
   const shellPauseChrome = isPaused && !isArcadePanel;
   const shellClassName = [
@@ -91,9 +111,12 @@ const ReportShell = ({ report, panelInstanceId, children }) => {
 
   return (
     <div
+      ref={shellRef}
       className={shellClassName}
       aria-busy={isLoading || undefined}
       data-panel-loading={isLoading ? 'true' : undefined}
+      data-panel-instance-id={panelInstanceId || undefined}
+      data-panel-component-id={report?.panelId || undefined}
     >
       {showTechnicalMeta && (
         <div className="talia-report-technical-meta">

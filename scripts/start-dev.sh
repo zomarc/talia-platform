@@ -169,11 +169,16 @@ cleanup() {
     echo ""
     echo -e "${YELLOW}🛑 Stopping all development servers...${NC}"
     
-    # Kill background processes
-    pkill -f "npm run dev"
-    pkill -f "npm run start"
-    pkill -f "vite"
-    pkill -f "node.*dist/index.js"
+    # Kill only this script's UI/API ports — never pkill vite (that reaps demo preview :4173)
+    if command -v lsof >/dev/null 2>&1; then
+      local pids
+      pids=$(lsof -ti:5173,4000 2>/dev/null | tr '\n' ' ' | xargs || true)
+      if [[ -n "$pids" ]]; then
+        kill $pids 2>/dev/null || true
+        sleep 1
+        kill -9 $pids 2>/dev/null || true
+      fi
+    fi
     
     # Remove PID files
     rm -f "$SCRIPT_DIR/../talia-ui/.dev-server.pid"

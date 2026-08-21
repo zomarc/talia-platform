@@ -100,10 +100,13 @@ export const emitAgencyClear = (detail = {}) => {
 };
 
 export const extractSailCodeFromEvent = (detail) => (
-  detail?.sail_code ||
-  detail?.Sail_Code ||
-  detail?.row_data?.sail_code ||
-  (typeof detail === 'string' ? detail : null)
+  detail?.sail_code
+  || detail?.Sail_Code
+  || detail?.reference_sail_code
+  || detail?.canonical_scope?.reference_sail_code
+  || detail?.row_data?.sail_code
+  || detail?.row_data?.reference_sail_code
+  || (typeof detail === 'string' ? detail : null)
 );
 
 export const extractShipCodeFromEvent = (detail) => {

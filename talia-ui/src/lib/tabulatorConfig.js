@@ -8,6 +8,7 @@
 // Import Tabulator from npm package
 import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import { formatDayMon } from './dateFormat';
+import { activateDockviewPanelFromHost, wasDockviewPanelJustActivated } from './activateDockviewPanel';
 import { normalizeColumnHeaderAlignment } from './tabulatorColumnAlignment';
 import { observeTabulatorFieldTerminology, resolveGlobalTabulatorLabel, resolveGlobalTabulatorDisplayKind } from './tabulatorColumnLabelDictionary';
 import {
@@ -334,6 +335,119 @@ export const runWithPreservedTableScroll = (table, refreshFn) => {
 /** Fit-data modes only sample visible / 1 rows natively — expand from the first N rows. */
 const FIT_DATA_SAMPLE_ROWS = 100;
 const FIT_DATA_MAX_COL_WIDTH = 480;
+const EQUAL_WIDTH_COLUMN_CLASS = 'talia-equal-width-col';
+const EQUAL_WIDTH_COLUMN_MIN = 64;
+
+const columnDefinitionHasClass = (column, className) => {
+  const css = column?.definition?.cssClass
+    || column?.getDefinition?.()?.cssClass
+    || '';
+  return String(css).split(/\s+/).includes(className);
+};
+
+const columnIsFrozen = (column) => {
+  const def = column?.getDefinition?.() || column?.definition || {};
+  return def.frozen === true;
+};
+
+const countFrozenLeaves = (cols = []) => cols.reduce((sum, col) => {
+  if (Array.isArray(col?.columns) && col.columns.length) {
+    return sum + countFrozenLeaves(col.columns);
+  }
+  return sum + (col?.frozen === true ? 1 : 0);
+}, 0);
+
+/**
+ * Freeze the first N leaf columns (left → right). Explicit `frozen: false` opts out.
+ * Applied by default in getTabulatorOptions so tables pin at least the first column.
+ */
+export const applyFreezeLeadingColumns = (columns = [], count = 1) => {
+  const n = Number.parseInt(count, 10);
+  if (!Array.isArray(columns) || !Number.isFinite(n) || n <= 0) return columns;
+  let remaining = n;
+  return columns.map((column) => {
+    if (!column || typeof column !== 'object') return column;
+    if (Array.isArray(column.columns) && column.columns.length) {
+      if (remaining <= 0) return column;
+      const before = countFrozenLeaves(column.columns);
+      const nested = applyFreezeLeadingColumns(column.columns, remaining);
+      const after = countFrozenLeaves(nested);
+      remaining = Math.max(0, remaining - Math.max(0, after - before));
+      return { ...column, columns: nested };
+    }
+    if (column.frozen === false) return column;
+    if (remaining > 0) {
+      remaining -= 1;
+      return { ...column, frozen: true };
+    }
+    return column;
+  });
+};
+
+const tabulatorColumns = (table) => {
+  if (typeof table?.getColumns === 'function') {
+    try {
+      return table.getColumns() || [];
+    } catch {
+      return [];
+    }
+  }
+  const byIndex = table?.columnManager?.columnsByIndex;
+  return Array.isArray(byIndex) ? byIndex : [];
+};
+
+/**
+ * Best-fit / width / data: size date & numeric columns to content, then give
+ * scrollable `talia-equal-width-col` bars equal width. Frozen equal-width cols
+ * keep a stable width and are excluded from the viewport squeeze so wide grids
+ * overflow horizontally (required for Tabulator frozen pins).
+ */
+const equalizeMarkedColumnWidths = (table) => {
+  if (!table) return;
+  const columns = tabulatorColumns(table).filter((column) => column?.visible !== false);
+  const graphic = columns.filter((column) => columnDefinitionHasClass(column, EQUAL_WIDTH_COLUMN_CLASS));
+  if (!graphic.length) return;
+
+  const graphicFrozen = graphic.filter(columnIsFrozen);
+  const graphicScroll = graphic.filter((column) => !columnIsFrozen(column));
+  const others = columns.filter((column) => !graphic.includes(column));
+
+  others.forEach((column) => {
+    try {
+      column.reinitializeWidth?.(true);
+      const width = column.getWidth?.() || 0;
+      if (width > FIT_DATA_MAX_COL_WIDTH) column.setWidth?.(FIT_DATA_MAX_COL_WIDTH);
+    } catch {
+      // noop
+    }
+  });
+
+  graphicFrozen.forEach((column) => {
+    try {
+      const width = Math.max(EQUAL_WIDTH_COLUMN_MIN, column.getWidth?.() || EQUAL_WIDTH_COLUMN_MIN);
+      column.setWidth?.(width);
+    } catch {
+      // noop
+    }
+  });
+
+  if (!graphicScroll.length) return;
+
+  const holderWidth = table.rowManager?.element?.clientWidth
+    || table.element?.clientWidth
+    || 0;
+  const used = [...others, ...graphicFrozen].reduce((sum, column) => sum + (column.getWidth?.() || 0), 0);
+  const remaining = Math.max(0, holderWidth - used);
+  const fitted = Math.floor(remaining / graphicScroll.length);
+  const each = Math.max(EQUAL_WIDTH_COLUMN_MIN, fitted);
+  graphicScroll.forEach((column) => {
+    try {
+      column.setWidth?.(each);
+    } catch {
+      // noop
+    }
+  });
+};
 
 const isFitDataLayout = (layout) => String(layout || '').startsWith('fitData');
 
@@ -382,11 +496,13 @@ const sampleFitDataColumnWidths = (table, sampleSize = FIT_DATA_SAMPLE_ROWS) => 
       : [];
     const visible = columns.filter((column) => column?.visible);
     const stretchLast = table.options?.layout === 'fitDataStretch'
+      && !columnDefinitionHasClass(visible[visible.length - 1], EQUAL_WIDTH_COLUMN_CLASS)
       ? visible[visible.length - 1]
       : null;
 
     visible.forEach((column) => {
       if (column === stretchLast) return;
+      if (columnDefinitionHasClass(column, EQUAL_WIDTH_COLUMN_CLASS)) return;
       try {
         column.reinitializeWidth?.(true);
         const width = column.getWidth?.() || 0;
@@ -430,7 +546,9 @@ const refreshTableLayout = (table) => {
   const snapshot = captureTableScroll(table);
   table.layoutRefresh?.(true);
   sampleFitDataColumnWidths(table);
+  equalizeMarkedColumnWidths(table);
   table.redraw?.(true);
+  equalizeMarkedColumnWidths(table);
   restoreTableScroll(snapshot);
 };
 
@@ -447,8 +565,16 @@ export const scheduleTabulatorLayoutRefresh = (table) => {
     if (meta) meta.pendingLayoutRefresh = true;
     return;
   }
-  if (meta) meta.pendingLayoutRefresh = false;
-  refreshTableLayout(table);
+  if (meta?.layoutRefreshInFlight) return;
+  if (meta) {
+    meta.pendingLayoutRefresh = false;
+    meta.layoutRefreshInFlight = true;
+  }
+  try {
+    refreshTableLayout(table);
+  } finally {
+    if (meta) meta.layoutRefreshInFlight = false;
+  }
 };
 
 const bindTableDataLayoutRefresh = (table) => {
@@ -636,6 +762,7 @@ const registerTableInstance = (table, baseColumns = null, ids = {}) => {
       lastAppliedMode: null,
       isBuilt: false,
       pendingLayoutRefresh: false,
+      layoutRefreshInFlight: false,
       dataLayoutBound: false,
       panelInstanceId: ids.panelInstanceId || null,
       panelComponentId: ids.panelComponentId || null,
@@ -709,6 +836,38 @@ const getWrappedTabulatorClass = () => {
           });
         }
       });
+
+      // Inactive Dockview panels previously needed two clicks (activate, then select).
+      // ReportShell activates on capture pointerdown; when this gesture just activated
+      // the host, re-fire a row click after the turn so Tabulator rowClick listeners run.
+      this.on?.('rowMouseDown', (event, row) => {
+        const didActivate = activateDockviewPanelFromHost(this.element)
+          || wasDockviewPanelJustActivated(this.element);
+        if (!didActivate) return;
+        try {
+          if (this.options?.selectableRows) row.select?.();
+        } catch {
+          // noop
+        }
+        const rowEl = row?.getElement?.();
+        if (!rowEl) return;
+        const blockNativeClick = (clickEvent) => {
+          clickEvent.stopImmediatePropagation();
+          clickEvent.preventDefault();
+          rowEl.removeEventListener('click', blockNativeClick, true);
+        };
+        rowEl.addEventListener('click', blockNativeClick, true);
+        window.setTimeout(() => {
+          rowEl.removeEventListener('click', blockNativeClick, true);
+          rowEl.dispatchEvent(new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+            clientX: event?.clientX,
+            clientY: event?.clientY,
+          }));
+        }, 0);
+      });
       this.on?.('groupVisibilityChanged', () => {
         refreshTableLayout(this);
       });
@@ -765,7 +924,15 @@ export const getTabulatorOptions = (options = {}) => {
   const numberColumns = titledColumns ? applyGlobalNumberDisplayFormatters(titledColumns) : null;
   const compactColumns = numberColumns ? applyGlobalCompactFormatters(numberColumns) : null;
   const alignedColumns = compactColumns ? normalizeColumnHeaderAlignment(compactColumns) : null;
-  const sourceColumns = ignoreGlobalLayout ? alignedColumns : stripFixedWidths(alignedColumns);
+  const freezeLeading = options.freezeLeadingColumns === false || options.freezeLeadingColumns === 0
+    ? 0
+    : (Number.isFinite(Number(options.freezeLeadingColumns))
+      ? Number(options.freezeLeadingColumns)
+      : 1);
+  const frozenColumns = alignedColumns
+    ? applyFreezeLeadingColumns(alignedColumns, freezeLeading)
+    : null;
+  const sourceColumns = ignoreGlobalLayout ? frozenColumns : stripFixedWidths(frozenColumns);
   const panelInstanceId = typeof options.panelInstanceId === 'string' && options.panelInstanceId.trim()
     ? options.panelInstanceId.trim()
     : null;
@@ -779,6 +946,7 @@ export const getTabulatorOptions = (options = {}) => {
     panelComponentId: _panelComponentId,
     panelInstanceId: _panelInstanceId,
     exportTitle: _exportTitle,
+    freezeLeadingColumns: _freezeLeadingColumns,
     ...restOptions
   } = options;
 

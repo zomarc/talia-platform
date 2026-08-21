@@ -45,6 +45,10 @@ import {
   normalizeDemandUnit,
 } from '../../lib/demandUnit';
 import {
+  SHIP_FILTER_ALL,
+  normalizeGlobalShipCode,
+} from '../../lib/globalShipFilter';
+import {
   ALL_DEPARTURE_MONTH_KEY,
   filterDepartureMonthOptionsForDateWindow,
   normalizeGlobalDepartureMonth,
@@ -56,6 +60,16 @@ import { loadEffectiveGlobalCriteria } from '../../services/data/roleCriteriaSer
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import { canConfigureComponentOperations } from '../../utils/roleUtils';
 import TaliaTooltip from './TaliaTooltip';
+import {
+  IconCheck,
+  IconChevron,
+  IconEye,
+  IconFilter,
+  IconFocus,
+  IconRefresh,
+  IconSave,
+  IconSidebar,
+} from './StatusBarIcons';
 // CSS imported globally in main.jsx
 const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
 const DASHBOARD_SIDEBAR_STATE_EVENT = 'talia:dashboard.sidebarState';
@@ -237,8 +251,8 @@ const HeaderCriteriaMenuSelect = ({
         aria-expanded={open}
         aria-label={ariaLabel}
       >
-        <span className="status-bar__menu-select-value">{selected?.label || '—'}</span>
-        <span className="status-bar__menu-select-caret" aria-hidden="true">?</span>
+        <span className="status-bar__menu-select-value">{selected?.label || '...'}</span>
+        <span className="status-bar__menu-select-caret" aria-hidden="true"><IconChevron open={open} /></span>
       </button>
       {open && (
         <div className={`status-bar__menu-select-menu ${isFading ? 'status-bar__menu-select-menu--fading' : ''}`} role="menu" aria-label={ariaLabel}>
@@ -254,7 +268,7 @@ const HeaderCriteriaMenuSelect = ({
                 onClick={() => handleOptionSelect(option.key)}
               >
                 <span>{option.label}</span>
-                {isSelected ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
+                {isSelected ? <span className="status-bar__menu-select-check" aria-hidden="true"><IconCheck /></span> : null}
               </button>
             );
           })}
@@ -416,6 +430,12 @@ const StatusBar = ({
   const [demandUnit, setDemandUnit] = useState(() => (
     normalizeDemandUnit(window.__taliaGlobalCriteria?.demandUnit ?? DEFAULT_DEMAND_UNIT)
   ));
+  const [shipCode, setShipCode] = useState(() => (
+    normalizeGlobalShipCode(window.__taliaGlobalCriteria?.shipCode)
+  ));
+  const [shipOptions, setShipOptions] = useState([
+    { key: SHIP_FILTER_ALL, label: 'All' },
+  ]);
   const [refreshPhase, setRefreshPhase] = useState('active'); // active -> all -> cooldown
   const [tableLayoutMode, setTableLayoutMode] = useState(() => {
     const inMemory = window.__taliaTableLayoutMode;
@@ -940,6 +960,12 @@ const StatusBar = ({
     setDemandUnit(next);
   };
 
+  const handleShipCodeChange = (nextValue) => {
+    const next = normalizeGlobalShipCode(nextValue);
+    userActivityTracker.recordHeaderAction('ship-filter', { shipCode: next });
+    setShipCode(next);
+  };
+
   const dispatchDataManagementCommand = (eventName, detail = {}) => {
     window.dispatchEvent(new CustomEvent(eventName, {
       detail: {
@@ -1187,6 +1213,62 @@ const StatusBar = ({
     let cancelled = false;
     (async () => {
       try {
+        const { trackedFetchGraphql } = await import('../../services/data/trackedGraphql.js');
+        const data = await trackedFetchGraphql({
+          query: `
+            query StatusBarShips($tableName: String!, $limit: Int, $columns: [String!]) {
+              tableData(tableName: $tableName, limit: $limit, columns: $columns)
+            }
+          `,
+          variables: {
+            tableName: 'ship',
+            limit: 100,
+            columns: ['ship_code', 'ship_name'],
+          },
+          component: 'StatusBar',
+          purpose: 'Load ship options for global ship filter',
+        });
+        if (cancelled) return;
+        const rows = Array.isArray(data?.tableData) ? data.tableData : [];
+        const byCode = new Map();
+        rows.forEach((row) => {
+          const code = String(row?.ship_code || '').trim();
+          if (!code) return;
+          byCode.set(code, String(row?.ship_name || code).trim());
+        });
+        const next = [
+          { key: SHIP_FILTER_ALL, label: 'All' },
+          ...[...byCode.entries()]
+            .map(([key, label]) => ({ key, label }))
+            .sort((a, b) => a.label.localeCompare(b.label)),
+        ];
+        setShipOptions(next);
+      } catch {
+        // Keep All-only fallback when ship list cannot load.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const syncShipFromCriteria = (event) => {
+      const next = normalizeGlobalShipCode(
+        event?.detail?.shipCode
+          ?? event?.detail?.criteria?.shipCode
+          ?? window.__taliaGlobalCriteria?.shipCode
+      );
+      setShipCode((prev) => (prev === next ? prev : next));
+    };
+    window.addEventListener(DASHBOARD_GLOBAL_CRITERIA_EVENT, syncShipFromCriteria);
+    return () => window.removeEventListener(DASHBOARD_GLOBAL_CRITERIA_EVENT, syncShipFromCriteria);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
         const profileState = await loadUserProfileState({ component: 'StatusBar' });
         window.__taliaUserProfileState = profileState || {};
         const criteria = await loadEffectiveGlobalCriteria({
@@ -1219,6 +1301,9 @@ const StatusBar = ({
           }
           if (Object.prototype.hasOwnProperty.call(criteria, 'demandUnit')) {
             setDemandUnit(normalizeDemandUnit(criteria.demandUnit));
+          }
+          if (Object.prototype.hasOwnProperty.call(criteria, 'shipCode')) {
+            setShipCode(normalizeGlobalShipCode(criteria.shipCode));
           }
           const savedCurrency = typeof criteria.defaultDisplayCurrency === 'string'
             ? criteria.defaultDisplayCurrency.trim().toUpperCase()
@@ -1276,7 +1361,7 @@ const StatusBar = ({
     };
   }, []);
 
-  // Date/duration/composition criteria — do NOT depend on sail selection.
+  // Date/duration/composition criteria -- do NOT depend on sail selection.
   // Sail.select must not republish globalCriteria (that forced every report to refresh).
   useEffect(() => {
     const range = resolveGlobalDateRange(globalDateRange || TEST_DEFAULT_GLOBAL_RANGE_KEY);
@@ -1292,6 +1377,7 @@ const StatusBar = ({
       bookedComposition: normalizeBookedComposition(bookedComposition),
       cabinCategoryMode: normalizeCabinCategoryMode(cabinCategoryMode),
       demandUnit: normalizeDemandUnit(demandUnit),
+      shipCode: normalizeGlobalShipCode(shipCode),
       defaultDisplayCurrency: String(defaultDisplayCurrency || '').trim().toUpperCase() || 'USD',
       ...range
     };
@@ -1309,9 +1395,9 @@ const StatusBar = ({
     }
     window.__taliaGlobalCriteria = criteria;
     publishDashboardGlobalConfig({ criteria });
-  }, [globalDateRange, departureMonth, globalDuration, activeOnly, marketDimension, bookedComposition, cabinCategoryMode, demandUnit, defaultDisplayCurrency]);
+  }, [globalDateRange, departureMonth, globalDuration, activeOnly, marketDimension, bookedComposition, cabinCategoryMode, demandUnit, shipCode, defaultDisplayCurrency]);
 
-  // Sail selection updates the window snapshot only — listeners already got sail.select.
+  // Sail selection updates the window snapshot only ... listeners already got sail.select.
   useEffect(() => {
     if (!window.__taliaGlobalCriteria || typeof window.__taliaGlobalCriteria !== 'object') {
       window.__taliaGlobalCriteria = window.__taliaGlobalCriteria || {};
@@ -1346,6 +1432,7 @@ const StatusBar = ({
         bookedComposition: normalizeBookedComposition(bookedComposition),
         cabinCategoryMode: normalizeCabinCategoryMode(cabinCategoryMode),
         demandUnit: normalizeDemandUnit(demandUnit),
+        shipCode: normalizeGlobalShipCode(shipCode),
         defaultDisplayCurrency: String(defaultDisplayCurrency || '').trim().toUpperCase() || 'USD',
         ...resolveGlobalDateRange(globalDateRange),
       };
@@ -1362,7 +1449,7 @@ const StatusBar = ({
         criteriaSaveTimerRef.current = null;
       }
     };
-  }, [profileCriteriaHydrated, globalDateRange, departureMonth, globalDuration, activeOnly, marketDimension, bookedComposition, cabinCategoryMode, demandUnit, defaultDisplayCurrency, globalSailSelection]);
+  }, [profileCriteriaHydrated, globalDateRange, departureMonth, globalDuration, activeOnly, marketDimension, bookedComposition, cabinCategoryMode, demandUnit, shipCode, defaultDisplayCurrency, globalSailSelection]);
 
   useEffect(() => {
     enforceDashboardUiState({ dispatchEvents: true });
@@ -1407,13 +1494,18 @@ const StatusBar = ({
     if (!range || (!range.min && !range.max)) return 'N/A';
     const min = range.min ? String(range.min).split('T')[0] : 'N/A';
     const max = range.max ? String(range.max).split('T')[0] : 'N/A';
-    return min === max ? min : `${min} ? ${max}`;
+    return min === max ? min : `${min} - ${max}`;
   };
   const dataRangeText = formatRange(dataStatus?.globalRange);
   const dataLastSyncText = dataStatus?.lastSync
     ? new Date(dataStatus.lastSync).toLocaleString()
     : 'N/A';
-  const refreshButtonLabel = refreshPhase === 'active' ? '?' : (refreshPhase === 'all' ? '??' : '?');
+  const refreshButtonLabel = (
+    <IconRefresh
+      all={refreshPhase === 'all'}
+      done={refreshPhase !== 'active' && refreshPhase !== 'all'}
+    />
+  );
   const refreshButtonTitle = refreshPhase === 'active'
     ? 'Refresh active panel (click again within 5s for all panels)'
     : refreshPhase === 'all'
@@ -1446,7 +1538,7 @@ const StatusBar = ({
                   onClick={handleSidebarToggle}
                   aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
                 >
-                  {sidebarCollapsed ? '?' : '?'}
+                  {sidebarCollapsed ? <IconSidebar collapsed /> : <IconSidebar />}
                 </button>
               </TaliaTooltip>
               <span className="status-bar__leading-separator" aria-hidden="true" />
@@ -1458,7 +1550,7 @@ const StatusBar = ({
                     onClick={handleCriteriaToggle}
                     aria-label={criteriaVisible ? 'Hide global criteria controls' : 'Show global criteria controls'}
                   >
-                    <span className="status-bar__icon-search" aria-hidden="true">??</span>
+                    <span className="status-bar__icon-search" aria-hidden="true"><IconFilter /></span>
                   </button>
                 </TaliaTooltip>
                 {hasAdvancedControls && (
@@ -1475,7 +1567,7 @@ const StatusBar = ({
                         aria-label={focusControlsOpen ? 'Hide focus controls' : 'Show focus controls'}
                         aria-expanded={focusControlsOpen}
                       >
-                        ?
+                        <IconFocus />
                       </button>
                     </TaliaTooltip>
                   </div>
@@ -1537,7 +1629,7 @@ const StatusBar = ({
                                 aria-label="Save current focus"
                                 onClick={handleSaveFocusAction}
                               >
-                                ??
+                                <IconSave />
                               </button>
                             </TaliaTooltip>
                             {showSaveFocusConfirm && (
@@ -1660,7 +1752,7 @@ const StatusBar = ({
                       />
                     </label>
                     </TaliaTooltip>
-                    <TaliaTooltip content="Demand volumes: Pax (guests/berths) or Cabins (guests÷2 presentation). Math stays at guests." placement="bottom-left" delayMs={180}>
+                    <TaliaTooltip content="Demand volumes: Pax (guests/berths) or Cabins (guests/2 presentation). Math stays at guests." placement="bottom-left" delayMs={180}>
                     <label className="status-bar__header-range">
                       <span className="status-bar__header-range-label">Unit</span>
                       <HeaderCriteriaMenuSelect
@@ -1669,6 +1761,19 @@ const StatusBar = ({
                         value={demandUnit}
                         onChange={handleDemandUnitChange}
                         aria-label="Demand unit Pax or Cabins"
+                        autoCloseMs={menuDisappearMs}
+                      />
+                    </label>
+                    </TaliaTooltip>
+                    <TaliaTooltip content="Ship filter applied across reports that carry ship_code (All = no ship limit)" placement="bottom-left" delayMs={180}>
+                    <label className="status-bar__header-range">
+                      <span className="status-bar__header-range-label">Ship</span>
+                      <HeaderCriteriaMenuSelect
+                        id="status-bar-global-ship"
+                        options={shipOptions}
+                        value={shipCode}
+                        onChange={handleShipCodeChange}
+                        aria-label="Global ship filter"
                         autoCloseMs={menuDisappearMs}
                       />
                     </label>
@@ -1733,7 +1838,7 @@ const StatusBar = ({
           {/* Status Message (temporary) */}
           {displayMessage && (
             <div className={`status-bar__message status-bar__message--success ${isMessageFading ? 'status-bar__message--fading' : ''}`}>
-              <span className="status-bar__icon">?</span>
+              <span className="status-bar__icon"><IconCheck /></span>
               <span className="status-bar__text">{displayMessage}</span>
             </div>
           )}
@@ -1766,7 +1871,7 @@ const StatusBar = ({
                         {currentEventSummary.identifier && ` - ${currentEventSummary.identifier}`}
                       </span>
                       <span className="status-bar__timestamp">{currentEventSummary.timestamp}</span>
-                      <span className="status-bar__expand">{showDetails ? '?' : '?'}</span>
+                      <span className="status-bar__expand"><IconChevron open={showDetails} /></span>
                     </div>
                     </TaliaTooltip>
                   )}
@@ -1839,7 +1944,7 @@ const StatusBar = ({
                   onClick={handleFiltersToggle}
                 >
                   <span>Filters</span>
-                  {filtersVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
+                  {filtersVisible ? <span className="status-bar__menu-select-check" aria-hidden="true"><IconCheck /></span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Show or hide native Tabulator column header filters on all tables" placement="bottom-left" delayMs={180}>
@@ -1851,7 +1956,7 @@ const StatusBar = ({
                   onClick={handleTabulatorFiltersToggle}
                 >
                   <span>Column filters</span>
-                  {tabulatorFiltersVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
+                  {tabulatorFiltersVisible ? <span className="status-bar__menu-select-check" aria-hidden="true"><IconCheck /></span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Show or hide informational callouts across all reports" placement="bottom-left" delayMs={180}>
@@ -1863,7 +1968,7 @@ const StatusBar = ({
                   onClick={handleCalloutsToggle}
                 >
                   <span>Callouts</span>
-                  {calloutsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
+                  {calloutsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true"><IconCheck /></span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Show or hide compact chart legends on all reports. Tab Options can hide legends on one panel." placement="bottom-left" delayMs={180}>
@@ -1875,7 +1980,7 @@ const StatusBar = ({
                   onClick={handleChartLegendsToggle}
                 >
                   <span>Legends</span>
-                  {chartLegendsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
+                  {chartLegendsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true"><IconCheck /></span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Show or hide panel titles globally" placement="bottom-left" delayMs={180}>
@@ -1887,7 +1992,7 @@ const StatusBar = ({
                   onClick={handlePanelTitlesToggle}
                 >
                   <span>Titles</span>
-                  {panelTitlesVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
+                  {panelTitlesVisible ? <span className="status-bar__menu-select-check" aria-hidden="true"><IconCheck /></span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Show or hide data details on all report panels" placement="bottom-left" delayMs={180}>
@@ -1899,7 +2004,7 @@ const StatusBar = ({
                   onClick={handleDetailsToggle}
                 >
                   <span>Details</span>
-                  {detailsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
+                  {detailsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true"><IconCheck /></span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Use adaptive best-fit table layout" placement="bottom-left" delayMs={180}>
@@ -1911,7 +2016,7 @@ const StatusBar = ({
                   onClick={() => handleTableLayoutSelect('best')}
                 >
                   <span>Best Fit</span>
-                  {tableLayoutMode === 'best' ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
+                  {tableLayoutMode === 'best' ? <span className="status-bar__menu-select-check" aria-hidden="true"><IconCheck /></span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Use width-fit table layout" placement="bottom-left" delayMs={180}>
@@ -1923,7 +2028,7 @@ const StatusBar = ({
                   onClick={() => handleTableLayoutSelect('width')}
                 >
                   <span>Fit Width</span>
-                  {tableLayoutMode === 'width' ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
+                  {tableLayoutMode === 'width' ? <span className="status-bar__menu-select-check" aria-hidden="true"><IconCheck /></span> : null}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Use data-fit table layout" placement="bottom-left" delayMs={180}>
@@ -1935,7 +2040,7 @@ const StatusBar = ({
                   onClick={() => handleTableLayoutSelect('data')}
                 >
                   <span>Fit Data</span>
-                  {tableLayoutMode === 'data' ? <span className="status-bar__menu-select-check" aria-hidden="true">?</span> : null}
+                  {tableLayoutMode === 'data' ? <span className="status-bar__menu-select-check" aria-hidden="true"><IconCheck /></span> : null}
                 </button>
               </TaliaTooltip>
             </div>
@@ -1950,7 +2055,7 @@ const StatusBar = ({
                   onClick={handleVisibilityToggle}
                   aria-label={visibilityControlsOpen ? 'Hide visibility controls' : 'Show visibility controls'}
                 >
-                  ??
+                  <IconEye />
                 </button>
               </TaliaTooltip>
             </div>
@@ -2115,7 +2220,7 @@ const StatusBar = ({
                   disabled={!dataMgmtState.bulkSyncing && !(dataMgmtState.runningSyncCount > 0)}
                   aria-label="Stop the running table sync"
                 >
-                  {dataMgmtState.stoppingSync ? '…' : '?'}
+                  {dataMgmtState.stoppingSync ? '...' : '?'}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Backup tools" placement="bottom-left" delayMs={180}>
@@ -2150,11 +2255,12 @@ const StatusBar = ({
           <div className="status-bar__details-header">
             <span className="status-bar__details-title">Event Details</span>
             <TaliaTooltip content="Close" placement="bottom-left" delayMs={180}>
-              <button 
+              <button
                 className="status-bar__details-close"
                 onClick={() => setShowDetails(false)}
+                aria-label="Close"
               >
-                ×
+                x
               </button>
             </TaliaTooltip>
           </div>

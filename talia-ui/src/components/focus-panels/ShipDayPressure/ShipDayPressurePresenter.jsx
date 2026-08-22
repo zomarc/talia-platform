@@ -70,9 +70,11 @@ const resolveSelectedSailCodes = (scope) => {
 
 const columnMatchesSelection = (col, selectedShip, selectedSailCodes) => {
   if (!col) return false;
-  if (col.kind === 'voyage') {
-    if (selectedSailCodes?.has?.(col.id)) return true;
-    return (col.sail_codes || []).some((code) => selectedSailCodes?.has?.(String(code)));
+  if (col.kind === 'voyage' || col.kind === 'package') {
+    if (col.kind === 'voyage' && selectedSailCodes?.has?.(col.id)) return true;
+    if (col.kind === 'package' && selectedSailCodes?.has?.(col.package_key)) return true;
+    return (col.sail_codes || []).some((code) => selectedSailCodes?.has?.(String(code)))
+      || (col.reference_sail_codes || []).some((code) => selectedSailCodes?.has?.(String(code)));
   }
   // Day / ship / cabin columns: ship-level chrome only when no voyage is active.
   if (selectedSailCodes?.size) return false;
@@ -181,6 +183,9 @@ const ShipDayPressurePresenter = ({
   dateTo,
   onDateFromChange,
   onDateToChange,
+  onResetDates,
+  datesFollowGlobal = true,
+  criteriaSummary = '',
   grain,
   onGrainChange,
   shipFilter = SHIP_FILTER_ALL,
@@ -239,6 +244,7 @@ const ShipDayPressurePresenter = ({
   rowsRef.current = rows;
   const selectionBandRef = useRef({ focusDate: null, impactFrom: null, impactTo: null });
   const truncatedVoyages = grain === PRESSURE_GRAINS.VOYAGE && columns.filter((col) => col.kind === 'voyage').length >= 48;
+  const truncatedPackages = grain === PRESSURE_GRAINS.PACKAGE && columns.filter((col) => col.kind === 'package').length >= 48;
   const fitGroupSplit = barSplit === BAR_SPLIT.FIT_GROUP;
 
   const snapshotItems = useMemo(() => ([
@@ -320,10 +326,11 @@ const ShipDayPressurePresenter = ({
     const ship = selectedShipRef.current;
     const cols = columnsRef.current || [];
     const voyageCol = cols.find((col) => (
-      col.kind === 'voyage' && columnMatchesSelection(col, ship, sailCodes)
+      (col.kind === 'voyage' || col.kind === 'package')
+      && columnMatchesSelection(col, ship, sailCodes)
     ));
     const meta = bundle?.meta || {};
-    // Row band = selected voyage occupancy (not the wider fetch/impact window).
+    // Row band = selected voyage / package occupancy (not the wider fetch/impact window).
     const voyageForBand = voyageCol || (meta.selectedVoyage
       ? {
         id: meta.selectedVoyage.reference_sail_code,
@@ -487,7 +494,7 @@ const ShipDayPressurePresenter = ({
         headerSort: false,
         headerHozAlign: 'center',
         hozAlign: 'center',
-        headerTooltip: col.kind === 'voyage'
+        headerTooltip: (col.kind === 'voyage' || col.kind === 'package')
           ? (col.title_full || col.id)
           : (col.label || col.id),
         cssClass: [
@@ -495,6 +502,7 @@ const ShipDayPressurePresenter = ({
           col.kind === 'day' ? '' : 'talia-equal-width-col',
           col.kind === 'day' ? 'sdp-day-col' : '',
           col.kind === 'voyage' ? 'sdp-voyage-col' : '',
+          col.kind === 'package' ? 'sdp-package-col' : '',
           columnMatchesSelection(col, selectedShipRef.current, selectedSailCodesRef.current)
             ? 'sdp-col--selected'
             : '',
@@ -505,27 +513,38 @@ const ShipDayPressurePresenter = ({
           barSplitRef.current
         ),
         headerClick: () => {
-          if (col.kind === 'voyage') {
+          if (col.kind === 'voyage' || col.kind === 'package') {
             const sailCodes = new Set([
-              String(col.id),
+              ...(col.kind === 'voyage' ? [String(col.id)] : []),
               ...(col.sail_codes || []).map((code) => String(code)),
+              ...(col.reference_sail_codes || []).map((code) => String(code)),
             ].filter(Boolean));
+            const emitCode = col.kind === 'package'
+              ? (col.primary_sail_code || col.primary_reference_sail_code || [...sailCodes][0])
+              : col.id;
+            const referenceCode = col.kind === 'package'
+              ? (col.primary_reference_sail_code || emitCode)
+              : col.id;
             selectedSailCodesRef.current = sailCodes;
             selectedShipRef.current = col.ship_code || null;
             selectedDateRef.current = null;
             setSelectedDate(null);
             applySelectionChrome({ scroll: true });
             emitSailSelect({
-              sail_code: col.id,
-              reference_sail_code: col.id,
+              sail_code: emitCode,
+              reference_sail_code: referenceCode,
               ship_code: col.ship_code,
               ship_name: col.ship_name,
               selection_origin: 'ship-day-pressure',
               row_data: {
-                sail_code: col.id,
-                reference_sail_code: col.id,
+                sail_code: emitCode,
+                reference_sail_code: referenceCode,
                 ship_code: col.ship_code,
                 ship_name: col.ship_name,
+                package_type: col.package_type,
+                package_key: col.package_key,
+                port_from: col.port_from,
+                port_to: col.port_to,
               },
             });
             return;
@@ -547,7 +566,7 @@ const ShipDayPressurePresenter = ({
       const options = getTabulatorOptions({
         panelComponentId: panelComponentId || 'ship-day-pressure',
         panelInstanceId,
-        freezeLeadingColumns: grain === PRESSURE_GRAINS.VOYAGE ? 2 : 1,
+        freezeLeadingColumns: (grain === PRESSURE_GRAINS.VOYAGE || grain === PRESSURE_GRAINS.PACKAGE) ? 2 : 1,
         // Keep explicit frozen widths; global stretch layout fights horizontal freeze.
         enforceGlobalLayout: false,
         layout: 'fitData',
@@ -581,28 +600,43 @@ const ShipDayPressurePresenter = ({
         const rowDate = cell.getRow?.()?.getData?.()?.date
           || cell.getValue?.()?.date
           || null;
-        if (col.kind === 'voyage') {
+        if (col.kind === 'voyage' || col.kind === 'package') {
+          const cellValue = cell.getValue?.() || null;
+          const part = cellValue?.by_sail?.[0] || null;
           const sailCodes = new Set([
-            String(col.id),
+            ...(col.kind === 'voyage' ? [String(col.id)] : []),
             ...(col.sail_codes || []).map((code) => String(code)),
-          ].filter(Boolean));
+            ...(col.reference_sail_codes || []).map((code) => String(code)),
+            part?.sail_code,
+            part?.reference_sail_code,
+          ].filter(Boolean).map(String));
+          const emitCode = col.kind === 'package'
+            ? (part?.sail_code || col.primary_sail_code || [...sailCodes][0])
+            : col.id;
+          const referenceCode = col.kind === 'package'
+            ? (part?.reference_sail_code || col.primary_reference_sail_code || emitCode)
+            : col.id;
           selectedSailCodesRef.current = sailCodes;
           selectedShipRef.current = col.ship_code || null;
           selectedDateRef.current = rowDate || null;
           setSelectedDate(rowDate || null);
           applySelectionChrome({ scroll: true });
           emitSailSelect({
-            sail_code: col.id,
-            reference_sail_code: col.id,
+            sail_code: emitCode,
+            reference_sail_code: referenceCode,
             ship_code: col.ship_code,
             ship_name: col.ship_name,
             selection_origin: 'ship-day-pressure',
             row_data: {
-              sail_code: col.id,
-              reference_sail_code: col.id,
+              sail_code: emitCode,
+              reference_sail_code: referenceCode,
               ship_code: col.ship_code,
               ship_name: col.ship_name,
               date: rowDate,
+              package_type: col.package_type,
+              package_key: col.package_key,
+              port_from: col.port_from,
+              port_to: col.port_to,
             },
           });
           return;
@@ -666,6 +700,12 @@ const ShipDayPressurePresenter = ({
       </header>
 
       <div className={`talia-report-filters${showFilters ? '' : ' talia-report-filters--hidden'}`} aria-label="Date window and ship filter">
+        {criteriaSummary ? (
+          <div className="talia-report-filters__group sdp-criteria-chip" title="StatusBar DATE ∩ MONTH — local From/To only narrow this window">
+            <span className="talia-report-filters__label">Global</span>
+            <span className="sdp-criteria-chip__value">{criteriaSummary}</span>
+          </div>
+        ) : null}
         <label className="talia-report-filters__group">
           <span className="talia-report-filters__label">From</span>
           <input
@@ -673,6 +713,7 @@ const ShipDayPressurePresenter = ({
             className="talia-report-filters__input"
             value={dateFrom || ''}
             onChange={(event) => onDateFromChange?.(event.target.value)}
+            title={datesFollowGlobal ? 'Following global criteria — edit to narrow locally' : 'Local narrow within global criteria'}
           />
         </label>
         <label className="talia-report-filters__group">
@@ -682,8 +723,19 @@ const ShipDayPressurePresenter = ({
             className="talia-report-filters__input"
             value={dateTo || ''}
             onChange={(event) => onDateToChange?.(event.target.value)}
+            title={datesFollowGlobal ? 'Following global criteria — edit to narrow locally' : 'Local narrow within global criteria'}
           />
         </label>
+        {!datesFollowGlobal ? (
+          <button
+            type="button"
+            className="talia-btn talia-btn--secondary"
+            onClick={() => onResetDates?.()}
+            title="Clear local From/To and follow StatusBar DATE + MONTH"
+          >
+            Reset to global
+          </button>
+        ) : null}
         <label className="talia-report-filters__group">
           <span className="talia-report-filters__label">Ship</span>
           <select
@@ -707,6 +759,7 @@ const ShipDayPressurePresenter = ({
         Dead beds: a short product (or a full cabin category) can occupy ship-days that a longer voyage needs.
         Hover a cell for the categories that are blocking. Capacity is never summed across master + segments.
         {truncatedVoyages ? ' Voyage view shows overlapping sailings in this date window (capped).' : ''}
+        {truncatedPackages ? ' Package view shows overlapping port-to-port products in this date window (capped).' : ''}
       </div>
 
       {showControls ? (
@@ -726,6 +779,15 @@ const ShipDayPressurePresenter = ({
             onClick={() => onGrainChange?.(PRESSURE_GRAINS.VOYAGE)}
           >
             Voyage
+          </button>
+          <button
+            type="button"
+            className={`talia-btn ${grain === PRESSURE_GRAINS.PACKAGE ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+            aria-pressed={grain === PRESSURE_GRAINS.PACKAGE}
+            onClick={() => onGrainChange?.(PRESSURE_GRAINS.PACKAGE)}
+            title="Segments by package_type / port→port — where beds are blocked"
+          >
+            Package
           </button>
           <button
             type="button"
@@ -820,6 +882,7 @@ const ShipDayPressurePresenter = ({
             Booked / expected / contracted come from <code>sail_booking_summary</code> and are copied onto every occupancy date of that sail
             (days before and after this cell). Physical sellable cabins match MSE: nameplate minus offsale / reserved, using MAX on the ship-day so master and segment berths are not double-counted.
             Voyage view adds a frozen Day column for the combined ship-day; bar fill splits booked master vs segment under the same voyage identity.
+            Package view columns are port→port products (<code>package_type</code>) so short segments that block beds are visible without treating sail code as the product.
             Cabin-category loading comes from <code>sail_by_cabin_occupancy</code> and is what flags blocking when a category is full on a day a longer voyage still needs.
             Category identity follows StatusBar Cat (Real vs Group via <code>cabin_ctg</code>); this panel can override locally without changing the global criteria.
           </p>
@@ -842,7 +905,11 @@ const ShipDayPressurePresenter = ({
             <div className="sdp-hover__title">
               {hoverCell.ship_name || hoverCell.ship_code}
               {hoverCell.cabin_category ? ` · ${hoverCell.cabin_category}` : ''}
-              {hoverCell.column_id && hoverCell.grain === 'voyage' ? ` · ${hoverCell.column_id}` : ''}
+              {hoverCell.column_id && (hoverCell.grain === 'voyage' || hoverCell.grain === 'package')
+                ? ` · ${hoverCell.grain === 'package'
+                  ? `${hoverCell.port_from || '?'}→${hoverCell.port_to || '?'} (${hoverCell.package_key || hoverCell.column_id})`
+                  : hoverCell.column_id}`
+                : ''}
               {' · '}
               {hoverCell.date}
             </div>

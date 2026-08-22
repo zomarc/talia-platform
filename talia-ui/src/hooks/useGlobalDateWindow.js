@@ -1,8 +1,15 @@
 /**
  * Subscribe to StatusBar global dateFrom / dateTo from __taliaGlobalCriteria.
+ * Combine with departure month via resolveEffectiveCriteriaDateWindow (lib).
  */
 
 import { useEffect, useState } from 'react';
+
+export {
+  applyLocalDateNarrow,
+  formatCriteriaDateSummary,
+  resolveEffectiveCriteriaDateWindow,
+} from '../lib/globalCriteriaDateWindow.js';
 
 export const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
 

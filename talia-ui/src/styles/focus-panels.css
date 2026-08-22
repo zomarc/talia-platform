@@ -7156,6 +7156,20 @@
   gap: 6px;
 }
 
+.sdp-criteria-chip {
+  flex: 1 1 auto;
+  min-width: 12rem;
+}
+
+.sdp-criteria-chip__value {
+  font-size: 0.75rem;
+  color: var(--talia-text-muted, #9aa3b2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 28rem;
+}
+
 .sdp-ship-control__label {
   font-size: 11px;
   opacity: 0.75;

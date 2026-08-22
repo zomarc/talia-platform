@@ -15,7 +15,10 @@ import {
   dateInVoyageSpan,
   explodeDemandOntoDays,
   enumerateDateKeys,
+  expandDateWindowForDepartingSails,
   expandDateWindowForSailImpact,
+  formatPackageLabel,
+  resolvePackageKey,
   resolveSellableCabins,
   resolveSellableBerths,
   resolvePressureDateSpine,
@@ -23,6 +26,10 @@ import {
   buildCategoryShipDays,
   splitBookedBySailingRole,
 } from './shipDayPressureTransform.js';
+import {
+  applyLocalDateNarrow,
+  resolveEffectiveCriteriaDateWindow,
+} from '../../../lib/globalCriteriaDateWindow.js';
 
 test('enumerateDateKeys is inclusive UTC', () => {
   assert.deepEqual(enumerateDateKeys('2026-09-01', '2026-09-03'), [
@@ -470,6 +477,126 @@ test('resolveSelectionRowBand focuses departure and shades impact span', () => {
   assert.equal(inferred.focusDate, '2026-09-05');
   assert.equal(inferred.impactFrom, '2026-09-05');
   assert.equal(inferred.impactTo, '2026-09-11');
+});
+
+test('resolveEffectiveCriteriaDateWindow uses MONTH when DATE is open', () => {
+  const window = resolveEffectiveCriteriaDateWindow({
+    dateFrom: null,
+    dateTo: null,
+    departureMonth: '2027-02',
+    fallback: { from: '2026-08-21', to: '2026-10-19' },
+  });
+  assert.equal(window.from, '2027-02-01');
+  assert.equal(window.to, '2027-02-28');
+  assert.equal(window.source, 'month');
+});
+
+test('applyLocalDateNarrow cannot widen past global bounds', () => {
+  const narrowed = applyLocalDateNarrow(
+    { from: '2027-02-01', to: '2027-02-28' },
+    { from: '2027-01-15', to: '2027-03-15' }
+  );
+  assert.equal(narrowed.from, '2027-02-01');
+  assert.equal(narrowed.to, '2027-02-28');
+  assert.equal(narrowed.followingGlobal, false);
+});
+
+test('expandDateWindowForDepartingSails extends past month end for occupancy', () => {
+  const windows = buildSailWindows(
+    [{ sail_code: 'S3', ship_code: 'JOURNEY', reference_sail_code: 'M7', sailing_role: 'segment' }],
+    [{
+      sail_code: 'S3',
+      ship_code: 'JOURNEY',
+      sail_date_from: '2027-02-25',
+      sail_date_to: '2027-03-03',
+      sail_days: 7,
+      is_main: 0,
+      package_type: 'ABUABU7A',
+      port_from: 'ABD',
+      port_to: 'ABD',
+    }]
+  );
+  const expanded = expandDateWindowForDepartingSails({
+    dateFrom: '2027-02-01',
+    dateTo: '2027-02-28',
+    windows,
+    departureMonth: '2027-02',
+  });
+  assert.equal(expanded.from, '2027-02-01');
+  assert.equal(expanded.to, '2027-03-03');
+});
+
+test('package grain columns are port-to-port products not sail codes', () => {
+  const windows = buildSailWindows(
+    [
+      { sail_code: 'S3A', ship_code: 'JOURNEY', reference_sail_code: 'M7', sailing_role: 'segment' },
+      { sail_code: 'S3B', ship_code: 'JOURNEY', reference_sail_code: 'M8', sailing_role: 'segment' },
+    ],
+    [
+      {
+        sail_code: 'S3A',
+        ship_code: 'JOURNEY',
+        sail_date_from: '2027-02-05',
+        sail_date_to: '2027-02-07',
+        sail_days: 3,
+        is_main: 0,
+        package_type: 'ABUABU3',
+        package_name: 'Iconic Arabia - 3Nights',
+        port_from: 'ABD',
+        port_to: 'ABD',
+      },
+      {
+        sail_code: 'S3B',
+        ship_code: 'JOURNEY',
+        sail_date_from: '2027-02-12',
+        sail_date_to: '2027-02-14',
+        sail_days: 3,
+        is_main: 0,
+        package_type: 'ABUABU3',
+        package_name: 'Iconic Arabia - 3Nights',
+        port_from: 'ABD',
+        port_to: 'ABD',
+      },
+    ]
+  );
+  assert.equal(resolvePackageKey(windows.get('S3A')), 'ABUABU3');
+  assert.equal(formatPackageLabel(windows.get('S3A')), 'ABD→ABD · 3N');
+
+  const cells = [
+    {
+      ship_code: 'JOURNEY',
+      ship_name: 'Journey',
+      date: '2027-02-05',
+      sellable: 1000,
+      booked: 40,
+      booked_master: 0,
+      booked_segment: 40,
+      by_sail: [{
+        sail_code: 'S3A',
+        reference_sail_code: 'M7',
+        sailing_role: 'segment',
+        package_key: 'ABUABU3',
+        booked: 40,
+        booked_fit: 0,
+        booked_group: 0,
+        estimated: 0,
+        contracted: 0,
+      }],
+    },
+  ];
+  const grid = buildPressureGrid({
+    cells,
+    windows,
+    grain: PRESSURE_GRAINS.PACKAGE,
+    dateFrom: '2027-02-01',
+    dateTo: '2027-02-28',
+  });
+  const packageCols = grid.columns.filter((col) => col.kind === 'package');
+  assert.equal(packageCols.length, 1);
+  assert.equal(packageCols[0].package_key, 'ABUABU3');
+  assert.equal(packageCols[0].label, 'ABD→ABD · 3N');
+  assert.deepEqual(packageCols[0].sail_codes.sort(), ['S3A', 'S3B']);
+  assert.equal(grid.rows.find((r) => r.date === '2027-02-05')?.[packageCols[0].id]?.booked, 40);
 });
 
 

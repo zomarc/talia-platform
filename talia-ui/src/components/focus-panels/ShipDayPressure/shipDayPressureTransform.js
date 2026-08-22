@@ -28,6 +28,7 @@ export const PRESSURE_FLAGS = {
 export const PRESSURE_GRAINS = {
   SHIP: 'ship',
   VOYAGE: 'voyage',
+  PACKAGE: 'package',
   CABIN: 'cabin',
 };
 
@@ -103,7 +104,26 @@ export const OPEN_ENDED_SPINE_DAYS = 120;
 const shipDayKey = (shipCode, dateKey) => `${shipCode}|${dateKey}`;
 
 const MAX_VOYAGE_COLUMNS = 48;
+const MAX_PACKAGE_COLUMNS = 48;
 const MAX_CABIN_COLUMNS = 48;
+
+/** Package / port-to-port product key (prefer Dim_Sale package_type). */
+export const resolvePackageKey = (win = {}) => {
+  const type = String(win?.package_type || '').trim();
+  if (type) return type;
+  const from = String(win?.port_from || '').trim();
+  const to = String(win?.port_to || '').trim();
+  const nights = toNumber(win?.nights) || 0;
+  if (from || to) return `${from || '?'}-${to || '?'}-${nights}`;
+  return null;
+};
+
+export const formatPackageLabel = (win = {}) => {
+  const from = String(win?.port_from || '').trim() || '?';
+  const to = String(win?.port_to || '').trim() || '?';
+  const nights = toNumber(win?.nights) || 0;
+  return nights ? `${from}→${to} · ${nights}N` : `${from}→${to}`;
+};
 
 const categoryDayKey = (shipCode, dateKey, category) => `${shipCode}|${dateKey}|${category}`;
 
@@ -194,6 +214,10 @@ export const buildSailWindows = (inventoryRows = [], masterSailRows = []) => {
       date_from: toDateKey(row?.sail_date_from),
       date_to: toDateKey(row?.sail_date_to) || toDateKey(row?.sail_date_from),
       nights: toNumber(row?.sail_days) || 0,
+      package_type: String(row?.package_type || '').trim() || null,
+      package_name: String(row?.package_name || '').trim() || null,
+      port_from: String(row?.port_from || '').trim() || null,
+      port_to: String(row?.port_to || '').trim() || null,
       occupancy_dates: new Set(),
     });
   });
@@ -211,6 +235,10 @@ export const buildSailWindows = (inventoryRows = [], masterSailRows = []) => {
       date_from: null,
       date_to: null,
       nights: 0,
+      package_type: null,
+      package_name: null,
+      port_from: null,
+      port_to: null,
       occupancy_dates: new Set(),
     };
     existing.ship_code = shipCode;
@@ -336,6 +364,11 @@ export const explodeDemandOntoDays = (bookingSummaryRows = [], windows = new Map
         reference_sail_code: win.reference_sail_code,
         sailing_role: win.sailing_role,
         nights: win.nights,
+        package_key: resolvePackageKey(win),
+        package_type: win.package_type,
+        package_name: win.package_name,
+        port_from: win.port_from,
+        port_to: win.port_to,
         booked,
         booked_fit: bookedFit,
         booked_group: bookedGroup,
@@ -783,6 +816,33 @@ export const expandDateWindowForSailImpact = ({
 };
 
 /**
+ * When MONTH criteria is set, extend `to` through full occupancy of sailings
+ * that depart in that month (e.g. late-Feb 7N into March) so blocking stays visible.
+ */
+export const expandDateWindowForDepartingSails = ({
+  dateFrom = null,
+  dateTo = null,
+  windows = new Map(),
+  departureMonth = null,
+} = {}) => {
+  const monthKey = typeof departureMonth === 'string' && /^\d{4}-\d{2}$/.test(departureMonth.trim())
+    ? departureMonth.trim()
+    : null;
+  let from = toDateKey(dateFrom);
+  let to = toDateKey(dateTo);
+  if (!monthKey) return { from, to };
+
+  windows.forEach?.((win) => {
+    const dep = toDateKey(win?.date_from);
+    if (!dep || dep.slice(0, 7) !== monthKey) return;
+    const end = toDateKey(win?.date_to) || dep;
+    if (end && (!to || end > to)) to = end;
+  });
+
+  return { from, to };
+};
+
+/**
  * Continuous calendar spine for the pressure grid.
  * Prefer explicit from/to; when to is open, extend through data / impact / practical cap.
  */
@@ -935,6 +995,92 @@ export const buildPressureGrid = ({
       });
     }
     columns = [...dayColumns, ...voyageColumns];
+  } else if (grain === PRESSURE_GRAINS.PACKAGE) {
+    // Segments by package_type / port→port — sail_code is secondary (blocked beds).
+    const colMap = new Map();
+    windows.forEach((win) => {
+      if (!matchesShipFilter(win.ship_code, shipFilter)) return;
+      // Prefer sellable package products (segments); masters rarely carry package_type.
+      if (isVoyageIdentity(win) && !resolvePackageKey(win)) return;
+      const packageKey = resolvePackageKey(win);
+      if (!packageKey) return;
+      if (!voyageOverlapsRange(win, start, end)) return;
+      const id = `${win.ship_code}::${packageKey}`;
+      if (!colMap.has(id)) {
+        colMap.set(id, {
+          id,
+          kind: 'package',
+          package_key: packageKey,
+          label: formatPackageLabel(win),
+          title_full: win.package_name || packageKey,
+          ship_code: win.ship_code,
+          ship_name: win.ship_name,
+          port_from: win.port_from,
+          port_to: win.port_to,
+          package_type: win.package_type,
+          nights: win.nights,
+          date_from: win.date_from,
+          date_to: win.date_to || win.date_from,
+          sail_codes: new Set([win.sail_code]),
+          reference_sail_codes: new Set([win.reference_sail_code].filter(Boolean)),
+        });
+      } else {
+        const col = colMap.get(id);
+        if (win.date_from && (!col.date_from || win.date_from < col.date_from)) {
+          col.date_from = win.date_from;
+        }
+        if (win.date_to && (!col.date_to || win.date_to > col.date_to)) {
+          col.date_to = win.date_to;
+        }
+        if (!col.title_full && win.package_name) col.title_full = win.package_name;
+      }
+      colMap.get(id).sail_codes.add(win.sail_code);
+      if (win.reference_sail_code) {
+        colMap.get(id).reference_sail_codes.add(win.reference_sail_code);
+      }
+    });
+    const packageColumns = [...colMap.values()]
+      .sort((a, b) => (
+        String(a.ship_code).localeCompare(String(b.ship_code))
+        || String(a.port_from || '').localeCompare(String(b.port_from || ''))
+        || (a.nights || 0) - (b.nights || 0)
+        || String(a.package_key).localeCompare(String(b.package_key))
+      ))
+      .slice(0, MAX_PACKAGE_COLUMNS)
+      .map((col) => ({
+        ...col,
+        sail_codes: [...col.sail_codes],
+        reference_sail_codes: [...col.reference_sail_codes],
+        primary_sail_code: [...col.sail_codes][0] || null,
+        primary_reference_sail_code: [...col.reference_sail_codes][0] || [...col.sail_codes][0] || null,
+      }));
+
+    const dayShipMap = new Map();
+    const rememberDayShip = (shipCode, shipName) => {
+      if (!shipCode || !matchesShipFilter(shipCode, shipFilter)) return;
+      if (!dayShipMap.has(shipCode)) {
+        dayShipMap.set(shipCode, {
+          id: `__day__::${shipCode}`,
+          kind: 'day',
+          label: 'Day',
+          ship_code: shipCode,
+          ship_name: shipName || shipCode,
+        });
+      } else if (shipName) {
+        dayShipMap.get(shipCode).ship_name = shipName;
+      }
+    };
+    scopedCells.forEach((cell) => rememberDayShip(cell.ship_code, cell.ship_name));
+    packageColumns.forEach((col) => rememberDayShip(col.ship_code, col.ship_name));
+    const dayColumns = [...dayShipMap.values()].sort((a, b) => (
+      String(a.ship_name || a.ship_code).localeCompare(String(b.ship_name || b.ship_code))
+    ));
+    if (dayColumns.length > 1) {
+      dayColumns.forEach((col) => {
+        col.label = col.ship_code;
+      });
+    }
+    columns = [...dayColumns, ...packageColumns];
   } else {
     const colMap = new Map();
     scopedCells.forEach((cell) => {
@@ -996,6 +1142,43 @@ export const buildPressureGrid = ({
           by_sail: parts,
           column_id: col.id,
           grain: 'voyage',
+        };
+      } else if (col.kind === 'package') {
+        const physical = cellIndex.get(shipDayKey(col.ship_code, date));
+        if (!physical) {
+          row[col.id] = null;
+          return;
+        }
+        const parts = (physical.by_sail || []).filter((p) => (
+          p.package_key === col.package_key
+          || (col.sail_codes || []).includes(p.sail_code)
+        ));
+        if (!parts.length) {
+          row[col.id] = null;
+          return;
+        }
+        const booked = parts.reduce((s, p) => s + p.booked, 0);
+        const estimated = parts.reduce((s, p) => s + p.estimated, 0);
+        const contracted = parts.reduce((s, p) => s + p.contracted, 0);
+        const split = splitBookedBySailingRole(parts);
+        const bookedFit = parts.reduce((s, p) => s + toNumber(p.booked_fit), 0);
+        const bookedGroup = parts.reduce((s, p) => s + toNumber(p.booked_group), 0);
+        row[col.id] = {
+          ...physical,
+          booked,
+          booked_master: split.booked_master,
+          booked_segment: split.booked_segment,
+          booked_fit: bookedFit,
+          booked_group: bookedGroup,
+          estimated,
+          contracted,
+          by_sail: parts,
+          package_key: col.package_key,
+          package_type: col.package_type,
+          port_from: col.port_from,
+          port_to: col.port_to,
+          column_id: col.id,
+          grain: 'package',
         };
       } else if (col.kind === 'cabin') {
         const physical = cellIndex.get(shipDayKey(col.ship_code, date));

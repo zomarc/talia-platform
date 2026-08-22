@@ -5,7 +5,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import { useGlobalCabinCategoryMode } from '../../../hooks/useGlobalCabinCategoryMode';
+import {
+  applyLocalDateNarrow,
+  formatCriteriaDateSummary,
+  resolveEffectiveCriteriaDateWindow,
+} from '../../../lib/globalCriteriaDateWindow';
 import { useGlobalDateWindow } from '../../../hooks/useGlobalDateWindow';
+import { useGlobalDepartureMonth } from '../../../hooks/useGlobalDepartureMonth';
 import { useGlobalDemandUnit } from '../../../hooks/useGlobalDemandUnit';
 import {
   setGlobalShipCode,
@@ -35,6 +41,7 @@ import {
   buildPressureGrid,
   buildSailWindows,
   defaultDateWindow,
+  expandDateWindowForDepartingSails,
   expandDateWindowForSailImpact,
 } from './shipDayPressureTransform';
 
@@ -76,6 +83,10 @@ const MASTER_SAIL_COLUMNS = [
   'sail_date_to',
   'sail_days',
   'is_main',
+  'package_type',
+  'package_name',
+  'port_from',
+  'port_to',
 ];
 
 const INVENTORY_COLUMNS = [
@@ -102,6 +113,7 @@ const ShipDayPressureContainer = ({ panelInstanceId, panelComponentId }) => {
   const demandUnit = useGlobalDemandUnit();
   const shipFilter = useGlobalShipFilter();
   const globalDates = useGlobalDateWindow();
+  const departureMonth = useGlobalDepartureMonth();
   const globalCabinCategoryMode = useGlobalCabinCategoryMode();
   /** null = follow StatusBar Cat; Real/Group = local override */
   const [cabinCategoryModeOverride, setCabinCategoryModeOverride] = useState(null);
@@ -113,8 +125,28 @@ const ShipDayPressureContainer = ({ panelInstanceId, panelComponentId }) => {
   const [selectedScope, setSelectedScope] = useState(null);
   const [sharedIndexEpoch, setSharedIndexEpoch] = useState(0);
 
-  const baseFrom = dateOverride.from || globalDates.dateFrom || fallbackWindow.from;
-  const baseTo = dateOverride.to || globalDates.dateTo || fallbackWindow.to;
+  const globalWindow = useMemo(() => resolveEffectiveCriteriaDateWindow({
+    dateFrom: globalDates.dateFrom,
+    dateTo: globalDates.dateTo,
+    departureMonth,
+    fallback: fallbackWindow,
+  }), [globalDates.dateFrom, globalDates.dateTo, departureMonth, fallbackWindow.from, fallbackWindow.to]);
+
+  const localWindow = useMemo(
+    () => applyLocalDateNarrow(globalWindow, dateOverride),
+    [globalWindow, dateOverride]
+  );
+
+  const criteriaSummary = useMemo(() => formatCriteriaDateSummary({
+    dateFrom: globalWindow.from,
+    dateTo: globalWindow.to,
+    departureMonth,
+    source: globalWindow.source,
+  }), [globalWindow, departureMonth]);
+
+  const baseFrom = localWindow.from;
+  const baseTo = localWindow.to;
+  const datesFollowGlobal = localWindow.followingGlobal;
 
   const {
     data: capacityRows,
@@ -189,16 +221,23 @@ const ShipDayPressureContainer = ({ panelInstanceId, panelComponentId }) => {
     [inventoryRows, masterSailRows]
   );
 
-  const expandedWindow = useMemo(() => expandDateWindowForSailImpact({
+  const monthExpandedWindow = useMemo(() => expandDateWindowForDepartingSails({
     dateFrom: baseFrom,
     dateTo: baseTo,
     windows: sailWindows,
+    departureMonth: globalWindow.departureMonth,
+  }), [baseFrom, baseTo, sailWindows, globalWindow.departureMonth]);
+
+  const expandedWindow = useMemo(() => expandDateWindowForSailImpact({
+    dateFrom: monthExpandedWindow.from,
+    dateTo: monthExpandedWindow.to,
+    windows: sailWindows,
     referenceSailCode: selectedReference,
     shipCode: selectedShipCode,
-  }), [baseFrom, baseTo, sailWindows, selectedReference, selectedShipCode]);
+  }), [monthExpandedWindow.from, monthExpandedWindow.to, sailWindows, selectedReference, selectedShipCode]);
 
-  const dateFrom = expandedWindow.from || baseFrom;
-  const dateTo = expandedWindow.to || baseTo;
+  const dateFrom = expandedWindow.from || monthExpandedWindow.from || baseFrom;
+  const dateTo = expandedWindow.to || monthExpandedWindow.to || baseTo;
   const impactFrom = expandedWindow.impactFrom || null;
   const impactTo = expandedWindow.impactTo || null;
 
@@ -213,6 +252,9 @@ const ShipDayPressureContainer = ({ panelInstanceId, panelComponentId }) => {
   };
   const handleDateToChange = (value) => {
     setDateOverride((prev) => ({ ...prev, to: value || null }));
+  };
+  const handleResetDates = () => {
+    setDateOverride({ from: null, to: null });
   };
 
   const {
@@ -420,15 +462,20 @@ const ShipDayPressureContainer = ({ panelInstanceId, panelComponentId }) => {
       empty={!bundle?.columns || bundle.columns.length === 0 || !bundle?.rows || bundle.rows.length === 0}
       emptyMessage={grain === PRESSURE_GRAINS.CABIN
         ? 'No cabin occupancy in this date window'
-        : 'No ship-day capacity in this date window'}
+        : grain === PRESSURE_GRAINS.PACKAGE
+          ? 'No package / port-to-port products in this date window'
+          : 'No ship-day capacity in this date window'}
       onRetry={handleRefresh}
     >
       <ShipDayPressurePresenter
         bundle={bundle}
-        dateFrom={dateFrom}
-        dateTo={dateTo}
+        dateFrom={baseFrom}
+        dateTo={baseTo}
         onDateFromChange={handleDateFromChange}
         onDateToChange={handleDateToChange}
+        onResetDates={handleResetDates}
+        datesFollowGlobal={datesFollowGlobal}
+        criteriaSummary={criteriaSummary}
         grain={grain}
         onGrainChange={setGrain}
         shipFilter={shipFilter}

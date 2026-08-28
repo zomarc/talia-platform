@@ -26,6 +26,10 @@ import { GraphQLUtils } from './lib/apolloClient.js';
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from './lib/eventBus.js';
 import { normalizeRole, canUseAdvancedHeader } from './utils/roleUtils.js';
 import userActivityTracker, { initUserActivityTracking } from './services/userActivityTracker.js';
+import { applyInstanceBrowserIdentity } from './lib/instanceIdentity.js';
+
+// Paint tab title/favicon ASAP (local/mvp/…) so multi-instance tabs are distinguishable.
+applyInstanceBrowserIdentity().catch(() => {});
 
 // Apollo Client temporarily disabled during database restoration
 // TODO: Re-enable when database is restored

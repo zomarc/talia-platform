@@ -61,6 +61,8 @@ import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import { canConfigureComponentOperations } from '../../utils/roleUtils';
 import TaliaTooltip from './TaliaTooltip';
 import {
+  IconBackup,
+  IconBolt,
   IconCheck,
   IconChevron,
   IconEye,
@@ -69,6 +71,9 @@ import {
   IconRefresh,
   IconSave,
   IconSidebar,
+  IconSpinner,
+  IconStatus,
+  IconStop,
 } from './StatusBarIcons';
 // CSS imported globally in main.jsx
 const DASHBOARD_TOGGLE_SIDEBAR_EVENT = 'talia:dashboard.toggleSidebar';
@@ -488,14 +493,13 @@ const StatusBar = ({
     && isDataManagementActive
     && (showDataAdminActions || showDataAdminFilters);
 
-  /** Hide centered logo while any top header strip / panel is open (avoids overlap). */
+  /** Hide centered logo only when a strip that occupies the mid-bar is open. */
   const headerLogoSuppressed = useMemo(() => (
     visibilityControlsOpen
     || criteriaVisible
     || focusControlsOpen
-    || eventsVisible
     || showDataAdminStrip
-  ), [visibilityControlsOpen, criteriaVisible, focusControlsOpen, eventsVisible, showDataAdminStrip]);
+  ), [visibilityControlsOpen, criteriaVisible, focusControlsOpen, showDataAdminStrip]);
 
   const reportActionFailure = (message) => {
     const text = String(message || '').trim() || 'Action failed.';
@@ -2139,7 +2143,7 @@ const StatusBar = ({
                   disabled={dataMgmtState.rangeSaving}
                   aria-label="Save integration date range"
                 >
-                  {dataMgmtState.rangeSaving ? '?' : '?'}
+                  {dataMgmtState.rangeSaving ? <IconSpinner /> : <IconSave />}
                 </button>
               </TaliaTooltip>
             </>
@@ -2154,7 +2158,7 @@ const StatusBar = ({
                   aria-label="Status for selected table"
                   disabled={!dataMgmtState.selectedTable}
                 >
-                  ??
+                  <IconStatus />
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Review selected table rows" placement="bottom-left" delayMs={180}>
@@ -2165,7 +2169,7 @@ const StatusBar = ({
                   aria-label="Review selected table rows"
                   disabled={!dataMgmtState.selectedTable}
                 >
-                  ???
+                  <IconEye />
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Sync selected table" placement="bottom-left" delayMs={180}>
@@ -2176,7 +2180,7 @@ const StatusBar = ({
                   aria-label="Sync selected table"
                   disabled={!dataMgmtState.selectedTable}
                 >
-                  ??
+                  <IconRefresh />
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Full update selected table" placement="bottom-left" delayMs={180}>
@@ -2187,7 +2191,7 @@ const StatusBar = ({
                   aria-label="Full update selected table"
                   disabled={!dataMgmtState.selectedTable}
                 >
-                  ?
+                  <IconBolt />
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Sync all configured tables" placement="bottom-left" delayMs={180}>
@@ -2198,7 +2202,7 @@ const StatusBar = ({
                   disabled={dataMgmtState.bulkSyncing}
                   aria-label="Sync all configured tables"
                 >
-                  ?
+                  <IconRefresh all />
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Full update all configured tables" placement="bottom-left" delayMs={180}>
@@ -2209,7 +2213,7 @@ const StatusBar = ({
                   disabled={dataMgmtState.bulkSyncing}
                   aria-label="Full update all configured tables"
                 >
-                  ?
+                  <IconBolt />
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Stop the running table sync" placement="bottom-left" delayMs={180}>
@@ -2220,7 +2224,7 @@ const StatusBar = ({
                   disabled={!dataMgmtState.bulkSyncing && !(dataMgmtState.runningSyncCount > 0)}
                   aria-label="Stop the running table sync"
                 >
-                  {dataMgmtState.stoppingSync ? '...' : '?'}
+                  {dataMgmtState.stoppingSync ? <IconSpinner /> : <IconStop />}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Backup tools" placement="bottom-left" delayMs={180}>
@@ -2231,7 +2235,7 @@ const StatusBar = ({
                   disabled={dataMgmtState.backupLoading}
                   aria-label="Backup tools"
                 >
-                  {dataMgmtState.backupLoading ? '?' : '??'}
+                  {dataMgmtState.backupLoading ? <IconSpinner /> : <IconBackup />}
                 </button>
               </TaliaTooltip>
               <TaliaTooltip content="Refresh Data Management state" placement="bottom-left" delayMs={180}>
@@ -2241,7 +2245,7 @@ const StatusBar = ({
                   onClick={handleDataMgmtRefresh}
                   aria-label="Refresh Data Management state"
                 >
-                  ?
+                  <IconRefresh />
                 </button>
               </TaliaTooltip>
             </>

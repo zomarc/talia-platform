@@ -274,6 +274,27 @@ const MyComponent = () => {
 
 ## Framework Usage
 
+### Chrome icons (StatusBar / action headers)
+
+- **Use** shared SVG glyphs from `components/shared/StatusBarIcons.jsx` (`IconRefresh`, `IconSave`, `IconEye`, …).
+- **Do not** put emoji or literal `?` / `??` in header/action buttons — those glyphs often corrupt in source or fail to render and show as `?`.
+- Busy states: `IconSpinner` (uses `.talia-icon--spin`).
+- Panel row actions: `panelActions.js` + `PanelActionIcon` / `getPanelActionIconMarkup` (React vs Tabulator HTML).
+- Prefer `aria-label` + tooltip; keep labels text-only when the button also shows words (Data Management action header).
+
+```jsx
+import { IconRefresh, IconSpinner, PanelActionIcon } from '../shared/StatusBarIcons';
+import { PANEL_ACTION_IDS } from '../shared/panelActions';
+
+<button type="button" aria-label="Sync selected table">
+  {busy ? <IconSpinner /> : <IconRefresh />}
+</button>
+
+<button type="button" aria-label="Status">
+  <PanelActionIcon actionId={PANEL_ACTION_IDS.STATUS} busy={loading} />
+</button>
+```
+
 ### Tables: Tabulator
 
 - **Always use Tabulator** for table components

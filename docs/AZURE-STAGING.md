@@ -111,6 +111,10 @@ The script requires `.env.staging` on the server and a git clone in `AZURE_STAGI
 
 The **mvp** environment is the personal Azure Docker host. Configure `MVP_*` in [`scripts/config/targets.env`](../scripts/config/targets.env). [`scripts/validate`](../scripts/validate) shows MVP UI / GraphQL / Kong when `MVP_VALIDATE=1` and `MVP_UI_HOST` is set.
 
+**Code deploy ≠ database.** `deploy-to-mvp` ships UI/GraphQL images and applies a thin schema guard (`inventory_item`, `agency`, …). It does **not** copy row data. Panels like Distribution need a restore (below) or they fail with `relation "public.agency" does not exist` / empty tables.
+
+After deploy, `./scripts/validate` → working target **MVP** → service check probes **Demo DB** (public table count + `agency` rows) and warns if thin.
+
 **Backup locally** (Supabase running; `pg_dump`/`psql` on PATH):
 
 ```bash

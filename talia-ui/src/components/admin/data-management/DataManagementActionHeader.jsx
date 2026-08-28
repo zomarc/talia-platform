@@ -11,10 +11,26 @@ import {
   DATA_MANAGEMENT_REFRESH_EVENT,
   DATA_MANAGEMENT_TABLE_ACTION_EVENT,
 } from '../../dockview/eventConstants';
+import {
+  IconBackup,
+  IconBolt,
+  IconEye,
+  IconRefresh,
+  IconSpinner,
+  IconStatus,
+  IconStop,
+} from '../../shared/StatusBarIcons';
 
 const dispatch = (eventName, detail) => {
   window.dispatchEvent(new CustomEvent(eventName, { detail }));
 };
+
+const ActionIconLabel = ({ icon, label }) => (
+  <span className="dm-action-header__btn-inner">
+    <span className="dm-action-header__btn-icon" aria-hidden="true">{icon}</span>
+    <span>{label}</span>
+  </span>
+);
 
 const DataManagementActionHeader = ({
   panelComponentId,
@@ -87,7 +103,7 @@ const DataManagementActionHeader = ({
             disabled={!hasTableSelection}
             title="Status for selected table"
           >
-            🧾 Status
+            <ActionIconLabel icon={<IconStatus />} label="Status" />
           </button>
           <button
             type="button"
@@ -96,7 +112,7 @@ const DataManagementActionHeader = ({
             disabled={!hasTableSelection}
             title="Review selected table rows"
           >
-            👁️ Review
+            <ActionIconLabel icon={<IconEye />} label="Review" />
           </button>
           <button
             type="button"
@@ -105,7 +121,7 @@ const DataManagementActionHeader = ({
             disabled={!canActOnTable || bulkSyncing}
             title="Sync selected table"
           >
-            🔄 Sync
+            <ActionIconLabel icon={<IconRefresh />} label="Sync" />
           </button>
           <button
             type="button"
@@ -114,7 +130,7 @@ const DataManagementActionHeader = ({
             disabled={!canActOnTable || bulkSyncing}
             title="Full update selected table"
           >
-            ⚡ Full
+            <ActionIconLabel icon={<IconBolt />} label="Full" />
           </button>
         </div>
 
@@ -127,7 +143,7 @@ const DataManagementActionHeader = ({
           disabled={bulkSyncing || syncableTableNames.length === 0}
           title="Sync all configured tables"
         >
-          ↻ Sync All
+          <ActionIconLabel icon={<IconRefresh all />} label="Sync All" />
         </button>
         <button
           type="button"
@@ -136,7 +152,7 @@ const DataManagementActionHeader = ({
           disabled={bulkSyncing || syncableTableNames.length === 0}
           title="Full update all tables"
         >
-          ⚡ Full All
+          <ActionIconLabel icon={<IconBolt />} label="Full All" />
         </button>
         <button
           type="button"
@@ -145,7 +161,10 @@ const DataManagementActionHeader = ({
           disabled={backupStatus?.loading}
           title="Create database backup"
         >
-          {backupStatus?.loading ? '⏳' : '💾'} Backup
+          <ActionIconLabel
+            icon={backupStatus?.loading ? <IconSpinner /> : <IconBackup />}
+            label="Backup"
+          />
         </button>
         <button
           type="button"
@@ -153,7 +172,7 @@ const DataManagementActionHeader = ({
           onClick={handleRefresh}
           title="Refresh tables and backup status"
         >
-          ↻
+          <IconRefresh />
         </button>
         {isSyncActive && (
           <div className="dm-action-header__sync-live" role="status" aria-live="polite">
@@ -172,7 +191,10 @@ const DataManagementActionHeader = ({
               disabled={stoppingSync || !onStopSync}
               title="Stop the running table sync"
             >
-              {stoppingSync ? 'Stopping…' : '⏹ Stop'}
+              <ActionIconLabel
+                icon={stoppingSync ? <IconSpinner /> : <IconStop />}
+                label={stoppingSync ? 'Stopping…' : 'Stop'}
+              />
             </button>
           </div>
         )}

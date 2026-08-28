@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { formatDayMonYear, formatSailDateRange } from '../../../lib/dateFormat';
+import { getPanelActionIconMarkup, PANEL_ACTION_IDS } from '../../shared/panelActions';
 
 const dayMs = 1000 * 60 * 60 * 24;
 
@@ -205,14 +206,14 @@ const DataManagementTable = ({
               if (row.hasSyncConfig !== true) return '<span class="dm-action-placeholder">—</span>';
               const statusBusy = statusLoadingTable === row.tableName;
               const stopButton = row._isSyncing
-                ? '<button class="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--danger" data-action="stop" title="Stop this sync">⏹</button>'
+                ? `<button class="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--danger" data-action="stop" title="Stop this sync">${getPanelActionIconMarkup(PANEL_ACTION_IDS.STOP)}</button>`
                 : '';
               return `
                 <div class="talia-action-group dm-actions-inline">
-                  <button class="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--neutral" data-action="status" ${statusBusy ? 'disabled' : ''}>${statusBusy ? '⏳' : '🧾'}</button>
-                  <button class="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--success" data-action="review" ${reviewLoading ? 'disabled' : ''}>${reviewLoading ? '⏳' : '👁️'}</button>
-                  <button class="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--primary" data-action="sync" ${row._isSyncing ? 'disabled' : ''}>${row._isSyncing ? '⏳' : '🔄'}</button>
-                  <button class="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--warning" data-action="full" ${row._isSyncing ? 'disabled' : ''}>${row._isSyncing ? '⏳' : '⚡'}</button>
+                  <button class="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--neutral" data-action="status" ${statusBusy ? 'disabled' : ''}>${getPanelActionIconMarkup(PANEL_ACTION_IDS.STATUS, { busy: statusBusy })}</button>
+                  <button class="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--success" data-action="review" ${reviewLoading ? 'disabled' : ''}>${getPanelActionIconMarkup(PANEL_ACTION_IDS.REVIEW, { busy: reviewLoading })}</button>
+                  <button class="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--primary" data-action="sync" ${row._isSyncing ? 'disabled' : ''}>${getPanelActionIconMarkup(PANEL_ACTION_IDS.SYNC, { busy: row._isSyncing })}</button>
+                  <button class="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--warning" data-action="full" ${row._isSyncing ? 'disabled' : ''}>${getPanelActionIconMarkup(PANEL_ACTION_IDS.FULL, { busy: row._isSyncing })}</button>
                   ${stopButton}
                 </div>`;
             },

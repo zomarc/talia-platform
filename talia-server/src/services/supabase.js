@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import ws from 'ws';
 import {
   getBookingProfileDimensional,
   getBookingProfileDimensionalYoY,
@@ -34,22 +35,29 @@ const SUPABASE_CONFIG = {
   serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || 'sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz'
 };
 
+// Node < 22 has no global WebSocket; Docker GraphQL image is Node 20.
+const supabaseClientOptions = {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+  realtime: {
+    transport: ws,
+  },
+};
+
 // Create Supabase client for server-side operations
 export const supabase = createClient(
   SUPABASE_CONFIG.url,
   SUPABASE_CONFIG.serviceRoleKey, // Use service role for server-side operations
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
+  supabaseClientOptions
 );
 
 // Create Supabase client for client-side operations (if needed)
 export const supabaseClient = createClient(
   SUPABASE_CONFIG.url,
-  SUPABASE_CONFIG.anonKey
+  SUPABASE_CONFIG.anonKey,
+  supabaseClientOptions
 );
 
 // Database query utilities

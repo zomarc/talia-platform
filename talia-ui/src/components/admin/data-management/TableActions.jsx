@@ -1,5 +1,6 @@
 import React from 'react';
 import { getPanelActionDefinition, PANEL_ACTION_IDS } from '../../shared/panelActions';
+import { PanelActionIcon } from '../../shared/StatusBarIcons';
 
 const TableActions = ({
   table,
@@ -14,54 +15,63 @@ const TableActions = ({
     return <span className="dm-action-placeholder">—</span>;
   }
 
+  const statusDef = getPanelActionDefinition(PANEL_ACTION_IDS.STATUS);
+  const reviewDef = getPanelActionDefinition(PANEL_ACTION_IDS.REVIEW);
+  const syncDef = getPanelActionDefinition(PANEL_ACTION_IDS.SYNC);
+  const fullDef = getPanelActionDefinition(PANEL_ACTION_IDS.FULL);
+  const stopDef = getPanelActionDefinition(PANEL_ACTION_IDS.STOP);
+
   return (
     <div className="talia-action-group">
       <button
         onClick={() => onOpenStatus(table)}
         disabled={statusLoadingTable === table.tableName}
         className="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--neutral"
-        title={getPanelActionDefinition(PANEL_ACTION_IDS.STATUS)?.title}
-        aria-label={getPanelActionDefinition(PANEL_ACTION_IDS.STATUS)?.label}
+        title={statusDef?.title}
+        aria-label={statusDef?.label}
       >
-        {statusLoadingTable === table.tableName ? '⏳' : getPanelActionDefinition(PANEL_ACTION_IDS.STATUS)?.icon}
+        <PanelActionIcon
+          actionId={PANEL_ACTION_IDS.STATUS}
+          busy={statusLoadingTable === table.tableName}
+        />
       </button>
       {selectedTable === table.tableName && (
         <button
           onClick={() => tableActions.handleReview(table)}
           disabled={reviewLoading}
           className="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--success"
-          title={getPanelActionDefinition(PANEL_ACTION_IDS.REVIEW)?.title}
-          aria-label={getPanelActionDefinition(PANEL_ACTION_IDS.REVIEW)?.label}
+          title={reviewDef?.title}
+          aria-label={reviewDef?.label}
         >
-          {reviewLoading ? '⏳' : getPanelActionDefinition(PANEL_ACTION_IDS.REVIEW)?.icon}
+          <PanelActionIcon actionId={PANEL_ACTION_IDS.REVIEW} busy={reviewLoading} />
         </button>
       )}
       <button
         onClick={() => tableActions.handleIncrementalSync(table)}
         disabled={isSyncing}
         className="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--primary"
-        title={getPanelActionDefinition(PANEL_ACTION_IDS.SYNC)?.title}
-        aria-label={getPanelActionDefinition(PANEL_ACTION_IDS.SYNC)?.label}
+        title={syncDef?.title}
+        aria-label={syncDef?.label}
       >
-        {isSyncing ? '⏳' : getPanelActionDefinition(PANEL_ACTION_IDS.SYNC)?.icon}
+        <PanelActionIcon actionId={PANEL_ACTION_IDS.SYNC} busy={isSyncing} />
       </button>
       <button
         onClick={() => tableActions.handleFullSync(table)}
         disabled={isSyncing}
         className="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--warning"
-        title={getPanelActionDefinition(PANEL_ACTION_IDS.FULL)?.title}
-        aria-label={getPanelActionDefinition(PANEL_ACTION_IDS.FULL)?.label}
+        title={fullDef?.title}
+        aria-label={fullDef?.label}
       >
-        {isSyncing ? '⏳' : getPanelActionDefinition(PANEL_ACTION_IDS.FULL)?.icon}
+        <PanelActionIcon actionId={PANEL_ACTION_IDS.FULL} busy={isSyncing} />
       </button>
       {isSyncing ? (
         <button
           onClick={() => tableActions.handleStop(table)}
           className="talia-btn talia-btn--small talia-btn--icon talia-action-btn talia-action-btn--danger"
-          title={getPanelActionDefinition(PANEL_ACTION_IDS.STOP)?.title}
-          aria-label={getPanelActionDefinition(PANEL_ACTION_IDS.STOP)?.label}
+          title={stopDef?.title}
+          aria-label={stopDef?.label}
         >
-          {getPanelActionDefinition(PANEL_ACTION_IDS.STOP)?.icon}
+          <PanelActionIcon actionId={PANEL_ACTION_IDS.STOP} />
         </button>
       ) : null}
     </div>

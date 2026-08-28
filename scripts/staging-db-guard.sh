@@ -15,9 +15,16 @@ set -euo pipefail
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.staging.yml}"
 MIGRATIONS_DIR="${MIGRATIONS_DIR:-talia-server/supabase/migrations}"
 DB_CONTAINER="${DB_CONTAINER:-talia-supabase-db}"
-REQUIRED_TABLES="${REQUIRED_TABLES:-inventory_item inventory_item_memo talia_users}"
+# Hard required: guard fails deploy if still missing after migration remediation.
+# Only list tables with a known create migration (see find_candidates_for_table).
+REQUIRED_TABLES="${REQUIRED_TABLES:-inventory_item inventory_item_memo talia_users agency}"
 DB_NAME="${DB_NAME:-postgres}"
 DB_USER="${DB_USER:-postgres}"
+
+# Soft readiness for demo/UAT panels (Distribution, MSE, etc.).
+# Schema alone is not enough — row data needs backup → restore:
+#   ./scripts/backup-local-db-for-mvp.sh && RESTORE_MVP_CONFIRM=yes ./scripts/restore-db-to-mvp.sh
+DEMO_CRITICAL_TABLES="${DEMO_CRITICAL_TABLES:-agency ship master_sail reservation sail_by_cabin_occupancy}"
 
 if [ ! -f "$COMPOSE_FILE" ]; then
   echo "❌ Compose file not found: $COMPOSE_FILE"
@@ -87,6 +94,9 @@ find_candidates_for_table() {
     talia_users)
       ls -1 "$MIGRATIONS_DIR"/20260327000000_create_talia_users.sql 2>/dev/null | sort || true
       ;;
+    agency)
+      ls -1 "$MIGRATIONS_DIR"/20260706143000_create_agency_table.sql 2>/dev/null | sort || true
+      ;;
     *)
       rg --files-with-matches "$table_name" "$MIGRATIONS_DIR" --glob "*.sql" | sort || true
       ;;
@@ -139,7 +149,25 @@ done
 
 if [ "${#missing_after[@]}" -gt 0 ]; then
   echo "❌ Required tables still missing after remediation: ${missing_after[*]}"
+  echo "   Tip: for Azure MVP demo data, restore a local dump:"
+  echo "     ./scripts/backup-local-db-for-mvp.sh && RESTORE_MVP_CONFIRM=yes ./scripts/restore-db-to-mvp.sh"
   exit 1
+fi
+
+# Soft readiness: demo-critical tables may exist empty (migration-only) or with data (restore).
+echo "🔎 Checking demo-critical tables (schema presence)..."
+demo_missing=()
+for table in $DEMO_CRITICAL_TABLES; do
+  if [ "$(table_exists "$table")" != "t" ]; then
+    demo_missing+=("$table")
+  fi
+done
+if [ "${#demo_missing[@]}" -gt 0 ]; then
+  echo "⚠️  Demo-critical tables missing: ${demo_missing[*]}"
+  echo "   UI may boot but panels (e.g. Distribution) will fail until DB is restored."
+  echo "   ./scripts/backup-local-db-for-mvp.sh && RESTORE_MVP_CONFIRM=yes ./scripts/restore-db-to-mvp.sh"
+else
+  echo "✅ Demo-critical tables present (${DEMO_CRITICAL_TABLES})"
 fi
 
 # Idempotent GRANTs: not tied to "missing tables". VM Postgres state survives image redeploys.

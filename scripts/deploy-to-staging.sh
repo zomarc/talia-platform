@@ -589,14 +589,24 @@ if [ \"$DEPLOY_MODE\" = \"full\" ] || [ \"$DEPLOY_MODE\" = \"graphql-only\" ]; t
 fi
 
 if [ \"$DEPLOY_MODE\" = \"full\" ]; then
-  # Test required schema tables for ship tracker/inventory memo features
-  echo -n '  Testing required tables (inventory_item, inventory_item_memo)... '
-  required_tables_check=\$(${DC} -f docker-compose.staging.yml exec -T supabase-db psql -U postgres -d postgres -tAc \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('inventory_item','inventory_item_memo');\" | tr -d '[:space:]')
-  if [ \"\$required_tables_check\" = \"2\" ]; then
+  # Test required schema tables for ship tracker/inventory memo + demo panels
+  echo -n '  Testing required tables (inventory_item, inventory_item_memo, agency, ship)... '
+  required_tables_check=\$(${DC} -f docker-compose.staging.yml exec -T supabase-db psql -U postgres -d postgres -tAc \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('inventory_item','inventory_item_memo','agency','ship');\" | tr -d '[:space:]')
+  if [ \"\$required_tables_check\" = \"4\" ]; then
     echo '✅ OK'
   else
-    echo \"❌ FAILED - Required tables missing (found \$required_tables_check/2)\"
+    echo \"❌ FAILED - Required tables missing (found \$required_tables_check/4)\"
+    echo '   Tip: UI/code deploy does not ship Postgres data. For MVP demo:'
+    echo '     ./scripts/backup-local-db-for-mvp.sh && RESTORE_MVP_CONFIRM=yes ./scripts/restore-db-to-mvp.sh'
     exit 1
+  fi
+
+  echo -n '  Testing agency has rows (demo data readiness)... '
+  agency_rows=\$(${DC} -f docker-compose.staging.yml exec -T supabase-db psql -U postgres -d postgres -tAc \"SELECT COUNT(*) FROM public.agency;\" 2>/dev/null | tr -d '[:space:]' || echo 0)
+  if [ \"\${agency_rows:-0}\" -gt \"0\" ] 2>/dev/null; then
+    echo \"✅ OK (\$agency_rows rows)\"
+  else
+    echo '⚠️  WARN - agency table empty (schema OK; restore local dump for demo panels)'
   fi
 
   # Test schema compatibility for Admin Lite metadata fields

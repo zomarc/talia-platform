@@ -589,6 +589,18 @@
   flex-wrap: wrap;
 }
 
+.dm-action-header__btn-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dm-action-header__btn-icon {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+}
+
 .dm-action-header .talia-btn.talia-btn--small {
   min-height: 30px;
   padding: 5px 10px;

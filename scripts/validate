@@ -19,7 +19,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Monotonic ops token (not a calendar stamp). Bump when validate menu behavior or Instance & keys cross-check changes.
-SCRIPT_VERSION="ops-13"
+SCRIPT_VERSION="ops-15"
 CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
 if [[ -f "${CONFIG_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -115,6 +115,12 @@ STAGING_REMOTE_CMD_RETRIES="${STAGING_REMOTE_CMD_RETRIES:-2}"
 STAGING_STATUS_SSH_TIMEOUT_SEC="${STAGING_STATUS_SSH_TIMEOUT_SEC:-2}"
 LOCAL_NGROK_DOMAIN="${LOCAL_NGROK_DOMAIN:-${PUBLIC_MAIN_URL#https://}}"
 LOCAL_NGROK_DOMAIN="${LOCAL_NGROK_DOMAIN#http://}"
+
+# Laptop Synapse egress: Azure firewall whitelists the static Proton UK#11 exit IP.
+# ISP / leak IPs (e.g. home router) change and must NOT be whitelisted.
+EXPECTED_VPN_IP="${EXPECTED_VPN_IP:-${VPN_EXPECTED_EGRESS_IP:-149.40.48.92}}"
+VPN_EGRESS_PROBE_URL="${VPN_EGRESS_PROBE_URL:-https://api.ipify.org}"
+VPN_EGRESS_PROBE_TIMEOUT_SEC="${VPN_EGRESS_PROBE_TIMEOUT_SEC:-5}"
 
 # External target memory (persists across runs)
 TARGET_STATE_FILE="${TARGET_STATE_FILE:-${HOME}/.talia-validate-last-target}"
@@ -903,6 +909,9 @@ start_demo_local() {
     echo -e "  ${GREEN}✓${NC} GraphQL OK (:${LOCAL_GRAPHQL_PORT:-4000})"
   fi
 
+  # Soft gate: demo UI can still publish without VPN; warn that Synapse sync will fail.
+  print_local_vpn_egress_status "  " 1 || true
+
   apply_target_external "local" || return 1
 
   echo ""
@@ -1587,6 +1596,24 @@ _print_quick_targets_summary_impl() {
   [[ "$work" == "staging" ]] && staging_marker="▶"
 
   validate_summary_log_step "Assemble markers + status strings"
+
+  local vpn_egress_line=""
+  if [[ "$work" == "local" ]] && ! $IS_ON_STAGING; then
+    evaluate_local_vpn_egress || true
+    case "$VPN_EGRESS_STATUS" in
+      ok)
+        vpn_egress_line="${BOLD}Synapse VPN egress${NC}: ${GREEN}OK${NC} ${VPN_EGRESS_ACTUAL_IP} ${DIM}(matches whitelist ${EXPECTED_VPN_IP})${NC}"
+        ;;
+      mismatch)
+        vpn_egress_line="${BOLD}Synapse VPN egress${NC}: ${RED}MISMATCH${NC} got ${VPN_EGRESS_ACTUAL_IP} · expected ${EXPECTED_VPN_IP}"
+        ;;
+      *)
+        vpn_egress_line="${BOLD}Synapse VPN egress${NC}: ${YELLOW}UNCHECKED${NC} (could not reach ${VPN_EGRESS_PROBE_URL})"
+        ;;
+    esac
+    validate_summary_log_step "Local Synapse VPN egress (ipify vs whitelist)"
+  fi
+
   validate_summary_log_total
 
   header_sep=$(printf '%*s' 96 '' | tr ' ' '-')
@@ -1603,6 +1630,14 @@ _print_quick_targets_summary_impl() {
   echo -e "${DIM}Run at (local): ${validate_run_local} · host: ${HOSTNAME}${NC}"
   echo -e "  ${BOLD}Discuss portal${NC}: ${PUBLIC_DEV_URL} (${ext_line})"
   echo -e "  ${DIM}dev = laptop discuss · MiniPC/Azure = prove · not customer prod · apex ${PUBLIC_MAIN_URL} = same tunnel${NC}"
+  if [[ -n "$vpn_egress_line" ]]; then
+    echo -e "  ${vpn_egress_line}"
+    if [[ "$VPN_EGRESS_STATUS" == "mismatch" ]]; then
+      echo -e "  ${YELLOW}⚠ Synapse sync will fail until Proton routes all traffic via UK#11.${NC}"
+      echo -e "  ${DIM}Fix: reconnect Proton UK#11 → curl -s ${VPN_EGRESS_PROBE_URL} → must print ${EXPECTED_VPN_IP}${NC}"
+      echo -e "  ${DIM}Do not whitelist ${VPN_EGRESS_ACTUAL_IP} (ISP / leak IP; it changes).${NC}"
+    fi
+  fi
   local rem_disp
   rem_disp=$(get_remembered_target)
   [[ -z "$rem_disp" ]] && rem_disp="(default by host)"
@@ -2060,6 +2095,83 @@ prompt_service_group() {
   esac
 }
 
+# Probe this machine's public egress IP (same path Synapse/Azure sees for outbound SQL).
+# ipify is only a diagnostic — not part of the Talia runtime.
+probe_local_vpn_egress_ip() {
+  local ip
+  ip=$(curl -sS --connect-timeout 2 --max-time "${VPN_EGRESS_PROBE_TIMEOUT_SEC}" \
+    "${VPN_EGRESS_PROBE_URL}" 2>/dev/null | tr -d '\r\n[:space:]' || true)
+  if [[ -z "$ip" ]]; then
+    echo "FAILED"
+    return 1
+  fi
+  if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "INVALID"
+    return 1
+  fi
+  echo "$ip"
+  return 0
+}
+
+# Returns: ok | mismatch | failed  (prints nothing; sets VPN_EGRESS_* globals for callers)
+evaluate_local_vpn_egress() {
+  VPN_EGRESS_ACTUAL_IP=""
+  VPN_EGRESS_STATUS="failed"
+  VPN_EGRESS_ACTUAL_IP=$(probe_local_vpn_egress_ip || true)
+  if [[ -z "$VPN_EGRESS_ACTUAL_IP" || "$VPN_EGRESS_ACTUAL_IP" == "FAILED" || "$VPN_EGRESS_ACTUAL_IP" == "INVALID" ]]; then
+    VPN_EGRESS_STATUS="failed"
+    VPN_EGRESS_ACTUAL_IP="${VPN_EGRESS_ACTUAL_IP:-FAILED}"
+    return 1
+  fi
+  if [[ "$VPN_EGRESS_ACTUAL_IP" == "$EXPECTED_VPN_IP" ]]; then
+    VPN_EGRESS_STATUS="ok"
+    return 0
+  fi
+  VPN_EGRESS_STATUS="mismatch"
+  return 1
+}
+
+# Local/dev only: alert when public egress ≠ Proton UK#11 whitelist (Synapse will fail).
+print_local_vpn_egress_status() {
+  local indent="${1:-  }"
+  local compact="${2:-0}"
+  evaluate_local_vpn_egress || true
+  case "$VPN_EGRESS_STATUS" in
+    ok)
+      if [[ "$compact" == "1" ]]; then
+        echo -e "${indent}${BOLD}Synapse VPN egress${NC}: ${GREEN}OK${NC} ${VPN_EGRESS_ACTUAL_IP} ${DIM}(matches whitelist)${NC}"
+      else
+        echo -n "${indent}Synapse VPN egress (${EXPECTED_VPN_IP}): "
+        echo -e "${GREEN}OK${NC}  ${DIM}public IP ${VPN_EGRESS_ACTUAL_IP}${NC}"
+      fi
+      return 0
+      ;;
+    mismatch)
+      if [[ "$compact" == "1" ]]; then
+        echo -e "${indent}${BOLD}Synapse VPN egress${NC}: ${RED}MISMATCH${NC} got ${VPN_EGRESS_ACTUAL_IP} · expected ${EXPECTED_VPN_IP}"
+        echo -e "${indent}${YELLOW}⚠ Synapse sync will fail until Proton routes all traffic via UK#11.${NC}"
+        echo -e "${indent}${DIM}Fix: reconnect Proton UK#11 → curl -s ${VPN_EGRESS_PROBE_URL} → must print ${EXPECTED_VPN_IP}${NC}"
+      else
+        echo -n "${indent}Synapse VPN egress (${EXPECTED_VPN_IP}): "
+        echo -e "${RED}MISMATCH${NC}  got ${VPN_EGRESS_ACTUAL_IP}"
+        echo -e "${indent}${YELLOW}⚠ Azure Synapse firewall only allows the static VPN exit ${EXPECTED_VPN_IP}.${NC}"
+        echo -e "${indent}${YELLOW}  Do not whitelist ${VPN_EGRESS_ACTUAL_IP} (ISP / leak IP; it changes).${NC}"
+        echo -e "${indent}${DIM}Fix: Proton → UK#11 full tunnel → curl -s ${VPN_EGRESS_PROBE_URL}${NC}"
+      fi
+      return 1
+      ;;
+    *)
+      if [[ "$compact" == "1" ]]; then
+        echo -e "${indent}${BOLD}Synapse VPN egress${NC}: ${YELLOW}UNCHECKED${NC} (could not reach ${VPN_EGRESS_PROBE_URL})"
+      else
+        echo -n "${indent}Synapse VPN egress (${EXPECTED_VPN_IP}): "
+        echo -e "${YELLOW}UNCHECKED${NC}  ${DIM}probe failed (${VPN_EGRESS_ACTUAL_IP})${NC}"
+      fi
+      return 1
+      ;;
+  esac
+}
+
 check_local_services() {
   local local_ui_health_url="${LOCAL_UI_URL%/}/"
   local local_graphql_health_url="${LOCAL_GRAPHQL_URL%/}"
@@ -2121,6 +2233,8 @@ check_local_services() {
   else
     echo -e "${YELLOW}DOWN${NC}"
   fi
+
+  print_local_vpn_egress_status "  " 0
 
   check_local_code_origin false
 }
@@ -2525,17 +2639,60 @@ deploy_to_mvp_from_local() {
   run_command "cd \"${ROOT_DIR}\" && ${deploy_xtra}STAGING_DEPLOY_CONFIRM_TOKEN=${token} ./scripts/deploy-to-mvp.sh ${mode}" "Deploy to MVP via ${SCRIPT_DIR}/deploy-to-mvp.sh (${label})" "$timeout_sec"
 }
 
+# Prints MVP demo-data readiness (code deploy ≠ Postgres restore).
+# Echoes one or more status lines; safe if SSH/DB unavailable.
+print_mvp_demo_db_readiness() {
+  local indent="${1:-  }"
+  local db_probe table_n agency_n
+  if ! check_mvp_ssh_ready 2>/dev/null; then
+    echo -e "${indent}Demo DB: ${YELLOW}UNCHECKED${NC} ${DIM}(SSH unreachable)${NC}"
+    return 0
+  fi
+  db_probe=$(ssh ${MVP_SSH_BASE_OPTS} "${MVP_SSH_USER}@${MVP_SSH_HOST}" \
+    "sudo docker exec talia-supabase-db psql -U postgres -d postgres -tAc \"
+      SELECT
+        (SELECT COUNT(*)::text FROM information_schema.tables
+          WHERE table_schema='public' AND table_type='BASE TABLE')
+        || '|' ||
+        CASE WHEN to_regclass('public.agency') IS NULL THEN 'missing'
+             ELSE (SELECT COUNT(*)::text FROM public.agency) END;
+    \"" 2>/dev/null | tr -d '[:space:]' || echo "")
+  if [[ -z "$db_probe" || "$db_probe" != *"|"* ]]; then
+    echo -e "${indent}Demo DB: ${YELLOW}UNCHECKED${NC} ${DIM}(could not query talia-supabase-db)${NC}"
+    return 0
+  fi
+  table_n="${db_probe%%|*}"
+  agency_n="${db_probe#*|}"
+  echo -n "${indent}Demo DB (public tables / agency rows): "
+  if [[ "$agency_n" =~ ^[0-9]+$ && "$agency_n" -gt 0 ]]; then
+    echo -e "${GREEN}OK${NC}  ${DIM}${table_n} tables · agency ${agency_n} rows${NC}"
+  elif [[ "$agency_n" == "missing" || "$agency_n" == "0" ]]; then
+    echo -e "${YELLOW}THIN${NC}  ${DIM}${table_n} tables · agency missing/empty${NC}"
+    echo -e "${indent}${YELLOW}⚠ Code deploy does not ship Postgres data.${NC}"
+    echo -e "${indent}${DIM}Restore: ./scripts/backup-local-db-for-mvp.sh && RESTORE_MVP_CONFIRM=yes ./scripts/restore-db-to-mvp.sh${NC}"
+  else
+    echo -e "${YELLOW}UNCHECKED${NC}  ${DIM}probe=${db_probe}${NC}"
+  fi
+}
+
 check_mvp_services_remote() {
   echo -e "${BOLD}MVP (${MVP_UI_HOST:-?}) — quick probes${NC}"
-  local ui gql
+  local ui gql ui_proxy
   ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "${MVP_UI_URL%/}/" 2>/dev/null || echo "000")
   gql=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "${MVP_GRAPHQL_URL%/}" 2>/dev/null || echo "000")
+  ui_proxy=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 \
+    -H 'Content-Type: application/json' \
+    -d '{"query":"{ __typename }"}' \
+    "${MVP_UI_URL%/}/api/graphql" 2>/dev/null || echo "000")
   echo -n "  UI (${MVP_UI_URL}): "
   [[ "$ui" == "200" || "$ui" == "302" ]] && echo -e "${GREEN}UP${NC} ($ui)" || echo -e "${YELLOW}DOWN${NC} ($ui)"
-  echo -n "  GraphQL (${MVP_GRAPHQL_URL}): "
-  [[ "$gql" == "200" || "$gql" == "400" ]] && echo -e "${GREEN}UP${NC} ($gql)" || echo -e "${YELLOW}DOWN${NC} ($gql)"
+  echo -n "  GraphQL direct (${MVP_GRAPHQL_URL}): "
+  [[ "$gql" == "200" || "$gql" == "400" ]] && echo -e "${GREEN}UP${NC} ($gql)" || echo -e "${YELLOW}DOWN${NC} ($gql) ${DIM}(often NSG-blocked; use UI /api/graphql)${NC}"
+  echo -n "  UI → GraphQL proxy: "
+  [[ "$ui_proxy" == "200" ]] && echo -e "${GREEN}UP${NC} ($ui_proxy)" || echo -e "${YELLOW}DOWN${NC} ($ui_proxy)"
   if check_mvp_ssh_ready 2>/dev/null; then
     echo -e "  SSH ${MVP_SSH_USER}@${MVP_SSH_HOST}: ${GREEN}OK${NC}"
+    print_mvp_demo_db_readiness "  "
   else
     echo -e "  SSH ${MVP_SSH_USER}@${MVP_SSH_HOST}: ${YELLOW}unreachable${NC}"
   fi

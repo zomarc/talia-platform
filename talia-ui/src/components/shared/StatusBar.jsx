@@ -1274,7 +1274,8 @@ const StatusBar = ({
     (async () => {
       try {
         const profileState = await loadUserProfileState({ component: 'StatusBar' });
-        window.__taliaUserProfileState = profileState || {};
+        // loadUserProfileState already seeds window.__taliaUserProfileState (+ Ready).
+        void profileState;
         const criteria = await loadEffectiveGlobalCriteria({
           role: effectiveUserRole,
           component: 'StatusBar',

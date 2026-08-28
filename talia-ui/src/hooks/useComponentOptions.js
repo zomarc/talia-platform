@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
-import { loadUserProfileState, saveUserProfileState } from '../services/data/userProfileState';
+import {
+  getCachedComponentOptionsEntry,
+  loadUserProfileState,
+  saveUserProfileState,
+} from '../services/data/userProfileState';
 import { loadRoleComponentOps } from '../services/data/roleCriteriaService';
 import {
   canShowOperationsOptionsMenu,
@@ -17,6 +21,15 @@ export { COMPONENT_OPTIONS_CHANGED_EVENT } from '../lib/componentOptionsEvents';
 
 const PERSIST_DEBOUNCE_MS = 200;
 
+const shallowEqualRecords = (a, b) => {
+  const left = a && typeof a === 'object' ? a : {};
+  const right = b && typeof b === 'object' ? b : {};
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every((k) => left[k] === right[k]);
+};
+
 /**
  * User × component Views prefs + role-gated Operations.
  * @param {string} componentId registry panelId
@@ -31,10 +44,12 @@ export function useComponentOptions(componentId, registryOptions = null) {
     [key, registryOptions]
   );
 
-  const [viewsState, setViewsState] = useState({});
-  const [opsState, setOpsState] = useState({});
+  const cachedEntry = key ? getCachedComponentOptionsEntry(key) : { views: {}, operations: {} };
+  const [viewsState, setViewsState] = useState(() => cachedEntry?.views || {});
+  const [opsState, setOpsState] = useState(() => cachedEntry?.operations || {});
   const [roleOpsAllow, setRoleOpsAllow] = useState({});
-  const [hydrated, setHydrated] = useState(false);
+  // Profile already in cache → first paint can use real prefs (no all-true flash).
+  const [hydrated, setHydrated] = useState(() => cachedEntry != null || !key);
   const viewsRef = useRef(viewsState);
   const opsRef = useRef(opsState);
   const persistTimerRef = useRef(null);
@@ -48,6 +63,13 @@ export function useComponentOptions(componentId, registryOptions = null) {
         setHydrated(true);
         return;
       }
+      // Re-seed if cache arrived between first render and this effect (e.g. StatusBar load).
+      const seeded = getCachedComponentOptionsEntry(key);
+      if (seeded) {
+        setViewsState((prev) => (shallowEqualRecords(prev, seeded.views) ? prev : seeded.views));
+        setOpsState((prev) => (shallowEqualRecords(prev, seeded.operations) ? prev : seeded.operations));
+        setHydrated(true);
+      }
       try {
         const [profile, roleOps] = await Promise.all([
           loadUserProfileState({ component: `Options:${key}` }),
@@ -55,8 +77,14 @@ export function useComponentOptions(componentId, registryOptions = null) {
         ]);
         if (cancelled) return;
         const componentEntry = profile?.componentOptions?.[key] || {};
-        setViewsState(componentEntry.views && typeof componentEntry.views === 'object' ? componentEntry.views : {});
-        setOpsState(componentEntry.operations && typeof componentEntry.operations === 'object' ? componentEntry.operations : {});
+        const nextViews = componentEntry.views && typeof componentEntry.views === 'object'
+          ? componentEntry.views
+          : {};
+        const nextOps = componentEntry.operations && typeof componentEntry.operations === 'object'
+          ? componentEntry.operations
+          : {};
+        setViewsState((prev) => (shallowEqualRecords(prev, nextViews) ? prev : nextViews));
+        setOpsState((prev) => (shallowEqualRecords(prev, nextOps) ? prev : nextOps));
         setRoleOpsAllow(roleOps && typeof roleOps === 'object' ? roleOps : {});
       } catch (error) {
         console.warn('[useComponentOptions] hydrate failed:', error?.message || error);
@@ -105,22 +133,10 @@ export function useComponentOptions(componentId, registryOptions = null) {
       },
     };
     try {
-      const saved = await saveUserProfileState({
+      await saveUserProfileState({
         patch,
         component: `Options:${key}`,
       });
-      window.__taliaUserProfileState = {
-        ...(window.__taliaUserProfileState || {}),
-        ...saved,
-        componentOptions: {
-          ...(window.__taliaUserProfileState?.componentOptions || {}),
-          ...(saved?.componentOptions || {}),
-          [key]: {
-            views: nextViews,
-            operations: nextOps,
-          },
-        },
-      };
     } catch (error) {
       console.warn('[useComponentOptions] save failed:', error?.message || error);
     }

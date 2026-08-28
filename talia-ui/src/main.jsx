@@ -27,9 +27,18 @@ import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from './lib/eventBus.js';
 import { normalizeRole, canUseAdvancedHeader } from './utils/roleUtils.js';
 import userActivityTracker, { initUserActivityTracking } from './services/userActivityTracker.js';
 import { applyInstanceBrowserIdentity } from './lib/instanceIdentity.js';
+import { enforceDashboardUiState } from './services/dashboardUiState.js';
 
 // Paint tab title/favicon ASAP (local/mvp/…) so multi-instance tabs are distinguishable.
 applyInstanceBrowserIdentity().catch(() => {});
+
+// Apply global visibility chrome (filters/details/legends/titles) from localStorage
+// before React paints panels — avoids a flash of "everything visible".
+try {
+  enforceDashboardUiState({ dispatchEvents: false });
+} catch {
+  // Boot must not fail if DOM/storage is unavailable.
+}
 
 // Apollo Client temporarily disabled during database restoration
 // TODO: Re-enable when database is restored

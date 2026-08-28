@@ -284,6 +284,13 @@
   display: none !important;
 }
 
+/* Options prefs not loaded yet — hide strips that default "on" to avoid refresh flash */
+.talia-report.talia-report--options-pending .talia-report-filters,
+.talia-report.talia-report--options-pending .talia-report__snapshot,
+.talia-report.talia-report--options-pending .talia-report-data-details {
+  visibility: hidden;
+}
+
 .talia-chart-legend {
   position: absolute;
   top: 6px;

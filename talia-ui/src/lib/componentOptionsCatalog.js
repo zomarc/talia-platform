@@ -80,8 +80,10 @@ export const buildReportShellClassName = (baseClassName, {
   showColumnFilters = true,
   showControls = true,
   showLegends = true,
+  optionsPending = false,
 } = {}) => {
   const parts = String(baseClassName || '').split(/\s+/).filter(Boolean);
+  if (optionsPending) parts.push('talia-report--options-pending');
   if (!showColumnFilters) parts.push('talia-report--column-filters-hidden');
   if (!showControls) parts.push('talia-report--controls-hidden');
   if (!showLegends) parts.push('talia-report--legends-hidden');

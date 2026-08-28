@@ -5,6 +5,9 @@
  *
  * When a panel declares Views → Details, that Options toggle is the source of truth
  * for ReportDataDetails (header ≣ still applies only to panels without that view).
+ *
+ * Until Options hydrate, hide Views chrome that defaults to "on" so refresh does not
+ * flash all filters/details before the user's prefs apply.
  */
 
 import { useMemo } from 'react';
@@ -30,7 +33,7 @@ const LEGENDS_DEF = { id: 'legends', default: true };
 export function useReportShellOptions(panelComponentId, panelInstanceId, registryOptions = null) {
   const key = String(panelComponentId || '');
   const options = useComponentOptions(key, registryOptions);
-  const { viewsState, views, operations } = options;
+  const { viewsState, views, operations, hydrated } = options;
 
   const catalogIds = useMemo(() => new Set((views || []).map((v) => v.id)), [views]);
   const hasSnapshotView = catalogIds.has('snapshot');
@@ -61,28 +64,56 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
     ? String(resolveViewValue(viewsState, TOOLTIP_VIEW_DEF) || TOOLTIP_VIEW_DEF.default)
     : null;
 
-  const showColumnFilters = hasColumnFiltersView ? optionsColumnFilters : true;
-  const showControls = hasControlsView ? optionsControls : true;
-  const showLegends = hasLegendsView ? optionsLegends : true;
+  // Hide-until-known only for Views this panel declares (catalog defaults are true).
+  const prefsReady = hydrated === true;
+
+  const showColumnFilters = (!prefsReady && hasColumnFiltersView)
+    ? false
+    : (hasColumnFiltersView ? optionsColumnFilters : true);
+  const showControls = (!prefsReady && hasControlsView)
+    ? false
+    : (hasControlsView ? optionsControls : true);
+  const showLegends = (!prefsReady && hasLegendsView)
+    ? false
+    : (hasLegendsView ? optionsLegends : true);
 
   // Legacy Operations "Show filters" (admin capability) still forces off when disabled.
   const opsFilters = operations.find((op) => op.id === 'showFilters');
   const opsFiltersAllowed = !opsFilters || opsFilters.enabled !== false;
 
+  const showSnapshot = (!prefsReady && hasSnapshotView)
+    ? false
+    : (hasSnapshotView ? optionsSnapshot : true);
+  const showDetails = (!prefsReady && hasDetailsView)
+    ? false
+    : (hasDetailsView ? optionsDetails : headerDetailsVisible);
+  const showFilters = (!prefsReady && hasFiltersView)
+    ? false
+    : ((hasFiltersView ? optionsFilters : true) && opsFiltersAllowed);
+  const showTotals = (!prefsReady && hasTotalsView)
+    ? false
+    : (hasTotalsView ? optionsTotals : true);
+  const showTooltip = (!prefsReady && hasTooltipView)
+    ? false
+    : (hasTooltipView ? optionsTooltip : true);
+
   return {
     ...options,
-    showSnapshot: hasSnapshotView ? optionsSnapshot : true,
-    // Options Details owns panels that declare the view; otherwise header ≣.
-    showDetails: hasDetailsView ? optionsDetails : headerDetailsVisible,
-    showFilters: (hasFiltersView ? optionsFilters : true) && opsFiltersAllowed,
+    showSnapshot,
+    showDetails,
+    showFilters,
     showColumnFilters,
     showControls,
-    // Panels without Views → Totals keep footer visible (legacy default).
-    showTotals: hasTotalsView ? optionsTotals : true,
-    showTooltip: hasTooltipView ? optionsTooltip : true,
+    showTotals,
+    showTooltip,
     showLegends,
     tooltipView,
-    reportShellClassName: buildReportShellClassName('', { showColumnFilters, showControls, showLegends }),
+    reportShellClassName: buildReportShellClassName('', {
+      showColumnFilters,
+      showControls,
+      showLegends,
+      optionsPending: !prefsReady,
+    }),
     hasSnapshotView,
     hasDetailsView,
     hasFiltersView,

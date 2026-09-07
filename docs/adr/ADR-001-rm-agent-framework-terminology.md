@@ -1,9 +1,10 @@
 # ADR-001: RM Agent Framework Terminology and Boundaries
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-09-07  
+**Accepted:** 2026-09-07  
 **Deciders:** Product / architecture (Talia Engine)  
-**Related:** [FUTURE-ARCHITECTURE.md](../FUTURE-ARCHITECTURE.md), [Framework sketch](../talia-engine/RM-AGENT-FRAMEWORK.md)
+**Related:** [FUTURE-ARCHITECTURE.md](../FUTURE-ARCHITECTURE.md), [Framework sketch](../talia-engine/RM-AGENT-FRAMEWORK.md), [Client overview](../talia-engine/CLIENT-DISCUSSION-OVERVIEW.md)
 
 ---
 

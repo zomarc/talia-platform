@@ -4,4 +4,4 @@ ADRs record normative decisions for Talia. Prefer amending an ADR over silent dr
 
 | ID | Title | Status |
 |----|-------|--------|
-| [ADR-001](./ADR-001-rm-agent-framework-terminology.md) | RM Agent Framework Terminology and Boundaries | Proposed |
+| [ADR-001](./ADR-001-rm-agent-framework-terminology.md) | RM Agent Framework Terminology and Boundaries | Accepted |

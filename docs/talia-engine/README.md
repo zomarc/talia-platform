@@ -4,6 +4,7 @@ This folder holds planning docs for the future **talia-engine** tier.
 
 | Doc | Purpose |
 |-----|---------|
+| [CLIENT-DISCUSSION-OVERVIEW.md](./CLIENT-DISCUSSION-OVERVIEW.md) / [.pdf](./CLIENT-DISCUSSION-OVERVIEW.pdf) | High-level client briefing |
 | [RM-AGENT-FRAMEWORK.md](./RM-AGENT-FRAMEWORK.md) | Framework sketch: Agent Runtime, RM Agents, Findings, Checklist, Talia Assistant |
 | [contracts/finding.schema.json](./contracts/finding.schema.json) | Frozen Finding JSON Schema (v0) |
 

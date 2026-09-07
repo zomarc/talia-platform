@@ -1,6 +1,6 @@
 # Talia Engine — RM Agent Framework (Sketch)
 
-**Status:** Draft for discussion  
+**Status:** Agreed (aligned with Accepted ADR-001)  
 **Normative terminology:** [ADR-001](../adr/ADR-001-rm-agent-framework-terminology.md)  
 **Parent vision:** [FUTURE-ARCHITECTURE.md](../FUTURE-ARCHITECTURE.md)
 

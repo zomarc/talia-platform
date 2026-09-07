@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Talia Engine — RM Agent Framework</title>
+<style>
+
+  @page { margin: 18mm 16mm; }
+  body {
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color: #1a1a1a;
+    font-size: 11pt;
+    line-height: 1.45;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 22pt; margin: 0 0 0.2em; color: #0b3d5c; }
+  h2 { font-size: 14pt; margin-top: 1.4em; color: #0b3d5c; border-bottom: 1px solid #d0d7de; padding-bottom: 0.25em; page-break-after: avoid; }
+  h3 { font-size: 12pt; margin-top: 1em; color: #174a6a; page-break-after: avoid; }
+  p { margin: 0.55em 0; }
+  .muted { color: #555; font-size: 10pt; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8em 0; font-size: 10pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #c9d1d9; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #eef3f7; color: #0b3d5c; }
+  pre { background: #f6f8fa; border: 1px solid #e1e4e8; padding: 10px 12px; font-size: 8.5pt; overflow: hidden; white-space: pre-wrap; page-break-inside: avoid; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
+  pre code { font-size: 8.5pt; }
+  ul, ol { margin: 0.4em 0 0.8em 1.2em; }
+  li { margin: 0.25em 0; }
+  hr { border: none; border-top: 1px solid #d0d7de; margin: 1.2em 0; }
+  strong { color: #0b3d5c; }
+  a { color: #0b3d5c; text-decoration: none; }
+
+</style>
+</head>
+<body>
+<h1>Talia Engine — RM Agent Framework (Sketch)</h1>
+<p><strong>Status:</strong> Agreed (aligned with Accepted ADR-001)<br />
+<strong>Normative terminology:</strong> <a href="../adr/ADR-001-rm-agent-framework-terminology.md">ADR-001</a><br />
+<strong>Parent vision:</strong> <a href="../FUTURE-ARCHITECTURE.md">FUTURE-ARCHITECTURE.md</a></p>
+<p>This document sketches the framework. Where it conflicts with ADR-001, <strong>ADR-001 wins</strong>.</p>
+<hr />
+<h2>1. Purpose</h2>
+<p><strong>talia-engine</strong> hosts a UI-independent <strong>Agent Runtime</strong> that runs <strong>RM Agents</strong>: small, extensible specialist evaluators for revenue management. They observe <strong>World State</strong>, emit normalised <strong>Findings</strong> (score + <strong>Recommended Action</strong> + evidence), and feed a user <strong>Checklist</strong>. Later, approved actions may integrate with the reservation system via <strong>talia-server</strong> (talia GQL / Seaware adapters). Separately, a <strong>Talia Assistant</strong> (local LLM plugin) may help the user interpret Findings — it is not an RM Agent.</p>
+<hr />
+<h2>2. Forced terminology (quick reference)</h2>
+<p>Use these names in code, GraphQL, UI labels, and docs:</p>
+<table>
+<thead>
+<tr>
+<th>Say this</th>
+<th>Not this</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RM Agent</td>
+<td>AI agent, LLM agent, bot</td>
+</tr>
+<tr>
+<td>Agent Runtime</td>
+<td>“the AI”, “agent platform” (ambiguous)</td>
+</tr>
+<tr>
+<td>Finding</td>
+<td>insight, alert (unless UI synonym clearly mapped)</td>
+</tr>
+<tr>
+<td>Recommended Action</td>
+<td>“the agent did X” (implies execution)</td>
+</tr>
+<tr>
+<td>Checklist</td>
+<td>“auto-pilot”, “agent actions applied”</td>
+</tr>
+<tr>
+<td>Talia Assistant</td>
+<td>RM Agent, “the LLM agent”</td>
+</tr>
+<tr>
+<td>World State</td>
+<td>“what the LLM knows”</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Rule:</strong> If both RM Agents and the Assistant are visible, never use bare <strong>Agent</strong> in user-facing copy.</p>
+<hr />
+<h2>3. System context</h2>
+<pre><code>┌─────────────────────────────────────────────────────────────┐
+│                         talia-ui                            │
+│  Checklist panel │ sailing context │ (later) Assistant UI   │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ GraphQL
+┌───────────────────────────▼─────────────────────────────────┐
+│                       talia-server                          │
+│  World State API │ Finding API │ (later) Action Executor    │
+│  Synapse sync │ Supabase │ (later) Seaware / talia GQL write│
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│                       talia-engine                          │
+│  ┌───────────────── Agent Runtime ─────────────────────┐    │
+│  │  schedule / run-on-demand / register plugins         │    │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐              │    │
+│  │  │Regulator │ │Probability│ │Competitor│  … RM Agents │    │
+│  │  └────┬─────┘ └────┬─────┘ └────┬─────┘              │    │
+│  │       └────────────┴────────────┘                    │    │
+│  │                    Findings                          │    │
+│  └───────────────────────┬──────────────────────────────┘    │
+│                          ▼                                  │
+│              Finding store (via server/DB)                  │
+│                          │                                  │
+│              ┌───────────▼───────────┐                      │
+│              │   Talia Assistant     │  optional plugin     │
+│              │   (AssistantProvider) │  reads Findings only │
+│              └───────────────────────┘                      │
+└─────────────────────────────────────────────────────────────┘
+</code></pre>
+<p><strong>Seaware / firewall:</strong> dedicated instance may be unreachable. Engine defaults to synced World State for reads. Writes (Phase C) go through talia-server and may queue until the path is open.</p>
+<hr />
+<h2>4. Package sketch (logical)</h2>
+<p>Language choice (TypeScript worker vs Python service) is <strong>open</strong>; layout should stay isomorphic:</p>
+<pre><code>talia-engine/
+  README.md                 # terminology + pointers to ADR-001
+  runtime/
+    registry.py|ts          # register RM Agents
+    scheduler.py|ts         # cron / on-demand runs
+    runner.py|ts            # execute agent, validate Finding envelope
+  rm_agents/
+    base.py|ts              # RmAgent interface
+    regulator/
+    probability/
+    competitor/
+  contracts/
+    finding.schema.json     # frozen Finding contract
+    action_types.md         # catalogue
+  assistant/                # NOT under rm_agents/
+    provider.py|ts          # AssistantProvider interface
+    local_llm/              # future small local model
+  adapters/
+    world_state_client      # read via talia-server GraphQL/HTTP
+    finding_writer          # persist via server
+</code></pre>
+<h3>RM Agent interface (conceptual)</h3>
+<pre><code class="language-text">RmAgent
+  id: string                          # e.g. rm.regulator.performance_vs_target
+  name: string
+  evaluate(ctx: EvaluationContext) -&gt; Finding[]
+
+EvaluationContext
+  as_of: datetime
+  subjects: Subject[] | &quot;all-configured&quot;
+  world: WorldStateView               # read-only
+  config: AgentConfig                 # thresholds, target set, etc.
+</code></pre>
+<p>Agents should be <strong>as simple as possible</strong>. Shared math and data shaping belong in adapters/helpers, not copied inside each agent.</p>
+<hr />
+<h2>5. Finding contract (frozen)</h2>
+<p>See ADR-001 for the normative table. Summary:</p>
+<ul>
+<li><strong><code>score</code> ∈ [0, 1]</strong> = urgency / need-to-act (not signed deviation)</li>
+<li><strong><code>severity</code></strong> ∈ <code>info | watch | action | critical</code></li>
+<li><strong><code>recommended_action</code></strong> = <code>{ action_type, params, rationale }</code></li>
+<li><strong><code>evidence</code></strong> holds ROS, load factor, targets, gaps, comps, probabilities, etc.</li>
+<li><strong><code>status</code></strong> lifecycle: <code>open → acknowledged | dismissed | applied | expired</code></li>
+</ul>
+<h3>Example Finding (Regulator)</h3>
+<pre><code class="language-json">{
+  &quot;finding_id&quot;: &quot;f-…&quot;,
+  &quot;agent_id&quot;: &quot;rm.regulator.performance_vs_target&quot;,
+  &quot;subject&quot;: { &quot;type&quot;: &quot;sailing&quot;, &quot;id&quot;: &quot;SAIL-12345&quot; },
+  &quot;as_of&quot;: &quot;2026-09-07T12:00:00Z&quot;,
+  &quot;score&quot;: 0.82,
+  &quot;severity&quot;: &quot;action&quot;,
+  &quot;recommended_action&quot;: {
+    &quot;action_type&quot;: &quot;REVIEW_PRICING&quot;,
+    &quot;params&quot;: { &quot;target_id&quot;: &quot;tgt-occupancy-oct&quot;, &quot;dimension&quot;: &quot;occupancy&quot; },
+    &quot;rationale&quot;: &quot;Load factor and rate of sale trail the selected target band for days-to-sail.&quot;
+  },
+  &quot;evidence&quot;: {
+    &quot;load_factor&quot;: 0.41,
+    &quot;rate_of_sale&quot;: 12.5,
+    &quot;target_load_factor&quot;: 0.55,
+    &quot;gap_signed&quot;: -0.14,
+    &quot;days_to_sail&quot;: 46
+  },
+  &quot;confidence&quot;: 0.7,
+  &quot;status&quot;: &quot;open&quot;
+}
+</code></pre>
+<hr />
+<h2>6. Initial RM Agents (plugins)</h2>
+<p>All emit the same Finding contract.</p>
+<h3>6.1 Regulator — performance vs target</h3>
+<ul>
+<li><strong>Purpose:</strong> Compare current performance to configured targets (many targets).</li>
+<li><strong>Inputs:</strong> targets, rate of sale, load factor / occupancy, booking build where available.</li>
+<li><strong>Output:</strong> urgency score + actions such as <code>REVIEW_TARGET</code>, <code>REVIEW_PRICING</code>, <code>REVIEW_INVENTORY</code>, <code>ESCALATE_SAILING</code>.</li>
+<li><strong>Simplicity rule:</strong> one clear gap metric per target dimension; thresholds in config.</li>
+</ul>
+<h3>6.2 Probability — group expectations / materialisation</h3>
+<ul>
+<li><strong>Purpose:</strong> From historic behaviour and external inputs, review group probabilities and materialisation rates; recommend revised expectations.</li>
+<li><strong>Inputs:</strong> reservation probabilities, historic group materialisation, current group book.</li>
+<li><strong>Output:</strong> <code>UPDATE_GROUP_EXPECTATION</code>, <code>FLAG_OVERBOOK_RISK</code>.</li>
+<li><strong>Simplicity rule:</strong> transparent rate-based update before any heavy ML.</li>
+</ul>
+<h3>6.3 Competitor — competitive pressure</h3>
+<ul>
+<li><strong>Purpose:</strong> Review available competitor sources; recommend attention to competitive pressure.</li>
+<li><strong>Inputs:</strong> competitor pricing / position vs own published rates.</li>
+<li><strong>Output:</strong> <code>PRICE_REVIEW</code>, <code>MONITOR_COMPETITOR</code>.</li>
+<li><strong>Simplicity rule:</strong> pressure score from relative position bands, not a full pricing optimiser.</li>
+</ul>
+<hr />
+<h2>7. Action Bus and reservation integration</h2>
+<pre><code>Finding (Recommended Action)
+        │
+        ▼
+Checklist (user) ──acknowledge / dismiss──┐
+        │                                 │
+        │ approve apply (Phase C)         │
+        ▼                                 ▼
+talia-server Action Executor          status update
+        │
+        ├── talia GQL mutation (preferred integration surface)
+        └── Seaware adapter (firewall-aware; may queue)
+</code></pre>
+<p><strong>Phase A:</strong> Findings + Checklist only.<br />
+<strong>Phase B:</strong> <code>params</code> shaped like future mutation inputs; still no execute.<br />
+<strong>Phase C:</strong> execute only through talia-server; audit log; idempotent action ids.</p>
+<p>RM Agents <strong>never</strong> call Seaware or B2B GraphQL directly.</p>
+<hr />
+<h2>8. Talia Assistant (plugin)</h2>
+<h3>Role</h3>
+<p>Help the user <strong>work with</strong> Findings and World State: explain, prioritise, summarise, draft notes. Optional; near-future.</p>
+<h3>AssistantProvider interface (conceptual)</h3>
+<pre><code class="language-text">AssistantProvider
+  id: string
+  complete(request: AssistantRequest) -&gt; AssistantResponse
+
+AssistantRequest
+  messages: { role, content }[]
+  focus_subject?: Subject
+  findings: Finding[]              # retrieved by server/runtime, not invented here
+  context_snippets?: object[]      # bounded World State excerpts
+
+AssistantResponse
+  messages: { role, content }[]
+  citations?: { finding_id }[]     # encourage grounding
+</code></pre>
+<h3>Hard rules</h3>
+<ol>
+<li>Provider output is <strong>not</strong> a Finding.</li>
+<li>Provider <strong>must not</strong> set <code>score</code> or <code>recommended_action</code>.</li>
+<li>Prefer <strong>small local / private</strong> models for commercial RM data.</li>
+<li>If ungrounded, the Assistant must say it lacks Findings/context.</li>
+</ol>
+<h3>UI</h3>
+<p>Separate surface from the Checklist (e.g. “Ask Talia Assistant” beside recommendations). Do not label it as an RM Agent.</p>
+<hr />
+<h2>9. World State dependencies (readiness lens)</h2>
+<table>
+<thead>
+<tr>
+<th>Concept</th>
+<th>Framework need</th>
+<th>Notes from current platform</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Targets</td>
+<td>Required for Regulator</td>
+<td><code>target_profiles</code> exist</td>
+</tr>
+<tr>
+<td>Load factor / occupancy</td>
+<td>Required for Regulator</td>
+<td>Real occupancy paths exist; some MVP metrics still mock</td>
+</tr>
+<tr>
+<td>Rate of sale</td>
+<td>Required for Regulator</td>
+<td>Partially scaffolded; may need hardening</td>
+</tr>
+<tr>
+<td>Group probability / history</td>
+<td>Required for Probability</td>
+<td><code>res_probability</code>, historic reservation data; models thin</td>
+</tr>
+<tr>
+<td>Competitor data</td>
+<td>Required for Competitor</td>
+<td>Sync + GraphQL + UI already present</td>
+</tr>
+<tr>
+<td>Reservation write APIs</td>
+<td>Phase C only</td>
+<td>Not engine-owned; server adapters TBD</td>
+</tr>
+</tbody>
+</table>
+<p>Data gaps block <strong>agent quality</strong>, not the <strong>framework</strong>. Framework can land with stubs/fixtures for one vertical slice.</p>
+<hr />
+<h2>10. Suggested implementation order</h2>
+<ol>
+<li><strong>Accept ADR-001 terminology</strong> (force names in review).</li>
+<li>Add <code>talia-engine</code> skeleton + Finding JSON schema + registry.</li>
+<li>Persist Findings (Supabase via talia-server GraphQL).</li>
+<li>Checklist focus panel (open Findings, filter by sailing).</li>
+<li><strong>Regulator v0</strong> on one subject × one target dimension.</li>
+<li>Probability and Competitor as next RM Agents.</li>
+<li>AssistantProvider stub (echo/citations) then local LLM.</li>
+<li>Action payload alignment with talia GQL; queued executor behind firewall.</li>
+</ol>
+<hr />
+<h2>11. Open decisions (do not block terminology)</h2>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Options</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Engine language</td>
+<td>TypeScript beside server vs Python service</td>
+<td>Contract-first; either can host RM Agents</td>
+</tr>
+<tr>
+<td>Job scheduling</td>
+<td>Cron + DB, pg-boss, BullMQ, etc.</td>
+<td>Need something beyond on-demand sync</td>
+</tr>
+<tr>
+<td>Severity thresholds</td>
+<td>Global vs per-agent</td>
+<td>Config, not hard-coded forever</td>
+</tr>
+<tr>
+<td>Multi-customer</td>
+<td>Tenant on Finding now vs later</td>
+<td>Prefer <code>tenant_id</code> early if multi-customer is real</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>12. Documentation map</h2>
+<table>
+<thead>
+<tr>
+<th>Doc</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../adr/ADR-001-rm-agent-framework-terminology.md">ADR-001</a></td>
+<td>Normative terminology + Finding contract + phases</td>
+</tr>
+<tr>
+<td>This file</td>
+<td>Framework sketch for discussion and onboarding</td>
+</tr>
+<tr>
+<td><a href="../FUTURE-ARCHITECTURE.md">FUTURE-ARCHITECTURE.md</a></td>
+<td>Three-tier vision (ui / server / engine)</td>
+</tr>
+</tbody>
+</table>
+<hr/>
+<p><em>Talia Platform — RM Agent Framework (Sketch)</em></p>
+<p class="muted"><em>Aligned with Accepted ADR-001 RM Agent Framework Terminology</em></p>
+</body>
+</html>

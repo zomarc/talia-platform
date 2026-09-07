@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://talia.local/schemas/finding.schema.json",
+  "title": "Finding",
+  "description": "Normalised output of an RM Agent. Normative rules: docs/adr/ADR-001-rm-agent-framework-terminology.md",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "finding_id",
+    "agent_id",
+    "subject",
+    "as_of",
+    "score",
+    "severity",
+    "recommended_action",
+    "evidence",
+    "status"
+  ],
+  "properties": {
+    "finding_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Runtime-assigned unique id (UUID recommended)."
+    },
+    "agent_id": {
+      "type": "string",
+      "pattern": "^rm\\.[a-z0-9_]+\\.[a-z0-9_]+$",
+      "description": "Stable RM Agent id, e.g. rm.regulator.performance_vs_target"
+    },
+    "subject": {
+      "type": "object",
+      "required": ["type", "id"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "e.g. sailing, ship, group_reservation, market"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "as_of": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Evaluation timestamp in UTC."
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Urgency / need-to-act. 1 = strongest need to act. Signed gaps belong in evidence."
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["info", "watch", "action", "critical"]
+    },
+    "recommended_action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action_type", "params", "rationale"],
+      "properties": {
+        "action_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Typed intent; see action catalogue in framework docs."
+        },
+        "params": {
+          "type": "object",
+          "description": "Structured parameters for the action type."
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short human-readable reason."
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "description": "Key inputs and intermediate metrics used by the RM Agent."
+    },
+    "confidence": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["open", "acknowledged", "dismissed", "applied", "expired"]
+    },
+    "tenant_id": {
+      "type": "string",
+      "description": "Optional multi-customer scope."
+    }
+  }
+}

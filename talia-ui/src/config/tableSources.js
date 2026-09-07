@@ -22,6 +22,9 @@ export const tableSources = {
     source: 'lkp.CABIN_CTG',
     type: 'direct',
     dateColumns: ['effective_from', 'effective_to'],
+    dateRole: 'record_validity',
+    intervalFrom: 'effective_from',
+    intervalTo: 'effective_to',
     syncType: 'cabinCtg'
   },
   etl_table_parameters: {
@@ -42,6 +45,9 @@ export const tableSources = {
     type: 'direct',
     isLargeDataset: true,
     dateColumns: ['sail_date_from', 'sail_date_to'],
+    dateRole: 'sailing_interval',
+    intervalFrom: 'sail_date_from',
+    intervalTo: 'sail_date_to',
     syncType: 'shipInventoryAlloc'
   },
   ship_cabin: {
@@ -54,12 +60,19 @@ export const tableSources = {
     source: 'fou.SHIP_CABIN_CTG_LINK',
     type: 'direct',
     dateColumns: ['eff_sail_from', 'eff_sail_to'],
+    dateRole: 'sailing_interval',
+    intervalFrom: 'eff_sail_from',
+    intervalTo: 'eff_sail_to',
+    sailCoverage: true,
     syncType: 'shipCabinCtgLink'
   },
   ship_cabin_reserve: {
     source: 'stg.SHIP_CABIN_RESERVE',
     type: 'direct',
     dateColumns: ['sail_date_from', 'sail_date_to'],
+    dateRole: 'sailing_interval',
+    intervalFrom: 'sail_date_from',
+    intervalTo: 'sail_date_to',
     syncType: 'shipCabinReserve'
   },
   cabin_availability: {
@@ -76,12 +89,18 @@ export const tableSources = {
     type: 'direct',
     isLargeDataset: true, // Uses batch loading
     dateColumns: ['sail_from_date', 'sail_to_date', 'res_init_date', 'original_init_date'],
+    dateRole: 'sailing_interval',
+    intervalFrom: 'sail_from_date',
+    intervalTo: 'sail_to_date',
     syncType: 'reservation'
   },
   master_sail: {
     source: 'dwh.Dim_Master_Sail',
     type: 'direct',
     dateColumns: ['sail_date_from', 'sail_date_to', 'vacation_date', 'master_voyage_departure_date'],
+    dateRole: 'sailing_interval',
+    intervalFrom: 'sail_date_from',
+    intervalTo: 'sail_date_to',
     syncType: 'master_sail' // snake_case - standard naming convention
   },
   sail_by_cabin_occupancy: {
@@ -227,6 +246,7 @@ export const tableSources = {
     source: 'lkp.BUDGET',
     type: 'synapse',
     dateColumns: ['accounting_month', 'master_departure_date', 'effective_from', 'effective_to', 'created_at'],
+    dateRole: 'event',
     syncType: 'budget',
     loadMethod: 'Sync'
   },

@@ -101,6 +101,16 @@ export const useDatabaseTables = () => {
               min
               max
             }
+            dateRole
+            coverage {
+              dateRole
+              overlappingRows
+              rowCoveragePct
+              coveredSails
+              totalSails
+              sailCoveragePct
+              openEnded
+            }
             latestSnapshotDate
             latestAvailableData
             lastSync
@@ -142,6 +152,8 @@ export const useDatabaseTables = () => {
           rowCount: table.rowCount || 0,
           dateRange: table.dateRange || { min: null, max: null },
           actualDataRange: table.actualDataRange || { min: null, max: null },
+          dateRole: table.dateRole || tableConfig?.dateRole || null,
+          coverage: table.coverage || null,
           latestSnapshotDate: table.latestSnapshotDate || null,
           latestAvailableData: table.latestAvailableData || null,
           lastSync: table.lastSync,
@@ -185,6 +197,16 @@ export const useDatabaseTables = () => {
               min
               max
             }
+            dateRole
+            coverage {
+              dateRole
+              overlappingRows
+              rowCoveragePct
+              coveredSails
+              totalSails
+              sailCoveragePct
+              openEnded
+            }
             latestSnapshotDate
             latestAvailableData
             lastSync
@@ -223,6 +245,8 @@ export const useDatabaseTables = () => {
               rowCount: table.rowCount || 0,
               dateRange: table.dateRange || { min: null, max: null },
               actualDataRange: table.actualDataRange || { min: null, max: null },
+              dateRole: table.dateRole || tableConfig?.dateRole || null,
+              coverage: table.coverage || t.coverage || null,
               latestSnapshotDate: table.latestSnapshotDate || null,
               latestAvailableData: table.latestAvailableData || null,
               lastSync: table.lastSync,

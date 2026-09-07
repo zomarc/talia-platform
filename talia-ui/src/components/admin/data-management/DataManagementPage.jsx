@@ -20,6 +20,7 @@ import InstanceConnectionPanel from './InstanceConnectionPanel.jsx';
 import TargetImportSection from './TargetImportSection.jsx';
 import { createTableActions } from './tableActions.js';
 import { formatDayMonYear, formatSailDateRange } from '../../../lib/dateFormat';
+import { isOpenEndedDate } from '../../../lib/integrationDateHealth.js';
 import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
 import SubpanelExpandButton from '../../shared/SubpanelExpandButton.jsx';
 import { enforceDashboardUiState } from '../../../services/dashboardUiState';
@@ -651,6 +652,8 @@ The backup will be saved to: talia-server/backups/`;
       const maxTime = Date.parse(range.max);
       if (!Number.isFinite(minTime) || !Number.isFinite(maxTime)) return;
       if (!min || minTime < Date.parse(min)) min = range.min;
+      // Open-ended SCD/sailing windows (2099+) are applicability, not loaded facts.
+      if (isOpenEndedDate(range.max)) return;
       if (!max || maxTime > Date.parse(max)) max = range.max;
     });
     return min || max ? { min, max } : null;
@@ -757,6 +760,16 @@ The backup will be saved to: talia-server/backups/`;
             actualDataRange {
               min
               max
+            }
+            dateRole
+            coverage {
+              dateRole
+              overlappingRows
+              rowCoveragePct
+              coveredSails
+              totalSails
+              sailCoveragePct
+              openEnded
             }
             latestSnapshotDate
             latestAvailableData

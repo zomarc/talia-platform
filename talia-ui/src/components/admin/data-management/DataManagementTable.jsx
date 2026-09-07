@@ -1,15 +1,8 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { formatDayMonYear, formatSailDateRange } from '../../../lib/dateFormat';
+import { computeIntegrationHealth } from '../../../lib/integrationDateHealth.js';
 import { getPanelActionIconMarkup, PANEL_ACTION_IDS } from '../../shared/panelActions';
-
-const dayMs = 1000 * 60 * 60 * 24;
-
-const toTimestamp = (value) => {
-  if (!value) return null;
-  const timestamp = new Date(value).getTime();
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
 
 const formatDate = (value) => {
   if (!value) return 'N/A';
@@ -45,46 +38,7 @@ const formatDuration = (durationMs) => {
   return durationMs < 1000 ? `${durationMs}ms` : `${seconds}s`;
 };
 
-const computeHealth = (table, configuredRange) => {
-  const expectedRange = configuredRange || table.dateRange;
-  const actualRange = table.actualDataRange;
-  const expectedStartTs = toTimestamp(expectedRange?.min);
-  const expectedEndTs = toTimestamp(expectedRange?.max);
-  const todayTs = new Date(new Date().toISOString().slice(0, 10)).getTime();
-  const freshnessTargetTs = expectedEndTs == null ? null : Math.min(expectedEndTs, todayTs);
-  const actualStartTs = toTimestamp(actualRange?.min);
-  const actualEndTs = toTimestamp(actualRange?.max);
-  const currentTs = toTimestamp(table.latestAvailableData);
-
-  let coverageRatio = null;
-  if (expectedStartTs != null && expectedEndTs != null && actualStartTs != null && actualEndTs != null) {
-    const expectedSpan = Math.max(expectedEndTs - expectedStartTs, dayMs);
-    const overlapStart = Math.max(expectedStartTs, actualStartTs);
-    const overlapEnd = Math.min(expectedEndTs, actualEndTs);
-    const overlapSpan = Math.max(0, overlapEnd - overlapStart);
-    coverageRatio = Math.min(1, overlapSpan / expectedSpan);
-  }
-  const coveragePct = coverageRatio != null ? Math.round(coverageRatio * 100) : null;
-  const lagDaysRaw = freshnessTargetTs != null && currentTs != null
-    ? (freshnessTargetTs - currentTs) / dayMs
-    : null;
-  const lagLabel = lagDaysRaw == null
-    ? 'N/A'
-    : lagDaysRaw <= -0.1
-      ? `${Math.abs(lagDaysRaw).toFixed(1)}d ahead`
-      : lagDaysRaw > 0.1
-        ? `${lagDaysRaw.toFixed(1)}d behind`
-        : 'On time';
-  const variant = (coverageRatio == null && lagDaysRaw == null)
-    ? 'unknown'
-    : (coverageRatio != null && coverageRatio < 0.75) || (lagDaysRaw != null && lagDaysRaw > 7)
-      ? 'mismatch'
-      : (coverageRatio != null && coverageRatio < 0.9) || (lagDaysRaw != null && lagDaysRaw > 3)
-        ? 'warn'
-        : 'ok';
-  const label = variant === 'ok' ? 'OK' : variant === 'warn' ? 'Warn' : variant === 'mismatch' ? 'Mismatch' : 'Unknown';
-  return { coveragePct, lagLabel, variant, label };
-};
+const computeHealth = (table, configuredRange) => computeIntegrationHealth(table, configuredRange);
 
 const getStatusVariant = (status) => {
   if (!status) return 'default';
@@ -178,7 +132,7 @@ const DataManagementTable = ({
             formatter: (cell) => {
               const health = cell.getValue() || {};
               return `<span class="dm-health-chip dm-health-chip--${health.variant || 'unknown'}">${health.label || 'Unknown'}</span>
-                <span class="dm-health-meta">Cov ${health.coveragePct != null ? `${health.coveragePct}%` : 'N/A'} | ${health.lagLabel || 'N/A'}</span>`;
+                <span class="dm-health-meta">${health.gridMeta || 'N/A'}</span>`;
             },
           },
           { title: 'Records', field: 'recordsProcessed', hozAlign: 'right', minWidth: 100, sorter: 'number', formatter: (cell) => cell.getValue() != null ? Number(cell.getValue()).toLocaleString() : '—' },

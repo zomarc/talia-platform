@@ -7,11 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.4.0] - 2026-09-07
+## [0.3.1] - 2026-09-07
 
 ### Summary
 
-Introduce **talia-engine** v0: a TypeScript Agent Runtime that runs independently of talia-server (own process / Docker service on :4100). First RM Agent is Regulator. UI shows an RM Checklist of Findings and Engine Activity. Python is reserved for later discrete math/ML jobs.
+talia-engine v0 (RM Checklist / Engine Activity) plus tested local WIP: integration date-role health, Ship × Day Pressure, and discuss-portal asset caching.
 
 ### Added
 
@@ -19,6 +19,13 @@ Introduce **talia-engine** v0: a TypeScript Agent Runtime that runs independentl
 - Finding store (`rm_findings`, `rm_engine_runs`) and GraphQL `rmFindings` / `runRmAgents` / `rmEngineStatus`.
 - Focus panels **RM Checklist** and **Engine Activity**.
 - Docker Compose service `talia-engine` (Python 3 in image for later elements).
+- Integration date-role health (sailing interval vs snapshot vs SCD) and source-issue Status.
+- Ship × Day Pressure grain, sail.select band, and hover/options polish.
+
+### Changed
+
+- Hashed `/assets/*` get a longer cache on vite preview and the Cloudflare discuss gateway.
+- Current-state tables can request a larger `tableData` page.
 
 ### Notes
 

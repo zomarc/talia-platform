@@ -95,7 +95,9 @@ export const buildTableDataQueryResolvers = ({
         || tableName === 'ship_cabin_ctg_link'
         || tableName === 'ship_cabin_reserve'
         || tableName === 'cabin_ctg'
-        || tableName === 'competitor_benchmark';
+        || tableName === 'competitor_benchmark'
+        || tableName === 'competitor_current_state'
+        || tableName === 'published_rates_current_state';
       const expandedLimit = largeTable
         ? Math.min(Math.max(baseLimit, 100), 150000)
         : (includeNonRealSailings ? baseLimit : Math.min(Math.max(baseLimit * 3, baseLimit), 5000));

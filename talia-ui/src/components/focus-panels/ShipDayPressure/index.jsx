@@ -37,9 +37,11 @@ import { resolveListenerScope } from '../ShipDayBerth/shipDayBerthTransform';
 import ShipDayPressurePresenter from './ShipDayPressurePresenter';
 import {
   PRESSURE_GRAINS,
+  buildMarketDayIndex,
   buildPressureCells,
   buildPressureGrid,
   buildSailWindows,
+  buildShipDayReserveIndex,
   defaultDateWindow,
   expandDateWindowForDepartingSails,
   expandDateWindowForSailImpact,
@@ -107,6 +109,48 @@ const OCCUPANCY_COLUMNS = [
   'total_cabins',
   'occupied_cabins',
   'remaining_cabins',
+];
+
+const PROMO_RATE_COLUMNS = [
+  'sail_code',
+  'ship_code',
+  'departure_date',
+  'promo_name',
+  'promo_type',
+  'fare_per_person',
+  'currency_code',
+];
+
+const COMPETITOR_PRICING_COLUMNS = [
+  'departure_date',
+  'duration',
+  'cruise_line',
+  'ship_name',
+  'destination',
+  'market',
+  'lowest_price',
+  'currency',
+  'cruise_name',
+];
+
+const COMPETITOR_BENCHMARK_COLUMNS = [
+  'departure_date',
+  'cruise_duration',
+  'cruise_line_name',
+  'cruise_line_code',
+  'pppd',
+  'total_rate_pp_eur',
+  'available_offer',
+  'is_latest_snapshot',
+  'source_destination',
+];
+
+const RESERVE_COLUMNS = [
+  'ship_code',
+  'cabin_number',
+  'sail_date_from',
+  'sail_date_to',
+  'reserve_type',
 ];
 
 const ShipDayPressureContainer = ({ panelInstanceId, panelComponentId }) => {
@@ -303,6 +347,88 @@ const ShipDayPressureContainer = ({ panelInstanceId, panelComponentId }) => {
     limit: 500,
   });
 
+  const marketEnabled = grain === PRESSURE_GRAINS.MARKET || grain === PRESSURE_GRAINS.IMPACT;
+  const impactEnabled = grain === PRESSURE_GRAINS.IMPACT;
+  const marketDateFilters = useMemo(() => (
+    dateFrom || dateTo
+      ? {
+        ...(dateFrom ? { departure_date_from: dateFrom } : {}),
+        ...(dateTo ? { departure_date_to: dateTo } : {}),
+      }
+      : null
+  ), [dateFrom, dateTo]);
+
+  const {
+    data: promoRateRows,
+    loading: promoLoading,
+    error: promoError,
+    refetch: refetchPromo,
+  } = useTableDataWithContext({
+    tableName: 'published_rates_current_state',
+    eventName: null,
+    panelInstanceId,
+    panelComponentId,
+    contextMapper: () => null,
+    columns: PROMO_RATE_COLUMNS,
+    filters: marketDateFilters,
+    enabled: marketEnabled,
+    limit: 80000,
+  });
+
+  const {
+    data: competitorPricingRows,
+    loading: pricingLoading,
+    error: pricingError,
+    refetch: refetchPricing,
+  } = useTableDataWithContext({
+    tableName: 'competitor_current_state',
+    eventName: null,
+    panelInstanceId,
+    panelComponentId,
+    contextMapper: () => null,
+    columns: COMPETITOR_PRICING_COLUMNS,
+    filters: marketDateFilters,
+    enabled: marketEnabled,
+    limit: 40000,
+  });
+
+  const {
+    data: competitorBenchmarkRows,
+    loading: benchmarkLoading,
+    error: benchmarkError,
+    refetch: refetchBenchmark,
+  } = useTableDataWithContext({
+    tableName: 'competitor_benchmark',
+    eventName: null,
+    panelInstanceId,
+    panelComponentId,
+    contextMapper: () => null,
+    columns: COMPETITOR_BENCHMARK_COLUMNS,
+    filters: {
+      is_latest_snapshot: 'Y',
+      ...(marketDateFilters || {}),
+    },
+    enabled: marketEnabled,
+    limit: 80000,
+  });
+
+  const {
+    data: reserveRows,
+    loading: reserveLoading,
+    error: reserveError,
+    refetch: refetchReserve,
+  } = useTableDataWithContext({
+    tableName: 'ship_cabin_reserve',
+    eventName: null,
+    panelInstanceId,
+    panelComponentId,
+    contextMapper: () => null,
+    columns: RESERVE_COLUMNS,
+    filters: shipFilter && shipFilter !== 'ALL' ? { ship_code: shipFilter } : null,
+    enabled: impactEnabled,
+    limit: 50000,
+  });
+
   const cabinCtgIndex = useMemo(
     () => indexCabinCategoryGroups(cabinCtgRows || []),
     [cabinCtgRows]
@@ -374,11 +500,41 @@ const ShipDayPressureContainer = ({ panelInstanceId, panelComponentId }) => {
     ]
   );
 
+  const marketIndex = useMemo(() => {
+    if (!marketEnabled) return null;
+    return buildMarketDayIndex({
+      publishedRateRows: promoRateRows,
+      competitorPricingRows,
+      competitorBenchmarkRows,
+      windows,
+      dateFrom,
+      dateTo,
+    });
+  }, [
+    marketEnabled,
+    promoRateRows,
+    competitorPricingRows,
+    competitorBenchmarkRows,
+    windows,
+    dateFrom,
+    dateTo,
+  ]);
+
+  const reserveIndex = useMemo(() => {
+    if (!impactEnabled) return null;
+    return buildShipDayReserveIndex({
+      reserveRows,
+      cells,
+    });
+  }, [impactEnabled, reserveRows, cells]);
+
   const bundle = useMemo(() => {
     const grid = buildPressureGrid({
       cells,
       windows,
       categoryDays,
+      marketIndex,
+      reserveIndex,
       grain,
       dateFrom,
       dateTo,
@@ -393,6 +549,8 @@ const ShipDayPressureContainer = ({ panelInstanceId, panelComponentId }) => {
       meta: {
         wip: true,
         cabinGrain: grain === PRESSURE_GRAINS.CABIN,
+        marketGrain: grain === PRESSURE_GRAINS.MARKET,
+        impactGrain: grain === PRESSURE_GRAINS.IMPACT,
         cabinCategoryMode,
         cabinCategoryModeOverride: cabinCategoryModeOverride != null,
         selectedVoyage: expandedWindow.voyage
@@ -410,6 +568,8 @@ const ShipDayPressureContainer = ({ panelInstanceId, panelComponentId }) => {
     cells,
     windows,
     categoryDays,
+    marketIndex,
+    reserveIndex,
     grain,
     dateFrom,
     dateTo,
@@ -438,10 +598,23 @@ const ShipDayPressureContainer = ({ panelInstanceId, panelComponentId }) => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [shipRows, cells]);
 
-  const loading = capacityLoading || shipLoading || inventoryLoading || masterLoading || bookingLoading
-    || occupancyLoading || cabinCtgLoading;
+  const loading = !bundle?.columns?.length || !bundle?.rows?.length
+    ? (
+      capacityLoading || shipLoading || inventoryLoading || masterLoading || bookingLoading
+      || occupancyLoading || cabinCtgLoading
+      || (marketEnabled && (promoLoading || pricingLoading || benchmarkLoading))
+      || (impactEnabled && reserveLoading)
+    )
+    : (
+      capacityLoading || shipLoading || inventoryLoading || masterLoading || bookingLoading
+      || (grain === PRESSURE_GRAINS.CABIN && occupancyLoading)
+    );
   const error = capacityError || shipError || inventoryError || masterError || bookingError || cabinCtgError
     || (grain === PRESSURE_GRAINS.CABIN ? occupancyError : null);
+  const marketWarning = marketEnabled
+    ? (promoError || pricingError || benchmarkError)
+    : null;
+  const impactWarning = impactEnabled ? reserveError : null;
 
   const handleRefresh = () => {
     refetchCapacity();
@@ -451,12 +624,22 @@ const ShipDayPressureContainer = ({ panelInstanceId, panelComponentId }) => {
     refetchBooking();
     refetchOccupancy();
     refetchCabinCtg();
+    if (marketEnabled) {
+      refetchPromo();
+      refetchPricing();
+      refetchBenchmark();
+    }
+    if (impactEnabled) refetchReserve();
   };
 
   return (
     <PanelDataState
       loading={loading}
-      loadingMessage="Loading ship × day pressure..."
+      loadingMessage={impactEnabled
+        ? 'Loading impact horizon (duration, block, cabin, market)...'
+        : marketEnabled
+          ? 'Loading promotions & competitor market...'
+          : 'Loading ship × day pressure...'}
       error={error}
       errorTitle="Failed to load Ship × Day Pressure"
       empty={!bundle?.columns || bundle.columns.length === 0 || !bundle?.rows || bundle.rows.length === 0}
@@ -464,7 +647,11 @@ const ShipDayPressureContainer = ({ panelInstanceId, panelComponentId }) => {
         ? 'No cabin occupancy in this date window'
         : grain === PRESSURE_GRAINS.PACKAGE
           ? 'No package / port-to-port products in this date window'
-          : 'No ship-day capacity in this date window'}
+          : grain === PRESSURE_GRAINS.MARKET
+            ? 'No promotions or competitor peers on departure days in this window'
+            : grain === PRESSURE_GRAINS.IMPACT
+              ? 'No duration / impact data in this window — select a ship for cabin + market strips'
+              : 'No ship-day capacity in this date window'}
       onRetry={handleRefresh}
     >
       <ShipDayPressurePresenter
@@ -476,6 +663,8 @@ const ShipDayPressureContainer = ({ panelInstanceId, panelComponentId }) => {
         onResetDates={handleResetDates}
         datesFollowGlobal={datesFollowGlobal}
         criteriaSummary={criteriaSummary}
+        marketWarning={marketWarning ? String(marketWarning.message || marketWarning) : null}
+        impactWarning={impactWarning ? String(impactWarning.message || impactWarning) : null}
         grain={grain}
         onGrainChange={setGrain}
         shipFilter={shipFilter}

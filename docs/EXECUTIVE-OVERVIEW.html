@@ -422,8 +422,53 @@
         <h2>Recent development</h2>
         <div class="card">
           <!-- COMMITS:START -->
-<p class="commits-meta">143 commits ahead of origin/main · showing 30 most recent of 143 · generated 2026-08-11</p>
+<p class="commits-meta">152 commits ahead of origin/main · showing 30 most recent of 152 · generated 2026-08-28</p>
 <ul class="commit-list">
+<li>
+  <code class="commit-hash">3f13f7e</code>
+  <span class="commit-subject">feat(ui): SXD follows global DATE∩MONTH and adds Package port-to-port grain</span>
+  <span class="commit-detail">Ship × Day Pressure now resolves StatusBar date and departure-month criteria first, with local From/To only narrowing that window, and a Package grain that columns segments by package_type / port→port so blocked beds are visible without treating sail code as the product identity.</span>
+</li>
+<li>
+  <code class="commit-hash">fad7e37</code>
+  <span class="commit-subject">feat(ui): Ship × Day Pressure with sail.select row band and one-click panel activate</span>
+  <span class="commit-detail">Add the SXD focus panel (voyage/ship/cabin pressure), sync date/ship criteria, highlight and scroll to selected voyage occupancy on sail.select, and activate inactive Dockview reports on the same pointer gesture as row selection.</span>
+</li>
+<li>
+  <code class="commit-hash">a6645e4</code>
+  <span class="commit-subject">feat: panel Options/legends, window hover cards, and validate local DB status</span>
+  <span class="commit-detail">Per-panel Views can hide legends independently of the StatusBar toggle, and hover cards clamp to the window instead of scrolling inside the panel. Validate reports live local listeners and top-10 Postgres tables with last-read, and this also ships competitor benchmark, ship-day capacity, and related shell work.</span>
+</li>
+<li>
+  <code class="commit-hash">5c203f0</code>
+  <span class="commit-subject">feat(ui): Views Totals, chart PDF export, and semantic number display</span>
+  <span class="commit-detail">Add per-component Totals toggle via Tabulator ColumnCalcs, embed charts in</span>
+</li>
+<li>
+  <code class="commit-hash">9775ba0</code>
+  <span class="commit-subject">feat(ui): global Pax/Cabins unit and report shell Views chrome</span>
+  <span class="commit-detail">Add presentation-only demand unit (guests stay canonical) plus shared Snapshot/Details/Filters Options persisted on the user profile, with chart fill layout and Export to CSV/PDF on major profile panels.</span>
+</li>
+<li>
+  <code class="commit-hash">41870a0</code>
+  <span class="commit-subject">feat: booked/estimated/contracted demand metrics with reservation totals</span>
+  <span class="commit-detail">Wire Fact_Reservation group-OF and Monday history into sailing demand metrics, add Reservation Estimated/Synthetic filters plus shared Tabulator column footers, and ship the Sailing Demand Composition panel with role/options UI support.</span>
+</li>
+<li>
+  <code class="commit-hash">4d32b67</code>
+  <span class="commit-subject">feat(ui): dock-tab data export and themeable tab chrome</span>
+  <span class="commit-detail">Add CSV/PDF export from active dock tabs (Reservation + Master Sailing Explorer) with unique filename timestamps, and polish Appearance controls for tab font, color, inactive dim, and stable tab height without the selected underline.</span>
+</li>
+<li>
+  <code class="commit-hash">ce5c955</code>
+  <span class="commit-subject">feat: sailing profiles, active targets, and theme-aware brand mark</span>
+  <span class="commit-detail">Ship ProfileCompare (REAL vs model/target), model map, target editor tools,</span>
+</li>
+<li>
+  <code class="commit-hash">42f11ec</code>
+  <span class="commit-subject">feat(ui): export Project Summary to dated PDF</span>
+  <span class="commit-detail">Add in-app Export PDF for the stored executive overview, with a dated print title so Save as PDF suggests a new filename.</span>
+</li>
 <li>
   <code class="commit-hash">dd883b0</code>
   <span class="commit-subject">release: Talia 0.3.0 development baseline</span>
@@ -521,46 +566,6 @@
 <li>
   <code class="commit-hash">43a27b3</code>
   <span class="commit-subject">fix(ui): Ship Day Berths table view without ship column, stacked sail codes</span>
-</li>
-<li>
-  <code class="commit-hash">87dedfc</code>
-  <span class="commit-subject">fix(ui): compact Ship Day Berths with criteria bar and view toggle</span>
-</li>
-<li>
-  <code class="commit-hash">febd5dc</code>
-  <span class="commit-subject">feat(docs): add git commit changelog to executive summary</span>
-  <span class="commit-detail">Inject recent branch commits into the branded executive overview HTML at</span>
-</li>
-<li>
-  <code class="commit-hash">8b39ab6</code>
-  <span class="commit-subject">fix(ui): Master Sailing Explorer reference row hover and tab loading</span>
-</li>
-<li>
-  <code class="commit-hash">2451fd8</code>
-  <span class="commit-subject">fix(ui): persistent active row highlight with hover coexistence</span>
-</li>
-<li>
-  <code class="commit-hash">fba19ad</code>
-  <span class="commit-subject">fix(ui): tab loading on listener panels only, instant selection</span>
-  <span class="commit-detail">Defer selection-triggered fetches so emitters paint immediately, match tab</span>
-</li>
-<li>
-  <code class="commit-hash">855e09e</code>
-  <span class="commit-subject">fix(ui): show loading state on panel tab headers</span>
-  <span class="commit-detail">Publish panel fetch loading through a shared hook wired into useTableDataWithContext</span>
-</li>
-<li>
-  <code class="commit-hash">5506db0</code>
-  <span class="commit-subject">fix(ui): persist sail selection highlight and auto-expand linked berths</span>
-  <span class="commit-detail">Canonical selection should stay visible in Master Sailing Explorer after</span>
-</li>
-<li>
-  <code class="commit-hash">5b6c872</code>
-  <span class="commit-subject">fix(ui): constrain Ship Day Berths table to selected voyage scope</span>
-</li>
-<li>
-  <code class="commit-hash">b0af781</code>
-  <span class="commit-subject">fix(ui): Ship Day Berths filters on canonical selection events</span>
 </li>
 </ul>
       <!-- COMMITS:END -->

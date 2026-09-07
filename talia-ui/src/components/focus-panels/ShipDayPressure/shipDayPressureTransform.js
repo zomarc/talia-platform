@@ -8,6 +8,10 @@
 
 import { SHIP_FILTER_ALL } from '../../../lib/globalShipFilter.js';
 import {
+  indexCabinReservesForSail,
+  summarizeCabinReserves,
+} from '../../../lib/shipCabinReserve.js';
+import {
   DEFAULT_CABIN_CATEGORY_MODE,
   normalizeCabinCategoryMode,
   resolveCabinCategoryLabel,
@@ -29,8 +33,15 @@ export const PRESSURE_GRAINS = {
   SHIP: 'ship',
   VOYAGE: 'voyage',
   PACKAGE: 'package',
+  MARKET: 'market',
+  IMPACT: 'impact',
   CABIN: 'cabin',
 };
+
+/** Nights at or above this threshold are styled as long-duration holds (e.g. 22N group). */
+export const LONG_DURATION_NIGHTS = 14;
+
+const MAX_DURATION_COLUMNS = 16;
 
 /** Bar fill composition — panel Options `barSplit`. */
 export const BAR_SPLIT = {
@@ -123,6 +134,78 @@ export const formatPackageLabel = (win = {}) => {
   const to = String(win?.port_to || '').trim() || '?';
   const nights = toNumber(win?.nights) || 0;
   return nights ? `${from}→${to} · ${nights}N` : `${from}→${to}`;
+};
+
+export const formatDurationLabel = (nights) => {
+  const n = toNumber(nights);
+  return n > 0 ? `${n}N` : '?N';
+};
+
+/** Long-duration group holds: contracted/estimated can block FIT even when booked is low. */
+export const classifyDurationImpact = ({
+  nights = 0,
+  booked = 0,
+  booked_fit = 0,
+  estimated = 0,
+  contracted = 0,
+  sellable = 0,
+} = {}) => {
+  const long = toNumber(nights) >= LONG_DURATION_NIGHTS;
+  const fit = toNumber(booked_fit) || toNumber(booked);
+  const planning = toNumber(estimated) + toNumber(contracted);
+  if (!long || sellable <= 0) return { flag: PRESSURE_FLAGS.OK, reasons: [] };
+  const planningPct = planning / sellable;
+  const estPct = toNumber(estimated) / sellable;
+  if (planningPct >= 0.12 && estPct >= 0.08 && planning > fit * 0.35) {
+    return {
+      flag: PRESSURE_FLAGS.SOFT_GROUP,
+      reasons: [
+        `${nights}N hold: contracted ${Math.round(contracted)} + estimated ${Math.round(estimated)} vs FIT booked ${Math.round(fit)} — low-probability group may be blocking shorter products.`,
+      ],
+    };
+  }
+  if (planningPct >= 0.2 && fit / sellable < 0.25) {
+    return {
+      flag: PRESSURE_FLAGS.BLOCKING,
+      reasons: [
+        `${nights}N product occupies ship-days with only ${Math.round((fit / sellable) * 100)}% FIT booked but ${Math.round(planningPct * 100)}% contracted/expected — beds blocked for other sails.`,
+      ],
+    };
+  }
+  return { flag: PRESSURE_FLAGS.OK, reasons: [] };
+};
+
+const buildDemandCellFromParts = (physical, parts, extra = {}) => {
+  if (!physical || !parts?.length) return null;
+  const booked = parts.reduce((s, p) => s + p.booked, 0);
+  const estimated = parts.reduce((s, p) => s + p.estimated, 0);
+  const contracted = parts.reduce((s, p) => s + p.contracted, 0);
+  const split = splitBookedBySailingRole(parts);
+  const bookedFit = parts.reduce((s, p) => s + toNumber(p.booked_fit), 0);
+  const bookedGroup = parts.reduce((s, p) => s + toNumber(p.booked_group), 0);
+  const nights = toNumber(extra.nights ?? parts[0]?.nights);
+  const impact = classifyDurationImpact({
+    nights,
+    booked,
+    booked_fit: bookedFit,
+    estimated,
+    contracted,
+    sellable: physical.sellable || physical.sellable_berths,
+  });
+  return {
+    ...physical,
+    booked,
+    booked_master: split.booked_master,
+    booked_segment: split.booked_segment,
+    booked_fit: bookedFit,
+    booked_group: bookedGroup,
+    estimated,
+    contracted,
+    by_sail: parts,
+    nights,
+    ...impact,
+    ...extra,
+  };
 };
 
 const categoryDayKey = (shipCode, dateKey, category) => `${shipCode}|${dateKey}|${category}`;
@@ -842,6 +925,283 @@ export const expandDateWindowForDepartingSails = ({
   return { from, to };
 };
 
+/** Exclude Celestyal / own-line rows from peer competitor overlays. */
+export const isOwnCruiseLine = (value) => /celestyal/i.test(String(value || '').trim());
+
+const pushUniqueCap = (list, item, cap = 8) => {
+  if (!item || list.length >= cap) return;
+  if (list.includes(item)) return;
+  list.push(item);
+};
+
+/**
+ * Index promotions + both competitor feeds onto ship × departure-date.
+ * Pricing = stg.COMPETITOR; Benchmark = RateGain dwh. Peers attach to every
+ * Celestyal ship that departs that calendar day (no competitor ship_code join).
+ */
+export const buildMarketDayIndex = ({
+  publishedRateRows = [],
+  competitorPricingRows = [],
+  competitorBenchmarkRows = [],
+  windows = new Map(),
+  dateFrom = null,
+  dateTo = null,
+} = {}) => {
+  const start = toDateKey(dateFrom);
+  const end = toDateKey(dateTo);
+  const inWindow = (dateKey) => {
+    if (!dateKey) return false;
+    if (start && dateKey < start) return false;
+    if (end && dateKey > end) return false;
+    return true;
+  };
+
+  const shipDepartures = new Map();
+  windows.forEach?.((win) => {
+    const shipCode = String(win?.ship_code || '').trim();
+    const dateKey = toDateKey(win?.date_from);
+    if (!shipCode || !inWindow(dateKey)) return;
+    const key = shipDayKey(shipCode, dateKey);
+    const existing = shipDepartures.get(key) || {
+      ship_code: shipCode,
+      ship_name: win.ship_name || shipCode,
+      date: dateKey,
+      sail_codes: new Set(),
+    };
+    if (win.sail_code) existing.sail_codes.add(win.sail_code);
+    if (win.ship_name) existing.ship_name = win.ship_name;
+    shipDepartures.set(key, existing);
+  });
+
+  const promosByShipDate = new Map();
+  asArray(publishedRateRows).forEach((row) => {
+    const shipCode = String(row?.ship_code || '').trim();
+    const dateKey = toDateKey(row?.departure_date);
+    const promoName = String(row?.promo_name || '').trim();
+    if (!shipCode || !dateKey || !promoName || !inWindow(dateKey)) return;
+    const key = shipDayKey(shipCode, dateKey);
+    if (!shipDepartures.has(key)) {
+      shipDepartures.set(key, {
+        ship_code: shipCode,
+        ship_name: shipCode,
+        date: dateKey,
+        sail_codes: new Set([String(row?.sail_code || '').trim()].filter(Boolean)),
+      });
+    } else if (row?.sail_code) {
+      shipDepartures.get(key).sail_codes.add(String(row.sail_code).trim());
+    }
+    const bucket = promosByShipDate.get(key) || new Map();
+    const fare = toNumber(row?.fare_per_person);
+    const prev = bucket.get(promoName) || {
+      name: promoName,
+      type: String(row?.promo_type || '').trim() || null,
+      min_fare: null,
+      count: 0,
+    };
+    prev.count += 1;
+    if (fare > 0 && (prev.min_fare == null || fare < prev.min_fare)) prev.min_fare = fare;
+    if (!prev.type && row?.promo_type) prev.type = String(row.promo_type).trim();
+    bucket.set(promoName, prev);
+    promosByShipDate.set(key, bucket);
+  });
+
+  const pricingByDate = new Map();
+  asArray(competitorPricingRows).forEach((row) => {
+    const dateKey = toDateKey(row?.departure_date);
+    if (!inWindow(dateKey)) return;
+    const line = String(row?.cruise_line || row?.cruiseLine || '').trim();
+    if (isOwnCruiseLine(line)) return;
+    const price = toNumber(row?.lowest_price ?? row?.lowestPrice ?? row?.pppd);
+    const existing = pricingByDate.get(dateKey) || {
+      date: dateKey,
+      source: 'pricing',
+      peer_count: 0,
+      min_price: null,
+      lines: [],
+      offers: [],
+    };
+    existing.peer_count += 1;
+    if (price > 0 && (existing.min_price == null || price < existing.min_price)) {
+      existing.min_price = price;
+    }
+    pushUniqueCap(existing.lines, line);
+    const offer = String(row?.available_offer || row?.cruise_name || '').trim();
+    pushUniqueCap(existing.offers, offer);
+    pricingByDate.set(dateKey, existing);
+  });
+
+  const benchmarkByDate = new Map();
+  asArray(competitorBenchmarkRows).forEach((row) => {
+    const dateKey = toDateKey(row?.departure_date);
+    if (!inWindow(dateKey)) return;
+    const latest = String(row?.is_latest_snapshot || 'Y').trim().toUpperCase();
+    if (latest && latest !== 'Y' && latest !== '1') return;
+    const line = String(row?.cruise_line_name || row?.cruise_line_code || '').trim();
+    if (isOwnCruiseLine(line)) return;
+    const pppd = toNumber(row?.pppd);
+    const total = toNumber(row?.total_rate_pp_eur ?? row?.total_rate_pp);
+    const existing = benchmarkByDate.get(dateKey) || {
+      date: dateKey,
+      source: 'benchmark',
+      peer_count: 0,
+      min_pppd: null,
+      min_total: null,
+      lines: [],
+      offers: [],
+    };
+    existing.peer_count += 1;
+    if (pppd > 0 && (existing.min_pppd == null || pppd < existing.min_pppd)) {
+      existing.min_pppd = pppd;
+    }
+    if (total > 0 && (existing.min_total == null || total < existing.min_total)) {
+      existing.min_total = total;
+    }
+    pushUniqueCap(existing.lines, line);
+    const offer = String(row?.available_offer || '').trim();
+    pushUniqueCap(existing.offers, offer);
+    benchmarkByDate.set(dateKey, existing);
+  });
+
+  const byShipDate = new Map();
+  shipDepartures.forEach((dep, key) => {
+    const promoMap = promosByShipDate.get(key);
+    const promos = promoMap
+      ? [...promoMap.values()].sort((a, b) => String(a.name).localeCompare(String(b.name)))
+      : [];
+    const pricing = pricingByDate.get(dep.date) || null;
+    const benchmark = benchmarkByDate.get(dep.date) || null;
+    if (!promos.length && !pricing && !benchmark) return;
+    byShipDate.set(key, {
+      ship_code: dep.ship_code,
+      ship_name: dep.ship_name,
+      date: dep.date,
+      sail_codes: [...dep.sail_codes],
+      promos,
+      pricing,
+      benchmark,
+      has_promo: promos.length > 0,
+      has_pricing: Boolean(pricing?.peer_count),
+      has_benchmark: Boolean(benchmark?.peer_count),
+    });
+  });
+
+  return { byShipDate, pricingByDate, benchmarkByDate };
+};
+
+/**
+ * Blocked / reserved cabins per ship-day (offsale from capacity + ship_cabin_reserve).
+ */
+export const buildShipDayReserveIndex = ({
+  reserveRows = [],
+  cells = [],
+} = {}) => {
+  const byShipDate = new Map();
+  asArray(cells).forEach((cell) => {
+    const key = shipDayKey(cell.ship_code, cell.date);
+    const reserveIndex = indexCabinReservesForSail(reserveRows, {
+      shipCode: cell.ship_code,
+      dateKey: cell.date,
+    });
+    const summary = summarizeCabinReserves(reserveIndex);
+    const offsaleFromCapacity = toNumber(cell.offsale_cabins);
+    const blockedCabins = Math.max(offsaleFromCapacity, summary.offsale);
+    byShipDate.set(key, {
+      ...summary,
+      offsale_from_capacity: offsaleFromCapacity,
+      blocked_cabins: blockedCabins,
+      nameplate_cabins: toNumber(cell.nameplate_cabins),
+    });
+  });
+  return { byShipDate };
+};
+
+/** Worst cabin-category loading on a ship-day (for Impact pressure strip). */
+export const summarizeShipDayCabinPressure = (physical, categoryDays, shipCode, date) => {
+  const cats = categoriesForShipDate(categoryDays, shipCode, date);
+  if (!cats.length) return null;
+  let maxOcc = 0;
+  let tightest = null;
+  let tightCount = 0;
+  cats.forEach((cat) => {
+    const occ = categoryOccPct(cat);
+    if (occ > maxOcc) {
+      maxOcc = occ;
+      tightest = cat;
+    }
+    if (categoryIsTight(cat)) tightCount += 1;
+  });
+  const blockingCats = physical?.blocking_categories || [];
+  let flag = PRESSURE_FLAGS.OK;
+  if (blockingCats.length) flag = PRESSURE_FLAGS.BLOCKING;
+  else if (tightCount >= 2) flag = PRESSURE_FLAGS.OVER;
+  else if (maxOcc >= 0.85) flag = PRESSURE_FLAGS.BLOCKING;
+  return {
+    grain: 'cabin_pressure',
+    category_count: cats.length,
+    tightest_category: tightest?.category || null,
+    max_occ_pct: maxOcc,
+    tight_categories: tightCount,
+    blocking_categories: blockingCats,
+    flag,
+    reasons: blockingCats.length
+      ? blockingCats.map((item) => `${item.category} ${Math.round((item.occ_pct || 0) * 100)}% full`)
+      : tightCount
+        ? [`${tightCount} cabin categories at ≥85% on this ship-day`]
+        : [],
+  };
+};
+
+const buildDurationColumnMap = (windows, shipFilter, start, end) => {
+  const colMap = new Map();
+  windows.forEach((win) => {
+    if (!matchesShipFilter(win.ship_code, shipFilter)) return;
+    const nights = toNumber(win.nights);
+    if (!nights) return;
+    if (!voyageOverlapsRange(win, start, end)) return;
+    const id = `${win.ship_code}::${nights}N`;
+    if (!colMap.has(id)) {
+      colMap.set(id, {
+        id,
+        kind: 'duration',
+        nights,
+        label: formatDurationLabel(nights),
+        title_full: `${nights}-night products`,
+        ship_code: win.ship_code,
+        ship_name: win.ship_name,
+        is_long_duration: nights >= LONG_DURATION_NIGHTS,
+        date_from: win.date_from,
+        date_to: win.date_to || win.date_from,
+        sail_codes: new Set([win.sail_code]),
+        reference_sail_codes: new Set([win.reference_sail_code].filter(Boolean)),
+        package_keys: new Set([resolvePackageKey(win)].filter(Boolean)),
+      });
+    } else {
+      const col = colMap.get(id);
+      if (win.date_from && (!col.date_from || win.date_from < col.date_from)) col.date_from = win.date_from;
+      if (win.date_to && (!col.date_to || win.date_to > col.date_to)) col.date_to = win.date_to;
+      const pkg = resolvePackageKey(win);
+      if (pkg) col.package_keys.add(pkg);
+    }
+    colMap.get(id).sail_codes.add(win.sail_code);
+    if (win.reference_sail_code) colMap.get(id).reference_sail_codes.add(win.reference_sail_code);
+  });
+  return [...colMap.values()]
+    .sort((a, b) => (
+      String(a.ship_code).localeCompare(String(b.ship_code))
+      || (a.nights || 0) - (b.nights || 0)
+    ))
+    .slice(0, MAX_DURATION_COLUMNS)
+    .map((col) => ({
+      ...col,
+      sail_codes: [...col.sail_codes],
+      reference_sail_codes: [...col.reference_sail_codes],
+      package_keys: [...col.package_keys],
+      primary_sail_code: [...col.sail_codes][0] || null,
+      primary_reference_sail_code: [...col.reference_sail_codes][0] || [...col.sail_codes][0] || null,
+      title_full: `${col.nights}N · ${[...col.sail_codes].slice(0, 6).join(', ')}${col.sail_codes.size > 6 ? '…' : ''}`,
+    }));
+};
+
 /**
  * Continuous calendar spine for the pressure grid.
  * Prefer explicit from/to; when to is open, extend through data / impact / practical cap.
@@ -879,6 +1239,8 @@ export const buildPressureGrid = ({
   cells = [],
   windows = new Map(),
   categoryDays = null,
+  marketIndex = null,
+  reserveIndex = null,
   grain = PRESSURE_GRAINS.SHIP,
   dateFrom = null,
   dateTo = null,
@@ -889,10 +1251,18 @@ export const buildPressureGrid = ({
   const start = toDateKey(dateFrom);
   const end = toDateKey(dateTo);
   const scopedCells = asArray(cells).filter((cell) => matchesShipFilter(cell.ship_code, shipFilter));
+  const marketEntries = grain === PRESSURE_GRAINS.MARKET
+    ? [...(marketIndex?.byShipDate?.values?.() || [])].filter((entry) => (
+      matchesShipFilter(entry.ship_code, shipFilter)
+    ))
+    : [];
   const dates = resolvePressureDateSpine({
     dateFrom: start,
     dateTo: end,
-    cellDates: scopedCells.map((c) => c.date),
+    cellDates: [
+      ...scopedCells.map((c) => c.date),
+      ...marketEntries.map((entry) => entry.date),
+    ],
     impactFrom,
     impactTo,
   });
@@ -1081,6 +1451,116 @@ export const buildPressureGrid = ({
       });
     }
     columns = [...dayColumns, ...packageColumns];
+  } else if (grain === PRESSURE_GRAINS.MARKET) {
+    const singleShip = shipFilter && shipFilter !== SHIP_FILTER_ALL;
+    if (singleShip) {
+      const shipName = marketEntries.find((e) => e.ship_code === shipFilter)?.ship_name
+        || scopedCells.find((c) => c.ship_code === shipFilter)?.ship_name
+        || shipFilter;
+      columns = [
+        {
+          id: `__promo__::${shipFilter}`,
+          kind: 'market_promo',
+          label: 'Promo',
+          title_full: 'Published rate promotions',
+          ship_code: shipFilter,
+          ship_name: shipName,
+        },
+        {
+          id: `__pricing__::${shipFilter}`,
+          kind: 'market_pricing',
+          label: 'Pricing',
+          title_full: 'Competitor Pricing (stg.COMPETITOR)',
+          ship_code: shipFilter,
+          ship_name: shipName,
+        },
+        {
+          id: `__bench__::${shipFilter}`,
+          kind: 'market_benchmark',
+          label: 'Benchmark',
+          title_full: 'Competitor Benchmark (RateGain)',
+          ship_code: shipFilter,
+          ship_name: shipName,
+        },
+      ];
+    } else {
+      const colMap = new Map();
+      marketEntries.forEach((entry) => {
+        if (!colMap.has(entry.ship_code)) {
+          colMap.set(entry.ship_code, {
+            id: entry.ship_code,
+            kind: 'market',
+            label: entry.ship_name || entry.ship_code,
+            ship_code: entry.ship_code,
+            ship_name: entry.ship_name,
+          });
+        }
+      });
+      scopedCells.forEach((cell) => {
+        if (!colMap.has(cell.ship_code)) {
+          colMap.set(cell.ship_code, {
+            id: cell.ship_code,
+            kind: 'market',
+            label: cell.ship_name || cell.ship_code,
+            ship_code: cell.ship_code,
+            ship_name: cell.ship_name,
+          });
+        }
+      });
+      columns = [...colMap.values()].sort((a, b) => (
+        String(a.ship_name || a.ship_code).localeCompare(String(b.ship_name || b.ship_code))
+      ));
+    }
+  } else if (grain === PRESSURE_GRAINS.IMPACT) {
+    const singleShip = shipFilter && shipFilter !== SHIP_FILTER_ALL;
+    const durationColumns = buildDurationColumnMap(windows, shipFilter, start, end);
+    const shipCodes = new Set([
+      ...scopedCells.map((c) => c.ship_code),
+      ...durationColumns.map((c) => c.ship_code),
+    ]);
+    const fixed = [];
+    [...shipCodes]
+      .filter((code) => matchesShipFilter(code, shipFilter))
+      .sort((a, b) => a.localeCompare(b))
+      .forEach((shipCode) => {
+        const shipName = scopedCells.find((c) => c.ship_code === shipCode)?.ship_name
+          || durationColumns.find((c) => c.ship_code === shipCode)?.ship_name
+          || shipCode;
+        fixed.push({
+          id: `__block__::${shipCode}`,
+          kind: 'block',
+          label: 'Block',
+          title_full: 'Offsale / reserved cabins (capacity + ship_cabin_reserve)',
+          ship_code: shipCode,
+          ship_name: shipName,
+        });
+        fixed.push({
+          id: `__day__::${shipCode}`,
+          kind: 'day',
+          label: singleShip ? 'Day' : shipCode,
+          ship_code: shipCode,
+          ship_name: shipName,
+        });
+        if (singleShip) {
+          fixed.push({
+            id: `__cabin__::${shipCode}`,
+            kind: 'cabin_pressure',
+            label: 'Cabin',
+            title_full: 'Tightest cabin-category loading on this ship-day',
+            ship_code: shipCode,
+            ship_name: shipName,
+          });
+          fixed.push({
+            id: `__impact_market__::${shipCode}`,
+            kind: 'market',
+            label: 'Market',
+            title_full: 'Promo + competitor peers on departure days',
+            ship_code: shipCode,
+            ship_name: shipName,
+          });
+        }
+      });
+    columns = [...fixed, ...durationColumns];
   } else {
     const colMap = new Map();
     scopedCells.forEach((cell) => {
@@ -1101,6 +1581,22 @@ export const buildPressureGrid = ({
   cells.forEach((cell) => {
     cellIndex.set(shipDayKey(cell.ship_code, cell.date), cell);
   });
+  const marketCellIndex = marketIndex?.byShipDate || new Map();
+
+  const buildMarketCell = (shipCode, date, columnId, lane = 'all') => {
+    const market = marketCellIndex.get(shipDayKey(shipCode, date));
+    if (!market) return null;
+    if (lane === 'promo' && !market.has_promo) return null;
+    if (lane === 'pricing' && !market.has_pricing) return null;
+    if (lane === 'benchmark' && !market.has_benchmark) return null;
+    return {
+      ...market,
+      column_id: columnId,
+      grain: 'market',
+      market_lane: lane,
+      flag: PRESSURE_FLAGS.OK,
+    };
+  };
 
   const rows = dates.map((date) => {
     const row = {
@@ -1112,6 +1608,66 @@ export const buildPressureGrid = ({
         const physical = cellIndex.get(shipDayKey(col.ship_code, date));
         row[col.id] = physical
           ? { ...physical, column_id: col.id, grain: 'day' }
+          : null;
+      } else if (col.kind === 'market') {
+        row[col.id] = buildMarketCell(col.ship_code, date, col.id, 'all');
+      } else if (col.kind === 'market_promo') {
+        row[col.id] = buildMarketCell(col.ship_code, date, col.id, 'promo');
+      } else if (col.kind === 'market_pricing') {
+        row[col.id] = buildMarketCell(col.ship_code, date, col.id, 'pricing');
+      } else if (col.kind === 'market_benchmark') {
+        row[col.id] = buildMarketCell(col.ship_code, date, col.id, 'benchmark');
+      } else if (col.kind === 'block') {
+        const physical = cellIndex.get(shipDayKey(col.ship_code, date));
+        if (!physical) {
+          row[col.id] = null;
+          return;
+        }
+        const reserve = reserveIndex?.byShipDate?.get?.(shipDayKey(col.ship_code, date));
+        const blockedCabins = reserve?.blocked_cabins ?? toNumber(physical.offsale_cabins);
+        row[col.id] = {
+          ...physical,
+          grain: 'block',
+          blocked_cabins: blockedCabins,
+          reserved_cabins: reserve?.offsale ?? 0,
+          constrained_cabins: reserve?.constrained ?? 0,
+          column_id: col.id,
+          flag: blockedCabins > 0 ? PRESSURE_FLAGS.BLOCKING : PRESSURE_FLAGS.OK,
+          reasons: blockedCabins > 0
+            ? [`${blockedCabins} cabin${blockedCabins === 1 ? '' : 's'} offsale / reserved on this ship-day`]
+            : ['No offsale / reserved cabins on this ship-day'],
+        };
+      } else if (col.kind === 'duration') {
+        const physical = cellIndex.get(shipDayKey(col.ship_code, date));
+        if (!physical) {
+          row[col.id] = null;
+          return;
+        }
+        const parts = (physical.by_sail || []).filter((p) => (
+          toNumber(p.nights) === col.nights
+          || (col.sail_codes || []).includes(p.sail_code)
+        ));
+        if (!parts.length) {
+          row[col.id] = null;
+          return;
+        }
+        const cell = buildDemandCellFromParts(physical, parts, {
+          column_id: col.id,
+          grain: 'duration',
+          nights: col.nights,
+          duration_nights: col.nights,
+          is_long_duration: col.is_long_duration,
+          sail_codes: col.sail_codes,
+        });
+        if (cell && cell.flag === PRESSURE_FLAGS.OK && physical.flag && physical.flag !== PRESSURE_FLAGS.OK) {
+          cell.flag = physical.flag;
+        }
+        row[col.id] = cell;
+      } else if (col.kind === 'cabin_pressure') {
+        const physical = cellIndex.get(shipDayKey(col.ship_code, date));
+        const summary = summarizeShipDayCabinPressure(physical, categoryDays, col.ship_code, date);
+        row[col.id] = summary
+          ? { ...(physical || {}), ...summary, column_id: col.id, ship_code: col.ship_code, date }
           : null;
       } else if (col.kind === 'voyage') {
         const physical = cellIndex.get(shipDayKey(col.ship_code, date));

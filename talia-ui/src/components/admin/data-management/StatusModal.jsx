@@ -1,8 +1,18 @@
 import React from 'react';
 import { getTableSource } from '../../../config/tableSources';
+import { DATE_ROLES } from '../../../lib/integrationDateProfile.js';
+import { computeIntegrationHealth, isOpenEndedDate } from '../../../lib/integrationDateHealth.js';
+
+const dateRoleLabel = (dateRole) => {
+  if (dateRole === DATE_ROLES.SAILING_INTERVAL) return 'Sailing applicability';
+  if (dateRole === DATE_ROLES.RECORD_VALIDITY) return 'Record version (SCD)';
+  if (dateRole === DATE_ROLES.LOAD) return 'Load / sync';
+  return 'Event / snapshot';
+};
 
 const StatusModal = ({ statusTable, configuredRange, onClose, formatDateRange, formatDateTime }) => {
   const statusConfig = statusTable ? getTableSource(statusTable.tableName) : null;
+  const health = statusTable ? computeIntegrationHealth(statusTable, configuredRange) : null;
   const statusDateColumns = statusConfig?.dateColumns || [];
   const statusProvider = statusTable
     ? (statusTable.type === 'application'
@@ -14,25 +24,9 @@ const StatusModal = ({ statusTable, configuredRange, onClose, formatDateRange, f
             : 'Supabase')
     : '';
 
-  const dayMs = 1000 * 60 * 60 * 24;
-  const toTimestamp = (value) => {
-    if (!value) return null;
-    const timestamp = new Date(value).getTime();
-    return Number.isNaN(timestamp) ? null : timestamp;
-  };
-  const expectedRange = configuredRange || statusTable?.dateRange || null;
-  const actualRange = statusTable?.actualDataRange || null;
-  const expectedEndDate = expectedRange?.max || null;
-  const expectedStartTs = toTimestamp(expectedRange?.min);
-  const expectedEndTs = toTimestamp(expectedRange?.max);
-  const todayTs = new Date(new Date().toISOString().slice(0, 10)).getTime();
-  const freshnessTargetTs = expectedEndTs == null ? null : Math.min(expectedEndTs, todayTs);
-  const actualStartTs = toTimestamp(actualRange?.min);
-  const actualEndTs = toTimestamp(actualRange?.max);
-  const currentTs = toTimestamp(statusTable?.latestAvailableData);
-
   const formatPreciseDate = (value) => {
     if (!value) return 'N/A';
+    if (isOpenEndedDate(value)) return 'Open-ended';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return String(value);
     return date.toLocaleDateString('en-GB', {
@@ -56,69 +50,33 @@ const StatusModal = ({ statusTable, configuredRange, onClose, formatDateRange, f
     });
   };
 
-  const getSpanDays = (startTs, endTs) => {
-    if (startTs == null || endTs == null) return null;
-    return Math.max(0, Math.round((endTs - startTs) / dayMs) + 1);
+  const formatApplicabilityRange = (range) => {
+    if (!range?.min && !range?.max) return 'N/A';
+    return `${formatPreciseDate(range.min)} -> ${formatPreciseDate(range.max)}`;
   };
 
-  let coveragePct = null;
-  let overlapDays = null;
-  if (expectedStartTs != null && expectedEndTs != null && actualStartTs != null && actualEndTs != null) {
-    const expectedSpan = Math.max(expectedEndTs - expectedStartTs, dayMs);
-    const overlapStart = Math.max(expectedStartTs, actualStartTs);
-    const overlapEnd = Math.min(expectedEndTs, actualEndTs);
-    const overlapSpan = Math.max(0, overlapEnd - overlapStart);
-    overlapDays = Math.round(overlapSpan / dayMs) + (overlapSpan > 0 ? 1 : 0);
-    coveragePct = Math.round(Math.min(1, overlapSpan / expectedSpan) * 100);
-  }
+  if (!statusTable || !health) return null;
 
-  const requestedSpanDays = getSpanDays(expectedStartTs, expectedEndTs);
-  const loadedSpanDays = getSpanDays(actualStartTs, actualEndTs);
-  const beforeRequestedDays = (expectedStartTs != null && actualStartTs != null && actualStartTs < expectedStartTs)
-    ? Math.round((expectedStartTs - actualStartTs) / dayMs)
-    : 0;
-  const afterRequestedDays = (expectedEndTs != null && actualEndTs != null && actualEndTs > expectedEndTs)
-    ? Math.round((actualEndTs - expectedEndTs) / dayMs)
-    : 0;
-
-  const lagDaysRaw = freshnessTargetTs != null && currentTs != null
-    ? (freshnessTargetTs - currentTs) / dayMs
+  const isInterval = health.dateRole === DATE_ROLES.SAILING_INTERVAL
+    || health.dateRole === DATE_ROLES.RECORD_VALIDITY;
+  const requestedTitle = isInterval ? 'Requested sailing horizon' : 'Requested for Sync';
+  const availableTitle = health.dateRole === DATE_ROLES.SAILING_INTERVAL
+    ? 'Links covering that horizon'
+    : health.dateRole === DATE_ROLES.RECORD_VALIDITY
+      ? 'Record versions in table'
+      : 'Available in Table';
+  const coverageMeterLabel = health.dateRole === DATE_ROLES.SAILING_INTERVAL
+    ? `Applies to requested sailing horizon (${formatDateRange(health.expectedRange)})`
+    : `Coverage inside requested window (${formatDateRange(health.expectedRange)})`;
+  const freshnessMeterLabel = health.freshnessClock === 'last_sync'
+    ? `Feed freshness (last sync vs today)`
+    : `Freshness to target (${health.freshnessTargetTs != null ? formatPreciseDate(new Date(health.freshnessTargetTs)) : 'N/A'})`;
+  const rowApplyLabel = health.overlappingRows != null
+    ? `${health.overlappingRows.toLocaleString()} of ${(statusTable.rowCount || 0).toLocaleString()} rows`
+    : 'N/A';
+  const sailApplyLabel = health.sailCoveragePct != null
+    ? `${health.coveredSails.toLocaleString()} of ${health.totalSails.toLocaleString()} sailings (${health.sailCoveragePct}%)`
     : null;
-  const lagLabel = lagDaysRaw == null
-    ? 'N/A'
-    : lagDaysRaw <= -0.1
-      ? `Ahead by ${Math.abs(lagDaysRaw).toFixed(1)}d`
-      : lagDaysRaw > 0.1
-        ? `${lagDaysRaw.toFixed(1)}d behind`
-        : 'On time';
-
-  const qualityState = coveragePct == null
-    ? 'unknown'
-    : coveragePct >= 95 && (lagDaysRaw == null || lagDaysRaw <= 1)
-      ? 'ok'
-      : coveragePct >= 80 && (lagDaysRaw == null || lagDaysRaw <= 7)
-        ? 'warn'
-        : 'mismatch';
-  const qualityLabel = qualityState === 'ok' ? 'Good'
-    : qualityState === 'warn' ? 'Partial'
-      : qualityState === 'mismatch' ? 'Limited'
-        : 'Unknown';
-
-  const freshnessState = lagDaysRaw == null
-    ? 'unknown'
-    : lagDaysRaw <= 1
-      ? 'ok'
-      : lagDaysRaw <= 7
-        ? 'warn'
-        : 'mismatch';
-
-  const freshnessAlignmentPct = lagDaysRaw == null
-    ? 0
-    : lagDaysRaw <= 0
-      ? 100
-      : Math.max(0, 100 - Math.min(100, Math.round(lagDaysRaw * (100 / 60))));
-
-  if (!statusTable) return null;
 
   return (
     <div
@@ -131,7 +89,7 @@ const StatusModal = ({ statusTable, configuredRange, onClose, formatDateRange, f
       >
         <div className="dm-modal__header">
           <div className="dm-modal__title">
-            🧾 Status: {statusTable.tableName}
+            Status: {statusTable.tableName}
           </div>
           <button
             onClick={onClose}
@@ -144,14 +102,14 @@ const StatusModal = ({ statusTable, configuredRange, onClose, formatDateRange, f
         <div className="dm-modal__section">
           <div className="dm-modal__section-title">Current Integration Snapshot</div>
           <div className="dm-status-summary">
-            <div className={`dm-status-pill dm-status-pill--${qualityState}`}>
-              Quality: {qualityLabel}
+            <div className={`dm-status-pill dm-status-pill--${health.qualityState}`}>
+              Quality: {health.qualityLabel}
             </div>
-            <div className={`dm-status-pill dm-status-pill--${freshnessState}`}>
-              Freshness: {lagLabel}
+            <div className={`dm-status-pill dm-status-pill--${health.freshnessState}`}>
+              Freshness: {health.lagLabel}
             </div>
             <div className="dm-status-pill">
-              Coverage: {coveragePct != null ? `${coveragePct}%` : 'N/A'}
+              {health.coveragePhrase}
             </div>
             <div className="dm-status-pill">
               Rows: {(statusTable.rowCount || 0).toLocaleString()}
@@ -163,27 +121,31 @@ const StatusModal = ({ statusTable, configuredRange, onClose, formatDateRange, f
           <div className="dm-modal__section-title">Requested vs Loaded Data</div>
           <div className="dm-status-compare">
             <div className="dm-table-status-card">
-              <div className="dm-table-status-card__title">Requested for Sync</div>
+              <div className="dm-table-status-card__title">{requestedTitle}</div>
               <div className="dm-table-status-card__range">
-                {expectedRange?.min ? formatPreciseDate(expectedRange.min) : 'N/A'} {'->'} {expectedRange?.max ? formatPreciseDate(expectedRange.max) : 'N/A'}
+                {health.expectedRange?.min ? formatPreciseDate(health.expectedRange.min) : 'N/A'} {'->'} {health.expectedRange?.max ? formatPreciseDate(health.expectedRange.max) : 'N/A'}
               </div>
               <div className="dm-table-status-card__meta">
-                Range Span: {requestedSpanDays != null ? `${requestedSpanDays} days` : 'N/A'}
+                Range Span: {health.requestedSpanDays != null ? `${health.requestedSpanDays} days` : 'N/A'}
               </div>
               <div className="dm-table-status-card__meta">
-                Expected End: {expectedEndDate ? formatPreciseDateTime(expectedEndDate) : 'N/A'}
+                Expected End: {health.expectedRange?.max ? formatPreciseDateTime(health.expectedRange.max) : 'N/A'}
               </div>
             </div>
             <div className="dm-table-status-card">
-              <div className="dm-table-status-card__title">Available in Table</div>
+              <div className="dm-table-status-card__title">{availableTitle}</div>
               <div className="dm-table-status-card__range">
-                {actualRange?.min ? formatPreciseDate(actualRange.min) : 'N/A'} {'->'} {actualRange?.max ? formatPreciseDate(actualRange.max) : 'N/A'}
+                {formatApplicabilityRange(health.actualRange)}
               </div>
               <div className="dm-table-status-card__meta">
-                Loaded Span: {loadedSpanDays != null ? `${loadedSpanDays} days` : 'N/A'}
+                {isInterval
+                  ? `Rows applying: ${rowApplyLabel}`
+                  : `Loaded Span: ${health.loadedSpanDays != null ? `${health.loadedSpanDays} days` : 'N/A'}`}
               </div>
               <div className="dm-table-status-card__meta">
-                Latest Data: {statusTable.latestAvailableData ? formatPreciseDateTime(statusTable.latestAvailableData) : 'N/A'}
+                {sailApplyLabel
+                  ? `Sailings covered: ${sailApplyLabel}`
+                  : `Latest Data: ${statusTable.latestAvailableData ? formatPreciseDateTime(statusTable.latestAvailableData) : 'N/A'}`}
               </div>
             </div>
           </div>
@@ -194,32 +156,32 @@ const StatusModal = ({ statusTable, configuredRange, onClose, formatDateRange, f
           <div className="dm-status-meters">
             <div className="dm-status-meter">
               <div className="dm-status-meter__label">
-                Coverage Inside Requested Window ({formatDateRange(expectedRange)})
+                {coverageMeterLabel}
               </div>
               <div className="dm-status-meter__track">
                 <div
-                  className={`dm-status-meter__fill dm-status-meter__fill--${qualityState}`}
-                  style={{ width: `${Math.max(0, Math.min(100, coveragePct ?? 0))}%` }}
+                  className={`dm-status-meter__fill dm-status-meter__fill--${health.qualityState}`}
+                  style={{ width: `${Math.max(0, Math.min(100, health.coveragePct ?? 0))}%` }}
                 />
               </div>
               <div className="dm-status-meter__value">
-                {coveragePct != null
-                  ? `${coveragePct}%${overlapDays != null ? ` (${overlapDays} days overlap)` : ''}`
+                {health.coveragePct != null
+                  ? `${health.coveragePhrase}${health.overlapDays != null && health.coverageKind !== 'sails' ? ` (${health.overlapDays} days overlap)` : ''}`
                   : 'N/A'}
               </div>
             </div>
             <div className="dm-status-meter">
               <div className="dm-status-meter__label">
-                Freshness to Target ({freshnessTargetTs != null ? formatPreciseDate(new Date(freshnessTargetTs)) : 'N/A'})
+                {freshnessMeterLabel}
               </div>
               <div className="dm-status-meter__track">
                 <div
-                  className={`dm-status-meter__fill dm-status-meter__fill--${freshnessState}`}
-                  style={{ width: `${Math.max(0, Math.min(100, freshnessAlignmentPct))}%` }}
+                  className={`dm-status-meter__fill dm-status-meter__fill--${health.freshnessState}`}
+                  style={{ width: `${Math.max(0, Math.min(100, health.freshnessAlignmentPct))}%` }}
                 />
               </div>
               <div className="dm-status-meter__value">
-                {lagLabel}
+                {health.lagLabel}
               </div>
             </div>
           </div>
@@ -232,14 +194,17 @@ const StatusModal = ({ statusTable, configuredRange, onClose, formatDateRange, f
             <div><strong>Source:</strong> {statusTable.source || statusConfig?.source || 'N/A'}</div>
             <div><strong>Source Query:</strong> {statusConfig?.source || 'N/A'}</div>
             <div><strong>Sync Key:</strong> {statusConfig?.syncType || 'N/A'}</div>
+            <div><strong>Date Role:</strong> {dateRoleLabel(health.dateRole)}</div>
             <div><strong>Date Columns:</strong> {statusDateColumns.length > 0 ? statusDateColumns.join(', ') : 'None'}</div>
             <div><strong>Type / Load:</strong> {(statusTable.type || 'N/A')} / {(statusTable.loadMethod || 'N/A')}</div>
-            <div><strong>Requested Range (raw):</strong> {formatDateRange(expectedRange)}</div>
-            <div><strong>Loaded Range (raw):</strong> {formatDateRange(statusTable.actualDataRange)}</div>
-            <div><strong>Outside Range Before:</strong> {beforeRequestedDays > 0 ? `${beforeRequestedDays} days` : 'No'}</div>
-            <div><strong>Outside Range After:</strong> {afterRequestedDays > 0 ? `${afterRequestedDays} days` : 'No'}</div>
+            <div><strong>Requested Range (raw):</strong> {formatDateRange(health.expectedRange)}</div>
+            <div><strong>Applicability Range (raw):</strong> {formatDateRange(statusTable.actualDataRange)}</div>
+            <div><strong>Open-ended windows:</strong> {health.openEnded ? 'Yes (to 2099+)' : 'No'}</div>
+            <div><strong>Rows applying to horizon:</strong> {rowApplyLabel}</div>
+            <div><strong>Sailings covered:</strong> {sailApplyLabel || 'N/A'}</div>
+            <div><strong>Outside Range Before:</strong> {health.beforeRequestedDays > 0 ? `${health.beforeRequestedDays} days` : 'No'}</div>
+            <div><strong>Outside Range After:</strong> {health.afterRequestedDays > 0 ? `${health.afterRequestedDays} days` : 'No'}</div>
             <div><strong>Latest Snapshot:</strong> {statusTable.latestSnapshotDate ? formatPreciseDateTime(statusTable.latestSnapshotDate) : 'N/A'}</div>
-            <div><strong>Freshness Target:</strong> {freshnessTargetTs != null ? formatPreciseDateTime(new Date(freshnessTargetTs)) : 'N/A'}</div>
             <div><strong>Last Sync:</strong> {statusTable.lastSync ? formatPreciseDateTime(statusTable.lastSync) : 'N/A'}</div>
             <div><strong>Rows:</strong> {(statusTable.rowCount || 0).toLocaleString()}</div>
             <div><strong>Records Processed:</strong> {(statusTable.recordsProcessed || 0).toLocaleString()}</div>

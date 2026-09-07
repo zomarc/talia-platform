@@ -18,6 +18,10 @@ import {
   expandDateWindowForDepartingSails,
   expandDateWindowForSailImpact,
   formatPackageLabel,
+  buildMarketDayIndex,
+  buildShipDayReserveIndex,
+  classifyDurationImpact,
+  isOwnCruiseLine,
   resolvePackageKey,
   resolveSellableCabins,
   resolveSellableBerths,
@@ -599,4 +603,212 @@ test('package grain columns are port-to-port products not sail codes', () => {
   assert.equal(grid.rows.find((r) => r.date === '2027-02-05')?.[packageCols[0].id]?.booked, 40);
 });
 
+test('isOwnCruiseLine excludes Celestyal peers', () => {
+  assert.equal(isOwnCruiseLine('Celestyal Cruises'), true);
+  assert.equal(isOwnCruiseLine('MSC CRUISES'), false);
+});
+
+test('market grain merges promos with both competitor sources on departure day', () => {
+  const windows = buildSailWindows(
+    [{ sail_code: 'M7', ship_code: 'JOURNEY', reference_sail_code: 'M7', sailing_role: 'master' }],
+    [{
+      sail_code: 'M7',
+      ship_code: 'JOURNEY',
+      ship_name: 'Journey',
+      sail_date_from: '2026-09-05',
+      sail_date_to: '2026-09-11',
+      sail_days: 7,
+      is_main: 1,
+    }]
+  );
+  const marketIndex = buildMarketDayIndex({
+    windows,
+    dateFrom: '2026-09-01',
+    dateTo: '2026-09-30',
+    publishedRateRows: [{
+      ship_code: 'JOURNEY',
+      sail_code: 'M7',
+      departure_date: '2026-09-05',
+      promo_name: 'Early Bird',
+      promo_type: 'EB',
+      fare_per_person: 899,
+    }],
+    competitorPricingRows: [
+      { departure_date: '2026-09-05', cruise_line: 'MSC', lowest_price: 850 },
+      { departure_date: '2026-09-05', cruise_line: 'Celestyal Cruises', lowest_price: 700 },
+    ],
+    competitorBenchmarkRows: [
+      {
+        departure_date: '2026-09-05',
+        cruise_line_name: 'COSTA CRUISES',
+        pppd: 120,
+        is_latest_snapshot: 'Y',
+      },
+    ],
+  });
+  const entry = marketIndex.byShipDate.get('JOURNEY|2026-09-05');
+  assert.ok(entry);
+  assert.equal(entry.promos[0].name, 'Early Bird');
+  assert.equal(entry.pricing.peer_count, 1);
+  assert.equal(entry.pricing.min_price, 850);
+  assert.equal(entry.benchmark.peer_count, 1);
+
+  const grid = buildPressureGrid({
+    cells: [],
+    windows,
+    marketIndex,
+    grain: PRESSURE_GRAINS.MARKET,
+    dateFrom: '2026-09-01',
+    dateTo: '2026-09-30',
+    shipFilter: 'JOURNEY',
+  });
+  assert.deepEqual(grid.columns.map((c) => c.kind), [
+    'market_promo',
+    'market_pricing',
+    'market_benchmark',
+  ]);
+  const row = grid.rows.find((r) => r.date === '2026-09-05');
+  assert.equal(row[grid.columns[0].id].has_promo, true);
+  assert.equal(row[grid.columns[1].id].has_pricing, true);
+  assert.equal(row[grid.columns[2].id].has_benchmark, true);
+});
+
+test('classifyDurationImpact flags long low-probability group holds', () => {
+  const impact = classifyDurationImpact({
+    nights: 22,
+    booked: 50,
+    booked_fit: 20,
+    estimated: 120,
+    contracted: 80,
+    sellable: 1000,
+  });
+  assert.equal(impact.flag, PRESSURE_FLAGS.SOFT_GROUP);
+  assert.match(impact.reasons[0], /22N/);
+
+  const short = classifyDurationImpact({
+    nights: 3,
+    booked: 50,
+    booked_fit: 20,
+    estimated: 120,
+    contracted: 80,
+    sellable: 1000,
+  });
+  assert.equal(short.flag, PRESSURE_FLAGS.OK);
+});
+
+test('buildShipDayReserveIndex uses capacity offsale as blocked cabins', () => {
+  const cells = [{
+    ship_code: 'DIS',
+    date: '2026-11-20',
+    offsale_cabins: 8,
+    nameplate_cabins: 600,
+  }];
+  const idx = buildShipDayReserveIndex({ reserveRows: [], cells });
+  assert.equal(idx.byShipDate.get('DIS|2026-11-20').blocked_cabins, 8);
+});
+
+test('impact grain shows block, day, cabin, market, and duration buckets for one ship', () => {
+  const windows = buildSailWindows(
+    [
+      { sail_code: 'SHORT3', ship_code: 'DIS', ship_name: 'Discovery', reference_sail_code: 'SHORT3', sailing_role: 'segment' },
+      { sail_code: 'CD22261127', ship_code: 'DIS', ship_name: 'Discovery', reference_sail_code: 'CD22261127', sailing_role: 'master' },
+    ],
+    [
+      {
+        sail_code: 'SHORT3',
+        ship_code: 'DIS',
+        ship_name: 'Discovery',
+        sail_date_from: '2026-11-18',
+        sail_date_to: '2026-11-20',
+        sail_days: 3,
+        is_main: 0,
+      },
+      {
+        sail_code: 'CD22261127',
+        ship_code: 'DIS',
+        ship_name: 'Discovery',
+        sail_date_from: '2026-11-20',
+        sail_date_to: '2026-12-11',
+        sail_days: 22,
+        is_main: 1,
+      },
+    ]
+  );
+  windows.get('SHORT3').occupancy_dates = new Set(enumerateDateKeys('2026-11-18', '2026-11-20'));
+  windows.get('CD22261127').occupancy_dates = new Set(enumerateDateKeys('2026-11-20', '2026-12-11'));
+
+  const cells = [{
+    ship_code: 'DIS',
+    ship_name: 'Discovery',
+    date: '2026-11-20',
+    sellable: 1000,
+    nameplate_cabins: 600,
+    offsale_cabins: 8,
+    booked: 50,
+    estimated: 150,
+    contracted: 100,
+    flag: PRESSURE_FLAGS.OK,
+    reasons: [],
+    sail_codes: ['SHORT3', 'CD22261127'],
+    by_sail: [
+      {
+        sail_code: 'SHORT3',
+        nights: 3,
+        booked: 40,
+        booked_fit: 40,
+        estimated: 0,
+        contracted: 0,
+      },
+      {
+        sail_code: 'CD22261127',
+        nights: 22,
+        booked: 10,
+        booked_fit: 5,
+        estimated: 150,
+        contracted: 100,
+      },
+    ],
+  }];
+
+  const categoryDays = {
+    byShipDate: new Map([
+      ['DIS|2026-11-20', [{ category: 'IB', sellable_cabins: 100, occupied_cabins: 92 }]],
+    ]),
+  };
+
+  const grid = buildPressureGrid({
+    cells,
+    windows,
+    categoryDays,
+    reserveIndex: buildShipDayReserveIndex({ cells, reserveRows: [] }),
+    grain: PRESSURE_GRAINS.IMPACT,
+    dateFrom: '2026-11-01',
+    dateTo: '2026-11-30',
+    shipFilter: 'DIS',
+  });
+
+  assert.deepEqual(grid.columns.map((col) => col.kind), [
+    'block',
+    'day',
+    'cabin_pressure',
+    'market',
+    'duration',
+    'duration',
+  ]);
+
+  const row = grid.rows.find((r) => r.date === '2026-11-20');
+  const blockCol = grid.columns.find((col) => col.kind === 'block');
+  assert.equal(row[blockCol.id].grain, 'block');
+  assert.equal(row[blockCol.id].blocked_cabins, 8);
+
+  const longCol = grid.columns.find((col) => col.nights === 22);
+  assert.ok(longCol.is_long_duration);
+  const longCell = row[longCol.id];
+  assert.equal(longCell.grain, 'duration');
+  assert.equal(longCell.flag, PRESSURE_FLAGS.SOFT_GROUP);
+  assert.equal(longCell.booked_fit, 5);
+
+  const shortCol = grid.columns.find((col) => col.nights === 3);
+  assert.equal(row[shortCol.id].booked_fit, 40);
+});
 

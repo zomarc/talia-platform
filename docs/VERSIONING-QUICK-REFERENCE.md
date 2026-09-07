@@ -29,7 +29,7 @@
 ### **Upcoming Releases**
 - **v0.2.0** - Enhanced data features
 - **v0.3.0** - Focus management implementation
-- **v0.4.0** - talia-engine RM Agent Runtime (Advise / Phase A)
+- **v0.3.1** - talia-engine RM Agent Runtime (Advise), integration health, Ship × Day Pressure
 - **v1.0.0** - First production release
 
 ## ✅ **Quality Gates**

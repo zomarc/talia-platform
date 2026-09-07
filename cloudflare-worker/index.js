@@ -92,6 +92,12 @@ const HOLDING_HTML = `<!DOCTYPE html>
 const NGROK_RESOLVE = '3gdvs2ekygjh8etb5.2yicxjompem9a7yrz.ngrok-cname.com';
 // Laptop tunnels can spike under CF→ngrok latency; 8s was flipping clients to holding.
 const ORIGIN_TIMEOUT_MS = 20000;
+/** Hashed bundles are ~3–4MB; allow slow client paths without aborting origin fetch. */
+const ASSET_ORIGIN_TIMEOUT_MS = 120000;
+
+const isHashedAssetPath = (pathname) => (
+  /^\/assets\/[^/]+\.(js|css|woff2?|png|jpe?g|svg|webp|gif|ico)$/i.test(pathname)
+);
 
 // Map public hostnames to the ngrok reserved domain Host header.
 // Laptop discuss URL is https://dev.taliahub.com — same tunnel as apex (single reserved domain).
@@ -125,8 +131,10 @@ export default {
     const originHost = HOST_MAP[url.hostname] || 'taliahub.com';
     const originUrl = new URL(url.toString());
     originUrl.hostname = originHost;
+    const hashedAsset = isHashedAssetPath(url.pathname);
+    const originTimeoutMs = hashedAsset ? ASSET_ORIGIN_TIMEOUT_MS : ORIGIN_TIMEOUT_MS;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), ORIGIN_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), originTimeoutMs);
 
     try {
       const headers = new Headers(request.headers);
@@ -137,7 +145,11 @@ export default {
         method: request.method,
         headers,
         body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined,
-        cf: { resolveOverride: NGROK_RESOLVE, cacheTtl: 0 },
+        cf: {
+          resolveOverride: NGROK_RESOLVE,
+          cacheTtl: hashedAsset ? 86400 : 0,
+          cacheEverything: hashedAsset,
+        },
       });
 
       const res = await fetch(originRequest, { signal: controller.signal });
@@ -146,6 +158,9 @@ export default {
       }
 
       const responseHeaders = new Headers(res.headers);
+      if (hashedAsset && res.status === 200) {
+        responseHeaders.set('Cache-Control', 'public, max-age=86400, immutable');
+      }
       responseHeaders.set('X-TaliaHub-Gateway', 'proxied');
       return new Response(res.body, {
         status: res.status,

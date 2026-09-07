@@ -39,9 +39,25 @@ function taliaReleaseProbePlugin(version) {
   }
 }
 
+/** Long cache for hashed /assets/* on vite preview (public ngrok discuss portal). */
+function previewAssetCachePlugin() {
+  return {
+    name: 'preview-asset-cache',
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const path = req.url?.split('?')[0] || ''
+        if (/^\/assets\/[^/]+\.(js|css|woff2?|png|jpe?g|svg|webp|gif|ico)$/i.test(path)) {
+          res.setHeader('Cache-Control', 'public, max-age=86400, immutable')
+        }
+        next()
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), taliaReleaseProbePlugin(appVersion)],
+  plugins: [react(), taliaReleaseProbePlugin(appVersion), previewAssetCachePlugin()],
   optimizeDeps: {
     // Keep these pre-bundled deterministically to avoid transient
     // 504 errors from /node_modules/.vite/deps during dev reloads.
@@ -72,6 +88,7 @@ export default defineConfig({
     allowedHosts: [
       'taliahub.com',
       'www.taliahub.com',
+      'dev.taliahub.com',
       'celestyal.taliahub.com',
       '*.ngrok-free.dev',
       '*.ngrok-free.app',

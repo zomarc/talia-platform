@@ -70,9 +70,12 @@ const resolveSelectedSailCodes = (scope) => {
 
 const columnMatchesSelection = (col, selectedShip, selectedSailCodes) => {
   if (!col) return false;
-  if (col.kind === 'voyage' || col.kind === 'package') {
+  if (col.kind === 'voyage' || col.kind === 'package' || col.kind === 'duration') {
     if (col.kind === 'voyage' && selectedSailCodes?.has?.(col.id)) return true;
     if (col.kind === 'package' && selectedSailCodes?.has?.(col.package_key)) return true;
+    if (col.kind === 'duration' && col.nights && selectedSailCodes?.size) {
+      return (col.sail_codes || []).some((code) => selectedSailCodes?.has?.(String(code)));
+    }
     return (col.sail_codes || []).some((code) => selectedSailCodes?.has?.(String(code)))
       || (col.reference_sail_codes || []).some((code) => selectedSailCodes?.has?.(String(code)));
   }
@@ -125,8 +128,203 @@ const cellOccupiedDisplay = (cell, demandUnit) => {
   return toDemandVolume(cell.occupied, demandUnit) || 0;
 };
 
+const fmtMoney = (value, digits = 0) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return n.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits });
+};
+
+const escapeHtml = (value) => String(value || '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;');
+
+const normalizePromoGroupLabel = (promo) => {
+  const type = String(promo?.type || '').trim();
+  if (type) return type;
+  const name = String(promo?.name || '');
+  const match = name.match(/^(PUBLISHED|CLOSED|EARLY|SPECIAL|GROUP)/i);
+  if (match) return match[1].toUpperCase();
+  return 'Rates';
+};
+
+const formatPromoItemLabel = (promo, groupLabel) => {
+  let name = String(promo?.name || '').trim();
+  const group = String(groupLabel || '').trim();
+  if (group && name.toUpperCase().startsWith(group.toUpperCase())) {
+    name = name.slice(group.length).trim().replace(/^[,:\-\s]+/, '');
+  }
+  return name || String(promo?.name || '—');
+};
+
+const groupPromosForDisplay = (promos = []) => {
+  const byGroup = new Map();
+  (promos || []).forEach((promo) => {
+    const label = normalizePromoGroupLabel(promo);
+    const list = byGroup.get(label) || [];
+    list.push(promo);
+    byGroup.set(label, list);
+  });
+  return [...byGroup.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([label, items]) => ({
+      label,
+      items: [...items].sort((a, b) => String(a.name).localeCompare(String(b.name))),
+    }));
+};
+
+const MarketHoverContent = ({ cell, fmtMoney }) => {
+  const promoGroups = groupPromosForDisplay(cell?.promos);
+  const pricing = cell?.pricing;
+  const benchmark = cell?.benchmark;
+  const promoTotal = (cell?.promos || []).length;
+
+  return (
+    <div className="sdp-market-hover">
+      {promoGroups.length ? (
+        <section className="sdp-market-hover__section sdp-market-hover__section--promo">
+          <header className="sdp-market-hover__section-head">
+            <span className="sdp-market-hover__section-title">Promotions</span>
+            <span className="sdp-market-hover__section-meta">{promoTotal}</span>
+          </header>
+          {promoGroups.map((group) => {
+            const visible = group.items.slice(0, 6);
+            const extra = Math.max(0, group.items.length - visible.length);
+            return (
+              <div key={group.label} className="sdp-market-hover__group">
+                <div className="sdp-market-hover__group-label">{group.label}</div>
+                <ul className="sdp-market-hover__list">
+                  {visible.map((promo) => (
+                    <li key={promo.name} className="sdp-market-hover__row">
+                      <span className="sdp-market-hover__name">
+                        {formatPromoItemLabel(promo, group.label)}
+                      </span>
+                      {promo.min_fare != null ? (
+                        <span className="sdp-market-hover__fare">€{fmtMoney(promo.min_fare)}</span>
+                      ) : (
+                        <span className="sdp-market-hover__fare sdp-market-hover__fare--muted">—</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {extra ? (
+                  <div className="sdp-market-hover__more">+{extra} more in {group.label}</div>
+                ) : null}
+              </div>
+            );
+          })}
+        </section>
+      ) : null}
+
+      {(pricing?.peer_count || benchmark?.peer_count) ? (
+        <section className="sdp-market-hover__section sdp-market-hover__section--competitor">
+          <header className="sdp-market-hover__section-head">
+            <span className="sdp-market-hover__section-title">Competitor pressure</span>
+          </header>
+          {pricing?.peer_count ? (
+            <div className="sdp-market-hover__competitor sdp-market-hover__competitor--pricing">
+              <div className="sdp-market-hover__competitor-head">
+                <span className="sdp-market-hover__competitor-source">Pricing (stg)</span>
+                <span className="sdp-market-hover__competitor-stat">
+                  {pricing.peer_count} peer{pricing.peer_count === 1 ? '' : 's'}
+                  {pricing.min_price != null ? ` · from €${fmtMoney(pricing.min_price)}` : ''}
+                </span>
+              </div>
+              {pricing.lines?.length ? (
+                <ul className="sdp-market-hover__peer-list">
+                  {pricing.lines.slice(0, 6).map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+          {benchmark?.peer_count ? (
+            <div className="sdp-market-hover__competitor sdp-market-hover__competitor--bench">
+              <div className="sdp-market-hover__competitor-head">
+                <span className="sdp-market-hover__competitor-source">Benchmark (RateGain)</span>
+                <span className="sdp-market-hover__competitor-stat">
+                  {benchmark.peer_count} peer{benchmark.peer_count === 1 ? '' : 's'}
+                  {benchmark.min_pppd != null ? ` · from €${fmtMoney(benchmark.min_pppd)}/d` : ''}
+                  {benchmark.min_total != null ? ` · €${fmtMoney(benchmark.min_total)} total` : ''}
+                </span>
+              </div>
+              {benchmark.lines?.length ? (
+                <ul className="sdp-market-hover__peer-list">
+                  {benchmark.lines.slice(0, 8).map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+    </div>
+  );
+};
+
+const renderMarketCellHtml = (cell) => {
+  if (!cell) return '<span class="sdp-cell sdp-cell--empty"></span>';
+  const lane = cell.market_lane || 'all';
+  const parts = [];
+  if ((lane === 'all' || lane === 'promo') && cell.has_promo) {
+    const primary = cell.promos?.[0];
+    const extra = Math.max(0, (cell.promos?.length || 0) - 1);
+    const label = primary
+      ? `${escapeHtml(formatPromoItemLabel(primary, normalizePromoGroupLabel(primary)))}${extra ? ` +${extra}` : ''}`
+      : 'Promo';
+    parts.push(`<span class="sdp-market__chip sdp-market__chip--promo">${label}</span>`);
+  }
+  if ((lane === 'all' || lane === 'pricing') && cell.has_pricing) {
+    const min = fmtMoney(cell.pricing?.min_price);
+    const label = `P·${cell.pricing?.peer_count || 0}${min != null ? ` €${min}` : ''}`;
+    parts.push(`<span class="sdp-market__chip sdp-market__chip--pricing">${label}</span>`);
+  }
+  if ((lane === 'all' || lane === 'benchmark') && cell.has_benchmark) {
+    const min = fmtMoney(cell.benchmark?.min_pppd, 0);
+    const label = `B·${cell.benchmark?.peer_count || 0}${min != null ? ` €${min}/d` : ''}`;
+    parts.push(`<span class="sdp-market__chip sdp-market__chip--bench">${label}</span>`);
+  }
+  if (!parts.length) return '<span class="sdp-cell sdp-cell--empty"></span>';
+  return `<div class="sdp-cell sdp-cell--market"><div class="sdp-market">${parts.join('')}</div></div>`;
+};
+
+const renderBlockCellHtml = (cell) => {
+  if (!cell) return '<span class="sdp-cell sdp-cell--empty"></span>';
+  const blocked = Number(cell.blocked_cabins) || 0;
+  if (!blocked) return '<span class="sdp-cell sdp-cell--empty"></span>';
+  const cap = Number(cell.nameplate_cabins) || Number(cell.sellable_cabins) || 0;
+  const blockPct = cap ? Math.max(4, Math.min(100, (blocked / cap) * 100)) : 12;
+  const title = `${blocked} offsale / reserved${cell.reserved_cabins ? ` (${cell.reserved_cabins} reserve)` : ''}`;
+  return (
+    `<div class="sdp-cell sdp-cell--blocking sdp-block-cell" data-flag="blocking" title="${escapeHtml(title)}">`
+    + `<span class="sdp-block-cell__count">${blocked}</span>`
+    + `<div class="sdp-cell__track" aria-hidden="true">`
+    + `<span class="sdp-cell__booked sdp-cell__booked--block" style="width:${blockPct}%"></span>`
+    + `</div></div>`
+  );
+};
+
+const renderCabinPressureCellHtml = (cell) => {
+  if (!cell) return '<span class="sdp-cell sdp-cell--empty"></span>';
+  const occ = Math.round((Number(cell.max_occ_pct) || 0) * 100);
+  const cat = cell.tightest_category ? String(cell.tightest_category) : '';
+  const label = cat ? `${cat} ${occ}%` : `${occ}%`;
+  const flag = cell.flag || PRESSURE_FLAGS.OK;
+  const title = (cell.reasons || []).join(' · ') || label;
+  return (
+    `<div class="sdp-cell sdp-cell--${flag} sdp-cabin-pressure-cell" data-flag="${flag}" title="${escapeHtml(title)}">`
+    + `<span class="sdp-cabin-pressure__label">${escapeHtml(label)}</span></div>`
+  );
+};
+
 const renderCellHtml = (cell, demandUnit, barSplit = DEFAULT_BAR_SPLIT) => {
   if (!cell) return '<span class="sdp-cell sdp-cell--empty"></span>';
+  if (cell.grain === 'market') return renderMarketCellHtml(cell);
+  if (cell.grain === 'block') return renderBlockCellHtml(cell);
+  if (cell.grain === 'cabin_pressure') return renderCabinPressureCellHtml(cell);
   const cabinGrain = cell.grain === 'cabin';
   const cap = cabinGrain
     ? (Number(cell.sellable_cabins) || 0)
@@ -186,6 +384,8 @@ const ShipDayPressurePresenter = ({
   onResetDates,
   datesFollowGlobal = true,
   criteriaSummary = '',
+  marketWarning = null,
+  impactWarning = null,
   grain,
   onGrainChange,
   shipFilter = SHIP_FILTER_ALL,
@@ -245,6 +445,13 @@ const ShipDayPressurePresenter = ({
   const selectionBandRef = useRef({ focusDate: null, impactFrom: null, impactTo: null });
   const truncatedVoyages = grain === PRESSURE_GRAINS.VOYAGE && columns.filter((col) => col.kind === 'voyage').length >= 48;
   const truncatedPackages = grain === PRESSURE_GRAINS.PACKAGE && columns.filter((col) => col.kind === 'package').length >= 48;
+  const frozenImpactCols = grain === PRESSURE_GRAINS.IMPACT
+    ? columns.filter((col) => ['block', 'day', 'cabin_pressure', 'market'].includes(col.kind)).length
+    : 0;
+  const columnLayoutKey = useMemo(
+    () => `${grain}|${columns.map((col) => col.id).join('\0')}`,
+    [grain, columns],
+  );
   const fitGroupSplit = barSplit === BAR_SPLIT.FIT_GROUP;
 
   const snapshotItems = useMemo(() => ([
@@ -326,7 +533,7 @@ const ShipDayPressurePresenter = ({
     const ship = selectedShipRef.current;
     const cols = columnsRef.current || [];
     const voyageCol = cols.find((col) => (
-      (col.kind === 'voyage' || col.kind === 'package')
+      (col.kind === 'voyage' || col.kind === 'package' || col.kind === 'duration')
       && columnMatchesSelection(col, ship, sailCodes)
     ));
     const meta = bundle?.meta || {};
@@ -383,10 +590,8 @@ const ShipDayPressurePresenter = ({
 
     const focusDate = band.focusDate;
     scrollToFocusDate(table, focusDate);
-    // Remount/virtual buffer: retry scroll once layout settles.
     if (focusDate) {
-      window.setTimeout(() => scrollToFocusDate(instanceRef.current, focusDate), 50);
-      window.setTimeout(() => scrollToFocusDate(instanceRef.current, focusDate), 200);
+      window.setTimeout(() => scrollToFocusDate(instanceRef.current, focusDate), 80);
     }
 
     if (voyageCol?.id) {
@@ -469,6 +674,7 @@ const ShipDayPressurePresenter = ({
       const TabGlobal = await initTabulator();
       if (cancelled || !TabGlobal || !tableRef.current) return;
 
+      const layoutColumns = columnsRef.current || [];
       const dateCol = {
         title: 'Date',
         field: 'date_label',
@@ -483,26 +689,32 @@ const ShipDayPressurePresenter = ({
         cssClass: 'sdp-date-col',
       };
 
-      const pressureCols = columns.map((col) => ({
+      const pressureCols = layoutColumns.map((col) => ({
         title: col.label,
         field: col.id,
-        frozen: col.kind === 'day',
-        ...(col.kind === 'day' ? { width: 72 } : {}),
-        minWidth: col.kind === 'day' ? 72 : 64,
-        widthGrow: col.kind === 'day' ? 0 : 1,
+        frozen: col.kind === 'day' || col.kind === 'block' || col.kind === 'cabin_pressure'
+          || (grain === PRESSURE_GRAINS.IMPACT && col.kind === 'market'),
+        ...(col.kind === 'day' || col.kind === 'block' ? { width: col.kind === 'block' ? 52 : 72 } : {}),
+        ...(col.kind === 'cabin_pressure' ? { width: 72 } : {}),
+        minWidth: col.kind === 'day' ? 72 : (col.kind === 'block' ? 48 : (col.kind === 'cabin_pressure' ? 64 : 64)),
+        widthGrow: (col.kind === 'day' || col.kind === 'block' || col.kind === 'cabin_pressure') ? 0 : 1,
         resizable: false,
         headerSort: false,
         headerHozAlign: 'center',
         hozAlign: 'center',
-        headerTooltip: (col.kind === 'voyage' || col.kind === 'package')
+        headerTooltip: (col.kind === 'voyage' || col.kind === 'package' || col.kind === 'duration')
           ? (col.title_full || col.id)
-          : (col.label || col.id),
+          : (col.title_full || col.label || col.id),
         cssClass: [
           'sdp-graphic-col',
-          col.kind === 'day' ? '' : 'talia-equal-width-col',
+          col.kind === 'day' || col.kind === 'block' || col.kind === 'cabin_pressure' ? '' : 'talia-equal-width-col',
           col.kind === 'day' ? 'sdp-day-col' : '',
+          col.kind === 'block' ? 'sdp-block-col' : '',
           col.kind === 'voyage' ? 'sdp-voyage-col' : '',
           col.kind === 'package' ? 'sdp-package-col' : '',
+          col.kind === 'duration' ? 'sdp-duration-col' : '',
+          col.is_long_duration ? 'sdp-duration-col--long' : '',
+          col.kind === 'cabin_pressure' ? 'sdp-cabin-pressure-col' : '',
           columnMatchesSelection(col, selectedShipRef.current, selectedSailCodesRef.current)
             ? 'sdp-col--selected'
             : '',
@@ -513,18 +725,18 @@ const ShipDayPressurePresenter = ({
           barSplitRef.current
         ),
         headerClick: () => {
-          if (col.kind === 'voyage' || col.kind === 'package') {
+          if (col.kind === 'voyage' || col.kind === 'package' || col.kind === 'duration') {
             const sailCodes = new Set([
               ...(col.kind === 'voyage' ? [String(col.id)] : []),
               ...(col.sail_codes || []).map((code) => String(code)),
               ...(col.reference_sail_codes || []).map((code) => String(code)),
             ].filter(Boolean));
-            const emitCode = col.kind === 'package'
-              ? (col.primary_sail_code || col.primary_reference_sail_code || [...sailCodes][0])
-              : col.id;
-            const referenceCode = col.kind === 'package'
-              ? (col.primary_reference_sail_code || emitCode)
-              : col.id;
+            const emitCode = col.kind === 'voyage'
+              ? col.id
+              : (col.primary_sail_code || col.primary_reference_sail_code || [...sailCodes][0]);
+            const referenceCode = col.kind === 'voyage'
+              ? col.id
+              : (col.primary_reference_sail_code || emitCode);
             selectedSailCodesRef.current = sailCodes;
             selectedShipRef.current = col.ship_code || null;
             selectedDateRef.current = null;
@@ -566,11 +778,13 @@ const ShipDayPressurePresenter = ({
       const options = getTabulatorOptions({
         panelComponentId: panelComponentId || 'ship-day-pressure',
         panelInstanceId,
-        freezeLeadingColumns: (grain === PRESSURE_GRAINS.VOYAGE || grain === PRESSURE_GRAINS.PACKAGE) ? 2 : 1,
+        freezeLeadingColumns: grain === PRESSURE_GRAINS.IMPACT
+          ? 1 + frozenImpactCols
+          : (grain === PRESSURE_GRAINS.VOYAGE || grain === PRESSURE_GRAINS.PACKAGE) ? 2 : 1,
         // Keep explicit frozen widths; global stretch layout fights horizontal freeze.
         enforceGlobalLayout: false,
         layout: 'fitData',
-        data: rows,
+        data: [],
         columns: [dateCol, ...pressureCols],
         height: '100%',
         rowHeight: 22,
@@ -586,6 +800,7 @@ const ShipDayPressurePresenter = ({
         instanceRef.current = null;
         return;
       }
+      try { instanceRef.current?.destroy?.(); } catch { /* noop */ }
       instanceRef.current = new TabGlobal(tableRef.current, options);
       if (cancelled) {
         try { instanceRef.current.destroy(); } catch { /* noop */ }
@@ -600,7 +815,7 @@ const ShipDayPressurePresenter = ({
         const rowDate = cell.getRow?.()?.getData?.()?.date
           || cell.getValue?.()?.date
           || null;
-        if (col.kind === 'voyage' || col.kind === 'package') {
+        if (col.kind === 'voyage' || col.kind === 'package' || col.kind === 'duration') {
           const cellValue = cell.getValue?.() || null;
           const part = cellValue?.by_sail?.[0] || null;
           const sailCodes = new Set([
@@ -610,12 +825,12 @@ const ShipDayPressurePresenter = ({
             part?.sail_code,
             part?.reference_sail_code,
           ].filter(Boolean).map(String));
-          const emitCode = col.kind === 'package'
-            ? (part?.sail_code || col.primary_sail_code || [...sailCodes][0])
-            : col.id;
-          const referenceCode = col.kind === 'package'
-            ? (part?.reference_sail_code || col.primary_reference_sail_code || emitCode)
-            : col.id;
+          const emitCode = col.kind === 'voyage'
+            ? col.id
+            : (part?.sail_code || col.primary_sail_code || col.primary_reference_sail_code || [...sailCodes][0]);
+          const referenceCode = col.kind === 'voyage'
+            ? col.id
+            : (part?.reference_sail_code || col.primary_reference_sail_code || emitCode);
           selectedSailCodesRef.current = sailCodes;
           selectedShipRef.current = col.ship_code || null;
           selectedDateRef.current = rowDate || null;
@@ -667,10 +882,11 @@ const ShipDayPressurePresenter = ({
       instanceRef.current.on('cellMouseLeave', () => setHover(null));
       instanceRef.current.on('tableBuilt', () => {
         builtRef.current = true;
-        applySelectionChrome({ scroll: true });
+        const refresh = instanceRef.current?.replaceData?.(rowsRef.current || []);
+        const after = () => applySelectionChrome({ scroll: false });
+        if (refresh?.then) refresh.then(after).catch(after);
+        else window.requestAnimationFrame(after);
       });
-      builtRef.current = true;
-      window.requestAnimationFrame(() => applySelectionChrome({ scroll: true }));
     };
 
     mount();
@@ -680,7 +896,28 @@ const ShipDayPressurePresenter = ({
       instanceRef.current = null;
       builtRef.current = false;
     };
-  }, [bundle, panelComponentId, panelInstanceId, grain, barSplit, applySelectionChrome]);
+  }, [columnLayoutKey, frozenImpactCols, grain, panelComponentId, panelInstanceId, applySelectionChrome, applyRowBandClasses]);
+
+  useEffect(() => {
+    if (!instanceRef.current || !builtRef.current || !rows.length) return;
+    try {
+      const refresh = instanceRef.current.replaceData(rows);
+      const after = () => applySelectionChrome({ scroll: false });
+      if (refresh?.then) refresh.then(after).catch(after);
+      else window.requestAnimationFrame(after);
+    } catch {
+      // noop
+    }
+  }, [rows, applySelectionChrome]);
+
+  useEffect(() => {
+    if (!instanceRef.current || !builtRef.current) return;
+    try {
+      instanceRef.current.redraw?.(true);
+    } catch {
+      // noop
+    }
+  }, [barSplit]);
 
   const hoverCell = hover?.cell || null;
 
@@ -760,6 +997,14 @@ const ShipDayPressurePresenter = ({
         Hover a cell for the categories that are blocking. Capacity is never summed across master + segments.
         {truncatedVoyages ? ' Voyage view shows overlapping sailings in this date window (capped).' : ''}
         {truncatedPackages ? ' Package view shows overlapping port-to-port products in this date window (capped).' : ''}
+        {grain === PRESSURE_GRAINS.MARKET
+          ? ' Market view: promotions on departure days, plus competitor peers from Pricing (stg) and Benchmark (RateGain). Prefer a single ship for split Promo / Pricing / Benchmark columns.'
+          : ''}
+        {grain === PRESSURE_GRAINS.IMPACT
+          ? ' Impact view: Block column shows offsale / reserved cabins; duration columns bucket demand by nights (long holds ≥14N highlighted); Cabin + Market strips appear when a single ship is selected. Use this to see how low-probability long groups (e.g. 22N) occupy ship-days that shorter FIT products need.'
+          : ''}
+        {marketWarning ? ` Market data warning: ${marketWarning}` : ''}
+        {impactWarning ? ` Reserve data warning: ${impactWarning}` : ''}
       </div>
 
       {showControls ? (
@@ -788,6 +1033,24 @@ const ShipDayPressurePresenter = ({
             title="Segments by package_type / port→port — where beds are blocked"
           >
             Package
+          </button>
+          <button
+            type="button"
+            className={`talia-btn ${grain === PRESSURE_GRAINS.MARKET ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+            aria-pressed={grain === PRESSURE_GRAINS.MARKET}
+            onClick={() => onGrainChange?.(PRESSURE_GRAINS.MARKET)}
+            title="Promotions + competitor peers from Pricing (stg) and Benchmark (RateGain)"
+          >
+            Market
+          </button>
+          <button
+            type="button"
+            className={`talia-btn ${grain === PRESSURE_GRAINS.IMPACT ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+            aria-pressed={grain === PRESSURE_GRAINS.IMPACT}
+            onClick={() => onGrainChange?.(PRESSURE_GRAINS.IMPACT)}
+            title="Block + duration + cabin + market pressure across the date horizon"
+          >
+            Impact
           </button>
           <button
             type="button"
@@ -831,7 +1094,22 @@ const ShipDayPressurePresenter = ({
       <main className="talia-report__content talia-report__content--scroll">
         {showLegends ? (
           <div className="talia-chart-legend sdp-legend" aria-label="Pressure legend">
-            {fitGroupSplit ? (
+            {grain === PRESSURE_GRAINS.MARKET ? (
+              <>
+                <span className="sdp-legend__item">
+                  <i className="sdp-legend__swatch sdp-legend__swatch--promo" aria-hidden="true" />
+                  Promo
+                </span>
+                <span className="sdp-legend__item">
+                  <i className="sdp-legend__swatch sdp-legend__swatch--pricing" aria-hidden="true" />
+                  Pricing (stg)
+                </span>
+                <span className="sdp-legend__item">
+                  <i className="sdp-legend__swatch sdp-legend__swatch--bench" aria-hidden="true" />
+                  Benchmark (RateGain)
+                </span>
+              </>
+            ) : fitGroupSplit ? (
               <>
                 <span className="sdp-legend__item">
                   <i className="sdp-legend__swatch sdp-legend__swatch--fit" aria-hidden="true" />
@@ -854,26 +1132,42 @@ const ShipDayPressurePresenter = ({
                 </span>
               </>
             )}
-            <span className="sdp-legend__item">
-              <i className="sdp-legend__swatch sdp-legend__swatch--est" aria-hidden="true" />
-              Expected
-            </span>
-            <span className="sdp-legend__item">
-              <i className="sdp-legend__swatch sdp-legend__swatch--blocking" aria-hidden="true" />
-              Blocking
-            </span>
-            <span className="sdp-legend__item">
-              <i className="sdp-legend__swatch sdp-legend__swatch--over" aria-hidden="true" />
-              Over
-            </span>
-            <span className="sdp-legend__item">
-              <i className="sdp-legend__swatch sdp-legend__swatch--soft" aria-hidden="true" />
-              Soft group
-            </span>
-            <span className="sdp-legend__item">
-              <i className="sdp-legend__swatch sdp-legend__swatch--under" aria-hidden="true" />
-              Under
-            </span>
+            {grain === PRESSURE_GRAINS.IMPACT ? (
+              <>
+                <span className="sdp-legend__item">
+                  <i className="sdp-legend__swatch sdp-legend__swatch--block" aria-hidden="true" />
+                  Block / reserved
+                </span>
+                <span className="sdp-legend__item">
+                  <i className="sdp-legend__swatch sdp-legend__swatch--long-duration" aria-hidden="true" />
+                  Long duration (≥14N)
+                </span>
+              </>
+            ) : null}
+            {grain !== PRESSURE_GRAINS.MARKET ? (
+              <>
+                <span className="sdp-legend__item">
+                  <i className="sdp-legend__swatch sdp-legend__swatch--est" aria-hidden="true" />
+                  Expected
+                </span>
+                <span className="sdp-legend__item">
+                  <i className="sdp-legend__swatch sdp-legend__swatch--blocking" aria-hidden="true" />
+                  Blocking
+                </span>
+                <span className="sdp-legend__item">
+                  <i className="sdp-legend__swatch sdp-legend__swatch--over" aria-hidden="true" />
+                  Over
+                </span>
+                <span className="sdp-legend__item">
+                  <i className="sdp-legend__swatch sdp-legend__swatch--soft" aria-hidden="true" />
+                  Soft group
+                </span>
+                <span className="sdp-legend__item">
+                  <i className="sdp-legend__swatch sdp-legend__swatch--under" aria-hidden="true" />
+                  Under
+                </span>
+              </>
+            ) : null}
           </div>
         ) : null}
         <div ref={tableRef} className="sdp-table-host talia-table" />
@@ -883,11 +1177,10 @@ const ShipDayPressurePresenter = ({
             (days before and after this cell). Physical sellable cabins match MSE: nameplate minus offsale / reserved, using MAX on the ship-day so master and segment berths are not double-counted.
             Voyage view adds a frozen Day column for the combined ship-day; bar fill splits booked master vs segment under the same voyage identity.
             Package view columns are port→port products (<code>package_type</code>) so short segments that block beds are visible without treating sail code as the product.
+            Market view overlays published-rate <code>promo_name</code> on departure days, plus peer competitors from both feeds — Competitor Pricing (<code>competitor_current_state</code> / stg) and Competitor Benchmark (<code>competitor_benchmark</code> / RateGain). Own-line (Celestyal) peers are excluded. With a single ship selected, columns split Promo / Pricing / Benchmark.
+            Impact view adds a Block column (offsale / <code>ship_cabin_reserve</code>), duration buckets (e.g. 22N) to surface long low-probability group holds, plus Cabin (tightest category loading) and Market strips when one ship is selected.
             Cabin-category loading comes from <code>sail_by_cabin_occupancy</code> and is what flags blocking when a category is full on a day a longer voyage still needs.
             Category identity follows StatusBar Cat (Real vs Group via <code>cabin_ctg</code>); this panel can override locally without changing the global criteria.
-          </p>
-          <p>
-            Next: competitor status and promotions in the same cell.
           </p>
         </ReportDataDetails>
       </main>
@@ -900,26 +1193,57 @@ const ShipDayPressurePresenter = ({
         onRequestClose={() => setHover(null)}
       >
         {hoverCell ? (
-          <div className="sdp-hover">
-            <div className="sdp-hover__kicker">{flagLabel(hoverCell.flag)}</div>
+          <div className={`sdp-hover${hoverCell.grain === 'market' ? ' sdp-hover--market' : ''}`}>
+            <div className="sdp-hover__kicker">
+              {hoverCell.grain === 'market'
+                ? 'Market'
+                : hoverCell.grain === 'block'
+                  ? 'Block / reserved'
+                  : hoverCell.grain === 'cabin_pressure'
+                    ? 'Cabin pressure'
+                    : hoverCell.grain === 'duration'
+                      ? `${hoverCell.duration_nights || hoverCell.nights || ''}N duration`
+                      : flagLabel(hoverCell.flag)}
+            </div>
             <div className="sdp-hover__title">
               {hoverCell.ship_name || hoverCell.ship_code}
               {hoverCell.cabin_category ? ` · ${hoverCell.cabin_category}` : ''}
+              {hoverCell.tightest_category ? ` · ${hoverCell.tightest_category}` : ''}
               {hoverCell.column_id && (hoverCell.grain === 'voyage' || hoverCell.grain === 'package')
                 ? ` · ${hoverCell.grain === 'package'
                   ? `${hoverCell.port_from || '?'}→${hoverCell.port_to || '?'} (${hoverCell.package_key || hoverCell.column_id})`
                   : hoverCell.column_id}`
                 : ''}
+              {hoverCell.grain === 'duration' && hoverCell.duration_nights
+                ? ` · ${hoverCell.duration_nights}N`
+                : ''}
               {' · '}
               {hoverCell.date}
             </div>
             <div
-              className="sdp-hover__preview"
+              className={`sdp-hover__preview${hoverCell.grain === 'market' ? ' sdp-hover__preview--market' : ''}`}
               aria-hidden="true"
               dangerouslySetInnerHTML={{
                 __html: renderCellHtml(hoverCell, demandUnit, barSplit),
               }}
             />
+            {hoverCell.grain === 'market' ? (
+              <MarketHoverContent cell={hoverCell} fmtMoney={fmtMoney} />
+            ) : hoverCell.grain === 'block' ? (
+              <dl className="sdp-hover__metrics">
+                <div><dt>Blocked</dt><dd>{fmt(hoverCell.blocked_cabins)} cabins</dd></div>
+                <div><dt>Reserved</dt><dd>{fmt(hoverCell.reserved_cabins)}</dd></div>
+                <div><dt>Nameplate</dt><dd>{fmt(hoverCell.nameplate_cabins)}</dd></div>
+                <div><dt>Offsale (capacity)</dt><dd>{fmt(hoverCell.offsale_cabins)}</dd></div>
+              </dl>
+            ) : hoverCell.grain === 'cabin_pressure' ? (
+              <dl className="sdp-hover__metrics">
+                <div><dt>Tightest</dt><dd>{hoverCell.tightest_category || '—'}</dd></div>
+                <div><dt>Max loading</dt><dd>{Math.round((hoverCell.max_occ_pct || 0) * 100)}%</dd></div>
+                <div><dt>Categories ≥85%</dt><dd>{fmt(hoverCell.tight_categories)}</dd></div>
+                <div><dt>Categories</dt><dd>{fmt(hoverCell.category_count)}</dd></div>
+              </dl>
+            ) : (
             <dl className="sdp-hover__metrics">
               <div><dt>Sellable</dt><dd>{fmt(hoverCell.grain === 'cabin' ? hoverCell.sellable_cabins : cellSellable(hoverCell, demandUnit))} {hoverCell.grain === 'cabin' ? 'cabins' : noun}</dd></div>
               {hoverCell.grain === 'cabin' ? (
@@ -949,18 +1273,21 @@ const ShipDayPressurePresenter = ({
                 </>
               )}
             </dl>
-            {(hoverCell.blocking_categories || []).length ? (
+            )}
+            {(hoverCell.grain !== 'market' && (hoverCell.blocking_categories || []).length) ? (
               <p className="sdp-hover__cats">
                 Blocking cats: {(hoverCell.blocking_categories || []).map((item) => (
                   `${item.category} ${Math.round((item.occ_pct || 0) * 100)}%`
                 )).join(' · ')}
               </p>
             ) : null}
-            <ul className="sdp-hover__why">
-              {(hoverCell.reasons || []).map((reason) => (
-                <li key={reason}>{reason}</li>
-              ))}
-            </ul>
+            {hoverCell.grain !== 'market' && (hoverCell.reasons || []).length ? (
+              <ul className="sdp-hover__why">
+                {(hoverCell.reasons || []).map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+            ) : null}
             {(hoverCell.by_sail || []).length ? (
               <p className="sdp-hover__sails">
                 Sails: {(hoverCell.by_sail || []).map((part) => part.sail_code).join(', ')}

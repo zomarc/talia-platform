@@ -7267,6 +7267,61 @@
   overflow: hidden;
 }
 
+.sdp-cell--market {
+  height: auto;
+  min-height: 14px;
+  padding: 1px 2px;
+  overflow: visible;
+}
+
+.sdp-market {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  align-items: center;
+  width: 100%;
+}
+
+.sdp-market__chip {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.2;
+  padding: 0 4px;
+  border-radius: 2px;
+  border: 1px solid transparent;
+}
+
+.sdp-market__chip--promo,
+.sdp-legend__swatch--promo {
+  background: color-mix(in srgb, #3d8bfd 22%, transparent);
+  border-color: color-mix(in srgb, #3d8bfd 55%, transparent);
+  color: #cfe3ff;
+}
+
+.sdp-market__chip--pricing,
+.sdp-legend__swatch--pricing {
+  background: color-mix(in srgb, #f0a202 20%, transparent);
+  border-color: color-mix(in srgb, #f0a202 50%, transparent);
+  color: #ffe7b0;
+}
+
+.sdp-market__chip--bench,
+.sdp-legend__swatch--bench {
+  background: color-mix(in srgb, #2bb673 20%, transparent);
+  border-color: color-mix(in srgb, #2bb673 50%, transparent);
+  color: #c8f0dc;
+}
+
+.sdp-legend__swatch--promo,
+.sdp-legend__swatch--pricing,
+.sdp-legend__swatch--bench {
+  border-radius: 2px;
+}
+
 .sdp-cell--empty {
   opacity: 0.25;
 }
@@ -7276,6 +7331,72 @@
   box-shadow:
     inset 3px 0 0 #c45c00,
     inset 0 0 0 1px color-mix(in srgb, #c45c00 55%, transparent);
+}
+
+.sdp-block-cell {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 14px;
+  padding: 0 1px;
+}
+
+.sdp-block-cell__count {
+  flex: 0 0 auto;
+  font-size: 10px;
+  line-height: 1;
+  min-width: 12px;
+  text-align: right;
+  color: color-mix(in srgb, var(--theme-text) 75%, #c45c00);
+}
+
+.sdp-cell__booked--block {
+  background: color-mix(in srgb, #c45c00 70%, #555);
+}
+
+.sdp-legend__swatch--block {
+  background: color-mix(in srgb, #c45c00 65%, #555);
+  border: 1px solid color-mix(in srgb, #c45c00 85%, transparent);
+}
+
+.sdp-legend__swatch--long-duration {
+  background: color-mix(in srgb, #7b61ff 25%, transparent);
+  border: 1px solid color-mix(in srgb, #7b61ff 65%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #7b61ff 35%, transparent);
+}
+
+.tabulator .sdp-duration-col--long.tabulator-col,
+.tabulator .sdp-duration-col--long .tabulator-col {
+  background: color-mix(in srgb, #7b61ff 10%, var(--theme-bg-elevated, #1a2332));
+}
+
+.tabulator .sdp-duration-col--long .tabulator-cell .sdp-cell--soft_group,
+.tabulator .sdp-duration-col--long .tabulator-cell.sdp-cell--soft_group {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, #7b61ff 55%, transparent),
+    inset 3px 0 0 color-mix(in srgb, #7b61ff 80%, #9b7bff);
+}
+
+.sdp-cabin-pressure-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 14px;
+  font-size: 10px;
+  line-height: 1.1;
+  padding: 0 2px;
+}
+
+.sdp-cabin-pressure__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.sdp-block-col .tabulator-col-title,
+.sdp-cabin-pressure-col .tabulator-col-title {
+  font-size: 10px;
 }
 
 .sdp-cell--over {
@@ -7456,6 +7577,185 @@
   min-width: 220px;
   padding: 8px 10px;
   font-size: 12px;
+}
+
+.sdp-hover--market {
+  min-width: 300px;
+  max-width: 380px;
+}
+
+.sdp-hover__preview--market {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+}
+
+.sdp-hover__preview--market .sdp-cell--market {
+  min-height: 22px;
+}
+
+.sdp-market-hover {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sdp-market-hover__section {
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 70%, transparent);
+  overflow: hidden;
+}
+
+.sdp-market-hover__section--promo {
+  border-left: 3px solid color-mix(in srgb, #3d8bfd 80%, transparent);
+}
+
+.sdp-market-hover__section--competitor {
+  border-left: 3px solid color-mix(in srgb, #2bb673 80%, transparent);
+}
+
+.sdp-market-hover__section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--theme-bg-elevated, #1a2332) 55%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-border) 60%, transparent);
+}
+
+.sdp-market-hover__section-title {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+.sdp-market-hover__section-meta {
+  font-size: 10px;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
+.sdp-market-hover__group + .sdp-market-hover__group {
+  border-top: 1px solid color-mix(in srgb, var(--theme-border) 50%, transparent);
+}
+
+.sdp-market-hover__group-label {
+  padding: 4px 8px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, #3d8bfd 70%, var(--theme-fg));
+}
+
+.sdp-market-hover__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 4px;
+}
+
+.sdp-market-hover__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 3px 8px;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.sdp-market-hover__row:nth-child(odd) {
+  background: color-mix(in srgb, var(--theme-bg-elevated, #1a2332) 35%, transparent);
+}
+
+.sdp-market-hover__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sdp-market-hover__fare {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: color-mix(in srgb, #cfe3ff 85%, var(--theme-fg));
+}
+
+.sdp-market-hover__fare--muted {
+  opacity: 0.45;
+  font-weight: 400;
+}
+
+.sdp-market-hover__more {
+  padding: 2px 8px 6px;
+  font-size: 10px;
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.sdp-market-hover__competitor {
+  padding: 6px 8px;
+}
+
+.sdp-market-hover__competitor + .sdp-market-hover__competitor {
+  border-top: 1px solid color-mix(in srgb, var(--theme-border) 50%, transparent);
+}
+
+.sdp-market-hover__competitor-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.sdp-market-hover__competitor-source {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.sdp-market-hover__competitor--pricing .sdp-market-hover__competitor-source {
+  color: color-mix(in srgb, #f0a202 85%, var(--theme-fg));
+}
+
+.sdp-market-hover__competitor--bench .sdp-market-hover__competitor-source {
+  color: color-mix(in srgb, #2bb673 85%, var(--theme-fg));
+}
+
+.sdp-market-hover__competitor-stat {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sdp-market-hover__peer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sdp-market-hover__peer-list li {
+  font-size: 10px;
+  line-height: 1.2;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--theme-bg-elevated, #1a2332) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--theme-border) 65%, transparent);
+}
+
+.sdp-market-hover__competitor--pricing .sdp-market-hover__peer-list li {
+  border-color: color-mix(in srgb, #f0a202 35%, transparent);
+}
+
+.sdp-market-hover__competitor--bench .sdp-market-hover__peer-list li {
+  border-color: color-mix(in srgb, #2bb673 35%, transparent);
 }
 
 .sdp-hover__kicker {

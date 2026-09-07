@@ -243,6 +243,7 @@ query GetKPIs {
 - Enterprise scalability
 
 **🏗️ See [FUTURE-ARCHITECTURE.md](./FUTURE-ARCHITECTURE.md) for complete three-tier vision**  
+**🧠 See [ADR-001](./adr/ADR-001-rm-agent-framework-terminology.md) and the [RM Agent Framework sketch](./talia-engine/RM-AGENT-FRAMEWORK.md) for talia-engine terminology**  
 **📋 See [VERSIONING-STRATEGY.md](./VERSIONING-STRATEGY.md) for our official versioning approach**
 
 ---

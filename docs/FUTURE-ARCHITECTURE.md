@@ -75,24 +75,30 @@ Talia will evolve into a comprehensive three-tier business intelligence platform
 
 ### **🧠 talia-engine (Analytics Engine)**
 **Current**: Not implemented  
-**Future**: Python-based modeling and analytics platform
+**Future**: Modeling, analytics, and **RM Agent** runtime (plus optional **Talia Assistant**)
 
 #### **Responsibilities**
 - Advanced analytics and modeling
-- Machine learning and AI pipelines
-- Statistical analysis and forecasting
-- Business intelligence computations
-- Data science workflows
+- **RM Agent Runtime**: specialist evaluators that emit normalised **Findings** (score + recommended action)
+- Machine learning and statistical pipelines where needed by RM Agents
+- Optional **Talia Assistant** (local/private LLM plugin) over Findings — not a substitute for RM Agents
+- Business intelligence computations and data science workflows
 
 #### **Technology Stack**
-- **Future**: Python, Jupyter, ML libraries (pandas, scikit-learn, etc.)
+- **Future**: Python and/or TypeScript worker (language open; contract-first)
+- **Future**: Jupyter, ML libraries (pandas, scikit-learn, etc.) as required
 - **Future**: Containerized microservices (Docker/Kubernetes)
 - **Future**: Data processing frameworks
 
 #### **Key Features**
+- 🔮 **Future**: RM Agents (Regulator, Probability, Competitor, …) → Checklist via Findings
 - 🔮 **Future**: Predictive analytics, forecasting models, ML pipelines
-- 🔮 **Future**: Containerized Python services
-- 🔮 **Future**: Integration with talia-server for data access
+- 🔮 **Future**: Containerized services integrated with talia-server for World State access
+- 🔮 **Future**: Optional Talia Assistant provider (local LLM) for explanation / prioritisation
+
+#### **Planning docs (terminology normative)**
+- [ADR-001: RM Agent Framework Terminology](./adr/ADR-001-rm-agent-framework-terminology.md)
+- [RM Agent Framework sketch](./talia-engine/RM-AGENT-FRAMEWORK.md)
 
 ---
 
@@ -153,19 +159,19 @@ Dockview   External APIs  ML Pipelines
 **Target**: Introduce talia-engine
 
 #### **v1.0.0 - Engine Foundation**
-- Python containerized services
-- Basic analytics models
-- Integration with talia-server
+- Agent Runtime + Finding contract (see ADR-001)
+- First RM Agent vertical slice (Regulator) → Checklist
+- Integration with talia-server for World State
 
 #### **v1.1.0 - Advanced Analytics**
-- Machine learning pipelines
-- Predictive modeling
-- Statistical analysis
+- Additional RM Agents (Probability, Competitor, …)
+- Machine learning / statistical pipelines where an RM Agent needs them
+- Predictive modeling as agent-backed Findings
 
-#### **v1.2.0 - AI Integration**
-- Advanced AI features
-- Automated insights
-- Business intelligence automation
+#### **v1.2.0 - Assistant + Action Execution**
+- Optional Talia Assistant (local/private LLM plugin) over Findings
+- Approved Recommended Actions via talia-server (talia GQL / Seaware adapters)
+- Business intelligence automation with human-in-the-loop Checklist
 
 ### **Phase 4: Platform Integration (v2.x.x+)**
 **Target**: Full three-tier platform

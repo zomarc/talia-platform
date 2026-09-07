@@ -1,8 +1,27 @@
+type TableDateFacts = {
+  actualDataRange: { min: string | null; max: string | null };
+  latestAvailableData: string | null;
+  dateRole: string;
+  coverage: {
+    dateRole: string;
+    overlappingRows: number | null;
+    rowCoveragePct: number | null;
+    coveredSails: number | null;
+    totalSails: number | null;
+    sailCoveragePct: number | null;
+    openEnded: boolean;
+  };
+};
+
 type BuildTableCatalogResolversDeps = {
   supabaseDataService: any;
   configService: any;
-  fetchActualDataRange: (tableName: string, rowCount: number) => Promise<{ min: string | null; max: string | null }>;
-  fetchLatestAvailableData: (tableName: string, rowCount: number) => Promise<string | null>;
+  fetchTableDateFacts: (args: {
+    tableName: string;
+    rowCount: number;
+    configuredRange?: { min: string | null; max: string | null } | null;
+    includeSailCoverage?: boolean;
+  }) => Promise<TableDateFacts>;
   getOperationMetadataKeysForTable: (tableName: string) => string[];
   getSyncTypeForTable: (tableName: string) => string;
   hasSyncConfigForTable: (tableName: string) => boolean;
@@ -11,8 +30,7 @@ type BuildTableCatalogResolversDeps = {
 export const buildTableCatalogQueryResolvers = ({
   supabaseDataService,
   configService,
-  fetchActualDataRange,
-  fetchLatestAvailableData,
+  fetchTableDateFacts,
   getOperationMetadataKeysForTable,
   getSyncTypeForTable,
   hasSyncConfigForTable
@@ -77,9 +95,14 @@ export const buildTableCatalogQueryResolvers = ({
           if (countError) return null;
 
           const rowCount = count || 0;
-          const actualDataRange = await fetchActualDataRange(tableName, rowCount);
-          const latestAvailableData = await fetchLatestAvailableData(tableName, rowCount);
           const dateRange = configuredDateRange;
+          const dateFacts = await fetchTableDateFacts({
+            tableName,
+            rowCount,
+            configuredRange: dateRange,
+            includeSailCoverage: false
+          });
+          const { actualDataRange, latestAvailableData, dateRole, coverage } = dateFacts;
 
           const operationKeys = getOperationMetadataKeysForTable(tableName);
           const syncRecord = operationKeys
@@ -103,6 +126,8 @@ export const buildTableCatalogQueryResolvers = ({
             rowCount,
             dateRange,
             actualDataRange,
+            dateRole,
+            coverage,
             latestSnapshotDate,
             latestAvailableData,
             lastSync,
@@ -146,8 +171,13 @@ export const buildTableCatalogQueryResolvers = ({
         max: activeDateRange.date_to
       } : { min: null, max: null };
 
-      const actualDataRange = await fetchActualDataRange(tableName, rowCount);
-      const latestAvailableData = await fetchLatestAvailableData(tableName, rowCount);
+      const dateFacts = await fetchTableDateFacts({
+        tableName,
+        rowCount,
+        configuredRange: dateRange,
+        includeSailCoverage: true
+      });
+      const { actualDataRange, latestAvailableData, dateRole, coverage } = dateFacts;
 
       const operationKeys = getOperationMetadataKeysForTable(tableName);
       const { data: syncData } = await supabaseDataService.client
@@ -195,6 +225,8 @@ export const buildTableCatalogQueryResolvers = ({
         rowCount,
         dateRange,
         actualDataRange,
+        dateRole,
+        coverage,
         latestSnapshotDate,
         latestAvailableData,
         lastSync,

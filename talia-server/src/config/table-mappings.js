@@ -23,6 +23,13 @@ const tableAliasToConfigMap = {
   sail_booking_monday: 'factReservationHistory',
 };
 
+export const DATE_ROLES = {
+  SAILING_INTERVAL: 'sailing_interval',
+  RECORD_VALIDITY: 'record_validity',
+  EVENT: 'event',
+  LOAD: 'load',
+};
+
 const tableDateColumns = {
   agency: [],
   ship: [],
@@ -58,6 +65,18 @@ const tableDateColumns = {
   sync_metadata: ['last_sync_at', 'created_at', 'updated_at'],
   focuses: ['created_at', 'updated_at'],
   data_refresh_metadata: ['last_refreshed_at', 'created_at', 'updated_at'],
+};
+
+// Explicit roles for tables whose first date column is not a snapshot/event series.
+const tableDateRoleOverrides = {
+  ship_cabin_ctg_link: { dateRole: DATE_ROLES.SAILING_INTERVAL, sailCoverage: true },
+  ship_cabin_reserve: { dateRole: DATE_ROLES.SAILING_INTERVAL },
+  ship_inventory_alloc: { dateRole: DATE_ROLES.SAILING_INTERVAL },
+  reservation: { dateRole: DATE_ROLES.SAILING_INTERVAL },
+  master_sail: { dateRole: DATE_ROLES.SAILING_INTERVAL },
+  sail_header: { dateRole: DATE_ROLES.SAILING_INTERVAL },
+  cabin_ctg: { dateRole: DATE_ROLES.RECORD_VALIDITY },
+  budget: { dateRole: DATE_ROLES.EVENT },
 };
 
 const defaultDateColumns = [
@@ -106,5 +125,54 @@ export const getDateColumnsForTable = (tableName) => {
     return tableDateColumns[tableName];
   }
   return defaultDateColumns;
+};
+
+const LOAD_DATE_COLUMNS = new Set([
+  'created_at',
+  'updated_at',
+  'last_sync_at',
+  'last_run_at',
+  'last_refreshed_at',
+  'imported_at',
+]);
+
+const findIntervalPair = (dateColumns = []) => {
+  for (const fromCol of dateColumns) {
+    const toCol = fromCol.replace(/from/i, 'to');
+    if (toCol !== fromCol && dateColumns.includes(toCol)) {
+      return { intervalFrom: fromCol, intervalTo: toCol };
+    }
+  }
+  return { intervalFrom: null, intervalTo: null };
+};
+
+const inferDateRole = (dateColumns = []) => {
+  if (!dateColumns.length) return DATE_ROLES.LOAD;
+  if (dateColumns.every((column) => LOAD_DATE_COLUMNS.has(column))) return DATE_ROLES.LOAD;
+  const { intervalFrom, intervalTo } = findIntervalPair(dateColumns);
+  if (intervalFrom && intervalTo) {
+    if (/^effective_from$/.test(intervalFrom) && !/sail/.test(intervalFrom)) {
+      return DATE_ROLES.RECORD_VALIDITY;
+    }
+    return DATE_ROLES.SAILING_INTERVAL;
+  }
+  return DATE_ROLES.EVENT;
+};
+
+export const getDateProfileForTable = (tableName) => {
+  const dateColumns = getDateColumnsForTable(tableName);
+  const inferredPair = findIntervalPair(dateColumns);
+  const override = tableDateRoleOverrides[tableName]
+    || tableDateRoleOverrides[getSyncTypeForTable(tableName)]
+    || {};
+  const dateRole = override.dateRole || inferDateRole(dateColumns);
+  const usesInterval = dateRole === DATE_ROLES.SAILING_INTERVAL || dateRole === DATE_ROLES.RECORD_VALIDITY;
+  return {
+    dateColumns,
+    dateRole,
+    intervalFrom: usesInterval ? (override.intervalFrom || inferredPair.intervalFrom) : null,
+    intervalTo: usesInterval ? (override.intervalTo || inferredPair.intervalTo) : null,
+    sailCoverage: override.sailCoverage === true,
+  };
 };
 

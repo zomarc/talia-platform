@@ -1,17 +1,19 @@
 {
   "name": "talia-platform",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Talia Platform - Multi-Customer Revenue and Inventory Management System (Alpha)",
   "private": true,
   "workspaces": [
     "talia-ui",
-    "talia-server"
+    "talia-server",
+    "talia-engine"
   ],
   "scripts": {
     "dev": "npm run dev:all",
     "dev:all": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:frontend": "cd talia-ui && npm run dev",
     "dev:backend": "cd talia-server && npm run start",
+    "dev:engine": "cd talia-engine && npm run dev",
     "build": "npm run build:all",
     "build:all": "npm run build:backend && npm run build:frontend",
     "build:frontend": "cd talia-ui && npm run build",

@@ -1,0 +1,24 @@
+{
+  "name": "talia-engine",
+  "version": "0.1.0",
+  "description": "Talia Engine — Agent Runtime and RM Agents (Advise / Phase A)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx tsx watch src/index.ts",
+    "start": "npx tsx src/index.ts",
+    "run": "npx tsx src/cli.ts run",
+    "test": "npx tsx --test src/rm_agents/regulator.test.ts src/contracts/finding.test.ts src/python/runner.test.ts"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}

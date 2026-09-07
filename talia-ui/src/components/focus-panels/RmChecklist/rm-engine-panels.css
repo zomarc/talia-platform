@@ -1,0 +1,11 @@
+.rm-checklist__scope,
+.engine-activity__scope {
+  align-self: center;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.rm-checklist__callout,
+.engine-activity__callout {
+  margin: 0 12px 8px;
+}

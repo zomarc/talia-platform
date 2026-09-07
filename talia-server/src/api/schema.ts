@@ -1159,6 +1159,8 @@ export const typeDefs = `#graphql
     is_operational: Boolean
     reference_sail_code: String
     sail_codes: [String]
+    is_latest_snapshot: String
+    cabin_type: String
     query_column: String
     query_value: String
     query_operator: String
@@ -1561,6 +1563,67 @@ export const typeDefs = `#graphql
     criteria: JSON
   }
 
+  type RmFinding {
+    findingId: ID!
+    agentId: String!
+    subjectType: String!
+    subjectId: String!
+    subject: JSON!
+    asOf: String!
+    score: Float!
+    severity: String!
+    recommendedAction: JSON!
+    evidence: JSON!
+    confidence: Float
+    status: String!
+    tenantId: String
+    runId: String
+    createdAt: String
+    updatedAt: String
+  }
+
+  type RmEngineRun {
+    runId: ID!
+    startedAt: String!
+    finishedAt: String
+    status: String!
+    agentIds: [String!]!
+    findingCount: Int!
+    error: String
+    trigger: String
+  }
+
+  type RmEngineStatus {
+    online: Boolean!
+    url: String
+    version: String
+    error: String
+    pythonAvailable: Boolean
+    pythonInterpreter: String
+    lastRun: RmEngineRun
+  }
+
+  input RmFindingFilters {
+    status: String
+    sailCode: String
+    agentId: String
+    limit: Int
+  }
+
+  input RunRmAgentsInput {
+    sailCodes: [String!]
+    agentIds: [String!]
+    limit: Int
+  }
+
+  type RunRmAgentsResult {
+    success: Boolean!
+    runId: String
+    findingCount: Int
+    message: String
+    error: String
+  }
+
   # Queries
   type Query {
     # User Management
@@ -1705,6 +1768,11 @@ export const typeDefs = `#graphql
     externalFeedContracts: JSON!
     externalFeedStatus: JSON!
     
+    # talia-engine Findings / Activity (Phase A)
+    rmFindings(filters: RmFindingFilters): [RmFinding!]!
+    rmEngineRuns(limit: Int): [RmEngineRun!]!
+    rmEngineStatus: RmEngineStatus!
+
     # Legacy queries (for backward compatibility)
     books: [Book!]!
   }
@@ -1790,6 +1858,10 @@ export const typeDefs = `#graphql
     updateGoogleTrendsSearchTerm(id: Int!, input: GoogleTrendsSearchTermInput!): GoogleTrendsSearchTerm!
     deleteGoogleTrendsSearchTerm(id: Int!): Boolean!
     
+    # talia-engine (Phase A)
+    updateRmFindingStatus(findingId: ID!, status: String!): RmFinding!
+    runRmAgents(input: RunRmAgentsInput): RunRmAgentsResult!
+
     # Server Management
     restartServer: Boolean!
   }
@@ -1852,6 +1924,16 @@ export const typeDefs = `#graphql
     max: String
   }
 
+  type TableDateCoverage {
+    dateRole: String
+    overlappingRows: Int
+    rowCoveragePct: Int
+    coveredSails: Int
+    totalSails: Int
+    sailCoveragePct: Int
+    openEnded: Boolean
+  }
+
   type DatabaseTableMetadata {
     tableName: String!
     hasSyncConfig: Boolean!
@@ -1860,7 +1942,9 @@ export const typeDefs = `#graphql
     loadMethod: String  # Optional - frontend calculates from tableSources config
     rowCount: Int!
     dateRange: TableDateRange!  # Configured sync date range (what should be synced)
-    actualDataRange: TableDateRange  # Actual data range in table (what's actually loaded)
+    actualDataRange: TableDateRange  # Applicability or event span actually present
+    dateRole: String
+    coverage: TableDateCoverage
     latestSnapshotDate: String
     latestAvailableData: String
     lastSync: String

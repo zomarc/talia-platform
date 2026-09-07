@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.0] - 2026-09-07
+
+### Summary
+
+Introduce **talia-engine** v0: a TypeScript Agent Runtime that runs independently of talia-server (own process / Docker service on :4100). First RM Agent is Regulator. UI shows an RM Checklist of Findings and Engine Activity. Python is reserved for later discrete math/ML jobs.
+
+### Added
+
+- `talia-engine` runtime, Finding contract validation, Regulator vs inventory load-factor targets + occupancy.
+- Finding store (`rm_findings`, `rm_engine_runs`) and GraphQL `rmFindings` / `runRmAgents` / `rmEngineStatus`.
+- Focus panels **RM Checklist** and **Engine Activity**.
+- Docker Compose service `talia-engine` (Python 3 in image for later elements).
+
+### Notes
+
+- Phase A / Advise only — no reservation writes, no Talia Assistant.
+- Engine language is TypeScript; Python jobs are discrete and must not invent scores.
+
+---
+
 ## [0.3.0] - 2026-08-11
 
 ### Summary

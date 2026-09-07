@@ -59,6 +59,8 @@ import ProjectSummaryContainer from './ProjectSummary';
 import ComponentInteractionMapContainer from './ComponentInteractionMap';
 import ContextRowMonitor from './ContextRowMonitor';
 import DataManagementPanel from './DataManagement';
+import RmChecklistContainer from './RmChecklist';
+import EngineActivityContainer from './EngineActivity';
 import ColumnTerminologyPanel from './ColumnTerminology';
 import EtlTableParametersPanel from './EtlTableParameters';
 import TestWorkbenchPanel from './TestWorkbench';
@@ -1126,6 +1128,48 @@ export const componentRegistry = {
     allowedRoles: ['ADMIN', 'SUPER_USER'],
     showInReports: true,
     filePath: 'src/components/focus-panels/DataManagement/index.jsx'
+  },
+  RmChecklist: {
+    component: RmChecklistContainer,
+    panelId: 'rm-checklist',
+    category: 'Dashboards',
+    title: 'RM Checklist',
+    description: 'Open Findings from talia-engine RM Agents. Advise only.',
+    props: {},
+    dataRequirements: 'Requires rm_findings via GraphQL. Engine runtime is optional for viewing stored Findings.',
+    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
+    supportsRefresh: true,
+    showInReports: true,
+    options: {
+      views: [
+        { ...VIEW_SNAPSHOT, default: true },
+        { ...VIEW_DETAILS, default: false },
+        VIEW_COLUMN_FILTERS,
+      ],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/RmChecklist/index.jsx'
+  },
+  EngineActivity: {
+    component: EngineActivityContainer,
+    panelId: 'engine-activity',
+    category: 'Dashboards',
+    title: 'Engine Activity',
+    description: 'talia-engine runtime health, RM Agent runs, and Python element status.',
+    props: {},
+    dataRequirements: 'Reads rm_engine_runs; live Online status requires talia-engine on :4100',
+    events: { emits: [], respondsTo: [] },
+    supportsRefresh: true,
+    minRole: 'MANAGER',
+    showInReports: true,
+    options: {
+      views: [
+        { ...VIEW_SNAPSHOT, default: true },
+        { ...VIEW_DETAILS, default: false },
+      ],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/EngineActivity/index.jsx'
   },
   ColumnTerminologyPanel: {
     component: ColumnTerminologyPanel,

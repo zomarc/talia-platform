@@ -1,12 +1,13 @@
-# talia-engine (planning)
+# talia-engine
 
-This folder holds planning docs for the future **talia-engine** tier.
+Planning docs plus the **v0 Agent Runtime** in `/talia-engine` (TypeScript, port 4100).
 
 | Doc | Purpose |
 |-----|---------|
-| [CLIENT-DISCUSSION-OVERVIEW.md](./CLIENT-DISCUSSION-OVERVIEW.md) / [.pdf](./CLIENT-DISCUSSION-OVERVIEW.pdf) | High-level client briefing |
-| [RM-AGENT-FRAMEWORK.md](./RM-AGENT-FRAMEWORK.md) | Framework sketch: Agent Runtime, RM Agents, Findings, Checklist, Talia Assistant |
+| [CLIENT-DISCUSSION-OVERVIEW.md](./CLIENT-DISCUSSION-OVERVIEW.md) / [.pdf](./CLIENT-DISCUSSION-OVERVIEW.pdf) | Client briefing |
+| [RM-AGENT-FRAMEWORK.md](./RM-AGENT-FRAMEWORK.md) | Framework sketch |
 | [contracts/finding.schema.json](./contracts/finding.schema.json) | Frozen Finding JSON Schema (v0) |
+| [../../talia-engine/README.md](../../talia-engine/README.md) | How to run the runtime |
 
 **Terminology is normative in** [ADR-001](../adr/ADR-001-rm-agent-framework-terminology.md).
 

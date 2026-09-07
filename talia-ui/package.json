@@ -1,7 +1,7 @@
 {
   "name": "talia-ui",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Talia Platform - Frontend UI (Alpha)",
   "type": "module",
   "scripts": {

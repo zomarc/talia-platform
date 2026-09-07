@@ -248,6 +248,41 @@ services:
       AZURE_SYNAPSE_USERNAME: ${AZURE_SYNAPSE_USERNAME:-RBryer}
       AZURE_SYNAPSE_PASSWORD: ${AZURE_SYNAPSE_PASSWORD:-Cele5tyalrbUser!}
       DATA_SOURCE_PRIORITY: ${DATA_SOURCE_PRIORITY:-supabase}
+      TALIA_ENGINE_URL: http://talia-engine:4100
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      supabase-kong:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - talia-network
+
+  # talia-engine — independent Agent Runtime (not inside graphql-server)
+  talia-engine:
+    container_name: talia-engine
+    build:
+      context: ./talia-engine
+      dockerfile: Dockerfile
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"require('http').get('http://127.0.0.1:4100/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "4100:4100"
+    environment:
+      NODE_ENV: production
+      ENGINE_PORT: 4100
+      ENGINE_RUN_ON_START: "1"
+      ENGINE_RUN_INTERVAL_MS: ${ENGINE_RUN_INTERVAL_MS:-0}
+      SUPABASE_URL: http://supabase-kong:8000
+      SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU
+      TALIA_SERVER_URL: http://graphql-server:4000/graphql
     depends_on:
       supabase-db:
         condition: service_healthy

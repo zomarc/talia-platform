@@ -74,8 +74,8 @@ Talia will evolve into a comprehensive three-tier business intelligence platform
 - 🔮 **Future**: Real-time subscriptions, advanced caching, external integrations
 
 ### **🧠 talia-engine (Analytics Engine)**
-**Current**: Not implemented  
-**Future**: Python-based modeling and analytics platform
+**Current**: v0 Agent Runtime (TypeScript, :4100) — RM Agents emit Findings; Python is a later discrete element  
+**Future**: Additional RM Agents, queued actions, optional Talia Assistant, Python math/ML jobs
 
 #### **Responsibilities**
 - Advanced analytics and modeling

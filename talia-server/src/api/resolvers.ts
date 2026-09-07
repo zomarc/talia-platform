@@ -16,12 +16,13 @@ import { configService } from '../services/config-service.js';
 import { shipPositionService } from '../services/ship-position-service.js';
 import {
   getAvailableSyncConfigTableNames,
-  getDateColumnsForTable,
   getSyncConfigNameForTable,
   getSyncTypeForTable,
   hasSyncConfigForTable,
 } from '../config/table-mappings.js';
+import { fetchTableDateFacts as fetchTableDateFactsFromClient } from '../lib/integrationDateRange.js';
 import { uiActivityMutationResolvers, uiActivityQueryResolvers } from './resolver-modules/uiActivityResolvers.js';
+import { engineMutationResolvers, engineQueryResolvers } from './resolver-modules/engineResolvers.js';
 import { userMutationResolvers, userQueryResolvers } from './resolver-modules/userResolvers.js';
 import { statusQueryResolvers } from './resolver-modules/statusResolvers.js';
 import { instanceConnectionQueryResolvers } from './resolver-modules/instanceConnectionResolvers.js';
@@ -571,142 +572,12 @@ const getOperationMetadataKeysForTable = (tableName: string): string[] => {
   );
 };
 
-const fetchReservationLinkedDateRange = async () => {
-  const { data: minData, error: minError } = await supabaseDataService.client
-    .from('reservation')
-    .select('sail_from_date')
-    .not('sail_from_date', 'is', null)
-    .order('sail_from_date', { ascending: true })
-    .limit(1);
-  if (minError) {
-    return { min: null, max: null };
-  }
-
-  const { data: maxData, error: maxError } = await supabaseDataService.client
-    .from('reservation')
-    .select('sail_from_date')
-    .not('sail_from_date', 'is', null)
-    .order('sail_from_date', { ascending: false })
-    .limit(1);
-  if (maxError) {
-    return { min: null, max: null };
-  }
-
-  const minValue = minData?.[0]?.sail_from_date;
-  const maxValue = maxData?.[0]?.sail_from_date;
-  if (minValue != null && maxValue != null && minValue !== '' && maxValue !== '') {
-    return {
-      min: String(minValue),
-      max: String(maxValue)
-    };
-  }
-  return { min: null, max: null };
-};
-
-const fetchActualDataRange = async (tableName: string, rowCount: number) => {
-  if (!rowCount || rowCount <= 0) {
-    return { min: null, max: null };
-  }
-
-  // reservation_promotion has no intrinsic date columns; derive the practical loaded
-  // date range from linked reservations so Data Quality reflects real availability.
-  if (tableName === 'reservation_promotion') {
-    const linkedRange = await fetchReservationLinkedDateRange();
-    if (linkedRange.min && linkedRange.max) {
-      return linkedRange;
-    }
-  }
-
-  const dateColumns = getDateColumnsForTable(tableName);
-
-  for (const dateCol of dateColumns) {
-    const { data: minData, error: minError } = await supabaseDataService.client
-      .from(tableName)
-      .select(dateCol)
-      .not(dateCol, 'is', null)
-      .order(dateCol, { ascending: true })
-      .limit(1);
-
-    if (minError) {
-      continue;
-    }
-
-    const { data: maxData, error: maxError } = await supabaseDataService.client
-      .from(tableName)
-      .select(dateCol)
-      .not(dateCol, 'is', null)
-      .order(dateCol, { ascending: false })
-      .limit(1);
-
-    if (maxError) {
-      continue;
-    }
-
-    const minValue = minData?.[0]?.[dateCol];
-    const maxValue = maxData?.[0]?.[dateCol];
-
-    if (minValue != null && maxValue != null && minValue !== '' && maxValue !== '') {
-      return {
-        min: String(minValue),
-        max: String(maxValue)
-      };
-    }
-  }
-
-  return { min: null, max: null };
-};
-
-const fetchLatestAvailableData = async (tableName: string, rowCount: number) => {
-  if (!rowCount || rowCount <= 0) {
-    return null;
-  }
-
-  if (tableName === 'reservation_promotion') {
-    const linkedRange = await fetchReservationLinkedDateRange();
-    if (linkedRange.max) {
-      return linkedRange.max;
-    }
-  }
-
-  const dateColumns = getDateColumnsForTable(tableName);
-  const candidateColumns: string[] = [];
-
-  if (dateColumns.includes('snapshot_date')) {
-    candidateColumns.push('snapshot_date');
-  }
-
-  dateColumns.forEach((column) => {
-    if (column !== 'snapshot_date' && !candidateColumns.includes(column)) {
-      candidateColumns.push(column);
-    }
-  });
-
-  ['created_at', 'updated_at'].forEach((column) => {
-    if (!candidateColumns.includes(column)) {
-      candidateColumns.push(column);
-    }
-  });
-
-  for (const dateCol of candidateColumns) {
-    const { data, error } = await supabaseDataService.client
-      .from(tableName)
-      .select(dateCol)
-      .not(dateCol, 'is', null)
-      .order(dateCol, { ascending: false })
-      .limit(1);
-
-    if (error) {
-      continue;
-    }
-
-    const value = data?.[0]?.[dateCol];
-    if (value != null && value !== '') {
-      return String(value);
-    }
-  }
-
-  return null;
-};
+const fetchTableDateFacts = (args: {
+  tableName: string;
+  rowCount: number;
+  configuredRange?: { min: string | null; max: string | null } | null;
+  includeSailCoverage?: boolean;
+}) => fetchTableDateFactsFromClient(supabaseDataService.client, args);
 
 // Older graphql-server images may ship a FocusType enum without ROLE; Postgres can still store type='role'.
 // Resolvers filter using raw DB rows (before this mapper); only the GraphQL `type` field is adjusted here.
@@ -1179,8 +1050,7 @@ const normalizeUserProfileState = (raw: any) => {
 const tableCatalogQueryResolvers = buildTableCatalogQueryResolvers({
   supabaseDataService,
   configService,
-  fetchActualDataRange,
-  fetchLatestAvailableData,
+  fetchTableDateFacts,
   getOperationMetadataKeysForTable,
   getSyncTypeForTable,
   hasSyncConfigForTable
@@ -1195,6 +1065,7 @@ export const resolvers = {
     // User Management
     ...userQueryResolvers,
     ...uiActivityQueryResolvers,
+    ...engineQueryResolvers,
 
     // Focus Management
     focuses: async (parent: any, args: any, context: any) => {
@@ -3680,6 +3551,7 @@ export const resolvers = {
     // User Management
     ...userMutationResolvers,
     ...uiActivityMutationResolvers,
+    ...engineMutationResolvers,
 
     // Focus Preferences
     updateFocusPreference: async (parent: any, args: any, context: any) => {

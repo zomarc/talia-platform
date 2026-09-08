@@ -33,3 +33,5 @@ Focus-panel presenters must use standard shell classes so global visibility togg
 - **Title/Subtitle** → `talia-report__header`; **Talia filters** → `talia-report-filters`; **Actions** → `talia-report__actions-bar`; **Callouts** → `talia-callout`; **Content** → `talia-report__content`.
 - **Column filters** = Tabulator `headerFilter` only. **Controls** = StatusBar global criteria strip — not panel filter rows.
 - Gate **secondary** detail blocks with `ReportDataDetails` for header **Details** (≣); never wrap the primary table/chart. Tab ⓘ is technical meta only.
+- Gate **where-data-comes-from** copy with `ReportProvenance` + Views → **Provenance** (admin only). Not a callout and not Details.
+- One gesture activates a Dockview report **and** performs the in-panel action (row/cell click). Do not add per-panel two-click workarounds — `ReportShell` + `activateDockviewPanel` own this.

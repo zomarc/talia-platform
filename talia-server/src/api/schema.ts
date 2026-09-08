@@ -1606,6 +1606,7 @@ export const typeDefs = `#graphql
   input RmFindingFilters {
     status: String
     sailCode: String
+    sailCodes: [String!]
     agentId: String
     limit: Int
   }

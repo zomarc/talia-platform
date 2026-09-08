@@ -11,6 +11,14 @@ import { hasRole, canConfigureComponentOperations, normalizeRole } from '../util
 /** Shared view defs — panels opt in via catalog / registry.options */
 export const VIEW_SNAPSHOT = { id: 'snapshot', label: 'Snapshot', type: 'boolean', default: true };
 export const VIEW_DETAILS = { id: 'details', label: 'Details', type: 'boolean', default: true };
+/** Admin-only: where this report’s data comes from. Not Details and not tab ⓘ. */
+export const VIEW_PROVENANCE = {
+  id: 'provenance',
+  label: 'Provenance',
+  type: 'boolean',
+  default: true,
+  minRole: 'ADMIN',
+};
 export const VIEW_FILTERS = { id: 'filters', label: 'Filters', type: 'boolean', default: true };
 export const VIEW_COLUMN_FILTERS = { id: 'columnFilters', label: 'Column filters', type: 'boolean', default: true };
 export const VIEW_CONTROLS = { id: 'controls', label: 'Controls', type: 'boolean', default: true };
@@ -24,6 +32,24 @@ export const VIEW_NESTED = {
   choices: ['nested', 'flat'],
   default: 'nested',
   choiceLabels: { nested: 'Nested', flat: 'Flat' },
+};
+/** Master Sailing Explorer — full metric grid vs Date / Bk / vs Tgt. */
+export const VIEW_MSE_DENSITY = {
+  id: 'density',
+  label: 'Density',
+  type: 'choice',
+  choices: ['full', 'compact'],
+  default: 'full',
+  choiceLabels: { full: 'Full', compact: 'Compact' },
+};
+/** RM Checklist — findings table vs date × action heatmap. */
+export const VIEW_CHECKLIST_DISPLAY = {
+  id: 'display',
+  label: 'Display',
+  type: 'choice',
+  choices: ['table', 'heatmap'],
+  default: 'table',
+  choiceLabels: { table: 'Table', heatmap: 'Heatmap' },
 };
 export const VIEW_TOOLTIP = { id: 'tooltip', label: 'Tooltip', type: 'boolean', default: true };
 export const VIEW_TOOLTIP_MSE = {
@@ -46,11 +72,14 @@ export const VIEW_BAR_SPLIT = {
 
 const VIEW_MENU_ORDER = [
   'viewMode',
+  'density',
+  'display',
   'filters',
   'columnFilters',
   'controls',
   'snapshot',
   'details',
+  'provenance',
   'totals',
   'legends',
   'tooltip',
@@ -73,6 +102,8 @@ export const resolveChoiceLabel = (def, value) => {
   if (!def) return '';
   if (def.choiceLabels && value != null && def.choiceLabels[value]) return def.choiceLabels[value];
   if (def.id === 'viewMode') return value === 'flat' ? 'Flat' : 'Nested';
+  if (def.id === 'density') return value === 'compact' ? 'Compact' : 'Full';
+  if (def.id === 'display') return value === 'heatmap' ? 'Heatmap' : 'Table';
   return def.label || String(value || '');
 };
 
@@ -98,6 +129,7 @@ export const DEFAULT_COMPONENT_OPTIONS = {
   'master-sailing-explorer': {
     views: [
       VIEW_NESTED,
+      VIEW_MSE_DENSITY,
       { id: 'segments', label: 'Segments', type: 'boolean', default: false },
       VIEW_FILTERS,
       VIEW_COLUMN_FILTERS,

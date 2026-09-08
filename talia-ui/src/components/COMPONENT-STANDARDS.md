@@ -76,6 +76,7 @@ Every focus-panel report uses the same **shell elements**. Use the standard CSS 
 │   (+ --scroll when Snapshot present)                        │
 │   primary table/chart/map (always mounted)                  │
 │   ReportDataDetails (Details ≣) → secondary detail blocks   │
+│   ReportProvenance (admin Views → Provenance)               │
 │   (.tabulator-header-filter = Column filters toggle)        │
 └─────────────────────────────────────────────────────────────┘
 
@@ -98,6 +99,7 @@ StatusBar global criteria / focus / visibility strips are independent of per-com
 | **Actions** | Panel actions (Refresh, product Export, …) | `.talia-report__actions-bar` (preferred); legacy compact: `.talia-report__actions` in header | Tab **Options** (Ops) / role | Role ops allow-list + Admin Options |
 | **Snapshot** | Pinned KPI strip above scrollable body (Booked, Velocity, …) | `ReportSnapshot` → `section.talia-report__snapshot` + `.talia-report__metrics` / `.talia-metric` | Tab **Options** → Views → **Snapshot** | User profile `componentOptions` |
 | **Details** | User-facing *extra* data blocks (header ≣); never the primary table/chart | `ReportDataDetails` + `useReportShellOptions` / `usePanelDetailsVisibility` | Tab **Options** → Views → **Details** (+ header ≣) | User profile `componentOptions` + `localStorage` |
+| **Provenance** | Admin-only: where this report’s data comes from (feeds, tables, engine) | `ReportProvenance` + `VIEW_PROVENANCE` (`minRole: ADMIN`) | Tab **Options** → Views → **Provenance** | User profile `componentOptions` |
 | **Totals** | Tabulator column-calc footer (`withColumnTotal`) | native ColumnCalcs via `setTabulatorColumnTotalsVisible` | Tab **Options** → Views → **Totals** | User profile `componentOptions` (opt-in `VIEW_TOTALS`; role `minRole` / ops allow-list) |
 | **Technical meta** | Dev/diagnostic block (dock tab ⓘ) | `ReportEventMeta` via `usePanelTechnicalMetaVisibility` | Tab ⓘ only | In-memory `__taliaPanelTechnicalMetaVisibility` |
 | **Panel Options** | Views + Operations menu on active dock tab | Tab **⚙** (`useComponentOptions` / `useReportShellOptions`) | Tab ⚙ | User profile + role criteria/ops |
@@ -162,6 +164,7 @@ Follow **Agency** / **Published Rates** (filters → callout → controls → ac
 - Put **Snapshot** KPIs in `ReportSnapshot` / `.talia-report__snapshot` as a sibling **above** `main` — do not place them inside scrollable content. Pair with `talia-report__content--scroll`. Gate with `useReportShellOptions` → `showSnapshot` (`visible={showSnapshot}`).
 - **Column filters** need no panel markup; set `headerFilter` on Tabulator columns.
 - Gate **secondary detail blocks** with `ReportDataDetails` when the panel has header **Details** (≣) content (history, editors, extra tables). Do **not** wrap the primary table/chart — that destroys one-shot Tabulator/chart instances when Details is toggled off.
+- Gate **where-data-comes-from** copy with `ReportProvenance` and `VIEW_PROVENANCE` (admin only). Do not put source/lineage text in Details, callouts, or tab ⓘ.
 - Do **not** use header ≣ for technical meta; do **not** use tab ⓘ for user data tables.
 
 ### Shell audit checklist

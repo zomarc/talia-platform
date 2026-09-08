@@ -7,7 +7,7 @@ import {
   resolvePanelLoading,
   panelLoadingEventMatches,
 } from "../../services/panelLoadingState";
-import { activateDockviewPanel } from "../../lib/activateDockviewPanel";
+import { activateDockviewPanel, replayClickAfterActivate } from "../../lib/activateDockviewPanel";
 
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
 
@@ -91,11 +91,11 @@ const ReportShell = ({ report, panelInstanceId, panelApi = null, children }) => 
     if (!node) return undefined;
     const onPointerDownCapture = (event) => {
       if (event.button !== 0) return;
-      if (panelApi) {
-        activateDockviewPanel(panelApi);
-        return;
-      }
-      activateDockviewPanel(panelInstanceId);
+      const becameActive = activateDockviewPanel(panelApi || panelInstanceId, {
+        panelInstanceId,
+        shell: node,
+      });
+      if (becameActive) replayClickAfterActivate(event);
     };
     node.addEventListener('pointerdown', onPointerDownCapture, true);
     return () => node.removeEventListener('pointerdown', onPointerDownCapture, true);

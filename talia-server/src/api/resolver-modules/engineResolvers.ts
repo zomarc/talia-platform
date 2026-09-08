@@ -42,7 +42,11 @@ export const engineQueryResolvers = {
       .limit(limit);
     if (filters.status) query = query.eq('status', filters.status);
     else query = query.neq('status', 'expired');
-    if (filters.sailCode) query = query.eq('subject_id', filters.sailCode);
+    if (Array.isArray(filters.sailCodes) && filters.sailCodes.length) {
+      query = query.in('subject_id', filters.sailCodes);
+    } else if (filters.sailCode) {
+      query = query.eq('subject_id', filters.sailCode);
+    }
     if (filters.agentId) query = query.eq('agent_id', filters.agentId);
     const { data, error } = await query;
     if (error) throw new Error(error.message);

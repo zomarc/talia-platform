@@ -473,6 +473,55 @@
   padding-bottom: 3px;
 }
 
+.ms-explorer-density {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--theme-border);
+}
+
+.ms-explorer-panel--compact .ms-explorer-table {
+  min-width: 0;
+}
+
+.mse-compact-date,
+.mse-compact-bk {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.mse-compact-bk {
+  align-items: flex-end;
+  width: 100%;
+}
+
+.mse-compact-date__day,
+.mse-compact-bk__n {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.mse-compact-date__sail,
+.mse-compact-bk__pct {
+  font-size: 0.72rem;
+  color: var(--theme-text-secondary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+@media (max-width: 720px) {
+  .ms-explorer-panel--compact .mse-compact-date__sail,
+  .ms-explorer-panel--compact .mse-compact-bk__pct {
+    font-size: 0.68rem;
+  }
+}
+
 /* Ship × Day Berths — table cell styles */
 .ms-berth-sails {
   display: inline-flex;

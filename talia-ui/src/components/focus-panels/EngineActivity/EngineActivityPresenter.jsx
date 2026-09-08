@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import ReportSnapshot from '../../shared/ReportSnapshot';
-import ReportDataDetails from '../../shared/ReportDataDetails';
+import ReportProvenance from '../../shared/ReportProvenance';
 import '../RmChecklist/rm-engine-panels.css';
 
 const EngineActivityPresenter = ({
@@ -16,7 +16,7 @@ const EngineActivityPresenter = ({
 }) => {
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
-  const { showSnapshot, showDetails, reportShellClassName } = useReportShellOptions(
+  const { showSnapshot, showProvenance, reportShellClassName } = useReportShellOptions(
     panelComponentId || 'engine-activity',
     panelInstanceId
   );
@@ -108,15 +108,17 @@ const EngineActivityPresenter = ({
 
       <main className="talia-report__content talia-report__content--scroll">
         <div ref={tableRef} className="talia-table" role="grid" />
-        <ReportDataDetails visible={showDetails} as="section">
+        <ReportProvenance visible={showProvenance}>
           <p>
-            Start locally with <code>cd talia-engine && npm run dev</code> or the
-            <code> talia-engine</code> Docker service. Stored runs remain visible if the
-            runtime is down. Python is a later discrete analysis hook, not an RM Agent.
+            Run history is stored in <code>rm_engine_runs</code>. Live Online / Python
+            status is probed from the independent talia-engine process on :4100
+            (<code>cd talia-engine && npm run dev</code> or the Docker service).
+            Stored runs remain visible if the runtime is down. Python is a discrete
+            analysis hook, not an RM Agent.
           </p>
           {status?.error ? <p>Last probe: {status.error}</p> : null}
           {status?.url ? <p>Probe URL: {status.url}</p> : null}
-        </ReportDataDetails>
+        </ReportProvenance>
       </main>
     </div>
   );

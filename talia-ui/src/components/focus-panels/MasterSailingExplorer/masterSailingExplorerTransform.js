@@ -630,7 +630,7 @@ export const buildExplorerDisplayRows = (masters, dayDetailsByMaster, expandedMa
       ...masterRow,
       is_expanded: isExpanded,
     });
-    if (isExpanded) {
+    if (isExpanded && dayDetailsByMaster && typeof dayDetailsByMaster.get === 'function') {
       const dayRows = dayDetailsByMaster.get(masterCode) || [];
       dayRows.forEach((dayRow) => {
         rows.push(dayRow);

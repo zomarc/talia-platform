@@ -1,11 +1,205 @@
-.rm-checklist__scope,
-.engine-activity__scope {
-  align-self: center;
-  font-size: 12px;
-  opacity: 0.8;
+.rm-checklist__filters .ms-berth-criteria {
+  align-items: center;
+}
+
+.rm-checklist__scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  width: 100%;
+}
+
+.rm-checklist__focus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.rm-checklist__focus-label {
+  color: var(--theme-text-secondary, #7c8ba0);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  letter-spacing: 0.03em;
+}
+
+.rm-checklist__focus-sail {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-accent, #5b9fd4) 18%, transparent);
+  color: var(--theme-fg, #e6ebff);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.rm-checklist__focus-meta {
+  color: var(--theme-text-secondary, #9aa8bc);
+  font-size: 0.75rem;
+}
+
+.rm-checklist__scope-modes {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.rm-checklist__neighbors {
+  margin: 0;
+  width: 100%;
+  color: var(--theme-text-secondary, #9aa8bc);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .rm-checklist__callout,
 .engine-activity__callout {
   margin: 0 12px 8px;
+}
+
+.rm-checklist__display {
+  display: inline-flex;
+  gap: 6px;
+  margin-right: 8px;
+}
+
+.rm-checklist-heatmap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 4px 2px 12px;
+}
+
+.rm-checklist-heatmap--empty {
+  color: var(--theme-text-secondary, #9aa8bc);
+  padding: 24px 8px;
+}
+
+.rm-checklist-heatmap__grid {
+  display: grid;
+  gap: 4px;
+  align-items: stretch;
+  min-width: min-content;
+}
+
+.rm-checklist-heatmap__corner,
+.rm-checklist-heatmap__colhead,
+.rm-checklist-heatmap__rowhead {
+  color: var(--theme-text-secondary, #9aa8bc);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.rm-checklist-heatmap__colhead {
+  text-align: center;
+  padding: 0 4px 4px;
+}
+
+.rm-checklist-heatmap__rowhead {
+  display: flex;
+  align-items: center;
+  text-transform: none;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.rm-checklist-heatmap__rowhead--focus {
+  color: var(--theme-fg, #e6ebff);
+}
+
+.rm-checklist-heatmap__cell {
+  min-height: 2.1rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--theme-text-muted, #6b7788) 10%, transparent);
+  color: var(--theme-fg, #e6ebff);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rm-checklist-heatmap__cell:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.rm-checklist-heatmap__cell--info {
+  background: color-mix(in srgb, var(--theme-accent, #5b9fd4) 28%, transparent);
+}
+
+.rm-checklist-heatmap__cell--warning,
+.rm-checklist-heatmap__cell--warn {
+  background: color-mix(in srgb, var(--theme-warning, #d4a017) 42%, transparent);
+}
+
+.rm-checklist-heatmap__cell--action {
+  background: color-mix(in srgb, var(--theme-warning, #e67e22) 62%, transparent);
+}
+
+.rm-checklist-heatmap__cell--critical {
+  background: color-mix(in srgb, var(--theme-error, #e74c3c) 78%, transparent);
+  color: #fff;
+}
+
+.rm-checklist-heatmap__cell--focus {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-accent, #5b9fd4) 70%, transparent);
+}
+
+.rm-checklist-heatmap__cell--selected {
+  border-color: var(--theme-fg, #e6ebff);
+}
+
+.rm-checklist-heatmap__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--theme-text-secondary, #9aa8bc);
+  font-size: 0.7rem;
+}
+
+.rm-checklist-heatmap__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rm-checklist-heatmap__swatch {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.rm-checklist-heatmap__tip-kicker,
+.rm-checklist-heatmap__tip-title,
+.rm-checklist-heatmap__tip-body {
+  margin: 0;
+}
+
+.rm-checklist-heatmap__tip-kicker {
+  color: var(--theme-text-secondary, #9aa8bc);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.rm-checklist-heatmap__tip-title {
+  font-weight: 650;
+  margin-top: 2px;
+}
+
+.rm-checklist-heatmap__tip-body {
+  margin-top: 6px;
+  max-width: 18rem;
 }

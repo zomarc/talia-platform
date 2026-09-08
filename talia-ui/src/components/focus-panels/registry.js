@@ -72,9 +72,12 @@ import {
   VIEW_COLUMN_FILTERS,
   VIEW_CONTROLS,
   VIEW_DETAILS,
+  VIEW_PROVENANCE,
   VIEW_FILTERS,
   VIEW_LEGENDS,
   VIEW_NESTED,
+  VIEW_MSE_DENSITY,
+  VIEW_CHECKLIST_DISPLAY,
   VIEW_SNAPSHOT,
   VIEW_TOOLTIP,
   VIEW_TOOLTIP_MSE,
@@ -153,6 +156,7 @@ export const componentRegistry = {
     options: {
       views: [
         VIEW_NESTED,
+        VIEW_MSE_DENSITY,
         { id: 'segments', label: 'Segments', type: 'boolean', default: false },
         VIEW_FILTERS,
         VIEW_COLUMN_FILTERS,
@@ -1137,14 +1141,16 @@ export const componentRegistry = {
     description: 'Open Findings from talia-engine RM Agents. Advise only.',
     props: {},
     dataRequirements: 'Requires rm_findings via GraphQL. Engine runtime is optional for viewing stored Findings.',
-    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
+    events: { emits: [SAIL_SELECT_EVENT], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
     supportsRefresh: true,
     showInReports: true,
     options: {
       views: [
+        VIEW_CHECKLIST_DISPLAY,
         { ...VIEW_SNAPSHOT, default: true },
-        { ...VIEW_DETAILS, default: false },
+        VIEW_FILTERS,
         VIEW_COLUMN_FILTERS,
+        VIEW_PROVENANCE,
       ],
       operations: [],
     },
@@ -1165,7 +1171,7 @@ export const componentRegistry = {
     options: {
       views: [
         { ...VIEW_SNAPSHOT, default: true },
-        { ...VIEW_DETAILS, default: false },
+        VIEW_PROVENANCE,
       ],
       operations: [],
     },

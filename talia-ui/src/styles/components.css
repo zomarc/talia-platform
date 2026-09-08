@@ -235,6 +235,43 @@
   display: none;
 }
 
+/* Admin-only Provenance — where this report’s data comes from */
+.talia-report-provenance {
+  flex-shrink: 0;
+  min-width: 0;
+  margin-top: var(--theme-component-gap-sm);
+  padding: var(--theme-component-padding-sm) var(--theme-component-padding-md);
+  border-top: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated);
+}
+
+.talia-report-provenance[hidden] {
+  display: none !important;
+}
+
+.talia-report-provenance__title {
+  margin: 0 0 var(--theme-component-gap-xs);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.talia-report-provenance__body {
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 0.9;
+}
+
+.talia-report-provenance__body p {
+  margin: 0 0 0.4em;
+}
+
+.talia-report-provenance__body p:last-child {
+  margin-bottom: 0;
+}
+
 .talia-report__footer span {
   opacity: 0.8;
 }

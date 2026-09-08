@@ -6,7 +6,6 @@ import {
   allocScopeKey,
   indexAllocRowsByShipDate,
 } from '../../../lib/bookedComposition';
-import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 import { setInventoryItems } from '../../../services/data/inventoryReferenceService';
 import profileCompareService from '../../../services/data/profileCompareService';
 import PanelDataState from '../../shared/PanelDataState';
@@ -92,12 +91,6 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
     setDistributionEnabled(true);
   }, []);
 
-  useEffect(() => {
-    const onSailSelect = () => setDistributionEnabled(true);
-    window.addEventListener(SAIL_SELECT_EVENT, onSailSelect);
-    return () => window.removeEventListener(SAIL_SELECT_EVENT, onSailSelect);
-  }, []);
-
   const {
     data: masterSailRows,
     loading: masterLoading,
@@ -173,7 +166,7 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
     limit: 60000,
   });
 
-  // Distribution / hover payload — deferred until hover or sail.select.
+  // Distribution / hover payload — deferred until hover, never on sail.select.
   const {
     data: reservationCurrentStateRows,
     loading: reservationLoading,

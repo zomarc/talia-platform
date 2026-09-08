@@ -1,6 +1,6 @@
 /**
  * Shared report chrome from component Options (user profile) + header Details.
- * Snapshot / Details / Filters / Column filters / Controls / Totals / Tooltip / Legends are Views.
+ * Snapshot / Details / Provenance / Filters / Column filters / Controls / Totals / Tooltip / Legends are Views.
  * Role can hide a view via minRole or roleOpsAllow[componentId][viewId].
  *
  * When a panel declares Views → Details, that Options toggle is the source of truth
@@ -17,6 +17,7 @@ import { buildReportShellClassName, resolveViewValue } from '../lib/componentOpt
 
 const SNAPSHOT_DEF = { id: 'snapshot', default: true };
 const DETAILS_DEF = { id: 'details', default: true };
+const PROVENANCE_DEF = { id: 'provenance', default: true };
 const FILTERS_DEF = { id: 'filters', default: true };
 const COLUMN_FILTERS_DEF = { id: 'columnFilters', default: true };
 const CONTROLS_DEF = { id: 'controls', default: true };
@@ -38,6 +39,7 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
   const catalogIds = useMemo(() => new Set((views || []).map((v) => v.id)), [views]);
   const hasSnapshotView = catalogIds.has('snapshot');
   const hasDetailsView = catalogIds.has('details');
+  const hasProvenanceView = catalogIds.has('provenance');
   const hasFiltersView = catalogIds.has('filters');
   const hasColumnFiltersView = catalogIds.has('columnFilters');
   const hasControlsView = catalogIds.has('controls');
@@ -54,6 +56,7 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
 
   const optionsSnapshot = resolveViewValue(viewsState, SNAPSHOT_DEF) !== false;
   const optionsDetails = resolveViewValue(viewsState, DETAILS_DEF) !== false;
+  const optionsProvenance = resolveViewValue(viewsState, PROVENANCE_DEF) !== false;
   const optionsFilters = resolveViewValue(viewsState, FILTERS_DEF) !== false;
   const optionsColumnFilters = resolveViewValue(viewsState, COLUMN_FILTERS_DEF) !== false;
   const optionsControls = resolveViewValue(viewsState, CONTROLS_DEF) !== false;
@@ -87,6 +90,7 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
   const showDetails = (!prefsReady && hasDetailsView)
     ? false
     : (hasDetailsView ? optionsDetails : headerDetailsVisible);
+  const showProvenance = hasProvenanceView && prefsReady && optionsProvenance;
   const showFilters = (!prefsReady && hasFiltersView)
     ? false
     : ((hasFiltersView ? optionsFilters : true) && opsFiltersAllowed);
@@ -101,6 +105,7 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
     ...options,
     showSnapshot,
     showDetails,
+    showProvenance,
     showFilters,
     showColumnFilters,
     showControls,
@@ -116,6 +121,7 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
     }),
     hasSnapshotView,
     hasDetailsView,
+    hasProvenanceView,
     hasFiltersView,
     hasColumnFiltersView,
     hasControlsView,

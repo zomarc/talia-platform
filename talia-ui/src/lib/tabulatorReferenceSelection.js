@@ -79,6 +79,40 @@ export function forEachTableRow(table, visit) {
 }
 
 /**
+ * Drop the reference class from currently painted rows without walking the table.
+ * @param {import('tabulator-tables').TabulatorFull | null} table
+ */
+export function clearReferenceRowClasses(table) {
+  const root = table?.element;
+  if (!root?.querySelectorAll) return;
+  root.querySelectorAll(`.${REFERENCE_ROW_CLASS}`).forEach((element) => {
+    element.classList.remove(REFERENCE_ROW_CLASS);
+  });
+}
+
+/**
+ * Paint the first matching row. Prefer this over a full toggle walk on click.
+ * @param {import('tabulator-tables').TabulatorFull} table
+ * @param {(rowData: object) => boolean} isReferenceRow
+ * @returns {HTMLElement | null}
+ */
+export function paintSingleReferenceRow(table, isReferenceRow) {
+  if (!table || typeof isReferenceRow !== 'function') return null;
+  clearReferenceRowClasses(table);
+  let found = null;
+  forEachTableRow(table, (row) => {
+    if (found) return;
+    const data = row.getData?.() || {};
+    if (!isReferenceRow(data)) return;
+    const element = row.getElement?.();
+    if (!element) return;
+    element.classList.add(REFERENCE_ROW_CLASS);
+    found = element;
+  });
+  return found;
+}
+
+/**
  * Re-apply reference class on all rendered rows (e.g. after external selection change).
  * @param {import('tabulator-tables').TabulatorFull} table
  * @param {(rowData: object) => boolean} isReferenceRow

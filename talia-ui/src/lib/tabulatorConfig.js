@@ -837,10 +837,10 @@ const getWrappedTabulatorClass = () => {
         }
       });
 
-      // Inactive Dockview panels previously needed two clicks (activate, then select).
-      // ReportShell activates on capture pointerdown; when this gesture just activated
-      // the host, re-fire a row click after the turn so Tabulator rowClick listeners run.
-      this.on?.('rowMouseDown', (event, row) => {
+      // ReportShell owns the activate+click replay. When this gesture just
+      // activated the host, still apply Tabulator row selection so selectable
+      // tables highlight on the same click as the synthetic row/cell click.
+      this.on?.('rowMouseDown', (_event, row) => {
         const didActivate = activateDockviewPanelFromHost(this.element)
           || wasDockviewPanelJustActivated(this.element);
         if (!didActivate) return;
@@ -849,24 +849,6 @@ const getWrappedTabulatorClass = () => {
         } catch {
           // noop
         }
-        const rowEl = row?.getElement?.();
-        if (!rowEl) return;
-        const blockNativeClick = (clickEvent) => {
-          clickEvent.stopImmediatePropagation();
-          clickEvent.preventDefault();
-          rowEl.removeEventListener('click', blockNativeClick, true);
-        };
-        rowEl.addEventListener('click', blockNativeClick, true);
-        window.setTimeout(() => {
-          rowEl.removeEventListener('click', blockNativeClick, true);
-          rowEl.dispatchEvent(new MouseEvent('click', {
-            bubbles: true,
-            cancelable: true,
-            view: window,
-            clientX: event?.clientX,
-            clientY: event?.clientY,
-          }));
-        }, 0);
       });
       this.on?.('groupVisibilityChanged', () => {
         refreshTableLayout(this);

@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initTabulator, getTabulatorOptions, captureTableScroll, restoreTableScrollSoon } from '../../../lib/tabulatorConfig';
 import { emitSailSelect, SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
-import { chainRowFormatters, createReferenceRowFormatter, refreshReferenceRowClasses } from '../../../lib/tabulatorReferenceSelection';
-import { formatDayMonYy, formatMonYear } from '../../../lib/dateFormat';
+import { chainRowFormatters, createReferenceRowFormatter, paintSingleReferenceRow, REFERENCE_ROW_CLASS } from '../../../lib/tabulatorReferenceSelection';
+import { formatMonYear } from '../../../lib/dateFormat';
 import { clipAnchorRectToViewport } from '../../../lib/clipAnchorRect';
 import { ALL_DEPARTURE_MONTH_KEY } from '../../../lib/globalDepartureMonth';
 import { useGlobalDepartureMonth } from '../../../hooks/useGlobalDepartureMonth';
@@ -10,7 +10,6 @@ import { useGlobalDemandUnit } from '../../../hooks/useGlobalDemandUnit';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import {
   demandUnitNoun,
-  toDemandVolume,
 } from '../../../lib/demandUnit';
 import DistributionSummary from '../../shared/DistributionSummary';
 import MsePerformanceSummary from '../../shared/MsePerformanceSummary';
@@ -24,8 +23,19 @@ import {
   masterRowMatchesReference,
   resolveSelectionReferenceCode,
 } from './masterSailingExplorerTransform';
+import {
+  MSE_COMPACT_BREAKPOINT,
+  buildMasterSailingExplorerColumns,
+} from './masterSailingExplorerColumns';
+import {
+  buildMseSailSelectDetail,
+  resolveMseMasterCode,
+  shouldEmitMseSelection,
+  shouldSkipDuplicateMseEmit,
+} from './masterSailingExplorerSelect';
 
 const REPORT_GROUP_ACTION_EVENT = 'talia:report.groupAction';
+const DISTRIBUTION_HOVER_DELAY_MS = 400;
 
 const FILTER_FIELDS = [
   ['sail_date_from', 'Departure'],
@@ -58,18 +68,6 @@ const groupHeaders = [
   (value, count) => `<span class="master-sailing-group master-sailing-group--ship">${value} (${count})</span>`,
 ];
 
-const formatCount = (value) => {
-  const numeric = Number.parseFloat(value);
-  if (!Number.isFinite(numeric)) return '—';
-  return numeric.toLocaleString('en-US', { maximumFractionDigits: 0 });
-};
-
-const formatPercent = (value) => {
-  const numeric = Number.parseFloat(value);
-  if (!Number.isFinite(numeric)) return '—';
-  return `${numeric.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-};
-
 const buildSelectValues = (rows, field) => {
   const masterRows = (rows || []).filter((row) => row?.row_type === 'master');
   const values = [...new Set(
@@ -85,18 +83,6 @@ const buildSelectValues = (rows, field) => {
   }, { '': 'All' });
 };
 
-const formatSegmentHighlights = (segments = []) => {
-  if (!segments.length) return '<span class="ms-explorer-segments ms-explorer-segments--empty">—</span>';
-  const items = segments.map((segment) => {
-    const guests = Number.parseFloat(segment?.guests ?? segment?.booked);
-    const guestsValue = Number.isFinite(guests) && guests > 0 ? guests : 0;
-    const guestsLabel = `${guestsValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
-    const bookingClass = segment?.is_booking ? 'ms-explorer-segment--booking' : 'ms-explorer-segment--active';
-    return `<span class="ms-explorer-segment ${bookingClass}" title="${segment.sail_code}: ${guestsLabel} guests (selling)"><span class="ms-explorer-segment__code">${segment.sail_code}</span><span class="ms-explorer-segment__metrics">${guestsLabel}</span></span>`;
-  }).join('');
-  return `<span class="ms-explorer-segments">${items}</span>`;
-};
-
 const MasterSailingExplorerPresenter = ({
   masters,
   dayDetailsByMaster,
@@ -108,8 +94,20 @@ const MasterSailingExplorerPresenter = ({
   panelInstanceId,
   panelComponentId,
 }) => {
+  const panelRef = useRef(null);
   const tableRef = useRef(null);
   const instanceRef = useRef(null);
+  const lastEmitRef = useRef({ code: null, t: 0 });
+  const gestureEmittedRef = useRef(false);
+  const emitMasterSelectionRef = useRef(null);
+  const applyReferenceHighlightRef = useRef(null);
+  const afterTableDataRefreshRef = useRef(null);
+  const applyGroupDepthRef = useRef(null);
+  const collapseAllGroupsRef = useRef(null);
+  const openAllGroupsRef = useRef(null);
+  const openFirstMonthOnlyRef = useRef(null);
+  const lastHighlightElRef = useRef(null);
+  const hoverDistTimerRef = useRef(null);
   const tableBuiltRef = useRef(false);
   const didApplyInitialGroupOpenRef = useRef(false);
   const suppressMonthAutoOpenRef = useRef(false);
@@ -135,6 +133,8 @@ const MasterSailingExplorerPresenter = ({
     panelInstanceId
   );
   const viewMode = viewsState.viewMode === 'flat' ? 'flat' : 'nested';
+  const densityPref = viewsState.density === 'compact' ? 'compact' : 'full';
+  const isCompact = densityPref === 'compact';
   const segmentsVisible = viewsState.segments === true;
   const showTooltipRef = useRef(showTooltip);
   const tooltipViewRef = useRef(tooltipView);
@@ -158,6 +158,24 @@ const MasterSailingExplorerPresenter = ({
     setView('viewMode', 'flat');
   }, [departureMonth, setView]);
 
+  // Narrow dock panes switch to Compact once; the user can still choose Full.
+  useEffect(() => {
+    const node = panelRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return undefined;
+    let wasNarrow = null;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect?.width ?? 0;
+      if (!(width > 0)) return;
+      const narrow = width < MSE_COMPACT_BREAKPOINT;
+      if (wasNarrow === narrow) return;
+      const crossedIntoNarrow = wasNarrow === false && narrow;
+      wasNarrow = narrow;
+      if (crossedIntoNarrow) setView('density', 'compact');
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [setView]);
+
   useEffect(() => {
     distributionBySailCodeRef.current = distributionBySailCode;
   }, [distributionBySailCode]);
@@ -174,8 +192,12 @@ const MasterSailingExplorerPresenter = ({
   });
 
   const displayRows = useMemo(
-    () => buildExplorerDisplayRows(masters, dayDetailsByMaster, expandedMasters),
-    [masters, dayDetailsByMaster, expandedMasters]
+    () => buildExplorerDisplayRows(
+      masters,
+      isCompact ? null : dayDetailsByMaster,
+      isCompact ? new Set() : expandedMasters
+    ),
+    [dayDetailsByMaster, expandedMasters, isCompact, masters]
   );
   const displayRowsRef = useRef(displayRows);
   useEffect(() => {
@@ -212,291 +234,60 @@ const MasterSailingExplorerPresenter = ({
     setExpandedMasters(new Set());
   }, []);
 
-  const columns = useMemo(() => {
-    const baseColumns = [
-      {
-        field: 'expand_toggle',
-        title: '',
-        width: 34,
-        hozAlign: 'center',
-        headerSort: false,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          if (row?.row_type !== 'master' || !row?.is_expandable) return '';
-          return row?.is_expanded ? '▾' : '▸';
-        },
-        cellClick: (event, cell) => {
-          handleExpandToggle(event, cell.getRow().getData());
-        },
-      },
-      {
-        field: 'sail_date_from',
-        title: 'Date',
-        headerTooltip: 'Departure date',
-        width: 96,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          if (row?.row_type === 'day') return `Day ${row?.voyage_day_index || ''}`;
-          return formatDayMonYy(cell.getValue(), '');
-        },
-        headerSort: viewMode === 'flat',
-      },
-      {
-        field: 'row_label',
-        title: 'Sail/Day',
-        headerTooltip: 'Master sail / voyage day',
-        minWidth: 130,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          if (row?.row_type === 'day') {
-            return formatDayMonYy(row?.voyage_day_date, row?.day_label || '');
-          }
-          return row?.sail_code || '';
-        },
-        headerSort: false,
-      },
-    ];
+  const columns = useMemo(() => buildMasterSailingExplorerColumns({
+    compact: isCompact,
+    segmentsVisible,
+    viewMode,
+    demandUnit,
+    demandNoun,
+    onExpandToggle: handleExpandToggle,
+  }), [demandNoun, demandUnit, handleExpandToggle, isCompact, segmentsVisible, viewMode]);
 
-    if (segmentsVisible) {
-      baseColumns.push({
-        field: 'contributing_segments',
-        title: 'Segs',
-        headerTooltip: 'Contributing segments',
-        minWidth: 220,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          if (row?.row_type === 'day') {
-            return formatSegmentHighlights(row?.contributing_segments);
-          }
-          return formatSegmentHighlights(row?.segment_summaries || []);
-        },
-        headerSort: false,
-      });
+  const processedTableOptions = useCallback((extra = {}) => getTabulatorOptions({
+    ...extra,
+    columns,
+    panelInstanceId,
+    panelComponentId: panelComponentId || 'master-sailing-explorer',
+    exportTitle: 'Master Sailing Explorer',
+    enforceGlobalLayout: !isCompact,
+    layout: isCompact ? 'fitColumns' : undefined,
+    freezeLeadingColumns: isCompact ? 0 : 1,
+  }), [columns, isCompact, panelComponentId, panelInstanceId]);
+
+  const processedTableOptionsRef = useRef(processedTableOptions);
+  processedTableOptionsRef.current = processedTableOptions;
+
+  const applyTableColumns = useCallback((table) => {
+    if (!table || typeof table.setColumns !== 'function') return;
+    const processed = processedTableOptionsRef.current();
+    if (processed.columns) table.setColumns(processed.columns);
+  }, []);
+
+  const emitMasterSelection = useCallback((row, event, { fromClick = false } = {}) => {
+    if (fromClick && gestureEmittedRef.current) {
+      gestureEmittedRef.current = false;
+      return true;
     }
-
-    baseColumns.push(
-      {
-        field: 'sail_days',
-        title: 'Dur',
-        headerTooltip: 'Duration',
-        hozAlign: 'center',
-        width: 72,
-        headerSort: false,
-      },
-      {
-        field: 'package_name',
-        title: 'Pkg',
-        headerTooltip: 'Package',
-        minWidth: 120,
-        headerSort: false,
-      },
-      {
-        field: 'route',
-        titleShort: 'Route',
-        titleLong: 'Route',
-        width: 96,
-        headerSort: false,
-      },
-      {
-        field: 'berths_occupied',
-        titleShort: 'Bk B',
-        titleLong: 'Booked (berths)',
-        hozAlign: 'right',
-        width: 100,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          const value = row?.row_type === 'day' ? row?.booked : row?.total_booked;
-          return formatCount(value);
-        },
-        headerSort: false,
-      },
-      {
-        field: 'total_cabins',
-        titleShort: 'Tot C',
-        titleLong: 'Nameplate cabins',
-        hozAlign: 'right',
-        width: 96,
-        formatter: (cell) => formatCount(cell.getRow().getData()?.total_cabins),
-        headerSort: false,
-      },
-      {
-        field: 'offsale_cabins',
-        titleShort: 'Off C',
-        titleLong: 'Offsale / blocked cabins',
-        hozAlign: 'right',
-        width: 88,
-        formatter: (cell) => formatCount(cell.getRow().getData()?.offsale_cabins),
-        headerSort: false,
-      },
-      {
-        field: 'booked_cabins',
-        titleShort: 'Bk C',
-        titleLong: 'Booked cabins',
-        hozAlign: 'right',
-        width: 104,
-        formatter: (cell) => formatCount(cell.getRow().getData()?.booked_cabins),
-        headerSort: false,
-      },
-      {
-        field: 'booked_guests',
-        titleShort: 'Booked',
-        titleLong: `Booked ${demandNoun} (real / materialised; presentation from guests)`,
-        hozAlign: 'right',
-        width: 96,
-        formatter: (cell) => formatCount(
-          toDemandVolume(cell.getRow().getData()?.booked_guests, demandUnit)
-        ),
-        headerSort: false,
-      },
-      {
-        field: 'estimated_guests',
-        titleShort: 'Est',
-        titleLong: `Estimated ${demandNoun} (contracted × probability; presentation from guests)`,
-        hozAlign: 'right',
-        width: 88,
-        formatter: (cell) => formatCount(
-          toDemandVolume(cell.getRow().getData()?.estimated_guests, demandUnit)
-        ),
-        headerSort: false,
-      },
-      {
-        field: 'contracted_guests',
-        titleShort: 'Contr',
-        titleLong: `Contracted ${demandNoun} (synthetic group OF face; presentation from guests)`,
-        hozAlign: 'right',
-        width: 96,
-        formatter: (cell) => formatCount(
-          toDemandVolume(cell.getRow().getData()?.contracted_guests, demandUnit)
-        ),
-        headerSort: false,
-      },
-      {
-        field: 'guaranteed_cabins',
-        titleShort: 'Res C',
-        titleLong: 'Reserved cabins (group × probability)',
-        hozAlign: 'right',
-        width: 184,
-        formatter: (cell) => formatCount(cell.getRow().getData()?.guaranteed_cabins),
-        headerSort: false,
-      },
-      {
-        field: 'actual_booked_pct',
-        titleShort: 'Bk%',
-        titleLong: 'Actual booked cabins %',
-        hozAlign: 'right',
-        width: 92,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          const pct = row?.row_type === 'day'
-            ? (
-              Number(row?.sellable_cabins || row?.total_cabins) > 0
-                ? (Number(row?.booked_cabins || 0) / Number(row?.sellable_cabins || row?.total_cabins)) * 100
-                : null
-            )
-            : row?.actual_booked_pct;
-          return formatPercent(pct);
-        },
-        headerSort: false,
-      },
-      {
-        field: 'potential_booked_pct',
-        titleShort: 'Pot%',
-        titleLong: 'Potential booked cabins % (booked + reserved)',
-        hozAlign: 'right',
-        width: 102,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          const pct = row?.row_type === 'day'
-            ? (
-              Number(row?.sellable_cabins || row?.total_cabins) > 0
-                ? ((Number(row?.booked_cabins || 0) + Number(row?.guaranteed_cabins || 0)) / Number(row?.sellable_cabins || row?.total_cabins)) * 100
-                : null
-            )
-            : row?.potential_booked_pct;
-          return formatPercent(pct);
-        },
-        headerSort: false,
-      },
-      {
-        field: 'booking_upside_pct',
-        titleShort: 'Up%',
-        titleLong: 'Upside % (potential - actual)',
-        hozAlign: 'right',
-        width: 92,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          const pct = row?.row_type === 'day'
-            ? (
-              Number(row?.sellable_cabins || row?.total_cabins) > 0
-                ? ((Number(row?.guaranteed_cabins || 0) / Number(row?.sellable_cabins || row?.total_cabins)) * 100)
-                : null
-            )
-            : row?.booking_upside_pct;
-          return formatPercent(pct);
-        },
-        headerSort: false,
-      },
-      {
-        field: 'target_review_status',
-        titleShort: 'vs Tgt',
-        titleLong: 'Actual cabin LF vs active target (behind / on / ahead)',
-        hozAlign: 'center',
-        width: 88,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          if (row?.row_type === 'day') return '';
-          const status = row?.target_review_status;
-          if (!status || status === 'unknown') return '—';
-          const gap = row?.target_gap_pp;
-          const gapTxt = gap != null && Number.isFinite(Number(gap))
-            ? ` ${Number(gap) > 0 ? '+' : ''}${Number(gap).toFixed(0)}`
-            : '';
-          const label =
-            status === 'behind' ? `▼${gapTxt}` : status === 'ahead' ? `▲${gapTxt}` : `●${gapTxt}`;
-          const el = document.createElement('span');
-          el.className = `mse-target-review mse-target-review--${status}`;
-          el.textContent = label;
-          el.title = [
-            row?.target_profile_name ? `Target: ${row.target_profile_name}` : null,
-            row?.target_lf_pct != null ? `Goal ${Number(row.target_lf_pct).toFixed(1)}%` : null,
-            status,
-          ]
-            .filter(Boolean)
-            .join(' · ');
-          return el;
-        },
-        headerSort: false,
-      },
-      {
-        field: 'berth_capacity',
-        titleShort: 'Cap B',
-        titleLong: 'Capacity (berths)',
-        hozAlign: 'right',
-        width: 108,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          const value = row?.row_type === 'day' ? row?.capacity : row?.total_capacity;
-          return formatCount(value);
-        },
-        headerSort: false,
-      },
-      {
-        field: 'berths_available',
-        titleShort: 'Avl B',
-        titleLong: 'Available (berths)',
-        hozAlign: 'right',
-        width: 88,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          const value = row?.row_type === 'day' ? row?.available : row?.total_available;
-          return formatCount(value);
-        },
-        headerSort: false,
-      }
-    );
-
-    return baseColumns;
-  }, [demandNoun, demandUnit, handleExpandToggle, segmentsVisible, viewMode]);
+    const rowData = row?.getData?.() || null;
+    if (!shouldEmitMseSelection(rowData, event)) return false;
+    const code = resolveMseMasterCode(rowData);
+    if (shouldSkipDuplicateMseEmit(lastEmitRef.current, code)) return true;
+    lastEmitRef.current = { code, t: Date.now() };
+    selectedReferenceRef.current = code;
+    if (!fromClick) gestureEmittedRef.current = true;
+    const rowEl = row?.getElement?.();
+    if (lastHighlightElRef.current && lastHighlightElRef.current !== rowEl) {
+      lastHighlightElRef.current.classList.remove(REFERENCE_ROW_CLASS);
+    }
+    if (rowEl) {
+      rowEl.classList.add(REFERENCE_ROW_CLASS);
+      lastHighlightElRef.current = rowEl;
+    }
+    const detail = buildMseSailSelectDetail(rowData);
+    if (detail) emitSailSelect(detail);
+    return true;
+  }, []);
+  emitMasterSelectionRef.current = emitMasterSelection;
 
   const openOnlyMonthGroup = useCallback((targetGroup) => {
     const table = instanceRef.current;
@@ -568,8 +359,9 @@ const MasterSailingExplorerPresenter = ({
   const applyReferenceHighlight = useCallback(() => {
     const table = instanceRef.current;
     if (!table || !tableBuiltRef.current) return;
-    refreshReferenceRowClasses(table, isReferenceMasterRow);
+    lastHighlightElRef.current = paintSingleReferenceRow(table, isReferenceMasterRow);
   }, [isReferenceMasterRow]);
+  applyReferenceHighlightRef.current = applyReferenceHighlight;
 
   const getTableScrollHolder = useCallback((table) => (
     table?.rowManager?.element
@@ -633,6 +425,11 @@ const MasterSailingExplorerPresenter = ({
     }
     window.requestAnimationFrame(apply);
   }, [focusSelectedMaster]);
+  afterTableDataRefreshRef.current = afterTableDataRefresh;
+  applyGroupDepthRef.current = applyGroupDepth;
+  collapseAllGroupsRef.current = collapseAllGroups;
+  openAllGroupsRef.current = openAllGroups;
+  openFirstMonthOnlyRef.current = openFirstMonthOnly;
 
   useEffect(() => {
     const handleSelect = (event) => {
@@ -644,10 +441,8 @@ const MasterSailingExplorerPresenter = ({
         && String(selectedReferenceRef.current) === String(referenceCode)
       );
       selectedReferenceRef.current = referenceCode;
-      // Own click already highlighted the row; never reopen groups from self
-      // (group show → layout refresh → scroll bounce / feels like a missed click).
+      // Own click already painted the row. Skip the table walk and group open.
       if (fromSelf || alreadySelected) {
-        applyReferenceHighlight();
         return;
       }
       focusSelectedMaster();
@@ -684,9 +479,8 @@ const MasterSailingExplorerPresenter = ({
           instanceRef.current.destroy();
         }
 
-        instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
+        instanceRef.current = new Tabulator(tableRef.current, processedTableOptionsRef.current({
           data: [],
-          columns,
           index: 'row_key',
           initialSort: [{ column: 'sail_date_from', dir: 'asc' }],
           height: '100%',
@@ -694,9 +488,6 @@ const MasterSailingExplorerPresenter = ({
           resizableColumns: true,
           movableColumns: true,
           pagination: false,
-          panelInstanceId,
-          panelComponentId: panelComponentId || 'master-sailing-explorer',
-          exportTitle: 'Master Sailing Explorer',
           ...(viewMode === 'nested'
             ? {
               groupBy: GROUP_BY,
@@ -723,49 +514,38 @@ const MasterSailingExplorerPresenter = ({
           try {
             const table = instanceRef.current;
             const scroll = captureTableScroll(table);
-            afterTableDataRefresh(table.replaceData(displayRowsRef.current || []), scroll);
+            afterTableDataRefreshRef.current?.(table.replaceData(displayRowsRef.current || []), scroll);
           } catch { /* noop */ }
           if (!didApplyInitialGroupOpenRef.current && !selectedReferenceRef.current && viewMode === 'nested') {
-            openFirstMonthOnly();
+            openFirstMonthOnlyRef.current?.();
             didApplyInitialGroupOpenRef.current = true;
           }
           const pendingAction = pendingGroupActionRef.current;
           if (pendingAction === 'openAll') {
             pendingGroupActionRef.current = null;
-            openAllGroups();
+            openAllGroupsRef.current?.();
           } else if (pendingAction === 'collapseAll') {
             pendingGroupActionRef.current = null;
-            collapseAllGroups();
+            collapseAllGroupsRef.current?.();
           } else if (typeof pendingAction === 'string' && pendingAction.startsWith('depth:')) {
             pendingGroupActionRef.current = null;
             const depth = Number.parseInt(pendingAction.split(':')[1], 10);
-            applyGroupDepth(Number.isNaN(depth) ? 0 : depth);
+            applyGroupDepthRef.current?.(Number.isNaN(depth) ? 0 : depth);
           }
         });
 
+        instanceRef.current.on('rowMouseDown', (event, row) => {
+          emitMasterSelectionRef.current?.(row, event, { fromClick: false });
+        });
         instanceRef.current.on('rowClick', (event, row) => {
-          const rowData = row.getData();
-          if (rowData?.row_type === 'day') return;
-          if (event?.target?.closest?.('.tabulator-cell[tabulator-field="expand_toggle"]')) {
-            handleExpandToggle(event, rowData);
-            return;
-          }
-          if (rowData?.row_type !== 'master') return;
-          const managementSailCode = rowData.reference_sail_code || rowData.sail_code;
-          selectedReferenceRef.current = managementSailCode ? String(managementSailCode).trim() : null;
-          applyReferenceHighlight();
-          emitSailSelect({
-            sail_code: managementSailCode,
-            reference_sail_code: managementSailCode,
-            segment_sail_codes: rowData.segment_codes || [],
-            sailing_role: rowData.sailing_role,
-            row_data: rowData,
-            selection_origin: 'master-sailing-explorer',
-            timestamp: new Date().toISOString(),
-          });
+          emitMasterSelectionRef.current?.(row, event, { fromClick: true });
         });
 
         instanceRef.current.on('rowMouseEnter', (event, row) => {
+          if (hoverDistTimerRef.current) {
+            window.clearTimeout(hoverDistTimerRef.current);
+            hoverDistTimerRef.current = null;
+          }
           if (!showTooltipRef.current) {
             setHoverPreview(null);
             return;
@@ -781,7 +561,10 @@ const MasterSailingExplorerPresenter = ({
             return;
           }
           if (tooltipViewRef.current !== 'performance') {
-            onDistributionIntentRef.current?.();
+            hoverDistTimerRef.current = window.setTimeout(() => {
+              hoverDistTimerRef.current = null;
+              onDistributionIntentRef.current?.();
+            }, DISTRIBUTION_HOVER_DELAY_MS);
           }
           const element = row.getElement?.();
           const rowRect = element?.getBoundingClientRect?.();
@@ -800,6 +583,10 @@ const MasterSailingExplorerPresenter = ({
         });
 
         instanceRef.current.on('rowMouseLeave', () => {
+          if (hoverDistTimerRef.current) {
+            window.clearTimeout(hoverDistTimerRef.current);
+            hoverDistTimerRef.current = null;
+          }
           setHoverPreview(null);
         });
 
@@ -819,24 +606,21 @@ const MasterSailingExplorerPresenter = ({
       cancelled = true;
       tableBuiltRef.current = false;
       pendingGroupActionRef.current = null;
+      lastHighlightElRef.current = null;
+      if (hoverDistTimerRef.current) {
+        window.clearTimeout(hoverDistTimerRef.current);
+        hoverDistTimerRef.current = null;
+      }
       if (instanceRef.current) {
         try { instanceRef.current.destroy(); } catch { /* noop */ }
       }
     };
-  }, [
-    afterTableDataRefresh,
-    applyGroupDepth,
-    applyReferenceHighlight,
-    collapseAllGroups,
-    columns,
-    handleExpandToggle,
-    isReferenceMasterRow,
-    openAllGroups,
-    openFirstMonthOnly,
-    openOnlyMonthGroup,
-    panelComponentId,
-    viewMode,
-  ]);
+  }, [panelComponentId, viewMode]);
+
+  useEffect(() => {
+    if (!instanceRef.current || !tableBuiltRef.current) return;
+    applyTableColumns(instanceRef.current);
+  }, [applyTableColumns, columns, isCompact]);
 
   useEffect(() => {
     if (!instanceRef.current || !tableBuiltRef.current) return;
@@ -844,9 +628,23 @@ const MasterSailingExplorerPresenter = ({
       suppressClearOnRefreshRef.current = true;
       const table = instanceRef.current;
       const scroll = captureTableScroll(table);
-      afterTableDataRefresh(table.replaceData(displayRows || []), scroll);
+      const nextRows = displayRows || [];
+      const currentKeys = (table.getData?.() || []).map((row) => row?.row_key).join('\n');
+      const nextKeys = nextRows.map((row) => row?.row_key).join('\n');
+      const refresh = currentKeys && currentKeys === nextKeys && typeof table.updateData === 'function'
+        ? table.updateData(nextRows)
+        : table.replaceData(nextRows);
+      const apply = () => {
+        applyReferenceHighlightRef.current?.();
+        restoreTableScrollSoon(scroll);
+      };
+      if (refresh && typeof refresh.then === 'function') {
+        refresh.then(apply).catch(apply);
+      } else {
+        apply();
+      }
       if (!didApplyInitialGroupOpenRef.current && !selectedReferenceRef.current && viewMode === 'nested') {
-        openFirstMonthOnly();
+        openFirstMonthOnlyRef.current?.();
         didApplyInitialGroupOpenRef.current = true;
       }
     } catch (error) {
@@ -856,7 +654,7 @@ const MasterSailingExplorerPresenter = ({
         suppressClearOnRefreshRef.current = false;
       }, 0);
     }
-  }, [afterTableDataRefresh, displayRows, openFirstMonthOnly, viewMode]);
+  }, [displayRows, viewMode]);
 
   useEffect(() => {
     if (!instanceRef.current) return;
@@ -956,12 +754,17 @@ const MasterSailingExplorerPresenter = ({
   ]);
 
   return (
-    <div className={`focus-panel talia-report master-sailing-panel ms-explorer-panel${reportShellClassName ? ` ${reportShellClassName}` : ''}`}>
+    <div
+      ref={panelRef}
+      className={`focus-panel talia-report master-sailing-panel ms-explorer-panel${isCompact ? ' ms-explorer-panel--compact' : ''}${reportShellClassName ? ` ${reportShellClassName}` : ''}`}
+    >
       <header className="talia-report__header">
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Master Sailing Explorer</h2>
           <p className="talia-report__subtitle">
-            {masterCount} master sailings · physical berths by day · actual vs potential booked cabin percentages
+            {isCompact
+              ? `${masterCount} master sailings · date · booked · vs target`
+              : `${masterCount} master sailings · physical berths by day · actual vs potential booked cabin percentages`}
           </p>
         </div>
       </header>
@@ -981,7 +784,25 @@ const MasterSailingExplorerPresenter = ({
           </label>
         ))}
       </div>
-      {showControls ? (
+      <div className="ms-explorer-density" aria-label="Explorer density">
+        <button
+          type="button"
+          className={`talia-btn ${!isCompact ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+          aria-pressed={!isCompact}
+          onClick={() => setView('density', 'full')}
+        >
+          Full
+        </button>
+        <button
+          type="button"
+          className={`talia-btn ${isCompact ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+          aria-pressed={isCompact}
+          onClick={() => setView('density', 'compact')}
+        >
+          Compact
+        </button>
+      </div>
+      {showControls && !isCompact ? (
         <div className="talia-report__controls" aria-label="Master sailing explorer controls">
           <button type="button" className="talia-btn talia-btn--secondary" onClick={expandAllMasters}>
             Expand all days

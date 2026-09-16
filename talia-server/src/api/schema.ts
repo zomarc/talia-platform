@@ -828,7 +828,7 @@ export const typeDefs = `#graphql
 
   type InventoryTargetProfile {
     id: ID!
-    inventoryItemId: ID!
+    inventoryItemId: ID
     name: String!
     perspective: String!
     description: String
@@ -837,6 +837,7 @@ export const typeDefs = `#graphql
     ownerKey: String
     lastEditedBy: String
     isActive: Boolean!
+    isLibrary: Boolean
     nodes: [InventoryTargetProfileNode!]!
     createdAt: String
     updatedAt: String
@@ -856,11 +857,13 @@ export const typeDefs = `#graphql
 
   input UpsertInventoryTargetProfileInput {
     id: ID
-    inventoryItemId: ID!
+    inventoryItemId: ID
     name: String!
     perspective: String!
     description: String
     isActive: Boolean
+    asLibrary: Boolean
+    sourceIsLibrary: Boolean
     nodes: [InventoryTargetProfileNodeInput!]!
   }
 
@@ -1702,6 +1705,7 @@ export const typeDefs = `#graphql
     ): ReservationBookingCurve
     seasonalTradingPack(filters: SeasonalTradingPackFilters): JSON!
     inventoryTargetProfiles(inventoryItemId: ID!): [InventoryTargetProfile!]!
+    inventoryTargetProfileLibrary: [InventoryTargetProfile!]!
     inventoryTargetProfile(id: ID!): InventoryTargetProfile
     profileModelMap(inventoryItemId: ID!): ProfileModelMap
     profileCompare(sailCode: String!, includeBudget: Boolean = true, includeTarget: Boolean = true): ProfileCompareResult!
@@ -1841,7 +1845,7 @@ export const typeDefs = `#graphql
     setActiveInventoryTargetProfile(id: ID!): InventoryTargetProfile!
     upsertProfileModelMap(input: UpsertProfileModelMapInput!): ProfileModelMap!
     clearProfileModelMap(inventoryItemId: ID!): Boolean!
-    backfillTargetProfiles(fromDate: String, toDate: String, dryRun: Boolean, limit: Int): ProfileBackfillResult!
+    backfillTargetProfiles(fromDate: String, toDate: String, dryRun: Boolean, limit: Int, templateProfileId: ID): ProfileBackfillResult!
     
     # Google Search Trends
     trackGoogleSearch(query: String!, trackTrend: Boolean): TrackSearchResult!

@@ -48,18 +48,48 @@ const applySuggestedDraft = (suggestion) => {
   };
 };
 
+const draftFromProfile = (profile) => ({
+  id: profile.id,
+  name: profile.name,
+  perspective: profile.perspective,
+  description: profile.description || '',
+  isActive: Boolean(profile.isActive),
+  nodes: (profile.nodes || []).map((n, idx) => ({
+    tempKey: `n${n.id || idx}`,
+    parentTempKey: n.parentNodeId ? `n${n.parentNodeId}` : null,
+    dimensionLevel: n.dimensionLevel,
+    dimensionKey: n.dimensionKey,
+    weekLabel: n.weekLabel,
+    weeksUntilSailing: n.weeksUntilSailing,
+    lfPct: n.lfPct,
+    pointOrder: n.pointOrder ?? idx,
+  })),
+});
+
+const formatTargetProfileError = (error) => {
+  const raw = error?.message || String(error || '');
+  if (/23505|one_active|already exists/i.test(raw)) {
+    return 'This sailing already has an active target. Assign replaces that profile instead of creating another.';
+  }
+  const quoted = raw.match(/message:\s*'([^']+)'/);
+  return quoted?.[1] || raw;
+};
+
 const InventoryTargetProfilePresenter = ({
+  mode = 'sailing',
+  onModeChange,
   sailCode,
   inventoryItemId,
   profiles = [],
+  libraryProfiles = [],
   suggestedDraft = null,
   overlaySeries = null,
   loadError = null,
   onSave,
   onDelete,
-  onActivate,
   onRefresh,
   onResuggest,
+  onCopyFromPeer,
   onBackfill,
   backfillBusy = false,
   backfillResult = null,
@@ -69,6 +99,8 @@ const InventoryTargetProfilePresenter = ({
   const [draft, setDraft] = useState(emptyDraft());
   const [selectedId, setSelectedId] = useState(null);
   const [usingSuggestion, setUsingSuggestion] = useState(false);
+  const [creatingNew, setCreatingNew] = useState(false);
+  const isLibraryMode = mode === 'library';
   const componentKey = panelComponentId || 'inventory-target-profile-editor';
   const { showSnapshot, showDetails, showFilters, showLegends, reportShellClassName } = useReportShellOptions(
     componentKey,
@@ -76,58 +108,46 @@ const InventoryTargetProfilePresenter = ({
   );
 
   useEffect(() => {
+    if (isLibraryMode) {
+      if (creatingNew) return;
+      if (libraryProfiles.length) {
+        const current = libraryProfiles.find((p) => String(p.id) === String(selectedId))
+          || libraryProfiles[0];
+        setSelectedId(current.id);
+        setUsingSuggestion(false);
+        setDraft({ ...draftFromProfile(current), sourceIsLibrary: false });
+        return;
+      }
+      setSelectedId(null);
+      setUsingSuggestion(false);
+      setDraft({ ...emptyDraft(), name: 'Standard', sourceIsLibrary: false });
+      return;
+    }
     if (profiles.length) {
       const active = profiles.find((p) => p.isActive) || profiles[0];
       setSelectedId(active.id);
       setUsingSuggestion(false);
-      setDraft({
-        id: active.id,
-        name: active.name,
-        perspective: active.perspective,
-        description: active.description || '',
-        isActive: Boolean(active.isActive),
-        nodes: (active.nodes || []).map((n, idx) => ({
-          tempKey: `n${n.id}`,
-          parentTempKey: n.parentNodeId ? `n${n.parentNodeId}` : null,
-          dimensionLevel: n.dimensionLevel,
-          dimensionKey: n.dimensionKey,
-          weekLabel: n.weekLabel,
-          weeksUntilSailing: n.weeksUntilSailing,
-          lfPct: n.lfPct,
-          pointOrder: n.pointOrder ?? idx,
-        })),
-      });
+      setDraft({ ...draftFromProfile(active), sourceIsLibrary: false });
       return;
     }
     setSelectedId(null);
     if (suggestedDraft) {
-      setDraft(applySuggestedDraft(suggestedDraft));
+      setDraft({ ...applySuggestedDraft(suggestedDraft), sourceIsLibrary: true });
       setUsingSuggestion(true);
     } else {
-      setDraft(emptyDraft());
+      setDraft({ ...emptyDraft(), sourceIsLibrary: true });
       setUsingSuggestion(false);
     }
-  }, [sailCode, suggestedDraft, profiles]);
+  }, [creatingNew, isLibraryMode, sailCode, suggestedDraft, profiles, libraryProfiles]);
 
-  const loadProfile = (profile) => {
+  const loadProfile = (profile, { fromLibrary = false } = {}) => {
+    setCreatingNew(false);
     setSelectedId(profile.id);
     setUsingSuggestion(false);
     setDraft({
-      id: profile.id,
-      name: profile.name,
-      perspective: profile.perspective,
-      description: profile.description || '',
-      isActive: Boolean(profile.isActive),
-      nodes: (profile.nodes || []).map((n, idx) => ({
-        tempKey: `n${n.id}`,
-        parentTempKey: n.parentNodeId ? `n${n.parentNodeId}` : null,
-        dimensionLevel: n.dimensionLevel,
-        dimensionKey: n.dimensionKey,
-        weekLabel: n.weekLabel,
-        weeksUntilSailing: n.weeksUntilSailing,
-        lfPct: n.lfPct,
-        pointOrder: n.pointOrder ?? idx,
-      })),
+      ...draftFromProfile(profile),
+      sourceIsLibrary: fromLibrary,
+      id: fromLibrary ? null : profile.id,
     });
   };
 
@@ -135,24 +155,6 @@ const InventoryTargetProfilePresenter = ({
     setDraft((prev) => ({
       ...prev,
       nodes: prev.nodes.map((n) => (n.tempKey === tempKey ? { ...n, ...patch } : n)),
-    }));
-  };
-
-  const addChild = (parentTempKey, level) => {
-    const key = `n${Date.now()}`;
-    setDraft((prev) => ({
-      ...prev,
-      nodes: [
-        ...prev.nodes,
-        {
-          tempKey: key,
-          parentTempKey,
-          dimensionLevel: level,
-          dimensionKey: level === 'market_group' ? 'HOME' : 'NEW',
-          lfPct: 0,
-          pointOrder: prev.nodes.length,
-        },
-      ],
     }));
   };
 
@@ -194,8 +196,6 @@ const InventoryTargetProfilePresenter = ({
     }));
   };
 
-  const roots = draft.nodes.filter((n) => !n.parentTempKey);
-  const childrenOf = (tempKey) => draft.nodes.filter((n) => n.parentTempKey === tempKey);
   const weekNodes = draft.nodes
     .filter((n) => n.dimensionLevel === 'voyage' && n.weeksUntilSailing != null)
     .sort((a, b) => Number(b.weeksUntilSailing) - Number(a.weeksUntilSailing));
@@ -247,68 +247,16 @@ const InventoryTargetProfilePresenter = ({
     });
   }, [componentKey, draft.name, panelInstanceId, sailCode, weekNodes]);
 
-  const renderTree = (node) => (
-    <div key={node.tempKey} className="target-profile-node">
-      <div className="target-profile-node__row">
-        <span className="target-profile-node__level">{node.dimensionLevel}</span>
-        <input
-          className="talia-report-filters__input"
-          value={node.dimensionKey}
-          onChange={(e) => updateNode(node.tempKey, { dimensionKey: e.target.value })}
-          aria-label="Dimension key"
-        />
-        <input
-          type="number"
-          className="talia-report-filters__input"
-          value={node.lfPct}
-          step="0.1"
-          onChange={(e) => updateNode(node.tempKey, { lfPct: Number(e.target.value) })}
-          aria-label="Load factor percent"
-        />
-        <span>%</span>
-        {node.dimensionLevel === 'voyage' ? (
-          <button
-            type="button"
-            className="talia-btn talia-btn--secondary"
-            onClick={() => addChild(node.tempKey, 'market_group')}
-          >
-            + Group
-          </button>
-        ) : null}
-        {node.dimensionLevel === 'market_group' ? (
-          <button
-            type="button"
-            className="talia-btn talia-btn--secondary"
-            onClick={() => addChild(node.tempKey, 'market')}
-          >
-            + Market
-          </button>
-        ) : null}
-        {node.dimensionLevel === 'market' ? (
-          <button
-            type="button"
-            className="talia-btn talia-btn--secondary"
-            onClick={() => addChild(node.tempKey, 'currency')}
-          >
-            + Currency
-          </button>
-        ) : null}
-        {node.dimensionLevel !== 'voyage' || weekNodes.length > 1 ? (
-          <button
-            type="button"
-            className="talia-btn talia-btn--secondary"
-            onClick={() => removeNode(node.tempKey)}
-          >
-            Remove
-          </button>
-        ) : null}
-      </div>
-      {childrenOf(node.tempKey).map((child) => renderTree(child))}
-    </div>
-  );
-
   const emptyProfiles = !profiles.length;
   const suggestionMeta = draft.suggestionMeta || suggestedDraft?.suggestionMeta || null;
+  const assigned = profiles.find((p) => p.isActive) || profiles[0] || null;
+  const assignedName = assigned?.name ? String(assigned.name).trim() : '';
+  const matchingLibrary = libraryProfiles.find(
+    (p) => String(p.name || '').trim() === String(draft.name || '').trim()
+  );
+  const assignValue = usingSuggestion
+    ? 'suggested'
+    : (draft.sourceIsLibrary && matchingLibrary ? `lib:${matchingLibrary.id}` : 'current');
 
   return (
     <div
@@ -320,10 +268,36 @@ const InventoryTargetProfilePresenter = ({
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Target Profile Editor</h2>
           <p className="talia-report__subtitle">
-            {[sailCode, inventoryItemId ? `item ${inventoryItemId}` : 'new']
-              .filter(Boolean)
-              .join(' · ')}
+            {isLibraryMode
+              ? 'Name and edit standard profiles, then assign them to sailings'
+              : [sailCode || 'No sailing selected', assignedName ? `assigned · ${assignedName}` : 'no assignment']
+                .filter(Boolean)
+                .join(' · ')}
           </p>
+        </div>
+        <div className="inventory-target-profile__modes" aria-label="Editor mode">
+          <button
+            type="button"
+            className={`talia-btn ${!isLibraryMode ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+            aria-pressed={!isLibraryMode}
+            onClick={() => {
+              setCreatingNew(false);
+              onModeChange?.('sailing');
+            }}
+          >
+            This sailing
+          </button>
+          <button
+            type="button"
+            className={`talia-btn ${isLibraryMode ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+            aria-pressed={isLibraryMode}
+            onClick={() => {
+              setCreatingNew(false);
+              onModeChange?.('library');
+            }}
+          >
+            Library
+          </button>
         </div>
       </header>
 
@@ -356,62 +330,88 @@ const InventoryTargetProfilePresenter = ({
             onChange={(e) => setDraft((p) => ({ ...p, description: e.target.value }))}
           />
         </label>
-        <label className="talia-report-filters__group talia-report-filters__group--toggle">
-          <input
-            type="checkbox"
-            checked={emptyProfiles ? true : Boolean(draft.isActive)}
-            onChange={(e) => setDraft((p) => ({ ...p, isActive: e.target.checked }))}
-          />
-          <span className="talia-report-filters__label">Active on save</span>
-        </label>
-        {profiles.length ? (
+        {isLibraryMode ? (
           <label className="talia-report-filters__group">
-            <span className="talia-report-filters__label">Saved</span>
+            <span className="talia-report-filters__label">Standard</span>
             <select
               className="talia-report-filters__input"
-              value={selectedId || ''}
+              value={creatingNew ? '' : (selectedId || '')}
               onChange={(e) => {
-                const next = profiles.find((p) => String(p.id) === e.target.value);
+                const next = libraryProfiles.find((p) => String(p.id) === e.target.value);
                 if (next) loadProfile(next);
               }}
             >
-              {profiles.map((p) => (
+              {creatingNew ? <option value="">New standard…</option> : null}
+              {libraryProfiles.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.isActive ? '★ ' : ''}
-                  {p.perspective}: {p.name}
+                  {String(p.name || '').trim()}
                 </option>
               ))}
             </select>
           </label>
-        ) : null}
+        ) : (
+          <label className="talia-report-filters__group">
+            <span className="talia-report-filters__label">Assign</span>
+            <select
+              className="talia-report-filters__input"
+              value={assignValue}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === 'suggested' && suggestedDraft) {
+                  setSelectedId(null);
+                  setUsingSuggestion(true);
+                  setDraft({ ...applySuggestedDraft(suggestedDraft), sourceIsLibrary: true });
+                  return;
+                }
+                if (value.startsWith('lib:')) {
+                  const next = libraryProfiles.find((p) => `lib:${p.id}` === value);
+                  if (next) loadProfile(next, { fromLibrary: true });
+                }
+              }}
+            >
+              {assignedName ? <option value="current">{`Current · ${assignedName}`}</option> : null}
+              {suggestedDraft ? (
+                <option value="suggested">
+                  {`Suggested${suggestionMeta?.modelSailCode ? ` · ${suggestionMeta.modelSailCode}` : ''}`}
+                </option>
+              ) : null}
+              {libraryProfiles.length ? (
+                <optgroup label="Standards">
+                  {libraryProfiles.map((p) => (
+                    <option key={`lib-${p.id}`} value={`lib:${p.id}`}>
+                      {String(p.name || '').trim()}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+            </select>
+          </label>
+        )}
       </div>
 
-      {emptyProfiles && usingSuggestion && suggestionMeta ? (
+      {!isLibraryMode && !sailCode ? (
         <div className="talia-callout" role="note">
-          Suggested target from{' '}
-          <strong>
-            {suggestionMeta.source === 'model'
-              ? `model prior${suggestionMeta.modelSailCode ? ` ${suggestionMeta.modelSailCode}` : ''}`
-              : 'current REAL curve'}
-          </strong>
-          {suggestionMeta.endLfPct != null ? ` · end LF ~${suggestionMeta.endLfPct}%` : ''}.
-          Drag amber points to move them. Shift-click adds a week; double-click removes.
-          Use Minimise points / Smooth to simplify the curve.
+          Select a sailing to assign a standard or suggested target.
         </div>
-      ) : emptyProfiles ? (
+      ) : null}
+
+      {!isLibraryMode && sailCode && emptyProfiles ? (
         <div className="talia-callout" role="note">
-          No target profile yet. Use a suggestion or blank draft, then Create profile. Manager+ to save.
+          {usingSuggestion && suggestionMeta
+            ? `Draft from ${suggestionMeta.source === 'peer-profile' ? 'last-year profile' : suggestionMeta.source === 'model' ? `last year ${suggestionMeta.modelSailCode || ''}`.trim() : 'the booking curve'}${suggestionMeta.endLfPct != null ? ` · end LF ~${suggestionMeta.endLfPct}%` : ''}. Assign to this sailing.`
+            : 'No target assigned yet. Choose a standard, use the suggestion, or copy last year.'}
         </div>
-      ) : (
+      ) : null}
+
+      {isLibraryMode ? (
         <div className="talia-callout" role="note">
-          Drag amber points to move them. Shift-click adds a week; double-click removes.
-          Use Minimise points / Smooth to simplify. Manager+ to save.
+          Library profiles are reusable standards. Saving here does not change a sailing until you assign.
         </div>
-      )}
+      ) : null}
 
       {loadError ? (
         <div className="talia-callout" role="note">
-          Load note: {loadError.message || String(loadError)}. You can still create a profile.
+          {formatTargetProfileError(loadError)}
         </div>
       ) : null}
 
@@ -454,20 +454,35 @@ const InventoryTargetProfilePresenter = ({
         >
           Smooth
         </button>
-        {emptyProfiles && suggestedDraft ? (
+        {!isLibraryMode && suggestedDraft ? (
           <button
             type="button"
             className="talia-btn talia-btn--secondary"
             onClick={() => {
               setSelectedId(null);
-              setDraft(applySuggestedDraft(suggestedDraft));
+              setDraft({ ...applySuggestedDraft(suggestedDraft), sourceIsLibrary: true });
               setUsingSuggestion(true);
             }}
           >
             Use suggestion
           </button>
         ) : null}
-        {emptyProfiles ? (
+        {!isLibraryMode ? (
+          <button
+            type="button"
+            className="talia-btn talia-btn--secondary"
+            onClick={async () => {
+              const next = await onCopyFromPeer?.();
+              if (!next) return;
+              setSelectedId(null);
+              setUsingSuggestion(true);
+              setDraft({ ...applySuggestedDraft(next), sourceIsLibrary: true });
+            }}
+          >
+            Copy last year
+          </button>
+        ) : null}
+        {!isLibraryMode && emptyProfiles ? (
           <button
             type="button"
             className="talia-btn talia-btn--secondary"
@@ -480,12 +495,17 @@ const InventoryTargetProfilePresenter = ({
           type="button"
           className="talia-btn talia-btn--secondary"
           onClick={() => {
+            setCreatingNew(true);
             setSelectedId(null);
             setUsingSuggestion(false);
-            setDraft(emptyDraft());
+            setDraft({
+              ...emptyDraft(),
+              name: isLibraryMode ? 'Standard' : 'Target',
+              sourceIsLibrary: !isLibraryMode,
+            });
           }}
         >
-          Blank profile
+          {isLibraryMode ? 'New standard' : 'New blank'}
         </button>
       </div>
 
@@ -493,43 +513,40 @@ const InventoryTargetProfilePresenter = ({
         <button type="button" className="talia-btn talia-btn--secondary" onClick={onRefresh}>
           Refresh
         </button>
-        <button
-          type="button"
-          className="talia-btn talia-btn--secondary"
-          disabled={backfillBusy}
-          onClick={() => onBackfill?.({ fromDate: '2026-06-01' })}
-        >
-          {backfillBusy ? 'Backfilling…' : 'Backfill from Jun 2026'}
-        </button>
+        {isLibraryMode ? (
+          <button
+            type="button"
+            className="talia-btn talia-btn--secondary"
+            disabled={backfillBusy || !draft.id}
+            onClick={() => onBackfill?.({ templateProfileId: draft.id || null })}
+          >
+            {backfillBusy ? 'Assigning…' : 'Assign this standard to current sailings'}
+          </button>
+        ) : null}
         <button
           type="button"
           className="talia-btn talia-btn--primary"
+          disabled={!isLibraryMode && !sailCode}
           onClick={() =>
-            onSave?.({
-              ...draft,
-              isActive: emptyProfiles ? true : Boolean(draft.isActive),
-            })
+            onSave?.(
+              {
+                ...draft,
+                isActive: !isLibraryMode,
+              },
+              { asLibrary: isLibraryMode }
+            )
           }
         >
-          {emptyProfiles ? 'Create profile' : 'Save'}
+          {isLibraryMode ? 'Save standard' : 'Assign to sailing'}
         </button>
-        {selectedId ? (
-          <>
-            <button
-              type="button"
-              className="talia-btn talia-btn--secondary"
-              onClick={() => onActivate?.(selectedId)}
-            >
-              Set active
-            </button>
-            <button
-              type="button"
-              className="talia-btn talia-btn--secondary"
-              onClick={() => onDelete?.(selectedId)}
-            >
-              Delete
-            </button>
-          </>
+        {isLibraryMode && selectedId ? (
+          <button
+            type="button"
+            className="talia-btn talia-btn--secondary"
+            onClick={() => onDelete?.(selectedId)}
+          >
+            Delete standard
+          </button>
         ) : null}
       </div>
 
@@ -610,14 +627,6 @@ const InventoryTargetProfilePresenter = ({
               ))}
             </tbody>
           </table>
-          <h3 className="booking-profile__section-title">Nested dimensions</h3>
-          {(() => {
-            const voyageRoot =
-              roots.find((n) => n.dimensionLevel === 'voyage' && childrenOf(n.tempKey).length) ||
-              roots.find((n) => n.dimensionLevel === 'voyage') ||
-              roots[0];
-            return voyageRoot ? renderTree(voyageRoot) : null;
-          })()}
         </ReportDataDetails>
       </main>
     </div>

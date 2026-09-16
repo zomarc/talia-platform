@@ -407,6 +407,19 @@
   font-size: 12px;
 }
 
+.mse-hover-target {
+  margin: 0 0 6px;
+  padding: 0 2px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: var(--theme-fg, #e6ebff);
+}
+
+.mse-hover-target--empty {
+  font-weight: 500;
+  color: var(--theme-text-secondary, #9aa8bc);
+}
+
 .ms-explorer-table .ms-explorer-row--day:not(.tabulator-selected):not(.tabulator-row--reference):not(:hover) {
   background: color-mix(in srgb, #1a2332 88%, transparent) !important;
 }

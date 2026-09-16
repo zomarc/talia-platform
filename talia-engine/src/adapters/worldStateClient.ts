@@ -136,14 +136,22 @@ export async function loadWorldState(options: {
   if (itemIds.length) {
     const { data: profiles, error: profileError } = await getClient()
       .from('inventory_target_profile')
-      .select('id, inventory_item_id, name, perspective')
+      .select('id, inventory_item_id, name, perspective, is_active')
       .in('inventory_item_id', itemIds);
     if (profileError) throw new Error(`inventory_target_profile: ${profileError.message}`);
 
     const preferred = new Map<number, any>();
     for (const profile of profiles || []) {
       const current = preferred.get(profile.inventory_item_id);
-      if (!current || profile.perspective === 'commercial') {
+      if (!current) {
+        preferred.set(profile.inventory_item_id, profile);
+        continue;
+      }
+      if (profile.is_active && !current.is_active) {
+        preferred.set(profile.inventory_item_id, profile);
+        continue;
+      }
+      if (profile.is_active === current.is_active && profile.perspective === 'commercial' && current.perspective !== 'commercial') {
         preferred.set(profile.inventory_item_id, profile);
       }
     }

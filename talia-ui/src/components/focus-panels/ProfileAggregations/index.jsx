@@ -2,10 +2,13 @@
  * Profile Aggregations — ship×month or DOW×duration coverage.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import profileCompareService from '../../../services/data/profileCompareService';
 import { REPORT_REFRESH_EVENT } from '../../dockview/eventConstants';
 import useReportPanelLoading from '../../../hooks/useReportPanelLoading';
+import { useGlobalDateWindow } from '../../../hooks/useGlobalDateWindow';
+import { useGlobalDepartureMonth } from '../../../hooks/useGlobalDepartureMonth';
+import { resolveEffectiveCriteriaDateWindow } from '../../../lib/globalCriteriaDateWindow';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 
@@ -19,6 +22,12 @@ const ProfileAggregationsContainer = ({
   const [error, setError] = useState(null);
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillResult, setBackfillResult] = useState(null);
+  const { dateFrom, dateTo } = useGlobalDateWindow();
+  const departureMonth = useGlobalDepartureMonth();
+  const horizon = useMemo(
+    () => resolveEffectiveCriteriaDateWindow({ dateFrom, dateTo, departureMonth }),
+    [dateFrom, dateTo, departureMonth]
+  );
 
   useReportPanelLoading(
     panelInstanceId,
@@ -61,7 +70,9 @@ const ProfileAggregationsContainer = ({
     setError(null);
     try {
       const result = await profileCompareService.backfillTargetProfiles({
-        fromDate: '2026-06-01',
+        fromDate: horizon.from || undefined,
+        toDate: horizon.to || undefined,
+        limit: 500,
       });
       setBackfillResult(result);
       window.dispatchEvent(new CustomEvent(REPORT_REFRESH_EVENT, { detail: {} }));
@@ -124,8 +135,8 @@ const ProfileAggregationsContainer = ({
         </div>
       ) : (
         <div className="talia-callout" role="note">
-          Counts of master sails with an active target or manual model map. Backfill creates
-          suggested targets from June 2026 (Manager+).
+          Counts of master sails with an active target or manual model map. Assign defaults
+          uses the StatusBar DATE ∩ MONTH window (Manager+).
         </div>
       )}
 
@@ -139,7 +150,7 @@ const ProfileAggregationsContainer = ({
           disabled={backfillBusy}
           onClick={handleBackfill}
         >
-          {backfillBusy ? 'Backfilling…' : 'Backfill from Jun 2026'}
+          {backfillBusy ? 'Assigning defaults…' : 'Assign defaults to current sailings'}
         </button>
       </div>
 

@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildChecklistHeatmap,
+  buildFindingExplanation,
   condenseRationale,
   formatActionLabel,
   severityRank,
@@ -73,5 +74,27 @@ describe('buildChecklistHeatmap', () => {
     assert.equal(pricing.count, 2);
     assert.match(pricing.tooltip, /Occupancy is 16 points behind/);
     assert.equal(grid.rows[1].cells.find((cell) => cell.action === 'REVIEW_PRICING').empty, true);
+  });
+});
+
+describe('buildFindingExplanation', () => {
+  it('combines action, rationale, and evidence for tooltips', () => {
+    const text = buildFindingExplanation({
+      actionType: 'REVIEW_PRICING',
+      rationale: 'Load factor and days-to-sail suggest a pricing review against the target band.',
+      loadFactor: 0.42,
+      targetLoadFactor: 0.55,
+      gapSigned: -0.13,
+      daysToSail: 48,
+      subjectId: 'CD04270329',
+      agentId: 'rm.regulator.performance_vs_target',
+    });
+    assert.match(text, /Action: Pricing/);
+    assert.match(text, /pricing review against the target band/);
+    assert.match(text, /LF 42\.0%/);
+    assert.match(text, /Target 55\.0%/);
+    assert.match(text, /Gap -13\.0pp/);
+    assert.match(text, /48 days to sail/);
+    assert.match(text, /Sailing CD04270329/);
   });
 });

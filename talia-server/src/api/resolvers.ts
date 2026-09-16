@@ -2978,6 +2978,15 @@ export const resolvers = {
       }
     },
 
+    inventoryTargetProfileLibrary: async () => {
+      try {
+        return await supabaseDataService.listInventoryTargetProfileLibrary();
+      } catch (error) {
+        console.error('Error listing target profile library:', error);
+        throw error;
+      }
+    },
+
     inventoryTargetProfile: async (_parent: any, args: any) => {
       const { id } = args;
       try {
@@ -4560,10 +4569,11 @@ export const resolvers = {
         }
         return await supabaseDataService.backfillTargetProfiles(
           {
-            fromDate: args?.fromDate || '2026-06-01',
+            fromDate: args?.fromDate,
             toDate: args?.toDate,
             dryRun: args?.dryRun === true,
             limit: args?.limit,
+            templateProfileId: args?.templateProfileId,
           },
           intelAuditStamp(context)
         );

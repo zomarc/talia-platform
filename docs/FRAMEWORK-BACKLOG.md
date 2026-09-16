@@ -21,7 +21,9 @@ Generated from live code audit + docs scan (Jul 2026). Prefer this over stale `N
 |------|--------|-------|
 | Tabulator scroll + active-panel flush | **Done** | `tabulatorConfig` preserves scroll; active panel only flushes `pendingLayoutRefresh` |
 | globalConfig alias scoping | **Done** | Legacy aliases only for changed fields |
-| Emit helpers on emitters (SailingSummary, DataMatch, SailingTable, SimpleTable) | **Done** | Clear-on-deselect removed; SailingTable/MasterSailing mount-once |
+| Emit helpers on emitters (SailingSummary, DataMatch, SailingTable, SimpleTable) | **Done** | Clear-on-deselect removed; SailingTable mount-once |
+| MasterSailing removed; MSE is sole explorer | **Done** | `master-sailing` layout alias → `master-sailing-explorer` |
+| CI is definitive standards gate | **Done** | `docs/FRAMEWORK-DIRECTIVES.md`; `npm run check:standards` |
 | Selection guide + `_TEMPLATE` match canonical docs | Open | Merge `COMPONENT-CREATION-GUIDE` / template with `CANONICAL-SELECTION-LINKING.md` |
 | Report-shell sweep (outliers) | Open | e.g. DemandHeatmap, MasterVoyagePerformanceSummary |
 | Sidebar toggles → `publishDashboardGlobalConfig` | Open | DashboardSidebar still fires legacy-only events |
@@ -35,7 +37,7 @@ Generated from live code audit + docs scan (Jul 2026). Prefer this over stale `N
 | Cabin Deck Inventory | **Done (v1)** | `ship_inventory_alloc` + `ship_cabin` by deck/category; FIT/Group/GTY ONLY highlights |
 | Reservation Validation ledger | Open | Same style as Capacity Validation — before trusting Distribution |
 | ShipDayBerth re-focus only on scope change | Open | Avoid scroll jump on every `replaceData` |
-| Group cycle without full `setData` | Open | MSE / MasterSailing / DataMatch / ShipDayBerth |
+| Group cycle without full `setData` | Open | MSE / DataMatch / ShipDayBerth |
 | Booking*Simple / ColumnTerminology split | Defer | Split when next touched |
 | MasterVoyagePerformanceSummary mock metrics | Open | Replace or mark demo-only |
 

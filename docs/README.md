@@ -5,6 +5,7 @@ Use this page as the entry point for all active development documentation.
 ## Start Here
 
 - `docs/DIRECTIVE.md` - mandatory development standards
+- `docs/FRAMEWORK-DIRECTIVES.md` - consolidation contract; **CI is the definitive enforcement gate**
 - `docs/DOCS-CANONICAL.md` - canonical documentation map
 - `README.md` - project-level quick start
 
@@ -26,6 +27,9 @@ Use this page as the entry point for all active development documentation.
   - library-first implementation
   - minimal code
   - CSS-only styling in active UI code
+- `docs/FRAMEWORK-DIRECTIVES.md` defines consolidation paths and authority order.
+- Measurable UI rules are enforced by `npm run check:standards` (strict: `check:standards:strict`).
+  Cursor/IDE rules are optional hints only — CI wins on conflict.
 
 ## Archive Policy
 

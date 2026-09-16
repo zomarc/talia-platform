@@ -12,11 +12,20 @@ import {
   CHECKLIST_SCOPE_THIS,
   findingSailCode,
 } from './rmChecklistScope';
+import { formatActionLabel, buildFindingExplanation } from './rmChecklistHeatmapTransform.js';
 import './rm-engine-panels.css';
 
 const formatPct = (value) => {
   if (value == null || Number.isNaN(Number(value))) return '—';
   return `${(Number(value) * 100).toFixed(1)}%`;
+};
+
+const withTitleTooltip = (text, title) => {
+  const el = document.createElement('span');
+  el.className = 'rm-checklist-cell-tip';
+  el.textContent = text == null || text === '' ? '—' : String(text);
+  if (title) el.title = title;
+  return el;
 };
 
 const SCOPE_MODES = [
@@ -81,8 +90,26 @@ const RmChecklistPresenter = ({
       formatter: (cell) => Number(cell.getValue() || 0).toFixed(2),
     },
     { field: 'subjectId', title: 'Sailing', width: 130, headerFilter: 'input' },
-    { field: 'actionType', title: 'Recommended action', width: 180, headerFilter: 'input' },
-    { field: 'rationale', title: 'Rationale', minWidth: 220 },
+    {
+      field: 'actionType',
+      title: 'Recommended action',
+      width: 180,
+      headerFilter: 'input',
+      formatter: (cell) => {
+        const row = cell.getRow()?.getData?.() || {};
+        const label = formatActionLabel(cell.getValue());
+        return withTitleTooltip(label, buildFindingExplanation(row));
+      },
+    },
+    {
+      field: 'rationale',
+      title: 'Rationale',
+      minWidth: 220,
+      formatter: (cell) => {
+        const row = cell.getRow()?.getData?.() || {};
+        return withTitleTooltip(cell.getValue(), buildFindingExplanation(row));
+      },
+    },
     {
       field: 'loadFactor',
       title: 'LF',

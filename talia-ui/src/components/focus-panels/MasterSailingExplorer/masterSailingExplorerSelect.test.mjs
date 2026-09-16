@@ -6,7 +6,7 @@ import {
   shouldEmitMseSelection,
   shouldSkipDuplicateMseEmit,
 } from './masterSailingExplorerSelect.js';
-import { buildMasterSailingExplorerColumns } from './masterSailingExplorerColumns.js';
+import { buildMasterSailingExplorerColumns, shortenTargetProfileName } from './masterSailingExplorerColumns.js';
 
 const master = {
   row_type: 'master',
@@ -58,12 +58,19 @@ test('shouldSkipDuplicateMseEmit suppresses the follow-up click', () => {
   assert.equal(shouldSkipDuplicateMseEmit({ code: 'CD04261116', t: 1000 }, 'CD04261116', 1900), false);
 });
 
-test('compact MSE columns are Date, Bk, and vs Tgt', () => {
+test('compact MSE columns are Date, Bk B, Bk C, and vs Tgt', () => {
   const columns = buildMasterSailingExplorerColumns({ compact: true, viewMode: 'flat' });
   assert.deepEqual(columns.map((col) => col.field), [
     'sail_date_from',
     'berths_occupied',
+    'booked_cabins',
     'target_review_status',
   ]);
+  assert.deepEqual(columns.map((col) => col.title), ['Date', 'Bk B', 'Bk C', 'vs Tgt']);
   assert.equal(columns.some((col) => col.field === 'expand_toggle'), false);
+});
+
+test('shortenTargetProfileName drops suggested prefix', () => {
+  assert.equal(shortenTargetProfileName('Suggested · CD04250907'), 'CD04250907');
+  assert.equal(shortenTargetProfileName('Commercial plan'), 'Commercial plan');
 });

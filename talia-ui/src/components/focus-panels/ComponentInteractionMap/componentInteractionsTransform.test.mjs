@@ -16,11 +16,6 @@ const registry = {
     category: 'Tables',
     events: { emits: ['talia:sail.select', 'talia:sail.clear'], respondsTo: [] },
   },
-  MasterSailing: {
-    title: 'Master Sailing',
-    category: 'Tables',
-    events: { emits: ['talia:sail.select', 'talia:sail.clear'], respondsTo: [] },
-  },
   ShipDayBerth: {
     title: 'Ship × Day Berths',
     category: 'Tables',
@@ -91,7 +86,7 @@ test('canonical channels sort first', () => {
 test('sail channel aggregates emitters and listeners, dedupes alias', () => {
   const { channels } = buildInteractionModel(registry);
   const sail = channels.find((c) => c.key === 'talia:sail');
-  assert.deepEqual(sail.emitters.map((e) => e.name).sort(), ['MasterSailing', 'MasterSailingExplorer']);
+  assert.deepEqual(sail.emitters.map((e) => e.name).sort(), ['MasterSailingExplorer']);
   assert.ok(sail.listeners.some((l) => l.name === 'ShipDayBerth'));
   assert.ok(sail.listeners.some((l) => l.name === 'CompetitorPricing'));
   assert.equal(sail.label, 'Sailing selection');
@@ -99,7 +94,7 @@ test('sail channel aggregates emitters and listeners, dedupes alias', () => {
 
 test('summary counts reflect participation', () => {
   const { summary } = buildInteractionModel(registry);
-  assert.equal(summary.totalPanels, 7);
+  assert.equal(summary.totalPanels, 6);
   assert.equal(summary.canonicalChannels, 2);
   assert.ok(summary.participatingPanels >= 4);
   // the lonely game never participates
@@ -118,9 +113,9 @@ test('eventLabel maps an event to its channel label', () => {
 
 test('catalog includes every component, grouped by category, sorted by size', () => {
   const { groups, summary } = buildComponentCatalog(registry);
-  assert.equal(summary.total, 7);
+  assert.equal(summary.total, 6);
   const catalogued = groups.reduce((sum, g) => sum + g.items.length, 0);
-  assert.equal(catalogued, 7);
+  assert.equal(catalogued, 6);
   // Tables is the largest category here, so it sorts first.
   assert.equal(groups[0].category, 'Tables');
   assert.equal(summary.categories, groups.length);
@@ -156,7 +151,7 @@ test('presentation model splits physical vs selling around the inventory_item hu
 
   // Selling drivers are the sail emitters; ShipDayBerth must not leak into selling.
   const sellingDrivers = model.selling.drivers.map((p) => p.name).sort();
-  assert.deepEqual(sellingDrivers, ['MasterSailing', 'MasterSailingExplorer']);
+  assert.deepEqual(sellingDrivers, ['MasterSailingExplorer']);
   const sellingNames = [...model.selling.drivers, ...model.selling.responders].map((p) => p.name);
   assert.ok(!sellingNames.includes('ShipDayBerth'));
 

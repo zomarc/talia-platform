@@ -29,6 +29,8 @@
     "lint": "npm run lint:frontend && npm run lint:backend",
     "lint:frontend": "cd talia-ui && npm run lint",
     "lint:backend": "cd talia-server && npm run lint",
+    "check:standards": "cd talia-ui && npm run check:standards",
+    "check:standards:strict": "cd talia-ui && npm run check:standards:strict",
     "deploy:preview": "netlify deploy",
     "deploy:production": "netlify deploy --prod",
     "generate:overview": "node scripts/inject-executive-overview-commits.mjs && node scripts/generate-executive-overview.js",

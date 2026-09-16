@@ -132,8 +132,8 @@ const REVIEW_STATUSES = gql`
 `;
 
 const BACKFILL = gql`
-  mutation BackfillTargetProfiles($fromDate: String, $toDate: String, $dryRun: Boolean, $limit: Int) {
-    backfillTargetProfiles(fromDate: $fromDate, toDate: $toDate, dryRun: $dryRun, limit: $limit) {
+  mutation BackfillTargetProfiles($fromDate: String, $toDate: String, $dryRun: Boolean, $limit: Int, $templateProfileId: ID) {
+    backfillTargetProfiles(fromDate: $fromDate, toDate: $toDate, dryRun: $dryRun, limit: $limit, templateProfileId: $templateProfileId) {
       fromDate
       toDate
       dryRun
@@ -256,13 +256,14 @@ class ProfileCompareService {
       client: apolloClient,
       mutation: BACKFILL,
       variables: {
-        fromDate: options.fromDate || '2026-06-01',
+        fromDate: options.fromDate || null,
         toDate: options.toDate || null,
         dryRun: options.dryRun === true,
-        limit: options.limit,
+        limit: options.limit || 500,
+        templateProfileId: options.templateProfileId || null,
       },
       component: 'Target Profile Editor',
-      purpose: 'Backfill suggested target profiles from June 2026',
+      purpose: 'Assign default target profiles to current sailings',
       tableName: 'inventory_target_profile',
     });
     return data?.backfillTargetProfiles || null;

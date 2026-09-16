@@ -1,9 +1,13 @@
 /**
- * Target Profile Editor — create/edit/activate goal curves for a selected sail.
- * When none exist, suggests a draft from model prior (else REAL).
+ * Target Profile Editor — two modes in one panel:
+ * This sailing = assign/replace the voyage's active target.
+ * Library = name and edit reusable standard profiles.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useGlobalDateWindow } from '../../../hooks/useGlobalDateWindow';
+import { useGlobalDepartureMonth } from '../../../hooks/useGlobalDepartureMonth';
+import { resolveEffectiveCriteriaDateWindow } from '../../../lib/globalCriteriaDateWindow';
 import {
   SAIL_SELECT_EVENT,
   SAIL_CLEAR_EVENT,
@@ -44,6 +48,7 @@ const InventoryTargetProfileEditorContainer = ({
   ...props
 }) => {
   const { params = {}, theme } = props;
+  const [mode, setMode] = useState(params.sailCode ? 'sailing' : 'library');
   const [sailCode, setSailCode] = useState(params.sailCode || null);
   const [selectionMeta, setSelectionMeta] = useState({
     referenceSailCode: params.sailCode || null,
@@ -52,12 +57,19 @@ const InventoryTargetProfileEditorContainer = ({
   });
   const [inventoryItemId, setInventoryItemId] = useState(null);
   const [profiles, setProfiles] = useState([]);
+  const [libraryProfiles, setLibraryProfiles] = useState([]);
   const [suggestedDraft, setSuggestedDraft] = useState(null);
   const [overlaySeries, setOverlaySeries] = useState({ real: [], model: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillResult, setBackfillResult] = useState(null);
+  const { dateFrom, dateTo } = useGlobalDateWindow();
+  const departureMonth = useGlobalDepartureMonth();
+  const horizon = useMemo(
+    () => resolveEffectiveCriteriaDateWindow({ dateFrom, dateTo, departureMonth }),
+    [dateFrom, dateTo, departureMonth]
+  );
 
   useEffect(() => {
     const onSelect = (e) => {
@@ -69,6 +81,7 @@ const InventoryTargetProfileEditorContainer = ({
           shipCode: meta.shipCode,
           shipName: meta.shipName,
         });
+        setMode('sailing');
       }
     };
     const onClear = () => {
@@ -79,6 +92,7 @@ const InventoryTargetProfileEditorContainer = ({
       setSuggestedDraft(null);
       setOverlaySeries({ real: [], model: [] });
       setError(null);
+      setMode('library');
     };
     window.addEventListener(SAIL_SELECT_EVENT, onSelect);
     window.addEventListener(SAIL_CLEAR_EVENT, onClear);
@@ -87,6 +101,16 @@ const InventoryTargetProfileEditorContainer = ({
       window.removeEventListener(SAIL_CLEAR_EVENT, onClear);
     };
   }, []);
+
+  const loadLibrary = async () => {
+    try {
+      const library = await inventoryTargetProfileService.listLibrary();
+      setLibraryProfiles(Array.isArray(library) ? library : []);
+    } catch (err) {
+      console.warn('[Target Profile Editor] library:', err?.message || err);
+      setLibraryProfiles([]);
+    }
+  };
 
   const loadSuggestion = async (code) => {
     try {
@@ -110,7 +134,7 @@ const InventoryTargetProfileEditorContainer = ({
     }
   };
 
-  const load = async () => {
+  const loadSailing = async () => {
     if (!sailCode) return;
     setLoading(true);
     setError(null);
@@ -118,16 +142,11 @@ const InventoryTargetProfileEditorContainer = ({
     try {
       const item = await inventoryProfileSeriesService.findInventoryItemBySailCode(sailCode);
       setInventoryItemId(item?.id || null);
-      let list = [];
-      if (item?.id) {
-        list = await inventoryTargetProfileService.list(item.id);
-        setProfiles(Array.isArray(list) ? list : []);
-      } else {
-        setProfiles([]);
-      }
+      const list = item?.id ? await inventoryTargetProfileService.list(item.id) : [];
+      setProfiles(Array.isArray(list) ? list : []);
       const suggestion = await loadSuggestion(sailCode);
       if (!list?.length) setSuggestedDraft(suggestion);
-      else setSuggestedDraft(null);
+      else setSuggestedDraft(suggestion);
     } catch (err) {
       console.warn('[Target Profile Editor] load:', err?.message || err);
       setError(err);
@@ -141,14 +160,34 @@ const InventoryTargetProfileEditorContainer = ({
   };
 
   useEffect(() => {
-    load();
+    loadLibrary();
+  }, []);
+
+  useEffect(() => {
+    loadSailing();
   }, [sailCode]);
 
-  const handleSave = async (draft) => {
-    if (!sailCode) return;
+  const handleSave = async (draft, { asLibrary = false } = {}) => {
     setLoading(true);
     setError(null);
     try {
+      if (asLibrary) {
+        await inventoryTargetProfileService.upsert({
+          id: draft?.id || null,
+          name: draft?.name,
+          perspective: draft?.perspective,
+          description: draft?.description,
+          nodes: draft?.nodes || [],
+          asLibrary: true,
+          isActive: false,
+        });
+        await loadLibrary();
+        return;
+      }
+
+      if (!sailCode) {
+        throw new Error('Select a sailing before assigning a target');
+      }
       let itemId = inventoryItemId;
       if (!itemId) {
         const item = await inventoryProfileSeriesService.ensureInventoryItemForSail({
@@ -163,14 +202,16 @@ const InventoryTargetProfileEditorContainer = ({
       if (!itemId) {
         throw new Error('Could not resolve or create inventory_item for this sail');
       }
-      const { suggestionMeta, ...payload } = draft || {};
+      const { suggestionMeta, sourceIsLibrary, ...payload } = draft || {};
       await inventoryTargetProfileService.upsert({
         ...payload,
+        id: sourceIsLibrary ? null : payload.id,
         inventoryItemId: String(itemId),
-        isActive: Boolean(payload.isActive),
+        sourceIsLibrary: Boolean(sourceIsLibrary) || !payload.id,
+        isActive: true,
       });
       window.dispatchEvent(new CustomEvent(REPORT_REFRESH_EVENT, { detail: {} }));
-      await load();
+      await Promise.all([loadSailing(), loadLibrary()]);
     } catch (err) {
       setError(err);
     } finally {
@@ -183,7 +224,7 @@ const InventoryTargetProfileEditorContainer = ({
     setError(null);
     try {
       await inventoryTargetProfileService.delete(id);
-      await load();
+      await Promise.all([loadLibrary(), loadSailing()]);
     } catch (err) {
       setError(err);
     } finally {
@@ -191,27 +232,19 @@ const InventoryTargetProfileEditorContainer = ({
     }
   };
 
-  const handleActivate = async (id) => {
-    setLoading(true);
-    setError(null);
-    try {
-      await inventoryTargetProfileService.setActive(id);
-      await load();
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleBackfill = async ({ fromDate = '2026-06-01' } = {}) => {
+  const handleBackfill = async ({ templateProfileId = null } = {}) => {
     setBackfillBusy(true);
     setError(null);
     try {
-      const result = await profileCompareService.backfillTargetProfiles({ fromDate });
+      const result = await profileCompareService.backfillTargetProfiles({
+        fromDate: horizon.from || undefined,
+        toDate: horizon.to || undefined,
+        templateProfileId: templateProfileId || undefined,
+        limit: 500,
+      });
       setBackfillResult(result);
       window.dispatchEvent(new CustomEvent(REPORT_REFRESH_EVENT, { detail: {} }));
-      await load();
+      await loadSailing();
     } catch (err) {
       setError(err);
     } finally {
@@ -230,32 +263,76 @@ const InventoryTargetProfileEditorContainer = ({
     }
   };
 
-  if (!sailCode) {
-    return (
-      <div className="focus-panel-empty">
-        <p>Select a sailing to create or edit a target profile</p>
-      </div>
-    );
-  }
+  const handleCopyFromPeer = async () => {
+    if (!sailCode) return null;
+    setLoading(true);
+    setError(null);
+    try {
+      const compare = await profileCompareService.fetchCompare(sailCode, {
+        includeBudget: false,
+        includeTarget: true,
+      });
+      const peerCode = compare?.modelSailCode || compare?.model?.sailCode || null;
+      if (!peerCode) {
+        setError(new Error('No last-year sailing found for this ship'));
+        return null;
+      }
+      const item = await inventoryProfileSeriesService.findInventoryItemBySailCode(peerCode);
+      const list = item?.id ? await inventoryTargetProfileService.list(item.id) : [];
+      const active = list.find((profile) => profile.isActive) || list[0];
+      if (active) {
+        return {
+          id: null,
+          name: active.name,
+          perspective: active.perspective || 'commercial',
+          description: `Copied from ${peerCode}`,
+          isActive: true,
+          sourceIsLibrary: true,
+          nodes: (active.nodes || []).map((node, idx) => ({
+            ...node,
+            id: undefined,
+            tempKey: `peer-${idx}`,
+          })),
+          suggestionMeta: {
+            source: 'peer-profile',
+            modelSailCode: peerCode,
+            endLfPct: active.nodes?.find((node) => Number(node.weeksUntilSailing) === 0)?.lfPct ?? null,
+          },
+        };
+      }
+      const suggestion = await loadSuggestion(sailCode);
+      if (suggestion) return suggestion;
+      setError(new Error(`Last-year sailing ${peerCode} has no target profile`));
+      return null;
+    } catch (err) {
+      setError(err);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  if (loading && !profiles.length && !suggestedDraft && inventoryItemId == null) {
+  if (loading && !profiles.length && !libraryProfiles.length && !suggestedDraft && inventoryItemId == null) {
     return <LoadingSpinner message="Loading target profiles..." fullScreen={false} />;
   }
 
   return (
     <InventoryTargetProfilePresenter
+      mode={mode}
+      onModeChange={setMode}
       sailCode={sailCode}
       inventoryItemId={inventoryItemId}
       profiles={profiles}
+      libraryProfiles={libraryProfiles}
       suggestedDraft={suggestedDraft}
       overlaySeries={overlaySeries}
       theme={theme}
       loadError={error}
       onSave={handleSave}
       onDelete={handleDelete}
-      onActivate={handleActivate}
-      onRefresh={load}
+      onRefresh={() => Promise.all([loadLibrary(), loadSailing()])}
       onResuggest={handleResuggest}
+      onCopyFromPeer={handleCopyFromPeer}
       onBackfill={handleBackfill}
       backfillBusy={backfillBusy}
       backfillResult={backfillResult}

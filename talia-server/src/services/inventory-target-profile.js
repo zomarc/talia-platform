@@ -24,7 +24,7 @@ function mapNode(row) {
 function mapProfile(row, nodes = []) {
   return {
     id: String(row.id),
-    inventoryItemId: String(row.inventory_item_id),
+    inventoryItemId: row.inventory_item_id != null ? String(row.inventory_item_id) : null,
     name: row.name,
     perspective: row.perspective,
     description: row.description,
@@ -33,10 +33,49 @@ function mapProfile(row, nodes = []) {
     ownerKey: row.owner_key,
     lastEditedBy: row.last_edited_by,
     isActive: Boolean(row.is_active),
+    isLibrary: row.inventory_item_id == null || String(row.profile_scope || '') === 'global',
     nodes: nodes.map(mapNode),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+/** Named templates the editor can assign — not Suggested/Default auto-fills. */
+export function isReusableTargetProfileName(name) {
+  const text = String(name || '').trim();
+  if (!text) return false;
+  return !/^(suggested|default)\b/i.test(text);
+}
+
+export function isLibraryProfileInput(input = {}) {
+  if (input.asLibrary === true || input.profileScope === 'global') return true;
+  const itemId = input.inventoryItemId;
+  return itemId == null || itemId === '' || itemId === 'null';
+}
+
+/** Reuse the sailing's active row when assigning, so we never insert a second active. */
+export function resolveSailingUpsertId(existingProfiles = [], requestedId, { isLibrarySource = false } = {}) {
+  if (requestedId && !isLibrarySource) return String(requestedId);
+  const active = existingProfiles.find((profile) => profile.isActive) || existingProfiles[0];
+  return active?.id ? String(active.id) : null;
+}
+
+/**
+ * True library / standard profiles (not sailing assignments).
+ */
+export async function listInventoryTargetProfileLibrary(client) {
+  const { data: rows, error } = await client
+    .from('inventory_target_profile')
+    .select('id, name, updated_at')
+    .is('inventory_item_id', null)
+    .order('name', { ascending: true });
+  if (error) throw error;
+  if (!rows?.length) return [];
+  const profiles = [];
+  for (const row of rows) {
+    profiles.push(await getInventoryTargetProfile(client, row.id));
+  }
+  return profiles;
 }
 
 export async function listInventoryTargetProfiles(client, inventoryItemId) {
@@ -92,31 +131,46 @@ export async function getInventoryTargetProfile(client, id) {
  * Nodes may reference parents via parentTempKey / tempKey for tree insert order.
  */
 export async function upsertInventoryTargetProfile(client, input, editorKey = null) {
-  const inventoryItemId = Number(input.inventoryItemId);
-  if (!inventoryItemId) throw new Error('inventoryItemId is required');
+  const asLibrary = isLibraryProfileInput(input);
+  const inventoryItemId = asLibrary ? null : Number(input.inventoryItemId);
+  if (!asLibrary && !inventoryItemId) {
+    throw new Error('inventoryItemId is required unless saving a library profile');
+  }
 
-  const wantActive = input.isActive === true;
+  let upsertId = input.id ? String(input.id) : null;
+  if (!asLibrary) {
+    const existing = await listInventoryTargetProfiles(client, inventoryItemId);
+    const sourceIsLibrary = Boolean(input.sourceIsLibrary);
+    upsertId = resolveSailingUpsertId(existing, upsertId, { isLibrarySource: sourceIsLibrary || !upsertId });
+  }
+
+  const wantActive = asLibrary ? false : input.isActive !== false;
   const payload = {
     inventory_item_id: inventoryItemId,
-    name: input.name,
+    name: String(input.name || '').trim() || (asLibrary ? 'Standard' : 'Target'),
     perspective: input.perspective || 'commercial',
     description: input.description || null,
     metric: 'load_factor',
-    profile_scope: TALIA_INTEL_PROFILE_SCOPE || 'system',
+    profile_scope: asLibrary ? 'global' : (TALIA_INTEL_PROFILE_SCOPE || 'system'),
     owner_key: TALIA_SYSTEM_OWNER_KEY || 'talia',
     last_edited_by: editorKey || null,
     updated_at: new Date().toISOString(),
+    is_active: false,
   };
-  if (input.isActive != null) {
-    payload.is_active = wantActive;
+
+  if (wantActive && inventoryItemId) {
+    await client
+      .from('inventory_target_profile')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('inventory_item_id', inventoryItemId);
   }
 
   let profileRow;
-  if (input.id) {
+  if (upsertId) {
     const { data, error } = await client
       .from('inventory_target_profile')
       .update(payload)
-      .eq('id', input.id)
+      .eq('id', upsertId)
       .select('*')
       .single();
     if (error) throw error;
@@ -137,16 +191,12 @@ export async function upsertInventoryTargetProfile(client, input, editorKey = nu
     profileRow = data;
   }
 
-  if (wantActive && profileRow?.id) {
-    await client
-      .from('inventory_target_profile')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq('inventory_item_id', inventoryItemId)
-      .neq('id', profileRow.id);
-    await client
+  if (wantActive && profileRow?.id && inventoryItemId) {
+    const { error: activeError } = await client
       .from('inventory_target_profile')
       .update({ is_active: true, updated_at: new Date().toISOString() })
       .eq('id', profileRow.id);
+    if (activeError) throw activeError;
   }
 
   const nodes = Array.isArray(input.nodes) ? input.nodes : [];
@@ -223,6 +273,9 @@ export async function deleteInventoryTargetProfile(client, id) {
 export async function setActiveInventoryTargetProfile(client, id, editorKey = null) {
   const profile = await getInventoryTargetProfile(client, id);
   if (!profile) throw new Error('Target profile not found');
+  if (profile.isLibrary || !profile.inventoryItemId) {
+    throw new Error('Assign a library profile to a sailing instead of activating it');
+  }
   const inventoryItemId = Number(profile.inventoryItemId);
 
   await client

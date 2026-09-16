@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initTabulator, getTabulatorOptions, captureTableScroll, restoreTableScrollSoon } from '../../../lib/tabulatorConfig';
+import { REPORT_ACTIVE_PANEL_EVENT } from '../../dockview/eventConstants';
 import { emitSailSelect, SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
-import { chainRowFormatters, createReferenceRowFormatter, paintSingleReferenceRow, REFERENCE_ROW_CLASS } from '../../../lib/tabulatorReferenceSelection';
+import { chainRowFormatters, createReferenceRowFormatter, forEachTableRow, paintSingleReferenceRow, REFERENCE_ROW_CLASS } from '../../../lib/tabulatorReferenceSelection';
 import { formatMonYear } from '../../../lib/dateFormat';
 import { clipAnchorRectToViewport } from '../../../lib/clipAnchorRect';
 import { ALL_DEPARTURE_MONTH_KEY } from '../../../lib/globalDepartureMonth';
@@ -115,6 +116,10 @@ const MasterSailingExplorerPresenter = ({
   const selectedReferenceRef = useRef(
     resolveSelectionReferenceCode(typeof window !== 'undefined' ? window.lastSailSelectEvent?.detail : null)
   );
+  const lastVisibleScrollRef = useRef({ top: 0, left: 0 });
+  const rememberVisibleScrollRef = useRef(null);
+  const restoreViewportAfterShowRef = useRef(null);
+  const bindVisibleScrollHolderRef = useRef(null);
   const pendingGroupActionRef = useRef(null);
   const groupCycleDepthRef = useRef(1);
   const distributionBySailCodeRef = useRef(distributionBySailCode);
@@ -363,68 +368,106 @@ const MasterSailingExplorerPresenter = ({
   }, [isReferenceMasterRow]);
   applyReferenceHighlightRef.current = applyReferenceHighlight;
 
-  const getTableScrollHolder = useCallback((table) => (
-    table?.rowManager?.element
-    || table?.element?.querySelector?.('.tabulator-tableholder')
-    || null
-  ), []);
+  const rememberVisibleScroll = useCallback(() => {
+    const snapshot = captureTableScroll(instanceRef.current);
+    if (!snapshot.holder || snapshot.holder.clientHeight < 16) return;
+    const activeId = typeof window !== 'undefined' ? window.__taliaActivePanelId : null;
+    if (panelInstanceId && activeId && activeId !== panelInstanceId) return;
+    const host = instanceRef.current?.element;
+    const hostHeight = host?.getBoundingClientRect?.()?.height ?? 0;
+    if (hostHeight <= 1) return;
+    lastVisibleScrollRef.current = { top: snapshot.top, left: snapshot.left };
+  }, [panelInstanceId]);
+  rememberVisibleScrollRef.current = rememberVisibleScroll;
 
-  const withPreservedTableScroll = useCallback((table, fn) => {
-    const holder = getTableScrollHolder(table);
-    const top = holder?.scrollTop ?? 0;
-    const left = holder?.scrollLeft ?? 0;
-    fn();
-    const restore = () => {
-      if (!holder) return;
-      holder.scrollTop = top;
-      holder.scrollLeft = left;
-    };
-    restore();
-    if (typeof window !== 'undefined') {
-      window.requestAnimationFrame(restore);
-    }
-  }, [getTableScrollHolder]);
+  const openGroupsForReference = useCallback((table, referenceCode) => {
+    if (!table || !referenceCode || viewMode !== 'nested') return;
+    const monthGroups = table.getGroups?.() || [];
+    monthGroups.forEach((monthGroup) => {
+      const shipGroups = monthGroup.getSubGroups?.() || [];
+      shipGroups.forEach((shipGroup) => {
+        const rows = shipGroup.getRows?.() || [];
+        const hasMatch = rows.some((row) => masterRowMatchesReference(row.getData?.(), referenceCode));
+        if (hasMatch) {
+          monthGroup.show?.();
+          shipGroup.show?.();
+        }
+      });
+    });
+  }, [viewMode]);
 
-  const focusSelectedMaster = useCallback(() => {
+  const revealSelectedMaster = useCallback(() => {
     const table = instanceRef.current;
     const referenceCode = selectedReferenceRef.current;
-    if (!table || !tableBuiltRef.current) {
-      return;
-    }
-
-    withPreservedTableScroll(table, () => {
-      if (referenceCode && viewMode === 'nested') {
-        const monthGroups = table.getGroups?.() || [];
-        monthGroups.forEach((monthGroup) => {
-          const shipGroups = monthGroup.getSubGroups?.() || [];
-          shipGroups.forEach((shipGroup) => {
-            const rows = shipGroup.getRows?.() || [];
-            const hasMatch = rows.some((row) => masterRowMatchesReference(row.getData?.(), referenceCode));
-            if (hasMatch) {
-              monthGroup.show?.();
-              shipGroup.show?.();
-            }
-          });
-        });
-      }
-
+    if (!table || !tableBuiltRef.current || !referenceCode) {
       applyReferenceHighlight();
+      return false;
+    }
+    openGroupsForReference(table, referenceCode);
+    let match = null;
+    forEachTableRow(table, (row) => {
+      if (match) return;
+      if (masterRowMatchesReference(row.getData?.(), referenceCode)) match = row;
     });
-  }, [applyReferenceHighlight, viewMode, withPreservedTableScroll]);
+    applyReferenceHighlight();
+    if (!match) return false;
+    const scrollRow = () => {
+      if (typeof match.scrollTo === 'function') {
+        Promise.resolve(match.scrollTo('center', false)).catch(() => {
+          match.getElement?.()?.scrollIntoView?.({ block: 'center', inline: 'nearest' });
+        });
+        return;
+      }
+      match.getElement?.()?.scrollIntoView?.({ block: 'center', inline: 'nearest' });
+    };
+    scrollRow();
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        scrollRow();
+        rememberVisibleScrollRef.current?.();
+      });
+    }
+    return true;
+  }, [applyReferenceHighlight, openGroupsForReference]);
 
-  const afterTableDataRefresh = useCallback((refreshPromise, scrollSnapshot = null) => {
-    const table = instanceRef.current;
-    const snapshot = scrollSnapshot || captureTableScroll(table);
+  const restoreViewportAfterShow = useCallback(() => {
     const apply = () => {
-      focusSelectedMaster();
-      restoreTableScrollSoon(snapshot);
+      const snapshot = captureTableScroll(instanceRef.current);
+      const remembered = lastVisibleScrollRef.current;
+      if (snapshot.holder && snapshot.holder.clientHeight >= 16) {
+        snapshot.holder.scrollTop = remembered.top;
+        snapshot.holder.scrollLeft = remembered.left;
+      }
+      applyReferenceHighlight();
+    };
+    apply();
+    if (typeof window === 'undefined') return;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        apply();
+        window.setTimeout(apply, 80);
+      });
+    });
+  }, [applyReferenceHighlight]);
+  restoreViewportAfterShowRef.current = restoreViewportAfterShow;
+
+  const afterTableDataRefresh = useCallback((refreshPromise) => {
+    const apply = () => {
+      if (revealSelectedMaster()) return;
+      if (selectedReferenceRef.current) {
+        window.setTimeout(() => revealSelectedMaster(), 50);
+        return;
+      }
+      if (viewMode === 'nested') {
+        openFirstMonthOnlyRef.current?.();
+      }
     };
     if (refreshPromise && typeof refreshPromise.then === 'function') {
       refreshPromise.then(apply).catch(apply);
       return;
     }
     window.requestAnimationFrame(apply);
-  }, [focusSelectedMaster]);
+  }, [revealSelectedMaster, viewMode]);
   afterTableDataRefreshRef.current = afterTableDataRefresh;
   applyGroupDepthRef.current = applyGroupDepth;
   collapseAllGroupsRef.current = collapseAllGroups;
@@ -445,7 +488,7 @@ const MasterSailingExplorerPresenter = ({
       if (fromSelf || alreadySelected) {
         return;
       }
-      focusSelectedMaster();
+      revealSelectedMaster();
     };
     const handleClear = () => {
       selectedReferenceRef.current = null;
@@ -464,7 +507,63 @@ const MasterSailingExplorerPresenter = ({
       window.removeEventListener(SAIL_SELECT_EVENT, handleSelect);
       window.removeEventListener(SAIL_CLEAR_EVENT, handleClear);
     };
-  }, [applyReferenceHighlight, focusSelectedMaster]);
+  }, [applyReferenceHighlight, revealSelectedMaster]);
+
+  useEffect(() => {
+    let holder = null;
+    let host = null;
+    let wasVisible = true;
+    const onScroll = () => rememberVisibleScroll();
+    const bindHolder = () => {
+      const snapshot = captureTableScroll(instanceRef.current);
+      if (snapshot.holder === holder) return;
+      if (holder) holder.removeEventListener('scroll', onScroll);
+      holder = snapshot.holder;
+      if (holder) {
+        holder.addEventListener('scroll', onScroll, { passive: true });
+        rememberVisibleScroll();
+      }
+    };
+    bindVisibleScrollHolderRef.current = bindHolder;
+    bindHolder();
+    const bindTimers = [200, 800].map((ms) => window.setTimeout(bindHolder, ms));
+
+    const onActivePanel = (event) => {
+      const activeId = event?.detail?.activePanelId || window.__taliaActivePanelId || null;
+      if (!panelInstanceId || !activeId || activeId !== panelInstanceId) return;
+      restoreViewportAfterShowRef.current?.();
+    };
+    window.addEventListener(REPORT_ACTIVE_PANEL_EVENT, onActivePanel);
+
+    if (typeof ResizeObserver !== 'undefined') {
+      host = tableRef.current || panelRef.current;
+      if (host) {
+        const observer = new ResizeObserver(() => {
+          const snapshot = captureTableScroll(instanceRef.current);
+          const visible = Boolean(snapshot.holder && snapshot.holder.clientHeight >= 16);
+          if (visible && !wasVisible) {
+            restoreViewportAfterShowRef.current?.();
+          } else if (visible) {
+            rememberVisibleScroll();
+          }
+          wasVisible = visible;
+        });
+        observer.observe(host);
+        return () => {
+          bindTimers.forEach((id) => window.clearTimeout(id));
+          window.removeEventListener(REPORT_ACTIVE_PANEL_EVENT, onActivePanel);
+          if (holder) holder.removeEventListener('scroll', onScroll);
+          observer.disconnect();
+        };
+      }
+    }
+
+    return () => {
+      bindTimers.forEach((id) => window.clearTimeout(id));
+      window.removeEventListener(REPORT_ACTIVE_PANEL_EVENT, onActivePanel);
+      if (holder) holder.removeEventListener('scroll', onScroll);
+    };
+  }, [panelInstanceId, rememberVisibleScroll]);
 
   useEffect(() => {
     let cancelled = false;
@@ -511,10 +610,10 @@ const MasterSailingExplorerPresenter = ({
 
         instanceRef.current.on('tableBuilt', () => {
           tableBuiltRef.current = true;
+          bindVisibleScrollHolderRef.current?.();
           try {
             const table = instanceRef.current;
-            const scroll = captureTableScroll(table);
-            afterTableDataRefreshRef.current?.(table.replaceData(displayRowsRef.current || []), scroll);
+            afterTableDataRefreshRef.current?.(table.replaceData(displayRowsRef.current || []));
           } catch { /* noop */ }
           if (!didApplyInitialGroupOpenRef.current && !selectedReferenceRef.current && viewMode === 'nested') {
             openFirstMonthOnlyRef.current?.();
@@ -635,6 +734,10 @@ const MasterSailingExplorerPresenter = ({
         ? table.updateData(nextRows)
         : table.replaceData(nextRows);
       const apply = () => {
+        if (selectedReferenceRef.current) {
+          afterTableDataRefreshRef.current?.();
+          return;
+        }
         applyReferenceHighlightRef.current?.();
         restoreTableScrollSoon(scroll);
       };
@@ -820,6 +923,15 @@ const MasterSailingExplorerPresenter = ({
         placement="right"
         onRequestClose={() => setHoverPreview(null)}
       >
+        {hoverPreview?.row?.target_review_pending ? (
+          <p className="mse-hover-target">Target · loading…</p>
+        ) : hoverPreview?.row?.target_profile_name ? (
+          <p className="mse-hover-target">
+            Target · {hoverPreview.row.target_profile_name}
+          </p>
+        ) : hoverPreview?.row ? (
+          <p className="mse-hover-target mse-hover-target--empty">No target profile</p>
+        ) : null}
         {tooltipView === 'performance' ? (
           <MsePerformanceSummary row={hoverPreview?.row || null} />
         ) : hoverPreview?.sailCode && distributionBySailCode?.get?.(hoverPreview.sailCode) ? (

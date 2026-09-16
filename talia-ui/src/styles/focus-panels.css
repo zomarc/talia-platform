@@ -1849,6 +1849,19 @@
   padding-left: var(--theme-component-padding-lg);
 }
 
+.inventory-target-profile .talia-report__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.inventory-target-profile__modes {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
 .inventory-target-profile__list ul {
   list-style: none;
   padding: 0;
@@ -7131,6 +7144,25 @@
   min-height: var(--theme-chart-min-height);
   padding: var(--theme-component-padding-md);
   min-width: 0;
+}
+
+.mse-target-review-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+.mse-target-review__name {
+  font-size: 0.68rem;
+  font-weight: 550;
+  color: var(--theme-text-secondary, #7c8ba0);
+  max-width: 6.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mse-target-review {

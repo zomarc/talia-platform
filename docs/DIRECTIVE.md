@@ -36,6 +36,11 @@ This is the canonical directive for development standards in `talia`.
   - `./scripts/validate-staging.sh local --quick`
   - or interactive `./scripts/validate`
 
+## Framework consolidation
+
+- Consolidation rules and authority order live in `docs/FRAMEWORK-DIRECTIVES.md`.
+- **CI / `npm run check:standards` is the definitive gate.** Cursor/IDE rules are optional hints only.
+
 ## Definition of Done (for local dev work)
 
 - One local UI instance on port `5173`.

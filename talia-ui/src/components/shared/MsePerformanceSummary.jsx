@@ -71,6 +71,12 @@ const MsePerformanceSummary = ({ row = null }) => {
         <Row label="Bk%">{formatPct(row.actual_booked_pct)}</Row>
         <Row label="Pot%">{formatPct(row.potential_booked_pct)}</Row>
         <Row label="Up%">{formatPct(row.booking_upside_pct)}</Row>
+        <Row label="Target">
+          {row.target_review_pending
+            ? 'Loading…'
+            : (row.target_profile_name || 'None assigned')}
+        </Row>
+        <Row label="Goal LF">{formatPct(row.target_lf_pct)}</Row>
         <Row label="vs Target">{targetLabel(row)}</Row>
       </div>
     </div>

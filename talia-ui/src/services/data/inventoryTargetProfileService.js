@@ -30,6 +30,7 @@ const PROFILE_FIELDS = `
   ownerKey
   lastEditedBy
   isActive
+  isLibrary
   createdAt
   updatedAt
   nodes { ${NODE_FIELDS} }
@@ -38,6 +39,14 @@ const PROFILE_FIELDS = `
 const LIST_PROFILES = gql`
   query InventoryTargetProfiles($inventoryItemId: ID!) {
     inventoryTargetProfiles(inventoryItemId: $inventoryItemId) {
+      ${PROFILE_FIELDS}
+    }
+  }
+`;
+
+const LIST_LIBRARY = gql`
+  query InventoryTargetProfileLibrary {
+    inventoryTargetProfileLibrary {
       ${PROFILE_FIELDS}
     }
   }
@@ -78,6 +87,18 @@ class InventoryTargetProfileService {
       options: { fetchPolicy: 'network-only' },
     });
     return data?.inventoryTargetProfiles || [];
+  }
+
+  async listLibrary() {
+    const { data } = await trackedApolloQuery({
+      client: apolloClient,
+      query: LIST_LIBRARY,
+      component: 'Target Profile Editor',
+      purpose: 'List reusable generic target profiles',
+      tableName: 'inventory_target_profile',
+      options: { fetchPolicy: 'network-only' },
+    });
+    return data?.inventoryTargetProfileLibrary || [];
   }
 
   async upsert(input) {

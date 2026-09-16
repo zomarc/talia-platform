@@ -1,4 +1,4 @@
-import { buildMasterSailingRows } from '../MasterSailing/masterSailingTransform.js';
+import { buildMasterSailingRows } from './masterSailingTransform.js';
 
 const asArray = (value) => (Array.isArray(value) ? value : []);
 

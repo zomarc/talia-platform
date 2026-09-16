@@ -281,20 +281,79 @@ const getTableScrollHolder = (table) => (
   || null
 );
 
+const MIN_VISIBLE_HOLDER_HEIGHT = 16;
+
 const restoreTableScrollIfChanged = (holder, top, left) => {
   if (!holder) return;
   if (holder.scrollTop !== top) holder.scrollTop = top;
   if (holder.scrollLeft !== left) holder.scrollLeft = left;
 };
 
-/** Snapshot scroll before replaceData/redraw — Tabulator resets scrollTop synchronously. */
+const rememberVisibleTableScroll = (table, top, left) => {
+  const meta = table ? tableMeta.get(table) : null;
+  if (!meta) return;
+  meta.lastVisibleScroll = { top, left };
+  meta.scrollUntrusted = false;
+};
+
+/** Snapshot scroll before replaceData/redraw — Tabulator resets scrollTop synchronously.
+ *  Inactive Dockview tabs collapse the holder and zero scrollTop. Keep the last
+ *  on-screen position so a later redraw does not pin the viewport at the top. */
 export const captureTableScroll = (table) => {
   const holder = getTableScrollHolder(table);
-  return {
-    holder,
-    top: holder?.scrollTop ?? 0,
-    left: holder?.scrollLeft ?? 0,
+  const top = holder?.scrollTop ?? 0;
+  const left = holder?.scrollLeft ?? 0;
+  const meta = table ? tableMeta.get(table) : null;
+  const usable = Boolean(
+    holder
+    && holder.clientHeight >= MIN_VISIBLE_HOLDER_HEIGHT
+    && isTableHostVisible(table)
+  );
+  if (!usable) {
+    if (meta) meta.scrollUntrusted = true;
+    if (meta?.lastVisibleScroll) {
+      return {
+        holder,
+        top: meta.lastVisibleScroll.top,
+        left: meta.lastVisibleScroll.left,
+      };
+    }
+    return { holder, top, left };
+  }
+  const last = meta?.lastVisibleScroll;
+  const looksLikeHideReset = Boolean(
+    meta?.scrollUntrusted
+    && last
+    && top === 0
+    && left === 0
+    && (last.top > 0 || last.left > 0)
+  );
+  if (looksLikeHideReset) {
+    meta.scrollUntrusted = false;
+    return { holder, top: last.top, left: last.left };
+  }
+  rememberVisibleTableScroll(table, top, left);
+  return { holder, top, left };
+};
+
+const bindVisibleScrollMemory = (table) => {
+  if (!table) return;
+  const attach = () => {
+    const holder = getTableScrollHolder(table);
+    const meta = tableMeta.get(table);
+    if (!holder || !meta || meta.scrollHolder === holder) return;
+    if (meta.scrollHolder && meta.onHolderScroll) {
+      meta.scrollHolder.removeEventListener('scroll', meta.onHolderScroll);
+    }
+    meta.onHolderScroll = () => {
+      captureTableScroll(table);
+    };
+    meta.scrollHolder = holder;
+    holder.addEventListener('scroll', meta.onHolderScroll, { passive: true });
+    captureTableScroll(table);
   };
+  table.on?.('tableBuilt', attach);
+  attach();
 };
 
 export const restoreTableScroll = (snapshot) => {
@@ -702,6 +761,10 @@ const ensureLayoutListenerBound = () => {
     const activePanelId = event?.detail?.activePanelId
       || window.__taliaActivePanelId
       || null;
+    tableInstances.forEach((table) => {
+      const meta = tableMeta.get(table);
+      if (meta) meta.scrollUntrusted = true;
+    });
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         tableInstances.forEach((table) => {
@@ -724,6 +787,13 @@ const ensureLayoutListenerBound = () => {
             || !meta?.panelInstanceId
           ) {
             applyLayoutModeToTable(table, { force: true });
+            if (belongsToActivePanel && meta?.lastVisibleScroll) {
+              restoreTableScroll({
+                holder: getTableScrollHolder(table),
+                top: meta.lastVisibleScroll.top,
+                left: meta.lastVisibleScroll.left,
+              });
+            }
           }
         });
       });
@@ -764,6 +834,10 @@ const registerTableInstance = (table, baseColumns = null, ids = {}) => {
       pendingLayoutRefresh: false,
       layoutRefreshInFlight: false,
       dataLayoutBound: false,
+      lastVisibleScroll: null,
+      scrollUntrusted: false,
+      scrollHolder: null,
+      onHolderScroll: null,
       panelInstanceId: ids.panelInstanceId || null,
       panelComponentId: ids.panelComponentId || null,
       exportTitle: ids.exportTitle || null,
@@ -801,6 +875,7 @@ const getWrappedTabulatorClass = () => {
 
       registerTableInstance(this, baseColumns, { panelInstanceId, panelComponentId, exportTitle });
       bindTableDataLayoutRefresh(this);
+      bindVisibleScrollMemory(this);
       // Sibling panel reflows often resize the host; Tabulator redraw resets scrollTop.
       if (typeof this.redraw === 'function') {
         const originalRedraw = this.redraw.bind(this);
@@ -855,6 +930,9 @@ const getWrappedTabulatorClass = () => {
       });
       this.on?.('tableDestroyed', () => {
         const gone = tableMeta.get(this);
+        if (gone?.scrollHolder && gone.onHolderScroll) {
+          gone.scrollHolder.removeEventListener('scroll', gone.onHolderScroll);
+        }
         gone?.unregisterExport?.();
         tableInstances.delete(this);
       });

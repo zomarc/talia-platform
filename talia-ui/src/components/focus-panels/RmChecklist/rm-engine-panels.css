@@ -203,3 +203,13 @@
   margin-top: 6px;
   max-width: 18rem;
 }
+
+.rm-checklist-cell-tip {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  cursor: help;
+}

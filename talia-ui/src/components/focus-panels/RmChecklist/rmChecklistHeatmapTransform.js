@@ -42,6 +42,51 @@ export const condenseRationale = (text, max = 120) => {
   return `${sentence.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
 };
 
+const formatPct = (value) => {
+  if (value == null || Number.isNaN(Number(value))) return '—';
+  return `${(Number(value) * 100).toFixed(1)}%`;
+};
+
+const formatSignedPp = (value) => {
+  if (value == null || Number.isNaN(Number(value))) return null;
+  const pp = Number(value) * 100;
+  const sign = pp > 0 ? '+' : '';
+  return `${sign}${pp.toFixed(1)}pp`;
+};
+
+/** Longer hover text for checklist table cells (action + rationale + evidence). */
+export const buildFindingExplanation = (row = {}) => {
+  const action = formatActionLabel(
+    row.actionType
+    || row.recommendedAction?.action_type
+    || row.recommended_action?.action_type
+  );
+  const rationale = String(
+    row.rationale
+    || row.recommendedAction?.rationale
+    || row.recommended_action?.rationale
+    || ''
+  ).replace(/\s+/g, ' ').trim();
+  const evidenceBits = [
+    row.loadFactor != null ? `LF ${formatPct(row.loadFactor)}` : null,
+    row.targetLoadFactor != null ? `Target ${formatPct(row.targetLoadFactor)}` : null,
+    formatSignedPp(row.gapSigned) ? `Gap ${formatSignedPp(row.gapSigned)}` : null,
+    row.daysToSail != null && Number.isFinite(Number(row.daysToSail))
+      ? `${Number(row.daysToSail)} days to sail`
+      : null,
+    row.subjectId || row.subject?.id
+      ? `Sailing ${row.subjectId || row.subject?.id}`
+      : null,
+    row.agentId ? `RM Agent ${row.agentId}` : null,
+  ].filter(Boolean);
+
+  return [
+    action ? `Action: ${action}` : null,
+    rationale || null,
+    evidenceBits.length ? evidenceBits.join(' · ') : null,
+  ].filter(Boolean).join('\n');
+};
+
 const findingActionType = (finding) => normalizeActionType(
   finding?.actionType
   || finding?.recommendedAction?.action_type

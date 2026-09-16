@@ -238,10 +238,7 @@ const TABULATOR_FIELD_USAGE_CATALOG = {
     "group-booking-review",
     "reservation-current-state"
   ],
-  "guests": [
-    "master-sailing"
-  ],
-  "is_active": [
+    "is_active": [
     "sailing-table",
     "simple-table-test"
   ],
@@ -368,8 +365,7 @@ const TABULATOR_FIELD_USAGE_CATALOG = {
     "master-voyage-performance-summary"
   ],
   "package_name": [
-    "master-sailing",
-    "master-sailing-explorer",
+        "master-sailing-explorer",
     "sailing-cabin-category",
     "sailing-summary",
     "sailing-table",
@@ -379,8 +375,7 @@ const TABULATOR_FIELD_USAGE_CATALOG = {
     "published-rates"
   ],
   "package_type": [
-    "master-sailing",
-    "sailing-summary",
+        "sailing-summary",
     "sailing-table",
     "simple-table-test"
   ],
@@ -457,8 +452,7 @@ const TABULATOR_FIELD_USAGE_CATALOG = {
     "reservation-current-state"
   ],
   "route": [
-    "master-sailing",
-    "master-sailing-explorer"
+        "master-sailing-explorer"
   ],
   "row_label": [
     "master-sailing-explorer"
@@ -466,8 +460,7 @@ const TABULATOR_FIELD_USAGE_CATALOG = {
   "sail_code": [
     "data-match",
     "group-booking-review",
-    "master-sailing",
-    "sailing-cabin-category",
+        "sailing-cabin-category",
     "sailing-summary",
     "sailing-table",
     "simple-table-test"
@@ -479,15 +472,13 @@ const TABULATOR_FIELD_USAGE_CATALOG = {
     "ship-day-berth"
   ],
   "sail_date_from": [
-    "master-sailing",
-    "master-sailing-explorer",
+        "master-sailing-explorer",
     "sailing-summary",
     "sailing-table",
     "simple-table-test"
   ],
   "sail_days": [
-    "master-sailing",
-    "master-sailing-explorer",
+        "master-sailing-explorer",
     "sailing-summary",
     "sailing-table",
     "simple-table-test"
@@ -517,8 +508,7 @@ const TABULATOR_FIELD_USAGE_CATALOG = {
     "column-terminology-panel"
   ],
   "segment_count": [
-    "master-sailing"
-  ],
+      ],
   "sfdc_owner_name": [
     "agency-directory"
   ],

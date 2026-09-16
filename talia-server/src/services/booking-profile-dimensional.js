@@ -669,6 +669,65 @@ export async function getBookingProfileScoped(client, sailCode) {
   };
 }
 
+const dateParts = (value) => {
+  const text = String(value || '').trim();
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+};
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+const lastDayOfMonth = (year, month) => new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+/**
+ * Pick the same-ship sailing in a month bucket closest to the target day-of-month.
+ * Prefers is_main masters.
+ */
+export function pickSameMonthPeer(rows = [], targetDate) {
+  const target = dateParts(targetDate);
+  if (!target) return null;
+  const scored = (rows || [])
+    .map((row) => {
+      const parts = dateParts(row?.sail_date_from);
+      if (!parts) return null;
+      const dayDiff = Math.abs(parts.day - target.day);
+      const mainBonus = row.is_main ? -2 : 0;
+      return { row, score: dayDiff + mainBonus, sail: String(row.sail_code || '') };
+    })
+    .filter(Boolean);
+  scored.sort((a, b) => a.score - b.score || a.sail.localeCompare(b.sail));
+  return scored[0]?.row || null;
+}
+
+/**
+ * Same ship, same calendar month last year (not a ±21 day window).
+ */
+export async function findSameMonthPriorYearPeer(client, sailCode, hint = {}) {
+  const code = clean(sailCode);
+  let shipCode = clean(hint.shipCode)?.toUpperCase() || null;
+  let sailDate = clean(hint.sailDate);
+  if (!shipCode || !sailDate) {
+    const scope = await resolveVoyageScope(client, code);
+    shipCode = shipCode || clean(scope.shipCode)?.toUpperCase() || null;
+    sailDate = sailDate || clean(scope.sailDate);
+  }
+  const parts = dateParts(sailDate);
+  if (!shipCode || !parts) return null;
+  const priorYear = parts.year - 1;
+  const from = `${priorYear}-${pad2(parts.month)}-01`;
+  const to = `${priorYear}-${pad2(parts.month)}-${pad2(lastDayOfMonth(priorYear, parts.month))}`;
+  const { data } = await client
+    .from('master_sail')
+    .select('sail_code, sail_date_from, ship_code, package_type, sail_days, is_main')
+    .eq('ship_code', shipCode)
+    .gte('sail_date_from', from)
+    .lte('sail_date_from', to)
+    .order('sail_date_from', { ascending: true });
+  const match = pickSameMonthPeer(data || [], `${priorYear}-${pad2(parts.month)}-${pad2(parts.day)}`);
+  return clean(match?.sail_code);
+}
+
 /**
  * Find a prior-year peer sail by ship + similar sail date (±21 days, year-1).
  */

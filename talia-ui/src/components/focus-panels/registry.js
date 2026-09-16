@@ -1,5 +1,4 @@
 import SailingTableContainer from './SailingTable';
-import MasterSailingContainer from './MasterSailing';
 import MasterSailingExplorerContainer from './MasterSailingExplorer';
 import ShipDayBerthContainer from './ShipDayBerth';
 import ShipDayPressureContainer from './ShipDayPressure';
@@ -119,23 +118,6 @@ export const componentRegistry = {
     },
     showInReports: true,
     filePath: 'src/components/focus-panels/SailingTable/index.jsx'
-  },
-  MasterSailing: {
-    component: MasterSailingContainer,
-    panelId: 'master-sailing',
-    category: 'Tables',
-    title: 'Master Sailing',
-    description: 'Top-level grouped sailing selector (month, ship, master sail, sail code)',
-    props: {},
-    dataRequirements: 'Requires master_sail, inventory_item (sailing hierarchy), and reservation_current_state',
-    events: {
-      emits: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT],
-      respondsTo: []
-    },
-    supportsRefresh: true,
-    supportsGroupActions: true,
-    showInReports: true,
-    filePath: 'src/components/focus-panels/MasterSailing/index.jsx'
   },
   MasterSailingExplorer: {
     component: MasterSailingExplorerContainer,
@@ -1280,6 +1262,20 @@ export const componentRegistry = {
     showInReports: true,
     filePath: 'src/components/dev/DataTypesValidation.jsx'
   }
+};
+
+/**
+ * Legacy Dockview panel ids remapped to the current canonical panel.
+ * Saved focuses that still store the old id open the replacement panel.
+ */
+export const PANEL_ID_ALIASES = Object.freeze({
+  'master-sailing': 'master-sailing-explorer',
+});
+
+export const resolvePanelId = (panelId) => {
+  const key = String(panelId || '').trim();
+  if (!key) return key;
+  return PANEL_ID_ALIASES[key] || key;
 };
 
 export const getComponent = (name) => componentRegistry[name]?.component || null;

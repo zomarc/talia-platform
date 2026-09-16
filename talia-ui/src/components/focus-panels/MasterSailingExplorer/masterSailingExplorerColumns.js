@@ -27,27 +27,62 @@ export const formatMseSegmentHighlights = (segments = []) => {
   return `<span class="ms-explorer-segments">${items}</span>`;
 };
 
-export const formatMseTargetReview = (row) => {
+export const shortenTargetProfileName = (name, max = 16) => {
+  const text = String(name || '')
+    .replace(/^Suggested ·\s*/i, '')
+    .replace(/^Default ·\s*/i, '')
+    .trim();
+  if (!text) return '';
+  return text.length > max ? `${text.slice(0, Math.max(1, max - 1))}…` : text;
+};
+
+export const formatMseTargetReview = (row, { compact = false } = {}) => {
   if (row?.row_type === 'day') return '';
+  if (row?.target_review_pending) {
+    const el = document.createElement('span');
+    el.className = 'mse-target-review mse-target-review--pending';
+    el.textContent = compact ? '…' : '…';
+    el.title = 'Loading target profile…';
+    if (!compact) return el;
+    const wrap = document.createElement('span');
+    wrap.className = 'mse-target-review-stack';
+    wrap.title = 'Loading target profile…';
+    const name = document.createElement('span');
+    name.className = 'mse-target-review__name';
+    name.textContent = '…';
+    wrap.append(el, name);
+    return wrap;
+  }
   const status = row?.target_review_status;
-  if (!status || status === 'unknown') return '—';
+  const profileName = String(row?.target_profile_name || '').trim();
+  if ((!status || status === 'unknown') && !profileName) return compact ? '—' : '—';
   const gap = row?.target_gap_pp;
   const gapTxt = gap != null && Number.isFinite(Number(gap))
     ? ` ${Number(gap) > 0 ? '+' : ''}${Number(gap).toFixed(0)}`
     : '';
-  const label =
-    status === 'behind' ? `▼${gapTxt}` : status === 'ahead' ? `▲${gapTxt}` : `●${gapTxt}`;
+  const label = !status || status === 'unknown'
+    ? '—'
+    : status === 'behind' ? `▼${gapTxt}` : status === 'ahead' ? `▲${gapTxt}` : `●${gapTxt}`;
   const el = document.createElement('span');
-  el.className = `mse-target-review mse-target-review--${status}`;
+  el.className = `mse-target-review${status && status !== 'unknown' ? ` mse-target-review--${status}` : ''}`;
   el.textContent = label;
-  el.title = [
-    row?.target_profile_name ? `Target: ${row.target_profile_name}` : null,
+  const title = [
+    profileName ? `Target: ${profileName}` : 'No target profile',
     row?.target_lf_pct != null ? `Goal ${Number(row.target_lf_pct).toFixed(1)}%` : null,
-    status,
+    status && status !== 'unknown' ? status : null,
   ]
     .filter(Boolean)
     .join(' · ');
-  return el;
+  el.title = title;
+  if (!compact) return el;
+  const wrap = document.createElement('span');
+  wrap.className = 'mse-target-review-stack';
+  wrap.title = title;
+  const name = document.createElement('span');
+  name.className = 'mse-target-review__name';
+  name.textContent = shortenTargetProfileName(profileName) || 'No tgt';
+  wrap.append(el, name);
+  return wrap;
 };
 
 const bookedVolumeForRow = (row) => (
@@ -95,6 +130,34 @@ const formatCompactBookedCell = (cell) => {
     pctEl.textContent = formatMsePercent(pct);
     el.append(pctEl);
   }
+  const berths = formatMseCount(bookedVolumeForRow(row));
+  const cabins = formatMseCount(row?.booked_cabins);
+  el.title = `Booked berths ${berths}${pct != null && Number.isFinite(Number(pct)) ? ` (${formatMsePercent(pct)})` : ''} · Booked cabins ${cabins}`;
+  return el;
+};
+
+const formatCompactCabinsCell = (cell) => {
+  const row = cell.getRow().getData();
+  const el = document.createElement('span');
+  el.className = 'mse-compact-bk mse-compact-cabins';
+  const booked = document.createElement('span');
+  booked.className = 'mse-compact-bk__n';
+  booked.textContent = formatMseCount(row?.booked_cabins);
+  el.append(booked);
+  const sellable = Number(row?.sellable_cabins || row?.total_cabins);
+  if (Number.isFinite(sellable) && sellable > 0) {
+    const tot = document.createElement('span');
+    tot.className = 'mse-compact-bk__pct';
+    tot.textContent = `/ ${formatMseCount(sellable)}`;
+    el.append(tot);
+  }
+  const offsale = Number(row?.offsale_cabins);
+  el.title = [
+    `Booked cabins ${formatMseCount(row?.booked_cabins)}`,
+    Number.isFinite(sellable) && sellable > 0 ? `Sellable ${formatMseCount(sellable)}` : null,
+    Number.isFinite(offsale) && offsale > 0 ? `Offsale ${formatMseCount(offsale)}` : null,
+    Number(row?.total_cabins) > 0 ? `Nameplate ${formatMseCount(row.total_cabins)}` : null,
+  ].filter(Boolean).join(' · ');
   return el;
 };
 
@@ -119,12 +182,22 @@ export const buildMasterSailingExplorerColumns = ({
       },
       {
         field: 'berths_occupied',
-        title: 'Bk',
+        title: 'Bk B',
         headerTooltip: 'Booked berths and actual booked %',
         hozAlign: 'right',
-        minWidth: 72,
+        minWidth: 64,
         widthGrow: 1,
         formatter: formatCompactBookedCell,
+        headerSort: false,
+      },
+      {
+        field: 'booked_cabins',
+        title: 'Bk C',
+        headerTooltip: 'Booked cabins / sellable cabins',
+        hozAlign: 'right',
+        minWidth: 64,
+        widthGrow: 1,
+        formatter: formatCompactCabinsCell,
         headerSort: false,
       },
       {
@@ -134,7 +207,7 @@ export const buildMasterSailingExplorerColumns = ({
         hozAlign: 'center',
         minWidth: 72,
         widthGrow: 1,
-        formatter: (cell) => formatMseTargetReview(cell.getRow().getData()),
+        formatter: (cell) => formatMseTargetReview(cell.getRow().getData(), { compact: true }),
         headerSort: false,
       },
     ];

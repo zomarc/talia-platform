@@ -343,7 +343,7 @@ import { PANEL_ACTION_IDS } from '../shared/panelActions';
 - Use only when the panel has Tabulator grouping and users need global expand/collapse
 - Keep actions in presenter (`cycleGroupState`, optional compatibility `openAllGroups`/`collapseAllGroups`)
 - Register actions by both keys:
-  - `panelComponentId` (stable panel type key, e.g. `master-sailing`)
+  - `panelComponentId` (stable panel type key, e.g. `master-sailing-explorer`)
   - `panelInstanceId` (instance key, when available)
 - Expose `getCycleState()` returning `{ depth, maxDepth }` so tab icon/tooltip reflects current state
 - Cleanup registrations on unmount to avoid stale handlers

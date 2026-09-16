@@ -371,8 +371,12 @@ For any new GraphQL data access path that cannot use `useTableDataWithContext`, 
 
 This keeps observability and performance metadata consistent across all reports.
 
+Enforcement: `npm run check:standards` (from `talia-ui` or monorepo root). See `docs/FRAMEWORK-DIRECTIVES.md` — CI is definitive; Cursor rules are optional hints only.
+
 ## Example Components
 
 Reference implementations:
-- `VoyageReport` - Lightweight table report template
+- `MasterSailingExplorer` - Canonical sailing explorer (selection, shell, Tabulator)
+- `Agency` - Full report shell
+- `VoyageReport` - Lightweight table report template (legacy; prefer MSE/Agency for new work)
 - `MasterVoyagePerformanceSummary` - Complex report with grouping

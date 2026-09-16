@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import useReportPanelLoading from '../../../hooks/useReportPanelLoading';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import { useGlobalBookedComposition } from '../../../hooks/useGlobalBookedComposition';
 import { useGlobalMarketDimension } from '../../../hooks/useGlobalMarketDimension';
@@ -316,28 +317,37 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
     || shipDayError;
 
   const [reviewBySail, setReviewBySail] = useState(() => new Map());
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const detailsLoading = reviewLoading
+    || (distributionEnabled && (reservationLoading || agenciesLoading || marketRollUpLoading || allocLoading));
+  useReportPanelLoading(panelInstanceId, panelComponentId, detailsLoading);
 
   useEffect(() => {
     const masters = explorerBundle?.masters || [];
     if (!masters.length) {
       setReviewBySail(new Map());
+      setReviewLoading(false);
       return undefined;
     }
     let cancelled = false;
-    const sailCodes = masters
-      .map((m) => String(m?.sail_code || '').trim())
-      .filter(Boolean)
-      .slice(0, 120);
+    const sailCodes = [...new Set(
+      masters
+        .flatMap((m) => [m?.sail_code, m?.reference_sail_code])
+        .map((code) => String(code || '').trim())
+        .filter(Boolean)
+    )];
     const actualLfPctBySail = {};
     masters.forEach((m) => {
       const code = String(m?.sail_code || '').trim();
       if (!code || m?.actual_booked_pct == null) return;
       actualLfPctBySail[code] = Number(m.actual_booked_pct);
+      const ref = String(m?.reference_sail_code || '').trim();
+      if (ref) actualLfPctBySail[ref] = actualLfPctBySail[code];
     });
 
+    setReviewLoading(true);
     (async () => {
       try {
-        // Pass actuals via query isn't supported server-side yet — client merges gap using local LF.
         const statuses = await profileCompareService.fetchReviewStatuses(sailCodes);
         if (cancelled) return;
         const map = new Map();
@@ -354,18 +364,21 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
             else if (gapPp > 3) status = 'ahead';
             else status = 'on';
           }
-          map.set(code, {
+          const next = {
             ...s,
             actualLfPct: actual,
             gapPp,
             status,
-          });
-          if (s.referenceSailCode) map.set(String(s.referenceSailCode), map.get(code));
+          };
+          map.set(code, next);
+          if (s.referenceSailCode) map.set(String(s.referenceSailCode).trim(), next);
+          if (s.inventoryItemId) map.set(`item:${s.inventoryItemId}`, next);
         });
         setReviewBySail(map);
       } catch (err) {
         console.warn('[MSE] profile review statuses:', err?.message || err);
-        if (!cancelled) setReviewBySail(new Map());
+      } finally {
+        if (!cancelled) setReviewLoading(false);
       }
     })();
 
@@ -376,20 +389,23 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
 
   const mastersWithReview = useMemo(() => {
     const masters = explorerBundle?.masters || [];
-    if (!reviewBySail.size) return masters;
     return masters.map((m) => {
       const code = String(m?.sail_code || '').trim();
-      const review = reviewBySail.get(code);
-      if (!review) return m;
+      const ref = String(m?.reference_sail_code || '').trim();
+      const review = reviewBySail.get(code) || reviewBySail.get(ref);
+      if (!review) {
+        return reviewLoading ? { ...m, target_review_pending: true } : m;
+      }
       return {
         ...m,
         target_review_status: review.status,
         target_lf_pct: review.targetLfPct,
         target_gap_pp: review.gapPp,
         target_profile_name: review.activeTargetName,
+        target_review_pending: false,
       };
     });
-  }, [explorerBundle?.masters, reviewBySail]);
+  }, [explorerBundle?.masters, reviewBySail, reviewLoading]);
 
   const handleRefresh = () => {
     refetchMasterSail();

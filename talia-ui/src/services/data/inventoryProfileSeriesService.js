@@ -8,6 +8,7 @@ const GET_INVENTORY_ITEMS = gql`
       id
       sailCode
       referenceSailCode
+      sailingRole
       shipCode
       shipName
     }
@@ -113,9 +114,11 @@ class InventoryProfileSeriesService {
         options: { fetchPolicy: 'network-only' },
       });
       const rows = data?.inventoryItems || [];
-      // Prefer master / exact sail_code match when several rows share a reference.
-      const exact = rows.find((r) => String(r.sailCode || '').trim() === code);
-      return exact || rows[0] || null;
+      const exact = rows.filter((r) => String(r.sailCode || '').trim() === code);
+      const pool = exact.length ? exact : rows;
+      return pool.find((r) => String(r.sailingRole || '').toLowerCase() === 'master')
+        || pool[0]
+        || null;
     };
 
     const bySail = await tryFilters({ sailCode: code });

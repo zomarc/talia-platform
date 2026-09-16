@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useEffect, useState } from "react";
 import { DockviewReact } from "dockview";
 import "dockview/dist/styles/dockview.css"; // required Dockview CSS
-import reportRegistry, { canRoleAccessComponent } from "./components/focus-panels/registry";
+import reportRegistry, { canRoleAccessComponent, PANEL_ID_ALIASES } from "./components/focus-panels/registry";
 import { normalizeRole } from "./utils/roleUtils";
 import { GraphQLUtils } from "./lib/apolloClient";
 // Focus Management Integration
@@ -870,6 +870,27 @@ function Dashboard({ user }) {
             theme={theme}
             panelInstanceId={props?.api?.id || props?.params?.panel?.id || report.panelId}
             panelComponentId={report.panelId}
+          />
+        </ReportShell>
+      );
+    });
+    // Saved layouts may still reference removed panel ids (e.g. master-sailing).
+    Object.entries(PANEL_ID_ALIASES).forEach(([legacyId, canonicalId]) => {
+      if (map[legacyId] || !map[canonicalId]) return;
+      const report = Object.values(reportRegistry).find((entry) => entry?.panelId === canonicalId);
+      if (!report) return;
+      const Component = report.component;
+      map[legacyId] = (props) => (
+        <ReportShell
+          report={report}
+          panelInstanceId={props?.api?.id || props?.params?.panel?.id || canonicalId}
+          panelApi={props?.api || null}
+        >
+          <Component
+            {...props}
+            theme={theme}
+            panelInstanceId={props?.api?.id || props?.params?.panel?.id || canonicalId}
+            panelComponentId={canonicalId}
           />
         </ReportShell>
       );

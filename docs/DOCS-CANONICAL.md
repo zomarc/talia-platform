@@ -7,6 +7,8 @@ This file defines the authoritative documentation set for active development.
 - `README.md` - project entry point and local run basics
 - `docs/README.md` - docs hub and navigation
 - `docs/DIRECTIVE.md` - mandatory coding and styling standards
+- `docs/FRAMEWORK-DIRECTIVES.md` - consolidation contract; CI is the definitive enforcement gate
+- `docs/CONSOLIDATION-PLAN.md` - incremental sprints (governance → polish → cleanup)
 - `docs/ARCHITECTURE.md` - system architecture and boundaries
 - `docs/DEVELOPMENT-WORKFLOW.md` - development workflow and daily usage
 - `docs/DEPLOYMENT.md` - deployment and environment operations

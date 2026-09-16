@@ -11,6 +11,7 @@ import { getReservationBookingCurve } from './reservation-booking-curve.js';
 import { getSeasonalTradingPack } from './seasonal-trading-pack.js';
 import {
   listInventoryTargetProfiles,
+  listInventoryTargetProfileLibrary,
   getInventoryTargetProfile,
   upsertInventoryTargetProfile,
   deleteInventoryTargetProfile,
@@ -1003,6 +1004,10 @@ export class SupabaseDataService {
 
   async listInventoryTargetProfiles(inventoryItemId) {
     return listInventoryTargetProfiles(this.client, inventoryItemId);
+  }
+
+  async listInventoryTargetProfileLibrary() {
+    return listInventoryTargetProfileLibrary(this.client);
   }
 
   async getInventoryTargetProfile(id) {

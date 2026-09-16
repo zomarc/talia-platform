@@ -5,8 +5,21 @@
 
 import { getReservationBookingCurve } from './reservation-booking-curve.js';
 import { densifyLfSeriesFromCurve } from './profile-compare.js';
+import { findSameMonthPriorYearPeer } from './booking-profile-dimensional.js';
 import { resolveModelPeer } from './profile-model-map.js';
-import { upsertInventoryTargetProfile } from './inventory-target-profile.js';
+import {
+  getInventoryTargetProfile,
+  listInventoryTargetProfiles,
+  upsertInventoryTargetProfile,
+} from './inventory-target-profile.js';
+
+/** Built-in voyage curve when last year has no profile and REAL has no points. */
+export const DEFAULT_TARGET_WAYPOINTS = [
+  { weeksUntilSailing: 16, lfPct: 15 },
+  { weeksUntilSailing: 8, lfPct: 40 },
+  { weeksUntilSailing: 4, lfPct: 62 },
+  { weeksUntilSailing: 0, lfPct: 85 },
+];
 
 function clean(value) {
   if (value == null) return null;
@@ -94,28 +107,141 @@ async function ensureMasterItem(client, sail) {
   return inserted;
 }
 
-/**
- * @param {string} fromDate YYYY-MM-DD (default 2026-06-01)
- */
-export async function backfillTargetProfiles(client, options = {}, editorKey = null) {
-  const fromDate = clean(options.fromDate) || '2026-06-01';
-  const toDate = clean(options.toDate);
-  const dryRun = options.dryRun === true;
-  const limit = Math.min(400, Math.max(1, Number(options.limit) || 250));
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
 
-  const fetchSails = async (mainOnly) => {
-    let query = client
+export function builtinDefaultNodes() {
+  return DEFAULT_TARGET_WAYPOINTS.map((point, idx) => ({
+    tempKey: `bf-default-w${point.weeksUntilSailing}`,
+    dimensionLevel: 'voyage',
+    dimensionKey: 'TOTAL',
+    weeksUntilSailing: point.weeksUntilSailing,
+    weekLabel: point.weeksUntilSailing === 0 ? 'Sail' : `W-${point.weeksUntilSailing}`,
+    lfPct: point.lfPct,
+    pointOrder: idx,
+  }));
+}
+
+export function mergeHorizonSails(departures = [], inProgress = [], limit = 500) {
+  const cap = Math.min(800, Math.max(1, Number(limit) || 500));
+  const seen = new Set();
+  const merged = [];
+  for (const sail of [...inProgress, ...departures]) {
+    const code = clean(sail?.sail_code);
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    merged.push(sail);
+    if (merged.length >= cap) break;
+  }
+  return merged;
+}
+
+function cloneVoyageNodes(profile) {
+  return (profile?.nodes || [])
+    .filter((node) => String(node.dimensionLevel || '') === 'voyage')
+    .map((node, idx) => ({
+      tempKey: `clone-w${node.weeksUntilSailing}-${idx}`,
+      dimensionLevel: 'voyage',
+      dimensionKey: node.dimensionKey || 'TOTAL',
+      weeksUntilSailing: node.weeksUntilSailing,
+      weekLabel: node.weekLabel || (Number(node.weeksUntilSailing) === 0 ? 'Sail' : `W-${node.weeksUntilSailing}`),
+      lfPct: node.lfPct,
+      pointOrder: idx,
+    }));
+}
+
+async function loadActiveTargetForSail(client, sailCode) {
+  const code = clean(sailCode);
+  if (!code) return null;
+  const { data: item } = await client
+    .from('inventory_item')
+    .select('id')
+    .eq('sail_code', code)
+    .limit(1)
+    .maybeSingle();
+  if (!item?.id) return null;
+  const profiles = await listInventoryTargetProfiles(client, item.id);
+  return profiles.find((profile) => profile.isActive) || null;
+}
+
+async function resolveDefaultPeer(client, sail) {
+  const code = clean(sail.sail_code);
+  const sameMonth = await findSameMonthPriorYearPeer(client, code, {
+    shipCode: sail.ship_code,
+    sailDate: sail.sail_date_from,
+  });
+  if (sameMonth) {
+    return { peerSail: sameMonth, peerSource: 'same_month' };
+  }
+  const fallback = await resolveModelPeer(client, code);
+  return {
+    peerSail: fallback.modelSailCode || null,
+    peerSource: fallback.modelSailCode ? 'near_date' : null,
+  };
+}
+
+async function loadTemplateProfile(client, templateProfileId) {
+  const id = clean(templateProfileId);
+  if (!id) return null;
+  try {
+    return await getInventoryTargetProfile(client, id);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchHorizonSails(client, { fromDate, toDate, limit, mainOnly }) {
+  const select = 'sail_code, sail_date_from, sail_date_to, ship_code, ship_name, is_main';
+  let departuresQuery = client
+    .from('master_sail')
+    .select(select)
+    .order('sail_date_from', { ascending: true })
+    .limit(limit);
+  if (fromDate) departuresQuery = departuresQuery.gte('sail_date_from', fromDate);
+  if (toDate) departuresQuery = departuresQuery.lte('sail_date_from', toDate);
+  if (mainOnly) departuresQuery = departuresQuery.eq('is_main', 1);
+
+  let inProgress = [];
+  if (fromDate) {
+    let inProgressQuery = client
       .from('master_sail')
-      .select('sail_code, sail_date_from, ship_code, ship_name, is_main')
-      .gte('sail_date_from', fromDate)
+      .select(select)
+      .lt('sail_date_from', fromDate)
+      .gte('sail_date_to', fromDate)
       .order('sail_date_from', { ascending: true })
       .limit(limit);
-    if (toDate) query = query.lte('sail_date_from', toDate);
-    if (mainOnly) query = query.eq('is_main', 1);
-    const { data, error } = await query;
-    if (error) throw error;
-    return data || [];
-  };
+    if (mainOnly) inProgressQuery = inProgressQuery.eq('is_main', 1);
+    const inProgressResult = await inProgressQuery;
+    if (inProgressResult.error) throw inProgressResult.error;
+    inProgress = inProgressResult.data || [];
+  }
+
+  const departuresResult = await departuresQuery;
+  if (departuresResult.error) throw departuresResult.error;
+  return mergeHorizonSails(departuresResult.data || [], inProgress, limit);
+}
+
+/**
+ * Create default targets for master sails that have none.
+ * Prefers an explicit template, then last year's same-month active profile,
+ * then the peer REAL curve, then a built-in waypoint curve.
+ * @param {string} fromDate YYYY-MM-DD (default today — open / in-progress / future)
+ */
+export async function backfillTargetProfiles(client, options = {}, editorKey = null) {
+  const fromDate = clean(options.fromDate) || todayKey();
+  const toDate = clean(options.toDate);
+  const dryRun = options.dryRun === true;
+  const limit = Math.min(800, Math.max(1, Number(options.limit) || 500));
+  const templateProfile = await loadTemplateProfile(client, options.templateProfileId);
+  const hasTemplate = Boolean(cloneVoyageNodes(templateProfile).length);
+
+  const fetchSails = (mainOnly) => fetchHorizonSails(client, {
+    fromDate,
+    toDate,
+    limit,
+    mainOnly,
+  });
 
   let sails = await fetchSails(true);
   if (!sails.length) sails = await fetchSails(false);
@@ -147,15 +273,28 @@ export async function backfillTargetProfiles(client, options = {}, editorKey = n
         continue;
       }
 
-      const peer = await resolveModelPeer(client, code);
-      const curveSail = peer.modelSailCode || code;
-      const curve = await getReservationBookingCurve(client, curveSail, {
-        marketBreakdown: 'market_group',
-        seriesMode: 'market',
-        includeCompetitor: false,
-      }).catch(() => null);
-      const series = densifyLfSeriesFromCurve(curve);
-      const nodes = sampleWeekWaypoints(series, 4);
+      const peer = hasTemplate
+        ? { peerSail: null, peerSource: 'template' }
+        : await resolveDefaultPeer(client, sail);
+      const peerProfile = !hasTemplate && peer.peerSail
+        ? await loadActiveTargetForSail(client, peer.peerSail)
+        : null;
+      let nodes = hasTemplate ? cloneVoyageNodes(templateProfile) : cloneVoyageNodes(peerProfile);
+      let source = hasTemplate ? 'template' : (peerProfile ? 'profile' : null);
+      if (!nodes.length) {
+        const curveSail = peer.peerSail || code;
+        const curve = await getReservationBookingCurve(client, curveSail, {
+          marketBreakdown: 'market_group',
+          seriesMode: 'market',
+          includeCompetitor: false,
+        }).catch(() => null);
+        nodes = sampleWeekWaypoints(densifyLfSeriesFromCurve(curve), 4);
+        source = nodes.length ? 'curve' : null;
+      }
+      if (!nodes.length) {
+        nodes = builtinDefaultNodes();
+        source = 'builtin';
+      }
       if (!nodes.length) {
         skippedNoCurve += 1;
         continue;
@@ -169,17 +308,30 @@ export async function backfillTargetProfiles(client, options = {}, editorKey = n
 
       const endLf = nodes.find((n) => n.weeksUntilSailing === 0)?.lfPct
         ?? nodes[nodes.length - 1]?.lfPct;
+      const monthKey = String(sail.sail_date_from || '').slice(0, 7);
+      const usableName = (name) => (name && !/^Suggested/i.test(name) ? name : null);
+      const copiedName = usableName(templateProfile?.name)
+        || usableName(peerProfile?.name)
+        || (monthKey ? `Default · ${monthKey}` : 'Default target');
+      const name = source === 'template' || source === 'profile'
+        ? copiedName
+        : (peer.peerSail ? `Suggested · ${peer.peerSail}` : 'Default target');
+      const description = source === 'template'
+        ? `Assigned from ${templateProfile?.name || 'open profile'} · end LF ~${endLf}%`
+        : source === 'profile'
+          ? `Copied from ${peer.peerSail} (${peer.peerSource || 'peer'}) · end LF ~${endLf}%`
+          : source === 'curve' && peer.peerSail
+            ? `Default from ${peer.peerSail} booking curve · end LF ~${endLf}%`
+            : source === 'builtin'
+              ? `Built-in default curve · end LF ~${endLf}%`
+              : `Default from REAL · end LF ~${endLf}%`;
       await upsertInventoryTargetProfile(
         client,
         {
           inventoryItemId: String(item.id),
-          name: peer.modelSailCode
-            ? `Suggested · ${peer.modelSailCode}`
-            : 'Suggested target',
-          perspective: 'commercial',
-          description: peer.modelSailCode
-            ? `Backfill from model prior ${peer.modelSailCode} · end LF ~${endLf}%`
-            : `Backfill from REAL · end LF ~${endLf}%`,
+          name,
+          perspective: templateProfile?.perspective || peerProfile?.perspective || 'commercial',
+          description,
           isActive: true,
           nodes,
         },
@@ -204,7 +356,7 @@ export async function backfillTargetProfiles(client, options = {}, editorKey = n
     failed,
     sampleSailCodes,
     message: dryRun
-      ? `Dry run: would create ${created} of ${considered} sails from ${fromDate}`
-      : `Created ${created} target profiles (${skippedExisting} already had one) from ${fromDate}`,
+      ? `Dry run: would create ${created} of ${considered} sails from ${fromDate}${toDate ? `–${toDate}` : ''}`
+      : `Assigned ${created} defaults (${skippedExisting} already had one, ${failed} failed${skippedNoCurve ? `, ${skippedNoCurve} no curve` : ''}) from ${fromDate}${toDate ? `–${toDate}` : ''}`,
   };
 }

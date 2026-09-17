@@ -1026,6 +1026,11 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--theme-component-gap-md', scaledPx(10));
     root.style.setProperty('--theme-card-padding', scaledPx(10));
     root.style.setProperty('--theme-component-control-height', scaledPx(28, 20));
+    // Status / risk pills (GE, PE, shared .talia-pill) — scale with font + component padding
+    root.style.setProperty('--theme-status-pill-font-size', `${Math.max(10, Math.round(fontSize * 0.88))}px`);
+    root.style.setProperty('--theme-status-pill-padding-y', scaledPx(3));
+    root.style.setProperty('--theme-status-pill-padding-x', scaledPx(8));
+    root.style.setProperty('--theme-status-pill-min-height', scaledPx(20, 16));
     // Shared panel-fit sizing tokens used by card/chart/map/table surfaces.
     root.style.setProperty('--theme-card-min-height', scaledPx(160, 110));
     root.style.setProperty('--theme-table-min-height', scaledPx(220, 140));

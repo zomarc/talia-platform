@@ -1,11 +1,12 @@
 import React from 'react';
 
 /**
- * Admin-only **Provenance** section — where this report’s data comes from.
- * Not Details (≣) and not tab ⓘ technical meta.
+ * Admin+ **Provenance** section — where this report’s data comes from.
+ * Not Details (≣), not Callouts, and not tab ⓘ technical meta.
  *
- * Gate with `useReportShellOptions` → `showProvenance` (`VIEW_PROVENANCE`, minRole ADMIN).
- * Keep children mounted when hidden so admin toggle does not remount.
+ * Gate with `useReportShellOptions` → `showProvenance`
+ * (`VIEW_PROVENANCE`, minRole ADMIN, default off).
+ * Keep children mounted when hidden so the Views toggle does not remount.
  *
  * @param {boolean} visible
  * @param {string} [title='Provenance']

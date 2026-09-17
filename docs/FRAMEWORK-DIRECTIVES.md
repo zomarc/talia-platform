@@ -35,6 +35,8 @@ Root convenience (when wired): `npm run check:standards` from the monorepo root.
 | Concern | Canonical | Removed / not for new work |
 |---------|-----------|----------------------------|
 | Master sailing explorer | `MasterSailingExplorer` (`master-sailing-explorer`) | `MasterSailing` removed; saved layouts alias `master-sailing` → explorer |
+| Groups risk (GRM) | `GroupsExplorer` (`groups-explorer`) | Prefer over ad-hoc group tables; Source MR ≠ Talia MR |
+| Promo risk / activity | `PromoExplorer` (`promo-explorer`) | Heuristic flags v1; booking take-up later |
 | Target profile edit | `InventoryTargetProfileEditor` | `TargetProfileEditor`, `BookingTargetProfileEditorSimple` |
 | Booking curves | `ReservationBookingCurve` + `ProfileCompare` | Legacy `BookingProfile` and `Booking*Simple` diagnostics |
 

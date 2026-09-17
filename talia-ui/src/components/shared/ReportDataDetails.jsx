@@ -9,6 +9,10 @@ import React from 'react';
  * When `visible` is false, children stay mounted but are hidden so state survives
  * the global Details toggle.
  *
+ * Selection / row-detail cards should use `.talia-card` so Appearance
+ * Card Intensity + Component & Card Padding apply. Avoid a redundant
+ * “Selected …” title above the card.
+ *
  * @param {boolean} visible - from `usePanelDetailsVisibility()[0]`
  * @param {keyof JSX.IntrinsicElements | React.ElementType} [as='div'] - root element, e.g. `'section'`
  */

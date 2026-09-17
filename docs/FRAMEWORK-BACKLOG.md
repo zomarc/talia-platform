@@ -24,6 +24,8 @@ Generated from live code audit + docs scan (Jul 2026). Prefer this over stale `N
 | Emit helpers on emitters (SailingSummary, DataMatch, SailingTable, SimpleTable) | **Done** | Clear-on-deselect removed; SailingTable mount-once |
 | MasterSailing removed; MSE is sole explorer | **Done** | `master-sailing` layout alias → `master-sailing-explorer` |
 | CI is definitive standards gate | **Done** | `docs/FRAMEWORK-DIRECTIVES.md`; `npm run check:standards` |
+| Groups Explorer (GRM) v1 | **Done** | Source MR display-only; Talia MR independent; registry `groups-explorer` |
+| Promo Explorer v1 | **Done** | Active/related/flagged heuristics; registry `promo-explorer` |
 | Selection guide + `_TEMPLATE` match canonical docs | Open | Merge `COMPONENT-CREATION-GUIDE` / template with `CANONICAL-SELECTION-LINKING.md` |
 | Report-shell sweep (outliers) | Open | e.g. DemandHeatmap, MasterVoyagePerformanceSummary |
 | Sidebar toggles → `publishDashboardGlobalConfig` | Open | DashboardSidebar still fires legacy-only events |

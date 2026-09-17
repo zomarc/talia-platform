@@ -2433,11 +2433,20 @@
   flex-shrink: 0;
 }
 
-/* Wrapper from ReportDataDetails.jsx — panels gate data tables/grids with this + hook */
+/* Wrapper from ReportDataDetails.jsx — panels gate secondary blocks with this + hook.
+   Selection / detail cards inside should use `.talia-card` (Appearance card padding + intensity). */
 .talia-report-data-details {
   flex-shrink: 0;
   min-width: 0;
   min-height: 0;
+  margin-top: var(--theme-component-gap-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-component-gap-sm);
+}
+
+.talia-report-data-details > .talia-card {
+  width: 100%;
 }
 
 .talia-report-data-details[hidden] {

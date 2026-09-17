@@ -34,6 +34,8 @@ Small enhancements on the live path (MSE / RM Checklist / Target Profile). Do th
 | RM Checklist: longer explanation tooltip | **Done** | Hover action / rationale for full explanation |
 | Target Profile Editor library modes | Done recently | This sailing vs Library |
 | MSE scroll restore on panel switch | Done recently | |
+| Groups Explorer (GRM) v1 | **Done** | `groups-explorer` — Source MR display-only; Talia MR independent; impact flags |
+| Promo Explorer v1 | **Done** | `promo-explorer` — active / related / conservative detrimental heuristics |
 
 ---
 

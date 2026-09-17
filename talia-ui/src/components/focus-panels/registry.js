@@ -18,6 +18,8 @@ import ItineraryList from './ItineraryList';
 import ItineraryExtract from './ItineraryExtract';
 import ReservationCurrentStateContainer from './ReservationCurrentState';
 import GroupBookingReviewContainer from './GroupBookingReview';
+import GroupsExplorerContainer from './GroupsExplorer';
+import PromoExplorerContainer from './PromoExplorer';
 import SailingDemandCompositionContainer from './SailingDemandComposition';
 import BookingProfileContainer from './BookingProfile';
 import ReservationBookingCurveContainer from './ReservationBookingCurve';
@@ -76,6 +78,7 @@ import {
   VIEW_LEGENDS,
   VIEW_NESTED,
   VIEW_MSE_DENSITY,
+  VIEW_DENSITY,
   VIEW_CHECKLIST_DISPLAY,
   VIEW_SNAPSHOT,
   VIEW_TOOLTIP,
@@ -559,6 +562,48 @@ export const componentRegistry = {
     supportsRefresh: true,
     showInReports: true,
     filePath: 'src/components/focus-panels/GroupBookingReview/index.jsx'
+  },
+  GroupsExplorer: {
+    component: GroupsExplorerContainer,
+    panelId: 'groups-explorer',
+    category: 'Tables',
+    title: 'Groups Explorer',
+    description: 'Group Risk Management — commitment, impact, source vs Talia materialisation rate, agency context',
+    props: {},
+    dataRequirements: 'Requires reservation (group_id, probabilities, fact_group_alloc) and agency. Responds to sail.select.',
+    events: {
+      emits: [SAIL_SELECT_EVENT],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+    },
+    supportsRefresh: true,
+    supportsDataExport: true,
+    showInReports: true,
+    options: {
+      views: [VIEW_DENSITY, VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_COLUMN_FILTERS, VIEW_PROVENANCE],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/GroupsExplorer/index.jsx'
+  },
+  PromoExplorer: {
+    component: PromoExplorerContainer,
+    panelId: 'promo-explorer',
+    category: 'Tables',
+    title: 'Promo Explorer',
+    description: 'Active and related promotions with conservative detrimental flags',
+    props: {},
+    dataRequirements: 'Requires published_rates_current_state. Responds to sail.select; related sails by ship.',
+    events: {
+      emits: [SAIL_SELECT_EVENT],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+    },
+    supportsRefresh: true,
+    supportsDataExport: true,
+    showInReports: true,
+    options: {
+      views: [VIEW_DENSITY, VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_COLUMN_FILTERS, VIEW_PROVENANCE],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/PromoExplorer/index.jsx'
   },
   SailingDemandComposition: {
     component: SailingDemandCompositionContainer,

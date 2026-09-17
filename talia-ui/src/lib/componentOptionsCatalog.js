@@ -11,12 +11,12 @@ import { hasRole, canConfigureComponentOperations, normalizeRole } from '../util
 /** Shared view defs — panels opt in via catalog / registry.options */
 export const VIEW_SNAPSHOT = { id: 'snapshot', label: 'Snapshot', type: 'boolean', default: true };
 export const VIEW_DETAILS = { id: 'details', label: 'Details', type: 'boolean', default: true };
-/** Admin-only: where this report’s data comes from. Not Details and not tab ⓘ. */
+/** Admin+ (and SUPER_USER): where this report’s data comes from. Off by default; Views → Provenance. */
 export const VIEW_PROVENANCE = {
   id: 'provenance',
   label: 'Provenance',
   type: 'boolean',
-  default: true,
+  default: false,
   minRole: 'ADMIN',
 };
 export const VIEW_FILTERS = { id: 'filters', label: 'Filters', type: 'boolean', default: true };
@@ -33,8 +33,8 @@ export const VIEW_NESTED = {
   default: 'nested',
   choiceLabels: { nested: 'Nested', flat: 'Flat' },
 };
-/** Master Sailing Explorer — full metric grid vs Date / Bk / vs Tgt. */
-export const VIEW_MSE_DENSITY = {
+/** Shared Full / Compact density — opt in via registry Views (MSE, Groups, Promo, …). */
+export const VIEW_DENSITY = {
   id: 'density',
   label: 'Density',
   type: 'choice',
@@ -42,6 +42,8 @@ export const VIEW_MSE_DENSITY = {
   default: 'full',
   choiceLabels: { full: 'Full', compact: 'Compact' },
 };
+/** @deprecated Prefer VIEW_DENSITY — same id/choices for Master Sailing Explorer. */
+export const VIEW_MSE_DENSITY = VIEW_DENSITY;
 /** RM Checklist — findings table vs date × action heatmap. */
 export const VIEW_CHECKLIST_DISPLAY = {
   id: 'display',
@@ -203,6 +205,14 @@ export const DEFAULT_COMPONENT_OPTIONS = {
   },
   'published-rates-grid': {
     views: [VIEW_LEGENDS],
+    operations: [],
+  },
+  'groups-explorer': {
+    views: [VIEW_DENSITY, VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_COLUMN_FILTERS, VIEW_PROVENANCE],
+    operations: [],
+  },
+  'promo-explorer': {
+    views: [VIEW_DENSITY, VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_COLUMN_FILTERS, VIEW_PROVENANCE],
     operations: [],
   },
   'competitor-benchmark': {

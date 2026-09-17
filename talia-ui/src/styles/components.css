@@ -89,7 +89,7 @@
   flex-direction: column;
   gap: 0;
   min-width: 0;
-  padding: 2px 8px 4px;
+  padding: var(--theme-component-padding-xs) var(--theme-component-padding-md);
 }
 
 .talia-report__snapshot-title {
@@ -107,7 +107,7 @@
   flex-wrap: nowrap;
   align-items: stretch;
   gap: 0;
-  padding: 3px 4px;
+  padding: var(--theme-component-padding-xs) var(--theme-component-padding-sm);
   border: 1px solid var(--theme-border);
   border-radius: 4px;
   background: var(--theme-glass);
@@ -299,6 +299,10 @@
   border-radius: var(--theme-radius-sm);
   background: color-mix(in srgb, var(--theme-warning) 10%, var(--theme-glass));
   color: var(--theme-text-secondary);
+  margin: 0 var(--theme-component-padding-md);
+  padding: var(--theme-component-padding-xs) var(--theme-component-padding-sm);
+  font-size: var(--theme-font-size-sm);
+  line-height: 1.35;
 }
 
 .talia-callouts-hidden .talia-callout,
@@ -1256,11 +1260,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 2px 6px;
-  border-radius: 12px;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
+  box-sizing: border-box;
+  min-height: var(--theme-status-pill-min-height, 20px);
+  padding: var(--theme-status-pill-padding-y, 3px) var(--theme-status-pill-padding-x, 8px);
+  border-radius: 999px;
+  font-size: var(--theme-status-pill-font-size, 10px);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
   text-transform: uppercase;
   background: var(--theme-border-light);
   color: var(--theme-fg);

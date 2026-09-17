@@ -13,11 +13,14 @@
 import { useMemo } from 'react';
 import { useComponentOptions } from './useComponentOptions';
 import { usePanelDetailsVisibility } from './usePanelDetailsVisibility';
-import { buildReportShellClassName, resolveViewValue } from '../lib/componentOptionsCatalog';
+import {
+  buildReportShellClassName,
+  resolveViewValue,
+  VIEW_PROVENANCE,
+} from '../lib/componentOptionsCatalog';
 
 const SNAPSHOT_DEF = { id: 'snapshot', default: true };
 const DETAILS_DEF = { id: 'details', default: true };
-const PROVENANCE_DEF = { id: 'provenance', default: true };
 const FILTERS_DEF = { id: 'filters', default: true };
 const COLUMN_FILTERS_DEF = { id: 'columnFilters', default: true };
 const CONTROLS_DEF = { id: 'controls', default: true };
@@ -39,6 +42,7 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
   const catalogIds = useMemo(() => new Set((views || []).map((v) => v.id)), [views]);
   const hasSnapshotView = catalogIds.has('snapshot');
   const hasDetailsView = catalogIds.has('details');
+  // Provenance is role-filtered out of `views` for non–SUPER_USER; never show without the toggle.
   const hasProvenanceView = catalogIds.has('provenance');
   const hasFiltersView = catalogIds.has('filters');
   const hasColumnFiltersView = catalogIds.has('columnFilters');
@@ -56,7 +60,12 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
 
   const optionsSnapshot = resolveViewValue(viewsState, SNAPSHOT_DEF) !== false;
   const optionsDetails = resolveViewValue(viewsState, DETAILS_DEF) !== false;
-  const optionsProvenance = resolveViewValue(viewsState, PROVENANCE_DEF) !== false;
+  const optionsProvenance = resolveViewValue(viewsState, VIEW_PROVENANCE) === true;
+  const densityPref = resolveViewValue(viewsState, { id: 'density', default: 'full' }) === 'compact'
+    ? 'compact'
+    : 'full';
+  const isCompact = densityPref === 'compact';
+  const hasDensityView = catalogIds.has('density');
   const optionsFilters = resolveViewValue(viewsState, FILTERS_DEF) !== false;
   const optionsColumnFilters = resolveViewValue(viewsState, COLUMN_FILTERS_DEF) !== false;
   const optionsControls = resolveViewValue(viewsState, CONTROLS_DEF) !== false;
@@ -113,6 +122,9 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
     showTooltip,
     showLegends,
     tooltipView,
+    density: densityPref,
+    isCompact,
+    hasDensityView,
     reportShellClassName: buildReportShellClassName('', {
       showColumnFilters,
       showControls,

@@ -887,24 +887,6 @@ const MasterSailingExplorerPresenter = ({
           </label>
         ))}
       </div>
-      <div className="ms-explorer-density" aria-label="Explorer density">
-        <button
-          type="button"
-          className={`talia-btn ${!isCompact ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
-          aria-pressed={!isCompact}
-          onClick={() => setView('density', 'full')}
-        >
-          Full
-        </button>
-        <button
-          type="button"
-          className={`talia-btn ${isCompact ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
-          aria-pressed={isCompact}
-          onClick={() => setView('density', 'compact')}
-        >
-          Compact
-        </button>
-      </div>
       {showControls && !isCompact ? (
         <div className="talia-report__controls" aria-label="Master sailing explorer controls">
           <button type="button" className="talia-btn talia-btn--secondary" onClick={expandAllMasters}>

@@ -486,15 +486,6 @@
   padding-bottom: 3px;
 }
 
-.ms-explorer-density {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--theme-border);
-}
-
 .ms-explorer-panel--compact .ms-explorer-table {
   min-width: 0;
 }

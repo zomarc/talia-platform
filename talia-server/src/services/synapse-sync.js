@@ -2,6 +2,7 @@ import sql from 'mssql';
 import { createRequire } from 'module';
 
 import { supabaseDataService } from './supabase.js';
+import { syncPortCityFromSynapse } from './port-city-sync.js';
 import { 
   syncReservationChanges,
   processReservationChangesBatch,
@@ -2711,7 +2712,13 @@ class SynapseSyncService {
       logger.info(`🔄 Starting sync for table: ${tableName} (dataset: ${datasetName})`);
 
       let result;
-      if (runtime.type === 'derived') {
+      if (tableName === 'portCity') {
+        result = await syncPortCityFromSynapse({
+          logger,
+          synapseConfig: this.synapseConfig,
+        });
+        result.detailedLogs = logger.getLogs();
+      } else if (runtime.type === 'derived') {
         result = await this.syncDerivedTable(runtime, logger);
         // For derived tables, detailedLogs come from SyncOperation wrapper
         // If not present, fall back to logger

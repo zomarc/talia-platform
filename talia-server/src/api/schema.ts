@@ -1614,6 +1614,101 @@ export const typeDefs = `#graphql
     limit: Int
   }
 
+  type RequirementItem {
+    id: ID!
+    section: String!
+    title: String!
+    detail: String
+    status: String!
+    priority: String!
+    area: String
+    targetVersion: String
+    taliaVersion: String
+    owner: String
+    source: String!
+    sourceRef: String
+    createdAt: String!
+    updatedAt: String!
+    createdBy: String
+  }
+
+  input RequirementItemFilters {
+    section: String
+    status: String
+    targetVersion: String
+    taliaVersion: String
+    owner: String
+    priority: String
+    area: String
+    source: String
+    includeDone: Boolean
+    limit: Int
+  }
+
+  type PortCityLocation {
+    countryLocation: String!
+    countryCode: String
+    locationCode: String
+    portName: String
+    portCity: String
+    nameWoDiacritics: String
+    functionName: String
+    functionCode: String
+    latitudeLongitude: String
+    latitude: Float
+    longitude: Float
+    nearestPortCode: String
+    nearestPortName: String
+    nearestDistanceNm: Float
+    isPort: Boolean
+    wpi: String
+    isCruise: Boolean
+    isAirport: Boolean
+    isCelestyal: Boolean
+    region: String
+    portAddress: String
+    addressLabel: String
+  }
+
+  input PortCityFilters {
+    search: String
+    countryCode: String
+    functionName: String
+    kind: String
+    region: String
+    minDistanceNm: Float
+    maxDistanceNm: Float
+    limit: Int
+    offset: Int
+  }
+
+  type PortCityPage {
+    total: Int!
+    withCoordinates: Int!
+    ports: Int!
+    labeled: Int!
+    cruise: Int!
+    celestyal: Int!
+    airports: Int!
+    matchCount: Int!
+    rows: [PortCityLocation!]!
+  }
+
+  input RequirementItemInput {
+    id: ID
+    section: String!
+    title: String!
+    detail: String
+    status: String
+    priority: String
+    area: String
+    targetVersion: String
+    taliaVersion: String
+    owner: String
+    source: String
+    sourceRef: String
+  }
+
   input RunRmAgentsInput {
     sailCodes: [String!]
     agentIds: [String!]
@@ -1778,6 +1873,12 @@ export const typeDefs = `#graphql
     rmEngineRuns(limit: Int): [RmEngineRun!]!
     rmEngineStatus: RmEngineStatus!
 
+    # Requirements Log (ADMIN+)
+    requirementItems(filters: RequirementItemFilters): [RequirementItem!]!
+
+    # Port / city locations (dwh.Dim_Port_City) with nearest-port labels
+    portCityPage(filters: PortCityFilters): PortCityPage!
+
     # Legacy queries (for backward compatibility)
     books: [Book!]!
   }
@@ -1866,6 +1967,12 @@ export const typeDefs = `#graphql
     # talia-engine (Phase A)
     updateRmFindingStatus(findingId: ID!, status: String!): RmFinding!
     runRmAgents(input: RunRmAgentsInput): RunRmAgentsResult!
+
+    # Requirements Log (ADMIN+)
+    upsertRequirementItem(input: RequirementItemInput!): RequirementItem!
+    upsertRequirementItems(inputs: [RequirementItemInput!]!): [RequirementItem!]!
+    deleteRequirementItem(id: ID!): Boolean!
+    setRequirementItemStatus(id: ID!, status: String!): RequirementItem!
 
     # Server Management
     restartServer: Boolean!

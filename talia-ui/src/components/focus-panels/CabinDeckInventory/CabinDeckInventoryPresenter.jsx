@@ -9,11 +9,21 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import HoverPreview from '../../shared/HoverPreview';
 import CabinDeckHoverSummary from '../../shared/CabinDeckHoverSummary';
+import { useGlobalCabinCategoryMode } from '../../../hooks/useGlobalCabinCategoryMode';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
+import {
+  CABIN_CATEGORY_MODE,
+  CABIN_CATEGORY_MODE_OPTIONS,
+} from '../../../lib/cabinCategoryGroups';
 import { clipAnchorRectToViewport } from '../../../lib/clipAnchorRect';
 import { payloadFromRows, registerPanelDataExport } from '../../../lib/panelDataExport';
 import { ALLOCATE_MODE, allocateGtyPreview } from './cabinDeckAllocate.js';
-import { findCabinItemForReservation } from './cabinDeckInventoryTransform.js';
+import {
+  findCabinItemForReservation,
+  groupDecksByCabinType,
+  relabelDecksByCabinGroup,
+  relabelGtyHoldsByCabinGroup,
+} from './cabinDeckInventoryTransform.js';
 import {
   emitCabinClear,
   emitCabinSelect,
@@ -22,6 +32,8 @@ import {
   RESERVATION_SELECT_EVENT,
 } from '../../../lib/eventBus';
 import { isFitOwner, isGroupOwner } from '../../../lib/shipInventoryAlloc.js';
+
+const FOLLOW_GLOBAL_CAT = '__global__';
 
 const STATUS_LEGEND = [
   { key: 'fit', label: 'FIT', hint: 'res_id owner' },
@@ -263,6 +275,7 @@ const CabinDeckInventoryPresenter = ({
   truncations = [],
   softErrors = [],
   reconciliationLoading = false,
+  cabinCtgIndex = null,
   panelInstanceId = null,
   panelComponentId = null,
 }) => {
@@ -283,10 +296,31 @@ const CabinDeckInventoryPresenter = ({
   bundleRef.current = bundle;
   allocateModeRef.current = allocateMode;
   selectedCabinKeyRef.current = selectedCabinKey;
-  const { showDetails, showControls, showTooltip, reportShellClassName, operations } = useReportShellOptions(
+  const {
+    showDetails,
+    showControls,
+    showTooltip,
+    reportShellClassName,
+    operations,
+    viewsState,
+    setView,
+  } = useReportShellOptions(
     panelComponentId,
     panelInstanceId
   );
+  const globalCabinCategoryMode = useGlobalCabinCategoryMode();
+  const storedCabinCategoryMode = viewsState.cabinCategoryMode;
+  const cabinCategoryModeOverride = storedCabinCategoryMode === CABIN_CATEGORY_MODE.REAL
+    || storedCabinCategoryMode === CABIN_CATEGORY_MODE.GROUP
+    ? storedCabinCategoryMode
+    : null;
+  const cabinCategoryMode = cabinCategoryModeOverride ?? globalCabinCategoryMode;
+  const groupByCabinType = viewsState.groupBy === 'category' || viewsState.groupBy === 'category-group';
+  const setGroupBy = (next, mode) => {
+    setView('groupBy', next);
+    if (mode) setView('cabinCategoryMode', mode);
+  };
+  const globalCatLabel = globalCabinCategoryMode === CABIN_CATEGORY_MODE.GROUP ? 'Group' : 'Real';
   const allocateEnabled = operations.find((op) => op.id === 'allocate')?.enabled !== false;
 
   const allocateResult = useMemo(
@@ -574,8 +608,22 @@ const CabinDeckInventoryPresenter = ({
     || (selectedSailCodes.length ? selectedSailCodes.join(', ') : null);
   const summary = bundle?.summary || {};
   const allocateActive = Boolean(allocateMode);
-  const decks = allocateResult?.decks || bundle?.decks || [];
-  const gtyHolds = allocateResult?.gtyHolds || bundle?.gtyHolds || [];
+  const sourceDecks = allocateResult?.decks || bundle?.decks || [];
+  const sourceGtyHolds = allocateResult?.gtyHolds || bundle?.gtyHolds || [];
+  const decks = useMemo(
+    () => relabelDecksByCabinGroup(sourceDecks, cabinCtgIndex, cabinCategoryMode),
+    [sourceDecks, cabinCtgIndex, cabinCategoryMode]
+  );
+  const cabinTypeRows = useMemo(
+    () => (groupByCabinType
+      ? groupDecksByCabinType(sourceDecks, { cabinCtgIndex, mode: cabinCategoryMode })
+      : []),
+    [sourceDecks, cabinCtgIndex, cabinCategoryMode, groupByCabinType]
+  );
+  const gtyHolds = useMemo(
+    () => relabelGtyHoldsByCabinGroup(sourceGtyHolds, cabinCtgIndex, cabinCategoryMode),
+    [sourceGtyHolds, cabinCtgIndex, cabinCategoryMode]
+  );
   const limitWarnings = truncations?.length
     ? truncations
     : (summary.truncations || []);
@@ -616,23 +664,75 @@ const CabinDeckInventoryPresenter = ({
       </header>
 
       {hasSailSelection && showControls && (
-        <div className="talia-report__controls" aria-label="Cabin deck view">
-          <button
-            type="button"
-            className={`talia-btn ${compactBlocks ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
-            onClick={() => setCompactBlocks(true)}
-            aria-pressed={compactBlocks}
-          >
-            Blocks
-          </button>
-          <button
-            type="button"
-            className={`talia-btn ${!compactBlocks ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
-            onClick={() => setCompactBlocks(false)}
-            aria-pressed={!compactBlocks}
-          >
-            Labels
-          </button>
+        <div className="talia-report__controls cabin-deck__view-controls" aria-label="Cabin deck view">
+          <div className="cabin-deck__view-group" role="group" aria-label="Group cabins">
+            <button
+              type="button"
+              className={`talia-btn ${!groupByCabinType ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+              onClick={() => setGroupBy('deck')}
+              aria-pressed={!groupByCabinType}
+            >
+              By deck
+            </button>
+            <button
+              type="button"
+              className={`talia-btn ${groupByCabinType && cabinCategoryMode === CABIN_CATEGORY_MODE.REAL ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+              onClick={() => setGroupBy('category', CABIN_CATEGORY_MODE.REAL)}
+              aria-pressed={groupByCabinType && cabinCategoryMode === CABIN_CATEGORY_MODE.REAL}
+              title="One section per cabin code"
+            >
+              Cabin type
+            </button>
+            <button
+              type="button"
+              className={`talia-btn ${groupByCabinType && cabinCategoryMode === CABIN_CATEGORY_MODE.GROUP ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+              onClick={() => setGroupBy('category-group', CABIN_CATEGORY_MODE.GROUP)}
+              aria-pressed={groupByCabinType && cabinCategoryMode === CABIN_CATEGORY_MODE.GROUP}
+              title="One section per cabin type group (Inside, Outside, Deluxe)"
+            >
+              Cabin type group
+            </button>
+          </div>
+          <label className="cabin-deck__cat-control">
+            <span className="cabin-deck__cat-control-label">Cat</span>
+            <select
+              className="talia-report-filters__input cabin-deck__cat-select"
+              value={cabinCategoryModeOverride == null ? FOLLOW_GLOBAL_CAT : cabinCategoryMode}
+              onChange={(event) => {
+                const next = event.target.value;
+                setView('cabinCategoryMode', next === FOLLOW_GLOBAL_CAT ? 'follow' : next);
+              }}
+              aria-label="Cabin type group"
+              title={cabinCategoryModeOverride == null
+                ? `Following header Cat (${globalCatLabel})`
+                : 'This panel only — does not change the header'}
+            >
+              <option value={FOLLOW_GLOBAL_CAT}>
+                {`Follow header (${globalCatLabel})`}
+              </option>
+              {CABIN_CATEGORY_MODE_OPTIONS.map((option) => (
+                <option key={option.key} value={option.key}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <div className="cabin-deck__view-group" role="group" aria-label="Block style">
+            <button
+              type="button"
+              className={`talia-btn ${compactBlocks ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+              onClick={() => setCompactBlocks(true)}
+              aria-pressed={compactBlocks}
+            >
+              Blocks
+            </button>
+            <button
+              type="button"
+              className={`talia-btn ${!compactBlocks ? 'talia-btn--primary' : 'talia-btn--secondary'}`}
+              onClick={() => setCompactBlocks(false)}
+              aria-pressed={!compactBlocks}
+            >
+              Labels
+            </button>
+          </div>
         </div>
       )}
 
@@ -769,6 +869,10 @@ const CabinDeckInventoryPresenter = ({
                   <ul className="cabin-deck__source-list">
                     <li>Physical cabins from <code>fou.SHIP_CABIN</code>.</li>
                     <li>Default category from <code>fou.SHIP_CABIN_CTG_LINK</code> (no customer fields).</li>
+                    <li>
+                      Cabin type group follows header Cat (Real vs Group via <code>cabin_ctg</code>)
+                      until this panel sets its own.
+                    </li>
                     <li>Ownership from <code>stg.RES_CABIN_ALLOCATION_DETAIL</code> (FIT/Group/GTY · probability).</li>
                     <li>Offsale / segment holds from <code>stg.SHIP_CABIN_RESERVE</code> overlapping the sail window.</li>
                     <li>
@@ -837,7 +941,22 @@ const CabinDeckInventoryPresenter = ({
             )}
 
             <div className={`cabin-deck__decks ${compactBlocks ? 'cabin-deck__decks--compact' : ''}`}>
-              {decks.map((deck) => (
+              {groupByCabinType ? cabinTypeRows.map((cat) => (
+                <section key={cat.category} className="cabin-deck__deck" aria-label={`Cabin type ${cat.category}`}>
+                  <CategoryRow
+                    category={cat.category}
+                    cabins={cat.cabins}
+                    compact={compactBlocks}
+                    bookedCount={cat.booked_count}
+                    emptyCount={cat.empty_count}
+                    overAlloc={cat.over_alloc || 0}
+                    selectedKey={selectedCabinKey}
+                    onSelectCabin={selectCabin}
+                    onHoverCabinStart={showCabinPreview}
+                    onHoverCabinEnd={hideCabinPreview}
+                  />
+                </section>
+              )) : decks.map((deck) => (
                 <section key={String(deck.deck)} className="cabin-deck__deck" aria-label={`Deck ${deck.deck}`}>
                   <div className="cabin-deck__section-title">
                     Deck {deck.deck}

@@ -26,6 +26,7 @@ import {
   resolveSellableCabins,
   resolveSellableBerths,
   resolvePressureDateSpine,
+  filterPressureRowsForScope,
   resolveSelectionRowBand,
   buildCategoryShipDays,
   splitBookedBySailingRole,
@@ -481,6 +482,32 @@ test('resolveSelectionRowBand focuses departure and shades impact span', () => {
   assert.equal(inferred.focusDate, '2026-09-05');
   assert.equal(inferred.impactFrom, '2026-09-05');
   assert.equal(inferred.impactTo, '2026-09-11');
+});
+
+test('filterPressureRowsForScope keeps the highlighted sailing dates in every grain', () => {
+  const rows = [
+    { date: '2026-09-01' },
+    { date: '2026-09-05' },
+    { date: '2026-09-11' },
+    { date: '2026-09-12' },
+  ];
+  const band = {
+    focusDate: '2026-09-05',
+    impactFrom: '2026-09-05',
+    impactTo: '2026-09-11',
+  };
+  const narrow = filterPressureRowsForScope(rows, band, 'narrow');
+  assert.deepEqual(narrow.map((row) => row.date), ['2026-09-05', '2026-09-11']);
+  const wide = filterPressureRowsForScope(rows, band, 'wide');
+  assert.equal(wide.length, 4);
+  const unselected = filterPressureRowsForScope(rows, { focusDate: null, impactFrom: null, impactTo: null }, 'narrow');
+  assert.equal(unselected.length, 4);
+  const withFocusOutside = filterPressureRowsForScope(rows, {
+    focusDate: '2026-09-01',
+    impactFrom: '2026-09-05',
+    impactTo: '2026-09-11',
+  }, 'narrow');
+  assert.deepEqual(withFocusOutside.map((row) => row.date), ['2026-09-01', '2026-09-05', '2026-09-11']);
 });
 
 test('resolveEffectiveCriteriaDateWindow uses MONTH when DATE is open', () => {

@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { useMap } from 'react-leaflet';
 
-export const LEAFLET_ENGLISH_TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-export const LEAFLET_ENGLISH_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; CARTO';
+export const LEAFLET_ENGLISH_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+export const LEAFLET_ENGLISH_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
 export const LeafletResizeObserver = () => {
   const map = useMap();

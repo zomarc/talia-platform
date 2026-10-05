@@ -264,6 +264,26 @@ export const emitCabinSelect = (detail) => {
   }
 };
 
+export const MEMO_CREATE_EVENT = 'talia:memo.create';
+
+/**
+ * Ask Inventory Memo to store a note. The payload is a point-in-time snapshot:
+ * author, timestamp, and the text the sender composed.
+ */
+export const emitMemoCreate = (detail = {}) => {
+  try {
+    const payload = {
+      ...(detail && typeof detail === 'object' ? detail : {}),
+      createdAt: detail?.createdAt || new Date().toISOString(),
+    };
+    window.dispatchEvent(new CustomEvent(MEMO_CREATE_EVENT, { detail: payload }));
+    return payload;
+  } catch (error) {
+    console.warn('[eventBus] emitMemoCreate failed', error);
+    return null;
+  }
+};
+
 export const emitCabinClear = (detail = {}) => {
   try {
     const reason = detail?.reason || 'cabin-cleared';

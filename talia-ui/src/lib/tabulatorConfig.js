@@ -35,6 +35,7 @@ import {
   resolveViewValue,
   VIEW_TOTALS,
 } from './componentOptionsCatalog';
+import { resolveStoredComponentViews } from './componentOptionsInstance';
 import { COMPONENT_OPTIONS_CHANGED_EVENT } from './componentOptionsEvents';
 import {
   payloadFromTabulator,
@@ -700,21 +701,30 @@ const catalogHasTotalsView = (componentId) => {
   return (catalog.views || []).some((view) => view?.id === 'totals');
 };
 
-const resolveTotalsVisibleForComponent = (componentId, viewsState = null) => {
+const resolveTotalsVisibleForComponent = (componentId, viewsState = null, instanceId = null) => {
   const state = viewsState && typeof viewsState === 'object'
     ? viewsState
-    : (window.__taliaUserProfileState?.componentOptions?.[componentId]?.views || {});
+    : resolveStoredComponentViews(
+      window.__taliaUserProfileState?.componentOptions?.[componentId],
+      instanceId
+    );
   return resolveViewValue(state, VIEW_TOTALS) !== false;
 };
 
-/** Apply Views → Totals to all live tables for a panelComponentId. */
-export const applyTabulatorColumnTotalsForComponent = (componentId, viewsState = null) => {
+/** Apply Views → Totals. Pass instanceId so only that panel's tables change. */
+export const applyTabulatorColumnTotalsForComponent = (componentId, viewsState = null, instanceId = null) => {
   const key = String(componentId || '');
+  const panelId = String(instanceId || '');
   if (!key || !catalogHasTotalsView(key)) return;
-  const visible = resolveTotalsVisibleForComponent(key, viewsState);
   tableInstances.forEach((table) => {
     const meta = tableMeta.get(table);
     if (meta?.panelComponentId !== key) return;
+    if (panelId && meta?.panelInstanceId && meta.panelInstanceId !== panelId) return;
+    const visible = resolveTotalsVisibleForComponent(
+      key,
+      viewsState,
+      panelId || meta?.panelInstanceId || null
+    );
     applyColumnTotalsVisible(table, visible);
   });
 };
@@ -724,7 +734,10 @@ const applyTabulatorColumnTotalsForTable = (table) => {
   const meta = tableMeta.get(table);
   const componentId = meta?.panelComponentId;
   if (!componentId || !catalogHasTotalsView(componentId)) return;
-  applyColumnTotalsVisible(table, resolveTotalsVisibleForComponent(componentId));
+  applyColumnTotalsVisible(
+    table,
+    resolveTotalsVisibleForComponent(componentId, null, meta?.panelInstanceId || null)
+  );
 };
 
 const ensureLayoutListenerBound = () => {
@@ -816,7 +829,7 @@ const ensureLayoutListenerBound = () => {
     const detail = event?.detail || {};
     const componentId = detail.componentId;
     if (!componentId || !catalogHasTotalsView(componentId)) return;
-    applyTabulatorColumnTotalsForComponent(componentId, detail.views);
+    applyTabulatorColumnTotalsForComponent(componentId, detail.views, detail.instanceId || null);
   });
 
   window.addEventListener('resize', () => {
@@ -1046,14 +1059,26 @@ export const COMMON_COLUMN_TYPES = {
     ...config
   }),
 
-  dropdown: (config = {}) => ({
-    headerFilter: 'list',
-    headerFilterParams: {
-      values: config.values || {},
-      clearable: config.clearable !== false
-    },
-    ...config
-  }),
+  dropdown: (config = {}) => {
+    const {
+      values,
+      clearable = true,
+      autocomplete = false,
+      headerFilterParams,
+      ...rest
+    } = config;
+    return {
+      ...rest,
+      headerFilter: 'list',
+      headerFilterParams: {
+        ...(headerFilterParams || {}),
+        values: values || headerFilterParams?.values || {},
+        clearable: clearable !== false,
+        // Fixed enums must keep the full option list after a value is chosen.
+        autocomplete: autocomplete === true,
+      },
+    };
+  },
 
   number: (config = {}) => ({
     headerFilter: 'input',
@@ -1085,3 +1110,42 @@ export const COMMON_COLUMN_TYPES = {
 };
 
 export default getWrappedTabulatorClass();
+
+/**
+ * Standard Tabulator row selection: single-click selects, double-click opens
+ * Details/edit (or whatever the panel treats as "open"). Prefer this over
+ * panel-local handlers so activate+click and selection stay consistent.
+ *
+ * @param {object} table — Tabulator instance
+ * @param {{ onSelect?: (data: object|null, row: object) => void, onOpen?: (data: object|null, row: object) => void }} handlers
+ * @returns {() => void} unsubscribe
+ */
+export function bindTabulatorRowSelectionHandlers(table, handlers = {}) {
+  if (!table || typeof table.on !== 'function') return () => {};
+  const { onSelect, onOpen } = handlers;
+
+  const handleClick = (_event, row) => {
+    const data = row?.getData?.() ?? null;
+    onSelect?.(data, row);
+  };
+
+  const handleDblClick = (event, row) => {
+    // Prevent accidental header/sort side-effects from bubbling on dense tables.
+    try { event?.stopPropagation?.(); } catch { /* noop */ }
+    const data = row?.getData?.() ?? null;
+    onSelect?.(data, row);
+    onOpen?.(data, row);
+  };
+
+  table.on('rowClick', handleClick);
+  table.on('rowDblClick', handleDblClick);
+
+  return () => {
+    try {
+      table.off?.('rowClick', handleClick);
+      table.off?.('rowDblClick', handleDblClick);
+    } catch {
+      /* noop — destroyed tables may not support off */
+    }
+  };
+}

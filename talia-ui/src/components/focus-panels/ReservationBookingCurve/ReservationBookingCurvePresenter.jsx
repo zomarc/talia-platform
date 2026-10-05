@@ -81,7 +81,7 @@ const ReservationBookingCurvePresenter = ({
   const demandNoun = demandUnitNoun(demandUnit);
   const showCapacityLine = demandUnit === DEMAND_UNIT_CABINS;
   const componentKey = panelComponentId || 'reservation-booking-curve';
-  const { showSnapshot, showDetails, showFilters, showLegends, reportShellClassName } = useReportShellOptions(
+  const { showSnapshot, showDetails, showFilters, showLegends, showGraph, reportShellClassName } = useReportShellOptions(
     componentKey,
     panelInstanceId
   );
@@ -98,7 +98,7 @@ const ReservationBookingCurvePresenter = ({
       }
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [showSnapshot, showDetails]);
+  }, [showGraph, showSnapshot, showDetails]);
 
   useEffect(() => {
     const unitLabel = demandUnitShortLabel(demandUnit);
@@ -141,7 +141,7 @@ const ReservationBookingCurvePresenter = ({
   }, [componentKey, data, demandUnit, panelInstanceId, sailCode]);
 
   useEffect(() => {
-    if (!chartRef.current || !data) return;
+    if (!showGraph || !chartRef.current || !data) return;
     const ctx = chartRef.current.getContext('2d');
     if (chartInstanceRef.current) {
       chartInstanceRef.current.destroy();
@@ -346,7 +346,7 @@ const ReservationBookingCurvePresenter = ({
         chartInstanceRef.current = null;
       }
     };
-  }, [chartLegendsVisible, chartMode, data, demandNoun, demandUnit, fontSize, fontFamily, showCapacityLine, showLegends]);
+  }, [chartLegendsVisible, chartMode, data, demandNoun, demandUnit, fontSize, fontFamily, showCapacityLine, showGraph, showLegends]);
 
   const v = data?.velocity || {};
   const revenue = data?.revenue;
@@ -550,7 +550,7 @@ const ReservationBookingCurvePresenter = ({
         items={metrics}
       />
 
-      <main className={`talia-report__content booking-profile__content${showDetails ? ' booking-profile__content--with-details' : ''}`}>
+      <main className={`talia-report__content booking-profile__content${showDetails ? ' booking-profile__content--with-details' : ''}${showGraph ? '' : ' booking-profile__content--no-graph'}`}>
         {showCompetitor ? (
           <div className="talia-callout booking-profile__callout reservation-booking-curve__competitor" role="status">
             {competitor?.ourMinFarePp != null || competitor?.competitorMedianPp != null ? (
@@ -576,12 +576,14 @@ const ReservationBookingCurvePresenter = ({
           </div>
         ) : null}
 
-        <div
-          className="booking-profile__chart-host"
-          aria-label={chartLabel}
-        >
-          <canvas ref={chartRef} />
-        </div>
+        {showGraph ? (
+          <div
+            className="booking-profile__chart-host"
+            aria-label={chartLabel}
+          >
+            <canvas ref={chartRef} />
+          </div>
+        ) : null}
       </main>
 
       <ReportDataDetails

@@ -12,6 +12,7 @@ import {
   resolveReferenceSailCodeFromDetail,
   resolveSailCodesFromDetail,
 } from '../Agency/agencyDirectoryContext';
+import { indexCabinCategoryGroups } from '../../../lib/cabinCategoryGroups';
 import CabinDeckInventoryPresenter from './CabinDeckInventoryPresenter';
 import { buildCabinDeckInventoryBundle } from './cabinDeckInventoryTransform';
 
@@ -61,6 +62,18 @@ const detectTruncation = (rows, limit, source) => {
 };
 
 const CabinDeckInventoryContainer = ({ panelInstanceId, panelComponentId }) => {
+  const { data: cabinCtgRows } = useTableDataWithContext({
+    tableName: 'cabin_ctg',
+    panelInstanceId,
+    panelComponentId,
+    fetchWithoutContext: true,
+    limit: 500,
+  });
+  const cabinCtgIndex = useMemo(
+    () => indexCabinCategoryGroups(cabinCtgRows || []),
+    [cabinCtgRows]
+  );
+
   const {
     data: masterSailRows,
     loading: masterLoading,
@@ -358,6 +371,7 @@ const CabinDeckInventoryContainer = ({ panelInstanceId, panelComponentId }) => {
         truncations={truncations}
         softErrors={softErrors}
         reconciliationLoading={Boolean(occupancyLoading || reservationsLoading || reserveLoading)}
+        cabinCtgIndex={cabinCtgIndex}
         panelInstanceId={panelInstanceId}
         panelComponentId={panelComponentId}
       />

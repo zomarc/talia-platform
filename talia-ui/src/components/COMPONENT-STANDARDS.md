@@ -53,7 +53,7 @@ const ComponentName = ({ data, theme, onRefresh }) => {
 
 Every focus-panel report uses the same **shell elements**. Use the standard CSS classes so global header visibility toggles work without per-panel logic.
 
-**Do not call panel filter rows “Controls”.** In Talia vocabulary, `.talia-report-filters` are report/application filters. **Views** (Nested/Flat, Details, …) are non-restrictive per-component prefs via tab **Options**. **Operations** (filters, allocate, …) are role-gated; Admin configures them — end users do not see that Options section. In-panel `.talia-report__controls` / `.talia-report__actions-bar` follow those Options.
+**Do not call panel filter rows “Controls”.** In Talia vocabulary, `.talia-report-filters` are report/application filters. **Views** (Nested/Flat, Details, Graph, …) are non-restrictive prefs via tab **Options**, stored per dock panel instance so two copies of the same report can differ. **Operations** (filters, allocate, …) are role-gated; Admin configures them — end users do not see that Options section. In-panel `.talia-report__controls` / `.talia-report__actions-bar` follow those Options.
 
 ```
 ┌─ .talia-report ─────────────────────────────────────────────┐
@@ -122,7 +122,7 @@ StatusBar global criteria / focus / visibility strips are independent of per-com
 
 Details use `ReportDataDetails` / `visible={showDetails}` for **secondary** blocks only — not a root CSS class. Primary Tabulator/chart hosts stay mounted in `talia-report__content`.
 
-**Views chrome (generic):** use `useReportShellOptions(panelComponentId, panelInstanceId)` for `showSnapshot`, `showDetails`, `showFilters`, `showTotals`, and `showLegends`. Persist via user profile `componentOptions`. Header **Filters** (`talia-filters-hidden`) remains a global override; per-panel Views → **Filters** uses `.talia-report-filters--hidden`. Header ≣ Details ANDs with Views → Details. StatusBar **Legends** (`talia-chart-legends-hidden`) remains a global override; per-panel Views → **Legends** uses `.talia-report--legends-hidden` and Chart.js `visible: chartLegendsVisible && showLegends`. Views → **Totals** (`VIEW_TOTALS`): pass `panelComponentId` into `getTabulatorOptions` so `tabulatorConfig` applies `setTabulatorColumnTotalsVisible` on Options change and `tableBuilt`; presenters may also call `useTabulatorColumnTotals(instanceRef, showTotals)`. Do **not** hide the footer with CSS (leaves a blank gap) or rewrite the Tabulator host `className` in React.
+**Views chrome (generic):** use `useReportShellOptions(panelComponentId, panelInstanceId)` for `showSnapshot`, `showGraph`, `showDetails`, `showFilters`, `showTotals`, and `showLegends`. Persist via user profile `componentOptions[componentId].instances[panelInstanceId].views` (component-level `views` remain the fallback for panels that have not been customized). Operations stay on the component type. Header **Filters** (`talia-filters-hidden`) remains a global override; per-panel Views → **Filters** uses `.talia-report-filters--hidden`. Header ≣ Details ANDs with Views → Details. StatusBar **Legends** (`talia-chart-legends-hidden`) remains a global override; per-panel Views → **Legends** uses `.talia-report--legends-hidden` and Chart.js `visible: chartLegendsVisible && showLegends`. Views → **Totals** (`VIEW_TOTALS`): pass `panelComponentId` into `getTabulatorOptions` so `tabulatorConfig` applies `setTabulatorColumnTotalsVisible` on Options change and `tableBuilt`; presenters may also call `useTabulatorColumnTotals(instanceRef, showTotals)`. Do **not** hide the footer with CSS (leaves a blank gap) or rewrite the Tabulator host `className` in React.
 
 ### Standard shell markup order
 
@@ -311,7 +311,8 @@ import { PANEL_ACTION_IDS } from '../shared/panelActions';
 - Update table data using `replaceData()` when data changes
 - Always create instances with `new Tabulator(..., getTabulatorOptions({ ... }))`
 - Use `selectableRows: 1` for single row selection
-- Use `headerFilter: "list"` with `autocomplete: true` for dropdown filters
+- **Row gestures:** single `rowClick` = select (and show Details when applicable); **double-click** = open edit / primary open action via `bindTabulatorRowSelectionHandlers` from `lib/tabulatorConfig.js`. Do not use double-click for status cycles or other mutations that rewrite/sort the table under the cursor.
+- Use `headerFilter: "list"` for enum dropdown filters with **static** `headerFilterParams.values` (prefer `COMMON_COLUMN_TYPES.dropdown`). Keep `autocomplete: false` for fixed enums so the full option list remains after a value is chosen; reserve `autocomplete: true` + `valuesLookup` for free-text columns that discover values from data.
 - Standardize column labels with short+long naming:
   - `titleShort`: compact column header shown in-table
   - `titleLong`: full label used by Tabulator `headerTooltip`

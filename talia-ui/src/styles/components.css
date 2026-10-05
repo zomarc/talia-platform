@@ -129,20 +129,20 @@
 }
 
 .talia-report__metric .talia-metric__label {
-  font-size: 8px;
-  line-height: 1.1;
+  font-size: var(--theme-font-size-xs);
+  line-height: 1.2;
   white-space: nowrap;
 }
 
 .talia-report__metric .talia-metric__value {
-  font-size: 0.82rem;
-  line-height: 1.15;
+  font-size: var(--theme-font-size-xl);
+  line-height: 1.2;
   white-space: nowrap;
 }
 
 .talia-report__metric .talia-metric__change {
-  font-size: 9px;
-  line-height: 1.1;
+  font-size: var(--theme-font-size-sm);
+  line-height: 1.2;
   opacity: 0.8;
   white-space: nowrap;
 }

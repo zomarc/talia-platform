@@ -1,5 +1,6 @@
 import { trackedFetchGraphql } from './trackedGraphql';
 import { GraphQLUtils } from '../../lib/apolloClient';
+import { mergeComponentOptionsMaps } from '../../lib/componentOptionsInstance';
 
 const USER_PROFILE_STATE_QUERY = `
   query UserProfileState($userId: String) {
@@ -31,13 +32,11 @@ export const getCurrentUserId = () => {
 const writeWindowSnapshot = (profile) => {
   if (typeof window === 'undefined') return;
   const next = profile && typeof profile === 'object' ? profile : {};
+  const prev = window.__taliaUserProfileState || {};
   window.__taliaUserProfileState = {
-    ...(window.__taliaUserProfileState || {}),
+    ...prev,
     ...next,
-    componentOptions: {
-      ...(window.__taliaUserProfileState?.componentOptions || {}),
-      ...(next.componentOptions || {}),
-    },
+    componentOptions: mergeComponentOptionsMaps(prev.componentOptions, next.componentOptions),
   };
 };
 
@@ -74,9 +73,25 @@ export const getCachedComponentOptionsEntry = (componentId, userId) => {
     return {
       views: entry.views && typeof entry.views === 'object' ? entry.views : {},
       operations: entry.operations && typeof entry.operations === 'object' ? entry.operations : {},
+      instances: entry.instances && typeof entry.instances === 'object' ? entry.instances : {},
     };
   }
-  return { views: {}, operations: {} };
+  return { views: {}, operations: {}, instances: {} };
+};
+
+/** Merge one component's options into the in-memory profile before the save round-trip. */
+export const mergeCachedComponentOptions = (componentId, partialEntry, userId) => {
+  const key = String(componentId || '');
+  if (!key) return null;
+  const targetUserId = userId || getCurrentUserId();
+  const profile = getCachedUserProfileState(targetUserId);
+  if (profile == null) return null;
+  return setCachedProfile(targetUserId, {
+    ...profile,
+    componentOptions: mergeComponentOptionsMaps(profile.componentOptions, {
+      [key]: partialEntry,
+    }),
+  });
 };
 
 const setCachedProfile = (userId, profile) => {
@@ -140,11 +155,10 @@ export const saveUserProfileState = async ({ patch, userId, component = 'User Pr
   const merged = {
     ...prev,
     ...saved,
-    componentOptions: {
-      ...(prev.componentOptions || {}),
-      ...(saved.componentOptions || {}),
-      ...(safePatch.componentOptions || {}),
-    },
+    componentOptions: mergeComponentOptionsMaps(
+      mergeComponentOptionsMaps(prev.componentOptions, saved.componentOptions),
+      safePatch.componentOptions
+    ),
   };
   return setCachedProfile(targetUserId, merged);
 };

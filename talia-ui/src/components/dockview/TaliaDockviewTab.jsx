@@ -99,7 +99,7 @@ const TaliaDockviewTab = ({
     hasOptions,
     setView,
     setOperation,
-  } = useComponentOptions(isReportTab ? componentOptionsId : '', registryOptions);
+  } = useComponentOptions(isReportTab ? componentOptionsId : '', registryOptions, panelId);
   const [showOptionsMenu, setShowOptionsMenu] = React.useState(false);
   const optionsButtonRef = React.useRef(null);
   const optionsMenuRef = React.useRef(null);

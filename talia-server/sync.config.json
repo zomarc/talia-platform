@@ -583,6 +583,32 @@
         "strategy": "delete-all",
         "column": "id"
       }
+    },
+    "portCity": {
+      "type": "direct",
+      "source": "dwh.Dim_Port_City",
+      "target": "port_city",
+      "columns": [
+        "Country_Location",
+        "Country_Code",
+        "Location_Code",
+        "Port_Name",
+        "Port_City",
+        "NameWoDiacritics",
+        "Function_Code",
+        "Function_Name",
+        "Status_Code",
+        "Latitude_Longitude"
+      ],
+      "transformKey": "portCity",
+      "isLargeDataset": true,
+      "rowNumberOrder": [
+        "Country_Location"
+      ],
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "country_location"
+      }
     }
   },
   "datasets": {

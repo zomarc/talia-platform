@@ -1,8 +1,12 @@
+import { indexCabinCategoryGroups } from '../../../lib/cabinCategoryGroups.js';
 import {
   buildCabinDeckInventoryBundle,
   filterAllocationsForSailing,
   findCabinItemForReservation,
+  groupDecksByCabinType,
   inferDeckFromCabinNumber,
+  relabelDecksByCabinGroup,
+  relabelGtyHoldsByCabinGroup,
 } from './cabinDeckInventoryTransform.js';
 import {
   ALLOCATE_MODE,
@@ -120,6 +124,111 @@ assert(bundle.summary.physical_cabin_count === 3, 'physical cabins');
 assert(bundle.summary.gty_count === 2, 'gty');
 assert(bundle.summary.booked_like_count === 4, 'booked like');
 assert(bundle.summary.group_missing_dlgt === 3, 'groups without dlgt (1 assigned + 2 gty)');
+const byType = groupDecksByCabinType([
+  {
+    deck: 9,
+    categories: [{
+      category: 'IA',
+      over_alloc: 2,
+      cabins: [{ cabin_number: '9001', is_empty: false, is_offsale: false }],
+    }],
+  },
+  {
+    deck: 8,
+    categories: [
+      {
+        category: 'IA',
+        over_alloc: 2,
+        cabins: [{ cabin_number: '8001', is_empty: true, is_offsale: false }],
+      },
+      {
+        category: 'IB',
+        over_alloc: 0,
+        cabins: [{ cabin_number: '8101', is_empty: false, is_offsale: false }],
+      },
+    ],
+  },
+]);
+assert(byType.map((row) => row.category).join(',') === 'IA,IB', 'cabin type order');
+assert(byType[0].cabins.map((cabin) => cabin.cabin_number).join(',') === '8001,9001', 'IA cabins from every deck');
+assert(byType[0].over_alloc === 2, 'over-alloc is not summed across decks');
+assert(byType[0].empty_count === 1 && byType[0].booked_count === 1, 'IA counts across decks');
+
+const cabinCtgIndex = indexCabinCategoryGroups([
+  { cabin_code: 'IA', generic_category: 'INSIDE', active_record_flag: 1 },
+  { cabin_code: 'IB', generic_category: 'INSIDE', active_record_flag: 1 },
+  { cabin_code: 'XA', generic_category: 'DELUXE', active_record_flag: 1 },
+]);
+const groupedType = groupDecksByCabinType([
+  {
+    deck: 9,
+    categories: [{
+      category: 'XA',
+      over_alloc: 4,
+      cabins: [{ cabin_number: '9002', cabin_category: 'XA', is_empty: false, is_offsale: false }],
+    }],
+  },
+  {
+    deck: 8,
+    categories: [
+      {
+        category: 'IA',
+        over_alloc: 2,
+        cabins: [{ cabin_number: '8001', cabin_category: 'IA', is_empty: true, is_offsale: false }],
+      },
+      {
+        category: 'IB',
+        over_alloc: 3,
+        cabins: [{ cabin_number: '8101', cabin_category: 'IB', is_empty: false, is_offsale: false }],
+      },
+    ],
+  },
+], { cabinCtgIndex, mode: 'group' });
+assert(groupedType.map((row) => row.category).join(',') === 'DELUXE,INSIDE', 'cabin type group order');
+assert(
+  groupedType.find((row) => row.category === 'INSIDE').cabins.map((cabin) => cabin.cabin_number).join(',') === '8001,8101',
+  'inside cabins merge across codes and decks'
+);
+assert(groupedType.find((row) => row.category === 'INSIDE').over_alloc === 5, 'group over-alloc sums distinct codes');
+assert(groupedType.find((row) => row.category === 'DELUXE').over_alloc === 4, 'deluxe keeps its own over-alloc');
+
+const groupedDecks = relabelDecksByCabinGroup([
+  {
+    deck: 8,
+    categories: [
+      {
+        category: 'IA',
+        over_alloc: 2,
+        cabins: [{ cabin_number: '8001', cabin_category: 'IA', is_empty: false, is_offsale: false }],
+      },
+      {
+        category: 'IB',
+        over_alloc: 3,
+        cabins: [{ cabin_number: '8101', cabin_category: 'IB', is_empty: true, is_offsale: false }],
+      },
+    ],
+  },
+], cabinCtgIndex, 'group');
+assert(groupedDecks[0].categories.length === 1, 'deck categories roll into one group');
+assert(groupedDecks[0].categories[0].category === 'INSIDE', 'deck group label');
+assert(groupedDecks[0].categories[0].over_alloc === 5, 'deck group over-alloc');
+assert(groupedDecks[0].cabin_count === 2 && groupedDecks[0].empty_count === 1, 'deck counts survive rollup');
+const realDecks = relabelDecksByCabinGroup([
+  {
+    deck: 8,
+    categories: [{ category: 'IA', over_alloc: 2, cabins: [{ cabin_number: '8001', cabin_category: 'IA' }] }],
+  },
+], cabinCtgIndex, 'real');
+assert(realDecks[0].categories[0].category === 'IA', 'real mode keeps cabin codes');
+
+const groupedGty = relabelGtyHoldsByCabinGroup([
+  { category: 'IA', items: [{ cabin_category: 'IA', allocation_id: 1 }] },
+  { category: 'IB', items: [{ cabin_category: 'IB', allocation_id: 2 }] },
+  { category: 'XA', items: [{ cabin_category: 'XA', allocation_id: 3 }] },
+], cabinCtgIndex, 'group');
+assert(groupedGty.map((group) => group.category).join(',') === 'DELUXE,INSIDE', 'gty groups');
+assert(groupedGty.find((group) => group.category === 'INSIDE').items.length === 2, 'gty inside merges');
+
 assert(bundle.decks[0].deck === 8, 'deck from ship_cabin');
 assert(bundle.decks[0].cabin_count === 3, 'deck includes empty');
 const iaCat = bundle.decks[0].categories.find((c) => c.category === 'IA');

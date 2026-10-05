@@ -3,6 +3,7 @@ import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import {
   getCachedComponentOptionsEntry,
   loadUserProfileState,
+  mergeCachedComponentOptions,
   saveUserProfileState,
 } from '../services/data/userProfileState';
 import { loadRoleComponentOps } from '../services/data/roleCriteriaService';
@@ -14,6 +15,7 @@ import {
   resolveOperationEnabled,
   resolveViewValue,
 } from '../lib/componentOptionsCatalog';
+import { resolveStoredComponentViews } from '../lib/componentOptionsInstance';
 import { COMPONENT_OPTIONS_CHANGED_EVENT } from '../lib/componentOptionsEvents';
 import { canConfigureComponentOperations } from '../utils/roleUtils';
 
@@ -32,20 +34,25 @@ const shallowEqualRecords = (a, b) => {
 
 /**
  * User × component Views prefs + role-gated Operations.
+ * Views are stored per dock panel instance. Operations stay on the component type.
  * @param {string} componentId registry panelId
  * @param {object|null} registryOptions optional registry.options override
+ * @param {string|null} instanceId dock panel id (`panelInstanceId`)
  */
-export function useComponentOptions(componentId, registryOptions = null) {
+export function useComponentOptions(componentId, registryOptions = null, instanceId = null) {
   const { user } = useSupabaseAuth();
   const role = user?.role || 'USER';
   const key = String(componentId || '');
+  const instanceKey = String(instanceId || '');
   const catalog = useMemo(
     () => getComponentOptionsCatalog(key, registryOptions),
     [key, registryOptions]
   );
 
-  const cachedEntry = key ? getCachedComponentOptionsEntry(key) : { views: {}, operations: {} };
-  const [viewsState, setViewsState] = useState(() => cachedEntry?.views || {});
+  const cachedEntry = key ? getCachedComponentOptionsEntry(key) : { views: {}, operations: {}, instances: {} };
+  const [viewsState, setViewsState] = useState(() => (
+    cachedEntry ? resolveStoredComponentViews(cachedEntry, instanceKey) : {}
+  ));
   const [opsState, setOpsState] = useState(() => cachedEntry?.operations || {});
   const [roleOpsAllow, setRoleOpsAllow] = useState({});
   // Profile already in cache → first paint can use real prefs (no all-true flash).
@@ -66,7 +73,8 @@ export function useComponentOptions(componentId, registryOptions = null) {
       // Re-seed if cache arrived between first render and this effect (e.g. StatusBar load).
       const seeded = getCachedComponentOptionsEntry(key);
       if (seeded) {
-        setViewsState((prev) => (shallowEqualRecords(prev, seeded.views) ? prev : seeded.views));
+        const seededViews = resolveStoredComponentViews(seeded, instanceKey);
+        setViewsState((prev) => (shallowEqualRecords(prev, seededViews) ? prev : seededViews));
         setOpsState((prev) => (shallowEqualRecords(prev, seeded.operations) ? prev : seeded.operations));
         setHydrated(true);
       }
@@ -77,9 +85,7 @@ export function useComponentOptions(componentId, registryOptions = null) {
         ]);
         if (cancelled) return;
         const componentEntry = profile?.componentOptions?.[key] || {};
-        const nextViews = componentEntry.views && typeof componentEntry.views === 'object'
-          ? componentEntry.views
-          : {};
+        const nextViews = resolveStoredComponentViews(componentEntry, instanceKey);
         const nextOps = componentEntry.operations && typeof componentEntry.operations === 'object'
           ? componentEntry.operations
           : {};
@@ -95,18 +101,33 @@ export function useComponentOptions(componentId, registryOptions = null) {
     return () => {
       cancelled = true;
     };
-  }, [key, role]);
+  }, [instanceKey, key, role]);
 
   useEffect(() => {
     const handleChanged = (event) => {
       const detail = event?.detail || {};
       if (String(detail.componentId || '') !== key) return;
-      if (detail.views && typeof detail.views === 'object') setViewsState(detail.views);
       if (detail.operations && typeof detail.operations === 'object') setOpsState(detail.operations);
+      if (!detail.views || typeof detail.views !== 'object') return;
+      const eventInstance = String(detail.instanceId || '');
+      if (instanceKey) {
+        if (eventInstance === instanceKey) {
+          setViewsState(detail.views);
+          return;
+        }
+        // Component-level write (no instance): panels that have not diverged follow it.
+        if (!eventInstance) {
+          const own = getCachedComponentOptionsEntry(key)?.instances?.[instanceKey]?.views;
+          if (own && typeof own === 'object' && Object.keys(own).length > 0) return;
+          setViewsState(detail.views);
+        }
+        return;
+      }
+      if (!eventInstance) setViewsState(detail.views);
     };
     window.addEventListener(COMPONENT_OPTIONS_CHANGED_EVENT, handleChanged);
     return () => window.removeEventListener(COMPONENT_OPTIONS_CHANGED_EVENT, handleChanged);
-  }, [key]);
+  }, [instanceKey, key]);
 
   useEffect(() => () => {
     if (persistTimerRef.current) {
@@ -118,29 +139,39 @@ export function useComponentOptions(componentId, registryOptions = null) {
   const publish = useCallback((nextViews, nextOps) => {
     if (!key) return;
     window.dispatchEvent(new CustomEvent(COMPONENT_OPTIONS_CHANGED_EVENT, {
-      detail: { componentId: key, views: nextViews, operations: nextOps },
+      detail: {
+        componentId: key,
+        instanceId: instanceKey || null,
+        views: nextViews,
+        operations: nextOps,
+      },
     }));
-  }, [key]);
+  }, [instanceKey, key]);
 
   const persistNow = useCallback(async (nextViews, nextOps) => {
     if (!key) return;
-    const patch = {
-      componentOptions: {
-        [key]: {
+    // Instance patches omit shared `views` so sibling panels keep their own maps.
+    const partial = instanceKey
+      ? {
+          operations: nextOps,
+          instances: {
+            [instanceKey]: { views: nextViews },
+          },
+        }
+      : {
           views: nextViews,
           operations: nextOps,
-        },
-      },
-    };
+        };
+    mergeCachedComponentOptions(key, partial);
     try {
       await saveUserProfileState({
-        patch,
+        patch: { componentOptions: { [key]: partial } },
         component: `Options:${key}`,
       });
     } catch (error) {
       console.warn('[useComponentOptions] save failed:', error?.message || error);
     }
-  }, [key]);
+  }, [instanceKey, key]);
 
   const schedulePersist = useCallback((nextViews, nextOps) => {
     if (!key) return;

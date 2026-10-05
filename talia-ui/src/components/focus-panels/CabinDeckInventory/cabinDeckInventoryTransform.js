@@ -5,6 +5,11 @@
  */
 
 import {
+  CABIN_CATEGORY_MODE,
+  normalizeCabinCategoryMode,
+  resolveGenericCabinCategory,
+} from '../../../lib/cabinCategoryGroups.js';
+import {
   describeOwner,
   hasAssignedCabin,
   isFitOwner,
@@ -233,6 +238,140 @@ const categorySortKey = (category) => {
   if (category === 'Open') return '~~~~';
   if (category === 'Uncategorized') return '~~~';
   return category;
+};
+
+const categoryLabelForCabin = (cabin, sourceCategory, cabinCtgIndex, mode) => {
+  const source = sourceCategory || 'Uncategorized';
+  if (normalizeCabinCategoryMode(mode) !== CABIN_CATEGORY_MODE.GROUP) return source;
+  const code = cabin?.cabin_category || cabin?.link_cabin_category || source;
+  return resolveGenericCabinCategory(code, cabinCtgIndex) || source;
+};
+
+const summarizeCabins = (cabins, overAlloc) => {
+  const sorted = sortCabins([...cabins]);
+  const emptyCount = sorted.filter((cabin) => cabin.is_empty).length;
+  const offsaleCount = sorted.filter((cabin) => cabin.is_offsale).length;
+  const bookedCount = sorted.filter((cabin) => !cabin.is_empty && !cabin.is_offsale).length;
+  return {
+    cabins: sorted,
+    booked_count: bookedCount,
+    empty_count: emptyCount,
+    offsale_count: offsaleCount,
+    over_alloc: overAlloc,
+    cabin_count: sorted.length,
+  };
+};
+
+/**
+ * Collapse deck sections into one row per cabin category.
+ * Real mode keeps the category code. Group mode rolls codes up through cabin_ctg.
+ * over_alloc is a category total copied onto each deck: max per real code, then
+ * sum those codes when they share a generic group.
+ */
+export const groupDecksByCabinType = (
+  decks = [],
+  { cabinCtgIndex = null, mode = CABIN_CATEGORY_MODE.REAL } = {}
+) => {
+  const useGroup = normalizeCabinCategoryMode(mode) === CABIN_CATEGORY_MODE.GROUP;
+  const byCategory = new Map();
+  const overBySource = new Map();
+  const sourcesByLabel = new Map();
+  (decks || []).forEach((deck) => {
+    (deck.categories || []).forEach((cat) => {
+      const source = cat.category || 'Uncategorized';
+      overBySource.set(
+        source,
+        Math.max(overBySource.get(source) || 0, Number(cat.over_alloc) || 0)
+      );
+      (cat.cabins || []).forEach((cabin) => {
+        const label = categoryLabelForCabin(cabin, source, cabinCtgIndex, mode);
+        if (!byCategory.has(label)) byCategory.set(label, []);
+        byCategory.get(label).push(cabin);
+        if (!sourcesByLabel.has(label)) sourcesByLabel.set(label, new Set());
+        sourcesByLabel.get(label).add(source);
+      });
+    });
+  });
+  return [...byCategory.entries()]
+    .sort((a, b) => categorySortKey(a[0]).localeCompare(categorySortKey(b[0])))
+    .map(([category, cabins]) => {
+      const sources = sourcesByLabel.get(category) || new Set([category]);
+      const overAlloc = useGroup
+        ? [...sources].reduce((sum, source) => sum + (overBySource.get(source) || 0), 0)
+        : (overBySource.get(category) || 0);
+      return {
+        category,
+        ...summarizeCabins(cabins, overAlloc),
+      };
+    });
+};
+
+/**
+ * Roll categories inside each deck up to generic cabin groups.
+ * Real mode returns the same deck list.
+ */
+export const relabelDecksByCabinGroup = (
+  decks = [],
+  cabinCtgIndex = null,
+  mode = CABIN_CATEGORY_MODE.REAL
+) => {
+  if (normalizeCabinCategoryMode(mode) !== CABIN_CATEGORY_MODE.GROUP) return decks;
+  return (decks || []).map((deck) => {
+    const buckets = new Map();
+    const overBySource = new Map();
+    const sourcesByLabel = new Map();
+    (deck.categories || []).forEach((cat) => {
+      const source = cat.category || 'Uncategorized';
+      overBySource.set(
+        source,
+        Math.max(overBySource.get(source) || 0, Number(cat.over_alloc) || 0)
+      );
+      (cat.cabins || []).forEach((cabin) => {
+        const label = categoryLabelForCabin(cabin, source, cabinCtgIndex, mode);
+        if (!buckets.has(label)) buckets.set(label, []);
+        buckets.get(label).push(cabin);
+        if (!sourcesByLabel.has(label)) sourcesByLabel.set(label, new Set());
+        sourcesByLabel.get(label).add(source);
+      });
+    });
+    const categories = [...buckets.entries()]
+      .sort((a, b) => categorySortKey(a[0]).localeCompare(categorySortKey(b[0])))
+      .map(([category, cabins]) => {
+        const sources = sourcesByLabel.get(category) || new Set();
+        const overAlloc = [...sources].reduce((sum, source) => sum + (overBySource.get(source) || 0), 0);
+        return { category, ...summarizeCabins(cabins, overAlloc) };
+      });
+    const cabinCount = categories.reduce((sum, cat) => sum + cat.cabin_count, 0);
+    const emptyCount = categories.reduce((sum, cat) => sum + cat.empty_count, 0);
+    const offsaleCount = categories.reduce((sum, cat) => sum + cat.offsale_count, 0);
+    return {
+      ...deck,
+      categories,
+      cabin_count: cabinCount,
+      empty_count: emptyCount,
+      offsale_count: offsaleCount,
+      booked_count: cabinCount - emptyCount - offsaleCount,
+    };
+  });
+};
+
+export const relabelGtyHoldsByCabinGroup = (
+  holds = [],
+  cabinCtgIndex = null,
+  mode = CABIN_CATEGORY_MODE.REAL
+) => {
+  if (normalizeCabinCategoryMode(mode) !== CABIN_CATEGORY_MODE.GROUP) return holds;
+  const buckets = new Map();
+  (holds || []).forEach((group) => {
+    (group.items || []).forEach((item) => {
+      const label = categoryLabelForCabin(item, group.category, cabinCtgIndex, mode);
+      if (!buckets.has(label)) buckets.set(label, []);
+      buckets.get(label).push(item);
+    });
+  });
+  return [...buckets.entries()]
+    .sort((a, b) => categorySortKey(a[0]).localeCompare(categorySortKey(b[0])))
+    .map(([category, items]) => ({ category, items }));
 };
 
 export const buildCabinDeckInventoryBundle = ({
@@ -535,4 +674,7 @@ export default {
   indexCabinCategoryLinks,
   buildCabinDeckInventoryBundle,
   findCabinItemForReservation,
+  groupDecksByCabinType,
+  relabelDecksByCabinGroup,
+  relabelGtyHoldsByCabinGroup,
 };

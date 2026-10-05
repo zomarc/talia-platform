@@ -10,6 +10,8 @@ import { hasRole, canConfigureComponentOperations, normalizeRole } from '../util
 
 /** Shared view defs — panels opt in via catalog / registry.options */
 export const VIEW_SNAPSHOT = { id: 'snapshot', label: 'Snapshot', type: 'boolean', default: true };
+/** Primary chart. Opt in on panels whose main body is a graph (Reservation Profile). */
+export const VIEW_GRAPH = { id: 'graph', label: 'Graph', type: 'boolean', default: true };
 export const VIEW_DETAILS = { id: 'details', label: 'Details', type: 'boolean', default: true };
 /** Admin+ (and SUPER_USER): where this report’s data comes from. Off by default; Views → Provenance. */
 export const VIEW_PROVENANCE = {
@@ -53,6 +55,23 @@ export const VIEW_CHECKLIST_DISPLAY = {
   default: 'table',
   choiceLabels: { table: 'Table', heatmap: 'Heatmap' },
 };
+/** Requirements Log — table vs milestone board overview. */
+export const VIEW_REQUIREMENTS_DISPLAY = {
+  id: 'display',
+  label: 'Display',
+  type: 'choice',
+  choices: ['table', 'board'],
+  default: 'table',
+  choiceLabels: { table: 'Table', board: 'Board' },
+};
+export const VIEW_PORT_CITY_DISPLAY = {
+  id: 'display',
+  label: 'Display',
+  type: 'choice',
+  choices: ['table', 'map'],
+  default: 'table',
+  choiceLabels: { table: 'Table', map: 'Map' },
+};
 export const VIEW_TOOLTIP = { id: 'tooltip', label: 'Tooltip', type: 'boolean', default: true };
 export const VIEW_TOOLTIP_MSE = {
   id: 'tooltipView',
@@ -61,6 +80,15 @@ export const VIEW_TOOLTIP_MSE = {
   choices: ['distribution', 'performance'],
   default: 'distribution',
   choiceLabels: { distribution: 'Distribution', performance: 'Performance' },
+};
+/** Ship × Day Pressure — sailing dates only vs the full criteria window. */
+export const VIEW_ROW_SCOPE = {
+  id: 'rowScope',
+  label: 'Rows',
+  type: 'choice',
+  choices: ['narrow', 'wide'],
+  default: 'narrow',
+  choiceLabels: { narrow: 'Narrow', wide: 'Wide' },
 };
 /** Ship × Day Pressure — bar fill: master/segment vs FIT/Group */
 export const VIEW_BAR_SPLIT = {
@@ -80,12 +108,14 @@ const VIEW_MENU_ORDER = [
   'columnFilters',
   'controls',
   'snapshot',
+  'graph',
   'details',
   'provenance',
   'totals',
   'legends',
   'tooltip',
   'tooltipView',
+  'rowScope',
   'barSplit',
 ];
 export const sortComponentViews = (views) => {
@@ -105,7 +135,12 @@ export const resolveChoiceLabel = (def, value) => {
   if (def.choiceLabels && value != null && def.choiceLabels[value]) return def.choiceLabels[value];
   if (def.id === 'viewMode') return value === 'flat' ? 'Flat' : 'Nested';
   if (def.id === 'density') return value === 'compact' ? 'Compact' : 'Full';
-  if (def.id === 'display') return value === 'heatmap' ? 'Heatmap' : 'Table';
+  if (def.id === 'display') {
+    if (value === 'heatmap') return 'Heatmap';
+    if (value === 'board') return 'Board';
+    if (value === 'map') return 'Map';
+    return 'Table';
+  }
   return def.label || String(value || '');
 };
 
@@ -142,7 +177,7 @@ export const DEFAULT_COMPONENT_OPTIONS = {
     operations: [],
   },
   'reservation-booking-curve': {
-    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
+    views: [VIEW_SNAPSHOT, VIEW_GRAPH, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
     operations: [],
   },
   'profile-compare': {
@@ -155,6 +190,10 @@ export const DEFAULT_COMPONENT_OPTIONS = {
   },
   'booking-profile': {
     views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
+    operations: [],
+  },
+  'inventory-memo': {
+    views: [VIEW_DETAILS, VIEW_DENSITY],
     operations: [],
   },
   'seasonal-trading-pack': {
@@ -176,7 +215,7 @@ export const DEFAULT_COMPONENT_OPTIONS = {
     operations: [],
   },
   'ship-day-pressure': {
-    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_CONTROLS, VIEW_TOOLTIP, VIEW_LEGENDS, VIEW_BAR_SPLIT],
+    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_CONTROLS, VIEW_TOOLTIP, VIEW_LEGENDS, VIEW_ROW_SCOPE, VIEW_BAR_SPLIT],
     operations: [],
   },
   'distribution': {
@@ -268,6 +307,11 @@ export const resolveViewValue = (viewsState, def) => {
   if (Object.prototype.hasOwnProperty.call(state, def.id)) return state[def.id];
   return def.default;
 };
+
+export {
+  mergeComponentOptionsMaps,
+  resolveStoredComponentViews,
+} from './componentOptionsInstance.js';
 
 export const resolveOperationEnabled = (opsState, def, role, roleOpsAllow, componentId) => {
   if (!isOperationAllowedForRole(def, role, roleOpsAllow, componentId)) return false;

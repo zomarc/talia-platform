@@ -64,6 +64,8 @@ import RmChecklistContainer from './RmChecklist';
 import EngineActivityContainer from './EngineActivity';
 import ColumnTerminologyPanel from './ColumnTerminology';
 import EtlTableParametersPanel from './EtlTableParameters';
+import PortCityPanel from './PortCity';
+import RequirementsLogPanel from './RequirementsLog';
 import TestWorkbenchPanel from './TestWorkbench';
 import DataDebugView from '../TestPage/DataDebugView';
 import DataTypesValidation from '../dev/DataTypesValidation';
@@ -80,11 +82,15 @@ import {
   VIEW_MSE_DENSITY,
   VIEW_DENSITY,
   VIEW_CHECKLIST_DISPLAY,
+  VIEW_PORT_CITY_DISPLAY,
+  VIEW_REQUIREMENTS_DISPLAY,
+  VIEW_GRAPH,
   VIEW_SNAPSHOT,
   VIEW_TOOLTIP,
   VIEW_TOOLTIP_MSE,
   VIEW_TOTALS,
   VIEW_BAR_SPLIT,
+  VIEW_ROW_SCOPE,
 } from '../../lib/componentOptionsCatalog';
 
 const publishedRatesSelect = 'talia:publishedRates.select';
@@ -191,7 +197,7 @@ export const componentRegistry = {
     supportsDataExport: true,
     showInReports: true,
     options: {
-      views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_CONTROLS, VIEW_TOOLTIP, VIEW_LEGENDS, VIEW_BAR_SPLIT],
+      views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_CONTROLS, VIEW_TOOLTIP, VIEW_LEGENDS, VIEW_ROW_SCOPE, VIEW_BAR_SPLIT],
       operations: [],
     },
     filePath: 'src/components/focus-panels/ShipDayPressure/index.jsx'
@@ -462,8 +468,12 @@ export const componentRegistry = {
     description: 'Create and review memos linked to canonical inventory_item mappings',
     props: {},
     dataRequirements: 'Uses inventory_item and inventory_item_memo tables through GraphQL',
-    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
+    events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, 'talia:memo.create'] },
     showInReports: true,
+    options: {
+      views: [VIEW_DETAILS, VIEW_DENSITY],
+      operations: [],
+    },
     filePath: 'src/components/focus-panels/InventoryMemo/index.jsx'
   },
   SailingByCabinCategory: {
@@ -659,7 +669,7 @@ export const componentRegistry = {
     showInReports: true,
     supportsDataExport: true,
     options: {
-      views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
+      views: [VIEW_SNAPSHOT, VIEW_GRAPH, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
       operations: [],
     },
     filePath: 'src/components/focus-panels/ReservationBookingCurve/index.jsx'
@@ -1229,6 +1239,46 @@ export const componentRegistry = {
     allowedRoles: ['ADMIN', 'SUPER_USER'],
     showInReports: true,
     filePath: 'src/components/focus-panels/EtlTableParameters/index.jsx'
+  },
+  PortCityPanel: {
+    component: PortCityPanel,
+    panelId: 'port-city',
+    category: 'Tables',
+    title: 'Port locations',
+    description: 'UN/LOCODE locations from dwh.Dim_Port_City, each labeled with the nearest port.',
+    props: {},
+    dataRequirements: 'Requires port_city synced from dwh.Dim_Port_City.',
+    events: { emits: [], respondsTo: [] },
+    showInReports: true,
+    options: {
+      views: [VIEW_PORT_CITY_DISPLAY, VIEW_FILTERS, VIEW_COLUMN_FILTERS, VIEW_PROVENANCE],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/PortCity/index.jsx'
+  },
+  RequirementsLogPanel: {
+    component: RequirementsLogPanel,
+    panelId: 'requirements-log',
+    category: 'Admin',
+    title: 'Requirements Log',
+    description: 'Instance task board: deliverable versions, external actions, and open questions',
+    props: {},
+    dataRequirements: 'Requires talia_requirement_item via GraphQL; ADMIN/SUPER_USER only',
+    events: { emits: [], respondsTo: [] },
+    allowedRoles: ['ADMIN', 'SUPER_USER'],
+    showInReports: true,
+    options: {
+      views: [
+        VIEW_DENSITY,
+        VIEW_REQUIREMENTS_DISPLAY,
+        VIEW_FILTERS,
+        VIEW_COLUMN_FILTERS,
+        { ...VIEW_DETAILS, default: true },
+        VIEW_PROVENANCE,
+      ],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/RequirementsLog/index.jsx'
   },
   TestWorkbenchPanel: {
     component: TestWorkbenchPanel,

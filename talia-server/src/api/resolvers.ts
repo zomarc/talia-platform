@@ -23,6 +23,8 @@ import {
 import { fetchTableDateFacts as fetchTableDateFactsFromClient } from '../lib/integrationDateRange.js';
 import { uiActivityMutationResolvers, uiActivityQueryResolvers } from './resolver-modules/uiActivityResolvers.js';
 import { engineMutationResolvers, engineQueryResolvers } from './resolver-modules/engineResolvers.js';
+import { requirementMutationResolvers, requirementQueryResolvers } from './resolver-modules/requirementResolvers.js';
+import { portCityQueryResolvers } from './resolver-modules/portCityResolvers.js';
 import { userMutationResolvers, userQueryResolvers } from './resolver-modules/userResolvers.js';
 import { statusQueryResolvers } from './resolver-modules/statusResolvers.js';
 import { instanceConnectionQueryResolvers } from './resolver-modules/instanceConnectionResolvers.js';
@@ -707,6 +709,26 @@ const asPlainObject = (raw: any) => (
   raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
 );
 
+/** Keep sibling components and sibling panel-instance view maps when a patch arrives. */
+const mergeUserComponentOptions = (current: any, patch: any) => {
+  const base = asPlainObject(current);
+  const incoming = asPlainObject(patch);
+  const out: Record<string, any> = { ...base };
+  Object.keys(incoming).forEach((id) => {
+    const prevEntry = asPlainObject(base[id]);
+    const nextEntry = asPlainObject(incoming[id]);
+    const mergedEntry: Record<string, any> = { ...prevEntry, ...nextEntry };
+    if (nextEntry.instances && typeof nextEntry.instances === 'object') {
+      mergedEntry.instances = {
+        ...asPlainObject(prevEntry.instances),
+        ...asPlainObject(nextEntry.instances),
+      };
+    }
+    out[id] = mergedEntry;
+  });
+  return out;
+};
+
 /** Role baseline + user deltas; adminOverride (if present) wins entirely for criteria. */
 const mergeEffectiveCriteria = (roleCriteria: any, userState: any) => {
   const role = asPlainObject(roleCriteria);
@@ -1066,6 +1088,8 @@ export const resolvers = {
     ...userQueryResolvers,
     ...uiActivityQueryResolvers,
     ...engineQueryResolvers,
+    ...requirementQueryResolvers,
+    ...portCityQueryResolvers,
 
     // Focus Management
     focuses: async (parent: any, args: any, context: any) => {
@@ -3561,6 +3585,7 @@ export const resolvers = {
     ...userMutationResolvers,
     ...uiActivityMutationResolvers,
     ...engineMutationResolvers,
+    ...requirementMutationResolvers,
 
     // Focus Preferences
     updateFocusPreference: async (parent: any, args: any, context: any) => {
@@ -4210,10 +4235,10 @@ export const resolvers = {
         };
         // Deep-merge nested maps when present so componentOptions patches do not wipe siblings.
         if (patch.componentOptions && typeof patch.componentOptions === 'object') {
-          merged.componentOptions = {
-            ...asPlainObject(current.componentOptions),
-            ...asPlainObject(patch.componentOptions),
-          };
+          merged.componentOptions = mergeUserComponentOptions(
+            current.componentOptions,
+            patch.componentOptions
+          );
         }
         if (patch.globalCriteria && typeof patch.globalCriteria === 'object') {
           merged.globalCriteria = {

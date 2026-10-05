@@ -28,6 +28,7 @@ const TOTALS_DEF = { id: 'totals', default: true };
 const TOOLTIP_DEF = { id: 'tooltip', default: true };
 const TOOLTIP_VIEW_DEF = { id: 'tooltipView', default: 'distribution' };
 const LEGENDS_DEF = { id: 'legends', default: true };
+const GRAPH_DEF = { id: 'graph', default: true };
 
 /**
  * @param {string} [panelComponentId]
@@ -36,7 +37,7 @@ const LEGENDS_DEF = { id: 'legends', default: true };
  */
 export function useReportShellOptions(panelComponentId, panelInstanceId, registryOptions = null) {
   const key = String(panelComponentId || '');
-  const options = useComponentOptions(key, registryOptions);
+  const options = useComponentOptions(key, registryOptions, panelInstanceId);
   const { viewsState, views, operations, hydrated } = options;
 
   const catalogIds = useMemo(() => new Set((views || []).map((v) => v.id)), [views]);
@@ -51,6 +52,7 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
   const hasTooltipView = catalogIds.has('tooltip');
   const hasTooltipViewChoice = catalogIds.has('tooltipView');
   const hasLegendsView = catalogIds.has('legends');
+  const hasGraphView = catalogIds.has('graph');
 
   const [headerDetailsVisible] = usePanelDetailsVisibility({
     panelInstanceId,
@@ -72,6 +74,7 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
   const optionsTotals = resolveViewValue(viewsState, TOTALS_DEF) !== false;
   const optionsTooltip = resolveViewValue(viewsState, TOOLTIP_DEF) !== false;
   const optionsLegends = resolveViewValue(viewsState, LEGENDS_DEF) !== false;
+  const optionsGraph = resolveViewValue(viewsState, GRAPH_DEF) !== false;
   const tooltipView = hasTooltipViewChoice
     ? String(resolveViewValue(viewsState, TOOLTIP_VIEW_DEF) || TOOLTIP_VIEW_DEF.default)
     : null;
@@ -88,6 +91,9 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
   const showLegends = (!prefsReady && hasLegendsView)
     ? false
     : (hasLegendsView ? optionsLegends : true);
+  const showGraph = (!prefsReady && hasGraphView)
+    ? false
+    : (hasGraphView ? optionsGraph : true);
 
   // Legacy Operations "Show filters" (admin capability) still forces off when disabled.
   const opsFilters = operations.find((op) => op.id === 'showFilters');
@@ -121,6 +127,7 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
     showTotals,
     showTooltip,
     showLegends,
+    showGraph,
     tooltipView,
     density: densityPref,
     isCompact,
@@ -141,6 +148,7 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
     hasTooltipView,
     hasTooltipViewChoice,
     hasLegendsView,
+    hasGraphView,
   };
 }
 

@@ -844,6 +844,25 @@ export const resolveSelectionRowBand = ({
 };
 
 /**
+ * Narrow keeps the highlighted sailing dates (and a clicked focus date).
+ * Wide returns every row. No sailing band → leave the grid unchanged.
+ */
+export const filterPressureRowsForScope = (rows = [], band = null, scope = 'narrow') => {
+  const list = asArray(rows);
+  if (scope === 'wide') return list;
+  const from = toDateKey(band?.impactFrom);
+  const to = toDateKey(band?.impactTo);
+  const focus = toDateKey(band?.focusDate);
+  if (!from && !to) return list;
+  return list.filter((row) => {
+    const date = toDateKey(row?.date);
+    if (!date) return false;
+    if (focus && date === focus) return true;
+    return dateInRange(date, from, to);
+  });
+};
+
+/**
  * Resolve the master voyage window for a selection (reference / sail code).
  */
 export const resolveVoyageWindow = (windows, referenceSailCode, shipCode = null) => {

@@ -97,7 +97,8 @@ export const buildTableDataQueryResolvers = ({
         || tableName === 'cabin_ctg'
         || tableName === 'competitor_benchmark'
         || tableName === 'competitor_current_state'
-        || tableName === 'published_rates_current_state';
+        || tableName === 'published_rates_current_state'
+        || tableName === 'port_city';
       const expandedLimit = largeTable
         ? Math.min(Math.max(baseLimit, 100), 150000)
         : (includeNonRealSailings ? baseLimit : Math.min(Math.max(baseLimit * 3, baseLimit), 5000));
@@ -250,6 +251,9 @@ export const buildTableDataQueryResolvers = ({
       }
       if (tableName === 'agency') {
         query = query.order('agency_name', { ascending: true });
+      }
+      if (tableName === 'port_city') {
+        query = query.order('port_name', { ascending: true });
       }
 
       query = query.limit(expandedLimit);

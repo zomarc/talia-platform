@@ -342,6 +342,12 @@ export const tableSources = {
     type: 'application',
     dateColumns: ['as_of_date', 'created_at', 'updated_at'],
     syncType: null
+  },
+  port_city: {
+    source: 'dwh.Dim_Port_City',
+    type: 'direct',
+    dateColumns: [],
+    syncType: 'portCity'
   }
 };
 

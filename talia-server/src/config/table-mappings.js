@@ -64,6 +64,7 @@ const tableDateColumns = {
   cabin_allocation: ['allocation_date'],
   sync_metadata: ['last_sync_at', 'created_at', 'updated_at'],
   focuses: ['created_at', 'updated_at'],
+  port_city: [],
   data_refresh_metadata: ['last_refreshed_at', 'created_at', 'updated_at'],
 };
 

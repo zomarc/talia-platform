@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import InventoryMemoPresenter from './InventoryMemoPresenter';
 import PanelDataState from '../../shared/PanelDataState';
-import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { MEMO_CREATE_EVENT, SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 
-const GRAPHQL_URL = '/api/graphql';
+const claimedMemoCreates = new Map();
 
 const extractSelection = (detail) => {
   if (!detail) return { sailCode: '', shipCode: '', shipName: '' };
@@ -13,6 +14,14 @@ const extractSelection = (detail) => {
     shipCode: row?.ship_code || row?.ship || '',
     shipName: row?.ship_name || row?.ship || ''
   };
+};
+
+const claimMemoCreate = (key) => {
+  const now = Date.now();
+  const previous = claimedMemoCreates.get(key) || 0;
+  if (now - previous < 1500) return false;
+  claimedMemoCreates.set(key, now);
+  return true;
 };
 
 const fetchInventoryItems = async (selection) => {
@@ -35,16 +44,14 @@ const fetchInventoryItems = async (selection) => {
     shipCode: selection.shipCode || undefined,
     limit: 10
   };
-  const response = await fetch(GRAPHQL_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables: { filters } })
+  const data = await trackedFetchGraphql({
+    query,
+    variables: { filters },
+    component: 'Inventory Memo',
+    purpose: 'Load inventory items for memo',
+    tableName: 'inventory_item',
   });
-  const payload = await response.json();
-  if (!response.ok || payload?.errors?.length) {
-    throw new Error(payload?.errors?.[0]?.message || `HTTP ${response.status}`);
-  }
-  return payload?.data?.inventoryItems || [];
+  return data?.inventoryItems || [];
 };
 
 const fetchMemos = async (inventoryItemId) => {
@@ -60,19 +67,25 @@ const fetchMemos = async (inventoryItemId) => {
       }
     }
   `;
-  const response = await fetch(GRAPHQL_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables: { inventoryItemId } })
+  const data = await trackedFetchGraphql({
+    query,
+    variables: { inventoryItemId },
+    component: 'Inventory Memo',
+    purpose: 'Load memos for inventory item',
+    tableName: 'inventory_item_memo',
   });
-  const payload = await response.json();
-  if (!response.ok || payload?.errors?.length) {
-    throw new Error(payload?.errors?.[0]?.message || `HTTP ${response.status}`);
-  }
-  return payload?.data?.inventoryMemos || [];
+  return data?.inventoryMemos || [];
 };
 
-const addMemo = async ({ inventoryItemId, selection, mmsi, memoText, memoType }) => {
+const addMemo = async ({
+  inventoryItemId,
+  selection,
+  mmsi,
+  memoText,
+  memoType,
+  sourceTable,
+  sourceRowId,
+}) => {
   const mutation = `
     mutation AddInventoryMemo($input: InventoryMemoInput!) {
       addInventoryMemo(input: $input) {
@@ -87,29 +100,28 @@ const addMemo = async ({ inventoryItemId, selection, mmsi, memoText, memoType })
   `;
   const input = {
     inventoryItemId: inventoryItemId || undefined,
-    inventoryItem: {
+    inventoryItem: inventoryItemId ? undefined : {
       sailCode: selection.sailCode || undefined,
       shipCode: selection.shipCode || undefined,
       shipName: selection.shipName || undefined,
       mmsi: mmsi || undefined,
-      sourceTable: 'manual-memo'
+      sourceTable: sourceTable || 'manual-memo',
+      sourceRowId: sourceRowId || undefined,
     },
     memoText,
     memoType
   };
-  const response = await fetch(GRAPHQL_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: mutation, variables: { input } })
+  const data = await trackedFetchGraphql({
+    query: mutation,
+    variables: { input },
+    component: 'Inventory Memo',
+    purpose: 'Save inventory memo',
+    tableName: 'inventory_item_memo',
   });
-  const payload = await response.json();
-  if (!response.ok || payload?.errors?.length) {
-    throw new Error(payload?.errors?.[0]?.message || `HTTP ${response.status}`);
-  }
-  return payload?.data?.addInventoryMemo;
+  return data?.addInventoryMemo;
 };
 
-const InventoryMemoContainer = () => {
+const InventoryMemoContainer = ({ panelInstanceId, panelComponentId }) => {
   const [selection, setSelection] = useState({ sailCode: '', shipCode: '', shipName: '' });
   const [inventoryItem, setInventoryItem] = useState(null);
   const [memos, setMemos] = useState([]);
@@ -170,6 +182,48 @@ const InventoryMemoContainer = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const onCreate = async (event) => {
+      const detail = event?.detail || {};
+      const text = String(detail.memoText || '').trim();
+      if (!text) return;
+      const key = `${detail.sourceRowId || ''}|${detail.createdAt || ''}|${text}`;
+      if (!claimMemoCreate(key)) return;
+      const nextSelection = {
+        sailCode: detail.sailCode || '',
+        shipCode: detail.shipCode || '',
+        shipName: detail.shipName || '',
+      };
+      setSaving(true);
+      setError(null);
+      try {
+        let inventoryItemId = null;
+        if (nextSelection.sailCode) {
+          const items = await fetchInventoryItems(nextSelection);
+          inventoryItemId = items[0]?.id || null;
+        }
+        await addMemo({
+          inventoryItemId,
+          selection: nextSelection,
+          mmsi: detail.mmsi || '',
+          memoText: text,
+          memoType: detail.memoType || 'note',
+          sourceTable: detail.sourceTable,
+          sourceRowId: detail.sourceRowId,
+        });
+        setMemoType(detail.memoType || 'note');
+        if (nextSelection.sailCode) setSelection(nextSelection);
+        await loadData(nextSelection.sailCode ? nextSelection : { sailCode: '', shipCode: '', shipName: '' });
+      } catch (e) {
+        setError(e);
+      } finally {
+        setSaving(false);
+      }
+    };
+    window.addEventListener(MEMO_CREATE_EVENT, onCreate);
+    return () => window.removeEventListener(MEMO_CREATE_EVENT, onCreate);
+  }, []);
+
   const subtitle = useMemo(() => {
     if (selection.sailCode) {
       return `Linked to sail ${selection.sailCode}${selection.shipName ? ` (${selection.shipName})` : ''}`;
@@ -220,6 +274,8 @@ const InventoryMemoContainer = () => {
         setMemoText={setMemoText}
         setMemoType={setMemoType}
         onSaveMemo={onSaveMemo}
+        panelInstanceId={panelInstanceId}
+        panelComponentId={panelComponentId}
       />
     </PanelDataState>
   );

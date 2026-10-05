@@ -29,6 +29,7 @@ import {
   BAR_SPLIT,
   DEFAULT_BAR_SPLIT,
   dateInRange,
+  filterPressureRowsForScope,
   normalizeBarSplit,
   PRESSURE_FLAGS,
   PRESSURE_GRAINS,
@@ -39,6 +40,10 @@ const FOLLOW_GLOBAL_CAT = '__global__';
 const BAR_SPLIT_DEF = {
   id: 'barSplit',
   default: DEFAULT_BAR_SPLIT,
+};
+const ROW_SCOPE_DEF = {
+  id: 'rowScope',
+  default: 'narrow',
 };
 
 const resolveSelectedReference = (scope) => {
@@ -425,6 +430,7 @@ const ShipDayPressurePresenter = ({
   const barSplit = normalizeBarSplit(resolveViewValue(viewsState, BAR_SPLIT_DEF));
   const barSplitRef = useRef(barSplit);
   barSplitRef.current = barSplit;
+  const rowScope = resolveViewValue(viewsState, ROW_SCOPE_DEF) === 'wide' ? 'wide' : 'narrow';
   const showTooltipRef = useRef(showTooltip);
   showTooltipRef.current = showTooltip;
   const noun = demandUnitNoun(demandUnit);
@@ -442,7 +448,32 @@ const ShipDayPressurePresenter = ({
   columnsRef.current = columns;
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
-  const selectionBandRef = useRef({ focusDate: null, impactFrom: null, impactTo: null });
+  const selectionBand = useMemo(() => {
+    const sailing = bundle?.meta?.selectedVoyage;
+    if (!sailing?.date_from && !sailing?.date_to) {
+      return { focusDate: selectedDate || null, impactFrom: null, impactTo: null };
+    }
+    const voyageForBand = {
+      id: sailing.reference_sail_code,
+      date_from: sailing.date_from,
+      date_to: sailing.date_to,
+    };
+    const band = resolveSelectionRowBand({
+      voyageCol: voyageForBand,
+      impactFrom: voyageForBand.date_from,
+      impactTo: voyageForBand.date_to,
+    });
+    if (selectedDate) band.focusDate = selectedDate;
+    return band;
+  }, [bundle?.meta?.selectedVoyage, selectedDate]);
+  const visibleRows = useMemo(
+    () => filterPressureRowsForScope(rows, selectionBand, rowScope),
+    [rows, selectionBand, rowScope]
+  );
+  const visibleRowsRef = useRef(visibleRows);
+  visibleRowsRef.current = visibleRows;
+  const selectionBandRef = useRef(selectionBand);
+  selectionBandRef.current = selectionBand;
   const truncatedVoyages = grain === PRESSURE_GRAINS.VOYAGE && columns.filter((col) => col.kind === 'voyage').length >= 48;
   const truncatedPackages = grain === PRESSURE_GRAINS.PACKAGE && columns.filter((col) => col.kind === 'package').length >= 48;
   const frozenImpactCols = grain === PRESSURE_GRAINS.IMPACT
@@ -537,19 +568,20 @@ const ShipDayPressurePresenter = ({
       && columnMatchesSelection(col, ship, sailCodes)
     ));
     const meta = bundle?.meta || {};
-    // Row band = selected voyage / package occupancy (not the wider fetch/impact window).
-    const voyageForBand = voyageCol || (meta.selectedVoyage
+    // Same sailing occupancy in every grain — not the package/duration column span.
+    const sailing = meta.selectedVoyage;
+    const voyageForBand = (sailing?.date_from || sailing?.date_to)
       ? {
-        id: meta.selectedVoyage.reference_sail_code,
-        date_from: meta.selectedVoyage.date_from,
-        date_to: meta.selectedVoyage.date_to,
+        id: sailing.reference_sail_code,
+        date_from: sailing.date_from,
+        date_to: sailing.date_to,
       }
-      : null);
+      : voyageCol;
     const band = { ...resolveSelectionRowBand({
       voyageCol: voyageForBand,
       impactFrom: voyageForBand?.date_from,
       impactTo: voyageForBand?.date_to,
-      rows: rowsRef.current,
+      rows: sailing ? [] : rowsRef.current,
     }) };
     if (selectedDateRef.current) {
       band.focusDate = selectedDateRef.current;
@@ -882,7 +914,7 @@ const ShipDayPressurePresenter = ({
       instanceRef.current.on('cellMouseLeave', () => setHover(null));
       instanceRef.current.on('tableBuilt', () => {
         builtRef.current = true;
-        const refresh = instanceRef.current?.replaceData?.(rowsRef.current || []);
+        const refresh = instanceRef.current?.replaceData?.(visibleRowsRef.current || []);
         const after = () => applySelectionChrome({ scroll: false });
         if (refresh?.then) refresh.then(after).catch(after);
         else window.requestAnimationFrame(after);
@@ -899,16 +931,17 @@ const ShipDayPressurePresenter = ({
   }, [columnLayoutKey, frozenImpactCols, grain, panelComponentId, panelInstanceId, applySelectionChrome, applyRowBandClasses]);
 
   useEffect(() => {
-    if (!instanceRef.current || !builtRef.current || !rows.length) return;
+    if (!instanceRef.current || !builtRef.current) return;
+    if (!rows.length && !visibleRows.length) return;
     try {
-      const refresh = instanceRef.current.replaceData(rows);
+      const refresh = instanceRef.current.replaceData(visibleRows);
       const after = () => applySelectionChrome({ scroll: false });
       if (refresh?.then) refresh.then(after).catch(after);
       else window.requestAnimationFrame(after);
     } catch {
       // noop
     }
-  }, [rows, applySelectionChrome]);
+  }, [visibleRows, rows.length, applySelectionChrome]);
 
   useEffect(() => {
     if (!instanceRef.current || !builtRef.current) return;
@@ -1181,6 +1214,7 @@ const ShipDayPressurePresenter = ({
             Impact view adds a Block column (offsale / <code>ship_cabin_reserve</code>), duration buckets (e.g. 22N) to surface long low-probability group holds, plus Cabin (tightest category loading) and Market strips when one ship is selected.
             Cabin-category loading comes from <code>sail_by_cabin_occupancy</code> and is what flags blocking when a category is full on a day a longer voyage still needs.
             Category identity follows StatusBar Cat (Real vs Group via <code>cabin_ctg</code>); this panel can override locally without changing the global criteria.
+            Views → Rows: Narrow (default) keeps only the highlighted dates of the sailing selected in Explorer — the same dates in Ship, Voyage, Package, Market, Impact, and Cabin cat. Wide shows the full criteria window.
           </p>
         </ReportDataDetails>
       </main>

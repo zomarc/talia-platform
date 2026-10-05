@@ -33,6 +33,7 @@ Optional: `deploy-to-azure-staging.sh` is a separate recipe for VMs that update 
 - Data lives in **Supabase Postgres** (application schemas + `talia_config`, etc.).
 - Use **pg_dump / restore** (see `talia-server/scripts/BACKUP-RESTORE.md` and repo `scripts/restore-db-to-staging.sh`, `scripts/restore-db-to-mvp.sh`).
 - After restore on a **new** host, align **role passwords** and **JWT-related env** with that host (`scripts/supabase/align-db-role-passwords.sh`, etc.). **Secrets do not travel** inside the dump the way your `.env` expects them.
+- **Requirements Log** (`talia_requirement_item`) rides the same DB backup/restore. For a selective copy without a full restore, use **Export JSON / Import** on the Requirements Log panel (`RequirementsLogExport` pack: merge-by-id or create-new).
 
 ## Ops checks
 

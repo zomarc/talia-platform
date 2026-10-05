@@ -13,6 +13,9 @@ import {
   findingSailCode,
 } from './rmChecklistScope';
 import { formatActionLabel, buildFindingExplanation } from './rmChecklistHeatmapTransform.js';
+import { memoCreateDetailFromFinding } from './rmChecklistMemo.js';
+import { emitMemoCreate } from '../../../lib/eventBus';
+import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import './rm-engine-panels.css';
 
 const formatPct = (value) => {
@@ -64,9 +67,16 @@ const RmChecklistPresenter = ({
   const selectedSailCodeRef = useRef(selectedSailCode);
   const selectedFindingIdRef = useRef(selectedFindingId);
   const onSelectFindingRef = useRef(onSelectFinding);
+  const createMemoRef = useRef(null);
+  const { user } = useSupabaseAuth();
   selectedSailCodeRef.current = selectedSailCode;
   selectedFindingIdRef.current = selectedFindingId;
   onSelectFindingRef.current = onSelectFinding;
+  const createMemoFromRow = (row) => {
+    if (!row) return;
+    emitMemoCreate(memoCreateDetailFromFinding(row, user));
+  };
+  createMemoRef.current = createMemoFromRow;
   const {
     viewsState,
     setView,
@@ -81,6 +91,25 @@ const RmChecklistPresenter = ({
   const display = viewsState.display === 'heatmap' ? 'heatmap' : 'table';
 
   const columns = useMemo(() => ([
+    {
+      title: '',
+      field: 'memoAction',
+      width: 118,
+      headerSort: false,
+      hozAlign: 'center',
+      formatter: () => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'talia-btn talia-btn--secondary rm-checklist__memo-btn';
+        button.textContent = 'Create memo';
+        return button;
+      },
+      cellClick: (event, cell) => {
+        event?.stopPropagation?.();
+        const data = cell?.getRow?.()?.getData?.();
+        if (data) createMemoRef.current?.(data);
+      },
+    },
     { field: 'severity', title: 'Severity', width: 96, headerFilter: 'list', headerFilterParams: { valuesLookup: true } },
     {
       field: 'score',
@@ -185,7 +214,8 @@ const RmChecklistPresenter = ({
         exportTitle: 'RM Checklist',
         rowFormatter: chainRowFormatters(createReferenceRowFormatter(isFocusRow)),
       }));
-      instanceRef.current.on('rowClick', (_event, row) => {
+      instanceRef.current.on('rowClick', (event, row) => {
+        if (event?.target?.closest?.('.rm-checklist__memo-btn')) return;
         const data = row?.getData?.();
         if (!data?.findingId) return;
         onSelectFindingRef.current?.(data);
@@ -320,6 +350,18 @@ const RmChecklistPresenter = ({
           onClick={() => activeFindingId && onDismiss(activeFindingId)}
         >
           Dismiss
+        </button>
+        <button
+          type="button"
+          className="talia-btn talia-btn--secondary"
+          disabled={!activeFindingId}
+          title="Store a memo for the selected finding without acknowledging or dismissing it"
+          onClick={() => {
+            const row = rows.find((item) => item.findingId === activeFindingId);
+            if (row) createMemoFromRow(row);
+          }}
+        >
+          Memo Only
         </button>
       </div>
 

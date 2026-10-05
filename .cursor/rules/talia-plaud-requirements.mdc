@@ -1,0 +1,81 @@
+---
+description: Ingest Plaud meeting notes into Talia requirements and actionable work via Plaud MCP
+alwaysApply: false
+---
+
+# Plaud → Talia requirements
+
+When the user mentions Plaud, a meeting, or wants requirements from a recording, use **Plaud MCP** (do not invent a parallel integration).
+
+## MCP tools (prefer in this order)
+
+1. `list_files` — find the recording (`query`, `date_from` / `date_to`)
+2. `get_note` — summary, action items, topics (**default**)
+3. `get_transcript` — only when the note is ambiguous or the user asks for exact wording
+4. `login` — if tools return 401 / not authenticated
+
+Prefer `get_note` over full transcripts (less noise, less sensitive content).
+
+## Normalize every meeting into this shape
+
+```markdown
+## Meeting
+- Title / date / Plaud id:
+
+## Requirements (Talia)
+- [ ] … — area: UI | data | engine | docs
+  - Panel / surface (if known):
+  - Acceptance:
+
+## Out of scope / parking lot
+- …
+
+## Open questions
+- …
+```
+
+Classify each item: **UI** (focus-panels / shell), **data** (GraphQL / inventory / sync), **engine**, or **docs**. Respect existing Talia rules (report shell, `inventory_item` selection, tracked GraphQL).
+
+## Actioning
+
+- **Default:** present the normalized list and ask what to implement first (or switch to Plan for multi-step work).
+- **If the user says implement / build:** execute against the repo; commit only when asked.
+- **If the user says capture / save:** write `docs/meetings/YYYY-MM-DD-short-slug.md` with the normalized note (create the folder if needed).
+- Do not invent product requirements that were not in the Plaud note or explicit user follow-up.
+
+## Push to Requirements Log (optional)
+
+After normalizing (and optionally saving under `docs/meetings/`), **offer “Push to Requirements Log”**.
+
+Do **not** connect Talia to Plaud MCP. Cursor reads Plaud, then writes Talia via GraphQL:
+
+1. Map normalized bullets → `RequirementItemInput`:
+   - Requirements with a release/milestone → `section: "deliverable"` (+ `targetVersion` when known)
+   - Work owned outside Talia → `section: "external"`
+   - Unresolved decisions → `section: "question"`
+   - `area`: `ui` | `data` | `engine` | `docs` | `ops`
+   - `source: "plaud"`, `sourceRef: "<Plaud file id or meeting path>"`
+   - `status: "backlog"`, `priority: "p1"` (or `p0` if clearly blocking)
+2. Call Talia GraphQL (authenticated as ADMIN/SUPER_USER) with bulk upsert:
+
+```graphql
+mutation UpsertRequirementItems($inputs: [RequirementItemInput!]!) {
+  upsertRequirementItems(inputs: $inputs) {
+    id
+    section
+    title
+    status
+  }
+}
+```
+
+POST `/api/graphql` on the target instance (local / staging / mvp). Re-push with stable ids when updating the same Plaud capture; otherwise omit `id` to create new rows.
+
+3. Confirm counts pushed per section. The live board is the **Requirements Log** panel (`requirements-log`); `docs/meetings/*.md` remains the git archive.
+
+## Example prompts (user → agent)
+
+- “Pull today’s Plaud note and extract Talia requirements.”
+- “From the RM workshop recording, plan Groups Explorer follow-ups.”
+- “Save yesterday’s Plaud digest under docs/meetings.”
+- “Push that Plaud extract to the Requirements Log.”

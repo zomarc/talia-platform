@@ -1574,6 +1574,11 @@
   overflow: hidden;
 }
 
+.booking-profile__content--no-graph {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
 /* Chart always fills remaining space below Snapshot / filters / callouts */
 .booking-profile__chart-host {
   position: relative;
@@ -1677,6 +1682,8 @@
   flex-direction: column;
   min-height: 0;
   height: 100%;
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size);
 }
 
 .seasonal-trading-pack__content {
@@ -1699,10 +1706,26 @@
 
 .seasonal-trading-pack__section-title {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--theme-font-size-lg);
   font-weight: 600;
   color: var(--theme-fg, inherit);
   line-height: 1.3;
+}
+
+/* Snapshot strip overrides the framework metric sizes with fixed px. Restore Appearance scale here. */
+.seasonal-trading-pack .talia-report__metric .talia-metric__label {
+  font-size: var(--theme-font-size-xs);
+  line-height: 1.2;
+}
+
+.seasonal-trading-pack .talia-report__metric .talia-metric__value {
+  font-size: var(--theme-font-size-xl);
+  line-height: 1.2;
+}
+
+.seasonal-trading-pack .talia-report__metric .talia-metric__change {
+  font-size: var(--theme-font-size-sm);
+  line-height: 1.2;
 }
 
 .seasonal-trading-pack__narrative,
@@ -1738,15 +1761,18 @@
   width: max-content;
   min-width: 100%;
   border-collapse: collapse;
-  font-size: 0.78rem;
+  font-family: var(--theme-table-font-family, var(--theme-font-family));
+  font-size: var(--theme-table-font-size, var(--theme-font-size));
 }
 
 .seasonal-trading-pack__table th,
 .seasonal-trading-pack__table td {
-  padding: 0.35rem 0.5rem;
+  padding: var(--theme-table-cell-padding-y, 4px) var(--theme-table-cell-padding-x, 8px);
   border-bottom: 1px solid var(--theme-border, #333);
   white-space: nowrap;
   text-align: right;
+  font-size: var(--theme-table-font-size, var(--theme-font-size));
+  line-height: 1.3;
 }
 
 .seasonal-trading-pack__table th:first-child,
@@ -1764,6 +1790,7 @@
   top: 0;
   background: var(--theme-bg-elevated, #222);
   font-weight: 600;
+  font-size: var(--theme-table-header-font-size, var(--theme-table-font-size, var(--theme-font-size)));
   z-index: 2;
 }
 
@@ -1783,7 +1810,7 @@
 
 .seasonal-trading-pack__export-hint,
 .seasonal-trading-pack__export-error {
-  font-size: 0.75rem;
+  font-size: var(--theme-font-size-sm);
   color: var(--theme-text-muted, #888);
   align-self: flex-end;
   padding-bottom: 4px;
@@ -1801,7 +1828,7 @@
 
 .seasonal-trading-pack__more-note {
   margin: 4px 0 0;
-  font-size: 0.75rem;
+  font-size: var(--theme-font-size-sm);
   color: var(--theme-text-muted, #888);
 }
 
@@ -5588,10 +5615,11 @@
   flex-direction: column;
   gap: 10px;
   height: 100%;
-  padding: 10px;
+  min-height: 0;
   background: var(--theme-bg-solid);
   color: var(--theme-fg);
   overflow: auto;
+  padding: 0 10px 10px;
 }
 
 .inventory-memo__header {
@@ -5607,10 +5635,14 @@
   font-size: var(--theme-font-size-xl);
 }
 
-.inventory-memo__subtitle {
-  margin: 4px 0 0 0;
-  color: var(--theme-text-secondary);
-  font-size: var(--theme-font-size-sm);
+.inventory-memo__details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inventory-memo__details .talia-report__subtitle {
+  margin: 0;
 }
 
 .inventory-memo__chips {
@@ -5702,13 +5734,31 @@
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inventory-memo__item--compact .inventory-memo__item-head {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
 }
 
 .inventory-memo__type {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--theme-font-size-sm);
   background: var(--theme-accent-light);
   border-radius: 999px;
   padding: 1px 8px;
+}
+
+.inventory-memo__type-icon {
+  font-size: var(--theme-font-size);
+  line-height: 1;
+}
+
+.inventory-memo__item--compact .inventory-memo__type {
+  padding: 1px 6px;
 }
 
 .inventory-memo__text {
@@ -6637,6 +6687,41 @@
   border-radius: var(--theme-radius-sm);
   font-size: var(--theme-font-size-xs);
   border: 1px solid transparent;
+}
+
+.cabin-deck__view-controls {
+  align-items: center;
+}
+
+.cabin-deck__view-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--theme-component-gap-xs);
+}
+
+.cabin-deck__view-group + .cabin-deck__view-group,
+.cabin-deck__view-group + .cabin-deck__cat-control,
+.cabin-deck__cat-control + .cabin-deck__view-group {
+  margin-left: var(--theme-component-gap-sm);
+  padding-left: var(--theme-component-gap-sm);
+  border-left: 1px solid var(--theme-border);
+}
+
+.cabin-deck__cat-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--theme-component-gap-xs);
+}
+
+.cabin-deck__cat-control-label {
+  font-size: var(--theme-font-size-xs);
+  opacity: 0.75;
+}
+
+.cabin-deck__cat-select {
+  min-width: 9.5rem;
+  max-width: 14rem;
+  font-size: var(--theme-font-size-xs);
 }
 
 .cabin-deck__section-title {

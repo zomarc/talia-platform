@@ -16,12 +16,15 @@ import {
   toDemandVolume,
 } from '../../../lib/demandUnit';
 import {
+  applyAxisLabelVisibility,
+  axisLabelsPluginOptions,
   getOverlayLegendOptions,
   taliaHorizontalReferenceLinePlugin,
   taliaVerticalReferenceLinePlugin,
   resolveTodayWeekIndex,
 } from '../../../lib/chartConfig';
 import { colorForDimensionKey } from '../../../lib/reservationDimensions';
+import { buildCommercialCurveOverlay } from '../../../lib/commercialBookTargets';
 import { registerPanelDataExport } from '../../../lib/panelDataExport';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import ReportSnapshot from '../../shared/ReportSnapshot';
@@ -71,6 +74,8 @@ const ReservationBookingCurvePresenter = ({
   showCompetitor = false,
   onShowCompetitorChange,
   marketBreakdown = 'market_group',
+  commercialEnabled = false,
+  commercialWeekRows = [],
   panelInstanceId,
   panelComponentId,
 }) => {
@@ -81,7 +86,7 @@ const ReservationBookingCurvePresenter = ({
   const demandNoun = demandUnitNoun(demandUnit);
   const showCapacityLine = demandUnit === DEMAND_UNIT_CABINS;
   const componentKey = panelComponentId || 'reservation-booking-curve';
-  const { showSnapshot, showDetails, showFilters, showLegends, showGraph, reportShellClassName } = useReportShellOptions(
+  const { showSnapshot, showDetails, showFilters, showLegends, showAxisLabels, showGraph, reportShellClassName } = useReportShellOptions(
     componentKey,
     panelInstanceId
   );
@@ -240,6 +245,82 @@ const ReservationBookingCurvePresenter = ({
       });
     }
 
+    const commercialOverlay = commercialEnabled
+      ? buildCommercialCurveOverlay(commercialWeekRows, {
+        sailDate: data?.sailDate,
+        axisWeeks: axisPoints.map((p) => p.weeksUntilSailing),
+        marketDimension: marketBreakdown,
+        splitByDimension: chartMode === 'series',
+      })
+      : null;
+    const pppdByWeek = new Map(
+      (data.totals || [])
+        .filter((p) => p?.pppdEur != null && Number.isFinite(Number(p.pppdEur)) && Number(p.guests) >= 20)
+        .map((p) => [Number(p.weeksUntilSailing), Number(p.pppdEur)])
+    );
+    const moneyLine = (label, values, color, dash) => ({
+      label,
+      yAxisID: 'y1',
+      data: values,
+      borderColor: color,
+      backgroundColor: 'transparent',
+      borderDash: dash,
+      fill: false,
+      tension: 0.15,
+      pointRadius: 0,
+      pointHoverRadius: 3,
+      borderWidth: 2,
+      spanGaps: true,
+    });
+    const actualPppd = axisPoints.map((p) => {
+      const value = pppdByWeek.get(Number(p.weeksUntilSailing));
+      return value == null ? null : value;
+    });
+    if (actualPppd.some((value) => value != null)) {
+      datasets.push(moneyLine('PPPD', actualPppd, '#0f766e', []));
+    }
+    if (commercialOverlay) {
+      const pushCommercialGuests = (label, points, color) => {
+        datasets.push({
+          label,
+          yAxisID: 'y',
+          stack: chartMode === 'series' ? 'commercial' : undefined,
+          data: points.map((point) => presentGuests(point.guests)),
+          borderColor: color,
+          backgroundColor: 'transparent',
+          borderDash: [5, 4],
+          fill: false,
+          tension: 0.15,
+          pointRadius: 0,
+          pointHoverRadius: 3,
+          borderWidth: 2,
+          spanGaps: true,
+        });
+      };
+      if (chartMode === 'series' && commercialOverlay.byDimension.length) {
+        commercialOverlay.byDimension.forEach((seriesLine) => {
+          pushCommercialGuests(
+            `Cml ${seriesLine.dimensionKey}`,
+            seriesLine.points,
+            colorForDimensionKey(seriesLine.dimensionKey)
+          );
+        });
+      } else if (commercialOverlay.total.some((point) => point.guests > 0)) {
+        pushCommercialGuests('Commercial', commercialOverlay.total, '#7c3aed');
+      }
+      const commercialPppd = commercialOverlay.total.map((point) => (
+        point.pppd != null && Number.isFinite(Number(point.pppd)) && point.guests >= 20
+          ? Number(point.pppd)
+          : null
+      ));
+      if (commercialPppd.some((value) => value != null)) {
+        datasets.push(moneyLine('Cml PPPD', commercialPppd, '#c026d3', [2, 3]));
+      }
+    }
+    datasets.forEach((dataset) => {
+      if (!dataset.yAxisID) dataset.yAxisID = 'y';
+    });
+
     const capacity = Number(data?.totalCabins);
     const hasCapacity = showCapacityLine && Number.isFinite(capacity) && capacity > 0;
     const peakBookings = Math.max(
@@ -247,7 +328,8 @@ const ReservationBookingCurvePresenter = ({
       ...(data.totals || []).map((p) => Number(p.bookings) || 0),
       ...(series.flatMap((s) => (s.points || []).map((p) => Number(p.bookings) || 0))),
       ...(contractSeries.flatMap((s) => (s.points || []).map((p) => Number(presentGuests(p.guests ?? p.bookings)) || 0))),
-      ...(targetSeries.map((p) => Number(presentGuests(p.guests ?? p.bookings)) || 0))
+      ...(targetSeries.map((p) => Number(presentGuests(p.guests ?? p.bookings)) || 0)),
+      ...(commercialOverlay?.total || []).map((p) => Number(presentGuests(p.guests)) || 0)
     );
     const daysUntil = data.daysUntilSailing;
     let todayIndex = resolveTodayWeekIndex(axisPoints, daysUntil);
@@ -259,11 +341,15 @@ const ReservationBookingCurvePresenter = ({
     chartInstanceRef.current = new Chart(ctx, {
       type: 'line',
       data: { labels, datasets },
-      options: {
+      options: applyAxisLabelVisibility({
         responsive: true,
         maintainAspectRatio: false,
+        layout: {
+          padding: { top: 2, right: 2, bottom: 0, left: 0 },
+        },
         interaction: { mode: 'index', intersect: false },
         plugins: {
+          ...axisLabelsPluginOptions(showAxisLabels),
           legend: getOverlayLegendOptions({ visible: chartLegendsVisible && showLegends }),
           taliaHorizontalReferenceLine: hasCapacity
             ? {
@@ -286,10 +372,23 @@ const ReservationBookingCurvePresenter = ({
                 if (Number(w) === 0) return 'Sail (Week −0)';
                 return `Week −${w}`;
               },
+              label: (item) => {
+                const value = item.parsed?.y;
+                if (item.dataset?.yAxisID === 'y1') {
+                  if (value == null || Number.isNaN(Number(value))) return `${item.dataset.label}: —`;
+                  return `${item.dataset.label}: €${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+                }
+                return `${item.dataset.label}: ${Number(value || 0).toLocaleString()}`;
+              },
               footer: (items) => {
+                const volumeItems = (items || []).filter((item) => {
+                  if (item.dataset?.yAxisID === 'y1') return false;
+                  const label = String(item.dataset?.label || '');
+                  return label !== 'Commercial' && !label.startsWith('Cml ');
+                });
                 if (useDemandTotals) {
                   const byLabel = new Map(
-                    (items || []).map((it) => [String(it.dataset?.label || ''), Number(it.raw) || 0])
+                    volumeItems.map((it) => [String(it.dataset?.label || ''), Number(it.raw) || 0])
                   );
                   const booked = byLabel.get('Booked') || 0;
                   const estimated = [...byLabel.entries()].reduce((sum, [label, value]) => (
@@ -298,7 +397,7 @@ const ReservationBookingCurvePresenter = ({
                   const demand = booked + estimated;
                   return `Demand ${demand.toLocaleString()} ${demandNoun} (Booked + Estimated)`;
                 }
-                const total = items.reduce((sum, it) => sum + (Number(it.raw) || 0), 0);
+                const total = volumeItems.reduce((sum, it) => sum + (Number(it.raw) || 0), 0);
                 return `Total ${total.toLocaleString()} ${demandNoun}`;
               },
             },
@@ -336,8 +435,31 @@ const ReservationBookingCurvePresenter = ({
             },
             ticks: { font: { size: 10, family: fontFamily } },
           },
+          ...(datasets.some((dataset) => dataset.yAxisID === 'y1')
+            ? {
+              y1: {
+                position: 'right',
+                beginAtZero: true,
+                stacked: false,
+                title: {
+                  display: true,
+                  text: '€ PPPD',
+                  font: { size: 11, family: fontFamily },
+                },
+                ticks: {
+                  font: { size: 10, family: fontFamily },
+                  maxTicksLimit: 5,
+                  callback: (value) => `€${Math.round(Number(value))}`,
+                },
+                afterFit(scale) {
+                  scale.width += 10;
+                },
+                grid: { drawOnChartArea: false },
+              },
+            }
+            : {}),
         },
-      },
+      }, showAxisLabels),
     });
 
     return () => {
@@ -346,7 +468,7 @@ const ReservationBookingCurvePresenter = ({
         chartInstanceRef.current = null;
       }
     };
-  }, [chartLegendsVisible, chartMode, data, demandNoun, demandUnit, fontSize, fontFamily, showCapacityLine, showGraph, showLegends]);
+  }, [chartLegendsVisible, chartMode, commercialEnabled, commercialWeekRows, data, demandNoun, demandUnit, fontSize, fontFamily, marketBreakdown, showAxisLabels, showCapacityLine, showGraph, showLegends]);
 
   const v = data?.velocity || {};
   const revenue = data?.revenue;

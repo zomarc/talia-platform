@@ -92,6 +92,7 @@ const MasterSailingExplorerPresenter = ({
   onDistributionIntent = null,
   marketDimension = 'market_group',
   bookedComposition = 'group_fit_expected',
+  showCommercialTargets = false,
   panelInstanceId,
   panelComponentId,
 }) => {
@@ -246,7 +247,8 @@ const MasterSailingExplorerPresenter = ({
     demandUnit,
     demandNoun,
     onExpandToggle: handleExpandToggle,
-  }), [demandNoun, demandUnit, handleExpandToggle, isCompact, segmentsVisible, viewMode]);
+    showCommercialTargets,
+  }), [demandNoun, demandUnit, handleExpandToggle, isCompact, segmentsVisible, showCommercialTargets, viewMode]);
 
   const processedTableOptions = useCallback((extra = {}) => getTabulatorOptions({
     ...extra,

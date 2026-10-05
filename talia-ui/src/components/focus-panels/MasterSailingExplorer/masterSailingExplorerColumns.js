@@ -9,6 +9,15 @@ export const formatMseCount = (value) => {
   return numeric.toLocaleString('en-US', { maximumFractionDigits: 0 });
 };
 
+export const formatMseEuro = (value) => {
+  const numeric = Number.parseFloat(value);
+  if (!Number.isFinite(numeric)) return '—';
+  const abs = Math.abs(numeric);
+  if (abs >= 1e6) return `€${(numeric / 1e6).toFixed(1)}m`;
+  if (abs >= 1e3) return `€${Math.round(numeric / 1e3)}k`;
+  return `€${Math.round(numeric)}`;
+};
+
 export const formatMsePercent = (value) => {
   const numeric = Number.parseFloat(value);
   if (!Number.isFinite(numeric)) return '—';
@@ -168,7 +177,37 @@ export const buildMasterSailingExplorerColumns = ({
   demandUnit,
   demandNoun = 'guests',
   onExpandToggle,
+  showCommercialTargets = false,
 } = {}) => {
+  const commercialColumns = [
+    {
+      field: 'commercial_fit_guests',
+      titleShort: 'Cml F',
+      titleLong: 'Commercial FIT guests (pax F, voyage sum of weekly pace)',
+      hozAlign: 'right',
+      width: 88,
+      formatter: (cell) => formatMseCount(cell.getRow().getData()?.commercial_fit_guests),
+      headerSort: false,
+    },
+    {
+      field: 'commercial_group_guests',
+      titleShort: 'Cml G',
+      titleLong: 'Commercial Group guests (pax G, voyage sum of weekly pace). Pax A is excluded.',
+      hozAlign: 'right',
+      width: 88,
+      formatter: (cell) => formatMseCount(cell.getRow().getData()?.commercial_group_guests),
+      headerSort: false,
+    },
+    {
+      field: 'commercial_ticket_eur',
+      titleShort: 'Cml €',
+      titleLong: 'Commercial gross ticket revenue, FIT + Group',
+      hozAlign: 'right',
+      width: 96,
+      formatter: (cell) => formatMseEuro(cell.getRow().getData()?.commercial_ticket_eur),
+      headerSort: false,
+    },
+  ];
   if (compact) {
     return [
       {
@@ -180,6 +219,19 @@ export const buildMasterSailingExplorerColumns = ({
         formatter: formatCompactDateCell,
         headerSort: viewMode === 'flat',
       },
+      ...(showCommercialTargets ? [{
+        field: 'commercial_fit_guests',
+        title: 'Cml',
+        headerTooltip: 'Commercial FIT / Group guests and ticket revenue',
+        hozAlign: 'right',
+        width: 88,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (row?.commercial_fit_guests == null && row?.commercial_group_guests == null) return '—';
+          return `${formatMseCount(row?.commercial_fit_guests)}/${formatMseCount(row?.commercial_group_guests)}`;
+        },
+        headerSort: false,
+      }] : []),
       {
         field: 'berths_occupied',
         title: 'Bk B',
@@ -459,5 +511,6 @@ export const buildMasterSailingExplorerColumns = ({
     },
   );
 
+  if (showCommercialTargets) baseColumns.push(...commercialColumns);
   return baseColumns;
 };

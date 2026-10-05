@@ -39,6 +39,7 @@ import { useFocusManagement } from '../../hooks/useFocusManagement';
 import { resolveAppPublicUrl } from '../../lib/headerLogoAsset';
 import TaliaBrandMark from './TaliaBrandMark';
 import { GLOBAL_DATE_RANGE_OPTIONS, normalizeGlobalDateRangeKey, resolveGlobalDateRange } from '../../lib/globalDateRange';
+import { normalizeCommercialTargets } from '../../lib/commercialBookTargets';
 import {
   DEFAULT_DEMAND_UNIT,
   DEMAND_UNIT_OPTIONS,
@@ -120,6 +121,11 @@ const GLOBAL_BOOKED_COMPOSITION_OPTIONS = [
   { key: 'booked_only', label: 'Booked' },
   { key: 'three_way', label: '3-way' },
   { key: 'group_fit_expected', label: 'FIT+Held' },
+];
+
+const GLOBAL_COMMERCIAL_TARGET_OPTIONS = [
+  { key: 'off', label: 'Off' },
+  { key: 'on', label: 'On' },
 ];
 
 const GLOBAL_CABIN_CATEGORY_MODE_OPTIONS = [
@@ -428,6 +434,9 @@ const StatusBar = ({
   ));
   const [bookedComposition, setBookedComposition] = useState(() => (
     normalizeBookedComposition(window.__taliaGlobalCriteria?.bookedComposition)
+  ));
+  const [commercialTargets, setCommercialTargets] = useState(() => (
+    normalizeCommercialTargets(window.__taliaGlobalCriteria?.commercialTargets)
   ));
   const [cabinCategoryMode, setCabinCategoryMode] = useState(() => (
     normalizeCabinCategoryMode(window.__taliaGlobalCriteria?.cabinCategoryMode)
@@ -952,6 +961,12 @@ const StatusBar = ({
     setBookedComposition(next);
   };
 
+  const handleCommercialTargetsChange = (nextValue) => {
+    const next = normalizeCommercialTargets(nextValue);
+    userActivityTracker.recordHeaderAction('commercial-targets', { commercialTargets: next });
+    setCommercialTargets(next);
+  };
+
   const handleCabinCategoryModeChange = (nextValue) => {
     const next = normalizeCabinCategoryMode(nextValue);
     userActivityTracker.recordHeaderAction('cabin-category-mode', { cabinCategoryMode: next });
@@ -1301,6 +1316,9 @@ const StatusBar = ({
           if (Object.prototype.hasOwnProperty.call(criteria, 'bookedComposition')) {
             setBookedComposition(normalizeBookedComposition(criteria.bookedComposition));
           }
+          if (Object.prototype.hasOwnProperty.call(criteria, 'commercialTargets')) {
+            setCommercialTargets(normalizeCommercialTargets(criteria.commercialTargets));
+          }
           if (Object.prototype.hasOwnProperty.call(criteria, 'cabinCategoryMode')) {
             setCabinCategoryMode(normalizeCabinCategoryMode(criteria.cabinCategoryMode));
           }
@@ -1380,6 +1398,7 @@ const StatusBar = ({
       includeNonRealSailings,
       marketDimension: normalizeMarketDimension(marketDimension),
       bookedComposition: normalizeBookedComposition(bookedComposition),
+      commercialTargets: normalizeCommercialTargets(commercialTargets),
       cabinCategoryMode: normalizeCabinCategoryMode(cabinCategoryMode),
       demandUnit: normalizeDemandUnit(demandUnit),
       shipCode: normalizeGlobalShipCode(shipCode),
@@ -1400,7 +1419,7 @@ const StatusBar = ({
     }
     window.__taliaGlobalCriteria = criteria;
     publishDashboardGlobalConfig({ criteria });
-  }, [globalDateRange, departureMonth, globalDuration, activeOnly, marketDimension, bookedComposition, cabinCategoryMode, demandUnit, shipCode, defaultDisplayCurrency]);
+  }, [globalDateRange, departureMonth, globalDuration, activeOnly, marketDimension, bookedComposition, commercialTargets, cabinCategoryMode, demandUnit, shipCode, defaultDisplayCurrency]);
 
   // Sail selection updates the window snapshot only ... listeners already got sail.select.
   useEffect(() => {
@@ -1435,6 +1454,7 @@ const StatusBar = ({
         includeNonRealSailings: !activeOnly,
         marketDimension: normalizeMarketDimension(marketDimension),
         bookedComposition: normalizeBookedComposition(bookedComposition),
+        commercialTargets: normalizeCommercialTargets(commercialTargets),
         cabinCategoryMode: normalizeCabinCategoryMode(cabinCategoryMode),
         demandUnit: normalizeDemandUnit(demandUnit),
         shipCode: normalizeGlobalShipCode(shipCode),
@@ -1454,7 +1474,7 @@ const StatusBar = ({
         criteriaSaveTimerRef.current = null;
       }
     };
-  }, [profileCriteriaHydrated, globalDateRange, departureMonth, globalDuration, activeOnly, marketDimension, bookedComposition, cabinCategoryMode, demandUnit, shipCode, defaultDisplayCurrency, globalSailSelection]);
+  }, [profileCriteriaHydrated, globalDateRange, departureMonth, globalDuration, activeOnly, marketDimension, bookedComposition, commercialTargets, cabinCategoryMode, demandUnit, shipCode, defaultDisplayCurrency, globalSailSelection]);
 
   useEffect(() => {
     enforceDashboardUiState({ dispatchEvents: true });
@@ -1740,6 +1760,19 @@ const StatusBar = ({
                         value={bookedComposition}
                         onChange={handleBookedCompositionChange}
                         aria-label="Booked composition"
+                        autoCloseMs={menuDisappearMs}
+                      />
+                    </label>
+                    </TaliaTooltip>
+                    <TaliaTooltip content="Commercial book targets from lkp.Commercial_Book_Targets. Off hides them and does not load that table." placement="bottom-left" delayMs={180}>
+                    <label className="status-bar__header-range">
+                      <span className="status-bar__header-range-label">Cml</span>
+                      <HeaderCriteriaMenuSelect
+                        id="status-bar-global-commercial-targets"
+                        options={GLOBAL_COMMERCIAL_TARGET_OPTIONS}
+                        value={commercialTargets}
+                        onChange={handleCommercialTargetsChange}
+                        aria-label="Commercial book targets"
                         autoCloseMs={menuDisappearMs}
                       />
                     </label>

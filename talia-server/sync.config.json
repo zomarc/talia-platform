@@ -411,6 +411,52 @@
         "column": "id"
       }
     },
+    "commercialBookTargets": {
+      "type": "direct",
+      "source": "lkp.Commercial_Book_Targets",
+      "target": "commercial_book_targets",
+      "columns": [
+        "Pax_Type",
+        "AccMonth",
+        "Itinerary_Type_OLD",
+        "Agency_Market",
+        "Agency_Subchannel",
+        "Agency_Channel",
+        "Master_Voyage_Length",
+        "[Label]",
+        "[Bud.GrossPrePostRevenueEUR]",
+        "WC_Snapshot_Date",
+        "Master_Voyage",
+        "Guest_Count",
+        "Pax_Nights",
+        "GrossTicketRevenueEUR",
+        "GrossPreEmbRevenueEUR",
+        "GrossPrePostRevenueEUR",
+        "ShorexRevEUR",
+        "AddOnRevEUR",
+        "OtherPSRevEUR",
+        "Res_Status",
+        "Group_Status",
+        "Pax_Status",
+        "AccYear",
+        "Itinerary_Type",
+        "Market_Grouping"
+      ],
+      "transformKey": "commercialBookTargets",
+      "isLargeDataset": true,
+      "rowNumberOrder": [
+        "[Master_Voyage]",
+        "[WC_Snapshot_Date]",
+        "[Agency_Market]",
+        "[Pax_Type]",
+        "[Agency_Channel]",
+        "[Agency_Subchannel]"
+      ],
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "id"
+      }
+    },
     "budget": {
       "type": "direct",
       "source": "lkp.BUDGET",

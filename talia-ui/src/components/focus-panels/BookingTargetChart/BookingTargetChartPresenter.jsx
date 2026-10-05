@@ -8,7 +8,7 @@ import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
-import { getChartColors, getOverlayLegendOptions, getSeriesColors } from '../../../lib/chartConfig';
+import { applyAxisLabelVisibility, axisLabelsPluginOptions, getChartColors, getOverlayLegendOptions, getSeriesColors } from '../../../lib/chartConfig';
 import { formatDayMon, formatDateTime } from '../../../lib/dateFormat';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
 
@@ -49,7 +49,7 @@ const BookingTargetChartPresenter = ({
   panelComponentId,
 }) => {
   const { theme, fontSize, fontFamily, chartLegendsVisible } = useTheme();
-  const { showLegends, reportShellClassName } = useReportShellOptions(
+  const { showLegends, showAxisLabels, reportShellClassName } = useReportShellOptions(
     panelComponentId || 'booking-target-chart',
     panelInstanceId
   );
@@ -244,11 +244,12 @@ const BookingTargetChartPresenter = ({
     chartInstanceRef.current = new Chart(ctx, {
       type: chartType,
       data: { labels, datasets },
-      options: {
+      options: applyAxisLabelVisibility({
         responsive: true,
         maintainAspectRatio: false,
         animation: { duration: 0 },
         plugins: {
+          ...axisLabelsPluginOptions(showAxisLabels),
           legend: getOverlayLegendOptions({ visible: chartLegendsVisible && showLegends }),
           title: {
             display: false,
@@ -279,7 +280,7 @@ const BookingTargetChartPresenter = ({
           },
         },
         interaction: { mode: 'index', intersect: false },
-      },
+      }, showAxisLabels),
     });
 
     return () => {
@@ -301,6 +302,7 @@ const BookingTargetChartPresenter = ({
     fontSize,
     fontFamily,
     chartLegendsVisible,
+    showAxisLabels,
     showLegends,
   ]);
 

@@ -9,7 +9,43 @@
  *   initChartDefaults(); // Call once at app startup
  */
 
-import { Chart, defaults } from 'chart.js';
+import { defaults } from 'chart.js';
+
+/**
+ * Hide axis titles and tick labels when a panel's Views → Axis Labels is off.
+ * Grid lines stay. Pie and doughnut charts are left alone.
+ */
+const hideScaleChrome = (scales, id) => {
+  if (!scales[id] || typeof scales[id] !== 'object') scales[id] = {};
+  const scale = scales[id];
+  const ticks = scale.ticks && typeof scale.ticks === 'object' ? scale.ticks : {};
+  const title = scale.title && typeof scale.title === 'object' ? scale.title : {};
+  scales[id] = {
+    ...scale,
+    ticks: { ...ticks, display: false },
+    title: { ...title, display: false },
+  };
+};
+
+/** Apply before `new Chart`. Chart.js re-enters update if scales are mutated inside beforeUpdate. */
+export const applyAxisLabelVisibility = (options, visible = true) => {
+  if (!options || typeof options !== 'object') return options;
+  const plugins = {
+    ...(options.plugins || {}),
+    ...axisLabelsPluginOptions(visible),
+  };
+  if (visible !== false) return { ...options, plugins };
+  const scales = { ...(options.scales || {}) };
+  const ids = Object.keys(scales);
+  const keys = ids.length ? ids : ['x', 'y'];
+  keys.forEach((id) => hideScaleChrome(scales, id));
+  return { ...options, plugins, scales };
+};
+
+/** Plugin flag for Chart.js options. Display defaults to on. */
+export const axisLabelsPluginOptions = (visible = true) => ({
+  taliaAxisLabels: { display: visible !== false },
+});
 
 /**
  * Get computed CSS variable value

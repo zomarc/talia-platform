@@ -125,7 +125,28 @@ function emptyMonthBucket() {
     fitL4wRev: 0,
     bookedGroupRev: 0,
     bookedGroupPax: 0,
+    commercialPax: 0,
+    commercialRev: 0,
+    commercialFitPax: 0,
+    commercialGroupPax: 0,
   };
+}
+
+async function fetchCommercialVoyageRows(client, sailCodes) {
+  const codes = [...new Set((sailCodes || []).map((code) => String(code || '').trim()).filter(Boolean))];
+  const rows = [];
+  const chunkSize = 80;
+  for (let i = 0; i < codes.length; i += chunkSize) {
+    const chunk = codes.slice(i, i + chunkSize);
+    const { data, error } = await client
+      .from('commercial_book_target_voyage')
+      .select('master_voyage, pax_type, market_grouping, agency_channel, guest_count, gross_ticket_revenue_eur')
+      .in('master_voyage', chunk)
+      .limit(20000);
+    if (error) throw error;
+    rows.push(...(data || []));
+  }
+  return rows;
 }
 
 async function fetchAllPages(client, table, select, applyFilters) {
@@ -382,6 +403,52 @@ export async function getSeasonalTradingPack(client, options = {}) {
     b.expectedFinalRev = b.expectedFinalPax * groupRevPerPax;
   });
 
+  let commercialChannels = null;
+  let commercialMessage = null;
+  if (options.includeCommercialTargets === true) {
+    const monthByVoyage = new Map();
+    reservations.forEach((res) => {
+      const code = clean(res.sail_code);
+      const ym = monthKey(toDateKey(res.sail_from_date));
+      if (!code || !ym || !monthSet.has(ym) || monthByVoyage.has(code)) return;
+      monthByVoyage.set(code, ym);
+    });
+    try {
+      const commercialRows = await fetchCommercialVoyageRows(client, [...monthByVoyage.keys()]);
+      const channelTotals = new Map();
+      commercialRows.forEach((row) => {
+        const pax = String(row.pax_type || '').trim().toUpperCase();
+        if (pax !== 'F' && pax !== 'G' && !pax.startsWith('F') && !pax.startsWith('G')) return;
+        const group = clean(row.market_grouping) || 'UNKNOWN';
+        if (!matchesMarketGroup(group)) return;
+        const ym = monthByVoyage.get(clean(row.master_voyage));
+        if (!ym) return;
+        const bucket = buckets.get(ym);
+        const guests = Number(row.guest_count) || 0;
+        const ticket = Number(row.gross_ticket_revenue_eur) || 0;
+        bucket.commercialPax += guests;
+        bucket.commercialRev += ticket;
+        if (pax.startsWith('F')) bucket.commercialFitPax += guests;
+        if (pax.startsWith('G')) bucket.commercialGroupPax += guests;
+        const channel = clean(row.agency_channel) || 'Other';
+        const current = channelTotals.get(channel) || { guests: 0, ticket: 0 };
+        current.guests += guests;
+        current.ticket += ticket;
+        channelTotals.set(channel, current);
+      });
+      commercialChannels = [...channelTotals.entries()]
+        .map(([channel, totals]) => ({
+          channel,
+          guests: round0(totals.guests),
+          ticketEur: round2(totals.ticket),
+        }))
+        .sort((a, b) => b.guests - a.guests || a.channel.localeCompare(b.channel));
+    } catch (error) {
+      commercialMessage = error?.message || 'Commercial targets did not load';
+      commercialChannels = [];
+    }
+  }
+
   const buildMatrix = (metric) => {
     const isPax = metric === 'pax';
     const rows = [
@@ -393,6 +460,16 @@ export async function getSeasonalTradingPack(client, options = {}) {
           return isPax ? round0(b.bookedPax) : round2(b.bookedRev);
         }),
       },
+      ...(commercialChannels
+        ? [{
+          key: 'commercial',
+          label: isPax ? 'Commercial guests' : 'Commercial ticket',
+          values: months.map((m) => {
+            const b = buckets.get(m);
+            return isPax ? round0(b.commercialPax) : round2(b.commercialRev);
+          }),
+        }]
+        : []),
       {
         key: 'budget',
         label: isPax ? 'Budget Pax' : 'Budget',
@@ -708,10 +785,24 @@ export async function getSeasonalTradingPack(client, options = {}) {
         reservationRows: reservations.length,
         budgetRows: budgetRows.length,
         bookedActiveReservations: bookedActive,
+        commercialRevTotal: commercialChannels
+          ? round2([...buckets.values()].reduce((sum, bucket) => sum + bucket.commercialRev, 0))
+          : null,
+        commercialPaxTotal: commercialChannels
+          ? round0([...buckets.values()].reduce((sum, bucket) => sum + bucket.commercialPax, 0))
+          : null,
+        commercialFitPax: commercialChannels
+          ? round0([...buckets.values()].reduce((sum, bucket) => sum + bucket.commercialFitPax, 0))
+          : null,
+        commercialGroupPax: commercialChannels
+          ? round0([...buckets.values()].reduce((sum, bucket) => sum + bucket.commercialGroupPax, 0))
+          : null,
       },
     },
     paxMatrix,
     revMatrix,
+    commercialChannels,
+    commercialMessage,
     trading: {
       bullets: tradingBullets,
       last7: {

@@ -4,6 +4,8 @@ import { useBookingTargetChart } from '../../../hooks/data/useBookingTargetChart
 import { useInventoryProfileSeriesBySail } from '../../../hooks/data/useInventoryProfileSeriesBySail';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
 import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
+import { applyAxisLabelVisibility, axisLabelsPluginOptions } from '../../../lib/chartConfig';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import {
   MAX_MODEL_BOOKINGS,
@@ -81,6 +83,10 @@ const rowsEqual = (a = [], b = []) => {
 };
 
 const BookingTargetProfileEditorSimple = ({ panelInstanceId, panelComponentId }) => {
+  const { showAxisLabels } = useReportShellOptions(
+    panelComponentId || 'booking-target-profile-editor-simple',
+    panelInstanceId
+  );
   const [selectedProfileKey, setSelectedProfileKey] = useState('');
   const [profileName, setProfileName] = useState('');
   const [rows, setRows] = useState([]);
@@ -385,7 +391,7 @@ const BookingTargetProfileEditorSimple = ({ panelInstanceId, panelComponentId })
           },
         ],
       },
-      options: {
+      options: applyAxisLabelVisibility({
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
@@ -402,13 +408,14 @@ const BookingTargetProfileEditorSimple = ({ panelInstanceId, panelComponentId })
           },
         },
         plugins: {
+          ...axisLabelsPluginOptions(showAxisLabels),
           title: {
             display: true,
             text: `Drag orange points — ${sailCode || 'select sail'} (${dragMetric})`,
           },
           tooltip: { enabled: true },
         },
-      },
+      }, showAxisLabels),
     });
     chartInstanceRef.current = chart;
 
@@ -558,7 +565,7 @@ const BookingTargetProfileEditorSimple = ({ panelInstanceId, panelComponentId })
         chartInstanceRef.current = null;
       }
     };
-  }, [chartCanvas, labels, actualMap, budgetMap, sailCode, dragMetric, chartYAxisMax, canEditIntel]);
+  }, [chartCanvas, labels, actualMap, budgetMap, sailCode, dragMetric, chartYAxisMax, canEditIntel, showAxisLabels]);
 
   useEffect(() => {
     const chart = chartInstanceRef.current;

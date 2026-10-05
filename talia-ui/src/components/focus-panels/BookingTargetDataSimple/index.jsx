@@ -6,6 +6,8 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useBookingTargetChart } from '../../../hooks/data/useBookingTargetChart';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
+import { applyAxisLabelVisibility, axisLabelsPluginOptions } from '../../../lib/chartConfig';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
 
 Chart.register(...registerables);
@@ -13,6 +15,10 @@ Chart.register(...registerables);
 const BookingTargetDataSimple = ({ panelInstanceId, panelComponentId }) => {
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
+  const { showAxisLabels } = useReportShellOptions(
+    panelComponentId || 'booking-target-data-simple',
+    panelInstanceId
+  );
 
   const {
     sailCode,
@@ -58,14 +64,15 @@ const BookingTargetDataSimple = ({ panelInstanceId, panelComponentId }) => {
           },
         ],
       },
-      options: {
+      options: applyAxisLabelVisibility({
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
         plugins: {
+          ...axisLabelsPluginOptions(showAxisLabels),
           title: { display: false },
         },
-      },
+      }, showAxisLabels),
     });
 
     return () => {
@@ -73,7 +80,7 @@ const BookingTargetDataSimple = ({ panelInstanceId, panelComponentId }) => {
         chartInstanceRef.current.destroy();
       }
     };
-  }, [labels, data, sailCode]);
+  }, [labels, data, sailCode, showAxisLabels]);
 
   const options = [...new Set([...(sailCode ? [sailCode] : []), ...(sailCodes || [])])];
   const subtitle = [

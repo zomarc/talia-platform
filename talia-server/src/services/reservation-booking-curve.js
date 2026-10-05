@@ -404,11 +404,39 @@ function summarizeTodayContractMetrics(reservations) {
   };
 }
 
+function sailNightsOf(reservations) {
+  const counts = new Map();
+  (reservations || []).forEach((res) => {
+    let nights = Number(res.sail_duration) || 0;
+    if (!nights) {
+      const from = toDateKey(res.sail_from_date);
+      const to = toDateKey(res.sail_to_date);
+      if (from && to) nights = Math.max(0, daysBetween(from, to));
+    }
+    if (nights > 0) counts.set(nights, (counts.get(nights) || 0) + 1);
+  });
+  let best = 0;
+  let bestCount = 0;
+  counts.forEach((count, nights) => {
+    if (count > bestCount) {
+      bestCount = count;
+      best = nights;
+    }
+  });
+  return best;
+}
+
+function netTicketEurOf(res) {
+  const net = Number(res?.net_ticket_revenue_eur);
+  return Number.isFinite(net) ? net : 0;
+}
+
 function buildAreaSeries(reservations, sailDateKey, dimCtx) {
   const byDimWeek = new Map();
   const dims = new Set();
   let maxWeeks = 0;
   let withBookDate = 0;
+  const sailNights = sailNightsOf(reservations);
 
   reservations.forEach((res) => {
     const bookDate = bookDateOf(res);
@@ -424,9 +452,10 @@ function buildAreaSeries(reservations, sailDateKey, dimCtx) {
     dims.add(key);
     if (!byDimWeek.has(key)) byDimWeek.set(key, new Map());
     const weekMap = byDimWeek.get(key);
-    const cell = weekMap.get(weeksUntil) || { bookings: 0, guests: 0 };
+    const cell = weekMap.get(weeksUntil) || { bookings: 0, guests: 0, netTicketEur: 0 };
     cell.bookings += 1;
     cell.guests += Number(res.guest_count) || 0;
+    cell.netTicketEur += netTicketEurOf(res);
     weekMap.set(weeksUntil, cell);
   });
 
@@ -448,9 +477,10 @@ function buildAreaSeries(reservations, sailDateKey, dimCtx) {
       dims.add(key);
       if (!byDimWeek.has(key)) byDimWeek.set(key, new Map());
       const weekMap = byDimWeek.get(key);
-      const cell = weekMap.get(0) || { bookings: 0, guests: 0 };
+      const cell = weekMap.get(0) || { bookings: 0, guests: 0, netTicketEur: 0 };
       cell.bookings += 1;
       cell.guests += Number(res.guest_count) || 0;
+      cell.netTicketEur += netTicketEurOf(res);
       weekMap.set(0, cell);
     });
   }
@@ -474,21 +504,32 @@ function buildAreaSeries(reservations, sailDateKey, dimCtx) {
   const series = [...dims].sort(sortKeys).map((key) => {
     const weekMap = byDimWeek.get(key) || new Map();
     const incremental = weekLabels.map(({ weeksUntilSailing }) => {
-      const cell = weekMap.get(weeksUntilSailing) || { bookings: 0, guests: 0 };
-      return { bookings: cell.bookings, guests: Math.round(cell.guests) };
+      const cell = weekMap.get(weeksUntilSailing) || { bookings: 0, guests: 0, netTicketEur: 0 };
+      return {
+        bookings: cell.bookings,
+        guests: Math.round(cell.guests),
+        netTicketEur: cell.netTicketEur || 0,
+      };
     });
     const points = weekLabels.map((label, idx) => {
       let bookings = 0;
       let guests = 0;
+      let netTicketEur = 0;
       for (let j = 0; j <= idx; j += 1) {
         bookings += incremental[j].bookings;
         guests += incremental[j].guests;
+        netTicketEur += incremental[j].netTicketEur;
       }
+      const pppdEur = guests > 0 && sailNights > 0 && netTicketEur > 0
+        ? round2(netTicketEur / guests / sailNights)
+        : null;
       return {
         weekLabel: label.weekLabel,
         weeksUntilSailing: label.weeksUntilSailing,
         bookings,
         guests,
+        netTicketEur: round2(netTicketEur),
+        pppdEur,
       };
     });
     return { dimensionKey: key, points };
@@ -497,19 +538,25 @@ function buildAreaSeries(reservations, sailDateKey, dimCtx) {
   const totals = weekLabels.map((label, idx) => {
     let bookings = 0;
     let guests = 0;
+    let netTicketEur = 0;
     series.forEach((s) => {
       bookings += s.points[idx].bookings;
       guests += s.points[idx].guests;
+      netTicketEur += s.points[idx].netTicketEur || 0;
     });
+    const pppdEur = guests > 0 && sailNights > 0 && netTicketEur > 0
+      ? round2(netTicketEur / guests / sailNights)
+      : null;
     return {
       weekLabel: label.weekLabel,
       weeksUntilSailing: label.weeksUntilSailing,
       bookings,
       guests,
+      pppdEur,
     };
   });
 
-  return { series, totals, maxWeeks, withBookDate };
+  return { series, totals, maxWeeks, withBookDate, sailNights };
 }
 
 function velocityWindows(reservations, asOfKey) {
@@ -721,7 +768,7 @@ export async function getReservationBookingCurve(client, sailCode, options = {})
     groupIdIndex,
   };
 
-  const { series, totals, maxWeeks, withBookDate } = buildAreaSeries(
+  const { series, totals, maxWeeks, withBookDate, sailNights } = buildAreaSeries(
     active,
     sailDateKey,
     dimCtx
@@ -894,5 +941,6 @@ export async function getReservationBookingCurve(client, sailCode, options = {})
     composition,
     maxWeeks,
     daysUntilSailing,
+    sailNights: sailNights > 0 ? sailNights : null,
   };
 }

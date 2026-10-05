@@ -2,7 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import useReportPanelLoading from '../../../hooks/useReportPanelLoading';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import { useGlobalBookedComposition } from '../../../hooks/useGlobalBookedComposition';
+import { useGlobalCommercialTargets } from '../../../hooks/useGlobalCommercialTargets';
 import { useGlobalMarketDimension } from '../../../hooks/useGlobalMarketDimension';
+import {
+  COMMERCIAL_SAIL_COLUMNS,
+  indexCommercialByVoyage,
+} from '../../../lib/commercialBookTargets';
 import {
   allocScopeKey,
   indexAllocRowsByShipDate,
@@ -86,6 +91,18 @@ const toDateKey = (value) => {
 const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) => {
   const marketDimension = useGlobalMarketDimension();
   const bookedComposition = useGlobalBookedComposition();
+  const commercialEnabled = useGlobalCommercialTargets();
+  const {
+    data: commercialSailRows,
+  } = useTableDataWithContext({
+    tableName: 'commercial_book_target_sail',
+    panelInstanceId,
+    panelComponentId,
+    fetchWithoutContext: true,
+    enabled: commercialEnabled,
+    limit: 5000,
+    columns: COMMERCIAL_SAIL_COLUMNS,
+  });
   const [distributionEnabled, setDistributionEnabled] = useState(false);
 
   const enableDistribution = useCallback(() => {
@@ -387,17 +404,31 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
     };
   }, [explorerBundle?.masters]);
 
+  const commercialByVoyage = useMemo(
+    () => (commercialEnabled ? indexCommercialByVoyage(commercialSailRows) : new Map()),
+    [commercialEnabled, commercialSailRows]
+  );
+
   const mastersWithReview = useMemo(() => {
     const masters = explorerBundle?.masters || [];
     return masters.map((m) => {
       const code = String(m?.sail_code || '').trim();
       const ref = String(m?.reference_sail_code || '').trim();
+      const commercial = commercialByVoyage.get(code) || commercialByVoyage.get(ref);
+      const withCommercial = commercial
+        ? {
+          ...m,
+          commercial_fit_guests: commercial.fitGuests,
+          commercial_group_guests: commercial.groupGuests,
+          commercial_ticket_eur: commercial.ticketEur,
+        }
+        : m;
       const review = reviewBySail.get(code) || reviewBySail.get(ref);
       if (!review) {
-        return reviewLoading ? { ...m, target_review_pending: true } : m;
+        return reviewLoading ? { ...withCommercial, target_review_pending: true } : withCommercial;
       }
       return {
-        ...m,
+        ...withCommercial,
         target_review_status: review.status,
         target_lf_pct: review.targetLfPct,
         target_gap_pp: review.gapPp,
@@ -405,7 +436,7 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
         target_review_pending: false,
       };
     });
-  }, [explorerBundle?.masters, reviewBySail, reviewLoading]);
+  }, [commercialByVoyage, explorerBundle?.masters, reviewBySail, reviewLoading]);
 
   const handleRefresh = () => {
     refetchMasterSail();
@@ -442,6 +473,7 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
         onDistributionIntent={enableDistribution}
         marketDimension={marketDimension}
         bookedComposition={bookedComposition}
+        showCommercialTargets={commercialEnabled}
         onRefresh={handleRefresh}
         panelInstanceId={panelInstanceId}
         panelComponentId={panelComponentId}

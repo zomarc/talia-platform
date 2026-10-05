@@ -7,7 +7,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTableDataWithContext, buildContextFiltersKey } from '../../../hooks/data/useTableDataWithContext';
 import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 import { useGlobalBookedComposition } from '../../../hooks/useGlobalBookedComposition';
+import { useGlobalCommercialTargets } from '../../../hooks/useGlobalCommercialTargets';
 import { useGlobalMarketDimension } from '../../../hooks/useGlobalMarketDimension';
+import {
+  COMMERCIAL_VOYAGE_COLUMNS,
+  buildCommercialDistribution,
+} from '../../../lib/commercialBookTargets';
 import PanelDataState from '../../shared/PanelDataState';
 import {
   mapSailCodesToReservationFilters,
@@ -44,6 +49,7 @@ const resolveSailDateFromDetail = (detail) => (
 const DistributionContainer = ({ panelInstanceId, panelComponentId }) => {
   const marketDimension = useGlobalMarketDimension();
   const bookedComposition = useGlobalBookedComposition();
+  const commercialEnabled = useGlobalCommercialTargets();
 
   const {
     data: agencies,
@@ -268,6 +274,36 @@ const DistributionContainer = ({ panelInstanceId, panelComponentId }) => {
     ]
   );
 
+  const {
+    data: commercialVoyageRows,
+    error: commercialError,
+  } = useTableDataWithContext({
+    tableName: 'commercial_book_target_voyage',
+    eventName: SAIL_SELECT_EVENT,
+    panelInstanceId,
+    panelComponentId,
+    contextMapper: (detail) => {
+      const code = resolveReferenceSailCodeFromDetail(detail)
+        || resolveSailCodesFromDetail(detail)[0]
+        || null;
+      if (!code) return null;
+      return {
+        query_column: 'master_voyage',
+        query_operator: 'eq',
+        query_value: code,
+      };
+    },
+    fetchWithoutContext: false,
+    enabled: commercialEnabled,
+    limit: 20000,
+    columns: COMMERCIAL_VOYAGE_COLUMNS,
+  });
+
+  const commercialCompare = useMemo(() => {
+    if (!commercialEnabled || !hasSailSelection) return null;
+    return buildCommercialDistribution(commercialVoyageRows, { marketDimension });
+  }, [commercialEnabled, commercialVoyageRows, hasSailSelection, marketDimension]);
+
   const loading = agenciesLoading
     || marketRollUpLoading
     || (hasSailSelection && (
@@ -297,6 +333,8 @@ const DistributionContainer = ({ panelInstanceId, panelComponentId }) => {
         selectedSailCodes={sailCodes}
         selectedReferenceSailCode={referenceSailCode}
         marketDimension={marketDimension}
+        commercialCompare={commercialCompare}
+        commercialError={commercialEnabled ? commercialError : null}
         bookedComposition={bookedComposition}
         panelInstanceId={panelInstanceId}
         panelComponentId={panelComponentId}

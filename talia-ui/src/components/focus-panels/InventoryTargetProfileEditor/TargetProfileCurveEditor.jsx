@@ -7,7 +7,7 @@ import React, { useEffect, useRef } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { getRelativePosition } from 'chart.js/helpers';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { getOverlayLegendOptions } from '../../../lib/chartConfig';
+import { applyAxisLabelVisibility, axisLabelsPluginOptions, getOverlayLegendOptions } from '../../../lib/chartConfig';
 
 Chart.register(...registerables);
 
@@ -26,6 +26,7 @@ const TargetProfileCurveEditor = ({
   realSeries = [],
   modelSeries = [],
   showLegends = true,
+  showAxisLabels = true,
   onChangeLf,
   onMovePoint,
   onAddPoint,
@@ -119,12 +120,13 @@ const TargetProfileCurveEditor = ({
           },
         ],
       },
-      options: {
+      options: applyAxisLabelVisibility({
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
         interaction: { mode: 'nearest', intersect: false, axis: 'x' },
         plugins: {
+          ...axisLabelsPluginOptions(showAxisLabels),
           legend: getOverlayLegendOptions({ visible: chartLegendsVisible && showLegends }),
           tooltip: {
             enabled: true,
@@ -147,7 +149,7 @@ const TargetProfileCurveEditor = ({
             title: { display: true, text: 'LF %' },
           },
         },
-      },
+      }, showAxisLabels),
     });
     chartRef.current = chart;
 
@@ -366,7 +368,7 @@ const TargetProfileCurveEditor = ({
         chartRef.current = null;
       }
     };
-  }, [axisWeeks.join(','), realSeries, modelSeries, chartLegendsVisible, showLegends, fontSize, fontFamily]);
+  }, [axisWeeks.join(','), realSeries, modelSeries, chartLegendsVisible, showAxisLabels, showLegends, fontSize, fontFamily]);
 
   useEffect(() => {
     const chart = chartRef.current;

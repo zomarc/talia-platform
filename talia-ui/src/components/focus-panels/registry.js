@@ -78,6 +78,7 @@ import {
   VIEW_PROVENANCE,
   VIEW_FILTERS,
   VIEW_LEGENDS,
+  VIEW_AXIS_LABELS,
   VIEW_NESTED,
   VIEW_MSE_DENSITY,
   VIEW_DENSITY,
@@ -249,7 +250,7 @@ export const componentRegistry = {
     supportsRefresh: true,
     showInReports: true,
     options: {
-      views: [VIEW_LEGENDS],
+      views: [VIEW_LEGENDS, VIEW_AXIS_LABELS],
       operations: [],
     },
     filePath: 'src/components/focus-panels/Distribution/index.jsx'
@@ -383,7 +384,7 @@ export const componentRegistry = {
     events: { emits: [], respondsTo: [] },
     showInReports: true,
     options: {
-      views: [VIEW_LEGENDS],
+      views: [VIEW_LEGENDS, VIEW_AXIS_LABELS],
       operations: [],
     },
     filePath: 'src/components/focus-panels/OccupancyChart/index.jsx'
@@ -669,7 +670,7 @@ export const componentRegistry = {
     showInReports: true,
     supportsDataExport: true,
     options: {
-      views: [VIEW_SNAPSHOT, VIEW_GRAPH, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
+      views: [VIEW_SNAPSHOT, VIEW_GRAPH, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS, VIEW_AXIS_LABELS],
       operations: [],
     },
     filePath: 'src/components/focus-panels/ReservationBookingCurve/index.jsx'
@@ -691,7 +692,7 @@ export const componentRegistry = {
     showInReports: true,
     supportsDataExport: true,
     options: {
-      views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
+      views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS, VIEW_AXIS_LABELS],
       operations: [],
     },
     filePath: 'src/components/focus-panels/ProfileCompare/index.jsx'
@@ -754,7 +755,7 @@ export const componentRegistry = {
     showInReports: true,
     supportsDataExport: true,
     options: {
-      views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
+      views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS, VIEW_AXIS_LABELS],
       operations: [],
     },
     filePath: 'src/components/focus-panels/InventoryTargetProfileEditor/index.jsx'
@@ -794,7 +795,7 @@ export const componentRegistry = {
     events: { emits: [], respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT] },
     showInReports: true,
     options: {
-      views: [VIEW_LEGENDS],
+      views: [VIEW_LEGENDS, VIEW_AXIS_LABELS],
       operations: [],
     },
     filePath: 'src/components/focus-panels/BookingTargetChart/index.jsx'

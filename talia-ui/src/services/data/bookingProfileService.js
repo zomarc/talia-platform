@@ -273,6 +273,7 @@ const GET_RESERVATION_BOOKING_CURVE = gql`
       missingBookDates
       maxWeeks
       daysUntilSailing
+      sailNights
       contractMessage
       velocity {
         pastWeek { label days bookings guests bookingsPerDay guestsPerDay }
@@ -333,6 +334,7 @@ const GET_RESERVATION_BOOKING_CURVE = gql`
         weeksUntilSailing
         bookings
         guests
+        pppdEur
       }
       composition {
         dimensionKey

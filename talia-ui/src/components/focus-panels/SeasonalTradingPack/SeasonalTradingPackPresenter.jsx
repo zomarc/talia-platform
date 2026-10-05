@@ -117,6 +117,16 @@ const SeasonalTradingPackPresenter = ({
       value: fmtEuroCompact(facts?.budgetRevTotal),
       hint: data?.fyLabel || fyLabel || null,
     },
+    ...(facts?.commercialRevTotal != null
+      ? [{
+        key: 'commercial',
+        label: 'COMMERCIAL',
+        value: fmtEuroCompact(facts.commercialRevTotal),
+        hint: facts.commercialPaxTotal != null
+          ? `${Number(facts.commercialPaxTotal).toLocaleString()} pax · F ${Number(facts.commercialFitPax || 0).toLocaleString()} · G ${Number(facts.commercialGroupPax || 0).toLocaleString()}`
+          : null,
+      }]
+      : []),
     {
       key: 'held',
       label: 'HELD (MR)',
@@ -369,6 +379,35 @@ const SeasonalTradingPackPresenter = ({
                 ))}
               </ul>
             </>
+          ) : null}
+
+          {Array.isArray(data?.commercialChannels) && data.commercialChannels.length ? (
+            <>
+              <h3 className="seasonal-trading-pack__section-title">Commercial by channel</h3>
+              <div className="seasonal-trading-pack__table-wrap seasonal-trading-pack__table-wrap--compact">
+                <table className="seasonal-trading-pack__table talia-table">
+                  <thead>
+                    <tr>
+                      <th>Channel</th>
+                      <th>Guests</th>
+                      <th>Ticket EUR</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.commercialChannels.map((row) => (
+                      <tr key={row.channel}>
+                        <td>{row.channel}</td>
+                        <td>{fmtCell(row.guests, 'pax')}</td>
+                        <td>{fmtCell(row.ticketEur, 'rev')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : null}
+          {data?.commercialMessage ? (
+            <p className="seasonal-trading-pack__note">{data.commercialMessage}</p>
           ) : null}
 
           {marketMix.length ? (

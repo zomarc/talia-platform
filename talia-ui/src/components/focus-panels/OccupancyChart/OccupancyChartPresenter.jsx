@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Chart } from 'chart.js/auto';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
-import { getChartColors, getChartOptions, getOverlayLegendOptions } from '../../../lib/chartConfig';
+import { applyAxisLabelVisibility, axisLabelsPluginOptions, getChartColors, getChartOptions, getOverlayLegendOptions } from '../../../lib/chartConfig';
 
 /**
  * OccupancyChartPresenter - Weekly occupancy and revenue chart
@@ -14,7 +14,7 @@ const OccupancyChartPresenter = ({ data, panelInstanceId = null, panelComponentI
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
   const { chartLegendsVisible } = useTheme();
-  const { showLegends, reportShellClassName } = useReportShellOptions(
+  const { showLegends, showAxisLabels, reportShellClassName } = useReportShellOptions(
     panelComponentId || 'occupancy-chart',
     panelInstanceId
   );
@@ -56,8 +56,9 @@ const OccupancyChartPresenter = ({ data, panelInstanceId = null, panelComponentI
           }
         ]
       },
-      options: getChartOptions.bar({
+      options: applyAxisLabelVisibility(getChartOptions.bar({
         plugins: {
+          ...axisLabelsPluginOptions(showAxisLabels),
           legend: getOverlayLegendOptions({ visible: chartLegendsVisible && showLegends })
         },
         scales: {
@@ -80,7 +81,7 @@ const OccupancyChartPresenter = ({ data, panelInstanceId = null, panelComponentI
             }
           }
         }
-      })
+      }), showAxisLabels)
     });
 
     return () => {
@@ -89,7 +90,7 @@ const OccupancyChartPresenter = ({ data, panelInstanceId = null, panelComponentI
         chartRef.current = null;
       }
     };
-  }, [chartLegendsVisible, showLegends, data]);
+  }, [chartLegendsVisible, showAxisLabels, showLegends, data]);
 
   return (
     <div className={`talia-report${reportShellClassName ? ` ${reportShellClassName}` : ''}`} role="region" aria-label="Weekly occupancy and revenue">

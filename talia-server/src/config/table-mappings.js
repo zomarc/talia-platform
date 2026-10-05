@@ -38,6 +38,7 @@ const tableDateColumns = {
   ship_cabin_reserve: ['sail_date_from', 'sail_date_to'],
   market_roll_up: [],
   cabin_ctg: ['effective_from', 'effective_to'],
+  commercial_book_targets: ['wc_snapshot_date', 'accounting_month'],
   budget: ['accounting_month', 'effective_from', 'effective_to'],
   etl_table_parameters: [],
   ship_inventory_alloc: ['sail_date_from', 'sail_date_to'],
@@ -77,6 +78,7 @@ const tableDateRoleOverrides = {
   master_sail: { dateRole: DATE_ROLES.SAILING_INTERVAL },
   sail_header: { dateRole: DATE_ROLES.SAILING_INTERVAL },
   cabin_ctg: { dateRole: DATE_ROLES.RECORD_VALIDITY },
+  commercial_book_targets: { dateRole: DATE_ROLES.EVENT },
   budget: { dateRole: DATE_ROLES.EVENT },
 };
 

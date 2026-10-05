@@ -640,6 +640,8 @@ export const typeDefs = `#graphql
     bookings: Int!
     guests: Int!
     loadFactorPct: Float
+    """Net ticket revenue per guest per voyage night, cumulative to this week."""
+    pppdEur: Float
   }
 
   type DimensionalSeries {
@@ -796,6 +798,8 @@ export const typeDefs = `#graphql
     composition: [ProfileCompositionSlice!]!
     maxWeeks: Int!
     daysUntilSailing: Int
+    """Voyage length used as the PPPD divisor (nights)."""
+    sailNights: Int
   }
 
   input SeasonalTradingPackFilters {
@@ -804,6 +808,8 @@ export const typeDefs = `#graphql
     depMonthTo: String
     marketGroup: String
     fyLabel: String
+    """When true, add commercial book-target rows. Omitted or false skips that query."""
+    includeCommercialTargets: Boolean
   }
 
   enum TargetDimensionLevel {

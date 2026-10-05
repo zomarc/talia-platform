@@ -7,6 +7,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useBookingTargetChart } from '../../../hooks/data/useBookingTargetChart';
 import { useInventoryProfileSeriesBySail } from '../../../hooks/data/useInventoryProfileSeriesBySail';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
+import { applyAxisLabelVisibility, axisLabelsPluginOptions } from '../../../lib/chartConfig';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
 
 Chart.register(...registerables);
@@ -21,6 +23,10 @@ const sortLabels = (labels) => labels.sort((a, b) => {
 });
 
 const BookingCombinedDataSimple = ({ panelInstanceId, panelComponentId }) => {
+  const { showAxisLabels } = useReportShellOptions(
+    panelComponentId || 'booking-combined-data-simple',
+    panelInstanceId
+  );
   const [selectedProfileId, setSelectedProfileId] = useState(null);
   const [viewScope, setViewScope] = useState(() => (window.__taliaViewScope === 'wide' ? 'wide' : 'local'));
   const chartRef = useRef(null);
@@ -195,18 +201,21 @@ const BookingCombinedDataSimple = ({ panelInstanceId, panelComponentId }) => {
     chartInstanceRef.current = new Chart(chartRef.current.getContext('2d'), {
       type: 'line',
       data: { labels, datasets },
-      options: {
+      options: applyAxisLabelVisibility({
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
-        plugins: { title: { display: false } },
-      },
+        plugins: {
+          ...axisLabelsPluginOptions(showAxisLabels),
+          title: { display: false },
+        },
+      }, showAxisLabels),
     });
 
     return () => {
       if (chartInstanceRef.current) chartInstanceRef.current.destroy();
     };
-  }, [labels, actualData, targetData, budgetData, modelData, sailCode]);
+  }, [labels, actualData, targetData, budgetData, modelData, sailCode, showAxisLabels]);
 
   const sailOptions = [...new Set([...(sailCode ? [sailCode] : []), ...(sailCodes || [])])];
   const subtitle = [

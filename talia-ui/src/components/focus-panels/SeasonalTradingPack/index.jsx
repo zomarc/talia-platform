@@ -4,6 +4,7 @@
 
 import React, { useState } from 'react';
 import { useSeasonalTradingPack } from '../../../hooks/data/useSeasonalTradingPack';
+import { useGlobalCommercialTargets } from '../../../hooks/useGlobalCommercialTargets';
 import SeasonalTradingPackPresenter from './SeasonalTradingPackPresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
@@ -35,6 +36,7 @@ const SeasonalTradingPackContainer = ({
   const [marketGroup, setMarketGroup] = useState(params.marketGroup || DEFAULT_FILTERS.marketGroup);
   const [fyLabel, setFyLabel] = useState(params.fyLabel || DEFAULT_FILTERS.fyLabel);
   const [metric, setMetric] = useState(params.metric === 'pax' ? 'pax' : 'rev');
+  const commercialEnabled = useGlobalCommercialTargets();
 
   const applyRange = (preset, from, to) => {
     setRangePreset(preset);
@@ -62,6 +64,7 @@ const SeasonalTradingPackContainer = ({
     depMonthTo,
     fyLabel,
     ...(marketGroup ? { marketGroup } : {}),
+    ...(commercialEnabled ? { includeCommercialTargets: true } : {}),
   };
 
   const { data, loading, error, refetch } = useSeasonalTradingPack(filters, {

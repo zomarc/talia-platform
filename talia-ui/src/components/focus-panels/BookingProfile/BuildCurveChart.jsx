@@ -6,12 +6,12 @@
 import React, { useRef, useEffect } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { getOverlayLegendOptions } from '../../../lib/chartConfig';
+import { applyAxisLabelVisibility, axisLabelsPluginOptions, getOverlayLegendOptions } from '../../../lib/chartConfig';
 
 // Register Chart.js components
 Chart.register(...registerables);
 
-const BuildCurveChart = ({ buildCurves, targetCurves = null, previousYearCurves = null, theme, sailCode }) => {
+const BuildCurveChart = ({ buildCurves, targetCurves = null, previousYearCurves = null, theme, sailCode, showAxisLabels = true }) => {
   const { fontSize, fontFamily, chartLegendsVisible } = useTheme();
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
@@ -76,13 +76,14 @@ const BuildCurveChart = ({ buildCurves, targetCurves = null, previousYearCurves 
     chartInstanceRef.current = new Chart(ctx, {
       type: 'line',
       data: { labels, datasets },
-      options: {
+      options: applyAxisLabelVisibility({
         responsive: true,
         maintainAspectRatio: false,
         animation: {
           duration: 0 // Disable animation to prevent shaking
         },
         plugins: {
+          ...axisLabelsPluginOptions(showAxisLabels),
           legend: getOverlayLegendOptions({ visible: chartLegendsVisible }),
           title: {
             display: true,
@@ -120,7 +121,7 @@ const BuildCurveChart = ({ buildCurves, targetCurves = null, previousYearCurves 
           axis: 'x',
           intersect: false
         }
-      }
+      }, showAxisLabels)
     });
 
     return () => {
@@ -138,6 +139,7 @@ const BuildCurveChart = ({ buildCurves, targetCurves = null, previousYearCurves 
     fontSize,
     fontFamily,
     chartLegendsVisible,
+    showAxisLabels,
   ]);
 
   if (!buildCurves || buildCurves.length === 0) {

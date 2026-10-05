@@ -852,6 +852,18 @@ class SynapseSyncService {
       if (Number.isNaN(parsed.getTime())) return null;
       return parsed.toISOString().split('T')[0];
     };
+    const parseDayMonthYear = (value) => {
+      if (value == null || value === '') return null;
+      if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return value.toISOString().split('T')[0];
+      }
+      const text = String(value).trim();
+      const dmy = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (dmy) {
+        return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+      }
+      return toDateOnly(text);
+    };
     const toNumber = (value) => {
       if (value === null || value === undefined || value === '') return null;
       const n = Number(value);
@@ -1307,6 +1319,36 @@ class SynapseSyncService {
           promo_value: row.PROMO_VALUE ? parseFloat(row.PROMO_VALUE) : null,
           promo_value_type: row.PROMO_VALUE_TYPE || null,
           is_static: row.IS_STATIC || null,
+          created_at: currentTime
+        }));
+
+      case 'commercialBookTargets':
+        return data.map(row => ({
+          pax_type: getField(row, ['Pax_Type', 'PAX_TYPE']) || null,
+          accounting_month: parseDayMonthYear(getField(row, ['AccMonth', 'ACC_MONTH'])),
+          itinerary_type_old: getField(row, ['Itinerary_Type_OLD', 'ITINERARY_TYPE_OLD']) || null,
+          agency_market: getField(row, ['Agency_Market', 'AGENCY_MARKET']) || null,
+          agency_subchannel: getField(row, ['Agency_Subchannel', 'AGENCY_SUBCHANNEL']) || null,
+          agency_channel: getField(row, ['Agency_Channel', 'AGENCY_CHANNEL']) || null,
+          master_voyage_length: toNumber(getField(row, ['Master_Voyage_Length', 'MASTER_VOYAGE_LENGTH'])),
+          label: getField(row, ['Label', 'LABEL']) || null,
+          bud_gross_pre_post_revenue_eur: toNumber(getField(row, ['Bud.GrossPrePostRevenueEUR'])),
+          wc_snapshot_date: parseDayMonthYear(getField(row, ['WC_Snapshot_Date', 'WC_SNAPSHOT_DATE'])),
+          master_voyage: getField(row, ['Master_Voyage', 'MASTER_VOYAGE']) || null,
+          guest_count: toNumber(getField(row, ['Guest_Count', 'GUEST_COUNT'])),
+          pax_nights: toNumber(getField(row, ['Pax_Nights', 'PAX_NIGHTS'])),
+          gross_ticket_revenue_eur: toNumber(getField(row, ['GrossTicketRevenueEUR', 'GROSS_TICKET_REVENUE_EUR'])),
+          gross_pre_emb_revenue_eur: toNumber(getField(row, ['GrossPreEmbRevenueEUR', 'GROSS_PRE_EMB_REVENUE_EUR'])),
+          gross_pre_post_revenue_eur: toNumber(getField(row, ['GrossPrePostRevenueEUR', 'GROSS_PRE_POST_REVENUE_EUR'])),
+          shorex_rev_eur: toNumber(getField(row, ['ShorexRevEUR', 'SHOREX_REV_EUR'])),
+          addon_rev_eur: toNumber(getField(row, ['AddOnRevEUR', 'ADDON_REV_EUR'])),
+          other_ps_rev_eur: toNumber(getField(row, ['OtherPSRevEUR', 'OTHER_PS_REV_EUR'])),
+          res_status: getField(row, ['Res_Status', 'RES_STATUS']) || null,
+          group_status: getField(row, ['Group_Status', 'GROUP_STATUS']) || null,
+          pax_status: getField(row, ['Pax_Status', 'PAX_STATUS']) || null,
+          accounting_year: getField(row, ['AccYear', 'ACC_YEAR']) || null,
+          itinerary_type: getField(row, ['Itinerary_Type', 'ITINERARY_TYPE']) || null,
+          market_grouping: getField(row, ['Market_Grouping', 'MARKET_GROUPING']) || null,
           created_at: currentTime
         }));
 

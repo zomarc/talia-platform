@@ -7,6 +7,7 @@ import React, { useRef, useEffect } from 'react';
 import { Chart, registerables } from 'chart.js';
 import SubpanelExpandButton from '../../../shared/SubpanelExpandButton';
 import { formatDayMon, formatMonYear } from '../../../../lib/dateFormat';
+import { applyAxisLabelVisibility, axisLabelsPluginOptions } from '../../../../lib/chartConfig';
 import { useTheme } from '../../../../contexts/ThemeContext';
 
 // Register Chart.js components
@@ -82,7 +83,8 @@ const CompetitorScatterChart = ({
   expandedCabinType,
   onToggleExpand,
   tableVisible = true,
-  chartOptions = { pppdScaleMode: 'AUTO', pppdMax: 200 }
+  chartOptions = { pppdScaleMode: 'AUTO', pppdMax: 200 },
+  showAxisLabels = true,
 }) => {
   const { fontSize, fontFamily } = useTheme();
   const filteredCabinTypes = (filters?.cabinType && filters.cabinType !== 'ALL')
@@ -161,10 +163,11 @@ const CompetitorScatterChart = ({
         chartInstances.current[cabinType] = new Chart(ctx, {
           type: 'scatter',
           data: { datasets: [] },
-          options: {
+          options: applyAxisLabelVisibility({
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
+              ...axisLabelsPluginOptions(showAxisLabels),
               title: {
                 display: true,
                 text: `${cabinType} (PPPD/Departure Date)`,
@@ -190,7 +193,7 @@ const CompetitorScatterChart = ({
                 }
               }
             }
-          }
+          }, showAxisLabels),
         });
         return;
       }
@@ -223,13 +226,14 @@ const CompetitorScatterChart = ({
       chartInstances.current[cabinType] = new Chart(ctx, {
         type: 'scatter',
         data: { datasets },
-        options: {
+        options: applyAxisLabelVisibility({
           responsive: true,
           maintainAspectRatio: false,
           animation: {
             duration: 0
           },
           plugins: {
+            ...axisLabelsPluginOptions(showAxisLabels),
             title: {
               display: true,
               text: `${cabinType} (PPPD/Departure Date)`,
@@ -282,7 +286,7 @@ const CompetitorScatterChart = ({
             intersect: false,
             mode: 'nearest'
           }
-        }
+        }, showAxisLabels)
       });
     });
 
@@ -293,7 +297,7 @@ const CompetitorScatterChart = ({
         }
       });
     };
-  }, [data, theme, activeCabinTypes, primaryCruiseLine, secondaryCruiseLine, chartOptions?.pppdScaleMode, chartOptions?.pppdMax, fontSize, fontFamily]);
+  }, [data, theme, activeCabinTypes, primaryCruiseLine, secondaryCruiseLine, chartOptions?.pppdScaleMode, chartOptions?.pppdMax, fontSize, fontFamily, showAxisLabels]);
 
   return (
     <div

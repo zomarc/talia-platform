@@ -242,6 +242,15 @@ export const tableSources = {
     syncType: null,
     loadMethod: 'Import'
   },
+  commercial_book_targets: {
+    source: 'lkp.Commercial_Book_Targets',
+    type: 'synapse',
+    isLargeDataset: true,
+    dateColumns: ['wc_snapshot_date', 'accounting_month'],
+    dateRole: 'event',
+    syncType: 'commercialBookTargets',
+    loadMethod: 'Sync'
+  },
   budget: {
     source: 'lkp.BUDGET',
     type: 'synapse',

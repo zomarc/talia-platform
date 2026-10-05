@@ -10,7 +10,10 @@ import {
 } from '../../../lib/eventBus';
 import { resolveSelectionScope } from '../../../lib/inventoryReference';
 import { useReservationBookingCurve } from '../../../hooks/data/useBookingProfile';
+import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import { useGlobalMarketDimension } from '../../../hooks/useGlobalMarketDimension';
+import { useGlobalCommercialTargets } from '../../../hooks/useGlobalCommercialTargets';
+import { COMMERCIAL_WEEK_COLUMNS } from '../../../lib/commercialBookTargets';
 import ReservationBookingCurvePresenter from './ReservationBookingCurvePresenter';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
@@ -39,6 +42,7 @@ const ReservationBookingCurveContainer = ({
   const sailFromParams = params.sailCode ?? sailProp ?? null;
   const [sailCode, setSailCode] = useState(sailFromParams);
   const marketBreakdown = useGlobalMarketDimension();
+  const commercialEnabled = useGlobalCommercialTargets();
   const [seriesMode, setSeriesMode] = useState(params.seriesMode || 'market');
   const [chartMode, setChartMode] = useState(params.chartMode || 'totals');
   const [showRevenue, setShowRevenue] = useState(params.showRevenue === true);
@@ -82,6 +86,28 @@ const ReservationBookingCurveContainer = ({
     const fromWindow = resolveSailFromDetail(window?.lastSailSelectEvent?.detail);
     if (fromWindow) setSailCode(fromWindow);
   }, [sailFromParams, sailCode]);
+
+  const {
+    data: commercialWeekRows,
+  } = useTableDataWithContext({
+    tableName: 'commercial_book_target_week',
+    eventName: SAIL_SELECT_EVENT,
+    panelInstanceId,
+    panelComponentId: panelComponentId || 'reservation-booking-curve',
+    contextMapper: (detail) => {
+      const code = resolveSailFromDetail(detail);
+      if (!code) return null;
+      return {
+        query_column: 'master_voyage',
+        query_operator: 'eq',
+        query_value: code,
+      };
+    },
+    fetchWithoutContext: false,
+    enabled: commercialEnabled,
+    limit: 20000,
+    columns: COMMERCIAL_WEEK_COLUMNS,
+  });
 
   const { data, loading, error, refetch } = useReservationBookingCurve(sailCode, {
     marketBreakdown,
@@ -141,6 +167,8 @@ const ReservationBookingCurveContainer = ({
       showCompetitor={showCompetitor}
       onShowCompetitorChange={setShowCompetitor}
       marketBreakdown={marketBreakdown}
+      commercialEnabled={commercialEnabled}
+      commercialWeekRows={commercialEnabled ? commercialWeekRows : []}
       panelInstanceId={panelInstanceId}
       panelComponentId={panelComponentId}
     />

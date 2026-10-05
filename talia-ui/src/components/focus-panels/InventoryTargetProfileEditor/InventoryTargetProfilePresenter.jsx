@@ -102,7 +102,7 @@ const InventoryTargetProfilePresenter = ({
   const [creatingNew, setCreatingNew] = useState(false);
   const isLibraryMode = mode === 'library';
   const componentKey = panelComponentId || 'inventory-target-profile-editor';
-  const { showSnapshot, showDetails, showFilters, showLegends, reportShellClassName } = useReportShellOptions(
+  const { showSnapshot, showDetails, showFilters, showLegends, showAxisLabels, reportShellClassName } = useReportShellOptions(
     componentKey,
     panelInstanceId
   );
@@ -567,6 +567,7 @@ const InventoryTargetProfilePresenter = ({
             onMovePoint={(tempKey, patch) => updateNode(tempKey, patch)}
             onAddPoint={(week, lfPct) => addWeekPoint(week, lfPct)}
             showLegends={showLegends}
+            showAxisLabels={showAxisLabels}
           />
         </div>
 

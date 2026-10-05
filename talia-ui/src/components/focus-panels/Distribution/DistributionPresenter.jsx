@@ -6,7 +6,7 @@ import React, { useEffect, useRef } from 'react';
 import { Chart } from 'chart.js/auto';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
-import { getChartColors, getChartOptions, getOverlayLegendOptions, initChartDefaults } from '../../../lib/chartConfig';
+import { applyAxisLabelVisibility, axisLabelsPluginOptions, getChartColors, getChartOptions, getOverlayLegendOptions, initChartDefaults } from '../../../lib/chartConfig';
 import { colorForDimensionKey } from '../../../lib/reservationDimensions';
 import DistributionSummary from '../../shared/DistributionSummary';
 
@@ -33,7 +33,9 @@ const buildHorizontalStackedChart = (
     title,
     valueMode = 'absolute',
     legendsVisible = true,
+    axisLabelsVisible = true,
     capacityBerths = null,
+    compareSlices = null,
   } = {}
 ) => {
   if (!canvas) return null;
@@ -48,7 +50,11 @@ const buildHorizontalStackedChart = (
     && capacityBerths != null
     && capacityBerths > 0;
 
-  let chartSlices = valueMode === 'percent'
+  const compare = Array.isArray(compareSlices) && compareSlices.length
+    ? compareSlices.filter((slice) => slice && slice.label !== AVAILABLE_LABEL)
+    : null;
+
+  let chartSlices = !compare && valueMode === 'percent'
     ? safeSlices.map((s) => ({ ...s, value: (Number(s.value) / soldTotal) * 100 }))
     : safeSlices;
 
@@ -59,15 +65,65 @@ const buildHorizontalStackedChart = (
     }
   }
 
-  const datasets = buildStackedDataset(chartSlices, title);
+  let datasets;
+  let chartLabels = [' '];
+  if (compare) {
+    const bookedByLabel = new Map(chartSlices.map((slice) => [slice.label, Number(slice.value) || 0]));
+    const commercialByLabel = new Map(compare.map((slice) => [slice.label, Number(slice.value) || 0]));
+    const order = [];
+    const seen = new Set();
+    [...chartSlices, ...compare].forEach((slice) => {
+      if (!slice?.label || slice.label === AVAILABLE_LABEL || seen.has(slice.label)) return;
+      seen.add(slice.label);
+      order.push(slice.label);
+    });
+    const commercialTotal = [...commercialByLabel.values()].reduce((sum, value) => sum + value, 0);
+    const bookedSold = chartSlices
+      .filter((slice) => slice.label !== AVAILABLE_LABEL)
+      .reduce((sum, slice) => sum + (Number(slice.value) || 0), 0);
+    datasets = order.map((label) => {
+      const booked = bookedByLabel.get(label) || 0;
+      const commercial = commercialByLabel.get(label) || 0;
+      const bookedValue = valueMode === 'percent' && bookedSold > 0
+        ? (booked / bookedSold) * 100
+        : booked;
+      const commercialValue = valueMode === 'percent' && commercialTotal > 0
+        ? (commercial / commercialTotal) * 100
+        : commercial;
+      return {
+        label,
+        data: [bookedValue, commercialValue],
+        backgroundColor: colorForDimensionKey(label),
+        borderWidth: 0,
+        stack: title,
+        barThickness: 14,
+        maxBarThickness: 18,
+      };
+    });
+    const available = chartSlices.find((slice) => slice.label === AVAILABLE_LABEL);
+    if (available) {
+      datasets.push({
+        label: AVAILABLE_LABEL,
+        data: [Number(available.value) || 0, 0],
+        backgroundColor: 'rgba(128,128,128,0.22)',
+        borderWidth: 0,
+        stack: title,
+        barThickness: 14,
+        maxBarThickness: 18,
+      });
+    }
+    chartLabels = ['Booked', 'Commercial'];
+  } else {
+    datasets = buildStackedDataset(chartSlices, title);
+  }
 
   return new Chart(canvas, {
     type: 'bar',
     data: {
-      labels: [' '],
+      labels: chartLabels,
       datasets,
     },
-    options: getChartOptions.bar({
+    options: applyAxisLabelVisibility(getChartOptions.bar({
       indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
@@ -75,6 +131,7 @@ const buildHorizontalStackedChart = (
         padding: { top: 2, right: 2, bottom: 2, left: 2 },
       },
       plugins: {
+        ...axisLabelsPluginOptions(axisLabelsVisible),
         title: { display: false },
         legend: {
           ...getOverlayLegendOptions({ visible: legendsVisible }),
@@ -126,16 +183,21 @@ const buildHorizontalStackedChart = (
         },
         y: {
           stacked: true,
-          ticks: { display: false },
+          ticks: {
+            display: Boolean(compare),
+            font: { size: 9 },
+          },
           grid: { display: false },
         },
       },
-    }),
+    }), axisLabelsVisible),
   });
 };
 
 const DistributionPresenter = ({
   bundle,
+  commercialCompare = null,
+  commercialError = null,
   hasSailSelection,
   scopeLoading = false,
   selectedSailCodes = [],
@@ -146,7 +208,7 @@ const DistributionPresenter = ({
   panelInstanceId = null,
 }) => {
   const { chartLegendsVisible } = useTheme();
-  const { showLegends, reportShellClassName } = useReportShellOptions(
+  const { showLegends, showAxisLabels, reportShellClassName } = useReportShellOptions(
     panelComponentId || 'distribution',
     panelInstanceId
   );
@@ -180,7 +242,9 @@ const DistributionPresenter = ({
           title: 'Channel',
           valueMode: 'absolute',
           legendsVisible: chartLegendsVisible && showLegends,
+          axisLabelsVisible: showAxisLabels,
           capacityBerths,
+          compareSlices: commercialCompare?.channelSlices,
         }
       );
       const marketChart = buildHorizontalStackedChart(
@@ -190,7 +254,9 @@ const DistributionPresenter = ({
           title: marketTitle,
           valueMode: 'percent',
           legendsVisible: chartLegendsVisible && showLegends,
+          axisLabelsVisible: showAxisLabels,
           capacityBerths,
+          compareSlices: commercialCompare?.marketSlices,
         }
       );
       const groupChart = buildHorizontalStackedChart(
@@ -200,7 +266,9 @@ const DistributionPresenter = ({
           title: groupFitTitle,
           valueMode: 'absolute',
           legendsVisible: chartLegendsVisible && showLegends,
+          axisLabelsVisible: showAxisLabels,
           capacityBerths,
+          compareSlices: commercialCompare?.groupFitSlices,
         }
       );
       chartsRef.current = [channelChart, marketChart, groupChart].filter(Boolean);
@@ -214,7 +282,7 @@ const DistributionPresenter = ({
       });
       chartsRef.current = [];
     };
-  }, [bundle, capacityBerths, chartLegendsVisible, showLegends, groupFitTitle, hasSailSelection, marketTitle, scopeLoading]);
+  }, [bundle, capacityBerths, chartLegendsVisible, commercialCompare, showAxisLabels, showLegends, groupFitTitle, hasSailSelection, marketTitle, scopeLoading]);
 
   const scopeLabel = selectedReferenceSailCode
     || (selectedSailCodes.length ? selectedSailCodes.join(', ') : null);
@@ -297,6 +365,9 @@ const DistributionPresenter = ({
             </div>
             {meta.groupFitCoverageNote ? (
               <p className="distribution-panel__note">{meta.groupFitCoverageNote}</p>
+            ) : null}
+            {commercialError ? (
+              <p className="distribution-panel__note">Commercial targets did not load.</p>
             ) : null}
           </>
         )}

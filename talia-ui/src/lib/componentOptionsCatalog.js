@@ -27,6 +27,8 @@ export const VIEW_CONTROLS = { id: 'controls', label: 'Controls', type: 'boolean
 /** Tabulator column-calc footer — opt in only on tables that use `withColumnTotal`. */
 export const VIEW_TOTALS = { id: 'totals', label: 'Totals', type: 'boolean', default: true, minRole: 'USER' };
 export const VIEW_LEGENDS = { id: 'legends', label: 'Legends', type: 'boolean', default: true };
+/** Chart axis titles and tick labels. Off reclaims space on small report tiles. */
+export const VIEW_AXIS_LABELS = { id: 'axisLabels', label: 'Axis Labels', type: 'boolean', default: true };
 export const VIEW_NESTED = {
   id: 'viewMode',
   label: 'Nested',
@@ -113,6 +115,7 @@ const VIEW_MENU_ORDER = [
   'provenance',
   'totals',
   'legends',
+  'axisLabels',
   'tooltip',
   'tooltipView',
   'rowScope',
@@ -177,19 +180,19 @@ export const DEFAULT_COMPONENT_OPTIONS = {
     operations: [],
   },
   'reservation-booking-curve': {
-    views: [VIEW_SNAPSHOT, VIEW_GRAPH, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
+    views: [VIEW_SNAPSHOT, VIEW_GRAPH, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS, VIEW_AXIS_LABELS],
     operations: [],
   },
   'profile-compare': {
-    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
+    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS, VIEW_AXIS_LABELS],
     operations: [],
   },
   'inventory-target-profile-editor': {
-    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
+    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS, VIEW_AXIS_LABELS],
     operations: [],
   },
   'booking-profile': {
-    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS],
+    views: [VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_FILTERS, VIEW_LEGENDS, VIEW_AXIS_LABELS],
     operations: [],
   },
   'inventory-memo': {
@@ -219,15 +222,15 @@ export const DEFAULT_COMPONENT_OPTIONS = {
     operations: [],
   },
   'distribution': {
-    views: [VIEW_LEGENDS],
+    views: [VIEW_LEGENDS, VIEW_AXIS_LABELS],
     operations: [],
   },
   'booking-target-chart': {
-    views: [VIEW_LEGENDS],
+    views: [VIEW_LEGENDS, VIEW_AXIS_LABELS],
     operations: [],
   },
   'occupancy-chart': {
-    views: [VIEW_LEGENDS],
+    views: [VIEW_LEGENDS, VIEW_AXIS_LABELS],
     operations: [],
   },
   'revenue-breakdown': {
@@ -244,6 +247,26 @@ export const DEFAULT_COMPONENT_OPTIONS = {
   },
   'published-rates-grid': {
     views: [VIEW_LEGENDS],
+    operations: [],
+  },
+  'booking-current-data-simple': {
+    views: [VIEW_AXIS_LABELS],
+    operations: [],
+  },
+  'booking-target-data-simple': {
+    views: [VIEW_AXIS_LABELS],
+    operations: [],
+  },
+  'booking-combined-data-simple': {
+    views: [VIEW_AXIS_LABELS],
+    operations: [],
+  },
+  'booking-target-profile-editor-simple': {
+    views: [VIEW_AXIS_LABELS],
+    operations: [],
+  },
+  'competitor-pricing': {
+    views: [VIEW_AXIS_LABELS],
     operations: [],
   },
   'groups-explorer': {

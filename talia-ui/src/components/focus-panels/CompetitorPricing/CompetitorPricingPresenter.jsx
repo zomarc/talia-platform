@@ -8,6 +8,7 @@ import CompetitorPricingFilters from './components/CompetitorPricingFilters';
 import CompetitorScatterChart from './components/CompetitorScatterChart';
 import CompetitorPricingTable from './components/CompetitorPricingTable';
 import { usePanelDetailsVisibility } from '../../../hooks/usePanelDetailsVisibility';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
 
@@ -20,6 +21,10 @@ const CompetitorPricingPresenter = ({
   panelComponentId,
 }) => {
   const { expandedKey: expandedCabinType, setExpandedKey: setExpandedCabinType } = useSubpanelExpansion();
+  const { showAxisLabels } = useReportShellOptions(
+    panelComponentId || 'competitor-pricing',
+    panelInstanceId
+  );
   const [showTable] = usePanelDetailsVisibility({
     panelInstanceId,
     panelComponentId: panelComponentId || 'competitor-pricing',
@@ -55,6 +60,7 @@ const CompetitorPricingPresenter = ({
           onToggleExpand={setExpandedCabinType}
           tableVisible={showTable}
           chartOptions={chartOptions}
+          showAxisLabels={showAxisLabels}
         />
         {!expandedCabinType && (
           <ReportDataDetails visible={showTable} className="competitor-pricing__data-details">

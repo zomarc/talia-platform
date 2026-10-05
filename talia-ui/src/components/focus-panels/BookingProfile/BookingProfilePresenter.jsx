@@ -7,7 +7,7 @@ import { Chart, registerables } from 'chart.js';
 import { formatDayMon } from '../../../lib/dateFormat';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
-import { getOverlayLegendOptions, getProfileSeriesColors, taliaHorizontalReferenceLinePlugin, taliaVerticalReferenceLinePlugin, resolveTodayWeekIndex } from '../../../lib/chartConfig';
+import { applyAxisLabelVisibility, axisLabelsPluginOptions, getOverlayLegendOptions, getProfileSeriesColors, taliaHorizontalReferenceLinePlugin, taliaVerticalReferenceLinePlugin, resolveTodayWeekIndex } from '../../../lib/chartConfig';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import ReportSnapshot from '../../shared/ReportSnapshot';
 import BookingGoalCallout from '../../shared/BookingGoalCallout';
@@ -59,7 +59,7 @@ const BookingProfilePresenter = ({
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
   const componentKey = panelComponentId || 'booking-profile';
-  const { showSnapshot, showDetails, showFilters, showLegends, reportShellClassName } = useReportShellOptions(
+  const { showSnapshot, showDetails, showFilters, showLegends, showAxisLabels, reportShellClassName } = useReportShellOptions(
     componentKey,
     panelInstanceId
   );
@@ -177,12 +177,13 @@ const BookingProfilePresenter = ({
     chartInstanceRef.current = new Chart(ctx, {
       type: 'line',
       data: { labels, datasets },
-      options: {
+      options: applyAxisLabelVisibility({
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         layout: { padding: { top: 4, right: 8, bottom: 0, left: 0 } },
         plugins: {
+          ...axisLabelsPluginOptions(showAxisLabels),
           legend: getOverlayLegendOptions({ visible: chartLegendsVisible && showLegends }),
           taliaHorizontalReferenceLine: capacityRef
             ? capacityRef
@@ -236,7 +237,7 @@ const BookingProfilePresenter = ({
             },
           },
         },
-      },
+      }, showAxisLabels),
     });
 
     return () => {
@@ -245,7 +246,7 @@ const BookingProfilePresenter = ({
         chartInstanceRef.current = null;
       }
     };
-  }, [current, previous, budget, breakdown, metric, theme, fontFamily, fontSize, chartLegendsVisible, showLegends]);
+  }, [current, previous, budget, breakdown, metric, theme, fontFamily, fontSize, chartLegendsVisible, showAxisLabels, showLegends]);
 
   const subtitle = [
     current?.referenceSailCode || sailCode,

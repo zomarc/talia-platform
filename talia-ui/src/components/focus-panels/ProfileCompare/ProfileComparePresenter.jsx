@@ -9,6 +9,8 @@ import { formatDayMon } from '../../../lib/dateFormat';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import {
+  applyAxisLabelVisibility,
+  axisLabelsPluginOptions,
   getOverlayLegendOptions,
   getProfileSeriesColors,
   taliaVerticalReferenceLinePlugin,
@@ -78,7 +80,7 @@ const ProfileComparePresenter = ({
   const chartInstanceRef = useRef(null);
   const [typedModel, setTypedModel] = useState('');
   const componentKey = panelComponentId || 'profile-compare';
-  const { showSnapshot, showDetails, showFilters, showLegends, reportShellClassName } = useReportShellOptions(
+  const { showSnapshot, showDetails, showFilters, showLegends, showAxisLabels, reportShellClassName } = useReportShellOptions(
     componentKey,
     panelInstanceId
   );
@@ -257,13 +259,14 @@ const ProfileComparePresenter = ({
     chartInstanceRef.current = new Chart(ctx, {
       type: 'line',
       data: { labels: axis.labels, datasets },
-      options: {
+      options: applyAxisLabelVisibility({
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
         interaction: { mode: 'nearest', intersect: false, axis: 'xy' },
         onClick: (evt, elements, chart) => selectFromEvent(chart, elements),
         plugins: {
+          ...axisLabelsPluginOptions(showAxisLabels),
           legend: {
             ...getOverlayLegendOptions({ visible: (chartLegendsVisible && showLegends) || picking }),
             onClick: (evt, legendItem, legend) => {
@@ -291,7 +294,7 @@ const ProfileComparePresenter = ({
             suggestedMax: 100,
           },
         },
-      },
+      }, showAxisLabels),
     });
 
     return () => {
@@ -308,6 +311,7 @@ const ProfileComparePresenter = ({
     overlaySeries,
     picking,
     chartLegendsVisible,
+    showAxisLabels,
     showLegends,
     fontSize,
     fontFamily,

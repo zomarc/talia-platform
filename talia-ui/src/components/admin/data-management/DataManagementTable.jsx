@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions, observeTabulatorHost } from '../../../lib/tabulatorConfig';
 import { formatDayMonYear, formatSailDateRange } from '../../../lib/dateFormat';
 import { computeIntegrationHealth } from '../../../lib/integrationDateHealth.js';
 import { getPanelActionIconMarkup, PANEL_ACTION_IDS } from '../../shared/panelActions';
@@ -63,6 +63,8 @@ const getRowVariantClass = (rowData) => {
 
 const DataManagementTable = ({
   tableId,
+  panelInstanceId = null,
+  panelComponentId = 'data-management-panel',
   data,
   configuredRange,
   selectedTable,
@@ -92,9 +94,12 @@ const DataManagementTable = ({
       };
     })
   ), [blockedTableName, configuredRange, data, syncingTables, syncProgress]);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
 
   useEffect(() => {
     let cancelled = false;
+    let stopObserve = () => {};
 
     const init = async () => {
       if (!hostRef.current) return;
@@ -105,8 +110,10 @@ const DataManagementTable = ({
         try { instanceRef.current.destroy(); } catch { /* noop */ }
       }
 
-      instanceRef.current = new Tabulator(hostRef.current, getTabulatorOptions({
-        data: rows,
+      const table = new Tabulator(hostRef.current, getTabulatorOptions({
+        data: rowsRef.current || [],
+        panelInstanceId,
+        panelComponentId,
         index: 'tableName',
         height: '100%',
         selectableRows: 1,
@@ -192,7 +199,17 @@ const DataManagementTable = ({
         },
       }));
 
-      instanceRef.current.on('rowClick', (_event, row) => {
+      instanceRef.current = table;
+      table.on('tableBuilt', () => {
+        if (cancelled) return;
+        try {
+          table.replaceData(rowsRef.current || []);
+          table.redraw(true);
+        } catch { /* destroyed */ }
+      });
+      stopObserve = observeTabulatorHost(hostRef.current, () => instanceRef.current);
+
+      table.on('rowClick', (_event, row) => {
         const rowData = row?.getData?.();
         if (rowData?.tableName && typeof onSelectedTableChange === 'function') {
           onSelectedTableChange(rowData.tableName);
@@ -211,17 +228,22 @@ const DataManagementTable = ({
     init();
     return () => {
       cancelled = true;
+      stopObserve();
       if (instanceRef.current) {
         try { instanceRef.current.destroy(); } catch { /* noop */ }
         instanceRef.current = null;
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [panelComponentId, panelInstanceId]);
 
   useEffect(() => {
-    if (!instanceRef.current) return;
-    instanceRef.current.replaceData(rows);
+    const table = instanceRef.current;
+    if (!table) return;
+    try {
+      table.replaceData(rows || []);
+      if (hostRef.current && hostRef.current.clientHeight >= 8) table.redraw(true);
+    } catch { /* not built yet */ }
   }, [rows]);
 
   useEffect(() => {

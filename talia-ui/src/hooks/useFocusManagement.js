@@ -25,6 +25,8 @@ export const useFocusManagement = () => {
     updateFocus: taliaHook.updateTaliaFocus,
     deleteFocus: taliaHook.deleteTaliaFocus,
     toggleFavorite: taliaHook.toggleFavorite,
+    reorderFocuses: taliaHook.reorderFocuses,
+    toggleFocusLegacy: taliaHook.toggleFocusLegacy,
 
     favoriteFocuses: taliaHook.favoriteFocuses || [],
     recentlyUsedFocuses: [],

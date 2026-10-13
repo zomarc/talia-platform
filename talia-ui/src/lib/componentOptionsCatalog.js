@@ -6,7 +6,7 @@
 
 import { hasRole, canConfigureComponentOperations, normalizeRole } from '../utils/roleUtils';
 
-/** @typedef {{ id: string, label: string, type?: 'boolean'|'choice', choices?: string[], choiceLabels?: Record<string, string>, default?: unknown, minRole?: string }} ComponentOptionDef */
+/** @typedef {{ id: string, label: string, type?: 'boolean'|'choice'|'text', choices?: string[], choiceLabels?: Record<string, string>, default?: unknown, placeholder?: string, maxLength?: number, minRole?: string }} ComponentOptionDef */
 
 /** Shared view defs — panels opt in via catalog / registry.options */
 export const VIEW_SNAPSHOT = { id: 'snapshot', label: 'Snapshot', type: 'boolean', default: true };
@@ -29,6 +29,29 @@ export const VIEW_TOTALS = { id: 'totals', label: 'Totals', type: 'boolean', def
 export const VIEW_LEGENDS = { id: 'legends', label: 'Legends', type: 'boolean', default: true };
 /** Chart axis titles and tick labels. Off reclaims space on small report tiles. */
 export const VIEW_AXIS_LABELS = { id: 'axisLabels', label: 'Axis Labels', type: 'boolean', default: true };
+/**
+ * Table column fit. Unset instances follow the header/theme default.
+ * An explicit choice is stored on the dock instance with the other Views.
+ */
+export const VIEW_TABLE_FIT = {
+  id: 'tableFit',
+  label: 'Fit',
+  type: 'choice',
+  choices: ['best', 'width', 'data'],
+  default: 'best',
+  choiceLabels: { best: 'Best Fit', width: 'Fit Width', data: 'Fit Data' },
+};
+/** Place Holder panel — caption stored on the dock instance. */
+export const VIEW_PLACEHOLDER_CAPTION = {
+  id: 'caption',
+  label: 'Label',
+  type: 'text',
+  default: 'Place Holder',
+  placeholder: 'Text shown in the panel',
+  maxLength: 80,
+};
+/** Place Holder panel — corner-to-corner wireframe. */
+export const VIEW_WIREFRAME = { id: 'wireframe', label: 'Wireframe', type: 'boolean', default: true };
 export const VIEW_NESTED = {
   id: 'viewMode',
   label: 'Nested',
@@ -101,8 +124,57 @@ export const VIEW_BAR_SPLIT = {
   default: 'master_segment',
   choiceLabels: { master_segment: 'Master / Segment', fit_group: 'FIT / Group' },
 };
+/** Admin Dashboard — which administration section this instance shows. */
+export const VIEW_ADMIN_SECTION = {
+  id: 'section',
+  label: 'Section',
+  type: 'choice',
+  choices: ['access', 'users', 'mapping', 'themes', 'role-criteria', 'logs'],
+  default: 'access',
+  choiceLabels: {
+    access: 'Focus Access',
+    users: 'Talia Users',
+    mapping: 'User Mappings',
+    themes: 'Themes',
+    'role-criteria': 'Role Criteria',
+    logs: 'Logs',
+  },
+};
+/** Data Management — which integration section this instance shows. */
+export const VIEW_DATA_SECTION = {
+  id: 'section',
+  label: 'Section',
+  type: 'choice',
+  choices: [
+    'table-integration',
+    'external-integration',
+    'internal-integration',
+    'backup-status',
+    'instance-connection',
+    'operations',
+  ],
+  default: 'table-integration',
+  choiceLabels: {
+    'table-integration': 'Table Integration',
+    'external-integration': 'External Integration',
+    'internal-integration': 'Internal Integration',
+    'backup-status': 'Backup and Status',
+    'instance-connection': 'Instance & keys',
+    operations: 'Operations',
+  },
+};
+/** Component Interaction Map — overview, channel detail, or full catalog. */
+export const VIEW_INTERACTION_DISPLAY = {
+  id: 'display',
+  label: 'Display',
+  type: 'choice',
+  choices: ['presentation', 'detailed', 'catalog'],
+  default: 'presentation',
+  choiceLabels: { presentation: 'Presentation', detailed: 'Detailed', catalog: 'Catalog' },
+};
 
 const VIEW_MENU_ORDER = [
+  'section',
   'viewMode',
   'density',
   'display',
@@ -112,6 +184,7 @@ const VIEW_MENU_ORDER = [
   'snapshot',
   'graph',
   'details',
+  'tableFit',
   'provenance',
   'totals',
   'legends',
@@ -120,6 +193,8 @@ const VIEW_MENU_ORDER = [
   'tooltipView',
   'rowScope',
   'barSplit',
+  'wireframe',
+  'caption',
 ];
 export const sortComponentViews = (views) => {
   const list = Array.isArray(views) ? [...views] : [];
@@ -138,6 +213,11 @@ export const resolveChoiceLabel = (def, value) => {
   if (def.choiceLabels && value != null && def.choiceLabels[value]) return def.choiceLabels[value];
   if (def.id === 'viewMode') return value === 'flat' ? 'Flat' : 'Nested';
   if (def.id === 'density') return value === 'compact' ? 'Compact' : 'Full';
+  if (def.id === 'tableFit') {
+    if (value === 'width') return 'Fit Width';
+    if (value === 'data') return 'Fit Data';
+    return 'Best Fit';
+  }
   if (def.id === 'display') {
     if (value === 'heatmap') return 'Heatmap';
     if (value === 'board') return 'Board';
@@ -281,14 +361,77 @@ export const DEFAULT_COMPONENT_OPTIONS = {
     views: [VIEW_DETAILS, VIEW_COLUMN_FILTERS],
     operations: [],
   },
+  'ui-placeholder': {
+    views: [VIEW_WIREFRAME, VIEW_PLACEHOLDER_CAPTION],
+    operations: [],
+  },
+};
+
+const TABLE_FIT_TRIGGER_IDS = new Set([
+  'columnFilters',
+  'totals',
+  'viewMode',
+  'density',
+  'filters',
+  'details',
+  'snapshot',
+  'controls',
+  'tooltip',
+  'tooltipView',
+  'display',
+]);
+
+/**
+ * Tabulator reports whose other Views do not already imply Fit
+ * (legends / axis labels only). Fit is still per dock instance.
+ */
+const TABLE_FIT_PANEL_IDS = new Set([
+  'competitor-pricing',
+  'demand-heatmap',
+  'demand-heatmap-with-trends',
+]);
+
+/**
+ * Non-legacy reports that had no Views menu. Each entry is a control the
+ * report already renders (filters, column filters, controls, or display).
+ * Column filters also add Fit.
+ */
+const UNCONFIGURED_REPORT_VIEWS = {
+  'sailing-table': [VIEW_COLUMN_FILTERS],
+  'agency-directory': [VIEW_FILTERS, VIEW_COLUMN_FILTERS],
+  'published-rates': [VIEW_COLUMN_FILTERS],
+  'sailing-summary': [VIEW_COLUMN_FILTERS],
+  'sailing-cabin-category': [VIEW_COLUMN_FILTERS],
+  'group-booking-review': [VIEW_CONTROLS, VIEW_COLUMN_FILTERS],
+  'data-match': [VIEW_FILTERS, VIEW_COLUMN_FILTERS],
+  'master-voyage-performance-summary': [VIEW_COLUMN_FILTERS],
+  'direct-source-request': [VIEW_FILTERS, VIEW_CONTROLS, VIEW_COLUMN_FILTERS],
+  'direct-availability': [VIEW_CONTROLS, VIEW_COLUMN_FILTERS],
+  'column-terminology-panel': [VIEW_COLUMN_FILTERS],
+  'etl-table-parameters-panel': [VIEW_COLUMN_FILTERS],
+  'itinerary-extract': [VIEW_FILTERS],
+  'profile-aggregations': [VIEW_FILTERS],
+  'google-trends': [VIEW_FILTERS, VIEW_CONTROLS],
+  'ship-tracker-map': [VIEW_FILTERS, VIEW_CONTROLS],
+  'component-interaction-map': [VIEW_INTERACTION_DISPLAY, VIEW_CONTROLS],
+};
+
+const appendTableFitView = (views, componentId) => {
+  const list = Array.isArray(views) ? views : [];
+  if (list.some((view) => view?.id === 'tableFit')) return list;
+  const isTable = TABLE_FIT_PANEL_IDS.has(componentId);
+  if (!isTable && !list.some((view) => TABLE_FIT_TRIGGER_IDS.has(view?.id))) return list;
+  return [...list, VIEW_TABLE_FIT];
 };
 
 export const getComponentOptionsCatalog = (componentId, registryOptions = null) => {
   const key = String(componentId || '');
   const fromRegistry = registryOptions && typeof registryOptions === 'object' ? registryOptions : null;
   const fallback = DEFAULT_COMPONENT_OPTIONS[key] || { views: [], operations: [] };
+  const declared = Array.isArray(fromRegistry?.views) ? fromRegistry.views : (fallback.views || []);
+  const views = declared.length > 0 ? declared : (UNCONFIGURED_REPORT_VIEWS[key] || []);
   return {
-    views: sortComponentViews(Array.isArray(fromRegistry?.views) ? fromRegistry.views : (fallback.views || [])),
+    views: sortComponentViews(appendTableFitView(views, key)),
     operations: Array.isArray(fromRegistry?.operations) ? fromRegistry.operations : (fallback.operations || []),
   };
 };
@@ -328,6 +471,10 @@ export const canShowOperationsOptionsMenu = (role) => canConfigureComponentOpera
 export const resolveViewValue = (viewsState, def) => {
   const state = viewsState && typeof viewsState === 'object' ? viewsState : {};
   if (Object.prototype.hasOwnProperty.call(state, def.id)) return state[def.id];
+  if (def?.id === 'tableFit') {
+    const globalMode = typeof window !== 'undefined' ? window.__taliaTableLayoutMode : null;
+    if (globalMode === 'best' || globalMode === 'width' || globalMode === 'data') return globalMode;
+  }
   return def.default;
 };
 

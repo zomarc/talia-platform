@@ -10,6 +10,17 @@ import focusPreferencesService from '../services/FocusPreferencesService';
 import { normalizeRole, isAdmin } from '../utils/roleUtils';
 import { GraphQLUtils } from '../lib/apolloClient';
 
+function sortFocuses(list) {
+  const focuses = Array.isArray(list) ? list : [];
+  const hasOrder = focuses.some((focus) => Number(focus?.sortOrder) > 0);
+  if (!hasOrder) return focuses;
+  return [...focuses].sort((a, b) => {
+    const order = (Number(a?.sortOrder) || 0) - (Number(b?.sortOrder) || 0);
+    if (order !== 0) return order;
+    return String(a?.name || '').localeCompare(String(b?.name || ''));
+  });
+}
+
 export const useTaliaFocusManagementImpl = () => {
   const { user, loading: authLoading, error: authError } = useSupabaseAuth();
   const focusPreferenceUserKey = useMemo(() => {
@@ -39,7 +50,7 @@ export const useTaliaFocusManagementImpl = () => {
             ? String(user.talia_user_id)
             : null;
       const focuses = await graphQLFocusService.getFocusesForRole(userRole, taliaUserKey);
-      const nextFocuses = focuses || [];
+      const nextFocuses = sortFocuses(focuses || []);
       setTaliaFocuses(nextFocuses);
 
       setCurrentTaliaFocus((prev) => {
@@ -221,6 +232,53 @@ export const useTaliaFocusManagementImpl = () => {
     loadFocusGroups();
   }, [loadFocusPreferences, loadFocusGroups]);
 
+  const toggleFocusLegacy = useCallback(async (focusId, isLegacy) => {
+    if (!focusId) return false;
+    const nextLegacy = isLegacy === true;
+    let previous = [];
+    let previousCurrent = null;
+    setTaliaFocuses((prev) => {
+      previous = prev;
+      return prev.map((focus) => (focus.id === focusId ? { ...focus, isLegacy: nextLegacy } : focus));
+    });
+    setCurrentTaliaFocus((prev) => {
+      previousCurrent = prev;
+      return prev?.id === focusId ? { ...prev, isLegacy: nextLegacy } : prev;
+    });
+    try {
+      await graphQLFocusService.setFocusLegacy(focusId, nextLegacy);
+      return true;
+    } catch (err) {
+      console.error('Error setting focus legacy flag:', err);
+      setTaliaFocuses(previous);
+      setCurrentTaliaFocus(previousCurrent);
+      return false;
+    }
+  }, []);
+
+  const reorderFocuses = useCallback(async (updates) => {
+    const payload = (Array.isArray(updates) ? updates : [])
+      .filter((update) => update?.id && Number.isFinite(Number(update.sortOrder)))
+      .map((update) => ({ id: update.id, sortOrder: Number(update.sortOrder) }));
+    if (payload.length === 0) return false;
+    const byId = new Map(payload.map((update) => [update.id, update.sortOrder]));
+    let previous = [];
+    setTaliaFocuses((prev) => {
+      previous = prev;
+      return sortFocuses(prev.map((focus) => (
+        byId.has(focus.id) ? { ...focus, sortOrder: byId.get(focus.id) } : focus
+      )));
+    });
+    try {
+      await graphQLFocusService.reorderFocuses(payload);
+      return true;
+    } catch (err) {
+      console.error('Error reordering focuses:', err);
+      setTaliaFocuses(previous);
+      return false;
+    }
+  }, []);
+
   const toggleFavorite = useCallback(
     async (taliaFocusId) => {
       if (!focusPreferenceUserKey) return false;
@@ -231,10 +289,10 @@ export const useTaliaFocusManagementImpl = () => {
           const filtered = prev.filter((p) => p.focusId !== taliaFocusId);
           return [...filtered, updated];
         });
+        setError(null);
         return true;
       } catch (err) {
         console.error('Error toggling favorite:', err);
-        setError(err.message);
         return false;
       }
     },
@@ -365,6 +423,8 @@ export const useTaliaFocusManagementImpl = () => {
     updateTaliaFocus,
     deleteTaliaFocus,
     toggleFavorite,
+    reorderFocuses,
+    toggleFocusLegacy,
     updateLastUsed,
     saveCustomLayout,
     loadFocusPreferences,

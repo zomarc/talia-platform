@@ -8,6 +8,7 @@ import {
   panelLoadingEventMatches,
 } from "../../services/panelLoadingState";
 import { activateDockviewPanel, replayClickAfterActivate } from "../../lib/activateDockviewPanel";
+import { useReportShellOptions } from "../../hooks/useReportShellOptions";
 
 const DASHBOARD_GLOBAL_CRITERIA_EVENT = 'talia:dashboard.globalCriteria';
 
@@ -102,11 +103,22 @@ const ReportShell = ({ report, panelInstanceId, panelApi = null, children }) => 
   }, [panelApi, panelInstanceId]);
 
   const isArcadePanel = isArcadeGamePanelComponent(report?.panelId);
+  const {
+    hasFiltersView,
+    hasControlsView,
+    hasColumnFiltersView,
+    showFilters,
+    showControls,
+    showColumnFilters,
+  } = useReportShellOptions(report?.panelId, panelInstanceId, report?.options || null);
   const shellPauseChrome = isPaused && !isArcadePanel;
   const shellClassName = [
     'talia-report-shell',
     shellPauseChrome ? 'talia-report-shell--paused' : '',
     isLoading ? 'talia-report-shell--loading' : '',
+    hasFiltersView && !showFilters ? 'talia-filters-hidden' : '',
+    hasControlsView && !showControls ? 'talia-controls-hidden' : '',
+    hasColumnFiltersView && !showColumnFilters ? 'talia-column-filters-hidden' : '',
   ].filter(Boolean).join(' ');
 
   return (

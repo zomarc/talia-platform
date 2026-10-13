@@ -33,6 +33,7 @@
 
 .admin-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 0;
   border-bottom: 1px solid var(--theme-border-light);
@@ -105,7 +106,7 @@
 .admin-dashboard-panel__content > .admin-access > .admin-access__main-fill > .admin-access__grid {
   flex: 1;
   min-height: 0;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(180px, 1fr) minmax(180px, 1fr);
 }
 
 .admin-dashboard-panel__content > .admin-access > .admin-access__main-fill > .admin-access__loading:only-child {
@@ -116,7 +117,7 @@
 .admin-dashboard-panel__content > .admin-access .admin-access__panel > .admin-access__panel-body,
 .admin-dashboard-panel__content > .admin-access .admin-access__panel > .admin-access__table {
   flex: 1;
-  min-height: 0;
+  min-height: 180px;
   min-width: 0;
 }
 
@@ -606,10 +607,15 @@
   flex-direction: column;
   gap: var(--theme-component-gap-sm);
   padding: var(--theme-component-padding-sm);
+  height: 100%;
+  min-height: 0;
+  container-type: inline-size;
+  container-name: admin-access;
 }
 
 .admin-access__top {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
   gap: var(--theme-component-gap-sm);
@@ -632,15 +638,22 @@
 }
 
 .admin-access__create {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--theme-component-gap-xs);
   align-items: center;
 }
 
 .admin-access__grid {
   display: grid;
-  grid-template-columns: minmax(340px, 1.2fr) minmax(340px, 1fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   gap: var(--theme-component-gap-sm);
+}
+
+@container admin-access (max-width: 760px) {
+  .admin-access__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .admin-access__panel {
@@ -681,8 +694,9 @@
 }
 
 .admin-access__table {
+  flex: 1 1 auto;
   height: 100%;
-  min-height: 0;
+  min-height: 180px;
 }
 
 .admin-access__table--users {

@@ -157,6 +157,8 @@ export const typeDefs = `#graphql
     createdAt: String!
     updatedAt: String!
     isPublic: Boolean!
+    sortOrder: Int!
+    isLegacy: Boolean!
   }
 
   enum FocusType {
@@ -1510,6 +1512,11 @@ export const typeDefs = `#graphql
   }
 
   # Input Types for Mutations
+  input FocusSortUpdate {
+    id: ID!
+    sortOrder: Int!
+  }
+
   input FocusInput {
     name: String!
     description: String
@@ -1894,6 +1901,8 @@ export const typeDefs = `#graphql
     # Focus Management
     createFocus(input: FocusInput!): Focus!
     updateFocus(id: ID!, input: FocusInput!): Focus!
+    reorderFocuses(updates: [FocusSortUpdate!]!): Boolean!
+    setFocusLegacy(id: ID!, isLegacy: Boolean!): Boolean!
     deleteFocus(id: ID!): Boolean!
     shareFocus(id: ID!, isPublic: Boolean!): Focus!
     

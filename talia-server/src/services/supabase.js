@@ -350,8 +350,8 @@ export class SupabaseDataService {
         queryBuilder = queryBuilder.eq('created_by', filters.createdBy);
       }
       
-      // Apply ordering
-      queryBuilder = queryBuilder.order('created_at', { ascending: false });
+      // Apply ordering. sort_order is the user-facing list position.
+      queryBuilder = queryBuilder.order('sort_order', { ascending: true }).order('name', { ascending: true });
       
       const { data, error } = await queryBuilder;
       
@@ -474,6 +474,31 @@ export class SupabaseDataService {
     } catch (error) {
       console.error('Error updating focus:', error);
       throw error;
+    }
+  }
+
+  async reorderFocuses(updates = []) {
+    const now = new Date().toISOString();
+    for (const update of updates) {
+      const sortOrder = Number(update?.sortOrder);
+      if (!update?.id || !Number.isFinite(sortOrder)) continue;
+      const { error } = await this.client
+        .from('focuses')
+        .update({ sort_order: sortOrder, updated_at: now })
+        .eq('id', update.id);
+      if (error) {
+        throw new Error(error.message || 'Failed to reorder focus');
+      }
+    }
+  }
+
+  async setFocusLegacy(id, isLegacy) {
+    const { error } = await this.client
+      .from('focuses')
+      .update({ is_legacy: isLegacy === true, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) {
+      throw new Error(error.message || 'Failed to update focus legacy flag');
     }
   }
 
@@ -816,14 +841,18 @@ export class SupabaseDataService {
   async toggleFavorite(userId, focusId) {
     try {
       // First get current preference
-      const { data: existing } = await this.client
-        .from('user_focus_preferences')
-        .select('is_favorite')
-        .eq('user_id', userId)
-        .eq('focus_id', focusId)
-        .single();
-      
-      const newFavoriteStatus = existing ? !existing.is_favorite : true;
+    const { data: existing, error: readError } = await this.client
+      .from('user_focus_preferences')
+      .select('is_favorite')
+      .eq('user_id', userId)
+      .eq('focus_id', focusId)
+      .maybeSingle();
+
+    if (readError) {
+      throw new Error(readError.message || 'Failed to read focus preference');
+    }
+
+    const newFavoriteStatus = existing ? !existing.is_favorite : true;
       
       return await this.updateUserFocusPreference(userId, focusId, {
         isFavorite: newFavoriteStatus

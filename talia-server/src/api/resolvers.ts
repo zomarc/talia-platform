@@ -625,7 +625,9 @@ const mapDbFocusToGraphQL = (dbFocus: any) => {
     createdBy: dbFocus.created_by || '',
     createdAt: dbFocus.created_at || new Date().toISOString(),
     updatedAt: dbFocus.updated_at || dbFocus.created_at || new Date().toISOString(),
-    isPublic: dbFocus.is_standard || false
+    isPublic: dbFocus.is_standard || false,
+    sortOrder: Number.isFinite(Number(dbFocus.sort_order)) ? Number(dbFocus.sort_order) : 0,
+    isLegacy: dbFocus.is_legacy === true
   };
 };
 
@@ -3555,6 +3557,26 @@ export const resolvers = {
       } catch (error) {
         console.error('Error updating focus:', error);
         throw new Error(`Failed to update focus: ${error.message}`);
+      }
+    },
+
+    reorderFocuses: async (_parent: any, args: any) => {
+      try {
+        await supabaseDataService.reorderFocuses(args?.updates || []);
+        return true;
+      } catch (error) {
+        console.error('Error reordering focuses:', error);
+        throw new Error(`Failed to reorder focuses: ${error.message}`);
+      }
+    },
+
+    setFocusLegacy: async (_parent: any, args: any) => {
+      try {
+        await supabaseDataService.setFocusLegacy(args?.id, args?.isLegacy === true);
+        return true;
+      } catch (error) {
+        console.error('Error setting focus legacy flag:', error);
+        throw new Error(`Failed to set focus legacy: ${error.message}`);
       }
     },
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
+import { initTabulator, getTabulatorOptions, observeTabulatorHost } from '../../../lib/tabulatorConfig';
 import { useFocusManagement } from '../../../hooks/useFocusManagement';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import taliaUserService from '../../../services/TaliaUserService';
@@ -102,7 +102,10 @@ const buildEditorFromFocus = (focus) => {
   };
 };
 
-const AdminAccessManager = () => {
+const AdminAccessManager = ({
+  panelInstanceId = null,
+  panelComponentId = 'admin-dashboard',
+}) => {
   const {
     focuses,
     loading,
@@ -138,6 +141,8 @@ const AdminAccessManager = () => {
   const matrixTableRef = useRef(null);
   const matrixTableElRef = useRef(null);
   const updateFocusRoleFloorRef = useRef(null);
+  const focusRowsRef = useRef([]);
+  const matrixRowsRef = useRef([]);
 
   const selectedFocus = useMemo(
     () => focuses.find((focus) => focus.id === selectedFocusId) || null,
@@ -170,6 +175,8 @@ const AdminAccessManager = () => {
       })),
     [focuses]
   );
+  focusRowsRef.current = focusRows;
+  matrixRowsRef.current = matrixRows;
 
   const updateFocusRoleFloor = useCallback(
     async (focusId, minimumRole) => {
@@ -246,16 +253,19 @@ const AdminAccessManager = () => {
 
   useEffect(() => {
     let cancelled = false;
+    let stopObserve = () => {};
     const init = async () => {
       if (!focusTableElRef.current || focusTableRef.current) return;
       const Tabulator = await initTabulator();
       if (cancelled || !Tabulator || !focusTableElRef.current) return;
 
-      focusTableRef.current = new Tabulator(focusTableElRef.current, {
+      const table = new Tabulator(focusTableElRef.current, {
         ...getTabulatorOptions({
           selectableRows: 1,
           height: '100%',
-          data: [],
+          data: focusRowsRef.current || [],
+          panelInstanceId,
+          panelComponentId,
           columns: [
           { title: 'Focus Name', field: 'name', headerFilter: 'input' },
           { title: 'Type', field: 'type', width: 120, headerFilter: 'list', headerFilterParams: { valuesLookup: true, clearable: true } },
@@ -264,18 +274,26 @@ const AdminAccessManager = () => {
           ]
         })
       });
+      focusTableRef.current = table;
 
-      focusTableRef.current.on('rowClick', (_, row) => {
+      table.on('rowClick', (_, row) => {
         const data = row.getData();
         if (data?.id) setSelectedFocusId(data.id);
       });
-
-      focusTableRef.current.setData(focusRows || []);
-      setFocusTableReady(true);
+      table.on('tableBuilt', () => {
+        if (cancelled) return;
+        try {
+          table.setData(focusRowsRef.current || []);
+          table.redraw(true);
+        } catch { /* destroyed */ }
+        setFocusTableReady(true);
+      });
+      stopObserve = observeTabulatorHost(focusTableElRef.current, () => focusTableRef.current);
     };
     init();
     return () => {
       cancelled = true;
+      stopObserve();
       if (focusTableRef.current) {
         try {
           focusTableRef.current.destroy();
@@ -286,25 +304,31 @@ const AdminAccessManager = () => {
       }
       setFocusTableReady(false);
     };
-  }, []);
+  }, [panelComponentId, panelInstanceId]);
 
   useEffect(() => {
     if (!focusTableReady || !focusTableRef.current) return;
-    focusTableRef.current.setData(focusRows || []);
+    try {
+      focusTableRef.current.setData(focusRows || []);
+      focusTableRef.current.redraw(true);
+    } catch { /* destroyed */ }
   }, [focusRows, focusTableReady]);
 
   useEffect(() => {
     let cancelled = false;
+    let stopObserve = () => {};
     const init = async () => {
       if (!matrixTableElRef.current || matrixTableRef.current) return;
       const Tabulator = await initTabulator();
       if (cancelled || !Tabulator || !matrixTableElRef.current) return;
 
-      matrixTableRef.current = new Tabulator(matrixTableElRef.current, {
+      const table = new Tabulator(matrixTableElRef.current, {
         ...getTabulatorOptions({
           selectableRows: false,
           height: '100%',
-          data: [],
+          data: matrixRowsRef.current || [],
+          panelInstanceId,
+          panelComponentId,
           columns: [
           { title: 'Focus Name', field: 'name', headerFilter: 'input' },
           { title: 'Type', field: 'type', width: 120 },
@@ -354,13 +378,21 @@ const AdminAccessManager = () => {
           ]
         })
       });
-
-      matrixTableRef.current.setData(matrixRows || []);
-      setMatrixTableReady(true);
+      matrixTableRef.current = table;
+      table.on('tableBuilt', () => {
+        if (cancelled) return;
+        try {
+          table.setData(matrixRowsRef.current || []);
+          table.redraw(true);
+        } catch { /* destroyed */ }
+        setMatrixTableReady(true);
+      });
+      stopObserve = observeTabulatorHost(matrixTableElRef.current, () => matrixTableRef.current);
     };
     init();
     return () => {
       cancelled = true;
+      stopObserve();
       if (matrixTableRef.current) {
         try {
           matrixTableRef.current.destroy();
@@ -371,11 +403,14 @@ const AdminAccessManager = () => {
       }
       setMatrixTableReady(false);
     };
-  }, []);
+  }, [panelComponentId, panelInstanceId]);
 
   useEffect(() => {
     if (!matrixTableReady || !matrixTableRef.current) return;
-    matrixTableRef.current.setData(matrixRows || []);
+    try {
+      matrixTableRef.current.setData(matrixRows || []);
+      matrixTableRef.current.redraw(true);
+    } catch { /* destroyed */ }
   }, [matrixRows, matrixTableReady]);
 
   const handleEditorTypeChange = useCallback((nextType) => {
@@ -605,16 +640,10 @@ const AdminAccessManager = () => {
 
   return (
     <div className="admin-access">
-      <div className="admin-access__top">
-        <div className="admin-access__intro">
-          <h2 className="admin-access__title">Focus Access Management</h2>
-          <p className="admin-access__subtitle">
-            Manage focus names, assignment type, and role/user visibility from one place. Export / Import JSON moves
-            layout and metadata to a new focus id (USER assigns: clear Talia user id unless you remap on this instance).
-            Naming: <code>talia-ui/docs/TALIA_UI_GLOSSARY.md</code>.
-          </p>
-        </div>
-        <div className="admin-access__create">
+      <div className="talia-callout admin-access__intro" role="note">
+        Manage focus names, assignment type, and role or user visibility. Export and import JSON copies layout onto a new focus id.
+      </div>
+      <div className="talia-report__actions-bar admin-access__create" aria-label="Focus access actions">
           <input
             className="admin-access__input"
             type="text"
@@ -654,7 +683,6 @@ const AdminAccessManager = () => {
             aria-hidden="true"
             onChange={handleImportFileChange}
           />
-        </div>
       </div>
 
       <div className="admin-access__status" role="status" aria-live="polite">

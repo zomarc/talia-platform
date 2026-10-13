@@ -9,11 +9,19 @@ import React, { useMemo, useState, useCallback } from 'react';
 import componentRegistry from '../registry';
 import { buildInteractionModel, buildPresentationModel, buildComponentCatalog } from './componentInteractionsTransform';
 import ComponentInteractionMapPresenter from './ComponentInteractionMapPresenter';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 
-const ComponentInteractionMapContainer = () => {
+const ComponentInteractionMapContainer = ({ panelInstanceId, panelComponentId }) => {
   // Registry is static at runtime; a nonce lets the Refresh button force a rebuild.
   const [nonce, setNonce] = useState(0);
-  const [mode, setMode] = useState('presentation');
+  const { viewsState, setView } = useReportShellOptions(
+    panelComponentId || 'component-interaction-map',
+    panelInstanceId
+  );
+  const storedDisplay = viewsState?.display;
+  const mode = storedDisplay === 'detailed' || storedDisplay === 'catalog'
+    ? storedDisplay
+    : 'presentation';
 
   const model = useMemo(
     () => buildInteractionModel(componentRegistry),
@@ -41,7 +49,7 @@ const ComponentInteractionMapContainer = () => {
       presentation={presentation}
       catalog={catalog}
       mode={mode}
-      onModeChange={setMode}
+      onModeChange={(next) => setView('display', next)}
       onRefresh={handleRefresh}
     />
   );

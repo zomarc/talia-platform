@@ -261,6 +261,33 @@ const getGlobalTableLayoutMode = () => {
   return TABLE_LAYOUT_BEST;
 };
 
+const normalizeFitMode = (mode) => (
+  mode === TABLE_LAYOUT_DATA || mode === TABLE_LAYOUT_WIDTH || mode === TABLE_LAYOUT_BEST
+    ? mode
+    : null
+);
+
+const layoutNameForFitMode = (mode) => (
+  mode === TABLE_LAYOUT_DATA
+    ? 'fitDataTable'
+    : mode === TABLE_LAYOUT_WIDTH
+      ? 'fitColumns'
+      : 'fitDataStretch'
+);
+
+/** Instance Views → Fit wins. Otherwise the header/theme default. */
+const resolveTableFitForPanel = (componentId, instanceId) => {
+  if (isBrowser() && componentId) {
+    const entry = window.__taliaUserProfileState?.componentOptions?.[componentId];
+    const views = resolveStoredComponentViews(entry, instanceId);
+    if (views && Object.prototype.hasOwnProperty.call(views, 'tableFit')) {
+      const stored = normalizeFitMode(views.tableFit);
+      if (stored) return stored;
+    }
+  }
+  return getGlobalTableLayoutMode();
+};
+
 const setGlobalTableLayoutMode = (mode) => {
   if (!isBrowser()) return;
   const next = mode === TABLE_LAYOUT_DATA
@@ -653,12 +680,10 @@ const applyLayoutModeToTable = (table, { force = false } = {}) => {
     if (meta) meta.pendingLayoutRefresh = true;
     return;
   }
-  const mode = getGlobalTableLayoutMode();
-  const nextLayout = mode === TABLE_LAYOUT_DATA
-    ? 'fitDataTable'
-    : mode === TABLE_LAYOUT_WIDTH
-      ? 'fitColumns'
-      : 'fitDataStretch';
+  const metaForFit = tableMeta.get(table);
+  const mode = normalizeFitMode(metaForFit?.pendingFitMode)
+    || resolveTableFitForPanel(metaForFit?.panelComponentId, metaForFit?.panelInstanceId);
+  const nextLayout = layoutNameForFitMode(mode);
   try {
     const meta = tableMeta.get(table);
     const ready = meta?.isBuilt === true || table?.initialized === true;
@@ -767,6 +792,23 @@ const ensureLayoutListenerBound = () => {
     applyAllVisible();
   });
 
+  window.addEventListener(COMPONENT_OPTIONS_CHANGED_EVENT, (event) => {
+    const detail = event?.detail || {};
+    const views = detail.views;
+    if (!views || !Object.prototype.hasOwnProperty.call(views, 'tableFit')) return;
+    const componentId = String(detail.componentId || '');
+    const instanceId = String(detail.instanceId || '');
+    const nextMode = normalizeFitMode(views.tableFit);
+    tableInstances.forEach((table) => {
+      const meta = tableMeta.get(table);
+      if (!meta) return;
+      if (componentId && meta.panelComponentId !== componentId) return;
+      if (instanceId && meta.panelInstanceId && meta.panelInstanceId !== instanceId) return;
+      if (nextMode) meta.pendingFitMode = nextMode;
+      applyLayoutModeToTable(table, { force: true });
+    });
+  });
+
   // Re-apply the current global fit when the active dock tab changes.
   // Deferred-only flush missed tables that measured while the host was the
   // wrong size (or never set pendingLayoutRefresh), which left the wrong fit.
@@ -837,6 +879,36 @@ const ensureLayoutListenerBound = () => {
   });
 };
 
+/** Redraw a table once its host has a real box (hidden tabs and late layout). */
+export const observeTabulatorHost = (element, getTable) => {
+  if (!element || typeof ResizeObserver === 'undefined') return () => {};
+  let frame = 0;
+  const observer = new ResizeObserver(() => {
+    if (element.clientHeight < 8 || element.clientWidth < 8) return;
+    const table = typeof getTable === 'function' ? getTable() : null;
+    if (!table?.redraw) return;
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      try { table.redraw(true); } catch { /* host gone */ }
+    });
+  });
+  observer.observe(element);
+  return () => {
+    cancelAnimationFrame(frame);
+    observer.disconnect();
+  };
+};
+
+const resolvePanelIdsFromHost = (element) => {
+  const node = element instanceof Element ? element : null;
+  const host = node?.closest?.('[data-panel-instance-id], [data-panel-component-id]');
+  if (!host) return { panelInstanceId: null, panelComponentId: null };
+  return {
+    panelInstanceId: host.getAttribute('data-panel-instance-id') || null,
+    panelComponentId: host.getAttribute('data-panel-component-id') || null,
+  };
+};
+
 const registerTableInstance = (table, baseColumns = null, ids = {}) => {
   if (!table) return;
   if (!tableMeta.has(table)) {
@@ -876,8 +948,9 @@ const getWrappedTabulatorClass = () => {
         ? { ...incomingOptions }
         : getTabulatorOptions(incomingOptions);
       const baseColumns = processed.__taliaBaseColumns || incomingOptions.columns || null;
-      const panelInstanceId = processed.__taliaPanelInstanceId || null;
-      const panelComponentId = processed.__taliaPanelComponentId || null;
+      const hostIds = resolvePanelIdsFromHost(element);
+      const panelInstanceId = hostIds.panelInstanceId || processed.__taliaPanelInstanceId || null;
+      const panelComponentId = hostIds.panelComponentId || processed.__taliaPanelComponentId || null;
       const exportTitle = processed.__taliaExportTitle || null;
       delete processed.__taliaProcessedOptions;
       delete processed.__taliaBaseColumns;
@@ -973,14 +1046,6 @@ export const getTabulatorOptions = (options = {}) => {
   const rawLayout = options.layout;
   const requestedLayout = rawLayout === 'fitDataFill' ? 'fitDataTable' : rawLayout;
   const ignoreGlobalLayout = options.enforceGlobalLayout === false;
-  const globalMode = ignoreGlobalLayout ? null : getGlobalTableLayoutMode();
-  const effectiveLayout = ignoreGlobalLayout
-    ? (requestedLayout || 'fitColumns')
-    : globalMode === TABLE_LAYOUT_DATA
-      ? 'fitDataTable'
-      : globalMode === TABLE_LAYOUT_WIDTH
-        ? 'fitColumns'
-        : 'fitDataStretch';
   const rawColumns = Array.isArray(options.columns) ? [...options.columns] : null;
   const panelComponentId = typeof options.panelComponentId === 'string' && options.panelComponentId.trim()
     ? options.panelComponentId.trim()
@@ -1009,6 +1074,9 @@ export const getTabulatorOptions = (options = {}) => {
   const panelInstanceId = typeof options.panelInstanceId === 'string' && options.panelInstanceId.trim()
     ? options.panelInstanceId.trim()
     : null;
+  const effectiveLayout = ignoreGlobalLayout
+    ? (requestedLayout || 'fitColumns')
+    : layoutNameForFitMode(resolveTableFitForPanel(panelComponentId, panelInstanceId));
   const exportTitle = typeof options.exportTitle === 'string' && options.exportTitle.trim()
     ? options.exportTitle.trim()
     : null;

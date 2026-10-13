@@ -7,6 +7,100 @@ import React, { useState } from 'react';
 import { useFocusManagement } from '../../hooks/useFocusManagement';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 
+function reorderUpdates(list, fromId, toId) {
+  const ids = list.map((focus) => focus.id);
+  const from = ids.indexOf(fromId);
+  const to = ids.indexOf(toId);
+  if (from < 0 || to < 0 || from === to) return [];
+  const next = [...list];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  const slots = list.map((focus) => Number(focus.sortOrder) || 0).sort((a, b) => a - b);
+  const useSlots = slots.every((value) => value > 0) && new Set(slots).size === slots.length;
+  return next
+    .map((focus, index) => ({
+      id: focus.id,
+      sortOrder: useSlots ? slots[index] : index + 1,
+    }))
+    .filter((update) => {
+      const current = list.find((focus) => focus.id === update.id);
+      return Number(current?.sortOrder) !== update.sortOrder;
+    });
+}
+
+function FocusOrderRow({
+  focus,
+  selected,
+  list,
+  draggingId,
+  setDraggingId,
+  onSelect,
+  onToggleFavorite,
+  onReorder,
+  onToggleLegacy,
+  showStandard,
+  starred,
+}) {
+  const legacy = focus.isLegacy === true;
+  return (
+    <div
+      className={`dashboard-focus-item ${selected ? 'dashboard-focus-item--current' : ''} ${draggingId === focus.id ? 'dashboard-focus-item--dragging' : ''} ${legacy ? 'dashboard-focus-item--legacy' : ''}`}
+      onClick={() => onSelect(focus.id)}
+      onDragOver={(event) => {
+        if (!draggingId || draggingId === focus.id) return;
+        event.preventDefault();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const fromId = event.dataTransfer.getData('text/plain') || draggingId;
+        const updates = reorderUpdates(list, fromId, focus.id);
+        setDraggingId(null);
+        if (updates.length) onReorder(updates);
+      }}
+    >
+      <div className="dashboard-focus-item__header">
+        <span
+          className="dashboard-focus-item__drag"
+          draggable
+          title="Drag to reorder"
+          onClick={(event) => event.stopPropagation()}
+          onDragStart={(event) => {
+            event.stopPropagation();
+            event.dataTransfer.setData('text/plain', focus.id);
+            event.dataTransfer.effectAllowed = 'move';
+            setDraggingId(focus.id);
+          }}
+          onDragEnd={() => setDraggingId(null)}
+        >
+          ⋮⋮
+        </span>
+        <span className="dashboard-focus-item__name">{focus.name}</span>
+        <button
+          type="button"
+          onClick={(event) => onToggleLegacy(focus.id, !legacy, event)}
+          className={`dashboard-focus-item__legacy-btn ${legacy ? 'dashboard-focus-item__legacy-btn--active' : ''}`}
+          title={legacy ? 'Retired / legacy — still in the list' : 'Mark as retired / legacy'}
+        >
+          L
+        </button>
+        <button
+          onClick={(event) => onToggleFavorite(focus.id, event)}
+          className={`dashboard-focus-item__favorite-btn ${starred ? 'dashboard-focus-item__favorite-btn--active' : ''}`}
+          title={starred ? 'Remove from starred' : 'Star this focus'}
+        >
+          ★
+        </button>
+      </div>
+      <div className="dashboard-focus-item__meta">
+        <span className="dashboard-focus-item__type">{focus.type}</span>
+        {focus.isDefault && <span>Default</span>}
+        {showStandard && focus.isStandard && <span>Standard</span>}
+      </div>
+    </div>
+  );
+}
+
 const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
   const { user } = useSupabaseAuth();
   const {
@@ -17,12 +111,18 @@ const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
     loadFocus,
     createFocus,
     toggleFavorite,
+    toggleFocusLegacy,
+    reorderFocuses,
     favoriteFocuses,
     canCreateFocus
   } = useFocusManagement();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newFocusName, setNewFocusName] = useState('');
+  const [starredOpen, setStarredOpen] = useState(true);
+  const [restOpen, setRestOpen] = useState(false);
+  const [retiredOpen, setRetiredOpen] = useState(false);
+  const [draggingId, setDraggingId] = useState(null);
 
   const handleFocusSelect = async (focusId) => {
     await loadFocus(focusId);
@@ -34,6 +134,11 @@ const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
   const handleToggleFavorite = async (focusId, e) => {
     e.stopPropagation();
     await toggleFavorite(focusId);
+  };
+
+  const handleToggleLegacy = async (focusId, isLegacy, event) => {
+    event.stopPropagation();
+    await toggleFocusLegacy(focusId, isLegacy);
   };
 
   const handleSaveCurrentLayout = async () => {
@@ -73,6 +178,11 @@ const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
       setShowCreateForm(false);
     }
   };
+
+  const starredIds = new Set(favoriteFocuses.map((focus) => focus.id || focus.taliaFocusId));
+  const retiredFocuses = focuses.filter((focus) => focus.isLegacy === true);
+  const primaryFocuses = favoriteFocuses.filter((focus) => focus.isLegacy !== true);
+  const additionalFocuses = focuses.filter((focus) => focus.isLegacy !== true && !starredIds.has(focus.id));
 
   if (loading) {
     return (
@@ -163,13 +273,21 @@ const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
         {currentFocus && (
           <div className="dashboard-focus-section">
             <div 
-              className={`dashboard-focus-item dashboard-focus-item--current`}
+              className={`dashboard-focus-item dashboard-focus-item--current ${currentFocus.isLegacy ? 'dashboard-focus-item--legacy' : ''}`}
               onClick={() => handleFocusSelect(currentFocus.id)}
             >
               <div className="dashboard-focus-item__header">
                 <span className="dashboard-focus-item__name">
                   {currentFocus.name}
                 </span>
+                <button
+                  type="button"
+                  onClick={(event) => handleToggleLegacy(currentFocus.id, !currentFocus.isLegacy, event)}
+                  className={`dashboard-focus-item__legacy-btn ${currentFocus.isLegacy ? 'dashboard-focus-item__legacy-btn--active' : ''}`}
+                  title={currentFocus.isLegacy ? 'Retired / legacy — still in the list' : 'Mark as retired / legacy'}
+                >
+                  L
+                </button>
                 <button 
                   onClick={(e) => handleToggleFavorite(currentFocus.id, e)}
                   className={`dashboard-focus-item__favorite-btn ${favoriteFocuses.find(f => f.id === currentFocus.id) ? 'dashboard-focus-item__favorite-btn--active' : ''}`}
@@ -198,36 +316,38 @@ const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
           </div>
         )}
 
-        {/* Favorite Focuses */}
-        {favoriteFocuses.length > 0 && (
-          <div className="dashboard-focus-section">
-            <div className="dashboard-focus-section__title">Favorites</div>
+        <div className="dashboard-focus-section">
+          <button
+            type="button"
+            className="dashboard-focus-section__title dashboard-focus-section__title--toggle"
+            aria-expanded={starredOpen}
+            onClick={() => setStarredOpen((open) => !open)}
+          >
+            <span>{starredOpen ? '▼' : '▶'} Starred (Primary) ({primaryFocuses.length})</span>
+          </button>
+          {starredOpen && (
             <div className="dashboard-focus-section__list">
-              {favoriteFocuses.map(focus => (
-                <div 
-                  key={focus.id || focus.taliaFocusId} 
-                  className={`dashboard-focus-item ${currentFocus?.id === (focus.id || focus.taliaFocusId) ? 'dashboard-focus-item--current' : ''}`}
-                  onClick={() => handleFocusSelect(focus.id || focus.taliaFocusId)}
-                >
-                  <div className="dashboard-focus-item__header">
-                    <span className="dashboard-focus-item__name">{focus.name}</span>
-                    <button 
-                      onClick={(e) => handleToggleFavorite(focus.id || focus.taliaFocusId, e)}
-                      className="dashboard-focus-item__favorite-btn dashboard-focus-item__favorite-btn--active"
-                      title="Remove from favorites"
-                    >
-                      ★
-                    </button>
-                  </div>
-                  <div className="dashboard-focus-item__meta">
-                    <span className="dashboard-focus-item__type">{focus.type}</span>
-                    {focus.isDefault && <span>Default</span>}
-                  </div>
-                </div>
+              {primaryFocuses.length === 0 && (
+                <div className="dashboard-focus-section__empty">Star a focus to pin it here.</div>
+              )}
+              {primaryFocuses.map(focus => (
+                <FocusOrderRow
+                  key={focus.id || focus.taliaFocusId}
+                  focus={focus}
+                  list={primaryFocuses}
+                  selected={currentFocus?.id === (focus.id || focus.taliaFocusId)}
+                  draggingId={draggingId}
+                  setDraggingId={setDraggingId}
+                  onSelect={handleFocusSelect}
+                  onToggleFavorite={handleToggleFavorite}
+                  onReorder={reorderFocuses}
+                  onToggleLegacy={handleToggleLegacy}
+                  starred
+                />
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Recently Used Focuses - TODO: Implement in Talia system */}
         {/* {recentlyUsedFocuses.length > 0 && (
@@ -259,38 +379,68 @@ const FocusSelector = ({ onFocusChange, onSaveCurrentLayout }) => {
           </div>
         )} */}
 
-        {/* All Available Focuses - Fill Available Space */}
-        <div className="dashboard-focus-section dashboard-focus-section--scrollable">
-          <div className="dashboard-focus-section__title">
-            All Focuses ({focuses.length})
-          </div>
+        <div className={`dashboard-focus-section ${restOpen ? 'dashboard-focus-section--scrollable' : ''}`}>
+          <button
+            type="button"
+            className="dashboard-focus-section__title dashboard-focus-section__title--toggle"
+            aria-expanded={restOpen}
+            onClick={() => setRestOpen((open) => !open)}
+          >
+            <span>{restOpen ? '▼' : '▶'} The rest (Additional) ({additionalFocuses.length})</span>
+          </button>
+          {restOpen && (
           <div className="dashboard-focus-section__list">
-            {focuses.map(focus => (
-              <div 
-                key={focus.id} 
-                className={`dashboard-focus-item ${currentFocus?.id === focus.id ? 'dashboard-focus-item--current' : ''}`}
-                onClick={() => handleFocusSelect(focus.id)}
-              >
-                <div className="dashboard-focus-item__header">
-                  <span className="dashboard-focus-item__name">
-                    {focus.name}
-                  </span>
-                  <button 
-                    onClick={(e) => handleToggleFavorite(focus.id, e)}
-                    className={`dashboard-focus-item__favorite-btn ${favoriteFocuses.find(f => f.id === focus.id) ? 'dashboard-focus-item__favorite-btn--active' : ''}`}
-                    title="Toggle favorite"
-                  >
-                    ★
-                  </button>
-                </div>
-                <div className="dashboard-focus-item__meta">
-                  <span className="dashboard-focus-item__type">{focus.type}</span>
-                  {focus.isDefault && <span>Default</span>}
-                  {focus.isStandard && <span>Standard</span>}
-                </div>
-              </div>
+            {additionalFocuses.map(focus => (
+              <FocusOrderRow
+                key={focus.id}
+                focus={focus}
+                list={additionalFocuses}
+                selected={currentFocus?.id === focus.id}
+                draggingId={draggingId}
+                setDraggingId={setDraggingId}
+                onSelect={handleFocusSelect}
+                onToggleFavorite={handleToggleFavorite}
+                onReorder={reorderFocuses}
+                onToggleLegacy={handleToggleLegacy}
+                showStandard
+              />
             ))}
           </div>
+          )}
+        </div>
+
+        <div className="dashboard-focus-section">
+          <button
+            type="button"
+            className="dashboard-focus-section__title dashboard-focus-section__title--toggle"
+            aria-expanded={retiredOpen}
+            onClick={() => setRetiredOpen((open) => !open)}
+          >
+            <span>{retiredOpen ? '▼' : '▶'} Retired (Legacy) ({retiredFocuses.length})</span>
+          </button>
+          {retiredOpen && (
+            <div className="dashboard-focus-section__list">
+              {retiredFocuses.length === 0 && (
+                <div className="dashboard-focus-section__empty">Mark a focus with L to retire it.</div>
+              )}
+              {retiredFocuses.map(focus => (
+                <FocusOrderRow
+                  key={focus.id}
+                  focus={focus}
+                  list={retiredFocuses}
+                  selected={currentFocus?.id === focus.id}
+                  draggingId={draggingId}
+                  setDraggingId={setDraggingId}
+                  onSelect={handleFocusSelect}
+                  onToggleFavorite={handleToggleFavorite}
+                  onReorder={reorderFocuses}
+                  onToggleLegacy={handleToggleLegacy}
+                  starred={starredIds.has(focus.id)}
+                  showStandard
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

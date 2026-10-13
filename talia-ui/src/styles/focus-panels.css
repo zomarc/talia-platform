@@ -7953,3 +7953,117 @@
   margin-top: 8px;
   font-size: 12px;
 }
+
+.ui-placeholder__stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 16px;
+}
+
+.ui-placeholder__stage--wireframe {
+  border: 1px dashed color-mix(in srgb, var(--theme-fg) 35%, var(--theme-border));
+}
+
+.ui-placeholder__x {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.ui-placeholder__x line {
+  stroke: color-mix(in srgb, var(--theme-fg) 28%, transparent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.ui-placeholder__caption {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  max-width: 90%;
+  padding: 4px 10px;
+  text-align: center;
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size);
+  line-height: 1.35;
+}
+
+.ui-chatbot__body {
+  min-height: 0;
+}
+
+.ui-chatbot__transcript {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.ui-chatbot__message {
+  margin: 0;
+  max-width: 88%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  line-height: 1.4;
+  font-size: var(--theme-font-size);
+  white-space: pre-wrap;
+}
+
+.ui-chatbot__message--assistant {
+  align-self: flex-start;
+  background: color-mix(in srgb, var(--theme-fg) 8%, transparent);
+  border: 1px solid var(--theme-border);
+}
+
+.ui-chatbot__message--user {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--theme-accent, #5b9bd5) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--theme-accent, #5b9bd5) 45%, var(--theme-border));
+}
+
+.ui-chatbot__message--pending {
+  opacity: 0.7;
+}
+
+.ui-chatbot__prompts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.ui-chatbot__prompt {
+  white-space: normal;
+  text-align: left;
+  height: auto;
+}
+
+.ui-chatbot__composer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--theme-border);
+}
+
+.ui-chatbot__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--theme-border);
+  border-radius: 4px;
+  background: var(--theme-bg-solid);
+  color: var(--theme-fg);
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size);
+  padding: 6px 8px;
+}

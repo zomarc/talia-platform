@@ -67,6 +67,8 @@ import EtlTableParametersPanel from './EtlTableParameters';
 import PortCityPanel from './PortCity';
 import RequirementsLogPanel from './RequirementsLog';
 import TestWorkbenchPanel from './TestWorkbench';
+import PlaceHolderContainer from './PlaceHolder';
+import ChatbotDemoContainer from './ChatbotDemo';
 import DataDebugView from '../TestPage/DataDebugView';
 import DataTypesValidation from '../dev/DataTypesValidation';
 import AdminDashboard from '../admin/dashboard/AdminDashboard';
@@ -92,6 +94,10 @@ import {
   VIEW_TOTALS,
   VIEW_BAR_SPLIT,
   VIEW_ROW_SCOPE,
+  VIEW_PLACEHOLDER_CAPTION,
+  VIEW_WIREFRAME,
+  VIEW_ADMIN_SECTION,
+  VIEW_DATA_SECTION,
 } from '../../lib/componentOptionsCatalog';
 
 const publishedRatesSelect = 'talia:publishedRates.select';
@@ -1156,6 +1162,10 @@ export const componentRegistry = {
     events: { emits: [], respondsTo: [] },
     allowedRoles: ['ADMIN', 'SUPER_USER'],
     showInReports: true,
+    options: {
+      views: [VIEW_ADMIN_SECTION, VIEW_CONTROLS, VIEW_COLUMN_FILTERS],
+      operations: [],
+    },
     filePath: 'src/components/admin/dashboard/AdminDashboard.jsx'
   },
   DataManagementPanel: {
@@ -1169,6 +1179,10 @@ export const componentRegistry = {
     events: { emits: [], respondsTo: [] },
     allowedRoles: ['ADMIN', 'SUPER_USER'],
     showInReports: true,
+    options: {
+      views: [VIEW_DATA_SECTION, VIEW_FILTERS, VIEW_CONTROLS, VIEW_COLUMN_FILTERS],
+      operations: [],
+    },
     filePath: 'src/components/focus-panels/DataManagement/index.jsx'
   },
   RmChecklist: {
@@ -1357,6 +1371,34 @@ export const componentRegistry = {
     events: { emits: [], respondsTo: [] },
     showInReports: true,
     filePath: 'src/components/dev/DataTypesValidation.jsx'
+  },
+  PlaceHolder: {
+    component: PlaceHolderContainer,
+    panelId: 'ui-placeholder',
+    category: 'UI/UX Tools',
+    title: 'Place Holder',
+    description: 'Empty dock slot. The label and wireframe are set per instance from Views.',
+    props: {},
+    dataRequirements: 'No data. Demonstration frame for a future report.',
+    events: { emits: [], respondsTo: [] },
+    showInReports: true,
+    options: {
+      views: [VIEW_WIREFRAME, VIEW_PLACEHOLDER_CAPTION],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/PlaceHolder/index.jsx'
+  },
+  ChatbotDemo: {
+    component: ChatbotDemoContainer,
+    panelId: 'ui-chatbot-demo',
+    category: 'UI/UX Tools',
+    title: 'Chatbot (demo)',
+    description: 'Simulated assistant layout. Replies are random local lines from Sun Tzu and are not connected to bookings or a model.',
+    props: {},
+    dataRequirements: 'No data and no external service. Demonstration of a future chat report.',
+    events: { emits: [], respondsTo: [] },
+    showInReports: true,
+    filePath: 'src/components/focus-panels/ChatbotDemo/index.jsx'
   }
 };
 

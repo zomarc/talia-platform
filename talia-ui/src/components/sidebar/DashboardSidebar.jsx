@@ -24,6 +24,106 @@ const FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderFiltersVisible';
 const TABULATOR_FILTERS_VISIBILITY_STORAGE_KEY = 'taliaHeaderTabulatorFiltersVisible';
 const TABLE_LAYOUT_STORAGE_KEY = 'taliaTableLayoutMode';
 const SIDEBAR_SECTIONS_STORAGE_KEY = 'taliaSidebarExpandedSections';
+const REPORT_USE_COUNTS_KEY = 'taliaReportUseCounts';
+const REPORT_GROUPS_OPEN_KEY = 'taliaReportGroupsOpen';
+const REPORT_MOST_USED_KEY = 'taliaReportMostUsed';
+const REPORT_FLAGS_KEY = 'taliaReportFlags';
+const REPORT_BUCKETS_KEY = 'taliaReportBucketsOpen';
+
+const PROFILE_TOOL_REPORTS = [
+  {
+    key: 'real-profile',
+    panelId: 'booking-profile',
+    label: '① Real profile',
+    title: 'Real booking profile (+ YoY)',
+    params: { reportId: 'booking-profile', includeComparison: false },
+    tip: 'Goal ① REAL: inventory-scoped curves; breakdown by market / group / currency; absolute or load-factor %.',
+  },
+  {
+    key: 'real-yoy',
+    panelId: 'booking-profile',
+    label: '① Real + YoY',
+    title: 'Real booking profile + YoY',
+    params: { reportId: 'booking-profile', includeComparison: true },
+    tip: 'Goal ① with YoY overlay (illustrative — recent years are weak futures proxies). Peer sail auto-resolved when possible.',
+  },
+  {
+    key: 'imported-targets',
+    panelId: 'booking-target-data-simple',
+    label: '② Imported targets',
+    title: 'TARGET only (imported)',
+    params: { reportId: 'booking-target-data-simple' },
+    tip: 'Goal ② TARGET: curve from Data Management import (booking_targets_supplied)',
+  },
+  {
+    key: 'sailing-profile',
+    panelId: 'profile-compare',
+    label: 'Sailing Profile',
+    title: 'Sailing Profile',
+    params: { reportId: 'profile-compare' },
+    tip: 'Sailing Profile: REAL vs model prior (lazy/manual map), optional active target + budget gap',
+  },
+  {
+    key: 'target-profiles',
+    panelId: 'inventory-target-profile-editor',
+    label: 'Target profiles',
+    title: 'Target Profile Editor',
+    params: { reportId: 'inventory-target-profile-editor' },
+    tip: 'Target Profile Editor — define/activate LF goal curves per voyage (Manager+).',
+  },
+  {
+    key: 'profile-aggregations',
+    panelId: 'profile-aggregations',
+    label: 'Profile aggregations',
+    title: 'Profile Aggregations',
+    params: { reportId: 'profile-aggregations' },
+    tip: 'Read-only profile coverage by ship×month or DOW×duration',
+  },
+  {
+    key: 'overlay',
+    panelId: 'booking-combined-data-simple',
+    label: 'Overlay (all streams)',
+    title: 'Overlay: REAL + TARGET + MODEL',
+    params: { reportId: 'booking-combined-data-simple' },
+    tip: 'Overlay REAL, imported TARGET, BUDGET, and inventory MODEL on one chart',
+  },
+  {
+    key: 'model-editor',
+    panelId: 'booking-target-profile-editor-simple',
+    label: '③ Model editor (graph)',
+    title: 'MODEL profile editor (graph)',
+    params: { reportId: 'booking-target-profile-editor-simple' },
+    tip: 'Goal ③ MODEL: drag points / edit table, save consolidated curve on inventory item',
+  },
+];
+
+function readStoredObject(key) {
+  try {
+    const raw = window.localStorage?.getItem?.(key);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function readDockviewOpenCounts() {
+  const panels = window.dockviewApi?.panels;
+  const counts = {};
+  const list = [];
+  if (Array.isArray(panels)) {
+    list.push(...panels);
+  } else if (panels && typeof panels.forEach === 'function') {
+    panels.forEach((panel) => list.push(panel));
+  }
+  list.forEach((panel) => {
+    const id = panel?.api?.component || panel?.component || panel?.params?.component;
+    if (!id) return;
+    counts[id] = (counts[id] || 0) + 1;
+  });
+  return counts;
+}
 const TABLE_LAYOUT_MODES = ['best', 'width', 'data'];
 
 function DashboardSidebar({
@@ -303,6 +403,163 @@ function DashboardSidebar({
     return grouped;
   }, [userRole]);
 
+  const [reportUseCounts, setReportUseCounts] = React.useState(() => readStoredObject(REPORT_USE_COUNTS_KEY));
+  const [reportGroupsOpen, setReportGroupsOpen] = React.useState(() => readStoredObject(REPORT_GROUPS_OPEN_KEY));
+  const [mostUsedFirst, setMostUsedFirst] = React.useState(() => {
+    try {
+      return window.localStorage?.getItem?.(REPORT_MOST_USED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [openNowCounts, setOpenNowCounts] = React.useState({});
+
+  React.useEffect(() => {
+    let disposed = false;
+    const disposers = [];
+    const read = () => {
+      if (!disposed) setOpenNowCounts(readDockviewOpenCounts());
+    };
+    const attach = () => {
+      const api = window.dockviewApi;
+      if (!api || attach.bound) return Boolean(api && attach.bound);
+      attach.bound = true;
+      read();
+      const add = api.onDidAddPanel?.(read);
+      const remove = api.onDidRemovePanel?.(read);
+      if (add) disposers.push(add);
+      if (remove) disposers.push(remove);
+      return true;
+    };
+    if (!attach()) {
+      const timer = window.setInterval(() => {
+        if (attach()) window.clearInterval(timer);
+      }, 1000);
+      disposers.push({ dispose: () => window.clearInterval(timer) });
+    }
+    return () => {
+      disposed = true;
+      disposers.forEach((disposer) => disposer?.dispose?.());
+    };
+  }, []);
+
+  const recordReportUse = (panelId) => {
+    setReportUseCounts((prev) => {
+      const next = { ...prev, [panelId]: (Number(prev[panelId]) || 0) + 1 };
+      try {
+        window.localStorage?.setItem?.(REPORT_USE_COUNTS_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore quota */
+      }
+      return next;
+    });
+  };
+
+  const addReportPanel = (panelId, label, params) => {
+    recordReportUse(panelId);
+    onAddPanel(panelId, label, params);
+  };
+
+  const toggleReportGroup = (groupId) => {
+    setReportGroupsOpen((prev) => {
+      const next = { ...prev, [groupId]: prev[groupId] !== true };
+      try {
+        window.localStorage?.setItem?.(REPORT_GROUPS_OPEN_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore quota */
+      }
+      return next;
+    });
+  };
+
+  const toggleMostUsed = () => {
+    setMostUsedFirst((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage?.setItem?.(REPORT_MOST_USED_KEY, next ? '1' : '0');
+      } catch {
+        /* ignore quota */
+      }
+      return next;
+    });
+  };
+
+  const usageFor = (panelId) => Number(reportUseCounts[panelId]) || 0;
+
+  const sectionBadge = (panelIds, itemCount) => {
+    const unique = [...new Set(panelIds)];
+    const open = unique.reduce((sum, id) => sum + (openNowCounts[id] || 0), 0);
+    const used = unique.reduce((sum, id) => sum + usageFor(id), 0);
+    if (open > 0) return `${open} open`;
+    if (used > 0) return `${used} used`;
+    return String(itemCount);
+  };
+
+  const [reportFlags, setReportFlags] = React.useState(() => readStoredObject(REPORT_FLAGS_KEY));
+  const [reportBucketsOpen, setReportBucketsOpen] = React.useState(() => {
+    const stored = readStoredObject(REPORT_BUCKETS_KEY);
+    return {
+      starred: stored.starred !== false,
+      rest: stored.rest === true,
+      retired: stored.retired === true,
+    };
+  });
+
+  const reportCatalog = React.useMemo(() => {
+    const profile = PROFILE_TOOL_REPORTS.map((item) => ({
+      id: `profile:${item.key}`,
+      panelId: item.panelId,
+      label: item.label,
+      title: item.title,
+      params: item.params,
+      tip: item.tip,
+      category: 'Profile Tools',
+      categoryId: 'profile-tools',
+      legacy: false,
+    }));
+    const fromRegistry = Object.entries(reportGroups).flatMap(([category, reports]) => reports.map((report) => ({
+      id: `report:${report.panelId}`,
+      panelId: report.panelId,
+      label: report.title,
+      title: report.title,
+      params: { reportId: report.panelId },
+      tip: report.legacy ? `${report.description || ''} Legacy component.` : report.description,
+      category,
+      categoryId: category,
+      legacy: report.legacy === true,
+    })));
+    return [...profile, ...fromRegistry];
+  }, [reportGroups]);
+
+  const setReportFlag = (id, patch) => {
+    setReportFlags((prev) => {
+      const next = { ...prev, [id]: { ...(prev[id] || {}), ...patch } };
+      try {
+        window.localStorage?.setItem?.(REPORT_FLAGS_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore quota */
+      }
+      return next;
+    });
+  };
+
+  const reportIsStarred = (id) => reportFlags[id]?.starred === true;
+  const reportIsLegacy = (item) => (
+    typeof reportFlags[item.id]?.legacy === 'boolean' ? reportFlags[item.id].legacy : item.legacy === true
+  );
+
+  const toggleReportBucket = (bucketId) => {
+    setReportBucketsOpen((prev) => {
+      const next = { ...prev, [bucketId]: !prev[bucketId] };
+      try {
+        window.localStorage?.setItem?.(REPORT_BUCKETS_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore quota */
+      }
+      return next;
+    });
+  };
+
   const [expandedSections, setExpandedSections] = React.useState(() => {
     const defaultState = {
       focus: false,
@@ -383,7 +640,7 @@ function DashboardSidebar({
               </div>
             )}
 
-            {!focusLoading && !focusError && (
+            {!focusLoading && (
               <FocusSelector onFocusChange={onFocusChange} currentFocusId={currentFocus} onSaveCurrentLayout={onSaveCurrentLayout} />
             )}
           </div>
@@ -397,92 +654,136 @@ function DashboardSidebar({
             </span>
           </button>
           <div className={`dashboard-section__content ${expandedSections.reports ? 'dashboard-section__content--expanded' : ''}`}>
-            <div className="dashboard-section__group">
-              <div className="dashboard-section__subtitle">Profile Tools</div>
-              <TaliaTooltip content="Goal ① REAL: inventory-scoped curves; breakdown by market / group / currency; absolute or load-factor %." placement="bottom-left" delayMs={180}>
-                <button
-                  className="dashboard-btn"
-                  onClick={() => onAddPanel('booking-profile', 'Real booking profile (+ YoY)', { reportId: 'booking-profile', includeComparison: false })}
-                >
-                  ① Real profile
-                </button>
-              </TaliaTooltip>
-              <TaliaTooltip content="Goal ① with YoY overlay (illustrative — recent years are weak futures proxies). Peer sail auto-resolved when possible." placement="bottom-left" delayMs={180}>
-                <button
-                  className="dashboard-btn"
-                  onClick={() => onAddPanel('booking-profile', 'Real booking profile + YoY', { reportId: 'booking-profile', includeComparison: true })}
-                >
-                  ① Real + YoY
-                </button>
-              </TaliaTooltip>
-              <TaliaTooltip content="Goal ② TARGET: curve from Data Management import (booking_targets_supplied)" placement="bottom-left" delayMs={180}>
-                <button
-                  className="dashboard-btn"
-                  onClick={() => onAddPanel('booking-target-data-simple', 'TARGET only (imported)', { reportId: 'booking-target-data-simple' })}
-                >
-                  ② Imported targets
-                </button>
-              </TaliaTooltip>
-              <TaliaTooltip content="Sailing Profile: REAL vs model prior (lazy/manual map), optional active target + budget gap" placement="bottom-left" delayMs={180}>
-                <button
-                  className="dashboard-btn"
-                  onClick={() => onAddPanel('profile-compare', 'Sailing Profile', { reportId: 'profile-compare' })}
-                >
-                  Sailing Profile
-                </button>
-              </TaliaTooltip>
-              <TaliaTooltip content="Target Profile Editor — define/activate LF goal curves per voyage (Manager+)." placement="bottom-left" delayMs={180}>
-                <button
-                  className="dashboard-btn"
-                  onClick={() => onAddPanel('inventory-target-profile-editor', 'Target Profile Editor', { reportId: 'inventory-target-profile-editor' })}
-                >
-                  Target profiles
-                </button>
-              </TaliaTooltip>
-              <TaliaTooltip content="Read-only profile coverage by ship×month or DOW×duration" placement="bottom-left" delayMs={180}>
-                <button
-                  className="dashboard-btn"
-                  onClick={() => onAddPanel('profile-aggregations', 'Profile Aggregations', { reportId: 'profile-aggregations' })}
-                >
-                  Profile aggregations
-                </button>
-              </TaliaTooltip>
-              <TaliaTooltip content="Overlay REAL, imported TARGET, BUDGET, and inventory MODEL on one chart" placement="bottom-left" delayMs={180}>
-                <button
-                  className="dashboard-btn"
-                  onClick={() => onAddPanel('booking-combined-data-simple', 'Overlay: REAL + TARGET + MODEL', { reportId: 'booking-combined-data-simple' })}
-                >
-                  Overlay (all streams)
-                </button>
-              </TaliaTooltip>
-              <TaliaTooltip content="Goal ③ MODEL: drag points / edit table, save consolidated curve on inventory item" placement="bottom-left" delayMs={180}>
-                <button
-                  className="dashboard-btn"
-                  onClick={() => onAddPanel('booking-target-profile-editor-simple', 'MODEL profile editor (graph)', { reportId: 'booking-target-profile-editor-simple' })}
-                >
-                  ③ Model editor (graph)
-                </button>
-              </TaliaTooltip>
+            <div className="dashboard-report-toolbar">
+              <button
+                type="button"
+                className={`dashboard-report-toolbar__filter ${mostUsedFirst ? 'dashboard-report-toolbar__filter--active' : ''}`}
+                aria-pressed={mostUsedFirst}
+                onClick={toggleMostUsed}
+              >
+                Most used
+              </button>
             </div>
-            {Object.entries(reportGroups).sort(([a], [b]) => a.localeCompare(b)).map(([category, reports]) => (
-              <div key={category} className="dashboard-section__group">
-                <div className="dashboard-section__subtitle">{category}</div>
-                {reports.map((report) => {
-                  const reportLabel = report.legacy ? `${report.title} (Legacy)` : report.title;
-                  const reportDescription = report.legacy ? `${report.description || ''} Legacy component.` : report.description;
-                  return (
-                    <TaliaTooltip key={`report-tip-${report.panelId}`} content={reportDescription} placement="bottom-left" delayMs={180}>
-                      <button
-                        className="dashboard-btn"
-                        onClick={() => onAddPanel(report.panelId, reportLabel, { reportId: report.panelId })}
-                      >
-                        {reportLabel}
-                      </button>
-                    </TaliaTooltip>
-                  );
-                })}
-              </div>
-            ))}
+            {['starred', 'rest', 'retired'].map((bucketId) => {
+              const bucketItems = reportCatalog.filter((item) => {
+                const legacy = reportIsLegacy(item);
+                if (bucketId === 'retired') return legacy;
+                if (legacy) return false;
+                return bucketId === 'starred' ? reportIsStarred(item.id) : !reportIsStarred(item.id);
+              });
+              const open = reportBucketsOpen[bucketId] === true;
+              const grouped = {};
+              bucketItems.forEach((item) => {
+                if (!grouped[item.categoryId]) {
+                  grouped[item.categoryId] = { id: item.categoryId, title: item.category, items: [] };
+                }
+                grouped[item.categoryId].items.push(item);
+              });
+              const groups = Object.values(grouped);
+              groups.forEach((group) => {
+                group.items.sort((a, b) => {
+                  if (mostUsedFirst) {
+                    const used = usageFor(b.panelId) - usageFor(a.panelId);
+                    if (used !== 0) return used;
+                  }
+                  return a.label.localeCompare(b.label);
+                });
+              });
+              groups.sort((a, b) => {
+                if (mostUsedFirst) {
+                  const usedA = [...new Set(a.items.map((item) => item.panelId))].reduce((sum, id) => sum + usageFor(id), 0);
+                  const usedB = [...new Set(b.items.map((item) => item.panelId))].reduce((sum, id) => sum + usageFor(id), 0);
+                  if (usedB !== usedA) return usedB - usedA;
+                } else if (a.id === 'profile-tools') return -1;
+                else if (b.id === 'profile-tools') return 1;
+                return a.title.localeCompare(b.title);
+              });
+              const title = bucketId === 'starred'
+                ? 'Starred (Primary)'
+                : bucketId === 'retired'
+                  ? 'Retired (Legacy)'
+                  : 'The rest (Additional)';
+              return (
+                <div key={bucketId} className="dashboard-report-bucket">
+                  <button
+                    type="button"
+                    className="dashboard-focus-section__title dashboard-focus-section__title--toggle"
+                    aria-expanded={open}
+                    onClick={() => toggleReportBucket(bucketId)}
+                  >
+                    <span>{open ? '▼' : '▶'} {title} ({bucketItems.length})</span>
+                  </button>
+                  {open && bucketItems.length === 0 && bucketId === 'starred' && (
+                    <div className="dashboard-focus-section__empty">Star a report to pin it here.</div>
+                  )}
+                  {open && bucketItems.length === 0 && bucketId === 'retired' && (
+                    <div className="dashboard-focus-section__empty">Mark a report with L to retire it.</div>
+                  )}
+                  {open && groups.map((group) => {
+                    const groupKey = `${bucketId}:${group.id}`;
+                    const groupOpen = reportGroupsOpen[groupKey] === true;
+                    return (
+                      <div key={groupKey} className="dashboard-section__group">
+                        <button
+                          type="button"
+                          className="dashboard-section__subtitle dashboard-section__subtitle--toggle"
+                          aria-expanded={groupOpen}
+                          onClick={() => toggleReportGroup(groupKey)}
+                        >
+                          <span>{groupOpen ? '▼' : '▶'} {group.title}</span>
+                          <span className="dashboard-section__count">
+                            {sectionBadge(group.items.map((item) => item.panelId), group.items.length)}
+                          </span>
+                        </button>
+                        {groupOpen && group.items.map((item) => {
+                          const legacy = reportIsLegacy(item);
+                          const starred = reportIsStarred(item.id);
+                          const used = usageFor(item.panelId);
+                          return (
+                            <TaliaTooltip key={item.id} content={item.tip} placement="bottom-left" delayMs={180}>
+                              <div
+                                className={`dashboard-focus-item ${legacy ? 'dashboard-focus-item--legacy' : ''}`}
+                                onClick={() => addReportPanel(item.panelId, item.title, item.params)}
+                              >
+                                <div className="dashboard-focus-item__header">
+                                  <span className="dashboard-focus-item__name">{item.label}</span>
+                                  <button
+                                    type="button"
+                                    className={`dashboard-focus-item__legacy-btn ${legacy ? 'dashboard-focus-item__legacy-btn--active' : ''}`}
+                                    title={legacy ? 'Clear retired / legacy' : 'Mark as retired / legacy'}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setReportFlag(item.id, { legacy: !legacy });
+                                    }}
+                                  >
+                                    L
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`dashboard-focus-item__favorite-btn ${starred ? 'dashboard-focus-item__favorite-btn--active' : ''}`}
+                                    title={starred ? 'Remove from starred' : 'Star this report'}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setReportFlag(item.id, { starred: !starred });
+                                    }}
+                                  >
+                                    ★
+                                  </button>
+                                </div>
+                                <div className="dashboard-focus-item__meta">
+                                  <span className="dashboard-focus-item__type">{item.category}</span>
+                                  {used > 0 && <span>{used} used</span>}
+                                </div>
+                              </div>
+                            </TaliaTooltip>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -1069,7 +1370,7 @@ function DashboardSidebar({
                 <option value="width">Expand to Fit Width</option>
                 <option value="data">Fit to Data</option>
               </select>
-              <div className="dashboard-form-hint">Uses the same fit control as the top header eye menu.</div>
+              <div className="dashboard-form-hint">Default for new reports. Each report can set its own fit in Views.</div>
             </div>
             <div className="dashboard-form-group">
               <label className="dashboard-form-label">Global Filters</label>

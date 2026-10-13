@@ -22,6 +22,8 @@ import { createTableActions } from './tableActions.js';
 import { formatDayMonYear, formatSailDateRange } from '../../../lib/dateFormat';
 import { isOpenEndedDate } from '../../../lib/integrationDateHealth.js';
 import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
+import { VIEW_DATA_SECTION } from '../../../lib/componentOptionsCatalog';
 import SubpanelExpandButton from '../../shared/SubpanelExpandButton.jsx';
 import { enforceDashboardUiState } from '../../../services/dashboardUiState';
 import {
@@ -166,7 +168,15 @@ export const DataManagementPanelCore = ({
   // Refresh status function
   const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
   const rootRef = useRef(null);
-  const [activeSection, setActiveSection] = useState('table-integration');
+  const { viewsState, setView, reportShellClassName } = useReportShellOptions(
+    panelComponentId,
+    panelInstanceId
+  );
+  const storedSection = viewsState?.section;
+  const activeSection = VIEW_DATA_SECTION.choices.includes(storedSection)
+    ? storedSection
+    : VIEW_DATA_SECTION.default;
+  const selectSection = (section) => setView('section', section);
   const { expandedKey: expandedDataKey, toggleExpandedKey: toggleExpandedDataKey } = useSubpanelExpansion('tables');
   const [opsPanelsOpen, setOpsPanelsOpen] = useState({
     backup: true,
@@ -2018,6 +2028,8 @@ The backup will be saved to: talia-server/backups/`;
           <div className="talia-card__content dm-table-card__body">
             <DataManagementTable
               tableId={`dm-main-table-${sectionKey}`}
+              panelInstanceId={panelInstanceId}
+              panelComponentId={panelComponentId}
               data={sectionDisplayedTables}
               configuredRange={configuredRange}
               selectedTable={sectionSelectedTable}
@@ -2057,7 +2069,7 @@ The backup will be saved to: talia-server/backups/`;
   return (
     <div
       ref={rootRef}
-      className={`talia-report admin-dashboard-panel data-management-root ${embedded ? 'data-management-root--panel' : ''}`.trim()}
+      className={`talia-report admin-dashboard-panel data-management-root ${embedded ? 'data-management-root--panel' : ''} ${reportShellClassName}`.trim()}
       role="region"
       aria-label="Data integration management panel"
     >
@@ -2073,23 +2085,23 @@ The backup will be saved to: talia-server/backups/`;
           </div>
         </header>
 
-        <div className="admin-tabs admin-dashboard-panel__tabs dm-dashboard-tabs">
-          <button className={`admin-tab ${activeSection === 'table-integration' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('table-integration')}>
+        <div className="talia-report__controls admin-tabs admin-dashboard-panel__tabs dm-dashboard-tabs" aria-label="Data management sections">
+          <button className={`admin-tab ${activeSection === 'table-integration' ? 'admin-tab-active' : ''}`} onClick={() => selectSection('table-integration')}>
             Table Integration
           </button>
-          <button className={`admin-tab ${activeSection === 'external-integration' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('external-integration')}>
+          <button className={`admin-tab ${activeSection === 'external-integration' ? 'admin-tab-active' : ''}`} onClick={() => selectSection('external-integration')}>
             External Integration
           </button>
-          <button className={`admin-tab ${activeSection === 'internal-integration' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('internal-integration')}>
+          <button className={`admin-tab ${activeSection === 'internal-integration' ? 'admin-tab-active' : ''}`} onClick={() => selectSection('internal-integration')}>
             Internal Integration
           </button>
-          <button className={`admin-tab ${activeSection === 'backup-status' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('backup-status')}>
+          <button className={`admin-tab ${activeSection === 'backup-status' ? 'admin-tab-active' : ''}`} onClick={() => selectSection('backup-status')}>
             Backup and Status
           </button>
-          <button className={`admin-tab ${activeSection === 'instance-connection' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('instance-connection')}>
+          <button className={`admin-tab ${activeSection === 'instance-connection' ? 'admin-tab-active' : ''}`} onClick={() => selectSection('instance-connection')}>
             Instance &amp; keys
           </button>
-          <button className={`admin-tab ${activeSection === 'operations' ? 'admin-tab-active' : ''}`} onClick={() => setActiveSection('operations')}>
+          <button className={`admin-tab ${activeSection === 'operations' ? 'admin-tab-active' : ''}`} onClick={() => selectSection('operations')}>
             Operations
           </button>
         </div>

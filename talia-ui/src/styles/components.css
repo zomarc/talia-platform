@@ -365,7 +365,8 @@
   display: none !important;
 }
 
-.talia-report.talia-report--column-filters-hidden .tabulator-header .tabulator-col .tabulator-header-filter {
+.talia-report.talia-report--column-filters-hidden .tabulator-header .tabulator-col .tabulator-header-filter,
+.talia-column-filters-hidden .tabulator-header .tabulator-col .tabulator-header-filter {
   display: none !important;
   min-height: 0;
   margin-top: 0;

@@ -30,6 +30,8 @@ const GET_FOCUSES_BY_ROLE_QUERY = gql`
       createdAt
       updatedAt
       isPublic
+      sortOrder
+      isLegacy
     }
   }
 `;
@@ -123,6 +125,18 @@ const UPDATE_FOCUS_MUTATION = gql`
       updatedAt
       isPublic
     }
+  }
+`;
+
+const SET_FOCUS_LEGACY_MUTATION = gql`
+  mutation SetFocusLegacy($id: ID!, $isLegacy: Boolean!) {
+    setFocusLegacy(id: $id, isLegacy: $isLegacy)
+  }
+`;
+
+const REORDER_FOCUSES_MUTATION = gql`
+  mutation ReorderFocuses($updates: [FocusSortUpdate!]!) {
+    reorderFocuses(updates: $updates)
   }
 `;
 
@@ -538,6 +552,26 @@ class GraphQLFocusService {
       console.error('❌ Error deleting focus via GraphQL:', error);
       return false;
     }
+  }
+
+  async reorderFocuses(updates) {
+    const payload = (Array.isArray(updates) ? updates : [])
+      .filter((update) => update?.id && Number.isFinite(Number(update.sortOrder)))
+      .map((update) => ({ id: update.id, sortOrder: Number(update.sortOrder) }));
+    if (payload.length === 0) return true;
+    const { data } = await apolloClient.mutate({
+      mutation: REORDER_FOCUSES_MUTATION,
+      variables: { updates: payload },
+    });
+    return data?.reorderFocuses === true;
+  }
+
+  async setFocusLegacy(focusId, isLegacy) {
+    const { data } = await apolloClient.mutate({
+      mutation: SET_FOCUS_LEGACY_MUTATION,
+      variables: { id: focusId, isLegacy: isLegacy === true },
+    });
+    return data?.setFocusLegacy === true;
   }
 
   // Focus Groups

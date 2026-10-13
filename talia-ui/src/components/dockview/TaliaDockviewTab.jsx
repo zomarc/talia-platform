@@ -684,7 +684,7 @@ const TaliaDockviewTab = ({
                     className="talia-dv-tab__export-menu talia-dv-tab__export-menu--portal talia-dv-tab__options-menu"
                     role="menu"
                     aria-label="Panel options"
-                    style={{ top: optionsMenuPos.top, left: optionsMenuPos.left, minWidth: 180 }}
+                    style={{ top: optionsMenuPos.top, left: optionsMenuPos.left, minWidth: optionViews.some((entry) => entry.type === 'text') ? 240 : 180 }}
                     onMouseEnter={cancelOptionsLeaveClose}
                     onMouseLeave={scheduleOptionsLeaveClose}
                   >
@@ -692,6 +692,31 @@ const TaliaDockviewTab = ({
                       <>
                         <div className="talia-dv-tab__options-heading">Views</div>
                         {optionViews.map((entry) => {
+                          if (entry.type === 'text') {
+                            const textValue = entry.value == null ? '' : String(entry.value);
+                            return (
+                              <label
+                                key={`view-${entry.id}`}
+                                className="talia-dv-tab__export-menu-item talia-dv-tab__export-menu-item--text"
+                              >
+                                <span>{entry.label}</span>
+                                <input
+                                  type="text"
+                                  className="talia-dv-tab__option-text"
+                                  value={textValue}
+                                  placeholder={entry.placeholder || ''}
+                                  maxLength={entry.maxLength || 80}
+                                  aria-label={entry.label}
+                                  onMouseDown={(event) => event.stopPropagation()}
+                                  onClick={(event) => event.stopPropagation()}
+                                  onKeyDown={(event) => {
+                                    if (event.key !== 'Escape') event.stopPropagation();
+                                  }}
+                                  onChange={(event) => setView(entry.id, event.target.value)}
+                                />
+                              </label>
+                            );
+                          }
                           const isChoice = entry.type === 'choice';
                           const checked = isChoice
                             ? true

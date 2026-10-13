@@ -181,12 +181,14 @@ const HeaderCriteriaMenuSelect = ({
   ariaLabel,
   wide = false,
   autoCloseMs = 5000,
+  selectedLabel = '',
 }) => {
   const [open, setOpen] = useState(false);
   const [isFading, setIsFading] = useState(false);
   const [isInteracting, setIsInteracting] = useState(false);
   const rootRef = useRef(null);
-  const selected = options.find((option) => option.key === value) || options[0] || null;
+  const matched = options.find((option) => option.key === value);
+  const selected = matched || (selectedLabel ? { key: value, label: selectedLabel } : null) || options[0] || null;
   const MENU_FADE_MS = 720;
 
   useEffect(() => {
@@ -323,13 +325,20 @@ const StatusBar = ({
   const effectiveUserRole = userRole || authUser?.role || 'USER';
   const canAdminOpsChrome = canConfigureComponentOperations(effectiveUserRole);
 
-  const { focuses: canonicalFocuses, currentFocus: currentFocusObject } = useFocusManagement();
+  const { focuses: canonicalFocuses, currentFocus: currentFocusObject, favoriteFocuses } = useFocusManagement();
   const catalogFocusOptions = useMemo(
     () =>
       Array.isArray(canonicalFocuses)
         ? canonicalFocuses.filter((focus) => focus?.id).map((focus) => ({ id: focus.id, name: focus.name || focus.id }))
         : [],
     [canonicalFocuses]
+  );
+  const quickFocusOptions = useMemo(
+    () =>
+      Array.isArray(favoriteFocuses)
+        ? favoriteFocuses.filter((focus) => focus?.id && focus.isLegacy !== true).map((focus) => ({ id: focus.id, name: focus.name || focus.id }))
+        : [],
+    [favoriteFocuses]
   );
   const currentFocusId = currentFocusObject?.id || '';
 
@@ -1629,16 +1638,17 @@ const StatusBar = ({
                         Next
                       </button>
                     </TaliaTooltip>
-                    {focusOptions.length > 0 && (
+                    {quickFocusOptions.length > 0 && (
                       <div className="status-bar__focus-control">
-                        <TaliaTooltip content="Quick focus selector" placement="bottom-left" delayMs={180}>
+                        <TaliaTooltip content="Quick focus selector — starred focuses" placement="bottom-left" delayMs={180}>
                         <label className="status-bar__header-range">
                           <span className="status-bar__header-range-label">Focus</span>
                           <HeaderCriteriaMenuSelect
                             id="status-bar-quick-focus"
                             wide
-                            options={focusOptions.map((focus) => ({ key: focus.id, label: focus.name || focus.id }))}
+                            options={quickFocusOptions.map((focus) => ({ key: focus.id, label: focus.name || focus.id }))}
                             value={selectedFocusId}
+                            selectedLabel={currentFocusObject?.name || ''}
                             onChange={handleQuickFocusChange}
                             aria-label="Quick focus selector"
                             autoCloseMs={menuDisappearMs}
@@ -2045,7 +2055,7 @@ const StatusBar = ({
                   {detailsVisible ? <span className="status-bar__menu-select-check" aria-hidden="true"><IconCheck /></span> : null}
                 </button>
               </TaliaTooltip>
-              <TaliaTooltip content="Use adaptive best-fit table layout" placement="bottom-left" delayMs={180}>
+              <TaliaTooltip content="Default table fit for new reports. A report can set its own fit in Views." placement="bottom-left" delayMs={180}>
                 <button
                   type="button"
                   role="menuitemradio"
@@ -2057,7 +2067,7 @@ const StatusBar = ({
                   {tableLayoutMode === 'best' ? <span className="status-bar__menu-select-check" aria-hidden="true"><IconCheck /></span> : null}
                 </button>
               </TaliaTooltip>
-              <TaliaTooltip content="Use width-fit table layout" placement="bottom-left" delayMs={180}>
+              <TaliaTooltip content="Default width fit for new reports. A report can set its own fit in Views." placement="bottom-left" delayMs={180}>
                 <button
                   type="button"
                   role="menuitemradio"
@@ -2069,7 +2079,7 @@ const StatusBar = ({
                   {tableLayoutMode === 'width' ? <span className="status-bar__menu-select-check" aria-hidden="true"><IconCheck /></span> : null}
                 </button>
               </TaliaTooltip>
-              <TaliaTooltip content="Use data-fit table layout" placement="bottom-left" delayMs={180}>
+              <TaliaTooltip content="Default data fit for new reports. A report can set its own fit in Views." placement="bottom-left" delayMs={180}>
                 <button
                   type="button"
                   role="menuitemradio"

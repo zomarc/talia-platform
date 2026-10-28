@@ -159,9 +159,43 @@ export function exportPanelDataCsv(payload) {
 /**
  * Print-iframe PDF (browser Save as PDF). No PDF library.
  * Optional `chartImage` (data URL / Chart.js toBase64Image) is rendered above the table.
- * @param {{ title?: string, subtitle?: string, columns?: { field: string, title?: string }[], rows?: object[], chartImage?: string|null }} payload
+ * Optional `html` is a full themed document. Table exports are unchanged when it is absent.
+ * @param {{ title?: string, subtitle?: string, columns?: { field: string, title?: string }[], rows?: object[], chartImage?: string|null, html?: string }} payload
  */
 export function exportPanelDataPdf(payload) {
+  const customHtml = typeof payload?.html === 'string' ? payload.html.trim() : '';
+  if (/<!doctype html|<html[\s>]/i.test(customHtml)) {
+    const exportTitle = buildExportFilename(payload?.title || 'Export', 'pdf').replace(/\.pdf$/i, '');
+    const existing = document.getElementById('talia-panel-data-export-print');
+    if (existing) existing.remove();
+    const iframe = document.createElement('iframe');
+    iframe.id = 'talia-panel-data-export-print';
+    iframe.title = exportTitle;
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
+    document.body.appendChild(iframe);
+    const frameWindow = iframe.contentWindow;
+    const frameDoc = frameWindow?.document;
+    if (!frameWindow || !frameDoc) {
+      iframe.remove();
+      throw new Error('Could not prepare print frame for PDF export');
+    }
+    frameDoc.open();
+    frameDoc.write(customHtml);
+    frameDoc.close();
+    const triggerPrint = () => {
+      try {
+        frameWindow.focus();
+        frameWindow.print();
+      } finally {
+        window.setTimeout(() => { if (iframe.parentNode) iframe.remove(); }, 1000);
+      }
+    };
+    if (frameDoc.readyState === 'complete') window.setTimeout(triggerPrint, 120);
+    else iframe.addEventListener('load', () => window.setTimeout(triggerPrint, 120), { once: true });
+    return;
+  }
+
   const title = String(payload?.title || 'Export');
   const subtitle = payload?.subtitle != null ? String(payload.subtitle) : '';
   const columns = Array.isArray(payload?.columns) ? payload.columns.filter((c) => c?.field) : [];
@@ -343,7 +377,8 @@ export function runPanelDataExport(format, getPayload) {
     : null;
 
   if (format === 'pdf') {
-    if ((!columns.length || !rows.length) && !chartImage) {
+    const hasDocument = typeof payload.html === 'string' && /<!doctype html|<html[\s>]/i.test(payload.html);
+    if ((!columns.length || !rows.length) && !chartImage && !hasDocument) {
       throw new Error('Nothing to export');
     }
     exportPanelDataPdf({ ...payload, columns, rows, chartImage });

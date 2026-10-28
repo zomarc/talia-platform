@@ -49,6 +49,30 @@ const debugLog = (message, data = null) => {
   console.log(`[App Debug] ${message}`, data || '');
 };
 
+const unavailableReportComponents = new Map();
+
+function withUnknownReportFallback(components) {
+  return new Proxy(components, {
+    get(target, prop, receiver) {
+      if (Reflect.has(target, prop)) return Reflect.get(target, prop, receiver);
+      if (typeof prop !== 'string' || prop === 'then') return undefined;
+      let fallback = unavailableReportComponents.get(prop);
+      if (!fallback) {
+        const panelId = prop;
+        fallback = function UnavailableSavedReport() {
+          return (
+            <div className="focus-panel-empty">
+              <p>{panelId} is not in this build. The rest of this focus is still open.</p>
+            </div>
+          );
+        };
+        unavailableReportComponents.set(prop, fallback);
+      }
+      return fallback;
+    },
+  });
+}
+
 const findTopLeftDockviewGroup = (api) => {
   const groups = api?.groups || [];
   if (!groups.length) return null;
@@ -897,6 +921,22 @@ function Dashboard({ user }) {
     });
     return map;
   }, [theme]);
+
+  const dockviewComponents = React.useMemo(
+    () => withUnknownReportFallback({
+      panel: InfoPanel,
+      table: TablePanel,
+      chart: ChartPanel,
+      'graphql-books': (props) => <GraphQLPanel {...props} params={{ ...props.params, dataType: 'books' }} />,
+      'graphql-ships': (props) => <GraphQLPanel {...props} params={{ ...props.params, dataType: 'ships' }} />,
+      'graphql-cabins': (props) => <GraphQLPanel {...props} params={{ ...props.params, dataType: 'cabinAvailability' }} />,
+      ...reportComponentMap,
+      'user-mapping-table': UserMappingTable,
+      'talia-user-table': TaliaUserTable,
+      'context-row-monitor': ContextRowMonitor,
+    }),
+    [reportComponentMap]
+  );
   const reportMetadataByPanelId = React.useMemo(() => {
     const map = new Map();
     Object.values(reportRegistry).forEach((report) => {
@@ -1205,20 +1245,18 @@ function Dashboard({ user }) {
         return focus.id;
         
       } catch (e) {
-        const errorMsg = `Failed to load saved layout for focus "${focus.name}": ${e.message}. The layout data may be corrupted. Please save a new layout.`;
+        const errorMsg = `Failed to load saved layout for focus "${focus.name}": ${e.message}`;
         console.error('❌', errorMsg, e);
-        alert(errorMsg);
+        window.__taliaStatus?.setStatusMessage?.(errorMsg);
         throw new Error(errorMsg);
       }
     } catch (error) {
-      // Re-throw if it's already our formatted error
       if (error.message && (error.message.includes('not found') || error.message.includes('no saved layout') || error.message.includes('Failed to load'))) {
         throw error;
       }
-      // Otherwise wrap in a meaningful error
-      const errorMsg = `Error loading focus layout: ${error.message}. Please try refreshing the page.`;
+      const errorMsg = `Error loading focus layout: ${error.message}`;
       console.error('❌', errorMsg, error);
-      alert(errorMsg);
+      window.__taliaStatus?.setStatusMessage?.(errorMsg);
       throw new Error(errorMsg);
     }
   }, [normalizedUserRole, taliaFocuses, refreshFocuses, reportMetadataByPanelId]);
@@ -1707,19 +1745,7 @@ function Dashboard({ user }) {
         {/* Dockview container with flex: 1 to fill remaining space */}
         <div className="dashboard-content" ref={dockviewHostRef}>
           <DockviewReact 
-            components={{ 
-              panel: InfoPanel, 
-              table: TablePanel, 
-              chart: ChartPanel,
-              "graphql-books": (props) => <GraphQLPanel {...props} params={{...props.params, dataType: "books"}} />,
-              "graphql-ships": (props) => <GraphQLPanel {...props} params={{...props.params, dataType: "ships"}} />,
-              "graphql-cabins": (props) => <GraphQLPanel {...props} params={{...props.params, dataType: "cabinAvailability"}} />,
-              ...reportComponentMap,
-              // Admin components
-              "user-mapping-table": UserMappingTable,
-              "talia-user-table": TaliaUserTable,
-              "context-row-monitor": ContextRowMonitor
-            }} 
+            components={dockviewComponents} 
             defaultTabComponent={defaultTabComponent}
             onReady={onReady}
             className="dashboard-dockview"

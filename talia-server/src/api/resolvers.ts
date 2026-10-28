@@ -24,6 +24,10 @@ import { fetchTableDateFacts as fetchTableDateFactsFromClient } from '../lib/int
 import { uiActivityMutationResolvers, uiActivityQueryResolvers } from './resolver-modules/uiActivityResolvers.js';
 import { engineMutationResolvers, engineQueryResolvers } from './resolver-modules/engineResolvers.js';
 import { requirementMutationResolvers, requirementQueryResolvers } from './resolver-modules/requirementResolvers.js';
+import { functionalityMatrixMutationResolvers, functionalityMatrixQueryResolvers } from './resolver-modules/functionalityMatrixResolvers.js';
+import { projectDocumentMutationResolvers, projectDocumentQueryResolvers } from './resolver-modules/projectDocumentResolvers.js';
+import { projectPlanMutationResolvers, projectPlanQueryResolvers } from './resolver-modules/projectPlanResolvers.js';
+import { riskRegisterMutationResolvers, riskRegisterQueryResolvers } from './resolver-modules/riskRegisterResolvers.js';
 import { portCityQueryResolvers } from './resolver-modules/portCityResolvers.js';
 import { userMutationResolvers, userQueryResolvers } from './resolver-modules/userResolvers.js';
 import { statusQueryResolvers } from './resolver-modules/statusResolvers.js';
@@ -1091,6 +1095,10 @@ export const resolvers = {
     ...uiActivityQueryResolvers,
     ...engineQueryResolvers,
     ...requirementQueryResolvers,
+    ...functionalityMatrixQueryResolvers,
+    ...riskRegisterQueryResolvers,
+    ...projectDocumentQueryResolvers,
+    ...projectPlanQueryResolvers,
     ...portCityQueryResolvers,
 
     // Focus Management
@@ -3608,6 +3616,10 @@ export const resolvers = {
     ...uiActivityMutationResolvers,
     ...engineMutationResolvers,
     ...requirementMutationResolvers,
+    ...functionalityMatrixMutationResolvers,
+    ...riskRegisterMutationResolvers,
+    ...projectDocumentMutationResolvers,
+    ...projectPlanMutationResolvers,
 
     // Focus Preferences
     updateFocusPreference: async (parent: any, args: any, context: any) => {

@@ -1,0 +1,329 @@
+/**
+ * Document repository presenter — tree, rendered Markdown, and the edit form.
+ */
+
+import React, { useMemo } from 'react';
+import RecordLinkEditor from '../../shared/RecordLinkEditor';
+import ReportDataDetails from '../../shared/ReportDataDetails';
+import ReportProvenance from '../../shared/ReportProvenance';
+import { buildDocumentTree } from '../../../lib/projectDocument';
+import { parseMarkdown } from '../../../lib/markdownLite';
+import MermaidDiagram from './MermaidDiagram';
+import './document-repository.css';
+
+const LINK_KINDS = [
+  { id: 'requirement', label: 'Requirement' },
+  { id: 'matrix', label: 'Matrix' },
+  { id: 'risk', label: 'Risk' },
+];
+
+const Field = ({ label, children }) => (
+  <label className="pd-field">
+    <span className="pd-field__label">{label}</span>
+    {children}
+  </label>
+);
+
+const Inline = ({ token, assets }) => {
+  if (token.type === 'strong') return <strong>{token.text}</strong>;
+  if (token.type === 'em') return <em>{token.text}</em>;
+  if (token.type === 'code') return <code>{token.text}</code>;
+  if (token.type === 'link') {
+    return <a href={token.href} target="_blank" rel="noreferrer">{token.text}</a>;
+  }
+  if (token.type === 'image') {
+    const src = token.assetId ? assets[token.assetId.toLowerCase()] || assets[token.assetId] : token.href;
+    if (!src) return <span className="pd-missing-image">{token.alt || 'Image'}</span>;
+    return <img src={src} alt={token.alt || ''} />;
+  }
+  return token.text;
+};
+
+const Inlines = ({ tokens, assets }) => (
+  tokens.map((token, index) => <Inline key={index} token={token} assets={assets} />)
+);
+
+const MarkdownList = ({ block, assets }) => {
+  const Tag = block.type === 'ol' ? 'ol' : 'ul';
+  return (
+    <Tag>
+      {block.items.map((item, index) => (
+        <li key={index}>
+          <Inlines tokens={item.inlines || []} assets={assets} />
+          {item.children ? <MarkdownList block={item.children} assets={assets} /> : null}
+        </li>
+      ))}
+    </Tag>
+  );
+};
+
+const MarkdownBlock = ({ block, assets }) => {
+  if (block.type === 'ul' || block.type === 'ol') return <MarkdownList block={block} assets={assets} />;
+  if (block.type === 'hr') return <hr />;
+  if (block.type === 'code') {
+    if (String(block.lang || '').toLowerCase() === 'mermaid') {
+      return <MermaidDiagram source={block.text} />;
+    }
+    return (
+      <pre className={block.lang ? `lang-${block.lang}` : undefined}>
+        {block.lang ? <span className="pd-code-lang">{block.lang}</span> : null}
+        <code>{block.text}</code>
+      </pre>
+    );
+  }
+  if (block.type === 'table') {
+    return (
+      <div className="pd-table-wrap">
+        <table>
+          {block.header?.length ? (
+            <thead>
+              <tr>
+                {block.header.map((cell, index) => (
+                  <th key={index}><Inlines tokens={cell} assets={assets} /></th>
+                ))}
+              </tr>
+            </thead>
+          ) : null}
+          <tbody>
+            {(block.rows || []).map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {row.map((cell, index) => (
+                  <td key={index}><Inlines tokens={cell} assets={assets} /></td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  if (block.type === 'quote') {
+    return <blockquote><Inlines tokens={block.inlines || []} assets={assets} /></blockquote>;
+  }
+  const Tag = /^h[1-4]$/.test(block.type) ? block.type : 'p';
+  return <Tag><Inlines tokens={block.inlines || []} assets={assets} /></Tag>;
+};
+
+const MarkdownView = ({ source, assets }) => {
+  const blocks = useMemo(() => parseMarkdown(source), [source]);
+  if (!blocks.length) return <p className="pd-reading__empty">This document has no body yet.</p>;
+  return (
+    <div className="pd-markdown">
+      {blocks.map((block, index) => (
+        <MarkdownBlock key={`${block.type}-${index}`} block={block} assets={assets} />
+      ))}
+    </div>
+  );
+};
+
+const DocumentLeaf = ({ document, selectedId, onSelect }) => (
+  <button
+    type="button"
+    className={`pd-tree__doc${document.id === selectedId ? ' is-selected' : ''}`}
+    onClick={() => onSelect(document)}
+  >
+    <strong>{document.referenceCode}</strong>
+    <span>{document.title}</span>
+  </button>
+);
+
+const DocumentTree = ({ documents, selectedId, onSelect }) => {
+  const tree = useMemo(() => buildDocumentTree(documents), [documents]);
+  if (!tree.length) return <p className="pd-tree__empty">No documents yet.</p>;
+  return (
+    <div className="pd-tree" role="tree" aria-label="Documents">
+      {tree.map((group) => (
+        <details key={group.id} open className="pd-tree__group">
+          <summary>{group.label}</summary>
+          {group.folders.map((folder) => (
+            folder.label ? (
+              <details key={folder.id} open className="pd-tree__folder">
+                <summary>{folder.label}</summary>
+                {folder.documents.map((document) => (
+                  <DocumentLeaf
+                    key={`${folder.id}-${document.id}`}
+                    document={document}
+                    selectedId={selectedId}
+                    onSelect={onSelect}
+                  />
+                ))}
+              </details>
+            ) : (
+              folder.documents.map((document) => (
+                <DocumentLeaf
+                  key={document.id}
+                  document={document}
+                  selectedId={selectedId}
+                  onSelect={onSelect}
+                />
+              ))
+            )
+          ))}
+        </details>
+      ))}
+    </div>
+  );
+};
+
+const DocumentRepositoryPresenter = ({
+  panelInstanceId,
+  panelComponentId,
+  reportShellClassName,
+  showFilters,
+  showDetails,
+  showProvenance,
+  items,
+  totalCount,
+  titleFilter,
+  onTitleFilter,
+  catalogs,
+  assets,
+  selectedId,
+  selected,
+  drafting,
+  form,
+  busy,
+  message,
+  onSelect,
+  onNew,
+  onFormChange,
+  onLinksChange,
+  onSave,
+  onDelete,
+  onAddImage,
+  onDeleteAsset,
+  onExportAll,
+  onRefresh,
+}) => (
+  <div
+    className={`focus-panel talia-report document-repository${reportShellClassName ? ` ${reportShellClassName}` : ''}`}
+    role="region"
+    aria-label="Documents"
+    data-panel-instance-id={panelInstanceId || undefined}
+    data-panel-component-id={panelComponentId || undefined}
+  >
+    <header className="talia-report__header">
+      <div className="talia-report__header-left">
+        <h2 className="talia-report__title">Documents</h2>
+        <p className="talia-report__subtitle">
+          Tree of linked documents · Cursor Markdown, including diagrams
+          {totalCount ? ` · ${items.length} of ${totalCount}` : ''}
+        </p>
+      </div>
+    </header>
+
+    <div className={`talia-report-filters${showFilters ? '' : ' talia-report-filters--hidden'}`} aria-label="Document filters">
+      <label>
+        Title
+        <input value={titleFilter} onChange={(event) => onTitleFilter(event.target.value)} placeholder="Search" />
+      </label>
+    </div>
+
+    <div className="talia-report__actions-bar">
+      <button type="button" className="talia-btn talia-btn--primary" onClick={onNew} disabled={busy}>New document</button>
+      <button type="button" className="talia-btn talia-btn--secondary" onClick={onExportAll} disabled={busy || !totalCount}>Export JSON</button>
+      <button type="button" className="talia-btn talia-btn--secondary" onClick={onRefresh} disabled={busy}>Refresh</button>
+    </div>
+
+    {message ? <p className="talia-callout">{message}</p> : null}
+
+    <div className="talia-report__content">
+      <DocumentTree documents={items} selectedId={selectedId} onSelect={onSelect} />
+      {selected && !drafting ? (
+        <article className="pd-reading" aria-label={`${selected.referenceCode} ${selected.title}`}>
+          <header>
+            <strong>{selected.referenceCode}</strong> {selected.title}
+          </header>
+          {(selected.links || []).length ? (
+            <p className="pd-reading__links">
+              {selected.links.map((link) => link.label || link.targetId).join(' · ')}
+            </p>
+          ) : null}
+          <MarkdownView source={selected.body} assets={assets} />
+        </article>
+      ) : (
+        <p className="pd-reading pd-reading--empty">
+          {drafting ? 'The new document is edited in Details.' : 'Select a document to read it.'}
+        </p>
+      )}
+    </div>
+
+    <ReportDataDetails visible={showDetails}>
+      {drafting || selected ? (
+        <form
+          className="talia-card pd-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSave();
+          }}
+        >
+          <div className="pd-form__row">
+            <Field label="Reference">
+              <input value={form.referenceCode} onChange={(event) => onFormChange('referenceCode', event.target.value)} required />
+            </Field>
+            <Field label="Title">
+              <input value={form.title} onChange={(event) => onFormChange('title', event.target.value)} required />
+            </Field>
+          </div>
+          <Field label="Markdown">
+            <textarea rows={8} value={form.body} onChange={(event) => onFormChange('body', event.target.value)} />
+          </Field>
+          <div className="talia-report__actions-bar">
+            <label className="talia-btn talia-btn--secondary">
+              Add image
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                hidden
+                disabled={busy || drafting || !selected}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  if (file) onAddImage(file);
+                }}
+              />
+            </label>
+            {(selected?.assets || []).map((asset) => (
+              <button
+                key={asset.id}
+                type="button"
+                className="talia-btn talia-btn--secondary"
+                onClick={() => onDeleteAsset(asset.id)}
+                disabled={busy}
+              >
+                Remove {asset.filename}
+              </button>
+            ))}
+          </div>
+          <Field label="Links">
+            <RecordLinkEditor
+              kinds={LINK_KINDS}
+              catalogs={catalogs}
+              links={form.links}
+              onChange={onLinksChange}
+            />
+          </Field>
+          <div className="talia-report__actions-bar">
+            <button type="submit" className="talia-btn talia-btn--primary" disabled={busy}>Save</button>
+            {selected && !drafting ? (
+              <button type="button" className="talia-btn talia-btn--secondary" onClick={onDelete} disabled={busy}>Delete</button>
+            ) : null}
+          </div>
+        </form>
+      ) : (
+        <p className="pd-form__empty">Details is where a document is written.</p>
+      )}
+    </ReportDataDetails>
+
+    <ReportProvenance visible={showProvenance}>
+      <p>
+        Documents live in <code>public.project_document</code>. The body is Markdown, including
+        Mermaid diagrams from Cursor.
+        Images are PNG, JPEG, GIF, or WebP, stored with the document and written as
+        <code> ![](asset:…)</code>. A document links to a requirement, a matrix cell, or a risk.
+      </p>
+    </ReportProvenance>
+  </div>
+);
+
+export default DocumentRepositoryPresenter;

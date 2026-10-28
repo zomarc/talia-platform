@@ -89,6 +89,24 @@ export const VIEW_REQUIREMENTS_DISPLAY = {
   default: 'table',
   choiceLabels: { table: 'Table', board: 'Board' },
 };
+/** Functionality Matrix — compact grid vs list. Not a Tabulator, so Fit is excluded. */
+export const VIEW_MATRIX_DISPLAY = {
+  id: 'display',
+  label: 'Display',
+  type: 'choice',
+  choices: ['grid', 'list'],
+  default: 'grid',
+  choiceLabels: { grid: 'Grid', list: 'List' },
+};
+/** Risk register — list of statements vs the likelihood × impact heat map. */
+export const VIEW_RISK_DISPLAY = {
+  id: 'display',
+  label: 'Display',
+  type: 'choice',
+  choices: ['list', 'heat'],
+  default: 'list',
+  choiceLabels: { list: 'List', heat: 'Heat map' },
+};
 export const VIEW_PORT_CITY_DISPLAY = {
   id: 'display',
   label: 'Display',
@@ -385,6 +403,13 @@ const TABLE_FIT_TRIGGER_IDS = new Set([
  * Tabulator reports whose other Views do not already imply Fit
  * (legends / axis labels only). Fit is still per dock instance.
  */
+const TABLE_FIT_EXCLUDED_PANEL_IDS = new Set([
+  'functionality-matrix',
+  'risk-register',
+  'document-repository',
+  'project-plan',
+]);
+
 const TABLE_FIT_PANEL_IDS = new Set([
   'competitor-pricing',
   'demand-heatmap',
@@ -418,6 +443,7 @@ const UNCONFIGURED_REPORT_VIEWS = {
 
 const appendTableFitView = (views, componentId) => {
   const list = Array.isArray(views) ? views : [];
+  if (TABLE_FIT_EXCLUDED_PANEL_IDS.has(String(componentId || ''))) return list;
   if (list.some((view) => view?.id === 'tableFit')) return list;
   const isTable = TABLE_FIT_PANEL_IDS.has(componentId);
   if (!isTable && !list.some((view) => TABLE_FIT_TRIGGER_IDS.has(view?.id))) return list;

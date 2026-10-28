@@ -66,6 +66,10 @@ import ColumnTerminologyPanel from './ColumnTerminology';
 import EtlTableParametersPanel from './EtlTableParameters';
 import PortCityPanel from './PortCity';
 import RequirementsLogPanel from './RequirementsLog';
+import FunctionalityMatrixPanel from './FunctionalityMatrix';
+import RiskRegisterPanel from './RiskRegister';
+import DocumentRepositoryPanel from './DocumentRepository';
+import ProjectPlanPanel from './ProjectPlan';
 import TestWorkbenchPanel from './TestWorkbench';
 import PlaceHolderContainer from './PlaceHolder';
 import ChatbotDemoContainer from './ChatbotDemo';
@@ -87,6 +91,8 @@ import {
   VIEW_CHECKLIST_DISPLAY,
   VIEW_PORT_CITY_DISPLAY,
   VIEW_REQUIREMENTS_DISPLAY,
+  VIEW_MATRIX_DISPLAY,
+  VIEW_RISK_DISPLAY,
   VIEW_GRAPH,
   VIEW_SNAPSHOT,
   VIEW_TOOLTIP,
@@ -306,12 +312,17 @@ export const componentRegistry = {
     panelId: 'project-summary',
     category: 'Reports',
     title: 'Project Summary',
-    description: 'Latest executive overview (architecture, achievements, next steps) stored in the database and rendered in-app',
+    description: 'Executive summary, architecture, project plan, and risk graphic',
     props: {},
-    dataRequirements: 'Requires project_summary table; published via scripts/generate-executive-overview-pdf.sh (validate option 14)',
+    dataRequirements: 'Published project_summary, plus the project plan and open risks for administrators.',
     events: { emits: [], respondsTo: [] },
     supportsRefresh: true,
     showInReports: true,
+    supportsDataExport: true,
+    options: {
+      views: [VIEW_PROVENANCE],
+      operations: [],
+    },
     filePath: 'src/components/focus-panels/ProjectSummary/index.jsx'
   },
   ComponentInteractionMap: {
@@ -1282,6 +1293,7 @@ export const componentRegistry = {
     events: { emits: [], respondsTo: [] },
     allowedRoles: ['ADMIN', 'SUPER_USER'],
     showInReports: true,
+    supportsDataExport: true,
     options: {
       views: [
         VIEW_DENSITY,
@@ -1294,6 +1306,95 @@ export const componentRegistry = {
       operations: [],
     },
     filePath: 'src/components/focus-panels/RequirementsLog/index.jsx'
+  },
+  FunctionalityMatrixPanel: {
+    component: FunctionalityMatrixPanel,
+    panelId: 'functionality-matrix',
+    category: 'Requirements',
+    title: 'Functionality Matrix',
+    description: 'Grid or list of requirements by element, with a specification for each cell',
+    props: {},
+    dataRequirements: 'Requires functionality_matrix_item via GraphQL. Assigns talia_requirement_item rows by link. ADMIN/SUPER_USER only',
+    events: { emits: [], respondsTo: [] },
+    allowedRoles: ['ADMIN', 'SUPER_USER'],
+    showInReports: true,
+    supportsDataExport: true,
+    options: {
+      views: [
+        VIEW_MATRIX_DISPLAY,
+        VIEW_AXIS_LABELS,
+        VIEW_FILTERS,
+        { ...VIEW_DETAILS, default: true },
+        VIEW_PROVENANCE,
+      ],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/FunctionalityMatrix/index.jsx'
+  },
+  RiskRegisterPanel: {
+    component: RiskRegisterPanel,
+    panelId: 'risk-register',
+    category: 'Admin',
+    title: 'Risk Register',
+    description: 'Project risks with likelihood, impact, response, and links to requirements and the matrix',
+    props: {},
+    dataRequirements: 'Requires risk_register_item via GraphQL. Links requirements and matrix cells. ADMIN/SUPER_USER only',
+    events: { emits: [], respondsTo: [] },
+    allowedRoles: ['ADMIN', 'SUPER_USER'],
+    showInReports: true,
+    supportsDataExport: true,
+    options: {
+      views: [
+        VIEW_RISK_DISPLAY,
+        VIEW_AXIS_LABELS,
+        VIEW_FILTERS,
+        { ...VIEW_DETAILS, default: true },
+        VIEW_PROVENANCE,
+      ],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/RiskRegister/index.jsx'
+  },
+  DocumentRepositoryPanel: {
+    component: DocumentRepositoryPanel,
+    panelId: 'document-repository',
+    category: 'Admin',
+    title: 'Documents',
+    description: 'Markdown notes and images linked to requirements, matrix cells, and risks',
+    props: {},
+    dataRequirements: 'Requires project_document via GraphQL. ADMIN/SUPER_USER only',
+    events: { emits: [], respondsTo: [] },
+    allowedRoles: ['ADMIN', 'SUPER_USER'],
+    showInReports: true,
+    options: {
+      views: [
+        VIEW_FILTERS,
+        { ...VIEW_DETAILS, default: true },
+        VIEW_PROVENANCE,
+      ],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/DocumentRepository/index.jsx'
+  },
+  ProjectPlanPanel: {
+    component: ProjectPlanPanel,
+    panelId: 'project-plan',
+    category: 'Admin',
+    title: 'Project Plan',
+    description: 'Phase timeline with milestone target dates and the requirements, matrix cells, risks, and documents linked to each phase',
+    props: {},
+    dataRequirements: 'Requires project_phase and project_milestone via GraphQL. ADMIN/SUPER_USER only',
+    events: { emits: [], respondsTo: [] },
+    allowedRoles: ['ADMIN', 'SUPER_USER'],
+    showInReports: true,
+    options: {
+      views: [
+        { ...VIEW_DETAILS, default: true },
+        VIEW_PROVENANCE,
+      ],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/ProjectPlan/index.jsx'
   },
   TestWorkbenchPanel: {
     component: TestWorkbenchPanel,

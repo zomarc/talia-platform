@@ -1,0 +1,15 @@
+.linked-documents {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.linked-documents__label {
+  display: inline-block;
+  min-width: 72px;
+  margin-right: 8px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}

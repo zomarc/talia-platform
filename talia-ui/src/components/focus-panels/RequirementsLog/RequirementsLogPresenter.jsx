@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import LinkedDocuments from '../../shared/LinkedDocuments';
 import { afterTabulatorDataRefresh } from '../../../hooks/useTabulatorLayoutSync';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import {
@@ -16,6 +17,7 @@ import {
   VIEW_PROVENANCE,
   VIEW_REQUIREMENTS_DISPLAY,
 } from '../../../lib/componentOptionsCatalog';
+import { payloadFromRows, registerPanelDataExport } from '../../../lib/panelDataExport';
 import {
   bindTabulatorRowSelectionHandlers,
   COMMON_COLUMN_TYPES,
@@ -473,6 +475,7 @@ const RequirementsLogPresenter = ({
             : [{ column: 'updatedAt', dir: 'desc' }],
           panelComponentId: panelComponentId || 'requirements-log',
           panelInstanceId: panelInstanceId || null,
+          exportTitle: 'Requirements Log',
         }));
 
         instanceRef.current.on('tableBuilt', () => {
@@ -513,6 +516,41 @@ const RequirementsLogPresenter = ({
       }
     };
   }, [columns, isCompact, panelComponentId, panelInstanceId, showTable]);
+
+  useEffect(() => {
+    if (showTable) return undefined;
+    return registerPanelDataExport({
+      panelInstanceId,
+      panelComponentId: panelComponentId || 'requirements-log',
+      getPayload: () => payloadFromRows(
+        'Requirements Log',
+        [
+          { field: 'section', title: 'Section' },
+          { field: 'priority', title: 'Priority' },
+          { field: 'status', title: 'Status' },
+          { field: 'title', title: 'Title' },
+          { field: 'detail', title: 'Detail' },
+          { field: 'targetVersion', title: 'Milestone' },
+          { field: 'taliaVersion', title: 'Talia version' },
+          { field: 'area', title: 'Area' },
+          { field: 'owner', title: 'Owner' },
+          { field: 'source', title: 'Source' },
+        ],
+        (dataRef.current || []).map((item) => ({
+          section: SECTION_LABELS[item.section] || item.section || '',
+          priority: item.priority || '',
+          status: STATUS_LABELS[item.status] || item.status || '',
+          title: item.title || '',
+          detail: item.detail || '',
+          targetVersion: item.targetVersion || '',
+          taliaVersion: item.taliaVersion || '',
+          area: AREA_LABELS[item.area] || item.area || '',
+          owner: item.owner || '',
+          source: SOURCE_LABELS[item.source] || item.source || '',
+        })),
+      ),
+    });
+  }, [panelComponentId, panelInstanceId, showTable]);
 
   useEffect(() => {
     if (!showTable) return;
@@ -962,6 +1000,7 @@ const RequirementsLogPresenter = ({
               </div>
               <h3 className="requirements-log__view-title">{selected.title}</h3>
               {selected.detail ? <p className="requirements-log__detail">{selected.detail}</p> : null}
+              <LinkedDocuments targetKind="requirement" targetId={selected.id} />
               <p className="requirements-log__meta">
                 {[
                   selected.area,

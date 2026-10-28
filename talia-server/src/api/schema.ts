@@ -1722,6 +1722,183 @@ export const typeDefs = `#graphql
     sourceRef: String
   }
 
+  type FunctionalityMatrixNote {
+    id: ID!
+    body: String!
+    createdAt: String!
+    createdBy: String
+  }
+
+  type FunctionalityMatrixLink {
+    requirementItemId: ID!
+    title: String
+    section: String
+    status: String
+  }
+
+  type FunctionalityMatrixItem {
+    id: ID!
+    referenceCode: String!
+    element: String!
+    functionName: String!
+    shortName: String!
+    name: String!
+    concept: String
+    rationale: String
+    technicalRequirement: String
+    complexity: String!
+    size: String!
+    phase: String!
+    sortOrder: Int!
+    notes: [FunctionalityMatrixNote!]!
+    links: [FunctionalityMatrixLink!]!
+    createdAt: String!
+    updatedAt: String!
+    createdBy: String
+  }
+
+  input FunctionalityMatrixItemInput {
+    id: ID
+    referenceCode: String
+    element: String!
+    functionName: String!
+    shortName: String!
+    name: String!
+    concept: String
+    rationale: String
+    technicalRequirement: String
+    complexity: String
+    size: String
+    phase: String
+    sortOrder: Int
+  }
+
+  type ProjectRecordLink {
+    targetKind: String!
+    targetId: ID!
+    label: String
+  }
+
+  input ProjectRecordLinkInput {
+    targetKind: String!
+    targetId: ID!
+  }
+
+  type RiskRegisterItem {
+    id: ID!
+    referenceCode: String!
+    title: String!
+    statement: String
+    category: String!
+    likelihood: Int!
+    impact: Int!
+    residualLikelihood: Int
+    residualImpact: Int
+    proximity: String!
+    status: String!
+    response: String!
+    treatment: String
+    owner: String
+    reviewOn: String
+    sortOrder: Int!
+    links: [ProjectRecordLink!]!
+    createdAt: String!
+    updatedAt: String!
+    createdBy: String
+  }
+
+  input RiskRegisterItemInput {
+    id: ID
+    referenceCode: String
+    title: String!
+    statement: String
+    category: String
+    likelihood: Int
+    impact: Int
+    residualLikelihood: Int
+    residualImpact: Int
+    proximity: String
+    status: String
+    response: String
+    treatment: String
+    owner: String
+    reviewOn: String
+    sortOrder: Int
+    links: [ProjectRecordLinkInput!]
+  }
+
+  type ProjectDocumentAsset {
+    id: ID!
+    documentId: ID!
+    filename: String!
+    mimeType: String!
+    byteSize: Int!
+    contentBase64: String
+  }
+
+  type ProjectDocumentAssetUpload {
+    id: ID!
+    documentId: ID!
+    filename: String!
+    mimeType: String!
+    byteSize: Int!
+    markdown: String!
+  }
+
+  type ProjectDocument {
+    id: ID!
+    referenceCode: String!
+    title: String!
+    body: String!
+    links: [ProjectRecordLink!]!
+    assets: [ProjectDocumentAsset!]!
+    createdAt: String!
+    updatedAt: String!
+    createdBy: String
+  }
+
+  input ProjectDocumentInput {
+    id: ID
+    referenceCode: String
+    title: String!
+    body: String
+    links: [ProjectRecordLinkInput!]
+  }
+
+  type ProjectPhase {
+    code: String!
+    label: String!
+    targetOn: String
+    sortOrder: Int!
+  }
+
+  type ProjectMilestone {
+    id: ID!
+    name: String!
+    phaseCode: String
+    targetOn: String
+    sortOrder: Int!
+  }
+
+  type ProjectPlanCalendar {
+    phases: [ProjectPhase!]!
+    milestones: [ProjectMilestone!]!
+  }
+
+  input ProjectMilestoneInput {
+    id: ID
+    name: String!
+    phaseCode: String
+    targetOn: String
+    sortOrder: Int
+  }
+
+  input ProjectPlanSaveInput {
+    phaseCode: String!
+    targetOn: String
+    milestones: [ProjectMilestoneInput!]!
+  }
+
   input RunRmAgentsInput {
     sailCodes: [String!]
     agentIds: [String!]
@@ -1889,6 +2066,14 @@ export const typeDefs = `#graphql
     # Requirements Log (ADMIN+)
     requirementItems(filters: RequirementItemFilters): [RequirementItem!]!
 
+    # Functionality Matrix (ADMIN+) — distinct from the Requirements Log
+    functionalityMatrixItems: [FunctionalityMatrixItem!]!
+    riskRegisterItems: [RiskRegisterItem!]!
+    projectDocuments: [ProjectDocument!]!
+    projectDocumentsFor(targetKind: String!, targetId: ID!): [ProjectDocument!]!
+    projectDocumentAssets(ids: [ID!]!): [ProjectDocumentAsset!]!
+    projectPlanCalendar: ProjectPlanCalendar!
+
     # Port / city locations (dwh.Dim_Port_City) with nearest-port labels
     portCityPage(filters: PortCityFilters): PortCityPage!
 
@@ -1988,6 +2173,27 @@ export const typeDefs = `#graphql
     upsertRequirementItems(inputs: [RequirementItemInput!]!): [RequirementItem!]!
     deleteRequirementItem(id: ID!): Boolean!
     setRequirementItemStatus(id: ID!, status: String!): RequirementItem!
+
+    # Functionality Matrix (ADMIN+)
+    upsertFunctionalityMatrixItem(input: FunctionalityMatrixItemInput!): FunctionalityMatrixItem!
+    deleteFunctionalityMatrixItem(id: ID!): Boolean!
+    addFunctionalityMatrixNote(matrixItemId: ID!, body: String!): FunctionalityMatrixNote!
+    deleteFunctionalityMatrixNote(id: ID!): Boolean!
+    setFunctionalityMatrixLinks(matrixItemId: ID!, requirementItemIds: [ID!]!): FunctionalityMatrixItem!
+
+    # Risk register (ADMIN+)
+    upsertRiskRegisterItem(input: RiskRegisterItemInput!): RiskRegisterItem!
+    deleteRiskRegisterItem(id: ID!): Boolean!
+    setRiskRegisterLinks(riskId: ID!, links: [ProjectRecordLinkInput!]!): RiskRegisterItem!
+
+    # Project documents (ADMIN+)
+    upsertProjectDocument(input: ProjectDocumentInput!): ProjectDocument!
+    deleteProjectDocument(id: ID!): Boolean!
+    addProjectDocumentAsset(documentId: ID!, filename: String, mimeType: String!, contentBase64: String!): ProjectDocumentAssetUpload!
+    deleteProjectDocumentAsset(id: ID!): Boolean!
+
+    # Project plan (ADMIN+)
+    saveProjectPlan(input: ProjectPlanSaveInput!): ProjectPlanCalendar!
 
     # Server Management
     restartServer: Boolean!

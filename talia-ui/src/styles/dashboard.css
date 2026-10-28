@@ -605,7 +605,7 @@
   position: fixed;
   right: auto;
   z-index: 100000;
-  min-width: 88px;
+  min-width: 168px;
   padding: 4px;
   border-radius: 6px;
   border: 1px solid var(--theme-border);

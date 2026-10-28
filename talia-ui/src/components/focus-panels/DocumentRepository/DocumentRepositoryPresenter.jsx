@@ -2,11 +2,15 @@
  * Document repository presenter — tree, rendered Markdown, and the edit form.
  */
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
 import RecordLinkEditor from '../../shared/RecordLinkEditor';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import ReportProvenance from '../../shared/ReportProvenance';
+import SubpanelExpandButton from '../../shared/SubpanelExpandButton';
+import { registerPanelDataExport } from '../../../lib/panelDataExport';
 import { buildDocumentTree } from '../../../lib/projectDocument';
+import { projectDocumentExportPayload } from '../../../lib/projectDocumentPrint';
 import { parseMarkdown } from '../../../lib/markdownLite';
 import MermaidDiagram from './MermaidDiagram';
 import './document-repository.css';
@@ -17,11 +21,29 @@ const LINK_KINDS = [
   { id: 'risk', label: 'Risk' },
 ];
 
-const Field = ({ label, children }) => (
-  <label className="pd-field">
-    <span className="pd-field__label">{label}</span>
+const Field = ({ label, children, className = '' }) => (
+  <label className={`pd-field${className ? ` ${className}` : ''}`}>
+    <span className="talia-report-filters__label">{label}</span>
     {children}
   </label>
+);
+
+const Pane = ({ paneKey, title, expandedKey, onToggle, className = '', children }) => (
+  <section
+    className={`pd-pane talia-card talia-card--expandable${expandedKey === paneKey ? ' talia-card--expanded' : ''}${className ? ` ${className}` : ''}`}
+    aria-label={title}
+  >
+    <SubpanelExpandButton
+      className="talia-card__expand-toggle"
+      expanded={expandedKey === paneKey}
+      onToggle={() => onToggle(paneKey)}
+      label={title}
+    />
+    <header className="pd-pane__header">
+      <h3 className="pd-pane__title">{title}</h3>
+    </header>
+    {children}
+  </section>
 );
 
 const Inline = ({ token, assets }) => {
@@ -194,7 +216,31 @@ const DocumentRepositoryPresenter = ({
   onDeleteAsset,
   onExportAll,
   onRefresh,
-}) => (
+}) => {
+  const { expandedKey, toggleExpandedKey } = useSubpanelExpansion(null);
+  const activeKey = expandedKey === 'editor' && !showDetails ? null : expandedKey;
+  const showPane = (key) => !activeKey || activeKey === key;
+  const exportRef = useRef({});
+  exportRef.current = { items, selected, drafting, assets };
+  useEffect(() => registerPanelDataExport({
+    panelInstanceId,
+    panelComponentId: panelComponentId || 'document-repository',
+    getPayload: () => {
+      const current = exportRef.current;
+      const open = current.selected && !current.drafting ? current.selected : null;
+      const diagrams = open && typeof document !== 'undefined'
+        ? [...document.querySelectorAll('.document-repository .pd-reading .pd-mermaid svg')].map((node) => node.outerHTML)
+        : [];
+      return projectDocumentExportPayload({
+        documents: current.items,
+        selected: open,
+        assets: current.assets,
+        diagrams,
+      });
+    },
+  }));
+
+  return (
   <div
     className={`focus-panel talia-report document-repository${reportShellClassName ? ` ${reportShellClassName}` : ''}`}
     role="region"
@@ -213,9 +259,14 @@ const DocumentRepositoryPresenter = ({
     </header>
 
     <div className={`talia-report-filters${showFilters ? '' : ' talia-report-filters--hidden'}`} aria-label="Document filters">
-      <label>
-        Title
-        <input value={titleFilter} onChange={(event) => onTitleFilter(event.target.value)} placeholder="Search" />
+      <label className="talia-report-filters__group">
+        <span className="talia-report-filters__label">Title</span>
+        <input
+          className="talia-report-filters__input"
+          value={titleFilter}
+          onChange={(event) => onTitleFilter(event.target.value)}
+          placeholder="Search"
+        />
       </label>
     </div>
 
@@ -227,93 +278,134 @@ const DocumentRepositoryPresenter = ({
 
     {message ? <p className="talia-callout">{message}</p> : null}
 
-    <div className="talia-report__content">
-      <DocumentTree documents={items} selectedId={selectedId} onSelect={onSelect} />
-      {selected && !drafting ? (
-        <article className="pd-reading" aria-label={`${selected.referenceCode} ${selected.title}`}>
-          <header>
-            <strong>{selected.referenceCode}</strong> {selected.title}
-          </header>
-          {(selected.links || []).length ? (
-            <p className="pd-reading__links">
-              {selected.links.map((link) => link.label || link.targetId).join(' · ')}
-            </p>
+    <div className={`pd-stage${activeKey ? ' pd-stage--focused' : ''}`}>
+      {showPane('index') || showPane('reading') ? (
+        <div className="talia-report__content pd-primary">
+          {showPane('index') ? (
+            <Pane paneKey="index" title="Index" expandedKey={activeKey} onToggle={toggleExpandedKey} className="pd-pane--index">
+              <div className="pd-pane__body">
+                <DocumentTree documents={items} selectedId={selectedId} onSelect={onSelect} />
+              </div>
+            </Pane>
           ) : null}
-          <MarkdownView source={selected.body} assets={assets} />
-        </article>
-      ) : (
-        <p className="pd-reading pd-reading--empty">
-          {drafting ? 'The new document is edited in Details.' : 'Select a document to read it.'}
-        </p>
-      )}
-    </div>
+          {showPane('reading') ? (
+            <Pane paneKey="reading" title="Document" expandedKey={activeKey} onToggle={toggleExpandedKey} className="pd-pane--reading">
+              {selected && !drafting ? (
+                <article className="pd-pane__body pd-reading" aria-label={`${selected.referenceCode} ${selected.title}`}>
+                  <header className="pd-reading__title">
+                    <strong>{selected.referenceCode}</strong> {selected.title}
+                  </header>
+                  {(selected.links || []).length ? (
+                    <p className="pd-reading__links">
+                      {selected.links.map((link) => link.label || link.targetId).join(' · ')}
+                    </p>
+                  ) : null}
+                  <MarkdownView source={selected.body} assets={assets} />
+                </article>
+              ) : (
+                <p className="pd-pane__body pd-reading pd-reading--empty">
+                  {drafting ? 'The new document is edited in the editor.' : 'Select a document to read it.'}
+                </p>
+              )}
+            </Pane>
+          ) : null}
+        </div>
+      ) : null}
 
-    <ReportDataDetails visible={showDetails}>
-      {drafting || selected ? (
-        <form
-          className="talia-card pd-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onSave();
-          }}
+      {showDetails && showPane('editor') ? (
+        <ReportDataDetails
+          visible
+          className={`pd-pane pd-pane--editor talia-card talia-card--expandable${activeKey === 'editor' ? ' talia-card--expanded' : ''}`}
+          aria-label="Editor"
         >
-          <div className="pd-form__row">
-            <Field label="Reference">
-              <input value={form.referenceCode} onChange={(event) => onFormChange('referenceCode', event.target.value)} required />
-            </Field>
-            <Field label="Title">
-              <input value={form.title} onChange={(event) => onFormChange('title', event.target.value)} required />
-            </Field>
-          </div>
-          <Field label="Markdown">
-            <textarea rows={8} value={form.body} onChange={(event) => onFormChange('body', event.target.value)} />
-          </Field>
-          <div className="talia-report__actions-bar">
-            <label className="talia-btn talia-btn--secondary">
-              Add image
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/gif,image/webp"
-                hidden
-                disabled={busy || drafting || !selected}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = '';
-                  if (file) onAddImage(file);
-                }}
-              />
-            </label>
-            {(selected?.assets || []).map((asset) => (
-              <button
-                key={asset.id}
-                type="button"
-                className="talia-btn talia-btn--secondary"
-                onClick={() => onDeleteAsset(asset.id)}
-                disabled={busy}
-              >
-                Remove {asset.filename}
-              </button>
-            ))}
-          </div>
-          <Field label="Links">
-            <RecordLinkEditor
-              kinds={LINK_KINDS}
-              catalogs={catalogs}
-              links={form.links}
-              onChange={onLinksChange}
-            />
-          </Field>
-          <div className="talia-report__actions-bar">
-            <button type="submit" className="talia-btn talia-btn--primary" disabled={busy}>Save</button>
-            {selected && !drafting ? (
-              <button type="button" className="talia-btn talia-btn--secondary" onClick={onDelete} disabled={busy}>Delete</button>
-            ) : null}
-          </div>
-        </form>
-      ) : (
-        <p className="pd-form__empty">Details is where a document is written.</p>
-      )}
-    </ReportDataDetails>
+          <SubpanelExpandButton
+            className="talia-card__expand-toggle"
+            expanded={activeKey === 'editor'}
+            onToggle={() => toggleExpandedKey('editor')}
+            label="editor"
+          />
+          <header className="pd-pane__header">
+            <h3 className="pd-pane__title">Editor</h3>
+          </header>
+          {drafting || selected ? (
+            <form
+              className="pd-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onSave();
+              }}
+            >
+              <Field label="Reference">
+                <input
+                  className="talia-report-filters__input"
+                  value={form.referenceCode}
+                  onChange={(event) => onFormChange('referenceCode', event.target.value)}
+                  required
+                />
+              </Field>
+              <Field label="Title">
+                <input
+                  className="talia-report-filters__input"
+                  value={form.title}
+                  onChange={(event) => onFormChange('title', event.target.value)}
+                  required
+                />
+              </Field>
+              <Field label="Markdown" className="pd-field--body">
+                <textarea
+                  className="talia-report-filters__input"
+                  value={form.body}
+                  onChange={(event) => onFormChange('body', event.target.value)}
+                />
+              </Field>
+              <div className="pd-form__actions">
+                <label className="talia-btn talia-btn--secondary">
+                  Add image
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp"
+                    hidden
+                    disabled={busy || drafting || !selected}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = '';
+                      if (file) onAddImage(file);
+                    }}
+                  />
+                </label>
+                {(selected?.assets || []).map((asset) => (
+                  <button
+                    key={asset.id}
+                    type="button"
+                    className="talia-btn talia-btn--secondary"
+                    onClick={() => onDeleteAsset(asset.id)}
+                    disabled={busy}
+                  >
+                    Remove {asset.filename}
+                  </button>
+                ))}
+              </div>
+              <Field label="Links" className="pd-field--links">
+                <RecordLinkEditor
+                  kinds={LINK_KINDS}
+                  catalogs={catalogs}
+                  links={form.links}
+                  onChange={onLinksChange}
+                />
+              </Field>
+              <div className="pd-form__actions">
+                <button type="submit" className="talia-btn talia-btn--primary" disabled={busy}>Save</button>
+                {selected && !drafting ? (
+                  <button type="button" className="talia-btn talia-btn--secondary" onClick={onDelete} disabled={busy}>Delete</button>
+                ) : null}
+              </div>
+            </form>
+          ) : (
+            <p className="pd-pane__body pd-form__empty">Select a document, or start a new one.</p>
+          )}
+        </ReportDataDetails>
+      ) : null}
+    </div>
 
     <ReportProvenance visible={showProvenance}>
       <p>
@@ -324,6 +416,7 @@ const DocumentRepositoryPresenter = ({
       </p>
     </ReportProvenance>
   </div>
-);
+  );
+};
 
 export default DocumentRepositoryPresenter;

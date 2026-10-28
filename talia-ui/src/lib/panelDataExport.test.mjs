@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   rowsToCsv,
+  rowsToMarkdown,
   escapeCsvCell,
   buildExportFilename,
   shortDateStamp,
@@ -16,6 +17,13 @@ const csv = rowsToCsv(
   [{ id: 1, name: 'Alpha' }, { id: 2, name: 'Be,ta' }]
 );
 assert.equal(csv, 'ID,Name\n1,Alpha\n2,"Be,ta"');
+
+const markdown = rowsToMarkdown(
+  [{ field: 'id', title: 'ID' }, { field: 'name', title: 'Name' }],
+  [{ id: 1, name: 'A|B' }, { id: 2, name: 'line\nbreak' }]
+);
+assert.equal(markdown, '| ID | Name |\n| --- | --- |\n| 1 | A\\|B |\n| 2 | line<br>break |\n');
+assert.match(buildExportFilename('Documents', 'md'), /^Documents-\d{4}-\d{2}-\d{2}_\d{6}_\d{3}\.md$/);
 
 const fixed = new Date(2026, 7, 13, 16, 1, 45, 123); // local Aug 13 2026
 assert.equal(shortDateStamp(fixed), '2026-08-13_160145_123');

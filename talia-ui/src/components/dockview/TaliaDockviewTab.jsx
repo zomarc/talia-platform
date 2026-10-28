@@ -579,7 +579,7 @@ const TaliaDockviewTab = ({
       if (rect) {
         setExportMenuPos({
           top: Math.round(rect.bottom + 4),
-          left: Math.round(Math.max(8, rect.right - 88)),
+          left: Math.round(Math.max(8, rect.right - 176)),
         });
       }
       return true;
@@ -622,7 +622,7 @@ const TaliaDockviewTab = ({
       runPanelDataExport(format, registered.getPayload);
       try {
           window.__taliaStatus?.setStatusMessage?.(
-          format === 'pdf' ? 'Opening print dialog…' : 'Exported to CSV'
+          format === 'pdf' ? 'Opening print dialog…' : format === 'md' ? 'Exported to Markdown' : 'Exported to CSV'
         );
       } catch { /* noop */ }
     } catch (err) {
@@ -808,8 +808,8 @@ const TaliaDockviewTab = ({
                   ref={exportButtonRef}
                   type="button"
                   className="talia-dv-tab__button talia-dv-tab__button--export"
-                  title="Export to CSV or PDF"
-                  aria-label="Export to CSV or PDF"
+                  title="Export to CSV, Markdown, or PDF"
+                  aria-label="Export to CSV, Markdown, or PDF"
                   aria-expanded={showExportMenu}
                   aria-haspopup="menu"
                   onClick={handleToggleExportMenu}
@@ -831,6 +831,14 @@ const TaliaDockviewTab = ({
                       onClick={handleExportFormat('csv')}
                     >
                       Export to CSV
+                    </button>
+                    <button
+                      type="button"
+                      className="talia-dv-tab__export-menu-item"
+                      role="menuitem"
+                      onClick={handleExportFormat('md')}
+                    >
+                      Export to Markdown
                     </button>
                     <button
                       type="button"

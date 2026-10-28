@@ -1366,6 +1366,7 @@ export const componentRegistry = {
     events: { emits: [], respondsTo: [] },
     allowedRoles: ['ADMIN', 'SUPER_USER'],
     showInReports: true,
+    supportsDataExport: true,
     options: {
       views: [
         VIEW_FILTERS,

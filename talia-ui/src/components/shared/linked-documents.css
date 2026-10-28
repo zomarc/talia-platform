@@ -1,15 +1,17 @@
 .linked-documents {
-  margin: 8px 0 0;
-  font-size: 12px;
+  margin: var(--theme-component-gap-sm) 0 0;
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size-sm);
   line-height: 1.4;
+  color: var(--theme-fg);
 }
 
 .linked-documents__label {
   display: inline-block;
-  min-width: 72px;
-  margin-right: 8px;
-  font-size: 10px;
+  min-width: 5.5rem;
+  margin-right: var(--theme-padding-sm);
+  font-size: var(--theme-font-size-xs);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  opacity: 0.7;
+  color: var(--theme-text-secondary);
 }

@@ -45,10 +45,16 @@ const RecordLinkEditor = ({ kinds, catalogs, links, onChange }) => {
         )) : <span className="record-links__empty">No links yet.</span>}
       </div>
       <div className="record-links__add">
-        <select value={kind} onChange={(event) => setKind(event.target.value)} aria-label="Record type">
+        <select
+          className="talia-report-filters__input"
+          value={kind}
+          onChange={(event) => setKind(event.target.value)}
+          aria-label="Record type"
+        >
           {kinds.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
         </select>
         <input
+          className="talia-report-filters__input"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Find a record"
@@ -59,7 +65,7 @@ const RecordLinkEditor = ({ kinds, catalogs, links, onChange }) => {
         <ul className="record-links__choices">
           {choices.map((row) => (
             <li key={row.id}>
-              <button type="button" onClick={() => add(row)}>{row.label}</button>
+              <button type="button" className="record-links__choice" onClick={() => add(row)}>{row.label}</button>
             </li>
           ))}
         </ul>

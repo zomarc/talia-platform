@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
+import { buildDataManagementExport } from '../../../lib/dataManagementPrint';
 import { initTabulator, getTabulatorOptions, observeTabulatorHost } from '../../../lib/tabulatorConfig';
 import { formatDayMonYear, formatSailDateRange } from '../../../lib/dateFormat';
 import { computeIntegrationHealth } from '../../../lib/integrationDateHealth.js';
@@ -114,6 +115,8 @@ const DataManagementTable = ({
         data: rowsRef.current || [],
         panelInstanceId,
         panelComponentId,
+        exportTitle: 'Data management',
+        buildExportPayload: () => buildDataManagementExport(rowsRef.current),
         index: 'tableName',
         height: '100%',
         selectableRows: 1,

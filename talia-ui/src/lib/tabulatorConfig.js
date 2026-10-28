@@ -926,12 +926,14 @@ const registerTableInstance = (table, baseColumns = null, ids = {}) => {
       panelInstanceId: ids.panelInstanceId || null,
       panelComponentId: ids.panelComponentId || null,
       exportTitle: ids.exportTitle || null,
+      buildExportPayload: ids.buildExportPayload || null,
     });
   } else {
     const meta = tableMeta.get(table);
     if (ids.panelInstanceId) meta.panelInstanceId = ids.panelInstanceId;
     if (ids.panelComponentId) meta.panelComponentId = ids.panelComponentId;
     if (ids.exportTitle) meta.exportTitle = ids.exportTitle;
+    if (ids.buildExportPayload) meta.buildExportPayload = ids.buildExportPayload;
   }
   tableInstances.add(table);
 };
@@ -952,14 +954,23 @@ const getWrappedTabulatorClass = () => {
       const panelInstanceId = hostIds.panelInstanceId || processed.__taliaPanelInstanceId || null;
       const panelComponentId = hostIds.panelComponentId || processed.__taliaPanelComponentId || null;
       const exportTitle = processed.__taliaExportTitle || null;
+      const buildExportPayload = typeof processed.__taliaBuildExportPayload === 'function'
+        ? processed.__taliaBuildExportPayload
+        : null;
       delete processed.__taliaProcessedOptions;
       delete processed.__taliaBaseColumns;
       delete processed.__taliaPanelInstanceId;
       delete processed.__taliaPanelComponentId;
       delete processed.__taliaExportTitle;
+      delete processed.__taliaBuildExportPayload;
       super(element, processed);
 
-      registerTableInstance(this, baseColumns, { panelInstanceId, panelComponentId, exportTitle });
+      registerTableInstance(this, baseColumns, {
+        panelInstanceId,
+        panelComponentId,
+        exportTitle,
+        buildExportPayload,
+      });
       bindTableDataLayoutRefresh(this);
       bindVisibleScrollMemory(this);
       // Sibling panel reflows often resize the host; Tabulator redraw resets scrollTop.
@@ -993,7 +1004,13 @@ const getWrappedTabulatorClass = () => {
           exportMeta.unregisterExport = registerPanelDataExport({
             panelInstanceId: exportMeta.panelInstanceId,
             panelComponentId: exportMeta.panelComponentId,
-            getPayload: () => payloadFromTabulator(this, exportMeta.exportTitle || exportMeta.panelComponentId || 'Export'),
+            getPayload: () => {
+              if (typeof exportMeta.buildExportPayload === 'function') {
+                const payload = exportMeta.buildExportPayload(this);
+                if (payload && typeof payload === 'object') return payload;
+              }
+              return payloadFromTabulator(this, exportMeta.exportTitle || exportMeta.panelComponentId || 'Export');
+            },
           });
         }
       });
@@ -1087,6 +1104,7 @@ export const getTabulatorOptions = (options = {}) => {
     panelComponentId: _panelComponentId,
     panelInstanceId: _panelInstanceId,
     exportTitle: _exportTitle,
+    buildExportPayload: _buildExportPayload,
     freezeLeadingColumns: _freezeLeadingColumns,
     ...restOptions
   } = options;
@@ -1101,6 +1119,7 @@ export const getTabulatorOptions = (options = {}) => {
     __taliaPanelInstanceId: panelInstanceId,
     __taliaPanelComponentId: panelComponentId || null,
     __taliaExportTitle: exportTitle,
+    __taliaBuildExportPayload: typeof options.buildExportPayload === 'function' ? options.buildExportPayload : null,
   };
 };
 

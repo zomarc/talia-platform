@@ -36,7 +36,7 @@ export function buildExportFilename(panelTitle, format) {
     .trim()
     .replace(/\s+/g, '-')
     || 'Export';
-  const ext = format === 'pdf' ? 'pdf' : 'csv';
+  const ext = format === 'pdf' ? 'pdf' : format === 'md' ? 'md' : 'csv';
   return `${base}-${shortDateStamp()}.${ext}`;
 }
 
@@ -58,6 +58,29 @@ export function escapeCsvCell(value) {
  * @param {{ field: string, title?: string }[]} columns
  * @param {Record<string, unknown>[]} rows
  */
+const escapeMarkdownCell = (value) => {
+  if (value == null) return '';
+  const text = typeof value === 'object' ? JSON.stringify(value) : String(value);
+  return text.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+};
+
+/**
+ * Markdown table for the dock export. A panel may instead supply `markdown`.
+ * @param {{ field: string, title?: string }[]} columns
+ * @param {Record<string, unknown>[]} rows
+ */
+export function rowsToMarkdown(columns, rows) {
+  const cols = Array.isArray(columns) ? columns.filter((c) => c?.field) : [];
+  const list = Array.isArray(rows) ? rows : [];
+  if (!cols.length || !list.length) return '';
+  const header = `| ${cols.map((column) => escapeMarkdownCell(column.title || column.field)).join(' | ')} |`;
+  const rule = `| ${cols.map(() => '---').join(' | ')} |`;
+  const body = list.map((row) => (
+    `| ${cols.map((column) => escapeMarkdownCell(row?.[column.field])).join(' | ')} |`
+  ));
+  return `${[header, rule, ...body].join('\n')}\n`;
+}
+
 export function rowsToCsv(columns, rows) {
   const cols = Array.isArray(columns) ? columns.filter((c) => c?.field) : [];
   const header = cols.map((c) => escapeCsvCell(c.title || c.field)).join(',');
@@ -66,6 +89,62 @@ export function rowsToCsv(columns, rows) {
   ));
   return [header, ...body].join('\n');
 }
+
+/**
+ * Chrome names "Save as PDF" from the top-level document title, which is the
+ * instance label ("Talia (local)"). The printed page keeps its own title for
+ * the header. Hold the export name on the top window until the dialog closes.
+ */
+const printHtmlDocument = (html, exportTitle, delayMs = 120) => {
+  const existing = document.getElementById('talia-panel-data-export-print');
+  if (existing) existing.remove();
+
+  const iframe = document.createElement('iframe');
+  iframe.id = 'talia-panel-data-export-print';
+  iframe.title = exportTitle;
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
+  document.body.appendChild(iframe);
+
+  const frameWindow = iframe.contentWindow;
+  const frameDoc = frameWindow?.document;
+  if (!frameWindow || !frameDoc) {
+    iframe.remove();
+    throw new Error('Could not prepare print frame for PDF export');
+  }
+
+  const previousTitle = document.title;
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    document.title = previousTitle;
+    frameWindow.removeEventListener('afterprint', finish);
+    window.removeEventListener('afterprint', finish);
+    if (iframe.parentNode) iframe.remove();
+  };
+
+  const triggerPrint = () => {
+    document.title = exportTitle;
+    frameWindow.addEventListener('afterprint', finish);
+    window.addEventListener('afterprint', finish);
+    window.setTimeout(finish, 120000);
+    try {
+      frameWindow.focus();
+      frameWindow.print();
+    } catch (err) {
+      finish();
+      throw err;
+    }
+  };
+
+  frameDoc.open();
+  frameDoc.write(html);
+  frameDoc.close();
+
+  if (frameDoc.readyState === 'complete') window.setTimeout(triggerPrint, delayMs);
+  else iframe.addEventListener('load', () => window.setTimeout(triggerPrint, delayMs), { once: true });
+};
 
 export function downloadTextFile(filename, text, mime = 'text/csv;charset=utf-8') {
   const blob = new Blob([text], { type: mime });
@@ -140,8 +219,19 @@ export function payloadFromRows(title, columns, rows) {
 }
 
 /**
- * @param {{ title?: string, columns: { field: string, title?: string }[], rows: object[] }} payload
+ * Download Markdown. Uses `payload.markdown` when a panel supplies the document source.
+ * Otherwise builds a table from the same columns and rows as CSV.
+ * @param {{ title?: string, markdown?: string, columns?: { field: string, title?: string }[], rows?: object[] }} payload
  */
+export function exportPanelDataMarkdown(payload) {
+  const title = payload?.title || 'Export';
+  const supplied = typeof payload?.markdown === 'string' ? payload.markdown.trim() : '';
+  const text = supplied || rowsToMarkdown(payload?.columns, payload?.rows).trim();
+  if (!text) throw new Error('Nothing to export');
+  const body = text.endsWith('\n') ? text : `${text}\n`;
+  downloadTextFile(buildExportFilename(title, 'md'), body, 'text/markdown;charset=utf-8');
+}
+
 export function exportPanelDataCsv(payload) {
   const title = payload?.title || 'Export';
   const columns = Array.isArray(payload?.columns) ? payload.columns : [];
@@ -166,33 +256,7 @@ export function exportPanelDataPdf(payload) {
   const customHtml = typeof payload?.html === 'string' ? payload.html.trim() : '';
   if (/<!doctype html|<html[\s>]/i.test(customHtml)) {
     const exportTitle = buildExportFilename(payload?.title || 'Export', 'pdf').replace(/\.pdf$/i, '');
-    const existing = document.getElementById('talia-panel-data-export-print');
-    if (existing) existing.remove();
-    const iframe = document.createElement('iframe');
-    iframe.id = 'talia-panel-data-export-print';
-    iframe.title = exportTitle;
-    iframe.setAttribute('aria-hidden', 'true');
-    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
-    document.body.appendChild(iframe);
-    const frameWindow = iframe.contentWindow;
-    const frameDoc = frameWindow?.document;
-    if (!frameWindow || !frameDoc) {
-      iframe.remove();
-      throw new Error('Could not prepare print frame for PDF export');
-    }
-    frameDoc.open();
-    frameDoc.write(customHtml);
-    frameDoc.close();
-    const triggerPrint = () => {
-      try {
-        frameWindow.focus();
-        frameWindow.print();
-      } finally {
-        window.setTimeout(() => { if (iframe.parentNode) iframe.remove(); }, 1000);
-      }
-    };
-    if (frameDoc.readyState === 'complete') window.setTimeout(triggerPrint, 120);
-    else iframe.addEventListener('load', () => window.setTimeout(triggerPrint, 120), { once: true });
+    printHtmlDocument(customHtml, exportTitle);
     return;
   }
 
@@ -316,53 +380,11 @@ export function exportPanelDataPdf(payload) {
 </body>
 </html>`;
 
-  const existing = document.getElementById('talia-panel-data-export-print');
-  if (existing) existing.remove();
-
-  const iframe = document.createElement('iframe');
-  iframe.id = 'talia-panel-data-export-print';
-  iframe.title = exportTitle;
-  iframe.setAttribute('aria-hidden', 'true');
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
-  document.body.appendChild(iframe);
-
-  const frameWindow = iframe.contentWindow;
-  const frameDoc = frameWindow?.document;
-  if (!frameWindow || !frameDoc) {
-    iframe.remove();
-    throw new Error('Could not prepare print frame for PDF export');
-  }
-
-  const cleanup = () => {
-    window.setTimeout(() => {
-      if (iframe.parentNode) iframe.remove();
-    }, 1000);
-  };
-
-  const triggerPrint = () => {
-    try {
-      frameWindow.focus();
-      frameWindow.print();
-    } finally {
-      cleanup();
-    }
-  };
-
-  frameDoc.open();
-  frameDoc.write(html);
-  frameDoc.close();
-
-  // Data-URL images decode sync; short delay still helps print layout settle.
-  const delayMs = chartImage ? 120 : 80;
-  if (frameDoc.readyState === 'complete') {
-    window.setTimeout(triggerPrint, delayMs);
-  } else {
-    iframe.addEventListener('load', () => window.setTimeout(triggerPrint, delayMs), { once: true });
-  }
+  printHtmlDocument(html, exportTitle, chartImage ? 120 : 80);
 }
 
 /**
- * @param {'csv'|'pdf'} format
+ * @param {'csv'|'pdf'|'md'} format
  * @param {() => ({ title?: string, columns?: object[], rows?: object[], chartImage?: string|null } | null | undefined)} getPayload
  */
 export function runPanelDataExport(format, getPayload) {
@@ -382,6 +404,11 @@ export function runPanelDataExport(format, getPayload) {
       throw new Error('Nothing to export');
     }
     exportPanelDataPdf({ ...payload, columns, rows, chartImage });
+    return;
+  }
+
+  if (format === 'md') {
+    exportPanelDataMarkdown({ ...payload, columns, rows });
     return;
   }
 

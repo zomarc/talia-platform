@@ -14,6 +14,7 @@ This file defines the authoritative documentation set for active development.
 - `docs/DEPLOYMENT.md` - deployment and environment operations
 - `docs/ENVIRONMENTS-AND-DEPLOY.md` - local vs staging vs MVP, local deploys, backups, version pitfalls
 - `docs/AZURE-STAGING.md` - Azure VM + Docker staging (Bicep, Caddy, env files)
+- `docs/CELESTYAL-INSTANCE-SPEC.md` - client provisioning spec for a Celestyal-owned Azure instance
 - `docs/QUICK-START-GUIDE.md` - quick startup and verification
 - `EXECUTIVE-OVERVIEW.md` - top-level architecture, achievements, and environment summary (presentation page)
 - `docs/EXECUTIVE-OVERVIEW.html` - branded Celestyal HTML presentation (logo + Mediterranean theme)

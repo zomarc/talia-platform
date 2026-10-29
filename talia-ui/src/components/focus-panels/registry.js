@@ -19,6 +19,8 @@ import ItineraryExtract from './ItineraryExtract';
 import ReservationCurrentStateContainer from './ReservationCurrentState';
 import GroupBookingReviewContainer from './GroupBookingReview';
 import GroupsExplorerContainer from './GroupsExplorer';
+import SourceMrReviewContainer from './SourceMrReview';
+import TaliaMrMethodContainer from './TaliaMrMethod';
 import PromoExplorerContainer from './PromoExplorer';
 import SailingDemandCompositionContainer from './SailingDemandComposition';
 import BookingProfileContainer from './BookingProfile';
@@ -94,6 +96,7 @@ import {
   VIEW_MATRIX_DISPLAY,
   VIEW_RISK_DISPLAY,
   VIEW_GRAPH,
+  VIEW_SOURCE_MR_MONTH,
   VIEW_SNAPSHOT,
   VIEW_TOOLTIP,
   VIEW_TOOLTIP_MSE,
@@ -611,6 +614,67 @@ export const componentRegistry = {
       operations: [],
     },
     filePath: 'src/components/focus-panels/GroupsExplorer/index.jsx'
+  },
+  SourceMrReview: {
+    component: SourceMrReviewContainer,
+    panelId: 'source-mr-review',
+    category: 'Tables',
+    title: 'Source MR effectiveness',
+    description: 'Historic source materialisation against named guests, with an independent Talia MR',
+    props: {},
+    dataRequirements: 'Frozen SW_ETL group extract (sw_etl_group and related tables). Sail selection only when the sailing is in inventory_item.',
+    events: {
+      emits: [SAIL_SELECT_EVENT],
+      respondsTo: []
+    },
+    supportsRefresh: true,
+    supportsDataExport: true,
+    showInReports: true,
+    options: {
+      views: [
+        VIEW_SNAPSHOT,
+        VIEW_GRAPH,
+        VIEW_SOURCE_MR_MONTH,
+        VIEW_DETAILS,
+        VIEW_FILTERS,
+        VIEW_TOOLTIP,
+        VIEW_LEGENDS,
+        VIEW_AXIS_LABELS,
+        VIEW_PROVENANCE,
+      ],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/SourceMrReview/index.jsx'
+  },
+  TaliaMrMethod: {
+    component: TaliaMrMethodContainer,
+    panelId: 'talia-mr-method',
+    category: 'Tables',
+    title: 'Talia MR',
+    description: 'How Talia materialisation is calculated, on the selected sailing or a worked example',
+    props: {},
+    dataRequirements: 'Listens for talia:sail.select and reads reservation for that sailing. With no selection, shows worked examples from the frozen SW_ETL extract.',
+    events: {
+      emits: [],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+    },
+    supportsRefresh: true,
+    supportsDataExport: true,
+    showInReports: true,
+    options: {
+      views: [
+        VIEW_SNAPSHOT,
+        VIEW_GRAPH,
+        VIEW_DETAILS,
+        VIEW_FILTERS,
+        VIEW_TOOLTIP,
+        VIEW_LEGENDS,
+        VIEW_AXIS_LABELS,
+        VIEW_PROVENANCE,
+      ],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/TaliaMrMethod/index.jsx'
   },
   PromoExplorer: {
     component: PromoExplorerContainer,

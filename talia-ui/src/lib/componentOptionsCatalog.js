@@ -12,6 +12,8 @@ import { hasRole, canConfigureComponentOperations, normalizeRole } from '../util
 export const VIEW_SNAPSHOT = { id: 'snapshot', label: 'Snapshot', type: 'boolean', default: true };
 /** Primary chart. Opt in on panels whose main body is a graph (Reservation Profile). */
 export const VIEW_GRAPH = { id: 'graph', label: 'Graph', type: 'boolean', default: true };
+/** Source MR review: departure-month comparison. Off until the view is turned on. */
+export const VIEW_SOURCE_MR_MONTH = { id: 'monthGraph', label: 'By month', type: 'boolean', default: false };
 export const VIEW_DETAILS = { id: 'details', label: 'Details', type: 'boolean', default: true };
 /** Admin+ (and SUPER_USER): where this report’s data comes from. Off by default; Views → Provenance. */
 export const VIEW_PROVENANCE = {
@@ -371,6 +373,33 @@ export const DEFAULT_COMPONENT_OPTIONS = {
     views: [VIEW_DENSITY, VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_COLUMN_FILTERS, VIEW_PROVENANCE],
     operations: [],
   },
+  'source-mr-review': {
+    views: [
+      VIEW_SNAPSHOT,
+      VIEW_GRAPH,
+      VIEW_SOURCE_MR_MONTH,
+      VIEW_DETAILS,
+      VIEW_FILTERS,
+      VIEW_TOOLTIP,
+      VIEW_LEGENDS,
+      VIEW_AXIS_LABELS,
+      VIEW_PROVENANCE,
+    ],
+    operations: [],
+  },
+  'talia-mr-method': {
+    views: [
+      VIEW_SNAPSHOT,
+      VIEW_GRAPH,
+      VIEW_DETAILS,
+      VIEW_FILTERS,
+      VIEW_TOOLTIP,
+      VIEW_LEGENDS,
+      VIEW_AXIS_LABELS,
+      VIEW_PROVENANCE,
+    ],
+    operations: [],
+  },
   'promo-explorer': {
     views: [VIEW_DENSITY, VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_COLUMN_FILTERS, VIEW_PROVENANCE],
     operations: [],
@@ -408,6 +437,8 @@ const TABLE_FIT_EXCLUDED_PANEL_IDS = new Set([
   'risk-register',
   'document-repository',
   'project-plan',
+  'source-mr-review',
+  'talia-mr-method',
 ]);
 
 const TABLE_FIT_PANEL_IDS = new Set([

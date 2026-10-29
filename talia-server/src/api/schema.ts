@@ -1885,6 +1885,103 @@ export const typeDefs = `#graphql
     milestones: [ProjectMilestone!]!
   }
 
+  type SourceMrStatus {
+    status: String!
+    label: String!
+    sailedGroups: Int!
+    sailedRequestedGuests: Int!
+    sailedNamedGuests: Int!
+    sailedSourceExpectedGuests: Int!
+    sailedTaliaExpectedGuests: Int!
+    sailedRealisedRate: Float
+    openGroups: Int!
+    openRequestedGuests: Int!
+    openNamedGuests: Int!
+    openSourceExpectedGuests: Int!
+    openTaliaExpectedGuests: Int!
+    openRealisedRate: Float
+  }
+
+  type SourceMrBand {
+    status: String!
+    band: String!
+    groups: Int!
+    requestedGuests: Int!
+    namedGuests: Int!
+    sourceExpectedGuests: Int!
+    taliaExpectedGuests: Int!
+    realisedRate: Float
+  }
+
+  type SourceMrMonth {
+    status: String!
+    month: String!
+    groups: Int!
+    requestedGuests: Int!
+    namedGuests: Int!
+    sourceExpectedGuests: Int!
+    taliaExpectedGuests: Int!
+    realisedRate: Float
+  }
+
+  type SourceMrHistoryPoint {
+    changedDate: String
+    status: String
+    probability: Float
+    requestedGuests: Int
+    manual: Boolean
+  }
+
+  type SourceMrCandidate {
+    groupId: ID!
+    recGroupId: ID
+    shipCode: String
+    sailId: ID
+    sailDateFrom: String
+    sailDateTo: String
+    status: String!
+    requestedGuests: Int!
+    namedGuests: Int!
+    cabins: Int
+    sourceMr: Float
+    taliaMr: Float
+    sourceExpectedGuests: Int!
+    taliaExpectedGuests: Int!
+    manual: Boolean
+    reasons: [String!]!
+    versions: Int
+    history: [SourceMrHistoryPoint!]
+  }
+
+  type SourceMrAlloc {
+    ownerType: String!
+    allocationRows: Int!
+    owners: Int!
+    avgProbability: Float
+  }
+
+  type SourceMrGroupHistory {
+    groupId: ID!
+    versions: Int!
+    history: [SourceMrHistoryPoint!]!
+  }
+
+  type SourceMrReview {
+    feedThrough: String
+    extractLoadThrough: String
+    groupCount: Int!
+    unfilteredGroupCount: Int!
+    ships: [String!]!
+    sailDateMin: String
+    sailDateMax: String
+    statuses: [SourceMrStatus!]!
+    bands: [SourceMrBand!]!
+    months: [SourceMrMonth!]!
+    candidate: SourceMrCandidate
+    notableQuotes: [SourceMrCandidate!]!
+    allocations: [SourceMrAlloc!]!
+  }
+
   input ProjectMilestoneInput {
     id: ID
     name: String!
@@ -2073,6 +2170,10 @@ export const typeDefs = `#graphql
     projectDocumentsFor(targetKind: String!, targetId: ID!): [ProjectDocument!]!
     projectDocumentAssets(ids: [ID!]!): [ProjectDocumentAsset!]!
     projectPlanCalendar: ProjectPlanCalendar!
+
+    # Historic source MR (frozen SW_ETL extract; replaced when the warehouse is refreshed)
+    sourceMrReview(shipCode: String, dateFrom: String, dateTo: String): SourceMrReview!
+    sourceMrGroupHistory(groupId: ID!): SourceMrGroupHistory!
 
     # Port / city locations (dwh.Dim_Port_City) with nearest-port labels
     portCityPage(filters: PortCityFilters): PortCityPage!

@@ -655,6 +655,135 @@
         "strategy": "delete-all",
         "column": "country_location"
       }
+    },
+    "swEtlGroup": {
+      "type": "direct",
+      "source": "stg.SW_ETL_GROUPS",
+      "target": "sw_etl_group",
+      "columns": [
+        "REC_GROUP_ID",
+        "GROUP_ID",
+        "GROUP_STATUS",
+        "GROUP_INIT_DATE",
+        "GROUP_STATUS_DATE",
+        "CHANGED_DATE",
+        "SAIL_DATE_FROM",
+        "SAIL_DATE_TO",
+        "N_OF_GUESTS",
+        "N_OF_CABINS",
+        "N_OF_DELEGATE_GUESTS",
+        "PROBABILITY",
+        "IS_PROB_MANUAL",
+        "AGENCY_ID",
+        "OWNERSHIP_CODE",
+        "GROUP_ExpectedAddition"
+      ],
+      "transformKey": "swEtlGroup",
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "id"
+      }
+    },
+    "swEtlGroupHeader": {
+      "type": "direct",
+      "source": "stg.SW_ETL_GROUP_HEADER",
+      "target": "sw_etl_group_header",
+      "columns": [
+        "REC_GROUP_ID",
+        "GROUP_ID",
+        "GROUP_STATUS",
+        "GROUP_INIT_DATE",
+        "CHANGED_DATE",
+        "N_OF_GUESTS",
+        "PROBABILITY",
+        "IS_PROB_MANUAL",
+        "AGENCY_ID",
+        "OWNERSHIP_CODE"
+      ],
+      "transformKey": "swEtlGroupHeader",
+      "isLargeDataset": true,
+      "rowNumberOrder": ["REC_GROUP_ID"],
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "id"
+      }
+    },
+    "swEtlGroupShip": {
+      "type": "direct",
+      "source": "(SELECT MIN(r.REC_SHIP_REQ_ID) AS REC_SHIP_REQ_ID, g.REC_GROUP_ID, g.GROUP_ID, MIN(r.SHIP) AS SHIP, MIN(r.SAIL_ID) AS SAIL_ID, MIN(r.SAIL_DATE_FROM) AS SAIL_DATE_FROM, MIN(r.SAIL_DATE_TO) AS SAIL_DATE_TO FROM stg.SW_ETL_GROUPS g INNER JOIN stg.SW_ETL_GROUP_SHIP_REQUEST r ON r.REC_GROUP_ID = g.REC_GROUP_ID GROUP BY g.REC_GROUP_ID, g.GROUP_ID) src",
+      "target": "sw_etl_group_ship",
+      "columns": [
+        "REC_SHIP_REQ_ID",
+        "REC_GROUP_ID",
+        "GROUP_ID",
+        "SHIP",
+        "SAIL_ID",
+        "SAIL_DATE_FROM",
+        "SAIL_DATE_TO"
+      ],
+      "transformKey": "swEtlGroupShip",
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "id"
+      }
+    },
+    "swEtlSailInvAlloc": {
+      "type": "direct",
+      "source": "stg.SW_ETL_SAIL_INVENTORY_DATA_ALLOC",
+      "target": "sw_etl_sail_inv_alloc",
+      "columns": [
+        "REC_ID",
+        "ALLOCATION_ID",
+        "ALLOCATION_TIMESTAMP",
+        "OWNER_TYPE",
+        "OWNER_ID",
+        "OWNER_STATUS",
+        "PROBABILITY",
+        "OCCUPANCY",
+        "REQUEST_CATEGORY",
+        "ALLOCATION_SAIL_DATE_FROM",
+        "ALLOCATION_SAIL_DATE_TO",
+        "ALLOCATION_PORT_FROM",
+        "ALLOCATION_PORT_TO",
+        "AGENCY_ID",
+        "IS_INTERNAL",
+        "OWNERSHIP_CODE",
+        "RESERVE_TYPE"
+      ],
+      "transformKey": "swEtlSailInvAlloc",
+      "isLargeDataset": true,
+      "rowNumberOrder": ["REC_ID"],
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "id"
+      }
+    },
+    "swEtlExtractLoad": {
+      "type": "direct",
+      "source": "stg.SW_ETL_EXTRACT_LOAD",
+      "target": "sw_etl_extract_load",
+      "columns": [
+        "REC_ID",
+        "ENTITY_TYPE",
+        "ENTITY_ID",
+        "ENTITY_ORIGIN_ID",
+        "LOAD_DATE",
+        "IS_INVALID"
+      ],
+      "transformKey": "swEtlExtractLoad",
+      "isLargeDataset": true,
+      "rowNumberOrder": ["REC_ID"],
+      "defaultFilters": [
+        {
+          "column": "ENTITY_TYPE",
+          "operator": "equals",
+          "value": "GRP"
+        }
+      ],
+      "defaultReplace": {
+        "strategy": "delete-all",
+        "column": "id"
+      }
     }
   },
   "datasets": {

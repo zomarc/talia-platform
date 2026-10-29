@@ -869,6 +869,18 @@ class SynapseSyncService {
       const n = Number(value);
       return Number.isFinite(n) ? n : null;
     };
+    const toTimestamp = (value) => {
+      if (!value) return null;
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return parsed.toISOString();
+    };
+    const trimText = (value) => {
+      if (value == null) return null;
+      const text = String(value).trim();
+      return text || null;
+    };
+    const yesNo = (value) => trimText(value) === 'Y';
 
     switch (transformKey) {
       case 'ships':
@@ -1349,6 +1361,87 @@ class SynapseSyncService {
           accounting_year: getField(row, ['AccYear', 'ACC_YEAR']) || null,
           itinerary_type: getField(row, ['Itinerary_Type', 'ITINERARY_TYPE']) || null,
           market_grouping: getField(row, ['Market_Grouping', 'MARKET_GROUPING']) || null,
+          created_at: currentTime
+        }));
+
+      case 'swEtlGroup':
+        return data.map(row => ({
+          rec_group_id: toNumber(getField(row, ['REC_GROUP_ID'])),
+          group_id: toNumber(getField(row, ['GROUP_ID'])),
+          group_status: trimText(getField(row, ['GROUP_STATUS'])),
+          group_init_date: toDateOnly(getField(row, ['GROUP_INIT_DATE'])),
+          group_status_date: toDateOnly(getField(row, ['GROUP_STATUS_DATE'])),
+          changed_date: toTimestamp(getField(row, ['CHANGED_DATE'])),
+          sail_date_from: toDateOnly(getField(row, ['SAIL_DATE_FROM'])),
+          sail_date_to: toDateOnly(getField(row, ['SAIL_DATE_TO'])),
+          n_of_guests: toNumber(getField(row, ['N_OF_GUESTS'])),
+          n_of_cabins: toNumber(getField(row, ['N_OF_CABINS'])),
+          n_of_delegate_guests: toNumber(getField(row, ['N_OF_DELEGATE_GUESTS'])),
+          probability: toNumber(getField(row, ['PROBABILITY'])),
+          is_prob_manual: yesNo(getField(row, ['IS_PROB_MANUAL'])),
+          agency_id: toNumber(getField(row, ['AGENCY_ID'])),
+          ownership_code: trimText(getField(row, ['OWNERSHIP_CODE'])),
+          group_expected_addition: toNumber(getField(row, ['GROUP_ExpectedAddition', 'GROUP_EXPECTEDADDITION'])),
+          created_at: currentTime
+        }));
+
+      case 'swEtlGroupHeader':
+        return data.map(row => ({
+          rec_group_id: toNumber(getField(row, ['REC_GROUP_ID'])),
+          group_id: toNumber(getField(row, ['GROUP_ID'])),
+          group_status: trimText(getField(row, ['GROUP_STATUS'])),
+          group_init_date: toDateOnly(getField(row, ['GROUP_INIT_DATE'])),
+          changed_date: toTimestamp(getField(row, ['CHANGED_DATE'])),
+          n_of_guests: toNumber(getField(row, ['N_OF_GUESTS'])),
+          probability: toNumber(getField(row, ['PROBABILITY'])),
+          is_prob_manual: yesNo(getField(row, ['IS_PROB_MANUAL'])),
+          agency_id: toNumber(getField(row, ['AGENCY_ID'])),
+          ownership_code: trimText(getField(row, ['OWNERSHIP_CODE'])),
+          created_at: currentTime
+        }));
+
+      case 'swEtlGroupShip':
+        return data.map(row => ({
+          rec_ship_req_id: toNumber(getField(row, ['REC_SHIP_REQ_ID'])),
+          rec_group_id: toNumber(getField(row, ['REC_GROUP_ID'])),
+          group_id: toNumber(getField(row, ['GROUP_ID'])),
+          ship_code: trimText(getField(row, ['SHIP'])),
+          sail_id: toNumber(getField(row, ['SAIL_ID'])),
+          sail_date_from: toDateOnly(getField(row, ['SAIL_DATE_FROM'])),
+          sail_date_to: toDateOnly(getField(row, ['SAIL_DATE_TO'])),
+          created_at: currentTime
+        }));
+
+      case 'swEtlSailInvAlloc':
+        return data.map(row => ({
+          rec_id: toNumber(getField(row, ['REC_ID'])),
+          allocation_id: toNumber(getField(row, ['ALLOCATION_ID'])),
+          allocation_timestamp: toTimestamp(getField(row, ['ALLOCATION_TIMESTAMP'])),
+          owner_type: trimText(getField(row, ['OWNER_TYPE'])),
+          owner_id: toNumber(getField(row, ['OWNER_ID'])),
+          owner_status: trimText(getField(row, ['OWNER_STATUS'])),
+          probability: toNumber(getField(row, ['PROBABILITY'])),
+          occupancy: toNumber(getField(row, ['OCCUPANCY'])),
+          request_category: trimText(getField(row, ['REQUEST_CATEGORY'])),
+          sail_date_from: toDateOnly(getField(row, ['ALLOCATION_SAIL_DATE_FROM'])),
+          sail_date_to: toDateOnly(getField(row, ['ALLOCATION_SAIL_DATE_TO'])),
+          port_from: trimText(getField(row, ['ALLOCATION_PORT_FROM'])),
+          port_to: trimText(getField(row, ['ALLOCATION_PORT_TO'])),
+          agency_id: toNumber(getField(row, ['AGENCY_ID'])),
+          is_internal: yesNo(getField(row, ['IS_INTERNAL'])),
+          ownership_code: trimText(getField(row, ['OWNERSHIP_CODE'])),
+          reserve_type: trimText(getField(row, ['RESERVE_TYPE'])),
+          created_at: currentTime
+        }));
+
+      case 'swEtlExtractLoad':
+        return data.map(row => ({
+          rec_id: toNumber(getField(row, ['REC_ID'])),
+          entity_type: trimText(getField(row, ['ENTITY_TYPE'])),
+          entity_id: toNumber(getField(row, ['ENTITY_ID'])),
+          entity_origin_id: toNumber(getField(row, ['ENTITY_ORIGIN_ID'])),
+          load_date: toTimestamp(getField(row, ['LOAD_DATE'])),
+          is_invalid: yesNo(getField(row, ['IS_INVALID'])),
           created_at: currentTime
         }));
 

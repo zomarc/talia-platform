@@ -54,7 +54,9 @@ export const buildTableCatalogQueryResolvers = ({
         'booking_targets_supplied', 'target_profiles', 'target_mapping_config',
         'inventory_item', 'inventory_item_operational', 'sailing_master', 'sailing_hierarchy',
         'inventory_status_by_day', 'ship_day_berth_status', 'ship_day_capacity', 'sail_booking_summary', 'sail_booking_monday', 'sailing_physical_day_map',
-        'inventory_item_profile_curve_point'
+        'inventory_item_profile_curve_point',
+        'sw_etl_group', 'sw_etl_group_header', 'sw_etl_group_ship',
+        'sw_etl_sail_inv_alloc', 'sw_etl_extract_load'
       ];
 
       const { data: syncData } = await supabaseDataService.client

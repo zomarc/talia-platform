@@ -1,0 +1,212 @@
+.source-mr-review {
+  container-type: inline-size;
+  container-name: source-mr;
+}
+
+.source-mr-review__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.source-mr-review__body > .talia-report__content {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.source-mr-review__details {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  margin-top: 0;
+  overflow: auto;
+  border-top: 1px solid var(--theme-border);
+  background: var(--theme-bg-solid);
+}
+
+.source-mr-review__details[hidden] {
+  display: none !important;
+}
+
+@container source-mr (min-width: 880px) {
+  .source-mr-review__body {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .source-mr-review__details {
+    flex: 0 0 28%;
+    width: 28%;
+    max-width: 36rem;
+    min-width: 18rem;
+    max-height: none;
+    border-top: 0;
+    border-left: 1px solid var(--theme-border);
+  }
+}
+
+.source-mr-review__details .source-mr-review__table {
+  min-width: 0;
+}
+
+.source-mr-review .talia-report__content > .source-mr-review__section,
+.source-mr-review .talia-report__content > .talia-report-provenance {
+  flex: 0 0 auto;
+  min-height: auto;
+}
+
+.source-mr-review__section,
+.source-mr-review__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-component-gap-sm);
+  padding: var(--theme-component-padding-sm) var(--theme-component-padding-md);
+  border-bottom: 1px solid var(--theme-border);
+}
+
+.source-mr-review__heading {
+  margin: 0;
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size);
+  font-weight: 600;
+  color: var(--theme-fg);
+  line-height: 1.35;
+}
+
+.source-mr-review__lead {
+  margin: 0;
+  max-width: 46rem;
+  color: var(--theme-text-secondary);
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size-sm);
+  line-height: 1.4;
+}
+
+.source-mr-review__chart {
+  position: relative;
+  height: 16rem;
+  min-height: 12rem;
+}
+
+.source-mr-review__chart--month {
+  height: auto;
+  min-height: 12rem;
+}
+
+.source-mr-review__criteria,
+.source-mr-review__filter-note {
+  color: var(--theme-text-secondary);
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size-sm);
+}
+
+.source-mr-review__filter-note {
+  margin: 0;
+  flex-basis: 100%;
+}
+
+.source-mr-review__chart canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.source-mr-review--tips .source-mr-review__table th,
+.source-mr-review--tips .talia-metric {
+  cursor: help;
+}
+
+.source-mr-review__tip {
+  max-width: 18rem;
+  margin: 0;
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size-sm);
+  line-height: 1.4;
+  color: var(--theme-fg);
+}
+
+.source-mr-review__tip strong {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-weight: 600;
+}
+
+.source-mr-review__table-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.source-mr-review__table {
+  width: 100%;
+  min-width: 32rem;
+  border-collapse: collapse;
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size);
+  line-height: 1.35;
+}
+
+.source-mr-review__table th,
+.source-mr-review__table td {
+  padding: var(--theme-component-padding-xs) var(--theme-component-padding-sm);
+  border-bottom: 1px solid var(--theme-border);
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--theme-fg);
+}
+
+.source-mr-review__table th {
+  font-weight: 600;
+  color: var(--theme-text-secondary);
+  text-align: right;
+}
+
+.source-mr-review__table th:first-child,
+.source-mr-review__table td:first-child {
+  text-align: left;
+  white-space: normal;
+}
+
+.source-mr-review__card {
+  padding: var(--theme-card-padding);
+}
+
+.source-mr-review__card-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--theme-component-gap-sm) var(--theme-component-gap-md);
+  align-items: baseline;
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size);
+  color: var(--theme-fg);
+}
+
+.source-mr-review__quotes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-component-gap-xs, 0.25rem);
+}
+
+.source-mr-review__quotes button {
+  width: 100%;
+  text-align: left;
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size-sm);
+  line-height: 1.35;
+  color: var(--theme-fg);
+  background: transparent;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-border-radius, 4px);
+  padding: var(--theme-component-padding-xs) var(--theme-component-padding-sm);
+  min-height: var(--theme-component-control-height);
+}
+
+.source-mr-review__quotes button.is-selected {
+  border-color: var(--theme-fg);
+}

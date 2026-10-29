@@ -190,6 +190,8 @@ export const buildGroupsExplorerRows = (reservationRows = [], options = {}) => {
       group_value_eur: Math.round(bucket.group_value_eur),
       source_mr: mr.source_mr,
       talia_mr: mr.talia_mr,
+      offer_heavy: bucket.offer_pax > reservedPax,
+      has_named_booked: reservedPax > 0,
       mr_reasons: mr.reasons,
       mr_reason: mr.reasons.join(' · '),
       potential_pax: Math.round(impact.potential_pax),

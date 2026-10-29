@@ -357,6 +357,43 @@ export const tableSources = {
     type: 'direct',
     dateColumns: [],
     syncType: 'portCity'
+  },
+  sw_etl_group: {
+    source: 'stg.SW_ETL_GROUPS',
+    type: 'direct',
+    dateColumns: ['changed_date'],
+    dateRole: 'event',
+    syncType: 'swEtlGroup'
+  },
+  sw_etl_group_header: {
+    source: 'stg.SW_ETL_GROUP_HEADER',
+    type: 'direct',
+    dateColumns: ['changed_date'],
+    dateRole: 'event',
+    syncType: 'swEtlGroupHeader'
+  },
+  sw_etl_group_ship: {
+    source: 'stg.SW_ETL_GROUP_SHIP_REQUEST',
+    type: 'direct',
+    dateColumns: ['sail_date_from', 'sail_date_to'],
+    dateRole: 'sailing_interval',
+    intervalFrom: 'sail_date_from',
+    intervalTo: 'sail_date_to',
+    syncType: 'swEtlGroupShip'
+  },
+  sw_etl_sail_inv_alloc: {
+    source: 'stg.SW_ETL_SAIL_INVENTORY_DATA_ALLOC',
+    type: 'direct',
+    dateColumns: ['allocation_timestamp'],
+    dateRole: 'event',
+    syncType: 'swEtlSailInvAlloc'
+  },
+  sw_etl_extract_load: {
+    source: 'stg.SW_ETL_EXTRACT_LOAD',
+    type: 'direct',
+    dateColumns: ['load_date'],
+    dateRole: 'event',
+    syncType: 'swEtlExtractLoad'
   }
 };
 

@@ -18,6 +18,8 @@ import {
 import { REQUIREMENT_ITEMS_QUERY } from '../../../graphql/taliaRequirementLogOperations';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import { VIEW_DETAILS, VIEW_FILTERS, VIEW_PROVENANCE } from '../../../lib/componentOptionsCatalog';
+import { importDocumentFile, textToMarkdown } from '../../../lib/documentImport';
+import { getPdfJs } from '../../../lib/documentPdf';
 import { assetIdsInMarkdown } from '../../../lib/markdownLite';
 import { buildProjectDocumentExport, nextDocumentReference } from '../../../lib/projectDocument';
 import { downloadJson } from '../../../lib/riskRegister';
@@ -83,6 +85,8 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
   const [drafting, setDrafting] = useState(false);
   const [form, setForm] = useState(() => emptyDocumentForm());
   const [titleFilter, setTitleFilter] = useState('');
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -197,32 +201,134 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
     setForm((current) => ({ ...current, [field]: value }));
   };
 
+  const persistDocument = async (formValues, { id = null, successMessage = 'Saved' } = {}) => {
+    const input = {
+      ...(id ? { id } : {}),
+      referenceCode: formValues.referenceCode,
+      title: formValues.title,
+      body: formValues.body,
+      links: (formValues.links || []).map((link) => ({
+        targetKind: link.targetKind,
+        targetId: link.targetId,
+      })),
+    };
+    const data = await trackedFetchGraphql({
+      query: UPSERT_PROJECT_DOCUMENT_MUTATION,
+      variables: { input },
+      component: panelComponentId || COMPONENT,
+      purpose: 'Save project document',
+      tableName: 'project_document',
+    });
+    const saved = data?.upsertProjectDocument;
+    setDrafting(false);
+    if (saved?.id) {
+      setSelectedId(saved.id);
+      setForm(formFromItem(saved));
+    } else {
+      setForm(formValues);
+    }
+    setMessage(successMessage);
+    await loadItems();
+    return saved;
+  };
+
+  const applyImportedMarkdown = async (result) => {
+    const nextForm = {
+      referenceCode: nextDocumentReference(items),
+      title: result?.title || 'Imported document',
+      body: result?.body || '',
+      links: [],
+    };
+    setPasteOpen(false);
+    setPasteText('');
+    setForm(nextForm);
+    setDrafting(true);
+    setSelectedId(null);
+
+    if (result?.emptyExtract) {
+      setMessage('No extractable text in that PDF — paste the content instead.');
+      return;
+    }
+    if (!String(result?.body || '').trim()) {
+      setMessage('Import produced an empty body — paste the content or try another file.');
+      return;
+    }
+
+    await persistDocument(nextForm, {
+      successMessage: 'Imported and saved as Markdown — selected in the list.',
+    });
+  };
+
+  const importFile = async (file) => {
+    if (!file) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await importDocumentFile(file, getPdfJs());
+      await applyImportedMarkdown(result);
+    } catch (err) {
+      setMessage(err?.message || String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const convertPaste = async () => {
+    const raw = pasteText.trim();
+    if (!raw) {
+      setMessage('Paste some text first.');
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      await applyImportedMarkdown(textToMarkdown(raw));
+    } catch (err) {
+      setMessage(err?.message || String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reformatBody = async () => {
+    const raw = String(form.body || '').trim();
+    if (!raw) {
+      setMessage('Nothing to reformat.');
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const converted = textToMarkdown(raw, { suggestedTitle: form.title });
+      const nextForm = {
+        ...form,
+        title: form.title || converted.title,
+        body: converted.body,
+      };
+      setForm(nextForm);
+      if (selected?.id && !drafting) {
+        await persistDocument(nextForm, {
+          id: selected.id,
+          successMessage: 'Reformatted body as Markdown and saved.',
+        });
+      } else {
+        setMessage('Reformatted as Markdown — Save to keep it.');
+      }
+    } catch (err) {
+      setMessage(err?.message || String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const save = async () => {
     setBusy(true);
     setMessage(null);
     try {
-      const input = {
-        ...(selected && !drafting ? { id: selected.id } : {}),
-        referenceCode: form.referenceCode,
-        title: form.title,
-        body: form.body,
-        links: (form.links || []).map((link) => ({
-          targetKind: link.targetKind,
-          targetId: link.targetId,
-        })),
-      };
-      const data = await trackedFetchGraphql({
-        query: UPSERT_PROJECT_DOCUMENT_MUTATION,
-        variables: { input },
-        component: panelComponentId || COMPONENT,
-        purpose: 'Save project document',
-        tableName: 'project_document',
+      await persistDocument(form, {
+        id: selected && !drafting ? selected.id : null,
+        successMessage: 'Saved',
       });
-      const saved = data?.upsertProjectDocument;
-      setDrafting(false);
-      if (saved?.id) setSelectedId(saved.id);
-      setMessage('Saved');
-      await loadItems();
     } catch (err) {
       setMessage(err?.message || String(err));
     } finally {
@@ -366,6 +472,14 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
         message={message}
         onSelect={openItem}
         onNew={startDraft}
+        onImportFile={importFile}
+        onOpenPaste={() => { setPasteOpen(true); setMessage(null); }}
+        pasteOpen={pasteOpen}
+        pasteText={pasteText}
+        onPasteTextChange={setPasteText}
+        onConvertPaste={convertPaste}
+        onClosePaste={() => { setPasteOpen(false); setPasteText(''); }}
+        onReformatBody={reformatBody}
         onFormChange={updateForm}
         onLinksChange={(links) => updateForm('links', links)}
         onSave={save}

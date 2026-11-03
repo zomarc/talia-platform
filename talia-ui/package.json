@@ -29,6 +29,7 @@
     "leaflet": "^1.9.4",
     "mermaid": "^12.2.0",
     "papaparse": "^5.5.3",
+    "pdfjs-dist": "^4.10.38",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-leaflet": "^5.0.0",

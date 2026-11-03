@@ -1,4 +1,5 @@
 .document-repository {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -403,6 +404,69 @@
   flex: 0 0 auto;
 }
 
-.pd-form .talia-btn input {
+.pd-form .talia-btn input,
+.talia-report__actions-bar .talia-btn input {
   display: none;
+}
+
+.talia-report__actions-bar .talia-btn.is-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.pd-paste-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--theme-component-padding-md);
+  background: color-mix(in srgb, var(--theme-bg) 55%, transparent);
+}
+
+.pd-paste-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-component-gap-sm);
+  width: min(42rem, 100%);
+  max-height: min(36rem, 90%);
+  padding: var(--theme-card-padding);
+  overflow: hidden;
+}
+
+.pd-paste-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--theme-component-gap-sm);
+  flex: 0 0 auto;
+}
+
+.pd-paste-dialog__title {
+  margin: 0;
+  font-size: var(--theme-font-size);
+  font-weight: 600;
+}
+
+.pd-paste-dialog__hint {
+  margin: 0;
+  flex: 0 0 auto;
+  color: var(--theme-fg-muted, var(--theme-fg));
+  opacity: 0.85;
+  font-size: 0.92em;
+}
+
+.pd-paste-dialog__input {
+  flex: 1 1 auto;
+  min-height: 12rem;
+  resize: vertical;
+  font-family: var(--theme-font-family-monospace);
+  line-height: 1.45;
+}
+
+.pd-paste-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 0 auto;
 }

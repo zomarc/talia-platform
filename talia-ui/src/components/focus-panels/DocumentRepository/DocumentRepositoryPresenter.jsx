@@ -208,6 +208,14 @@ const DocumentRepositoryPresenter = ({
   message,
   onSelect,
   onNew,
+  onImportFile,
+  onOpenPaste,
+  pasteOpen,
+  pasteText,
+  onPasteTextChange,
+  onConvertPaste,
+  onClosePaste,
+  onReformatBody,
   onFormChange,
   onLinksChange,
   onSave,
@@ -272,11 +280,58 @@ const DocumentRepositoryPresenter = ({
 
     <div className="talia-report__actions-bar">
       <button type="button" className="talia-btn talia-btn--primary" onClick={onNew} disabled={busy}>New document</button>
+      <label className={`talia-btn talia-btn--secondary${busy ? ' is-disabled' : ''}`}>
+        Import…
+        <input
+          type="file"
+          accept=".pdf,.txt,.md,.markdown,text/plain,text/markdown,application/pdf"
+          hidden
+          disabled={busy}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (file) onImportFile?.(file);
+          }}
+        />
+      </label>
+      <button type="button" className="talia-btn talia-btn--secondary" onClick={onOpenPaste} disabled={busy}>Paste…</button>
       <button type="button" className="talia-btn talia-btn--secondary" onClick={onExportAll} disabled={busy || !totalCount}>Export JSON</button>
       <button type="button" className="talia-btn talia-btn--secondary" onClick={onRefresh} disabled={busy}>Refresh</button>
     </div>
 
     {message ? <p className="talia-callout">{message}</p> : null}
+
+    {pasteOpen ? (
+      <div className="pd-paste-overlay" role="presentation" onClick={onClosePaste}>
+        <div
+          className="pd-paste-dialog talia-card"
+          role="dialog"
+          aria-label="Paste text to convert"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <header className="pd-paste-dialog__header">
+            <h3 className="pd-paste-dialog__title">Paste text → Markdown</h3>
+            <button type="button" className="talia-btn talia-btn--secondary" onClick={onClosePaste} disabled={busy}>Close</button>
+          </header>
+          <p className="pd-paste-dialog__hint">
+            Paste PDF or Word copy here. Talia reformats it as Markdown for the repository — originals are not stored.
+          </p>
+          <textarea
+            className="talia-report-filters__input pd-paste-dialog__input"
+            value={pasteText}
+            onChange={(event) => onPasteTextChange(event.target.value)}
+            placeholder="Paste document text…"
+            rows={16}
+            autoFocus
+          />
+          <div className="pd-paste-dialog__actions">
+            <button type="button" className="talia-btn talia-btn--primary" onClick={onConvertPaste} disabled={busy || !String(pasteText || '').trim()}>
+              Convert to Markdown
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
 
     <div className={`pd-stage${activeKey ? ' pd-stage--focused' : ''}`}>
       {showPane('index') || showPane('reading') ? (
@@ -395,6 +450,15 @@ const DocumentRepositoryPresenter = ({
               </Field>
               <div className="pd-form__actions">
                 <button type="submit" className="talia-btn talia-btn--primary" disabled={busy}>Save</button>
+                <button
+                  type="button"
+                  className="talia-btn talia-btn--secondary"
+                  onClick={onReformatBody}
+                  disabled={busy || !String(form.body || '').trim()}
+                  title="Convert the current body text into structured Markdown"
+                >
+                  Reformat as Markdown
+                </button>
                 {selected && !drafting ? (
                   <button type="button" className="talia-btn talia-btn--secondary" onClick={onDelete} disabled={busy}>Delete</button>
                 ) : null}
@@ -413,6 +477,7 @@ const DocumentRepositoryPresenter = ({
         Mermaid diagrams from Cursor.
         Images are PNG, JPEG, GIF, or WebP, stored with the document and written as
         <code> ![](asset:…)</code>. A document links to a requirement, a matrix cell, or a risk.
+        Import / Paste converts PDF or plain text to Markdown in the browser; only the Markdown is saved.
       </p>
     </ReportProvenance>
   </div>

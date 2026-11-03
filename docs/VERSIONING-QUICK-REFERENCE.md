@@ -26,11 +26,11 @@
 - **Features**: Core revenue and inventory management
 - **Next**: v0.2.0 (Enhanced data features)
 
-### **Upcoming Releases**
-- **v0.2.0** - Enhanced data features
-- **v0.3.0** - Focus management implementation
+### **Current / recent**
+- **v0.4.0** - Demo baseline: Documents import, architecture print, Historic MR Path ✅
 - **v0.3.1** - talia-engine RM Agent Runtime (Advise), integration health, Ship × Day Pressure
-- **v1.0.0** - First production release
+- **v0.3.0** - Focus management / discuss presenter baseline
+- **v1.0.0** - First production release (planned)
 
 ## ✅ **Quality Gates**
 

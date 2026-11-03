@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.0] - 2026-11-03
+
+### Summary
+
+Stabilized demo baseline: Documents PDF/paste → Markdown import, Data Management architecture overview with reliable HTML print, platform PDF chrome, and Historic MR Path with source MR path ETL.
+
+### Added
+
+- **Documents:** Import PDF / `.txt` / `.md` or paste text, convert to structured Markdown, auto-save into `project_document`; **Reformat as Markdown** for existing raw bodies (`pdfjs-dist` text extract).
+- **Architecture (Data Management):** Overview/details Mermaid diagrams, node inspector, network path status, HTML print boards (no Mermaid-in-print).
+- **Print framework:** Shared document chrome (logo + datetime) and diagram HTML helpers for dock PDF exports.
+- **Historic MR Path:** Focus panel plus GraphQL/source MR path service and Supabase migration for MR path ETL.
+- **Instance connection:** Richer connection profile / egress notes for ops cross-checks.
+
+### Notes
+
+- Original PDF/files are not stored in Documents — Markdown content only.
+- Azure MVP deploy still requires SSH/NSG access; discuss demo path remains `dev.taliahub.com`.
+
+---
+
 ## [0.3.1] - 2026-09-07
 
 ### Summary

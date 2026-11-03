@@ -21,6 +21,7 @@ import GroupBookingReviewContainer from './GroupBookingReview';
 import GroupsExplorerContainer from './GroupsExplorer';
 import SourceMrReviewContainer from './SourceMrReview';
 import TaliaMrMethodContainer from './TaliaMrMethod';
+import HistoricMrPathContainer from './HistoricMrPath';
 import PromoExplorerContainer from './PromoExplorer';
 import SailingDemandCompositionContainer from './SailingDemandComposition';
 import BookingProfileContainer from './BookingProfile';
@@ -97,6 +98,8 @@ import {
   VIEW_RISK_DISPLAY,
   VIEW_GRAPH,
   VIEW_SOURCE_MR_MONTH,
+  VIEW_HISTORIC_MR_PATH,
+  VIEW_ASSUMPTIONS,
   VIEW_SNAPSHOT,
   VIEW_TOOLTIP,
   VIEW_TOOLTIP_MSE,
@@ -676,6 +679,38 @@ export const componentRegistry = {
     },
     filePath: 'src/components/focus-panels/TaliaMrMethod/index.jsx'
   },
+  HistoricMrPath: {
+    component: HistoricMrPathContainer,
+    panelId: 'historic-mr-path',
+    category: 'Tables',
+    title: 'Historic MR path',
+    description: 'What the source rate held before departure, and what Talia MR would have held',
+    props: {},
+    dataRequirements: 'Frozen SW_ETL group header history. Listens for talia:sail.select and narrows to that ship and sail date. Named guests are the final count until the header carries them.',
+    events: {
+      emits: [],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+    },
+    supportsRefresh: true,
+    supportsDataExport: true,
+    showInReports: true,
+    options: {
+      views: [
+        VIEW_SNAPSHOT,
+        VIEW_ASSUMPTIONS,
+        VIEW_GRAPH,
+        VIEW_HISTORIC_MR_PATH,
+        VIEW_DETAILS,
+        VIEW_FILTERS,
+        VIEW_TOOLTIP,
+        VIEW_LEGENDS,
+        VIEW_AXIS_LABELS,
+        VIEW_PROVENANCE,
+      ],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/HistoricMrPath/index.jsx'
+  },
   PromoExplorer: {
     component: PromoExplorerContainer,
     panelId: 'promo-explorer',
@@ -1253,9 +1288,16 @@ export const componentRegistry = {
     dataRequirements: 'Requires GraphQL backend access; ADMIN/SUPER_USER only',
     events: { emits: [], respondsTo: [] },
     allowedRoles: ['ADMIN', 'SUPER_USER'],
+    supportsDataExport: true,
     showInReports: true,
     options: {
-      views: [VIEW_DATA_SECTION, VIEW_FILTERS, VIEW_CONTROLS, VIEW_COLUMN_FILTERS],
+      views: [
+        VIEW_DATA_SECTION,
+        VIEW_DETAILS,
+        VIEW_FILTERS,
+        VIEW_CONTROLS,
+        VIEW_COLUMN_FILTERS,
+      ],
       operations: [],
     },
     filePath: 'src/components/focus-panels/DataManagement/index.jsx'

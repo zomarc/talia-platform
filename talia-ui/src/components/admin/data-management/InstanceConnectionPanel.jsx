@@ -6,57 +6,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 import uiPackageJson from '../../../../package.json';
-
-const INSTANCE_PROFILE_QUERY = `
-  query InstanceConnectionProfile {
-    instanceConnectionProfile {
-      collectedAt
-      configEnvironmentName
-      nodeEnv
-      dataSourcePriority
-      synapseSyncDisabled
-      graphqlServerPackageVersion
-      nodeRuntimeVersion
-      validateScriptDocVersion
-      backupBetweenInstances
-      architectureNotes
-      dataTargets {
-        id
-        label
-        role
-        address
-        skipped
-        online
-        detail
-      }
-      envKeys {
-        key
-        scope
-        label
-        present
-        sensitive
-        importance
-        whenRequired
-        note
-      }
-    }
-    dataSources {
-      id
-      sourceName
-      displayName
-      sourceType
-      isActive
-      description
-      connectionConfig
-    }
-    integrationSettings {
-      aisstreamApiKeyPresent
-      aishubUsername
-      vesselfinderApiKeyPresent
-      marinetrafficApiKeyPresent
-    }
-  }
-`;
+import NetworkPathDiagram from './NetworkPathDiagram.jsx';
+import { INSTANCE_PROFILE_QUERY } from './instanceConnectionQuery.js';
 
 const UPDATE_DATA_SOURCE_MUTATION = `
   mutation UpdateDataSourceConnection($sourceName: String!, $connectionConfig: JSON!) {
@@ -630,6 +581,84 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
               </div>
             </div>
           )}
+
+          <section className="dm-instance-profile__section" aria-label="Integration and networking">
+            <h4 className="dm-instance-profile__h4">Integration &amp; networking</h4>
+            <p className="dm-instance-profile__hint">
+              How <strong>this</strong> instance reaches its warehouse and database. Each environment (laptop, staging, MVP) has its own path and public IP.
+            </p>
+            {profile.networking && (
+              <>
+                <NetworkPathDiagram networking={profile.networking} />
+
+                <div className="talia-card dm-network-summary">
+                  <div className="talia-card__content">
+                    <dl className="dm-instance-profile__dl">
+                      <div>
+                        <dt>Public identity</dt>
+                        <dd>
+                          <code>{profile.networking.egressIpv4 || '—'}</code>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Open issues</dt>
+                        <dd>
+                          {(profile.networking.concerns || []).filter((c) => c.severity !== 'info').length
+                            || 'None'}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                </div>
+
+                {(profile.networking.concerns || []).filter((c) => c.severity !== 'info').length > 0 && (
+                  <div className="dm-network-concerns" role="list">
+                    {profile.networking.concerns.filter((c) => c.severity !== 'info').map((c) => (
+                      <div
+                        key={c.id}
+                        role="listitem"
+                        className={`talia-card dm-network-concern dm-network-concern--${c.severity}`}
+                      >
+                        <div className="talia-card__header">
+                          <h5 className="talia-card__title">{c.title}</h5>
+                        </div>
+                        <div className="talia-card__content">
+                          <p className="dm-network-concern__detail">{c.detail}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <details className="dm-network-technical">
+                  <summary>Technical path details</summary>
+                  <ol className="dm-network-hops">
+                    {(profile.networking.hops || []).map((hop, index) => (
+                      <li key={hop.id} className={`dm-network-hop dm-network-hop--${hop.kind}`}>
+                        <span className="dm-network-hop__step">{index + 1}</span>
+                        <div className="dm-network-hop__body">
+                          <strong className="dm-network-hop__label">{hop.label}</strong>
+                          {hop.address ? (
+                            <code className="dm-network-hop__addr">{hop.address}</code>
+                          ) : (
+                            <span className="dm-network-hop__addr dm-network-hop__addr--empty">—</span>
+                          )}
+                          {hop.note && <p className="dm-network-hop__note">{hop.note}</p>}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                  {(profile.networking.notes || []).length > 0 && (
+                    <ul className="dm-instance-profile__notes">
+                      {profile.networking.notes.map((note) => (
+                        <li key={note}>{note}</li>
+                      ))}
+                    </ul>
+                  )}
+                </details>
+              </>
+            )}
+          </section>
 
           <section className="dm-instance-profile__section">
             <h4 className="dm-instance-profile__h4">Data targets</h4>

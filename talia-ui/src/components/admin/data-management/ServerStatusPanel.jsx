@@ -26,9 +26,9 @@ const ServerStatusPanel = ({
       <div className={`dm-panel__header ${hideTitle ? 'dm-panel__header--actions-only' : ''}`}>
         {!hideTitle && (
           <div className="dm-panel__title dm-status-title">
-            🖥️ Server Status
+            Server status
             <span className="dm-status-count">
-              ({onlineCount}/{serverServices.length} Online)
+              ({onlineCount}/{serverServices.length} online)
             </span>
           </div>
         )}
@@ -74,7 +74,7 @@ const ServerStatusPanel = ({
                     className={`dm-status-dot ${status.online ? 'dm-status-dot--online' : 'dm-status-dot--offline'}`}
                   />
                   <span className="dm-status-name">
-                    {service.icon} {service.name}
+                    {service.name}
                   </span>
                   <span className="dm-status-state">
                     {status.online ? 'Online' : 'Offline'}

@@ -17,15 +17,26 @@ import LogsPanel from './LogsPanel.jsx';
 import ServerStatusPanel from './ServerStatusPanel.jsx';
 import DataManagementTable from './DataManagementTable.jsx';
 import InstanceConnectionPanel from './InstanceConnectionPanel.jsx';
+import ArchitectureOverviewPanel from './ArchitectureOverviewPanel.jsx';
 import TargetImportSection from './TargetImportSection.jsx';
 import { createTableActions } from './tableActions.js';
 import { formatDayMonYear, formatSailDateRange } from '../../../lib/dateFormat';
 import { isOpenEndedDate } from '../../../lib/integrationDateHealth.js';
 import { useSubpanelExpansion } from '../../../hooks/useSubpanelExpansion';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
-import { VIEW_DATA_SECTION } from '../../../lib/componentOptionsCatalog';
+import {
+  VIEW_COLUMN_FILTERS,
+  VIEW_CONTROLS,
+  VIEW_DATA_SECTION,
+  VIEW_DETAILS,
+  VIEW_FILTERS,
+} from '../../../lib/componentOptionsCatalog';
 import SubpanelExpandButton from '../../shared/SubpanelExpandButton.jsx';
+import ReportSnapshot from '../../shared/ReportSnapshot.jsx';
 import { enforceDashboardUiState } from '../../../services/dashboardUiState';
+import { registerPanelDataExport } from '../../../lib/panelDataExport';
+import { buildDataManagementExport } from '../../../lib/dataManagementPrint.js';
+import { buildArchitectureExport } from '../../../lib/architecturePrint.js';
 import {
   DATA_MANAGEMENT_STATE_EVENT,
   DATA_MANAGEMENT_SET_RANGE_EVENT,
@@ -39,6 +50,17 @@ import {
 import '../../../themes/dataMode.css';
 import '../admin.css';
 import './dataManagement.css';
+
+const DATA_MANAGEMENT_OPTIONS = {
+  views: [
+    VIEW_DATA_SECTION,
+    VIEW_DETAILS,
+    VIEW_FILTERS,
+    VIEW_CONTROLS,
+    VIEW_COLUMN_FILTERS,
+  ],
+  operations: [],
+};
 
 const INTERNAL_TALIA_TABLE_NAMES = new Set([
   'booking_targets_supplied',
@@ -168,9 +190,15 @@ export const DataManagementPanelCore = ({
   // Refresh status function
   const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
   const rootRef = useRef(null);
-  const { viewsState, setView, reportShellClassName } = useReportShellOptions(
+  const architectureDiagramRef = useRef(null);
+  const [architectureExportSnapshot, setArchitectureExportSnapshot] = useState(null);
+  const onArchitectureExportSnapshot = useCallback((snapshot) => {
+    setArchitectureExportSnapshot(snapshot || null);
+  }, []);
+  const { viewsState, setView, reportShellClassName, showSnapshot, showDetails } = useReportShellOptions(
     panelComponentId,
-    panelInstanceId
+    panelInstanceId,
+    DATA_MANAGEMENT_OPTIONS,
   );
   const storedSection = viewsState?.section;
   const activeSection = VIEW_DATA_SECTION.choices.includes(storedSection)
@@ -178,6 +206,10 @@ export const DataManagementPanelCore = ({
     : VIEW_DATA_SECTION.default;
   const selectSection = (section) => setView('section', section);
   const { expandedKey: expandedDataKey, toggleExpandedKey: toggleExpandedDataKey } = useSubpanelExpansion('tables');
+  const {
+    expandedKey: backupStatusExpandedKey,
+    toggleExpandedKey: toggleBackupStatusExpandedKey,
+  } = useSubpanelExpansion(null);
   const [opsPanelsOpen, setOpsPanelsOpen] = useState({
     backup: true,
     status: true,
@@ -187,6 +219,7 @@ export const DataManagementPanelCore = ({
   const toggleOpsPanel = useCallback((panelKey) => {
     setOpsPanelsOpen((prev) => ({ ...prev, [panelKey]: !prev[panelKey] }));
   }, []);
+  const servicesOnlineCount = SERVER_SERVICES.filter((s) => serverStatus[s.id]?.online).length;
 
   // Auto-scroll logs to bottom
   useEffect(() => {
@@ -468,6 +501,46 @@ The backup will be saved to: talia-server/backups/`;
       return dateString;
     }
   };
+
+  useEffect(() => registerPanelDataExport({
+    panelInstanceId,
+    panelComponentId: panelComponentId || 'data-management-panel',
+    getPayload: () => {
+      if (activeSection === 'architecture-overview') {
+        const profile = architectureExportSnapshot?.profile
+          || architectureDiagramRef.currentProfile
+          || null;
+        const networking = architectureExportSnapshot?.networking
+          || architectureDiagramRef.currentNetworking
+          || profile?.networking
+          || null;
+        const integrationSettings = architectureExportSnapshot?.integrationSettings
+          || architectureDiagramRef.currentIntegration
+          || null;
+        return buildArchitectureExport({
+          mode: showDetails ? 'details' : 'overview',
+          profile,
+          networking,
+          integrationSettings,
+          collectedAt: profile?.collectedAt
+            ? (formatDateTime(profile.collectedAt) || profile.collectedAt)
+            : '',
+          targets: profile?.dataTargets || [],
+          concerns: networking?.concerns || [],
+          egressIpv4: networking?.egressIpv4 || '',
+        });
+      }
+      return buildDataManagementExport(tables);
+    },
+  }), [
+    activeSection,
+    architectureExportSnapshot,
+    formatDateTime,
+    panelComponentId,
+    panelInstanceId,
+    showDetails,
+    tables,
+  ]);
 
   // Format date range for display (include year across horizon)
   const formatDateRange = (dateRange) => {
@@ -2098,6 +2171,9 @@ The backup will be saved to: talia-server/backups/`;
           <button className={`admin-tab ${activeSection === 'backup-status' ? 'admin-tab-active' : ''}`} onClick={() => selectSection('backup-status')}>
             Backup and Status
           </button>
+          <button className={`admin-tab ${activeSection === 'architecture-overview' ? 'admin-tab-active' : ''}`} onClick={() => selectSection('architecture-overview')}>
+            Architecture
+          </button>
           <button className={`admin-tab ${activeSection === 'instance-connection' ? 'admin-tab-active' : ''}`} onClick={() => selectSection('instance-connection')}>
             Instance &amp; keys
           </button>
@@ -2163,6 +2239,17 @@ The backup will be saved to: talia-server/backups/`;
             })
           )}
 
+          {activeSection === 'architecture-overview' && (
+            <div className="dm-tab-stack">
+              <ArchitectureOverviewPanel
+                formatDateTime={formatDateTime}
+                showDetails={showDetails}
+                diagramHostRef={architectureDiagramRef}
+                onExportSnapshot={onArchitectureExportSnapshot}
+              />
+            </div>
+          )}
+
           {activeSection === 'instance-connection' && (
             <div className="dm-tab-stack">
               <InstanceConnectionPanel formatDateTime={formatDateTime} />
@@ -2170,67 +2257,171 @@ The backup will be saved to: talia-server/backups/`;
           )}
 
           {activeSection === 'backup-status' && (
-            <div className="dm-bottom-panels dm-bottom-panels--collapsible">
-              <div className={`talia-card talia-card--expandable dm-panel-card ${opsPanelsOpen.backup ? 'talia-card--expanded' : ''}`}>
-                <SubpanelExpandButton
-                  className="talia-card__expand-toggle"
-                  expanded={opsPanelsOpen.backup}
-                  onToggle={() => toggleOpsPanel('backup')}
-                  label="backup"
-                />
-                <div className="talia-card__header">
-                  <h3 className="talia-card__title">💾 Backup</h3>
+            <div
+              className={[
+                'dm-tab-stack',
+                'dm-backup-status-section',
+                backupStatusExpandedKey ? 'dm-backup-status-section--focused' : '',
+              ].filter(Boolean).join(' ')}
+            >
+              <header className="talia-report__header dm-section-header">
+                <div className="talia-report__header-left">
+                  <h3 className="talia-report__title dm-section-header__title">Backup and Status</h3>
+                  <span className="talia-report__subtitle dm-section-header__subtitle">
+                    Database backup health and runtime service status for this instance
+                  </span>
                 </div>
-                <div className="talia-card__content">
-                  <BackupStatusBar
-                    compact
-                    backupStatus={backupStatus}
-                    formatDateTime={formatDateTime}
-                    triggerBackup={triggerBackup}
-                    fetchBackupStatus={fetchBackupStatus}
-                  />
-                </div>
+              </header>
+
+              <div className="talia-report__actions-bar" aria-label="Backup and status actions">
+                <button
+                  type="button"
+                  className="talia-btn talia-btn--primary"
+                  onClick={triggerBackup}
+                  disabled={backupStatus.loading}
+                  title="Create a new database backup"
+                >
+                  {backupStatus.loading ? 'Backing up…' : 'Backup now'}
+                </button>
+                <button
+                  type="button"
+                  className="talia-btn talia-btn--secondary"
+                  onClick={fetchBackupStatus}
+                  disabled={backupStatus.loading}
+                  title="Refresh backup status"
+                >
+                  Refresh backup
+                </button>
+                <button
+                  type="button"
+                  className="talia-btn talia-btn--secondary"
+                  onClick={checkServerStatus}
+                  disabled={isRefreshingStatus}
+                  title="Refresh service status"
+                >
+                  {isRefreshingStatus ? 'Checking…' : 'Refresh status'}
+                </button>
               </div>
-              <div className={`talia-card talia-card--expandable dm-panel-card ${opsPanelsOpen.status ? 'talia-card--expanded' : ''}`}>
-                <SubpanelExpandButton
-                  className="talia-card__expand-toggle"
-                  expanded={opsPanelsOpen.status}
-                  onToggle={() => toggleOpsPanel('status')}
-                  label="server status"
-                />
-                <div className="talia-card__header">
-                  <h3 className="talia-card__title">
-                    🖥️ Server Status
-                    <span className="dm-status-count">
-                      ({SERVER_SERVICES.filter(s => serverStatus[s.id]?.online).length}/{SERVER_SERVICES.length} Online)
-                    </span>
-                  </h3>
-                </div>
-                <div className="talia-card__content">
-                  <ServerStatusPanel
-                    hideTitle
-                    embedded
-                    serverServices={SERVER_SERVICES}
-                    serverStatus={serverStatus}
-                    expandedServices={expandedServices}
-                    setExpandedServices={setExpandedServices}
-                    isRefreshingStatus={isRefreshingStatus}
-                    checkServerStatus={checkServerStatus}
-                    formatDateTime={formatDateTime}
-                    onRestartGraphQL={handleRestartGraphQL}
-                    onLogInfo={(message) => {
-                      const logId = `${Date.now()}-${++logIdCounterRef.current}`;
-                      setLogs(prev => [...prev, {
-                        id: logId,
-                        timestamp: new Date(),
-                        type: 'info',
-                        message,
-                        tableName: 'System'
-                      }]);
-                    }}
-                    onMaximize={() => setExpandedPanel('status')}
+
+              <ReportSnapshot
+                visible={showSnapshot}
+                items={[
+                  {
+                    key: 'last-backup',
+                    label: 'Last backup',
+                    value: backupStatus.loading
+                      ? '…'
+                      : (backupStatus.lastBackup ? formatDateTime(backupStatus.lastBackup) : 'Never'),
+                    hint: backupStatus.size || undefined,
+                  },
+                  {
+                    key: 'backup-state',
+                    label: 'Backup result',
+                    value: backupStatus.status && backupStatus.status !== 'idle'
+                      ? backupStatus.status
+                      : (backupStatus.lastBackup ? 'success' : '—'),
+                  },
+                  {
+                    key: 'services',
+                    label: 'Services online',
+                    value: `${servicesOnlineCount}/${SERVER_SERVICES.length}`,
+                  },
+                ]}
+              />
+
+              <div className="dm-backup-status-grid">
+                <section
+                  className={`talia-card talia-card--expandable dm-panel-card dm-backup-status-card${backupStatusExpandedKey === 'backup' ? ' talia-card--expanded' : ''}`}
+                  aria-label="Backup"
+                >
+                  <SubpanelExpandButton
+                    className="talia-card__expand-toggle"
+                    expanded={backupStatusExpandedKey === 'backup'}
+                    onToggle={() => toggleBackupStatusExpandedKey('backup')}
+                    label="backup"
                   />
-                </div>
+                  <div className="talia-card__header">
+                    <h3 className="talia-card__title">Backup</h3>
+                  </div>
+                  <div className="talia-card__content">
+                    <BackupStatusBar
+                      compact
+                      hideActions
+                      backupStatus={backupStatus}
+                      formatDateTime={formatDateTime}
+                      triggerBackup={triggerBackup}
+                      fetchBackupStatus={fetchBackupStatus}
+                    />
+                    {(backupStatus.recentBackups || []).length > 0 ? (
+                      <div className="dm-backup-recent">
+                        <h4 className="dm-backup-recent__heading">Recent backups</h4>
+                        <table className="dm-instance-profile__table">
+                          <thead>
+                            <tr>
+                              <th>When</th>
+                              <th>File</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {backupStatus.recentBackups.slice(0, 5).map((row) => (
+                              <tr key={`${row.time}-${row.filename}`}>
+                                <td>{row.time ? formatDateTime(row.time) : '—'}</td>
+                                <td><code>{row.filename || '—'}</code></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="dm-instance-profile__hint">No recent backup files listed yet.</p>
+                    )}
+                  </div>
+                </section>
+
+                <section
+                  className={`talia-card talia-card--expandable dm-panel-card dm-backup-status-card${backupStatusExpandedKey === 'status' ? ' talia-card--expanded' : ''}`}
+                  aria-label="Server status"
+                >
+                  <SubpanelExpandButton
+                    className="talia-card__expand-toggle"
+                    expanded={backupStatusExpandedKey === 'status'}
+                    onToggle={() => toggleBackupStatusExpandedKey('status')}
+                    label="server status"
+                  />
+                  <div className="talia-card__header">
+                    <h3 className="talia-card__title">
+                      Server status
+                      <span className="dm-status-count">
+                        ({servicesOnlineCount}/{SERVER_SERVICES.length} online)
+                      </span>
+                    </h3>
+                  </div>
+                  <div className="talia-card__content">
+                    <ServerStatusPanel
+                      hideTitle
+                      embedded
+                      serverServices={SERVER_SERVICES}
+                      serverStatus={serverStatus}
+                      expandedServices={expandedServices}
+                      setExpandedServices={setExpandedServices}
+                      isRefreshingStatus={isRefreshingStatus}
+                      checkServerStatus={checkServerStatus}
+                      formatDateTime={formatDateTime}
+                      onRestartGraphQL={handleRestartGraphQL}
+                      onLogInfo={(message) => {
+                        const logId = `${Date.now()}-${++logIdCounterRef.current}`;
+                        setLogs((prev) => [...prev, {
+                          id: logId,
+                          timestamp: new Date(),
+                          type: 'info',
+                          message,
+                          tableName: 'System',
+                        }]);
+                      }}
+                      onMaximize={() => setExpandedPanel('status')}
+                    />
+                  </div>
+                </section>
               </div>
             </div>
           )}

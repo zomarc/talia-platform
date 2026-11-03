@@ -1393,6 +1393,7 @@ class SynapseSyncService {
           group_init_date: toDateOnly(getField(row, ['GROUP_INIT_DATE'])),
           changed_date: toTimestamp(getField(row, ['CHANGED_DATE'])),
           n_of_guests: toNumber(getField(row, ['N_OF_GUESTS'])),
+          n_of_delegate_guests: toNumber(getField(row, ['N_OF_DELEGATE_GUESTS'])),
           probability: toNumber(getField(row, ['PROBABILITY'])),
           is_prob_manual: yesNo(getField(row, ['IS_PROB_MANUAL'])),
           agency_id: toNumber(getField(row, ['AGENCY_ID'])),

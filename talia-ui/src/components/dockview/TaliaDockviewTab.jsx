@@ -618,20 +618,27 @@ const TaliaDockviewTab = ({
       } catch { /* noop */ }
       return;
     }
-    try {
-      runPanelDataExport(format, registered.getPayload);
+    void (async () => {
       try {
+        if (format === 'pdf') {
+          try {
+            window.__taliaStatus?.setStatusMessage?.('Preparing PDF…');
+          } catch { /* noop */ }
+        }
+        await runPanelDataExport(format, registered.getPayload);
+        try {
           window.__taliaStatus?.setStatusMessage?.(
-          format === 'pdf' ? 'Opening print dialog…' : format === 'md' ? 'Exported to Markdown' : 'Exported to CSV'
-        );
-      } catch { /* noop */ }
-    } catch (err) {
-      const message = err?.message || 'Export failed';
-      console.error('[TaliaDockviewTab] export failed', err);
-      try {
-        window.__taliaStatus?.setStatusMessage?.(`Error: ${message}`);
-      } catch { /* noop */ }
-    }
+            format === 'pdf' ? 'Opening print dialog…' : format === 'md' ? 'Exported to Markdown' : 'Exported to CSV'
+          );
+        } catch { /* noop */ }
+      } catch (err) {
+        const message = err?.message || 'Export failed';
+        console.error('[TaliaDockviewTab] export failed', err);
+        try {
+          window.__taliaStatus?.setStatusMessage?.(`Error: ${message}`);
+        } catch { /* noop */ }
+      }
+    })();
   };
 
   const cycleLabel = `Group view level ${groupCycleDepth} of ${groupCycleMaxDepth}`;

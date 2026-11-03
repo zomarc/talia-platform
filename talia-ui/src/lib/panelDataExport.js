@@ -2,7 +2,13 @@
  * Framework panel data export — Export to CSV / PDF via dock-tab ⬇.
  * Used when a panel registers window.__taliaPanelDataExport.
  * Tabulator tables auto-register from tabulatorConfig when panel IDs are passed.
+ * Every PDF gets platform print chrome (Talia logo + generated date/time).
  */
+
+import {
+  ensurePrintDocumentChrome,
+  formatPrintTimestamp,
+} from './printDocumentChrome.js';
 
 export const PANEL_DATA_EXPORT_CHANGED_EVENT = 'talia:panel.dataExportChanged';
 
@@ -95,7 +101,7 @@ export function rowsToCsv(columns, rows) {
  * instance label ("Talia (local)"). The printed page keeps its own title for
  * the header. Hold the export name on the top window until the dialog closes.
  */
-const printHtmlDocument = (html, exportTitle, delayMs = 120) => {
+const printHtmlDocument = (html, exportTitle, delayMs = 120, chrome = {}) => {
   const existing = document.getElementById('talia-panel-data-export-print');
   if (existing) existing.remove();
 
@@ -115,6 +121,7 @@ const printHtmlDocument = (html, exportTitle, delayMs = 120) => {
 
   const previousTitle = document.title;
   let finished = false;
+  let printStarted = false;
   const finish = () => {
     if (finished) return;
     finished = true;
@@ -125,6 +132,8 @@ const printHtmlDocument = (html, exportTitle, delayMs = 120) => {
   };
 
   const triggerPrint = () => {
+    if (printStarted || finished) return;
+    printStarted = true;
     document.title = exportTitle;
     frameWindow.addEventListener('afterprint', finish);
     window.addEventListener('afterprint', finish);
@@ -138,12 +147,37 @@ const printHtmlDocument = (html, exportTitle, delayMs = 120) => {
     }
   };
 
+  const schedulePrint = () => {
+    const images = Array.from(frameDoc.images || []);
+    const pending = images.filter((img) => !img.complete);
+    if (!pending.length) {
+      window.setTimeout(triggerPrint, delayMs);
+      return;
+    }
+    let remaining = pending.length;
+    const onDone = () => {
+      remaining -= 1;
+      if (remaining <= 0) window.setTimeout(triggerPrint, delayMs);
+    };
+    pending.forEach((img) => {
+      img.addEventListener('load', onDone, { once: true });
+      img.addEventListener('error', onDone, { once: true });
+    });
+    // Failsafe — never block the print dialog forever.
+    window.setTimeout(triggerPrint, Math.max(delayMs, 2500));
+  };
+
+  const documentHtml = ensurePrintDocumentChrome(html, {
+    generatedAt: chrome.generatedAt || formatPrintTimestamp(),
+    documentTitle: chrome.documentTitle || exportTitle,
+  });
+
   frameDoc.open();
-  frameDoc.write(html);
+  frameDoc.write(documentHtml);
   frameDoc.close();
 
-  if (frameDoc.readyState === 'complete') window.setTimeout(triggerPrint, delayMs);
-  else iframe.addEventListener('load', () => window.setTimeout(triggerPrint, delayMs), { once: true });
+  if (frameDoc.readyState === 'complete') schedulePrint();
+  else iframe.addEventListener('load', schedulePrint, { once: true });
 };
 
 export function downloadTextFile(filename, text, mime = 'text/csv;charset=utf-8') {
@@ -254,9 +288,13 @@ export function exportPanelDataCsv(payload) {
  */
 export function exportPanelDataPdf(payload) {
   const customHtml = typeof payload?.html === 'string' ? payload.html.trim() : '';
+  const generatedAt = formatPrintTimestamp();
   if (/<!doctype html|<html[\s>]/i.test(customHtml)) {
     const exportTitle = buildExportFilename(payload?.title || 'Export', 'pdf').replace(/\.pdf$/i, '');
-    printHtmlDocument(customHtml, exportTitle);
+    printHtmlDocument(customHtml, exportTitle, 120, {
+      generatedAt,
+      documentTitle: payload?.title || exportTitle,
+    });
     return;
   }
 
@@ -274,7 +312,6 @@ export function exportPanelDataPdf(payload) {
   }
 
   const exportTitle = buildExportFilename(title, 'pdf').replace(/\.pdf$/i, '');
-  const generatedAt = new Date().toLocaleString();
 
   const thead = hasTable
     ? columns.map((c) => `<th>${escHtml(c.title || c.field)}</th>`).join('')
@@ -293,7 +330,6 @@ export function exportPanelDataPdf(payload) {
   const metaParts = [];
   if (hasTable) metaParts.push(`${rows.length} row${rows.length === 1 ? '' : 's'}`);
   if (chartImage) metaParts.push('chart');
-  metaParts.push(`exported ${generatedAt}`);
 
   const chartBlock = chartImage
     ? `<figure class="chart"><img src="${chartImage}" alt="Chart" /></figure>`
@@ -380,15 +416,21 @@ export function exportPanelDataPdf(payload) {
 </body>
 </html>`;
 
-  printHtmlDocument(html, exportTitle, chartImage ? 120 : 80);
+  printHtmlDocument(html, exportTitle, chartImage ? 120 : 80, {
+    generatedAt,
+    documentTitle: title,
+  });
 }
 
 /**
  * @param {'csv'|'pdf'|'md'} format
- * @param {() => ({ title?: string, columns?: object[], rows?: object[], chartImage?: string|null } | null | undefined)} getPayload
+ * @param {(() => (object | Promise<object> | null | undefined)) | object} getPayload
+ * @returns {Promise<void>}
  */
-export function runPanelDataExport(format, getPayload) {
-  const payload = typeof getPayload === 'function' ? getPayload() : getPayload;
+export async function runPanelDataExport(format, getPayload) {
+  const payload = await Promise.resolve(
+    typeof getPayload === 'function' ? getPayload() : getPayload,
+  );
   if (!payload || typeof payload !== 'object') {
     throw new Error('Nothing to export');
   }

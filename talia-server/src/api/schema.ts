@@ -1408,6 +1408,36 @@ export const typeDefs = `#graphql
     detail: String
   }
 
+  """One step on this instance's network path (addresses only — no secrets)."""
+  type InstanceNetworkHop {
+    id: String!
+    label: String!
+    address: String
+    """local | public | remote | policy"""
+    kind: String!
+    note: String
+  }
+
+  """Actionable security / connectivity concern for this instance."""
+  type InstanceSecurityConcern {
+    id: String!
+    """high | medium | info"""
+    severity: String!
+    title: String!
+    detail: String!
+    relatedTargetId: String
+  }
+
+  """Per-instance networking snapshot (egress IP, path, firewall concerns)."""
+  type InstanceNetworking {
+    egressIpv4: String
+    """How egressIpv4 was obtained (e.g. api.ipify.org)."""
+    egressSource: String
+    hops: [InstanceNetworkHop!]!
+    concerns: [InstanceSecurityConcern!]!
+    notes: [String!]!
+  }
+
   type InstanceConnectionProfile {
     collectedAt: String!
     configEnvironmentName: String
@@ -1415,6 +1445,8 @@ export const typeDefs = `#graphql
     dataSourcePriority: String!
     synapseSyncDisabled: Boolean!
     dataTargets: [RuntimeDataTarget!]!
+    """Outbound path and security highlights for this host (differs per instance)."""
+    networking: InstanceNetworking!
     envKeys: [InstanceEnvKeyRow!]!
     backupBetweenInstances: String!
     architectureNotes: [String!]!
@@ -1982,6 +2014,73 @@ export const typeDefs = `#graphql
     allocations: [SourceMrAlloc!]!
   }
 
+  type SourceMrPathMonth {
+    month: String!
+    groups: Int!
+    highlightedGroups: Int!
+    requestedGuests: Int!
+    namedGuests: Int!
+    sourceExpectedGuests: Int!
+    taliaExpectedGuests: Int!
+    qualifyingGap: Int!
+    highlighted: Boolean!
+  }
+
+  type SourceMrPathGroup {
+    groupId: ID!
+    shipCode: String
+    sailDateFrom: String
+    sailDateTo: String
+    status: String!
+    changeDays: Int!
+    holdDate: String
+    requestedGuests: Int!
+    namedGuests: Int!
+    sourceMr: Float
+    taliaMr: Float
+    sourceExpectedGuests: Int!
+    taliaExpectedGuests: Int!
+    manual: Boolean!
+    highlighted: Boolean!
+  }
+
+  type SourceMrPathDay {
+    changedDate: String
+    status: String
+    requestedGuests: Int!
+    namedGuests: Int!
+    sourceMr: Float
+    taliaMr: Float
+    sourceExpectedGuests: Int!
+    taliaExpectedGuests: Int!
+    manual: Boolean!
+  }
+
+  type SourceMrPath {
+    feedThrough: String
+    namesFromHistory: Boolean!
+    assumptions: [String!]!
+    sailedGroupCount: Int!
+    unfilteredSailedCount: Int!
+    ships: [String!]!
+    sailDateMin: String
+    sailDateMax: String
+    sourceExpectedGuests: Int!
+    taliaExpectedGuests: Int!
+    namedGuests: Int!
+    months: [SourceMrPathMonth!]!
+    highlights: [SourceMrPathGroup!]!
+  }
+
+  type SourceMrPathSeries {
+    groupId: ID
+    namesFromHistory: Boolean!
+    sailDateFrom: String
+    namedGuests: Int!
+    days: [SourceMrPathDay!]!
+    assumptions: [String!]!
+  }
+
   input ProjectMilestoneInput {
     id: ID
     name: String!
@@ -2174,6 +2273,8 @@ export const typeDefs = `#graphql
     # Historic source MR (frozen SW_ETL extract; replaced when the warehouse is refreshed)
     sourceMrReview(shipCode: String, dateFrom: String, dateTo: String): SourceMrReview!
     sourceMrGroupHistory(groupId: ID!): SourceMrGroupHistory!
+    sourceMrPath(shipCode: String, dateFrom: String, dateTo: String): SourceMrPath!
+    sourceMrPathDays(groupId: ID!): SourceMrPathSeries!
 
     # Port / city locations (dwh.Dim_Port_City) with nearest-port labels
     portCityPage(filters: PortCityFilters): PortCityPage!

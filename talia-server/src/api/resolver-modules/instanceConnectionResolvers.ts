@@ -71,6 +71,166 @@ async function synapseRuntimeCheckBudgeted(): Promise<{ online: boolean; error: 
   ]);
 }
 
+const IPV4_RE = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+
+async function detectEgressIpv4(): Promise<{ ip: string | null; source: string; error: string | null }> {
+  const urls = ['https://api.ipify.org', 'https://ifconfig.me/ip', 'https://icanhazip.com'];
+  for (const url of urls) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 4500);
+      const res = await fetch(url, { signal: controller.signal, headers: { Accept: 'text/plain' } });
+      clearTimeout(timer);
+      if (!res.ok) continue;
+      const ip = (await res.text()).trim().split(/\s+/)[0];
+      if (ip && IPV4_RE.test(ip)) {
+        return { ip, source: url, error: null };
+      }
+    } catch {
+      /* try next */
+    }
+  }
+  return { ip: null, source: 'none', error: 'Could not determine this host’s public IPv4' };
+}
+
+function extractBlockedClientIp(message: string | null | undefined): string | null {
+  if (!message) return null;
+  const match = message.match(/Client with IP address ['"]?([\d.]+)['"]? is not allowed/i);
+  return match?.[1] && IPV4_RE.test(match[1]) ? match[1] : null;
+}
+
+function buildNetworkingSnapshot(opts: {
+  synapseSyncDisabled: boolean;
+  synapseOnline: boolean;
+  synapseError: string | null;
+  synapseAddress: string;
+  supabaseUrl: string;
+  egressIp: string | null;
+  egressSource: string;
+  egressError: string | null;
+}) {
+  const expected = trim(process.env.TALIA_EXPECTED_EGRESS_IPV4) || null;
+  const egressLabel = trim(process.env.TALIA_EGRESS_LABEL) || null;
+  const hops: Array<{
+    id: string;
+    label: string;
+    address: string | null;
+    kind: string;
+    note: string | null;
+  }> = [
+    {
+      id: 'graphql_process',
+      label: 'GraphQL server (this process)',
+      address: `host=${process.env.HOSTNAME || 'localhost'} · NODE_ENV=${process.env.NODE_ENV || 'development'}`,
+      kind: 'local',
+      note: 'Warehouse and sync calls originate here — not from the browser.',
+    },
+    {
+      id: 'egress_public',
+      label: egressLabel ? `Public egress (${egressLabel})` : 'Public egress IPv4',
+      address: opts.egressIp,
+      kind: 'public',
+      note: opts.egressIp
+        ? `Seen by remote firewalls when this instance dials out (${opts.egressSource}).`
+        : opts.egressError || 'Egress IP unknown.',
+    },
+  ];
+
+  if (!opts.synapseSyncDisabled) {
+    hops.push({
+      id: 'azure_firewall',
+      label: 'Azure Synapse firewall / allowlist',
+      address: opts.egressIp ? `${opts.egressIp}/32 must be allowed` : 'Allowlist this host’s public IPv4',
+      kind: 'policy',
+      note: 'Azure rejects SQL clients whose source IP is not on the server firewall.',
+    });
+    hops.push({
+      id: 'synapse_sql',
+      label: 'Azure Synapse SQL',
+      address: opts.synapseAddress,
+      kind: 'remote',
+      note: opts.synapseOnline ? 'Probe OK from this host.' : opts.synapseError || 'Unreachable from this host.',
+    });
+  }
+
+  hops.push({
+    id: 'supabase_kong',
+    label: 'Supabase Postgres (via Kong)',
+    address: opts.supabaseUrl,
+    kind: opts.supabaseUrl.includes('127.0.0.1') || opts.supabaseUrl.includes('localhost') ? 'local' : 'remote',
+    note: 'Application database path for this instance.',
+  });
+
+  const concerns: Array<{
+    id: string;
+    severity: string;
+    title: string;
+    detail: string;
+    relatedTargetId: string | null;
+  }> = [];
+
+  const blockedIp = extractBlockedClientIp(opts.synapseError);
+  if (blockedIp) {
+    concerns.push({
+      id: 'synapse_ip_firewall',
+      severity: 'high',
+      title: 'Synapse firewall blocks this egress IP',
+      detail: `Azure reported client IP ${blockedIp} is not allowed. Add ${blockedIp}/32 on the Synapse / SQL firewall (or corporate gateway allowlist), then refresh.`,
+      relatedTargetId: 'azure_synapse',
+    });
+  } else if (!opts.synapseSyncDisabled && !opts.synapseOnline && opts.synapseError) {
+    concerns.push({
+      id: 'synapse_unreachable',
+      severity: 'medium',
+      title: 'Synapse not reachable from this instance',
+      detail: opts.synapseError,
+      relatedTargetId: 'azure_synapse',
+    });
+  }
+
+  if (opts.egressIp && expected && opts.egressIp !== expected) {
+    concerns.push({
+      id: 'egress_mismatch',
+      severity: 'high',
+      title: 'Egress IP does not match expected static identity',
+      detail: `This host egresses as ${opts.egressIp}, but TALIA_EXPECTED_EGRESS_IPV4=${expected}. Tunnel may be down or traffic is bypassing the gateway.`,
+      relatedTargetId: null,
+    });
+  } else if (opts.egressIp && expected && opts.egressIp === expected) {
+    concerns.push({
+      id: 'egress_matches_expected',
+      severity: 'info',
+      title: 'Egress matches expected static IP',
+      detail: `${opts.egressIp} matches TALIA_EXPECTED_EGRESS_IPV4.`,
+      relatedTargetId: null,
+    });
+  }
+
+  if (!opts.egressIp) {
+    concerns.push({
+      id: 'egress_unknown',
+      severity: 'medium',
+      title: 'Public egress IP could not be detected',
+      detail: opts.egressError || 'Outbound HTTPS to IP echo services failed.',
+      relatedTargetId: null,
+    });
+  }
+
+  const notes = [
+    'Each instance (laptop, staging Mini PC, MVP) has its own egress IP and allowlist requirements.',
+    'Browser → local UI/GraphQL uses loopback; Synapse allowlisting follows the GraphQL server host’s public IP.',
+    'Optional: set TALIA_EXPECTED_EGRESS_IPV4 and TALIA_EGRESS_LABEL in the server env to assert a static gateway identity.',
+  ];
+
+  return {
+    egressIpv4: opts.egressIp,
+    egressSource: opts.egressIp ? opts.egressSource : opts.egressError || 'none',
+    hops,
+    concerns,
+    notes,
+  };
+}
+
 function buildEnvRows(synapseSyncDisabled: boolean) {
   const rows: Array<{
     key: string;
@@ -227,16 +387,18 @@ function buildEnvRows(synapseSyncDisabled: boolean) {
 export const instanceConnectionQueryResolvers = {
   instanceConnectionProfile: async () => {
     const synapseSyncDisabled = isSynapseSyncDisabled();
-    const [supabaseCheck, synapseCheck, dbEnv] = await Promise.all([
+    const [supabaseCheck, synapseCheck, dbEnv, egress] = await Promise.all([
       supabaseRuntimeCheck(),
       synapseSyncDisabled
         ? Promise.resolve({ online: false, error: null as string | null })
         : synapseRuntimeCheckBudgeted(),
       configService.getEnvironment().catch(() => null),
+      detectEgressIpv4(),
     ]);
 
     const supabaseUrl = process.env.SUPABASE_URL || 'http://127.0.0.1:54321';
     const sc = synapseSyncService.synapseConfig;
+    const synapseAddress = `${sc.server},${sc.port} / ${sc.database}`;
     const providerTargets = await shipPositionService.getProviderTargets({ connectAisStream: false });
 
     const dataTargets = [
@@ -255,7 +417,7 @@ export const instanceConnectionQueryResolvers = {
         role: synapseSyncDisabled
           ? 'Warehouse (sync disabled on this instance — data via backup/restore only)'
           : 'Warehouse source for configured dataset sync into Supabase',
-        address: `${sc.server},${sc.port} / ${sc.database}`,
+        address: synapseAddress,
         skipped: synapseSyncDisabled,
         online: synapseSyncDisabled ? true : synapseCheck.online,
         detail: synapseSyncDisabled
@@ -264,6 +426,17 @@ export const instanceConnectionQueryResolvers = {
       },
       ...providerTargets,
     ];
+
+    const networking = buildNetworkingSnapshot({
+      synapseSyncDisabled,
+      synapseOnline: !!synapseCheck.online,
+      synapseError: synapseCheck.error,
+      synapseAddress,
+      supabaseUrl,
+      egressIp: egress.ip,
+      egressSource: egress.source,
+      egressError: egress.error,
+    });
 
     const envKeys = buildEnvRows(synapseSyncDisabled);
 
@@ -274,6 +447,7 @@ export const instanceConnectionQueryResolvers = {
       dataSourcePriority: trim(process.env.DATA_SOURCE_PRIORITY) || 'supabase',
       synapseSyncDisabled,
       dataTargets,
+      networking,
       envKeys: envKeys.map((k) => ({
         key: k.key,
         scope: k.scope,
@@ -290,6 +464,7 @@ export const instanceConnectionQueryResolvers = {
         'GraphQL uses SUPABASE_URL inside Docker (often http://supabase-kong:8000). Browsers use VITE_SUPABASE_URL pointing at the host-mapped Kong port (e.g. :54321). Both must refer to the same logical Supabase project.',
         'Separate instances should use separate .env / secrets. Only restore backups onto a target after aligning passwords and keys for that target.',
         'Code reaches staging/MVP via ./scripts/deploy-to-staging.sh and ./scripts/deploy-to-mvp.sh (local tar + dist), not by relying on unpushed Git on your laptop.',
+        'Warehouse allowlists follow this GraphQL host’s public egress IP (see networking). Laptop vs staging vs MVP each need their own firewall entry unless they share a static gateway.',
       ],
       graphqlServerPackageVersion: readGraphqlServerPackageVersion(),
       nodeRuntimeVersion: typeof process !== 'undefined' && process.version ? process.version : 'unknown',

@@ -62,8 +62,9 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
     fallback: true,
   });
 
+  const detailsViewDef = (views || []).find((v) => v?.id === 'details') || DETAILS_DEF;
   const optionsSnapshot = resolveViewValue(viewsState, SNAPSHOT_DEF) !== false;
-  const optionsDetails = resolveViewValue(viewsState, DETAILS_DEF) !== false;
+  const optionsDetails = resolveViewValue(viewsState, detailsViewDef) !== false;
   const optionsProvenance = resolveViewValue(viewsState, VIEW_PROVENANCE) === true;
   const densityPref = resolveViewValue(viewsState, { id: 'density', default: 'full' }) === 'compact'
     ? 'compact'

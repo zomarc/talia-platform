@@ -14,6 +14,10 @@ export const VIEW_SNAPSHOT = { id: 'snapshot', label: 'Snapshot', type: 'boolean
 export const VIEW_GRAPH = { id: 'graph', label: 'Graph', type: 'boolean', default: true };
 /** Source MR review: departure-month comparison. Off until the view is turned on. */
 export const VIEW_SOURCE_MR_MONTH = { id: 'monthGraph', label: 'By month', type: 'boolean', default: false };
+/** Historic MR path: one group's change days. Off until the view is turned on. */
+export const VIEW_HISTORIC_MR_PATH = { id: 'pathGraph', label: 'Group path', type: 'boolean', default: false };
+/** Historic MR path: the written method. On until the view is turned off. */
+export const VIEW_ASSUMPTIONS = { id: 'assumptions', label: 'Assumptions', type: 'boolean', default: true };
 export const VIEW_DETAILS = { id: 'details', label: 'Details', type: 'boolean', default: true };
 /** Admin+ (and SUPER_USER): where this report’s data comes from. Off by default; Views → Provenance. */
 export const VIEW_PROVENANCE = {
@@ -170,6 +174,7 @@ export const VIEW_DATA_SECTION = {
     'external-integration',
     'internal-integration',
     'backup-status',
+    'architecture-overview',
     'instance-connection',
     'operations',
   ],
@@ -179,6 +184,7 @@ export const VIEW_DATA_SECTION = {
     'external-integration': 'External Integration',
     'internal-integration': 'Internal Integration',
     'backup-status': 'Backup and Status',
+    'architecture-overview': 'Architecture',
     'instance-connection': 'Instance & keys',
     operations: 'Operations',
   },
@@ -400,6 +406,21 @@ export const DEFAULT_COMPONENT_OPTIONS = {
     ],
     operations: [],
   },
+  'historic-mr-path': {
+    views: [
+      VIEW_SNAPSHOT,
+      VIEW_ASSUMPTIONS,
+      VIEW_GRAPH,
+      VIEW_HISTORIC_MR_PATH,
+      VIEW_DETAILS,
+      VIEW_FILTERS,
+      VIEW_TOOLTIP,
+      VIEW_LEGENDS,
+      VIEW_AXIS_LABELS,
+      VIEW_PROVENANCE,
+    ],
+    operations: [],
+  },
   'promo-explorer': {
     views: [VIEW_DENSITY, VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_COLUMN_FILTERS, VIEW_PROVENANCE],
     operations: [],
@@ -410,6 +431,16 @@ export const DEFAULT_COMPONENT_OPTIONS = {
   },
   'ui-placeholder': {
     views: [VIEW_WIREFRAME, VIEW_PLACEHOLDER_CAPTION],
+    operations: [],
+  },
+  'data-management-panel': {
+    views: [
+      VIEW_DATA_SECTION,
+      VIEW_DETAILS,
+      VIEW_FILTERS,
+      VIEW_CONTROLS,
+      VIEW_COLUMN_FILTERS,
+    ],
     operations: [],
   },
 };
@@ -439,6 +470,7 @@ const TABLE_FIT_EXCLUDED_PANEL_IDS = new Set([
   'project-plan',
   'source-mr-review',
   'talia-mr-method',
+  'historic-mr-path',
 ]);
 
 const TABLE_FIT_PANEL_IDS = new Set([

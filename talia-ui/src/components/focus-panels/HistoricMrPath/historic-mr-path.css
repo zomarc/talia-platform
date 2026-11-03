@@ -1,0 +1,187 @@
+.historic-mr-path {
+  container-type: inline-size;
+  container-name: historic-mr;
+}
+
+.historic-mr-path__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.historic-mr-path__body > .talia-report__content {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.historic-mr-path__details {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  border-top: 1px solid var(--theme-border);
+  background: var(--theme-bg-solid);
+}
+
+.historic-mr-path__details[hidden] {
+  display: none !important;
+}
+
+@container historic-mr (min-width: 880px) {
+  .historic-mr-path__body {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .historic-mr-path__details {
+    flex: 0 0 28%;
+    width: 28%;
+    max-width: 36rem;
+    min-width: 18rem;
+    border-top: 0;
+    border-left: 1px solid var(--theme-border);
+  }
+
+  .historic-mr-path__body--detail > .historic-mr-path__details {
+    flex: 1 1 auto;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    border-left: 0;
+  }
+}
+
+.historic-mr-path .talia-report__content > .historic-mr-path__section,
+.historic-mr-path .talia-report__content > .talia-report-provenance {
+  flex: 0 0 auto;
+  min-height: auto;
+}
+
+.historic-mr-path__body--focused > .historic-mr-path__details {
+  display: none !important;
+}
+
+.historic-mr-path__body--detail > .talia-report__content {
+  display: none;
+}
+
+.historic-mr-path__content--focused {
+  overflow: hidden;
+}
+
+.historic-mr-path__content--focused > :not(.talia-card--expanded) {
+  display: none;
+}
+
+.historic-mr-path .talia-report__content > .historic-mr-path__section.talia-card--expanded {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.historic-mr-path__section,
+.historic-mr-path__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-component-gap-sm);
+  padding: var(--theme-component-padding-sm) var(--theme-component-padding-md);
+  border-bottom: 1px solid var(--theme-border);
+}
+
+.historic-mr-path__heading,
+.historic-mr-path__lead,
+.historic-mr-path__note,
+.historic-mr-path__assumptions {
+  margin: 0;
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size);
+  color: var(--theme-fg);
+  line-height: 1.45;
+}
+
+.historic-mr-path__heading {
+  font-weight: 600;
+}
+
+.historic-mr-path__section.talia-card--expandable > .historic-mr-path__heading,
+.historic-mr-path__card.talia-card--expandable > .historic-mr-path__heading {
+  padding-right: 1.75rem;
+}
+
+.historic-mr-path__assumptions {
+  padding-left: 1.1rem;
+}
+
+.historic-mr-path__chart {
+  position: relative;
+  height: 16rem;
+  min-height: 12rem;
+}
+
+.historic-mr-path__chart--range {
+  height: 9rem;
+  min-height: 8rem;
+}
+
+.historic-mr-path__section.talia-card--expanded > .historic-mr-path__chart,
+.historic-mr-path__section.talia-card--expanded > .historic-mr-path__table-wrap,
+.historic-mr-path__section.talia-card--expanded > .historic-mr-path__assumptions {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  overflow: auto;
+}
+
+.historic-mr-path__details .talia-card--expanded {
+  min-height: 100%;
+}
+
+.historic-mr-path__table-wrap {
+  overflow: auto;
+  min-width: 0;
+}
+
+.historic-mr-path__table {
+  width: 100%;
+  min-width: 0;
+  border-collapse: collapse;
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size);
+  color: var(--theme-fg);
+}
+
+.historic-mr-path__table th,
+.historic-mr-path__table td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--theme-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.historic-mr-path__table th {
+  font-weight: 600;
+}
+
+.historic-mr-path__table td.num,
+.historic-mr-path__table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.historic-mr-path__table tr.is-selected {
+  background: var(--theme-bg-elevated, transparent);
+}
+
+.historic-mr-path__row {
+  cursor: pointer;
+}
+
+.historic-mr-path__filter-note {
+  margin: 0;
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size);
+  color: var(--theme-fg);
+}

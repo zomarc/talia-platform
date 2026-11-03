@@ -30,6 +30,7 @@ import { projectPlanMutationResolvers, projectPlanQueryResolvers } from './resol
 import { riskRegisterMutationResolvers, riskRegisterQueryResolvers } from './resolver-modules/riskRegisterResolvers.js';
 import { portCityQueryResolvers } from './resolver-modules/portCityResolvers.js';
 import { sourceMrReviewQueryResolvers } from './resolver-modules/sourceMrReviewResolvers.js';
+import { sourceMrPathQueryResolvers } from './resolver-modules/sourceMrPathResolvers.js';
 import { userMutationResolvers, userQueryResolvers } from './resolver-modules/userResolvers.js';
 import { statusQueryResolvers } from './resolver-modules/statusResolvers.js';
 import { instanceConnectionQueryResolvers } from './resolver-modules/instanceConnectionResolvers.js';
@@ -1102,6 +1103,7 @@ export const resolvers = {
     ...projectPlanQueryResolvers,
     ...portCityQueryResolvers,
     ...sourceMrReviewQueryResolvers,
+    ...sourceMrPathQueryResolvers,
 
     // Focus Management
     focuses: async (parent: any, args: any, context: any) => {

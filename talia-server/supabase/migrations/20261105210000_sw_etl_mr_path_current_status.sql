@@ -1,6 +1,9 @@
 -- Expose current group status on MR path holds so cancelled groups can be
 -- omitted from forward aggregates while remaining visible on a single-group path.
 
+-- OUT columns changed vs prior version — REPLACE cannot alter return type.
+DROP FUNCTION IF EXISTS sw_etl_mr_path_holds();
+
 CREATE OR REPLACE FUNCTION sw_etl_mr_path_holds()
 RETURNS TABLE (
   group_id bigint,

@@ -19,7 +19,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Monotonic ops token (not a calendar stamp). Bump when validate menu behavior or Instance & keys cross-check changes.
-SCRIPT_VERSION="ops-15"
+SCRIPT_VERSION="ops-16"
 CONFIG_FILE="${SCRIPT_DIR}/config/targets.env"
 if [[ -f "${CONFIG_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -74,8 +74,9 @@ STAGING_SUPABASE_URL="${STAGING_SUPABASE_URL:-http://${STAGING_UI_HOST:-${STAGIN
 STAGING_SUPABASE_ANON_KEY="${STAGING_SUPABASE_ANON_KEY:-${STAGING_UI_SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}}"
 STAGING_SUPABASE_SERVICE_ROLE_KEY="${STAGING_SUPABASE_SERVICE_ROLE_KEY:-}"
 
-# MVP (Azure test instance — scripts/backup-local-db-for-mvp.sh, restore-db-to-mvp.sh)
+# MVP / Celestyal Azure instance — scripts/backup-local-db-for-mvp.sh, restore-db-to-mvp.sh
 MVP_VALIDATE="${MVP_VALIDATE:-0}"
+MVP_LABEL="${MVP_LABEL:-Celestyal Azure}"
 MVP_UI_HOST="${MVP_UI_HOST:-}"
 MVP_UI_PORT="${MVP_UI_PORT:-5173}"
 MVP_GRAPHQL_PORT="${MVP_GRAPHQL_PORT:-4000}"
@@ -93,6 +94,11 @@ MVP_SSH_BASE_OPTS="${MVP_SSH_BASE_OPTS:--o ConnectTimeout=6 -o ConnectionAttempt
 # Same compose file as staging; app dir on MVP VM (override in targets.env if different).
 MVP_APP_DIR="${MVP_APP_DIR:-/home/${MVP_SSH_USER}/talia-docker}"
 MVP_DOCKER_COMPOSE="${MVP_DOCKER_COMPOSE:-sudo docker compose}"
+# Laptop SSH tunnels when public NSG blocks app ports (ssh -L …; see targets.env).
+MVP_TUNNEL_UI_PORT="${MVP_TUNNEL_UI_PORT:-25173}"
+MVP_TUNNEL_GRAPHQL_PORT="${MVP_TUNNEL_GRAPHQL_PORT:-24000}"
+MVP_TUNNEL_KONG_PORT="${MVP_TUNNEL_KONG_PORT:-25432}"
+MVP_DATA_MOUNT="${MVP_DATA_MOUNT:-/mnt/talia-data}"
 # Optional: docker compose command when driving staging over SSH from your laptop (no sudo on MiniPC).
 STAGING_REMOTE_DOCKER_COMPOSE="${STAGING_REMOTE_DOCKER_COMPOSE:-docker compose}"
 # Preferred local Postgres container. `supabase start` uses supabase_db_<project>; compose uses talia-supabase-db.
@@ -1066,6 +1072,7 @@ target_status_plain() {
   local target="$1"
   local loc_ui="$2" loc_gql="$3" loc_sb="$4"
   local st_ui="$5" st_gql="$6" st_sb="$7"
+  local mvp_ui="${8:-}" mvp_gql="${9:-}" mvp_sb="${10:-}"
   if [[ "$target" == "local" ]]; then
     if is_quick_up "$loc_ui" "ui" && is_quick_up "$loc_gql" "gql" && is_quick_up "$loc_sb" "kong" && is_docker_ready; then
       echo "UP"
@@ -1080,6 +1087,24 @@ target_status_plain() {
     else
       echo "DOWN"
     fi
+    return 0
+  fi
+  if [[ "$target" == "mvp" ]]; then
+    # Public ports may be NSG-blocked; treat SSH-reachable + on-box healthy as UP via check later.
+    # For header: UP if public OR tunnel OR SSH is ready (SSH alone → PARTIAL).
+    if is_quick_up "${mvp_ui:-000}" "ui" && is_quick_up "${mvp_gql:-000}" "gql"; then
+      echo "UP"
+      return 0
+    fi
+    if [[ -n "${MVP_TUNNEL_UI_PORT:-}" ]] && is_quick_up "$(get_http_code_quick "http://127.0.0.1:${MVP_TUNNEL_UI_PORT}/" 1)" "ui"; then
+      echo "UP (tunnel)"
+      return 0
+    fi
+    if check_mvp_ssh_ready 2>/dev/null; then
+      echo "PARTIAL (SSH; public NSG?)"
+      return 0
+    fi
+    echo "DOWN"
     return 0
   fi
   echo "UNKNOWN"
@@ -1244,10 +1269,21 @@ _emit_validate_summary_endpoints() {
   printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "" "${STAGING_UI_HOST:-?}:${STAGING_GRAPHQL_PORT:-4000} GraphQL" "$(quick_up_label "$st_gql" "gql")"
   printf "  %s %-9s  %-36s  %s\n" "$staging_marker" "" "${STAGING_UI_HOST:-?}:${STAGING_SUPABASE_KONG_PORT} Kong" "$(quick_up_label "$st_sb" "kong")"
   if [[ "${mvp_section}" == "1" ]]; then
+    local mvp_marker=" "
+    local work_now
+    work_now=$(get_effective_working_target 2>/dev/null || true)
+    [[ "$work_now" == "mvp" ]] && mvp_marker="▶"
     echo ""
-    printf "  %s %-9s  %-36s  %s\n" " " "MVP" "${MVP_UI_HOST}:${MVP_UI_PORT} UI (Azure)" "$(quick_up_label "$mvp_ui" "200")"
-    printf "  %s %-9s  %-36s  %s\n" " " "" "${MVP_UI_HOST}:${MVP_GRAPHQL_PORT} GraphQL" "$(quick_up_label "$mvp_gql" "gql")"
-    printf "  %s %-9s  %-36s  %s%s\n" " " "" "${mvp_kong_hostport:-${MVP_UI_HOST}:${MVP_SUPABASE_KONG_LIVE_PORT:-${MVP_KONG_PORT:-54321}}} Supabase Kong" "$(quick_up_label "$mvp_sb" "kong")" "${mvp_kong_line_suffix:-}"
+    printf "  %s %-9s  %-36s  %s\n" "$mvp_marker" "MVP" "${MVP_UI_HOST}:${MVP_UI_PORT} UI (${MVP_LABEL})" "$(quick_up_label "$mvp_ui" "200")"
+    printf "  %s %-9s  %-36s  %s\n" "$mvp_marker" "" "${MVP_UI_HOST}:${MVP_GRAPHQL_PORT} GraphQL" "$(quick_up_label "$mvp_gql" "gql")"
+    printf "  %s %-9s  %-36s  %s%s\n" "$mvp_marker" "" "${mvp_kong_hostport:-${MVP_UI_HOST}:${MVP_SUPABASE_KONG_LIVE_PORT:-${MVP_KONG_PORT:-54321}}} Supabase Kong" "$(quick_up_label "$mvp_sb" "kong")" "${mvp_kong_line_suffix:-}"
+    if [[ -n "${MVP_TUNNEL_UI_PORT:-}" ]]; then
+      local tun_ui tun_gql
+      tun_ui=$(get_http_code_quick "http://127.0.0.1:${MVP_TUNNEL_UI_PORT}/" 1)
+      tun_gql=$(get_http_code_quick "http://127.0.0.1:${MVP_TUNNEL_GRAPHQL_PORT}/graphql" 1)
+      printf "  %s %-9s  %-36s  %s\n" "$mvp_marker" "" "127.0.0.1:${MVP_TUNNEL_UI_PORT} tunnel UI" "$(quick_up_label "$tun_ui" "200")"
+      printf "  %s %-9s  %-36s  %s\n" "$mvp_marker" "" "127.0.0.1:${MVP_TUNNEL_GRAPHQL_PORT} tunnel GraphQL" "$(quick_up_label "$tun_gql" "gql")"
+    fi
   fi
   echo ""
   printf "  %-10s  %-36s  HTTP %s  gateway=%s\n" "Discuss" "${PUBLIC_DEV_URL}" "${pub_code}" "${gateway}"
@@ -1266,7 +1302,11 @@ _emit_validate_summary_deployed_canonical() {
   deployed_versions_print_row "$local_marker" "Local" "$loc_hp" "$loc_ui_version" "$loc_gql_prof"
   deployed_versions_print_row "$staging_marker" "Staging" "$st_hp" "$st_ui_version" "$st_gql_prof"
   if [[ "${mvp_section}" == "1" ]]; then
-    deployed_versions_print_row " " "MVP" "$mvp_hp" "$mvp_ui_version" "$mvp_gql_prof"
+    local mvp_ver_marker=" "
+    local work_now2
+    work_now2=$(get_effective_working_target 2>/dev/null || true)
+    [[ "$work_now2" == "mvp" ]] && mvp_ver_marker="▶"
+    deployed_versions_print_row "$mvp_ver_marker" "MVP" "$mvp_hp" "$mvp_ui_version" "$mvp_gql_prof"
   fi
   deployed_versions_print_row " " "Public" "$pub_hp" "$pub_ui_version" "$pub_gql_prof"
 
@@ -1415,7 +1455,7 @@ _print_ops_summary_live_header() {
   esac
 
   work_u=$(echo "$work" | tr '[:lower:]' '[:upper:]')
-  target_status_plain_text=$(target_status_plain "$work" "$loc_ui" "$loc_gql" "$loc_sb" "$st_ui" "$st_gql" "$st_sb")
+  target_status_plain_text=$(target_status_plain "$work" "$loc_ui" "$loc_gql" "$loc_sb" "$st_ui" "$st_gql" "$st_sb" "${mvp_ui:-000}" "000" "000")
   ext_status_plain_text=$(external_status_plain "$presenter" "$pub_code" "$gateway")
 
   header_sep=$(printf '%*s' 96 '' | tr ' ' '-')
@@ -1588,7 +1628,8 @@ _print_quick_targets_summary_impl() {
   work_u=$(echo "$work" | tr '[:lower:]' '[:upper:]')
   [[ "$work" == "local" ]] && work_color="$GREEN"
   [[ "$work" == "staging" ]] && work_color="$BLUE"
-  target_status_plain_text=$(target_status_plain "$work" "$loc_ui" "$loc_gql" "$loc_sb" "$st_ui" "$st_gql" "$st_sb")
+  [[ "$work" == "mvp" ]] && work_color="$CYAN"
+  target_status_plain_text=$(target_status_plain "$work" "$loc_ui" "$loc_gql" "$loc_sb" "$st_ui" "$st_gql" "$st_sb" "$mvp_ui" "$mvp_gql" "$mvp_sb")
   ext_status_plain_text=$(external_status_plain "$presenter" "$pub_code" "$gateway")
   local_marker=" "
   staging_marker=" "
@@ -2639,11 +2680,11 @@ deploy_to_mvp_from_local() {
   run_command "cd \"${ROOT_DIR}\" && ${deploy_xtra}STAGING_DEPLOY_CONFIRM_TOKEN=${token} ./scripts/deploy-to-mvp.sh ${mode}" "Deploy to MVP via ${SCRIPT_DIR}/deploy-to-mvp.sh (${label})" "$timeout_sec"
 }
 
-# Prints MVP demo-data readiness (code deploy ≠ Postgres restore).
+# Prints MVP / Celestyal demo-data readiness (code deploy ≠ Postgres restore).
 # Echoes one or more status lines; safe if SSH/DB unavailable.
 print_mvp_demo_db_readiness() {
   local indent="${1:-  }"
-  local db_probe table_n agency_n
+  local db_probe table_n agency_n inv_n docs_n users_n
   if ! check_mvp_ssh_ready 2>/dev/null; then
     echo -e "${indent}Demo DB: ${YELLOW}UNCHECKED${NC} ${DIM}(SSH unreachable)${NC}"
     return 0
@@ -2655,17 +2696,25 @@ print_mvp_demo_db_readiness() {
           WHERE table_schema='public' AND table_type='BASE TABLE')
         || '|' ||
         CASE WHEN to_regclass('public.agency') IS NULL THEN 'missing'
-             ELSE (SELECT COUNT(*)::text FROM public.agency) END;
+             ELSE (SELECT COUNT(*)::text FROM public.agency) END
+        || '|' ||
+        CASE WHEN to_regclass('public.inventory_item') IS NULL THEN 'missing'
+             ELSE (SELECT COUNT(*)::text FROM public.inventory_item) END
+        || '|' ||
+        CASE WHEN to_regclass('public.project_document') IS NULL THEN 'missing'
+             ELSE (SELECT COUNT(*)::text FROM public.project_document) END
+        || '|' ||
+        CASE WHEN to_regclass('auth.users') IS NULL THEN 'missing'
+             ELSE (SELECT COUNT(*)::text FROM auth.users) END;
     \"" 2>/dev/null | tr -d '[:space:]' || echo "")
   if [[ -z "$db_probe" || "$db_probe" != *"|"* ]]; then
     echo -e "${indent}Demo DB: ${YELLOW}UNCHECKED${NC} ${DIM}(could not query talia-supabase-db)${NC}"
     return 0
   fi
-  table_n="${db_probe%%|*}"
-  agency_n="${db_probe#*|}"
-  echo -n "${indent}Demo DB (public tables / agency rows): "
+  IFS='|' read -r table_n agency_n inv_n docs_n users_n <<<"$db_probe"
+  echo -n "${indent}Demo DB (public / agency / inventory_item / docs / auth.users): "
   if [[ "$agency_n" =~ ^[0-9]+$ && "$agency_n" -gt 0 ]]; then
-    echo -e "${GREEN}OK${NC}  ${DIM}${table_n} tables · agency ${agency_n} rows${NC}"
+    echo -e "${GREEN}OK${NC}  ${DIM}${table_n} tables · agency ${agency_n} · inventory ${inv_n} · docs ${docs_n} · users ${users_n}${NC}"
   elif [[ "$agency_n" == "missing" || "$agency_n" == "0" ]]; then
     echo -e "${YELLOW}THIN${NC}  ${DIM}${table_n} tables · agency missing/empty${NC}"
     echo -e "${indent}${YELLOW}⚠ Code deploy does not ship Postgres data.${NC}"
@@ -2675,26 +2724,132 @@ print_mvp_demo_db_readiness() {
   fi
 }
 
+# One SSH round-trip: compose health, data disk, synapse flag, on-box HTTP.
+print_mvp_vm_stack_status() {
+  local indent="${1:-  }"
+  local blob
+  if ! check_mvp_ssh_ready 2>/dev/null; then
+    echo -e "${indent}VM stack: ${YELLOW}UNCHECKED${NC} ${DIM}(SSH unreachable)${NC}"
+    return 0
+  fi
+  blob=$(ssh ${MVP_SSH_BASE_OPTS} "${MVP_SSH_USER}@${MVP_SSH_HOST}" bash -s <<REMOTE
+set +e
+cd "${MVP_APP_DIR}" 2>/dev/null || { echo "APPDIR=missing"; exit 0; }
+echo "APPDIR=ok"
+echo -n "HOSTNAME="; hostname 2>/dev/null
+echo -n "DISK="
+if findmnt -n -o TARGET,SIZE,AVAIL,USE% "${MVP_DATA_MOUNT}" 2>/dev/null; then :; else echo "unmounted"; fi
+echo -n "DOCKER_ROOT="
+sudo docker info 2>/dev/null | awk -F': ' '/Docker Root Dir/{print \$2; exit}'
+echo -n "SYNAPSE_DISABLED="
+grep -E '^TALIA_SYNAPSE_SYNC_DISABLED=' .env.staging 2>/dev/null | head -1 | cut -d= -f2- || echo "?"
+echo -n "ONBOX_UI="; curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:${MVP_UI_PORT}/ 2>/dev/null || printf '000'; echo
+echo -n "ONBOX_GQL="; curl -s -o /dev/null -w '%{http_code}' --max-time 3 -H 'Content-Type: application/json' -d '{"query":"{ __typename }"}' http://127.0.0.1:${MVP_GRAPHQL_PORT}/graphql 2>/dev/null || printf '000'; echo
+echo "COMPOSE<<"
+${MVP_DOCKER_COMPOSE} --env-file .env.staging -f docker-compose.staging.yml ps --format '{{.Name}}|{{.Status}}' 2>/dev/null
+echo "COMPOSE>>"
+REMOTE
+  2>/dev/null || true)
+
+  if [[ -z "$blob" ]]; then
+    echo -e "${indent}VM stack: ${YELLOW}UNCHECKED${NC} ${DIM}(empty SSH response)${NC}"
+    return 0
+  fi
+
+  local hostname disk docker_root synapse onbox_ui onbox_gql
+  hostname=$(printf '%s\n' "$blob" | sed -n 's/^HOSTNAME=//p' | head -1)
+  disk=$(printf '%s\n' "$blob" | sed -n 's/^DISK=//p' | head -1)
+  docker_root=$(printf '%s\n' "$blob" | sed -n 's/^DOCKER_ROOT=//p' | head -1)
+  synapse=$(printf '%s\n' "$blob" | sed -n 's/^SYNAPSE_DISABLED=//p' | head -1)
+  onbox_ui=$(printf '%s\n' "$blob" | sed -n 's/^ONBOX_UI=//p' | head -1)
+  onbox_gql=$(printf '%s\n' "$blob" | sed -n 's/^ONBOX_GQL=//p' | head -1)
+
+  echo -e "${indent}Host: ${BOLD}${hostname:-?}${NC}  ${DIM}${MVP_SSH_USER}@${MVP_SSH_HOST} · ${MVP_APP_DIR}${NC}"
+  echo -n "${indent}Data disk (${MVP_DATA_MOUNT}): "
+  if [[ "$disk" == *"unmounted"* || -z "$disk" ]]; then
+    echo -e "${YELLOW}UNMOUNTED${NC}"
+  else
+    echo -e "${GREEN}OK${NC}  ${DIM}${disk}${NC}"
+  fi
+  [[ -n "$docker_root" ]] && echo -e "${indent}Docker root: ${DIM}${docker_root}${NC}"
+
+  echo -n "${indent}On-box UI :${MVP_UI_PORT}: "
+  [[ "$onbox_ui" == "200" || "$onbox_ui" == "302" ]] && echo -e "${GREEN}UP${NC} ($onbox_ui)" || echo -e "${YELLOW}DOWN${NC} ($onbox_ui)"
+  echo -n "${indent}On-box GraphQL :${MVP_GRAPHQL_PORT}: "
+  [[ "$onbox_gql" == "200" || "$onbox_gql" == "400" ]] && echo -e "${GREEN}UP${NC} ($onbox_gql)" || echo -e "${YELLOW}DOWN${NC} ($onbox_gql)"
+
+  echo -n "${indent}Synapse sync disabled: "
+  case "$synapse" in
+    1|true|TRUE|yes|YES) echo -e "${GREEN}yes${NC} ${DIM}(TALIA_SYNAPSE_SYNC_DISABLED=${synapse})${NC}" ;;
+    0|false|FALSE|"") echo -e "${YELLOW}no / unset${NC} ${DIM}(value='${synapse}')${NC}" ;;
+    *) echo -e "${DIM}${synapse}${NC}" ;;
+  esac
+
+  echo -e "${indent}${BOLD}Compose services:${NC}"
+  local in_compose=0 line name status colour
+  while IFS= read -r line; do
+    [[ "$line" == "COMPOSE<<" ]] && { in_compose=1; continue; }
+    [[ "$line" == "COMPOSE>>" ]] && { in_compose=0; continue; }
+    [[ "$in_compose" != "1" || -z "$line" ]] && continue
+    name="${line%%|*}"
+    status="${line#*|}"
+    colour="$YELLOW"
+    [[ "$status" == *"healthy"* || "$status" == Up* || "$status" == *" Up "* ]] && colour="$GREEN"
+    [[ "$status" == *"Restarting"* || "$status" == *"unhealthy"* || "$status" == Exited* ]] && colour="$RED"
+    printf "%s  %-28s %b%s%b\n" "$indent" "$name" "$colour" "$status" "$NC"
+  done <<<"$blob"
+}
+
 check_mvp_services_remote() {
-  echo -e "${BOLD}MVP (${MVP_UI_HOST:-?}) — quick probes${NC}"
-  local ui gql ui_proxy
-  ui=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "${MVP_UI_URL%/}/" 2>/dev/null || echo "000")
-  gql=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "${MVP_GRAPHQL_URL%/}" 2>/dev/null || echo "000")
-  ui_proxy=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 \
+  echo -e "${BOLD}${MVP_LABEL} (${MVP_UI_HOST:-?} · MVP)${NC}"
+  echo -e "  ${DIM}Deploy: ./scripts/deploy-to-mvp.sh · DB: backup-local-db-for-mvp.sh + restore-db-to-mvp.sh${NC}"
+  echo ""
+
+  local ui gql kong ui_proxy
+  ui=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 5 "${MVP_UI_URL%/}/" 2>/dev/null || echo "000")
+  gql=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 5 "${MVP_GRAPHQL_URL%/}" 2>/dev/null || echo "000")
+  kong=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 5 "${MVP_SUPABASE_URL}" 2>/dev/null || echo "000")
+  ui_proxy=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 8 \
     -H 'Content-Type: application/json' \
     -d '{"query":"{ __typename }"}' \
     "${MVP_UI_URL%/}/api/graphql" 2>/dev/null || echo "000")
+
+  echo -e "  ${BOLD}Public (NSG)${NC}"
   echo -n "  UI (${MVP_UI_URL}): "
-  [[ "$ui" == "200" || "$ui" == "302" ]] && echo -e "${GREEN}UP${NC} ($ui)" || echo -e "${YELLOW}DOWN${NC} ($ui)"
-  echo -n "  GraphQL direct (${MVP_GRAPHQL_URL}): "
-  [[ "$gql" == "200" || "$gql" == "400" ]] && echo -e "${GREEN}UP${NC} ($gql)" || echo -e "${YELLOW}DOWN${NC} ($gql) ${DIM}(often NSG-blocked; use UI /api/graphql)${NC}"
+  [[ "$ui" == "200" || "$ui" == "302" ]] && echo -e "${GREEN}UP${NC} ($ui)" || echo -e "${YELLOW}DOWN / blocked${NC} ($ui)"
+  echo -n "  GraphQL (${MVP_GRAPHQL_URL}): "
+  [[ "$gql" == "200" || "$gql" == "400" ]] && echo -e "${GREEN}UP${NC} ($gql)" || echo -e "${YELLOW}DOWN / blocked${NC} ($gql)"
+  echo -n "  Kong (${MVP_SUPABASE_URL}): "
+  [[ "$kong" == "200" || "$kong" == "404" || "$kong" == "401" ]] && echo -e "${GREEN}UP${NC} ($kong)" || echo -e "${YELLOW}DOWN / blocked${NC} ($kong)"
   echo -n "  UI → GraphQL proxy: "
-  [[ "$ui_proxy" == "200" ]] && echo -e "${GREEN}UP${NC} ($ui_proxy)" || echo -e "${YELLOW}DOWN${NC} ($ui_proxy)"
+  [[ "$ui_proxy" == "200" ]] && echo -e "${GREEN}UP${NC} ($ui_proxy)" || echo -e "${YELLOW}DOWN${NC} ($ui_proxy) ${DIM}(needs public UI)${NC}"
+
+  echo ""
+  echo -e "  ${BOLD}Laptop SSH tunnel${NC} ${DIM}(127.0.0.1:${MVP_TUNNEL_UI_PORT} / ${MVP_TUNNEL_GRAPHQL_PORT} / ${MVP_TUNNEL_KONG_PORT})${NC}"
+  local tun_ui tun_gql tun_kong
+  tun_ui=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 3 "http://127.0.0.1:${MVP_TUNNEL_UI_PORT}/" 2>/dev/null || echo "000")
+  tun_gql=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 3 \
+    -H 'Content-Type: application/json' -d '{"query":"{ __typename }"}' \
+    "http://127.0.0.1:${MVP_TUNNEL_GRAPHQL_PORT}/graphql" 2>/dev/null || echo "000")
+  tun_kong=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 3 \
+    "http://127.0.0.1:${MVP_TUNNEL_KONG_PORT}/" 2>/dev/null || echo "000")
+  echo -n "  Tunnel UI: "
+  [[ "$tun_ui" == "200" || "$tun_ui" == "302" ]] && echo -e "${GREEN}UP${NC} ($tun_ui)  ${DIM}→ http://127.0.0.1:${MVP_TUNNEL_UI_PORT}${NC}" \
+    || echo -e "${YELLOW}DOWN${NC} ($tun_ui)  ${DIM}ssh -L ${MVP_TUNNEL_UI_PORT}:127.0.0.1:${MVP_UI_PORT} -L ${MVP_TUNNEL_GRAPHQL_PORT}:127.0.0.1:${MVP_GRAPHQL_PORT} -L ${MVP_TUNNEL_KONG_PORT}:127.0.0.1:${MVP_KONG_PORT} celestyal-talia${NC}"
+  echo -n "  Tunnel GraphQL: "
+  [[ "$tun_gql" == "200" || "$tun_gql" == "400" ]] && echo -e "${GREEN}UP${NC} ($tun_gql)" || echo -e "${YELLOW}DOWN${NC} ($tun_gql)"
+  echo -n "  Tunnel Kong: "
+  [[ "$tun_kong" == "200" || "$tun_kong" == "404" || "$tun_kong" == "401" ]] && echo -e "${GREEN}UP${NC} ($tun_kong)" || echo -e "${YELLOW}DOWN${NC} ($tun_kong)"
+
+  echo ""
+  echo -e "  ${BOLD}SSH / on-box${NC}"
   if check_mvp_ssh_ready 2>/dev/null; then
     echo -e "  SSH ${MVP_SSH_USER}@${MVP_SSH_HOST}: ${GREEN}OK${NC}"
+    print_mvp_vm_stack_status "  "
     print_mvp_demo_db_readiness "  "
   else
     echo -e "  SSH ${MVP_SSH_USER}@${MVP_SSH_HOST}: ${YELLOW}unreachable${NC}"
+    echo -e "  ${DIM}Need IdentityFile (~/.ssh/id_ed25519_client_tunnel) and Host celestyal-talia in ~/.ssh/config${NC}"
   fi
 }
 
@@ -2724,9 +2879,9 @@ set_working_target_interactive() {
   echo -e "  ${GREEN}1)${NC} Local (this machine’s dev stack)"
   echo -e "  ${GREEN}2)${NC} MiniPC / staging (${STAGING_HOST} — Docker prove)"
   if [[ "$MVP_VALIDATE" == "1" && -n "${MVP_SSH_HOST:-}" ]]; then
-    echo -e "  ${GREEN}3)${NC} Azure UAT / MVP prove (${MVP_SSH_HOST} → ${MVP_UI_URL})"
+    echo -e "  ${GREEN}3)${NC} ${MVP_LABEL} / MVP (${MVP_SSH_HOST} → ${MVP_UI_URL})"
   else
-    echo -e "  ${DIM}3)${NC} ${DIM}Azure UAT (set MVP_VALIDATE=1 and MVP_SSH_HOST in targets.env)${NC}"
+    echo -e "  ${DIM}3)${NC} ${DIM}Celestyal Azure / MVP (set MVP_VALIDATE=1 and MVP_SSH_HOST in targets.env)${NC}"
   fi
   echo -e "  ${YELLOW}0)${NC} Back"
   echo ""

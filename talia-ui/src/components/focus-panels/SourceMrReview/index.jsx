@@ -9,7 +9,16 @@ import { useGlobalDepartureMonth } from '../../../hooks/useGlobalDepartureMonth'
 import { isShipFilterActive, useGlobalShipFilter } from '../../../hooks/useGlobalShipFilter';
 import useReportPanelLoading from '../../../hooks/useReportPanelLoading';
 import { formatCriteriaDateSummary, resolveEffectiveCriteriaDateWindow } from '../../../lib/globalCriteriaDateWindow';
-import { emitSailSelect } from '../../../lib/eventBus';
+import {
+  emitGroupSelect,
+  emitSailSelect,
+  extractGroupIdFromEvent,
+  extractShipCodeFromEvent,
+  GROUP_CLEAR_EVENT,
+  GROUP_SELECT_EVENT,
+  SAIL_CLEAR_EVENT,
+  SAIL_SELECT_EVENT,
+} from '../../../lib/eventBus';
 import { setInventoryItems } from '../../../services/data/inventoryReferenceService';
 import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 import PanelDataState from '../../shared/PanelDataState';
@@ -194,9 +203,18 @@ const SourceMrReviewContainer = ({ panelInstanceId, panelComponentId }) => {
       });
       const next = data?.sourceMrReview || null;
       setReview(next);
+      const busGroupId = typeof window !== 'undefined'
+        ? extractGroupIdFromEvent(window.lastGroupSelectEvent?.detail)
+        : null;
       const candidateId = next?.candidate?.groupId || null;
-      setSelectedGroupId(candidateId);
-      setHistory(next?.candidate?.history || []);
+      const nextId = busGroupId || candidateId;
+      setSelectedGroupId(nextId);
+      if (busGroupId && next?.candidate?.groupId === busGroupId) {
+        setHistory(next.candidate.history || []);
+      } else if (!busGroupId) {
+        setHistory(next?.candidate?.history || []);
+      }
+      // When busGroupId differs from candidate, the group-select effect loads history.
     } catch (err) {
       setError(err?.message || 'Failed to load the source MR extract');
       setReview(null);
@@ -214,27 +232,41 @@ const SourceMrReviewContainer = ({ panelInstanceId, panelComponentId }) => {
   const selectedGroup = useMemo(() => {
     if (!review) return null;
     const quotes = review.notableQuotes || [];
-    return quotes.find((row) => row.groupId === selectedGroupId)
-      || (review.candidate?.groupId === selectedGroupId ? review.candidate : null)
-      || review.candidate;
-  }, [review, selectedGroupId]);
+    const fromQuotes = quotes.find((row) => row.groupId === selectedGroupId);
+    if (fromQuotes) return fromQuotes;
+    if (review.candidate?.groupId === selectedGroupId) return review.candidate;
+    if (selectedGroupId) {
+      const detail = typeof window !== 'undefined' ? window.lastGroupSelectEvent?.detail : null;
+      const row = detail?.row_data && typeof detail.row_data === 'object' ? detail.row_data : {};
+      return {
+        groupId: selectedGroupId,
+        shipCode: detail?.ship_code || row.ship_code || null,
+        sailDateFrom: row.sail_date_from || null,
+        sailDateTo: row.sail_date_to || null,
+        history,
+      };
+    }
+    return review.candidate || null;
+  }, [history, review, selectedGroupId]);
 
   const sailMatch = useMemo(
     () => findSail(masterSailRows, inventoryRows, selectedGroup),
     [masterSailRows, inventoryRows, selectedGroup]
   );
 
-  const handleSelectGroup = async (group) => {
-    if (!group?.groupId) return;
-    setSelectedGroupId(group.groupId);
-    if (review?.candidate?.groupId === group.groupId) {
+  const loadGroupHistory = useCallback(async (groupId) => {
+    if (!groupId) {
+      setHistory([]);
+      return;
+    }
+    if (review?.candidate?.groupId === groupId && review.candidate.history) {
       setHistory(review.candidate.history || []);
       return;
     }
     try {
       const data = await trackedFetchGraphql({
         query: HISTORY_QUERY,
-        variables: { groupId: group.groupId },
+        variables: { groupId },
         component: panelComponentId || COMPONENT,
         purpose: 'Load source MR history for one group',
         tableName: 'sw_etl_group_header',
@@ -243,11 +275,82 @@ const SourceMrReviewContainer = ({ panelInstanceId, panelComponentId }) => {
     } catch {
       setHistory([]);
     }
-  };
+  }, [panelComponentId, review]);
+
+  const handleSelectGroup = useCallback(async (group, { broadcast = true } = {}) => {
+    if (!group?.groupId) return;
+    setSelectedGroupId(group.groupId);
+    if (broadcast) {
+      emitGroupSelect({
+        group_id: group.groupId,
+        ship_code: group.shipCode || null,
+        selection_origin: 'source-mr-review',
+        row_data: {
+          group_id: group.groupId,
+          ship_code: group.shipCode || null,
+          sail_date_from: group.sailDateFrom || null,
+          sail_date_to: group.sailDateTo || null,
+        },
+      });
+    }
+    await loadGroupHistory(group.groupId);
+  }, [loadGroupHistory]);
+
+  useEffect(() => {
+    const onGroupSelect = (event) => {
+      const groupId = extractGroupIdFromEvent(event?.detail);
+      if (!groupId) return;
+      const quotes = review?.notableQuotes || [];
+      const match = quotes.find((row) => row.groupId === groupId)
+        || (review?.candidate?.groupId === groupId ? review.candidate : null);
+      if (match) {
+        handleSelectGroup(match, { broadcast: false });
+        return;
+      }
+      setSelectedGroupId(groupId);
+      loadGroupHistory(groupId);
+      const ship = extractShipCodeFromEvent(event?.detail);
+      if (ship) setShipChoice(String(ship).trim().toUpperCase());
+    };
+    const onGroupClear = () => setSelectedGroupId(null);
+    const onSailSelect = (event) => {
+      const ship = extractShipCodeFromEvent(event?.detail);
+      if (ship) setShipChoice(String(ship).trim().toUpperCase());
+    };
+    const onSailClear = () => {
+      setShipChoice('global');
+      setDatesFollowGlobal(true);
+      setLocalFrom('');
+      setLocalTo('');
+    };
+    if (window.lastGroupSelectEvent?.detail) onGroupSelect({ detail: window.lastGroupSelectEvent.detail });
+    window.addEventListener(GROUP_SELECT_EVENT, onGroupSelect);
+    window.addEventListener(GROUP_CLEAR_EVENT, onGroupClear);
+    window.addEventListener(SAIL_SELECT_EVENT, onSailSelect);
+    window.addEventListener(SAIL_CLEAR_EVENT, onSailClear);
+    return () => {
+      window.removeEventListener(GROUP_SELECT_EVENT, onGroupSelect);
+      window.removeEventListener(GROUP_CLEAR_EVENT, onGroupClear);
+      window.removeEventListener(SAIL_SELECT_EVENT, onSailSelect);
+      window.removeEventListener(SAIL_CLEAR_EVENT, onSailClear);
+    };
+  }, [handleSelectGroup, loadGroupHistory, review]);
 
   const handleOpenSailing = () => {
     if (!sailMatch?.sailCode || !selectedGroup) return;
     emitSailSelect({
+      sail_code: sailMatch.sailCode,
+      reference_sail_code: sailMatch.referenceSailCode || sailMatch.sailCode,
+      ship_code: sailMatch.shipCode,
+      selection_origin: 'source-mr-review',
+      row_data: {
+        sail_code: sailMatch.sailCode,
+        ship_code: sailMatch.shipCode,
+        group_id: selectedGroup.groupId,
+      },
+    });
+    emitGroupSelect({
+      group_id: selectedGroup.groupId,
       sail_code: sailMatch.sailCode,
       reference_sail_code: sailMatch.referenceSailCode || sailMatch.sailCode,
       ship_code: sailMatch.shipCode,

@@ -1882,6 +1882,7 @@ export const typeDefs = `#graphql
     referenceCode: String!
     title: String!
     body: String!
+    isStarred: Boolean!
     links: [ProjectRecordLink!]!
     assets: [ProjectDocumentAsset!]!
     createdAt: String!
@@ -1894,6 +1895,7 @@ export const typeDefs = `#graphql
     referenceCode: String
     title: String!
     body: String
+    isStarred: Boolean
     links: [ProjectRecordLinkInput!]
   }
 
@@ -2032,6 +2034,7 @@ export const typeDefs = `#graphql
     sailDateFrom: String
     sailDateTo: String
     status: String!
+    currentStatus: String
     changeDays: Int!
     holdDate: String
     requestedGuests: Int!
@@ -2042,6 +2045,7 @@ export const typeDefs = `#graphql
     taliaExpectedGuests: Int!
     manual: Boolean!
     highlighted: Boolean!
+    cancelled: Boolean
   }
 
   type SourceMrPathDay {
@@ -2054,6 +2058,7 @@ export const typeDefs = `#graphql
     sourceExpectedGuests: Int!
     taliaExpectedGuests: Int!
     manual: Boolean!
+    cancelled: Boolean
   }
 
   type SourceMrPath {
@@ -2061,6 +2066,7 @@ export const typeDefs = `#graphql
     namesFromHistory: Boolean!
     assumptions: [String!]!
     sailedGroupCount: Int!
+    cancelledGroupCount: Int
     unfilteredSailedCount: Int!
     ships: [String!]!
     sailDateMin: String
@@ -2070,6 +2076,8 @@ export const typeDefs = `#graphql
     namedGuests: Int!
     months: [SourceMrPathMonth!]!
     highlights: [SourceMrPathGroup!]!
+    """All scored sailed groups in the filter window (capped). Used by MR Retrospect."""
+    groups: [SourceMrPathGroup!]!
   }
 
   type SourceMrPathSeries {

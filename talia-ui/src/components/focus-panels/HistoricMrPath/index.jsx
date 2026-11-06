@@ -11,8 +11,12 @@ import { isShipFilterActive, useGlobalShipFilter } from '../../../hooks/useGloba
 import useReportPanelLoading from '../../../hooks/useReportPanelLoading';
 import { formatCriteriaDateSummary, resolveEffectiveCriteriaDateWindow } from '../../../lib/globalCriteriaDateWindow';
 import {
+  emitGroupSelect,
+  extractGroupIdFromEvent,
   extractSailCodeFromEvent,
   extractShipCodeFromEvent,
+  GROUP_CLEAR_EVENT,
+  GROUP_SELECT_EVENT,
   SAIL_CLEAR_EVENT,
   SAIL_SELECT_EVENT,
 } from '../../../lib/eventBus';
@@ -53,6 +57,7 @@ const PATH_QUERY = `
         sailDateFrom
         sailDateTo
         status
+        currentStatus
         changeDays
         holdDate
         requestedGuests
@@ -63,6 +68,26 @@ const PATH_QUERY = `
         taliaExpectedGuests
         manual
         highlighted
+        cancelled
+      }
+      groups {
+        groupId
+        shipCode
+        sailDateFrom
+        sailDateTo
+        status
+        currentStatus
+        changeDays
+        holdDate
+        requestedGuests
+        namedGuests
+        sourceMr
+        taliaMr
+        sourceExpectedGuests
+        taliaExpectedGuests
+        manual
+        highlighted
+        cancelled
       }
     }
   }
@@ -86,6 +111,7 @@ const DAYS_QUERY = `
         sourceExpectedGuests
         taliaExpectedGuests
         manual
+        cancelled
       }
     }
   }
@@ -171,14 +197,16 @@ const HistoricMrPathContainer = ({ panelInstanceId, panelComponentId }) => {
   }, [loadPath]);
 
   useEffect(() => {
-    const highlights = path?.highlights || [];
-    if (!highlights.length) {
-      setSelectedGroupId(null);
-      return;
-    }
-    setSelectedGroupId((current) => (
-      highlights.some((row) => row.groupId === current) ? current : highlights[0].groupId
-    ));
+    const list = path?.groups?.length ? path.groups : (path?.highlights || []);
+    // Keep bus/manual focus when the sailed filter list is empty (e.g. open sailing).
+    if (!list.length) return;
+    setSelectedGroupId((current) => {
+      if (current && list.some((row) => row.groupId === current)) return current;
+      const fromBus = extractGroupIdFromEvent(window.lastGroupSelectEvent?.detail);
+      if (fromBus) return fromBus;
+      if (current) return current;
+      return list[0].groupId;
+    });
   }, [path]);
 
   useEffect(() => {
@@ -204,44 +232,72 @@ const HistoricMrPathContainer = ({ panelInstanceId, panelComponentId }) => {
   }, [panelComponentId, selectedGroupId]);
 
   useEffect(() => {
-    const onSelect = (event) => {
+    const onSailSelect = (event) => {
       const detail = event?.detail;
       const ship = extractShipCodeFromEvent(detail);
       const dates = sailDatesFromDetail(detail, masterSailRows);
-      const groupId = detail?.row_data?.group_id ?? detail?.group_id;
       if (ship) setShipChoice(String(ship).trim().toUpperCase());
       if (dates?.from) {
         setDatesFollowGlobal(false);
         setLocalFrom(dates.from);
         setLocalTo(dates.to || dates.from);
       }
-      if (groupId != null && String(groupId).trim()) setSelectedGroupId(String(groupId).trim());
     };
-    const onClear = () => {
+    const onSailClear = () => {
       setShipChoice('global');
       setDatesFollowGlobal(false);
       setLocalFrom('');
       setLocalTo('');
     };
-    if (window.lastSailSelectEvent?.detail) onSelect({ detail: window.lastSailSelectEvent.detail });
-    window.addEventListener(SAIL_SELECT_EVENT, onSelect);
-    window.addEventListener(SAIL_CLEAR_EVENT, onClear);
+    const onGroupSelect = (event) => {
+      const groupId = extractGroupIdFromEvent(event?.detail);
+      if (!groupId) return;
+      setSelectedGroupId(groupId);
+      const ship = extractShipCodeFromEvent(event?.detail);
+      const dates = sailDatesFromDetail(event?.detail, masterSailRows);
+      if (ship) setShipChoice(String(ship).trim().toUpperCase());
+      if (dates?.from) {
+        setDatesFollowGlobal(false);
+        setLocalFrom(dates.from);
+        setLocalTo(dates.to || dates.from);
+      }
+    };
+    const onGroupClear = () => setSelectedGroupId(null);
+    if (window.lastSailSelectEvent?.detail) onSailSelect({ detail: window.lastSailSelectEvent.detail });
+    if (window.lastGroupSelectEvent?.detail) onGroupSelect({ detail: window.lastGroupSelectEvent.detail });
+    window.addEventListener(SAIL_SELECT_EVENT, onSailSelect);
+    window.addEventListener(SAIL_CLEAR_EVENT, onSailClear);
+    window.addEventListener(GROUP_SELECT_EVENT, onGroupSelect);
+    window.addEventListener(GROUP_CLEAR_EVENT, onGroupClear);
     return () => {
-      window.removeEventListener(SAIL_SELECT_EVENT, onSelect);
-      window.removeEventListener(SAIL_CLEAR_EVENT, onClear);
+      window.removeEventListener(SAIL_SELECT_EVENT, onSailSelect);
+      window.removeEventListener(SAIL_CLEAR_EVENT, onSailClear);
+      window.removeEventListener(GROUP_SELECT_EVENT, onGroupSelect);
+      window.removeEventListener(GROUP_CLEAR_EVENT, onGroupClear);
     };
   }, [masterSailRows]);
 
   useReportPanelLoading(panelInstanceId, panelComponentId, loading && !path);
 
-  const selectedGroup = useMemo(
-    () => (path?.highlights || []).find((row) => row.groupId === selectedGroupId) || null,
-    [path, selectedGroupId]
-  );
+  const selectedGroup = useMemo(() => {
+    const list = [...(path?.groups || []), ...(path?.highlights || [])];
+    return list.find((row) => row.groupId === selectedGroupId) || null;
+  }, [path, selectedGroupId]);
 
   const handleSelectGroup = (group) => {
     if (!group?.groupId) return;
     setSelectedGroupId(group.groupId);
+    emitGroupSelect({
+      group_id: group.groupId,
+      sail_code: null,
+      ship_code: group.shipCode || null,
+      selection_origin: 'historic-mr-path',
+      row_data: {
+        group_id: group.groupId,
+        ship_code: group.shipCode || null,
+        sail_date_from: group.sailDateFrom || null,
+      },
+    });
   };
 
   return (

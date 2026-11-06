@@ -56,6 +56,11 @@ export DEPLOY_TARGET_LABEL="${DEPLOY_TARGET_LABEL:-staging}"
 
 # Remote Docker Compose invocation (set DEPLOY_DOCKER_COMPOSE='sudo docker compose' for Azure MVP if needed)
 DC="${DEPLOY_DOCKER_COMPOSE:-docker compose}"
+# Always load host .env.staging. Compose file JWT/anon/service defaults do not match Celestyal/MVP
+# secrets — recreating graphql-server without --env-file causes JWSInvalidSignature everywhere.
+if [[ "${DC}" != *"--env-file"* ]]; then
+  DC="${DC} --env-file .env.staging"
+fi
 # Remote docker binary for docker cp (set DEPLOY_DOCKER_BIN=sudo docker with sudo compose)
 DOCKER_BIN="${DEPLOY_DOCKER_BIN:-docker}"
 

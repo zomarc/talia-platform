@@ -10,7 +10,7 @@ import {
 
 export const FEED_THROUGH_LABEL = '10 February 2025';
 
-export const TALIA_MR_LEAD = 'Talia MR estimates how many requested group guests will be named. It starts from an even prior, then gives most of the weight to guests already named. The source rate can only nudge the result. Expected guests are the request times this rate.';
+export const TALIA_MR_LEAD = 'Talia MR estimates how many requested group guests will be named. It starts from an even prior, then gives most of the weight to guests already named at that point in time. The source rate nudges the result by default (Views can turn that off). Expected guests are the request times this rate. Cancelled holds contribute 0 forward.';
 
 export const TALIA_MR_SOURCES = [
   {
@@ -75,12 +75,22 @@ export const TALIA_MR_ISSUES = [
   {
     id: 'not-a-copy',
     title: 'The source rate is not the answer',
-    text: 'A quote stored at 100% with nobody named does not become a 100% Talia MR. The source rate moves the result by 15% of the gap, and only when the gap is at least 5 points.',
+    text: 'A quote stored at 100% with nobody named does not become a 100% Talia MR. Source nudge is on by default and moves the result by 15% of the gap when the gap is at least 5 points. Views → Use source rate nudge can turn it off.',
+  },
+  {
+    id: 'as-of-only',
+    title: 'No prior knowledge of the ending names',
+    text: 'At each point in time, Talia MR uses named guests known then. When the header has no named count, a booked (BK) hold uses the requested size as booked evidence; quotes and offers stay at 0 named. The final named outcome is only for judging the path.',
+  },
+  {
+    id: 'cancelled',
+    title: 'Cancelled groups do not add forward expected guests',
+    text: 'A cancelled hold scores 0 expected guests from that day forward. Cancelled groups stay visible on a single-group path, but sailing and window totals omit them.',
   },
   {
     id: 'blank-is-100',
     title: 'A missing live probability becomes 100%',
-    text: 'On the current book, a group with no group_probability and no reservation probability is given a 100% source rate before this calculation starts. That 100% can still only nudge Talia MR.',
+    text: 'On the current book, a group with no group_probability and no reservation probability is given a 100% source rate for comparison. That 100% only affects Talia MR when source nudge is on.',
   },
   {
     id: 'frozen',
@@ -196,8 +206,11 @@ const caseIssues = (explanation, meta) => {
   return issues;
 };
 
-const buildCase = (meta) => {
-  const explanation = explainTaliaMaterialisation(meta.input);
+const buildCase = (meta, options = {}) => {
+  const explanation = explainTaliaMaterialisation({
+    ...meta.input,
+    useSourceNudge: options.useSourceNudge !== false,
+  });
   return {
     ...meta,
     explanation,
@@ -205,7 +218,9 @@ const buildCase = (meta) => {
   };
 };
 
-export const buildIllustrationCases = () => ILLUSTRATIONS.map(buildCase);
+export const buildIllustrationCases = (options = {}) => (
+  ILLUSTRATIONS.map((item) => buildCase(item, options))
+);
 
 const dateLabel = (value) => {
   const key = String(value || '').slice(0, 10);
@@ -230,7 +245,8 @@ export const caseFromGroupRow = (row, context = {}) => {
   const when = dateLabel(sailDate);
   const sailing = [row?.ship_code, sailCode, when].filter(Boolean).join(' · ');
   return buildCase({
-    id: String(row?.group_key || row?.group_id || ''),
+    // Prefer group_id so talia:group.select matches the worked case.
+    id: String(row?.group_id || row?.group_key || ''),
     title: `Group ${row?.group_id || row?.group_key || ''}`,
     sailing: sailing || sailCode || 'Selected sailing',
     status: row?.status_mix || 'Group',
@@ -248,7 +264,7 @@ export const caseFromGroupRow = (row, context = {}) => {
       offerHeavy: Boolean(row?.offer_heavy),
       distressedSailing: Boolean(row?.distressed_sailing),
     },
-  });
+  }, { useSourceNudge: context.useSourceNudge !== false });
 };
 
 export const pickDefaultCaseId = (cases = []) => {

@@ -5,6 +5,7 @@ import {
   escapeCsvCell,
   buildExportFilename,
   shortDateStamp,
+  payloadFromReport,
 } from './panelDataExport.js';
 
 assert.equal(escapeCsvCell(null), '');
@@ -34,5 +35,24 @@ assert.match(name, /^Reservation-Current-\d{4}-\d{2}-\d{2}_\d{6}_\d{3}\.csv$/);
 const a = shortDateStamp();
 const b = shortDateStamp(new Date(Date.now() + 1));
 assert.notEqual(a, b);
+
+const report = payloadFromReport({
+  title: 'MR Retrospect',
+  html: '<html><body>ok</body></html>',
+  columns: [{ field: 'dtd', title: 'DTD' }],
+  rows: [{ dtd: 90 }],
+  chartImage: 'data:image/png;base64,AAA',
+});
+assert.equal(report.title, 'MR Retrospect');
+assert.equal(report.html, '<html><body>ok</body></html>');
+assert.equal(report.chartImage, 'data:image/png;base64,AAA');
+assert.deepEqual(report.columns, [{ field: 'dtd', title: 'DTD' }]);
+assert.deepEqual(report.rows, [{ dtd: 90 }]);
+
+const bare = payloadFromReport({ title: 'Bare', rows: [{ a: 1 }] });
+assert.equal(bare.html, undefined);
+assert.equal(bare.chartImage, undefined);
+assert.deepEqual(bare.columns, []);
+assert.deepEqual(bare.rows, [{ a: 1 }]);
 
 console.log('panelDataExport.test.mjs: ok');

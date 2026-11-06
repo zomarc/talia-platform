@@ -7,7 +7,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import useReportPanelLoading from '../../../hooks/useReportPanelLoading';
-import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
+import {
+  emitGroupSelect,
+  extractGroupIdFromEvent,
+  GROUP_CLEAR_EVENT,
+  GROUP_SELECT_EVENT,
+  SAIL_CLEAR_EVENT,
+  SAIL_SELECT_EVENT,
+} from '../../../lib/eventBus';
 import {
   activeCase,
   buildIllustrationCases,
@@ -41,14 +49,9 @@ const RESERVATION_COLUMNS = [
   'net_ticket_revenue',
 ];
 
-const groupIdFromDetail = (detail) => {
-  const raw = detail?.row_data?.group_id ?? detail?.group_id ?? null;
-  const text = raw == null ? '' : String(raw).trim();
-  return text || null;
-};
-
 const TaliaMrMethodContainer = ({ panelInstanceId, panelComponentId }) => {
   const [pickedId, setPickedId] = useState(null);
+  const { useSourceNudge } = useReportShellOptions(panelComponentId, panelInstanceId);
 
   const {
     data: reservationRows,
@@ -74,29 +77,36 @@ const TaliaMrMethodContainer = ({ panelInstanceId, panelComponentId }) => {
   ).trim();
 
   useEffect(() => {
-    const onSelect = (event) => setPickedId(groupIdFromDetail(event?.detail));
-    const onClear = () => setPickedId(null);
-    const existing = typeof window !== 'undefined' ? window.lastSailSelectEvent?.detail : null;
-    if (existing) setPickedId(groupIdFromDetail(existing));
-    window.addEventListener(SAIL_SELECT_EVENT, onSelect);
-    window.addEventListener(SAIL_CLEAR_EVENT, onClear);
+    const onGroupSelect = (event) => setPickedId(extractGroupIdFromEvent(event?.detail));
+    const onGroupClear = () => setPickedId(null);
+    const existingGroup = typeof window !== 'undefined' ? window.lastGroupSelectEvent?.detail : null;
+    if (existingGroup) setPickedId(extractGroupIdFromEvent(existingGroup));
+    window.addEventListener(GROUP_SELECT_EVENT, onGroupSelect);
+    window.addEventListener(GROUP_CLEAR_EVENT, onGroupClear);
+    window.addEventListener(SAIL_CLEAR_EVENT, onGroupClear);
     return () => {
-      window.removeEventListener(SAIL_SELECT_EVENT, onSelect);
-      window.removeEventListener(SAIL_CLEAR_EVENT, onClear);
+      window.removeEventListener(GROUP_SELECT_EVENT, onGroupSelect);
+      window.removeEventListener(GROUP_CLEAR_EVENT, onGroupClear);
+      window.removeEventListener(SAIL_CLEAR_EVENT, onGroupClear);
     };
   }, []);
 
   const rows = useMemo(
-    () => (selectedSailCode ? buildGroupsExplorerRows(reservationRows || []) : []),
-    [reservationRows, selectedSailCode]
+    () => (selectedSailCode
+      ? buildGroupsExplorerRows(reservationRows || [], { useSourceNudge })
+      : []),
+    [reservationRows, selectedSailCode, useSourceNudge]
   );
 
   const cases = useMemo(() => {
     if (selectedSailCode && rows.length) {
-      return rows.map((row) => caseFromGroupRow(row, { sailCode: selectedSailCode }));
+      return rows.map((row) => caseFromGroupRow(row, {
+        sailCode: selectedSailCode,
+        useSourceNudge,
+      }));
     }
-    return buildIllustrationCases();
-  }, [rows, selectedSailCode]);
+    return buildIllustrationCases({ useSourceNudge });
+  }, [rows, selectedSailCode, useSourceNudge]);
 
   const worked = activeCase(cases, pickedId) || activeCase(cases, pickDefaultCaseId(cases));
 
@@ -105,6 +115,23 @@ const TaliaMrMethodContainer = ({ panelInstanceId, panelComponentId }) => {
     panelComponentId,
     Boolean(selectedSailCode) && loading && rows.length === 0
   );
+
+  const handlePick = (caseId) => {
+    const id = caseId == null ? null : String(caseId).trim();
+    setPickedId(id);
+    if (!id) return;
+    const match = cases.find((item) => item.id === id);
+    emitGroupSelect({
+      group_id: id,
+      sail_code: selectedSailCode || null,
+      ship_code: match?.shipCode || null,
+      selection_origin: 'talia-mr-method',
+      row_data: {
+        group_id: id,
+        sail_code: selectedSailCode || null,
+      },
+    });
+  };
 
   const subtitle = selectedSailCode
     ? (rows.length
@@ -120,7 +147,7 @@ const TaliaMrMethodContainer = ({ panelInstanceId, panelComponentId }) => {
       usingIllustrations={!selectedSailCode || rows.length === 0}
       loading={Boolean(selectedSailCode) && loading && rows.length === 0}
       error={error}
-      onPick={setPickedId}
+      onPick={handlePick}
       onRetry={selectedSailCode ? refetch : null}
       panelInstanceId={panelInstanceId}
       panelComponentId={panelComponentId || 'talia-mr-method'}

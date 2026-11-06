@@ -11,9 +11,24 @@
   margin-bottom: var(--theme-component-padding-xs);
 }
 
-.promo-explorer .talia-report__content {
+.promo-explorer .talia-report__content,
+.promo-explorer__content {
   padding: 0 var(--theme-component-padding-md) var(--theme-component-padding-sm);
   gap: var(--theme-component-gap-sm);
+  overflow: hidden !important;
+}
+
+.promo-explorer__table {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+.promo-explorer__details {
+  flex: 0 1 auto;
+  max-height: 42%;
+  min-height: 0;
+  overflow: auto;
 }
 
 .promo-explorer__badge {

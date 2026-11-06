@@ -5,7 +5,7 @@ import { configService } from '../../services/config-service.js';
 import { shipPositionService } from '../../services/ship-position-service.js';
 
 /** Must match SCRIPT_VERSION in scripts/validate (same string token; bump both when the cross-check contract changes). */
-export const VALIDATE_SCRIPT_DOC_VERSION = 'ops-7';
+export const VALIDATE_SCRIPT_DOC_VERSION = 'ops-16';
 
 type Importance = 'REQUIRED' | 'CONDITIONAL' | 'OPTIONAL';
 

@@ -1,5 +1,6 @@
 /**
- * Historic MR path — sailed groups, last hold before departure, hindsight until names arrive on the header.
+ * Historic MR path — sailed groups, last hold before departure.
+ * As-of named is 0 when the header version has no named count (no hindsight).
  */
 
 import { supabase } from '../../services/supabase.js';

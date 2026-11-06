@@ -153,6 +153,7 @@ export const buildGroupsExplorerRows = (reservationRows = [], options = {}) => {
       hasNamedBooked: reservedPax > 0,
       offerHeavy: bucket.offer_pax > reservedPax,
       distressedSailing,
+      useSourceNudge: options.useSourceNudge !== false,
     });
 
     const impact = evaluateGroupPerformance({

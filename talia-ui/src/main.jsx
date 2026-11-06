@@ -23,7 +23,14 @@ import { ThemeProvider } from './contexts/ThemeContext.jsx';
 import { applyTheme, DEFAULT_THEME } from './config/themes.js';
 import { initChartDefaults } from './lib/chartConfig.js';
 import { GraphQLUtils } from './lib/apolloClient.js';
-import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from './lib/eventBus.js';
+import {
+  GROUP_CLEAR_EVENT,
+  GROUP_SELECT_EVENT,
+  SAIL_CLEAR_EVENT,
+  SAIL_SELECT_EVENT,
+  SHIP_CLEAR_EVENT,
+  SHIP_SELECT_EVENT,
+} from './lib/eventBus.js';
 import { normalizeRole, canUseAdvancedHeader } from './utils/roleUtils.js';
 import userActivityTracker, { initUserActivityTracking } from './services/userActivityTracker.js';
 import { applyInstanceBrowserIdentity } from './lib/instanceIdentity.js';
@@ -214,14 +221,16 @@ const DevSwitcher = () => {
     const eventTypes = [
       SAIL_SELECT_EVENT,
       SAIL_CLEAR_EVENT,
-      'talia:ship.select',
-      'talia:ship.clear',
+      SHIP_SELECT_EVENT,
+      SHIP_CLEAR_EVENT,
+      GROUP_SELECT_EVENT,
+      GROUP_CLEAR_EVENT,
       'talia:publishedRates.select',
       'talia:publishedRates.clear',
       'talia:reservation.select',
       'talia:reservation.clear',
       'talia:booking.select',
-      'talia:booking.clear'
+      'talia:booking.clear',
     ];
 
     eventTypes.forEach(eventType => {

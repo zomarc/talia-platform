@@ -2,10 +2,12 @@
  * Historic MR path.
  * Source expectation is the rate held on the last change before departure.
  * Talia MR uses the same steps as Groups Explorer.
- * Named guests are the final group count until a header version carries its own.
+ * Named guests are as-of: header count when present; BK with missing named uses
+ * requested as booked evidence; QT/OF missing named stays 0. Never finalNamed.
  */
 
-import { materialiseExtractGroup, dateKey } from './sourceMrReview.js';
+import { dateKey, isCancelledStatus } from './sourceMrReview.js';
+import { scoreTaliaHold } from '../../../talia-ui/src/components/focus-panels/GroupsExplorer/groupsMaterialisation.js';
 
 const OFFER = new Set(['QT', 'OF']);
 
@@ -18,12 +20,14 @@ const STANDING_ASSUMPTIONS = [
   'A group has sailed when its sail date is on or before the last change in the extract. Later sailings are not an outcome yet.',
   'The source rate is the rate on the last change on or before departure. Several header rows on the same day count as one day.',
   'Expected guests are requested guests times the rate. GROUP_ExpectedAddition is not a guest count and is not used.',
+  'A cancelled hold contributes 0 forward expected guests. Groups whose current status is cancelled are excluded from sailing and window totals, but remain visible on a single-group path.',
+  'Source rate nudge is on by default (15% of the gap when the gap is at least 5 points). Turn off Views → Use source rate nudge to ignore source.',
   'A group is highlighted when that hold was a quote or an open offer, the rate was kept on more than one day, the source expectation is at least 10 guests above the names, and the source rate is at least 15 points above Talia MR.',
 ];
 
 export const PLANNING_ASSUMPTION = 'A planning value is source expected guests minus named guests, times a euro amount you type. It is not a fare from the book. Leave it blank and the report stays in guests.';
 
-const HINDSIGHT_ASSUMPTION = 'Named guests are the final count on the group, applied to the request held before departure. The header history does not yet record how many guests were named on each earlier day, so Talia MR here is hindsight. A group that finished with names will look stronger than it did while it was still an empty quote.';
+const MISSING_NAMED_ASSUMPTION = 'When a header version has no named count: booked (BK) holds use the requested size as booked evidence; quotes and open offers stay at 0 named. Talia MR does not use the final named outcome as prior knowledge — that count is only for judging the path.';
 
 const ASOF_ASSUMPTION = 'Named guests are the count stored on the header version used for that day. Talia MR is the rate the method would have produced from the names known then.';
 
@@ -43,7 +47,7 @@ const shipCode = (value) => {
 };
 
 export const pathAssumptions = (namesFromHistory) => ([
-  namesFromHistory ? ASOF_ASSUMPTION : HINDSIGHT_ASSUMPTION,
+  namesFromHistory ? ASOF_ASSUMPTION : MISSING_NAMED_ASSUMPTION,
   ...STANDING_ASSUMPTIONS,
 ]);
 
@@ -53,6 +57,7 @@ const normaliseHold = (row = {}) => ({
   sailDateFrom: dateKey(row.sail_date_from),
   sailDateTo: dateKey(row.sail_date_to),
   finalNamed: round(row.final_named),
+  currentStatus: statusCode(row.current_status || row.hold_status),
   changeDays: round(row.change_days),
   holdDate: dateKey(row.hold_date),
   status: statusCode(row.hold_status),
@@ -75,18 +80,26 @@ const inWindow = (sailDate, dateFrom, dateTo) => {
   return true;
 };
 
-const scoreHold = (hold, namesFromHistory) => {
-  const named = namesFromHistory && hold.holdNamed != null ? hold.holdNamed : hold.finalNamed;
-  const rates = materialiseExtractGroup({
-    group_status: hold.status,
-    n_of_guests: hold.requested,
-    n_of_delegate_guests: named,
+/**
+ * As-of named via scoreTaliaHold / resolveAsOfNamed — never finalNamed.
+ * Cancelled → expected 0.
+ * @param {object} hold
+ * @param {{ useSourceNudge?: boolean }} [options]
+ */
+const scoreHold = (hold, options = {}) => {
+  const rates = scoreTaliaHold({
+    status: hold.status,
+    requested: hold.requested,
+    named: hold.holdNamed,
     probability: hold.probability,
+    useSourceNudge: options.useSourceNudge !== false,
   });
-  const sourceExpected = round(hold.requested * (rates.source_mr || 0));
-  const taliaExpected = round(hold.requested * (rates.talia_mr || 0));
+  const named = rates.namedGuests ?? 0;
+  const sourceExpected = rates.sourceExpectedGuests;
+  const taliaExpected = rates.taliaExpectedGuests;
   const rateGap = (rates.source_mr ?? 0) - (rates.talia_mr || 0);
-  const highlighted = OFFER.has(hold.status)
+  const highlighted = !rates.cancelled
+    && OFFER.has(hold.status)
     && hold.changeDays > 1
     && (sourceExpected - named) >= HIGHLIGHT_MIN_GUESTS
     && sourceExpected > taliaExpected
@@ -97,15 +110,18 @@ const scoreHold = (hold, namesFromHistory) => {
     sailDateFrom: hold.sailDateFrom,
     sailDateTo: hold.sailDateTo,
     status: hold.status,
+    currentStatus: hold.currentStatus,
     changeDays: hold.changeDays,
     holdDate: hold.holdDate,
     requestedGuests: hold.requested,
     namedGuests: named,
+    finalNamedGuests: hold.finalNamed,
     sourceMr: rates.source_mr,
     taliaMr: rates.talia_mr,
     sourceExpectedGuests: sourceExpected,
     taliaExpectedGuests: taliaExpected,
     manual: hold.manual,
+    cancelled: rates.cancelled || isCancelledStatus(hold.currentStatus),
     highlighted,
   };
 };
@@ -122,13 +138,20 @@ const emptyMonth = (month) => ({
 });
 
 /**
- * @param {{ holds?: object[], shipCode?: string|null, dateFrom?: string|null, dateTo?: string|null }} input
+ * @param {{
+ *   holds?: object[],
+ *   shipCode?: string|null,
+ *   dateFrom?: string|null,
+ *   dateTo?: string|null,
+ *   useSourceNudge?: boolean,
+ * }} input
  */
 export const buildSourceMrPath = ({
   holds = [],
   shipCode: shipCodeArg = null,
   dateFrom = null,
   dateTo = null,
+  useSourceNudge = true,
 } = {}) => {
   const all = (holds || []).map(normaliseHold).filter((row) => row.groupId);
   const namesFromHistory = all.some((row) => row.holdNamed != null);
@@ -140,7 +163,10 @@ export const buildSourceMrPath = ({
   const filtered = all.filter((row) => (
     (!ship || row.shipCode === ship) && inWindow(row.sailDateFrom, from, to)
   ));
-  const scored = filtered.map((row) => scoreHold(row, namesFromHistory));
+  const scoredAll = filtered.map((row) => scoreHold(row, { useSourceNudge }));
+  // Forward aggregates omit currently cancelled groups; they stay in `groups` for visibility.
+  const scored = scoredAll.filter((row) => !isCancelledStatus(row.currentStatus));
+  const cancelledVisible = scoredAll.filter((row) => isCancelledStatus(row.currentStatus));
   const months = new Map();
   scored.forEach((row) => {
     const month = row.sailDateFrom ? row.sailDateFrom.slice(0, 7) : null;
@@ -148,7 +174,7 @@ export const buildSourceMrPath = ({
     const bucket = months.get(month) || emptyMonth(month);
     bucket.groups += 1;
     bucket.requested += row.requestedGuests;
-    bucket.named += row.namedGuests;
+    bucket.named += row.finalNamedGuests;
     bucket.sourceExpected += row.sourceExpectedGuests;
     bucket.taliaExpected += row.taliaExpectedGuests;
     if (row.highlighted) {
@@ -172,15 +198,19 @@ export const buildSourceMrPath = ({
       highlighted: bucket.qualifyingGap >= MONTH_HIGHLIGHT_GUESTS,
     }));
 
+  const byGap = (a, b) => (b.sourceExpectedGuests - b.namedGuests) - (a.sourceExpectedGuests - a.namedGuests);
   const highlights = scored
     .filter((row) => row.highlighted)
-    .sort((a, b) => (b.sourceExpectedGuests - b.namedGuests) - (a.sourceExpectedGuests - a.namedGuests))
+    .sort(byGap)
     .slice(0, HIGHLIGHT_LIMIT);
+  const groups = [...scoredAll]
+    .sort(byGap)
+    .slice(0, 500);
 
   const totals = scored.reduce((sum, row) => {
     sum.source += row.sourceExpectedGuests;
     sum.talia += row.taliaExpectedGuests;
-    sum.named += row.namedGuests;
+    sum.named += row.finalNamedGuests;
     return sum;
   }, { source: 0, talia: 0, named: 0 });
 
@@ -188,6 +218,7 @@ export const buildSourceMrPath = ({
     namesFromHistory,
     assumptions: pathAssumptions(namesFromHistory),
     sailedGroupCount: scored.length,
+    cancelledGroupCount: cancelledVisible.length,
     unfilteredSailedCount: all.length,
     ships,
     sailDateMin: sailDates[0] || null,
@@ -197,6 +228,7 @@ export const buildSourceMrPath = ({
     namedGuests: totals.named,
     months: monthRows,
     highlights,
+    groups,
   };
 };
 
@@ -211,12 +243,20 @@ const normaliseDay = (row = {}) => ({
 
 /**
  * One group's change days. Days after departure are left out of the hold path.
+ * @param {{
+ *   groupId?: string|number|null,
+ *   sailDate?: string|null,
+ *   finalNamed?: number,
+ *   days?: object[],
+ *   useSourceNudge?: boolean,
+ * }} input
  */
 export const buildSourceMrPathDays = ({
   groupId = null,
   sailDate = null,
   finalNamed = 0,
   days = [],
+  useSourceNudge = true,
 } = {}) => {
   const sail = dateKey(sailDate);
   const collapsed = new Map();
@@ -230,23 +270,24 @@ export const buildSourceMrPathDays = ({
   const namesFromHistory = list.some((day) => day.named != null);
   const ending = round(finalNamed);
   const scored = list.map((day) => {
-    const named = namesFromHistory && day.named != null ? round(day.named) : ending;
-    const rates = materialiseExtractGroup({
-      group_status: day.status,
-      n_of_guests: day.requested,
-      n_of_delegate_guests: named,
+    const rates = scoreTaliaHold({
+      status: day.status,
+      requested: day.requested,
+      named: day.named,
       probability: day.probability,
+      useSourceNudge: useSourceNudge !== false,
     });
     return {
       changedDate: day.changedDate,
       status: day.status,
       requestedGuests: day.requested,
-      namedGuests: named,
+      namedGuests: rates.namedGuests ?? 0,
       sourceMr: rates.source_mr,
       taliaMr: rates.talia_mr,
-      sourceExpectedGuests: round(day.requested * (rates.source_mr || 0)),
-      taliaExpectedGuests: round(day.requested * (rates.talia_mr || 0)),
+      sourceExpectedGuests: rates.sourceExpectedGuests,
+      taliaExpectedGuests: rates.taliaExpectedGuests,
       manual: day.manual,
+      cancelled: rates.cancelled,
     };
   });
   return {
@@ -258,3 +299,5 @@ export const buildSourceMrPathDays = ({
     assumptions: pathAssumptions(namesFromHistory),
   };
 };
+
+export { rescorePathDays, rescorePathPayload } from '../../../talia-ui/src/lib/mrPathRescore.js';

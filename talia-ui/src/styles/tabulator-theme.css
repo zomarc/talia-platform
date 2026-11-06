@@ -96,6 +96,14 @@
   height: auto;
   border-top: 0 !important;
   border-bottom: 0 !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tabulator .tabulator-row .tabulator-cell,
+.tabulator .tabulator-tableholder .tabulator-table .tabulator-row .tabulator-cell {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .tabulator .tabulator-row.tabulator-row-even:not(.tabulator-group),

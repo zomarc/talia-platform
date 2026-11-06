@@ -5,8 +5,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import useReportPanelLoading from '../../../hooks/useReportPanelLoading';
+import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import {
+  emitGroupSelect,
   emitSailSelect,
+  extractGroupIdFromEvent,
+  GROUP_CLEAR_EVENT,
+  GROUP_SELECT_EVENT,
   SAIL_CLEAR_EVENT,
   SAIL_SELECT_EVENT,
 } from '../../../lib/eventBus';
@@ -49,6 +54,7 @@ const mapSailContextToFilters = (detail) => (
 
 const GroupsExplorerContainer = ({ panelInstanceId, panelComponentId }) => {
   const [selectedGroupKey, setSelectedGroupKey] = useState(null);
+  const { useSourceNudge } = useReportShellOptions(panelComponentId, panelInstanceId);
 
   const {
     data: agencies,
@@ -112,8 +118,20 @@ const GroupsExplorerContainer = ({ panelInstanceId, panelComponentId }) => {
 
   useEffect(() => {
     const onClear = () => setSelectedGroupKey(null);
+    const onGroupSelect = (event) => {
+      const groupId = extractGroupIdFromEvent(event?.detail);
+      if (!groupId) return;
+      const fromBus = event?.detail?.row_data?.group_key;
+      setSelectedGroupKey(fromBus || groupId);
+    };
     window.addEventListener(SAIL_CLEAR_EVENT, onClear);
-    return () => window.removeEventListener(SAIL_CLEAR_EVENT, onClear);
+    window.addEventListener(GROUP_CLEAR_EVENT, onClear);
+    window.addEventListener(GROUP_SELECT_EVENT, onGroupSelect);
+    return () => {
+      window.removeEventListener(SAIL_CLEAR_EVENT, onClear);
+      window.removeEventListener(GROUP_CLEAR_EVENT, onClear);
+      window.removeEventListener(GROUP_SELECT_EVENT, onGroupSelect);
+    };
   }, []);
 
   const agenciesById = useMemo(() => indexAgenciesById(agencies), [agencies]);
@@ -128,8 +146,9 @@ const GroupsExplorerContainer = ({ panelInstanceId, panelComponentId }) => {
     () => buildGroupsExplorerRows(reservationRows || [], {
       agenciesById,
       sellableRemainingPct,
+      useSourceNudge,
     }),
-    [reservationRows, agenciesById, sellableRemainingPct]
+    [reservationRows, agenciesById, sellableRemainingPct, useSourceNudge]
   );
 
   const snapshot = useMemo(() => buildGroupsExplorerSnapshot(rows), [rows]);
@@ -140,7 +159,33 @@ const GroupsExplorerContainer = ({ panelInstanceId, panelComponentId }) => {
     if (!row) return;
     setSelectedGroupKey(row.group_key);
     const sailCode = String(row.sail_code || selectedSailCode || '').trim();
-    if (!sailCode) return;
+    const groupId = String(row.group_id || row.group_key || '').trim();
+    const sailDateFrom = row.sail_date_from ? String(row.sail_date_from).slice(0, 10) : null;
+    // Group focus first so consumers see lastGroupSelectEvent before sail-scope side effects.
+    if (groupId) {
+      emitGroupSelect({
+        group_id: groupId,
+        sail_code: sailCode || null,
+        reference_sail_code: sailCode || null,
+        ship_code: row.ship_code || null,
+        agency_id: row.agency_id ?? null,
+        sail_date_from: sailDateFrom,
+        selection_origin: 'groups-explorer',
+        row_data: {
+          sail_code: sailCode || null,
+          ship_code: row.ship_code || null,
+          group_id: groupId,
+          agency_id: row.agency_id,
+          group_key: row.group_key,
+          sail_date_from: sailDateFrom,
+          source_mr: row.source_mr,
+          talia_mr: row.talia_mr,
+        },
+      });
+    }
+    // Re-broadcasting the same sail refreshes this table and jumps scroll; only
+    // emit when the sailing actually changes.
+    if (!sailCode || sailCode === selectedSailCode) return;
     emitSailSelect({
       sail_code: sailCode,
       reference_sail_code: sailCode,
@@ -149,8 +194,9 @@ const GroupsExplorerContainer = ({ panelInstanceId, panelComponentId }) => {
       row_data: {
         sail_code: sailCode,
         ship_code: row.ship_code || null,
-        group_id: row.group_id,
+        group_id: groupId || null,
         agency_id: row.agency_id,
+        sail_date_from: sailDateFrom,
       },
     });
   };

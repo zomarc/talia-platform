@@ -7,7 +7,7 @@ const cleanSearch = (value) => String(value || '')
   .replace(/[%_,()]/g, '')
   .slice(0, 80);
 
-const applyFilters = (query, filters = {}) => {
+const applyFilters = (query, filters: Record<string, any> = {}) => {
   const search = cleanSearch(filters.search);
   if (search) {
     const pattern = `"%${search}%"`;

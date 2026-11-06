@@ -44,6 +44,7 @@ export const emptyDocumentForm = (referenceCode = '') => ({
   referenceCode,
   title: '',
   body: '',
+  isStarred: false,
   links: [],
 });
 
@@ -51,6 +52,7 @@ const formFromItem = (item) => ({
   referenceCode: item?.referenceCode || '',
   title: item?.title || '',
   body: item?.body || '',
+  isStarred: Boolean(item?.isStarred),
   links: item?.links || [],
 });
 
@@ -207,6 +209,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
       referenceCode: formValues.referenceCode,
       title: formValues.title,
       body: formValues.body,
+      isStarred: Boolean(formValues.isStarred),
       links: (formValues.links || []).map((link) => ({
         targetKind: link.targetKind,
         targetId: link.targetId,
@@ -237,6 +240,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
       referenceCode: nextDocumentReference(items),
       title: result?.title || 'Imported document',
       body: result?.body || '',
+      isStarred: false,
       links: [],
     };
     setPasteOpen(false);
@@ -331,6 +335,42 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
       });
     } catch (err) {
       setMessage(err?.message || String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleStar = async (item) => {
+    if (!item?.id) return;
+    const nextStarred = !item.isStarred;
+    setBusy(true);
+    setMessage(null);
+    setItems((current) => current.map((row) => (
+      row.id === item.id ? { ...row, isStarred: nextStarred } : row
+    )));
+    if (selectedId === item.id) {
+      setForm((current) => ({ ...current, isStarred: nextStarred }));
+    }
+    try {
+      await trackedFetchGraphql({
+        query: UPSERT_PROJECT_DOCUMENT_MUTATION,
+        variables: {
+          input: {
+            id: item.id,
+            referenceCode: item.referenceCode,
+            title: item.title,
+            body: item.body,
+            isStarred: nextStarred,
+          },
+        },
+        component: panelComponentId || COMPONENT,
+        purpose: nextStarred ? 'Star project document' : 'Unstar project document',
+        tableName: 'project_document',
+      });
+      await loadItems();
+    } catch (err) {
+      setMessage(err?.message || String(err));
+      await loadItems();
     } finally {
       setBusy(false);
     }
@@ -471,6 +511,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
         busy={busy}
         message={message}
         onSelect={openItem}
+        onToggleStar={toggleStar}
         onNew={startDraft}
         onImportFile={importFile}
         onOpenPaste={() => { setPasteOpen(true); setMessage(null); }}

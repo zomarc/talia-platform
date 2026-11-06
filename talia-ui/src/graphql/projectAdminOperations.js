@@ -48,6 +48,7 @@ export const PROJECT_DOCUMENTS_QUERY = `
       referenceCode
       title
       body
+      isStarred
       links { targetKind targetId label }
       assets { id filename mimeType byteSize }
       createdAt
@@ -62,6 +63,7 @@ export const PROJECT_DOCUMENTS_FOR_QUERY = `
       id
       referenceCode
       title
+      isStarred
     }
   }
 `;
@@ -83,6 +85,7 @@ export const UPSERT_PROJECT_DOCUMENT_MUTATION = `
       referenceCode
       title
       body
+      isStarred
       links { targetKind targetId label }
       assets { id filename mimeType byteSize }
     }

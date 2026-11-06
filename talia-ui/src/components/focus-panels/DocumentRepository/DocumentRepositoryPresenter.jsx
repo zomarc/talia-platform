@@ -138,18 +138,43 @@ const MarkdownView = ({ source, assets }) => {
   );
 };
 
-const DocumentLeaf = ({ document, selectedId, onSelect }) => (
+const StarButton = ({ starred, onToggle, disabled, className = '' }) => (
   <button
     type="button"
-    className={`pd-tree__doc${document.id === selectedId ? ' is-selected' : ''}`}
-    onClick={() => onSelect(document)}
+    className={`pd-star${starred ? ' is-starred' : ''}${className ? ` ${className}` : ''}`}
+    aria-label={starred ? 'Unstar document' : 'Star document'}
+    aria-pressed={Boolean(starred)}
+    title={starred ? 'Unstar' : 'Star'}
+    disabled={disabled}
+    onClick={(event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onToggle?.();
+    }}
   >
-    <strong>{document.referenceCode}</strong>
-    <span>{document.title}</span>
+    {starred ? '★' : '☆'}
   </button>
 );
 
-const DocumentTree = ({ documents, selectedId, onSelect }) => {
+const DocumentLeaf = ({ document, selectedId, onSelect, onToggleStar, busy }) => (
+  <div className={`pd-tree__doc${document.id === selectedId ? ' is-selected' : ''}`}>
+    <button
+      type="button"
+      className="pd-tree__doc-main"
+      onClick={() => onSelect(document)}
+    >
+      <strong>{document.referenceCode}</strong>
+      <span>{document.title}</span>
+    </button>
+    <StarButton
+      starred={document.isStarred}
+      disabled={busy || !document.id}
+      onToggle={() => onToggleStar?.(document)}
+    />
+  </div>
+);
+
+const DocumentTree = ({ documents, selectedId, onSelect, onToggleStar, busy }) => {
   const tree = useMemo(() => buildDocumentTree(documents), [documents]);
   if (!tree.length) return <p className="pd-tree__empty">No documents yet.</p>;
   return (
@@ -167,16 +192,20 @@ const DocumentTree = ({ documents, selectedId, onSelect }) => {
                     document={document}
                     selectedId={selectedId}
                     onSelect={onSelect}
+                    onToggleStar={onToggleStar}
+                    busy={busy}
                   />
                 ))}
               </details>
             ) : (
               folder.documents.map((document) => (
                 <DocumentLeaf
-                  key={document.id}
+                  key={`${group.id}-${document.id}`}
                   document={document}
                   selectedId={selectedId}
                   onSelect={onSelect}
+                  onToggleStar={onToggleStar}
+                  busy={busy}
                 />
               ))
             )
@@ -207,6 +236,7 @@ const DocumentRepositoryPresenter = ({
   busy,
   message,
   onSelect,
+  onToggleStar,
   onNew,
   onImportFile,
   onOpenPaste,
@@ -339,7 +369,13 @@ const DocumentRepositoryPresenter = ({
           {showPane('index') ? (
             <Pane paneKey="index" title="Index" expandedKey={activeKey} onToggle={toggleExpandedKey} className="pd-pane--index">
               <div className="pd-pane__body">
-                <DocumentTree documents={items} selectedId={selectedId} onSelect={onSelect} />
+                <DocumentTree
+                  documents={items}
+                  selectedId={selectedId}
+                  onSelect={onSelect}
+                  onToggleStar={onToggleStar}
+                  busy={busy}
+                />
               </div>
             </Pane>
           ) : null}
@@ -348,6 +384,12 @@ const DocumentRepositoryPresenter = ({
               {selected && !drafting ? (
                 <article className="pd-pane__body pd-reading" aria-label={`${selected.referenceCode} ${selected.title}`}>
                   <header className="pd-reading__title">
+                    <StarButton
+                      className="pd-star--title"
+                      starred={selected.isStarred}
+                      disabled={busy}
+                      onToggle={() => onToggleStar?.(selected)}
+                    />
                     <strong>{selected.referenceCode}</strong> {selected.title}
                   </header>
                   {(selected.links || []).length ? (

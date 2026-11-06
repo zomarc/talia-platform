@@ -14,6 +14,8 @@ DOMAIN="${DOMAIN#http://}"
 PUBLIC_PORT="${LOCAL_PUBLIC_UI_PORT:-4173}"
 USER_NAME="${NGROK_BASIC_USER:-talia}"
 PASS_WORD="${NGROK_BASIC_PASS:-dev2025tal}"
+# Set NGROK_BASIC_AUTH=0 (or empty user/pass) to publish without the browser login wall.
+BASIC_AUTH_ENABLED="${NGROK_BASIC_AUTH:-1}"
 
 NGROK_BIN="$(command -v ngrok || true)"
 if [[ -z "$NGROK_BIN" ]]; then
@@ -21,10 +23,19 @@ if [[ -z "$NGROK_BIN" ]]; then
   exit 127
 fi
 
+if [[ "${BASIC_AUTH_ENABLED}" != "0" && -n "${USER_NAME}" && -n "${PASS_WORD}" ]]; then
+  exec "$NGROK_BIN" http \
+    --url="${DOMAIN}" \
+    --pooling-enabled \
+    --basic-auth="${USER_NAME}:${PASS_WORD}" \
+    --log=stdout \
+    --log-format=logfmt \
+    "${PUBLIC_PORT}"
+fi
+
 exec "$NGROK_BIN" http \
   --url="${DOMAIN}" \
   --pooling-enabled \
-  --basic-auth="${USER_NAME}:${PASS_WORD}" \
   --log=stdout \
   --log-format=logfmt \
   "${PUBLIC_PORT}"

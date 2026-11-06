@@ -21,9 +21,12 @@ layer.
 
 ## The rule (events)
 
-- There are exactly two selection events (+ their clears):
+- Sail/ship (inventory_item canonical layer) — two events (+ clears):
   `talia:sail.select` / `talia:sail.clear`, `talia:ship.select` / `talia:ship.clear`.
-- Translation happens **at emit time**. Selections are enriched via
+- Group focus (not inventory_item) — `talia:group.select` / `talia:group.clear`
+  via `emitGroupSelect` / `emitGroupClear`. Payload always includes `group_id`.
+  Sail scope changes clear group unless the new sail select carries `group_id`.
+- Sail/ship translation happens **at emit time**. Selections are enriched via
   `inventory_item.reference_sail_code` before dispatch, so every event carries:
   `reference_sail_code`, `ship_code`, `ship_name`, `sail_codes[]`, and `canonical_scope`.
 - Listeners respond by data refresh and/or filtering — they must NOT re-derive
@@ -31,8 +34,9 @@ layer.
 
 ## Emitting
 
-- Emit only via `emitSailSelect` / `emitShipSelect` from `talia-ui/src/lib/eventBus.js`.
-  Never dispatch raw `talia:sail.select` / `talia:ship.select` CustomEvents.
+- Emit only via `emitSailSelect` / `emitShipSelect` / `emitGroupSelect` from
+  `talia-ui/src/lib/eventBus.js`. Never dispatch raw `talia:sail.select` /
+  `talia:ship.select` / `talia:group.select` CustomEvents.
 - If your container loads `inventory_item`, prime the shared index:
 
 ```jsx
@@ -56,6 +60,7 @@ const scope = event?.detail?.canonical_scope
 
 - Never sum physical capacity across a master and its segments (same berths).
 - Never bypass `inventoryReferenceService` / `eventBus` emit helpers for selections.
+- Never treat `group.select` as an inventory_item translation — it is `group_id` focus only.
 
 ## Key files
 

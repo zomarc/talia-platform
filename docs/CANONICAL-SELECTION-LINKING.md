@@ -30,20 +30,25 @@ physical + selling scope of that selection.
 
 ---
 
-## The two events
+## The events
 
-| Event | Clear event | Meaning |
-|-------|-------------|---------|
-| `talia:sail.select` | `talia:sail.clear` | A sailing (master or segment) was selected |
-| `talia:ship.select` | `talia:ship.clear` | A ship was selected |
+| Event | Clear event | Meaning | Canonical layer |
+|-------|-------------|---------|-----------------|
+| `talia:sail.select` | `talia:sail.clear` | A sailing (master or segment) was selected | `inventory_item` |
+| `talia:ship.select` | `talia:ship.clear` | A ship was selected | `inventory_item` |
+| `talia:group.select` | `talia:group.clear` | A group commitment was focused | `group_id` (not inventory_item) |
 
 Constants and emit helpers live in `talia-ui/src/lib/eventBus.js`:
 
 - `SAIL_SELECT_EVENT`, `SAIL_CLEAR_EVENT`, `SHIP_SELECT_EVENT`, `SHIP_CLEAR_EVENT`
+- `GROUP_SELECT_EVENT`, `GROUP_CLEAR_EVENT`
 - `emitSailSelect(detail)`, `emitSailClear()`, `emitShipSelect(detail)`, `emitShipClear()`
+- `emitGroupSelect(detail)`, `emitGroupClear()`, `extractGroupIdFromEvent(detail)`
 
-**Always emit through these helpers.** They perform the canonical translation.
+**Always emit through these helpers.** Sail/ship helpers perform the inventory translation.
 Do not hand-roll `window.dispatchEvent(new CustomEvent('talia:sail.select', ...))`.
+
+**Group select:** Groups Explorer (and MR panels that pick a group) emit `emitGroupSelect({ group_id, sail_code?, ship_code?, row_data? })`. Sail clear / sail select without a `group_id` clears the group focus. MR panels (Talia MR, Historic MR path, MR Retrospect, Source MR effectiveness) listen for `group.select` to focus the same group.
 
 ---
 
@@ -238,14 +243,15 @@ cd talia-ui && node --test src/lib/inventoryReference.test.mjs src/services/data
 
 **Do**
 
-- Emit selections only via `emitSailSelect` / `emitShipSelect`.
+- Emit selections only via `emitSailSelect` / `emitShipSelect` / `emitGroupSelect`.
 - Prime the index with `setInventoryItems` whenever you load `inventory_item`.
-- Read `canonical_scope` on the receiving side.
+- Read `canonical_scope` on the receiving side for sail/ship.
 - Treat physical (`ship_code`, berths) and selling (`reference_sail_code`, guests) as
   separate concerns that meet through `inventory_item`.
+- Group focus is `group_id` only — not an `inventory_item` translation.
 
 **Don't**
 
-- Don't dispatch raw `sail.select` / `ship.select` CustomEvents directly.
+- Don't dispatch raw `sail.select` / `ship.select` / `group.select` CustomEvents directly.
 - Don't re-derive master↔segment or sail↔ship relationships inside a listener.
 - Don't sum physical capacity across a master and its segments (same berths).

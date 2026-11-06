@@ -16,6 +16,7 @@ import {
 } from '../../../lib/chartConfig';
 import { formatDayMonYear, formatMonYear } from '../../../lib/dateFormat';
 import { PLANNING_ASSUMPTION, planningValue } from '../../../lib/historicMrPath';
+import { rescorePathDays, rescorePathPayload } from '../../../lib/mrPathRescore.js';
 import { registerPanelDataExport } from '../../../lib/panelDataExport';
 import { buildHistoricMrPathExport } from '../../../lib/historicMrPathPrint';
 import { captureHistoricMrPathCharts } from '../../../lib/historicMrPathPrintCharts';
@@ -33,7 +34,7 @@ const ITEM_COPY = {
   Through: 'Last day this warehouse extract was updated. Sailings after this date are not an outcome.',
   Sailed: 'Groups whose sail date is on or before that day.',
   'Source expected': 'Requested guests times the source rate held on the last change before departure.',
-  'Talia expected': 'Requested guests times Talia MR for that same hold. In hindsight this uses the final named count.',
+  'Talia expected': 'Requested guests times Talia MR for that same hold, using as-of named guests only (0 when the header version has none).',
   Named: 'Guests named on the final group row, unless the header version already carries a named count.',
   'Source above named': 'Guests the source rate counted above the guests who were named.',
   'Planning value': 'That guest gap times the euro amount typed in the filter. Not a fare from the book.',
@@ -195,35 +196,49 @@ const HistoricMrPathPresenter = ({
     showTooltip,
     showLegends,
     showAxisLabels,
+    useSourceNudge,
     reportShellClassName,
   } = useReportShellOptions(panelComponentId, panelInstanceId);
   const showPath = hydrated === true && resolveViewValue(viewsState, VIEW_HISTORIC_MR_PATH) === true;
   const showAssumptions = hydrated === true && resolveViewValue(viewsState, VIEW_ASSUMPTIONS) !== false;
   const { expandedKey, toggleExpandedKey } = useSubpanelExpansion(null);
   const [tip, setTip] = useState(null);
-  const planning = planningValue(path?.sourceExpectedGuests, path?.namedGuests, planningRate);
-  const groupPlanning = planningValue(selectedGroup?.sourceExpectedGuests, selectedGroup?.namedGuests, planningRate);
-  const assumptions = [...(path?.assumptions || []), PLANNING_ASSUMPTION];
-  const months = useMemo(() => (path?.months || []).map((row) => ({
+  const displayPath = useMemo(
+    () => rescorePathPayload(path, { useSourceNudge }),
+    [path, useSourceNudge]
+  );
+  const displaySeries = useMemo(
+    () => rescorePathDays(series, { useSourceNudge }),
+    [series, useSourceNudge]
+  );
+  const planning = planningValue(displayPath?.sourceExpectedGuests, displayPath?.namedGuests, planningRate);
+  const selectedScored = useMemo(() => {
+    if (!selectedGroup) return null;
+    if (!useSourceNudge) return selectedGroup;
+    return (displayPath?.groups || []).find((row) => row.groupId === selectedGroup.groupId) || selectedGroup;
+  }, [selectedGroup, displayPath, useSourceNudge]);
+  const groupPlanning = planningValue(selectedScored?.sourceExpectedGuests, selectedScored?.namedGuests, planningRate);
+  const assumptions = [...(displayPath?.assumptions || []), PLANNING_ASSUMPTION];
+  const months = useMemo(() => (displayPath?.months || []).map((row) => ({
     ...row,
     label: formatMonYear(`${row.month}-01`, row.month),
     source: row.sourceExpectedGuests,
     talia: row.taliaExpectedGuests,
     named: row.namedGuests,
-  })), [path]);
-  const days = useMemo(() => (series?.days || []).slice(-24).map((row) => ({
+  })), [displayPath]);
+  const days = useMemo(() => (displaySeries?.days || []).slice(-24).map((row) => ({
     ...row,
     label: formatDayMonYear(row.changedDate, row.changedDate),
     source: row.sourceExpectedGuests,
     talia: row.taliaExpectedGuests,
     named: row.namedGuests,
-  })), [series]);
+  })), [displaySeries]);
   const globalShipLabel = !globalShip || globalShip === SHIP_FILTER_ALL ? 'All' : globalShip;
-  const sourceAboveNamed = Math.round((path?.sourceExpectedGuests || 0) - (path?.namedGuests || 0));
-  const sourceAboveTalia = Math.round((path?.sourceExpectedGuests || 0) - (path?.taliaExpectedGuests || 0));
+  const sourceAboveNamed = Math.round((displayPath?.sourceExpectedGuests || 0) - (displayPath?.namedGuests || 0));
+  const sourceAboveTalia = Math.round((displayPath?.sourceExpectedGuests || 0) - (displayPath?.taliaExpectedGuests || 0));
   const sectionOpen = (key) => {
     if (key === 'assumptions') return showAssumptions;
-    if (key === 'range') return Boolean(showGraph && path);
+    if (key === 'range') return Boolean(showGraph && displayPath);
     if (key === 'months') return Boolean(showGraph && months.length);
     if (key === 'path') return Boolean(showPath && days.length);
     if (key === 'detail') return showDetails;
@@ -247,9 +262,9 @@ const HistoricMrPathPresenter = ({
         months,
         days,
         range: {
-          source: path?.sourceExpectedGuests,
-          talia: path?.taliaExpectedGuests,
-          named: path?.namedGuests,
+          source: displayPath?.sourceExpectedGuests,
+          talia: displayPath?.taliaExpectedGuests,
+          named: displayPath?.namedGuests,
         },
         includeMonths: showGraph,
         includeRange: showGraph,
@@ -260,8 +275,8 @@ const HistoricMrPathPresenter = ({
       return {
         title: 'Historic MR path',
         html: buildHistoricMrPathExport({
-          path,
-          series: showPath ? series : null,
+          path: displayPath,
+          series: showPath ? displaySeries : null,
           planning,
           charts,
           includeAssumptions: showAssumptions,
@@ -278,7 +293,7 @@ const HistoricMrPathPresenter = ({
             item: row.label,
             detail: `Source ${row.source}, Talia ${row.talia}, named ${row.named}, highlight gap ${row.qualifyingGap}`,
           })),
-          ...(path?.highlights || []).map((row) => ({
+          ...(displayPath?.highlights || []).map((row) => ({
             section: 'Highlight',
             item: row.groupId,
             detail: `${row.shipCode || ''} ${row.sailDateFrom || ''} source ${row.sourceExpectedGuests} talia ${row.taliaExpectedGuests} named ${row.namedGuests}`,
@@ -289,8 +304,8 @@ const HistoricMrPathPresenter = ({
   }), [
     panelInstanceId,
     panelComponentId,
-    path,
-    series,
+    displayPath,
+    displaySeries,
     months,
     days,
     assumptions,
@@ -308,9 +323,9 @@ const HistoricMrPathPresenter = ({
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Historic MR path</h2>
           <p className="talia-report__subtitle">
-            {path?.namesFromHistory
+            {displayPath?.namesFromHistory
               ? 'Talia MR uses the named guests stored on each header version.'
-              : 'Talia MR uses the final named count. The header history does not yet record names on each day.'}
+              : 'Header versions here have no as-of named count: booked holds use requested size as evidence; quotes and offers stay at 0 named. Final named is for judging the path only.'}
           </p>
         </div>
       </header>
@@ -364,7 +379,7 @@ const HistoricMrPathPresenter = ({
           )}
           {cutsHistory ? (
             <p className="historic-mr-path__filter-note">
-              Header dates start after {formatDayMonYear(path?.feedThrough, 'the extract')}, so sailed history is hidden. Full sailed history shows it without changing the header.
+              Header dates start after {formatDayMonYear(displayPath?.feedThrough, 'the extract')}, so sailed history is hidden. Full sailed history shows it without changing the header.
             </p>
           ) : null}
         </div>
@@ -381,11 +396,11 @@ const HistoricMrPathPresenter = ({
         <ReportSnapshot
           visible={showSnapshot}
           items={[
-            { key: 'through', label: 'Through', value: formatDayMonYear(path?.feedThrough, '—') },
-            { key: 'sailed', label: 'Sailed', value: formatInt(path?.sailedGroupCount) },
-            { key: 'source', label: 'Source expected', value: formatInt(path?.sourceExpectedGuests) },
-            { key: 'talia', label: 'Talia expected', value: formatInt(path?.taliaExpectedGuests) },
-            { key: 'named', label: 'Named', value: formatInt(path?.namedGuests) },
+            { key: 'through', label: 'Through', value: formatDayMonYear(displayPath?.feedThrough, '—') },
+            { key: 'sailed', label: 'Sailed', value: formatInt(displayPath?.sailedGroupCount) },
+            { key: 'source', label: 'Source expected', value: formatInt(displayPath?.sourceExpectedGuests) },
+            { key: 'talia', label: 'Talia expected', value: formatInt(displayPath?.taliaExpectedGuests) },
+            { key: 'named', label: 'Named', value: formatInt(displayPath?.namedGuests) },
             { key: 'gap', label: 'Source above named', value: formatInt(sourceAboveNamed), hint: `source above Talia ${formatInt(sourceAboveTalia)}` },
             { key: 'value', label: 'Planning value', value: planning ? formatEuros(planning.euros) : '—' },
           ]}
@@ -403,16 +418,16 @@ const HistoricMrPathPresenter = ({
             </ExpandableSection>
           ) : null}
 
-          {showGraph && path ? (
+          {showGraph && displayPath ? (
             <ExpandableSection sectionKey="range" label="this range" expandedKey={openKey} onToggle={toggleExpandedKey} ariaLabel="Source expected, Talia expected, and named guests for this range">
               <h3 className="historic-mr-path__heading">This range</h3>
               <p className="historic-mr-path__lead">
                 Source expected, Talia expected, and the named result for the sailings in the current filter.
               </p>
               <RangeChart
-                source={Math.round(Number(path.sourceExpectedGuests) || 0)}
-                talia={Math.round(Number(path.taliaExpectedGuests) || 0)}
-                named={Math.round(Number(path.namedGuests) || 0)}
+                source={Math.round(Number(displayPath.sourceExpectedGuests) || 0)}
+                talia={Math.round(Number(displayPath.taliaExpectedGuests) || 0)}
+                named={Math.round(Number(displayPath.namedGuests) || 0)}
                 showAxisLabels={showAxisLabels}
                 showTooltip={showTooltip}
                 expanded={openKey === 'range'}
@@ -479,7 +494,7 @@ const HistoricMrPathPresenter = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {(path?.highlights || []).map((row) => (
+                  {(displayPath?.highlights || []).map((row) => (
                     <tr
                       key={row.groupId}
                       className={row.groupId === selectedGroup?.groupId ? 'historic-mr-path__row is-selected' : 'historic-mr-path__row'}
@@ -502,13 +517,13 @@ const HistoricMrPathPresenter = ({
           {showPath && days.length ? (
             <ExpandableSection sectionKey="path" label="group path" expandedKey={openKey} onToggle={toggleExpandedKey} ariaLabel="Change days for the selected group">
               <h3 className="historic-mr-path__heading">
-                Group {series?.groupId} · {formatDayMonYear(series?.sailDateFrom, '')}
+                Group {displaySeries?.groupId} · {formatDayMonYear(displaySeries?.sailDateFrom, '')}
               </h3>
               <p className="historic-mr-path__note">
-                {series?.namesFromHistory
+                {displaySeries?.namesFromHistory
                   ? 'Each day uses the named guests stored on that header version.'
-                  : 'Each day uses the final named count. Days after departure are left out.'}
-                {series?.days?.length > 24 ? ' The chart shows the latest 24 change days.' : ''}
+                  : 'Missing named on header: BK uses requested; QT/OF stay at 0. Days after departure are left out.'}
+                {displaySeries?.days?.length > 24 ? ' The chart shows the latest 24 change days.' : ''}
               </p>
               <GuestChart rows={days} showLegends={showLegends} showAxisLabels={showAxisLabels} showTooltip={showTooltip} label="Change day" expanded={openKey === 'path'} />
             </ExpandableSection>
@@ -518,9 +533,9 @@ const HistoricMrPathPresenter = ({
             <p>
               Holds come from stg.SW_ETL_GROUP_HEADER, collapsed to one row per change day, joined to stg.SW_ETL_GROUPS for the final named count and to stg.SW_ETL_GROUP_SHIP_REQUEST for the ship.
               A sailing selection arrives as talia:sail.select and narrows this report to that ship and sail date.
-              {path?.namesFromHistory
+              {displayPath?.namesFromHistory
                 ? ' Header versions include n_of_delegate_guests, so Talia MR uses that day\'s names.'
-                : ' n_of_delegate_guests on the header is empty, so the path stays in hindsight until the refresh sends names on each version.'}
+                : ' n_of_delegate_guests on the header is empty: BK uses requested as booked evidence; QT/OF stay at 0 named.'}
             </p>
           </ReportProvenance>
         </main>
@@ -533,18 +548,18 @@ const HistoricMrPathPresenter = ({
               onToggle={() => toggleExpandedKey('detail')}
               label="highlight"
             />
-            <h3 className="historic-mr-path__heading">{selectedGroup ? `Group ${selectedGroup.groupId}` : 'Highlight'}</h3>
-            {selectedGroup ? (
+            <h3 className="historic-mr-path__heading">{selectedScored ? `Group ${selectedScored.groupId}` : 'Highlight'}</h3>
+            {selectedScored ? (
               <table className="historic-mr-path__table">
                 <tbody>
-                  <tr><th>Ship</th><td>{selectedGroup.shipCode} · {formatDayMonYear(selectedGroup.sailDateFrom, '')}</td></tr>
-                  <tr><th>Hold</th><td>{selectedGroup.status} on {formatDayMonYear(selectedGroup.holdDate, '')}</td></tr>
-                  <tr><th>Days</th><td>{formatInt(selectedGroup.changeDays)}{selectedGroup.manual ? ' · manual rate' : ''}</td></tr>
-                  <tr><th>Source MR</th><td>{formatMrPctPrecise(selectedGroup.sourceMr)}</td></tr>
-                  <tr><th>Talia MR</th><td>{formatMrPctPrecise(selectedGroup.taliaMr)}</td></tr>
-                  <tr><th>Requested</th><td>{formatInt(selectedGroup.requestedGuests)}</td></tr>
-                  <tr><th>Named</th><td>{formatInt(selectedGroup.namedGuests)}</td></tr>
-                  <tr><th>Guest gap</th><td>{formatInt(selectedGroup.sourceExpectedGuests - selectedGroup.namedGuests)} source above named</td></tr>
+                  <tr><th>Ship</th><td>{selectedScored.shipCode} · {formatDayMonYear(selectedScored.sailDateFrom, '')}</td></tr>
+                  <tr><th>Hold</th><td>{selectedScored.status} on {formatDayMonYear(selectedScored.holdDate, '')}</td></tr>
+                  <tr><th>Days</th><td>{formatInt(selectedScored.changeDays)}{selectedScored.manual ? ' · manual rate' : ''}</td></tr>
+                  <tr><th>Source MR</th><td>{formatMrPctPrecise(selectedScored.sourceMr)}</td></tr>
+                  <tr><th>Talia MR</th><td>{formatMrPctPrecise(selectedScored.taliaMr)}</td></tr>
+                  <tr><th>Requested</th><td>{formatInt(selectedScored.requestedGuests)}</td></tr>
+                  <tr><th>Named</th><td>{formatInt(selectedScored.namedGuests)}</td></tr>
+                  <tr><th>Guest gap</th><td>{formatInt(selectedScored.sourceExpectedGuests - selectedScored.namedGuests)} source above named</td></tr>
                   {groupPlanning ? <tr><th>Planning value</th><td>{formatEuros(groupPlanning.euros)} at {formatInt(groupPlanning.eurosPerGuest)} per guest</td></tr> : null}
                 </tbody>
               </table>

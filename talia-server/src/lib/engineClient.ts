@@ -14,7 +14,7 @@ async function engineFetch(pathname: string, init?: RequestInit) {
     },
     signal: AbortSignal.timeout(Number(process.env.TALIA_ENGINE_TIMEOUT_MS || 20000)),
   });
-  const body = await response.json().catch(() => ({}));
+  const body: any = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(body?.error || `talia-engine HTTP ${response.status}`);
   }

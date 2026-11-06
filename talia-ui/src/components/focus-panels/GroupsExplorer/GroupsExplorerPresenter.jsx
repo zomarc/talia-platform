@@ -3,9 +3,20 @@
  */
 
 import React, { useEffect, useMemo, useRef } from 'react';
-import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
+import { afterTabulatorDataRefresh } from '../../../hooks/useTabulatorLayoutSync';
+import {
+  bindTabulatorRowSelectionHandlers,
+  captureTableScroll,
+  getTabulatorOptions,
+  initTabulator,
+  restoreTableScrollSoon,
+} from '../../../lib/tabulatorConfig';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
-import { chainRowFormatters, createReferenceRowFormatter } from '../../../lib/tabulatorReferenceSelection';
+import {
+  chainRowFormatters,
+  createReferenceRowFormatter,
+  refreshReferenceRowClasses,
+} from '../../../lib/tabulatorReferenceSelection';
 import { formatDayMonYy } from '../../../lib/dateFormat';
 import ReportSnapshot from '../../shared/ReportSnapshot';
 import ReportProvenance from '../../shared/ReportProvenance';
@@ -258,6 +269,8 @@ const GroupsExplorerPresenter = ({
     && data.group_key === selectedGroupKeyRef.current
   );
 
+  const unbindSelectionRef = useRef(() => {});
+
   useEffect(() => {
     let cancelled = false;
     const init = async () => {
@@ -265,8 +278,10 @@ const GroupsExplorerPresenter = ({
       const Tabulator = await initTabulator();
       if (cancelled || !tableRef.current) return;
       if (instanceRef.current) {
-        instanceRef.current.setColumns(columns);
-        instanceRef.current.replaceData(rows);
+        const table = instanceRef.current;
+        const scroll = captureTableScroll(table);
+        table.setColumns(columns);
+        afterTabulatorDataRefresh(table, table.replaceData(rows), scroll);
         return;
       }
       instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
@@ -283,8 +298,8 @@ const GroupsExplorerPresenter = ({
         initialSort: [{ column: 'value_at_risk', dir: 'desc' }],
         rowFormatter: chainRowFormatters(createReferenceRowFormatter(isFocusRow)),
       }));
-      instanceRef.current.on('rowClick', (_event, row) => {
-        onSelectGroupRef.current?.(row?.getData?.());
+      unbindSelectionRef.current = bindTabulatorRowSelectionHandlers(instanceRef.current, {
+        onSelect: (data) => onSelectGroupRef.current?.(data),
       });
     };
     init();
@@ -293,7 +308,17 @@ const GroupsExplorerPresenter = ({
     };
   }, [columns, isCompact, panelComponentId, panelInstanceId, rows, selectedSailCode]);
 
+  useEffect(() => {
+    const table = instanceRef.current;
+    const scroll = captureTableScroll(table);
+    refreshReferenceRowClasses(table, isFocusRow);
+    // Details card height changes on select can reflow Tabulator — keep the viewport.
+    restoreTableScrollSoon(scroll);
+  }, [selectedGroupKey, rows]);
+
   useEffect(() => () => {
+    unbindSelectionRef.current?.();
+    unbindSelectionRef.current = () => {};
     try { instanceRef.current?.destroy?.(); } catch { /* noop */ }
     instanceRef.current = null;
   }, []);
@@ -342,7 +367,7 @@ const GroupsExplorerPresenter = ({
         ]}
       />
 
-      <main className="talia-report__content talia-report__content--scroll">
+      <main className="talia-report__content groups-explorer__content">
         <div ref={tableRef} className="talia-table groups-explorer__table" role="grid" />
 
         <ReportDataDetails visible={showDetails} className="groups-explorer__details">

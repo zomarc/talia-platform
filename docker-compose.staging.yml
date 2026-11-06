@@ -72,7 +72,7 @@ services:
       - supabase-db
 
   supabase-auth:
-    image: public.ecr.aws/supabase/gotrue:v2.99.0
+    image: public.ecr.aws/supabase/gotrue:v2.180.0
     container_name: talia-supabase-auth
     depends_on:
       supabase-db:
@@ -222,6 +222,8 @@ services:
       - "4001:4001"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Shared MR helpers imported by talia-server (path resolves to /talia-ui from /app/dist/services)
+      - ./talia-ui:/talia-ui:ro
     environment:
       SUPABASE_URL: http://supabase-kong:8000
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImlhdCI6MTc2ODk0NTkzMSwiZXhwIjoxODAwNTAzNTMxfQ.L-fOEUmTqH8DSkBJHgEz39E-gf7MTv5kmFFeqc2wDRQ}

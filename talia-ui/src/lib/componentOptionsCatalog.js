@@ -18,6 +18,13 @@ export const VIEW_SOURCE_MR_MONTH = { id: 'monthGraph', label: 'By month', type:
 export const VIEW_HISTORIC_MR_PATH = { id: 'pathGraph', label: 'Group path', type: 'boolean', default: false };
 /** Historic MR path: the written method. On until the view is turned off. */
 export const VIEW_ASSUMPTIONS = { id: 'assumptions', label: 'Assumptions', type: 'boolean', default: true };
+/** Let source MR nudge Talia (15% of gap). On by default — part of the method. */
+export const VIEW_SOURCE_NUDGE = {
+  id: 'sourceNudge',
+  label: 'Use source rate nudge',
+  type: 'boolean',
+  default: true,
+};
 export const VIEW_DETAILS = { id: 'details', label: 'Details', type: 'boolean', default: true };
 /** Admin+ (and SUPER_USER): where this report’s data comes from. Off by default; Views → Provenance. */
 export const VIEW_PROVENANCE = {
@@ -376,7 +383,7 @@ export const DEFAULT_COMPONENT_OPTIONS = {
     operations: [],
   },
   'groups-explorer': {
-    views: [VIEW_DENSITY, VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_COLUMN_FILTERS, VIEW_PROVENANCE],
+    views: [VIEW_DENSITY, VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_COLUMN_FILTERS, VIEW_SOURCE_NUDGE, VIEW_PROVENANCE],
     operations: [],
   },
   'source-mr-review': {
@@ -389,6 +396,7 @@ export const DEFAULT_COMPONENT_OPTIONS = {
       VIEW_TOOLTIP,
       VIEW_LEGENDS,
       VIEW_AXIS_LABELS,
+      VIEW_SOURCE_NUDGE,
       VIEW_PROVENANCE,
     ],
     operations: [],
@@ -402,6 +410,7 @@ export const DEFAULT_COMPONENT_OPTIONS = {
       VIEW_TOOLTIP,
       VIEW_LEGENDS,
       VIEW_AXIS_LABELS,
+      VIEW_SOURCE_NUDGE,
       VIEW_PROVENANCE,
     ],
     operations: [],
@@ -417,6 +426,21 @@ export const DEFAULT_COMPONENT_OPTIONS = {
       VIEW_TOOLTIP,
       VIEW_LEGENDS,
       VIEW_AXIS_LABELS,
+      VIEW_SOURCE_NUDGE,
+      VIEW_PROVENANCE,
+    ],
+    operations: [],
+  },
+  'mr-retrospect': {
+    views: [
+      VIEW_SNAPSHOT,
+      VIEW_GRAPH,
+      VIEW_DETAILS,
+      VIEW_FILTERS,
+      VIEW_TOOLTIP,
+      VIEW_LEGENDS,
+      VIEW_AXIS_LABELS,
+      VIEW_SOURCE_NUDGE,
       VIEW_PROVENANCE,
     ],
     operations: [],

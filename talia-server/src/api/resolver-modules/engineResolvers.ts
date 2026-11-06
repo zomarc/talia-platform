@@ -102,7 +102,7 @@ export const engineMutationResolvers = {
   runRmAgents: async (_parent: any, args: any) => {
     const input = args?.input || {};
     try {
-      const result = await requestEngineRun({
+      const result: any = await requestEngineRun({
         sailCodes: input.sailCodes || undefined,
         agentIds: input.agentIds || undefined,
         limit: input.limit,

@@ -3,64 +3,18 @@
  * Screen charts stay on the theme. These are drawn only when export runs.
  */
 
-import { Chart, registerables } from 'chart.js';
+import {
+  PRINT_NAMED,
+  PRINT_SOURCE,
+  PRINT_TALIA,
+  printAxis,
+  printLegend,
+  renderPrintChart,
+} from './printChartCapture.js';
 
-Chart.register(...registerables);
-
-const INK = '#1c2430';
-const GRID = '#e4e9ee';
-const SOURCE = '#2f5f93';
-const TALIA = '#3d7a52';
-const NAMED = '#b26a24';
-
-const whiteBackground = {
-  id: 'sourceMrPrintBackground',
-  beforeDraw(chart) {
-    const { ctx } = chart;
-    ctx.save();
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, chart.width, chart.height);
-    ctx.restore();
-  },
-};
-
-const axis = (title, showTitle) => ({
-  beginAtZero: true,
-  title: { display: showTitle !== false, text: title, color: INK },
-  ticks: { color: showTitle === false ? 'transparent' : INK },
-  grid: { color: GRID },
-});
-
-const legend = (visible) => ({
-  display: visible !== false,
-  position: 'top',
-  align: 'start',
-  labels: {
-    color: INK,
-    boxWidth: 12,
-    boxHeight: 12,
-  },
-});
-
-const renderChart = (config, width, height) => {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const chart = new Chart(canvas, {
-    ...config,
-    plugins: [whiteBackground],
-    options: {
-      ...config.options,
-      animation: false,
-      responsive: false,
-      maintainAspectRatio: false,
-    },
-  });
-  chart.update('none');
-  const image = chart.toBase64Image('image/png', 1);
-  chart.destroy();
-  return image;
-};
+const SOURCE = PRINT_SOURCE;
+const TALIA = PRINT_TALIA;
+const NAMED = PRINT_NAMED;
 
 const bar = (label, data, color) => ({
   label,
@@ -85,7 +39,7 @@ export function captureSourceMrPrintCharts({
     charts.push({
       id: 'status',
       title: 'Source expected against Talia expected',
-      image: renderChart({
+      image: renderPrintChart({
         type: 'bar',
         data: {
           labels: sailed.map((row) => row.label),
@@ -95,10 +49,10 @@ export function captureSourceMrPrintCharts({
           ],
         },
         options: {
-          plugins: { legend: legend(showLegends), tooltip: { enabled: false } },
+          plugins: { legend: printLegend(showLegends), tooltip: { enabled: false } },
           scales: {
-            x: { ...axis('Status', showAxisLabels), beginAtZero: undefined },
-            y: axis('Expected guests', showAxisLabels),
+            x: { ...printAxis('Status', showAxisLabels), beginAtZero: undefined },
+            y: printAxis('Expected guests', showAxisLabels),
           },
         },
       }, 1400, 520),
@@ -109,7 +63,7 @@ export function captureSourceMrPrintCharts({
     charts.push({
       id: 'month',
       title: monthTitle,
-      image: renderChart({
+      image: renderPrintChart({
         type: 'bar',
         data: {
           labels: months.map((row) => row.label),
@@ -121,10 +75,10 @@ export function captureSourceMrPrintCharts({
         },
         options: {
           indexAxis: 'y',
-          plugins: { legend: legend(showLegends), tooltip: { enabled: false } },
+          plugins: { legend: printLegend(showLegends), tooltip: { enabled: false } },
           scales: {
-            x: axis('Guests', showAxisLabels),
-            y: { ...axis('Sail month', showAxisLabels), beginAtZero: undefined },
+            x: printAxis('Guests', showAxisLabels),
+            y: { ...printAxis('Sail month', showAxisLabels), beginAtZero: undefined },
           },
         },
       }, 1400, height),

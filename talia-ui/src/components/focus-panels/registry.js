@@ -22,6 +22,7 @@ import GroupsExplorerContainer from './GroupsExplorer';
 import SourceMrReviewContainer from './SourceMrReview';
 import TaliaMrMethodContainer from './TaliaMrMethod';
 import HistoricMrPathContainer from './HistoricMrPath';
+import MrRetrospectContainer from './MrRetrospect';
 import PromoExplorerContainer from './PromoExplorer';
 import SailingDemandCompositionContainer from './SailingDemandComposition';
 import BookingProfileContainer from './BookingProfile';
@@ -79,7 +80,14 @@ import ChatbotDemoContainer from './ChatbotDemo';
 import DataDebugView from '../TestPage/DataDebugView';
 import DataTypesValidation from '../dev/DataTypesValidation';
 import AdminDashboard from '../admin/dashboard/AdminDashboard';
-import { SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, SHIP_SELECT_EVENT, SHIP_CLEAR_EVENT } from '../../lib/eventBus';
+import {
+  SAIL_SELECT_EVENT,
+  SAIL_CLEAR_EVENT,
+  SHIP_SELECT_EVENT,
+  SHIP_CLEAR_EVENT,
+  GROUP_SELECT_EVENT,
+  GROUP_CLEAR_EVENT,
+} from '../../lib/eventBus';
 import {
   VIEW_COLUMN_FILTERS,
   VIEW_CONTROLS,
@@ -100,6 +108,7 @@ import {
   VIEW_SOURCE_MR_MONTH,
   VIEW_HISTORIC_MR_PATH,
   VIEW_ASSUMPTIONS,
+  VIEW_SOURCE_NUDGE,
   VIEW_SNAPSHOT,
   VIEW_TOOLTIP,
   VIEW_TOOLTIP_MSE,
@@ -604,16 +613,16 @@ export const componentRegistry = {
     title: 'Groups Explorer',
     description: 'Group Risk Management — commitment, impact, source vs Talia materialisation rate, agency context',
     props: {},
-    dataRequirements: 'Requires reservation (group_id, probabilities, fact_group_alloc) and agency. Responds to sail.select.',
+    dataRequirements: 'Requires reservation (group_id, probabilities, fact_group_alloc) and agency. Responds to sail.select; emits sail.select and group.select on row click.',
     events: {
-      emits: [SAIL_SELECT_EVENT],
-      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+      emits: [SAIL_SELECT_EVENT, GROUP_SELECT_EVENT],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, GROUP_CLEAR_EVENT]
     },
     supportsRefresh: true,
     supportsDataExport: true,
     showInReports: true,
     options: {
-      views: [VIEW_DENSITY, VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_COLUMN_FILTERS, VIEW_PROVENANCE],
+      views: [VIEW_DENSITY, VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_COLUMN_FILTERS, VIEW_SOURCE_NUDGE, VIEW_PROVENANCE],
       operations: [],
     },
     filePath: 'src/components/focus-panels/GroupsExplorer/index.jsx'
@@ -625,10 +634,10 @@ export const componentRegistry = {
     title: 'Source MR effectiveness',
     description: 'Historic source materialisation against named guests, with an independent Talia MR',
     props: {},
-    dataRequirements: 'Frozen SW_ETL group extract (sw_etl_group and related tables). Sail selection only when the sailing is in inventory_item.',
+    dataRequirements: 'Frozen SW_ETL group extract (sw_etl_group and related tables). Emits/responds to group.select; sail.select when opening a sailing.',
     events: {
-      emits: [SAIL_SELECT_EVENT],
-      respondsTo: []
+      emits: [SAIL_SELECT_EVENT, GROUP_SELECT_EVENT],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, GROUP_SELECT_EVENT, GROUP_CLEAR_EVENT]
     },
     supportsRefresh: true,
     supportsDataExport: true,
@@ -643,6 +652,7 @@ export const componentRegistry = {
         VIEW_TOOLTIP,
         VIEW_LEGENDS,
         VIEW_AXIS_LABELS,
+        VIEW_SOURCE_NUDGE,
         VIEW_PROVENANCE,
       ],
       operations: [],
@@ -656,10 +666,10 @@ export const componentRegistry = {
     title: 'Talia MR',
     description: 'How Talia materialisation is calculated, on the selected sailing or a worked example',
     props: {},
-    dataRequirements: 'Listens for talia:sail.select and reads reservation for that sailing. With no selection, shows worked examples from the frozen SW_ETL extract.',
+    dataRequirements: 'Listens for sail.select (book) and group.select (worked case). Picking a case emits group.select. With no selection, shows worked examples from the frozen SW_ETL extract.',
     events: {
-      emits: [],
-      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+      emits: [GROUP_SELECT_EVENT],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, GROUP_SELECT_EVENT, GROUP_CLEAR_EVENT]
     },
     supportsRefresh: true,
     supportsDataExport: true,
@@ -673,6 +683,7 @@ export const componentRegistry = {
         VIEW_TOOLTIP,
         VIEW_LEGENDS,
         VIEW_AXIS_LABELS,
+        VIEW_SOURCE_NUDGE,
         VIEW_PROVENANCE,
       ],
       operations: [],
@@ -686,10 +697,10 @@ export const componentRegistry = {
     title: 'Historic MR path',
     description: 'What the source rate held before departure, and what Talia MR would have held',
     props: {},
-    dataRequirements: 'Frozen SW_ETL group header history. Listens for talia:sail.select and narrows to that ship and sail date. Named guests are the final count until the header carries them.',
+    dataRequirements: 'Frozen SW_ETL group header history. Sail.select narrows ship/dates; group.select picks the path series.',
     events: {
-      emits: [],
-      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT]
+      emits: [GROUP_SELECT_EVENT],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, GROUP_SELECT_EVENT, GROUP_CLEAR_EVENT]
     },
     supportsRefresh: true,
     supportsDataExport: true,
@@ -705,11 +716,43 @@ export const componentRegistry = {
         VIEW_TOOLTIP,
         VIEW_LEGENDS,
         VIEW_AXIS_LABELS,
+        VIEW_SOURCE_NUDGE,
         VIEW_PROVENANCE,
       ],
       operations: [],
     },
     filePath: 'src/components/focus-panels/HistoricMrPath/index.jsx'
+  },
+  MrRetrospect: {
+    component: MrRetrospectContainer,
+    panelId: 'mr-retrospect',
+    category: 'Tables',
+    title: 'MR Retrospect',
+    description: 'Step days before departure and compare what Talia MR would have suggested with the named outcome',
+    props: {},
+    dataRequirements: 'Frozen SW_ETL header history via sourceMrPath / sourceMrPathDays. Sail.select sets window; group.select focuses one group DTD path.',
+    events: {
+      emits: [GROUP_SELECT_EVENT],
+      respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, GROUP_SELECT_EVENT, GROUP_CLEAR_EVENT]
+    },
+    supportsRefresh: true,
+    supportsDataExport: true,
+    showInReports: true,
+    options: {
+      views: [
+        VIEW_SNAPSHOT,
+        VIEW_GRAPH,
+        VIEW_DETAILS,
+        VIEW_FILTERS,
+        VIEW_TOOLTIP,
+        VIEW_LEGENDS,
+        VIEW_AXIS_LABELS,
+        VIEW_SOURCE_NUDGE,
+        VIEW_PROVENANCE,
+      ],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/MrRetrospect/index.jsx'
   },
   PromoExplorer: {
     component: PromoExplorerContainer,

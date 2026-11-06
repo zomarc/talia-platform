@@ -3,7 +3,11 @@
  * Talia MR uses the Groups Explorer model and is never copied from source.
  */
 
-import { computeTaliaMaterialisation } from '../../../talia-ui/src/components/focus-panels/GroupsExplorer/groupsMaterialisation.js';
+import {
+  computeTaliaMaterialisation,
+  isCancelledStatus,
+  scoreTaliaHold,
+} from '../../../talia-ui/src/components/focus-panels/GroupsExplorer/groupsMaterialisation.js';
 
 const STATUS_LABELS = {
   QT: 'Quote',
@@ -42,18 +46,29 @@ const guests = (value) => {
 
 const roundGuests = (value) => Math.round(Number(value) || 0);
 
-export const materialiseExtractGroup = (row = {}) => {
+/**
+ * @param {object} row
+ * @param {{ useSourceNudge?: boolean }} [options]
+ */
+export const materialiseExtractGroup = (row = {}, options = {}) => {
   const status = statusCode(row.group_status);
   const requested = guests(row.n_of_guests);
   const named = guests(row.n_of_delegate_guests);
-  return computeTaliaMaterialisation({
-    requestedPax: requested,
-    reservedPax: named,
-    sourceMr: row.probability,
-    hasNamedBooked: named > 0,
-    offerHeavy: (status === 'QT' || status === 'OF') && named === 0,
+  const scored = scoreTaliaHold({
+    status,
+    requested,
+    named,
+    probability: row.probability,
+    useSourceNudge: options.useSourceNudge === true,
   });
+  return {
+    talia_mr: scored.talia_mr,
+    source_mr: scored.source_mr,
+    reasons: scored.reasons,
+  };
 };
+
+export { isCancelledStatus, computeTaliaMaterialisation };
 
 export const probabilityBand = (probability) => {
   const n = Number(probability);

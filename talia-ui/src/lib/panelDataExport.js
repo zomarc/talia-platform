@@ -253,6 +253,40 @@ export function payloadFromRows(title, columns, rows) {
 }
 
 /**
+ * Consistent shape for full-report PDF exports (html) plus CSV/MD table rows.
+ * PDF prefers `html`; optional `chartImage` remains for simple single-chart panels.
+ * @param {{
+ *   title?: string,
+ *   html?: string,
+ *   columns?: { field: string, title?: string }[],
+ *   rows?: Record<string, unknown>[],
+ *   chartImage?: string,
+ *   markdown?: string,
+ * }} report
+ */
+export function payloadFromReport(report = {}) {
+  const title = String(report?.title || 'Export');
+  const cols = (Array.isArray(report?.columns) ? report.columns : [])
+    .filter((c) => c?.field)
+    .map((c) => ({ field: String(c.field), title: String(c.title || c.field) }));
+  const payload = {
+    title,
+    columns: cols,
+    rows: Array.isArray(report?.rows) ? report.rows : [],
+  };
+  if (typeof report?.html === 'string' && report.html.trim()) {
+    payload.html = report.html;
+  }
+  if (typeof report?.chartImage === 'string' && report.chartImage.startsWith('data:image/')) {
+    payload.chartImage = report.chartImage;
+  }
+  if (typeof report?.markdown === 'string' && report.markdown.trim()) {
+    payload.markdown = report.markdown;
+  }
+  return payload;
+}
+
+/**
  * Download Markdown. Uses `payload.markdown` when a panel supplies the document source.
  * Otherwise builds a table from the same columns and rows as CSV.
  * @param {{ title?: string, markdown?: string, columns?: { field: string, title?: string }[], rows?: object[] }} payload

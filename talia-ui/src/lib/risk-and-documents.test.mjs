@@ -14,6 +14,7 @@ assert.equal(riskBand(0, 3), 'low');
 
 assert.equal(nextRiskReference([{ referenceCode: 'RK001' }, { referenceCode: 'RK009' }]), 'RK010');
 assert.equal(nextDocumentReference([{ referenceCode: 'D002' }]), 'D003');
+assert.equal(nextDocumentReference([{ referenceCode: 'D006' }, { referenceCode: 'D006-1' }]), 'D007');
 
 const blocks = parseMarkdown('# Title\n\nSee <script> and **bold**.\n\n- one\n- two\n\n![](asset:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee)\n\n[ok](https://example.com) [no](javascript:alert(1))');
 assert.equal(blocks[0].type, 'h1');
@@ -97,13 +98,14 @@ const docPack = buildProjectDocumentExport([{
 assert.deepEqual(docPack.ProjectDocumentExport.documents[0].assetIds, ['aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee']);
 
 const tree = buildDocumentTree([
-  { id: 'a', referenceCode: 'D002', title: 'Later', links: [{ targetKind: 'risk', targetId: 'rk', label: 'RK001 Interface' }] },
+  { id: 'a', referenceCode: 'D002', title: 'Later', isStarred: true, links: [{ targetKind: 'risk', targetId: 'rk', label: 'RK001 Interface' }] },
   { id: 'b', referenceCode: 'D001', title: 'Note', links: [{ targetKind: 'risk', targetId: 'rk', label: 'RK001 Interface' }] },
   { id: 'c', referenceCode: 'D003', title: 'Loose', links: [] },
 ]);
-assert.deepEqual(tree.map((group) => group.id), ['risk', 'unlinked']);
-assert.deepEqual(tree[0].folders[0].documents.map((doc) => doc.referenceCode), ['D001', 'D002']);
-assert.equal(tree[1].folders[0].label, null);
-assert.equal(tree[1].folders[0].documents[0].referenceCode, 'D003');
+assert.deepEqual(tree.map((group) => group.id), ['starred', 'risk', 'unlinked']);
+assert.deepEqual(tree[0].folders[0].documents.map((doc) => doc.referenceCode), ['D002']);
+assert.deepEqual(tree[1].folders[0].documents.map((doc) => doc.referenceCode), ['D002', 'D001']);
+assert.equal(tree[2].folders[0].label, null);
+assert.equal(tree[2].folders[0].documents[0].referenceCode, 'D003');
 
 console.log('risk-and-documents.test.mjs ok');

@@ -96,7 +96,11 @@ const ReportShell = ({ report, panelInstanceId, panelApi = null, children }) => 
         panelInstanceId,
         shell: node,
       });
-      if (becameActive) replayClickAfterActivate(event);
+      if (!becameActive) return;
+      // Drop any browser text-range left from the previous panel so returning
+      // to an explorer does not paint a multi-row native selection.
+      try { window.getSelection?.()?.removeAllRanges?.(); } catch { /* noop */ }
+      replayClickAfterActivate(event);
     };
     node.addEventListener('pointerdown', onPointerDownCapture, true);
     return () => node.removeEventListener('pointerdown', onPointerDownCapture, true);

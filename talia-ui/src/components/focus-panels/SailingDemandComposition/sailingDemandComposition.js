@@ -9,10 +9,10 @@ import {
   RESERVATION_SOURCE_ORIGIN,
 } from '../../../lib/deliveryProbability.js';
 import { classifyPassengerType } from '../../../lib/reservationDimensions.js';
+import { isCancelledStatus } from '../GroupsExplorer/groupsMaterialisation.js';
 
 const BOOKED_STATUSES = new Set(['BK', 'BOOKED', 'BKD']);
 const OFFER_STATUSES = new Set(['OF', 'OPTION', 'QT', 'QUOTE', 'WL', 'WAITLIST', 'WAIT']);
-const CANCELLED = new Set(['CX', 'CANCELLED', 'CANCELED', 'X']);
 
 const asNum = (v) => {
   const n = Number(v);
@@ -28,7 +28,7 @@ export const revenueEurOf = (row) => {
 };
 
 export const isCancelledReservation = (row) => (
-  CANCELLED.has(String(row?.res_status || '').trim().toUpperCase())
+  isCancelledStatus(row?.res_status)
 );
 
 /** Named / materialised booked cabins (not synthetic group-OF explode). */

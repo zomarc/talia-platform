@@ -123,6 +123,24 @@ const getStoredEvents = () => {
       source: 'window.lastSailSelectEvent'
     });
   }
+  if (window.lastShipSelectEvent?.type) {
+    const detailTimestamp = window.lastShipSelectEvent?.detail?.timestamp;
+    snapshots.push({
+      name: window.lastShipSelectEvent.type,
+      detail: window.lastShipSelectEvent.detail || null,
+      timestamp: typeof detailTimestamp === 'string' && detailTimestamp ? detailTimestamp : new Date().toISOString(),
+      source: 'window.lastShipSelectEvent'
+    });
+  }
+  if (window.lastGroupSelectEvent?.type) {
+    const detailTimestamp = window.lastGroupSelectEvent?.detail?.timestamp;
+    snapshots.push({
+      name: window.lastGroupSelectEvent.type,
+      detail: window.lastGroupSelectEvent.detail || null,
+      timestamp: typeof detailTimestamp === 'string' && detailTimestamp ? detailTimestamp : new Date().toISOString(),
+      source: 'window.lastGroupSelectEvent'
+    });
+  }
 
   return snapshots;
 };

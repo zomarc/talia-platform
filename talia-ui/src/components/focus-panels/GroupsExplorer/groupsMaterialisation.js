@@ -1,6 +1,6 @@
 /**
  * Groups Explorer — Talia materialisation rate (independent of source probability).
- * Source MR is display-only; Talia MR is never copied from source.
+ * Source MR is display-only unless useSourceNudge is on; Talia MR is never copied from source.
  */
 
 export const DISTRESSED_REMAINING_PCT = 0.2;
@@ -8,6 +8,19 @@ export const DEFAULT_TALIA_PRIOR = 0.5;
 export const LARGE_GROUP_PAX = 50;
 export const WEAK_MR_THRESHOLD = 0.35;
 export const SOURCE_GAP_FLAG = 0.15;
+
+/** Extract + live reservation cancel codes. */
+export const CANCELLED_STATUSES = new Set([
+  'CX',
+  'CA',
+  'CANCELLED',
+  'CANCELED',
+  'X',
+]);
+
+export const isCancelledStatus = (status) => (
+  CANCELLED_STATUSES.has(String(status || '').trim().toUpperCase())
+);
 
 const clamp01 = (value) => {
   const n = Number(value);
@@ -133,7 +146,17 @@ export const explainTaliaMaterialisation = (input = {}) => {
   }
 
   const sourceMr = normalizeMr(input.sourceMr);
-  if (sourceMr != null) {
+  const useSourceNudge = input.useSourceNudge !== false;
+  if (!useSourceNudge) {
+    steps.push(step({
+      id: 'source',
+      title: 'Source rate',
+      rate: mr,
+      sentence: sourceMr == null
+        ? 'Source rate nudge is off. No source rate is applied.'
+        : `Source rate nudge is off. The stored source rate (${formatMrPctPrecise(sourceMr)}) is shown for comparison only.`,
+    }));
+  } else if (sourceMr != null) {
     const gap = sourceMr - mr;
     if (Math.abs(gap) >= 0.05) {
       const before = mr;
@@ -237,6 +260,7 @@ export const explainTaliaMaterialisation = (input = {}) => {
  *   offerHeavy?: boolean,
  *   distressedSailing?: boolean,
  *   prior?: number,
+ *   useSourceNudge?: boolean,
  * }} input
  * @returns {{ talia_mr: number, source_mr: number|null, reasons: string[] }}
  */
@@ -246,6 +270,70 @@ export const computeTaliaMaterialisation = (input = {}) => {
     talia_mr: explained.talia_mr,
     source_mr: explained.source_mr,
     reasons: explained.reasons,
+  };
+};
+
+/**
+ * Point-in-time named evidence for a hold/day.
+ * Explicit header named wins. When missing: BK uses requested (booked evidence);
+ * quotes/offers stay at 0. Never uses final/outcome named.
+ * @param {{ status?: string, requested?: number, named?: number|null }} input
+ */
+export const resolveAsOfNamed = ({ status, requested, named } = {}) => {
+  if (named != null && named !== '') {
+    const n = Number(named);
+    if (Number.isFinite(n)) return Math.max(0, Math.round(n));
+  }
+  const code = String(status || '').trim().toUpperCase();
+  if (code === 'BK') return Math.max(0, Math.round(Number(requested) || 0));
+  return 0;
+};
+
+/**
+ * Score one hold/day for path panels. Cancelled status → expected guests 0.
+ * Pass `named: null` when the header version has no named count.
+ * @param {{
+ *   status?: string,
+ *   requested?: number,
+ *   named?: number|null,
+ *   probability?: number|null,
+ *   useSourceNudge?: boolean,
+ * }} hold
+ */
+export const scoreTaliaHold = (hold = {}) => {
+  const status = String(hold.status || '').trim().toUpperCase();
+  const requested = Math.round(Number(hold.requested) || 0);
+  const named = resolveAsOfNamed({
+    status,
+    requested,
+    named: hold.named,
+  });
+  const sourceMr = normalizeMr(hold.probability);
+  if (isCancelledStatus(status)) {
+    return {
+      talia_mr: 0,
+      source_mr: sourceMr,
+      reasons: ['Cancelled — forward expected guests are 0'],
+      sourceExpectedGuests: 0,
+      taliaExpectedGuests: 0,
+      namedGuests: named,
+      cancelled: true,
+    };
+  }
+  const rates = computeTaliaMaterialisation({
+    requestedPax: requested,
+    reservedPax: named,
+    sourceMr: hold.probability,
+    hasNamedBooked: named > 0,
+    offerHeavy: (status === 'QT' || status === 'OF') && named === 0,
+    useSourceNudge: hold.useSourceNudge !== false,
+  });
+  return {
+    ...rates,
+    namedGuests: named,
+    sourceExpectedGuests: sourceMr == null ? 0 : Math.round(requested * sourceMr),
+    taliaExpectedGuests: Math.round(requested * (rates.talia_mr || 0)),
+    cancelled: false,
   };
 };
 
@@ -303,6 +391,9 @@ export default {
   computeTaliaMaterialisation,
   explainTaliaMaterialisation,
   evaluateGroupPerformance,
+  resolveAsOfNamed,
+  scoreTaliaHold,
+  isCancelledStatus,
   normalizeMr,
   formatMrPct,
   formatMrPctPrecise,

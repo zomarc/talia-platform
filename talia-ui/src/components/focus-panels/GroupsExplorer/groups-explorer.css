@@ -11,9 +11,25 @@
   margin-bottom: var(--theme-component-padding-xs);
 }
 
-.groups-explorer .talia-report__content {
+.groups-explorer .talia-report__content,
+.groups-explorer__content {
   padding: 0 var(--theme-component-padding-md) var(--theme-component-padding-sm);
   gap: var(--theme-component-gap-sm);
+  /* Keep vertical scroll inside Tabulator — outer --scroll was jumping to top on select. */
+  overflow: hidden !important;
+}
+
+.groups-explorer__table {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+.groups-explorer__details {
+  flex: 0 1 auto;
+  max-height: 42%;
+  min-height: 0;
+  overflow: auto;
 }
 
 .groups-explorer__badge {

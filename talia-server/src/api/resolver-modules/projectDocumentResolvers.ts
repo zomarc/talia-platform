@@ -25,11 +25,15 @@ const requireText = (value: any, label: string) => {
   return text;
 };
 
+/** Accept D001 or response children D006-1, D006-2, … */
 const normalizeReference = (value: any) => {
   const code = String(value || '').trim().toUpperCase();
-  if (!/^D\d+$/.test(code)) throw new Error('Reference must look like D001');
-  const number = code.slice(1).replace(/^0+(?=\d)/, '');
-  return `D${number.padStart(3, '0')}`;
+  const match = /^D(\d+)(?:-(\d+))?$/.exec(code);
+  if (!match) throw new Error('Reference must look like D001 or D006-1');
+  const baseNum = match[1].replace(/^0+(?=\d)/, '');
+  const base = `D${baseNum.padStart(3, '0')}`;
+  if (match[2] == null) return base;
+  return `${base}-${Number(match[2])}`;
 };
 
 const nextReferenceCode = async () => {
@@ -57,6 +61,7 @@ const mapDocument = (row: any, links: any[], assets: any[]) => ({
   referenceCode: row.reference_code,
   title: row.title,
   body: row.body ?? '',
+  isStarred: Boolean(row.is_starred),
   links,
   assets: assets.map((asset) => mapAsset(asset, false)),
   createdAt: row.created_at,
@@ -73,7 +78,9 @@ const loadBundle = async (onlyId?: string | null, target?: { kind: string, id: s
       .eq('target_kind', target.kind)
       .eq('target_id', target.id);
     if (error) throw new Error(error.message);
-    documentIds = [...new Set((data || []).map((row) => row.document_id))];
+    documentIds = Array.from(
+      new Set((data || []).map((row: { document_id: string }) => String(row.document_id))),
+    );
     if (!documentIds.length) return [];
   }
 
@@ -198,6 +205,7 @@ export const projectDocumentMutationResolvers = {
       body: input?.body == null ? '' : String(input.body),
     };
     if (referenceCode) patch.reference_code = referenceCode;
+    if (input?.isStarred != null) patch.is_starred = Boolean(input.isStarred);
 
     if (id) {
       const { data: existing, error: findError } = await supabase

@@ -3,9 +3,20 @@
  */
 
 import React, { useEffect, useMemo, useRef } from 'react';
-import { initTabulator, getTabulatorOptions } from '../../../lib/tabulatorConfig';
+import { afterTabulatorDataRefresh } from '../../../hooks/useTabulatorLayoutSync';
+import {
+  bindTabulatorRowSelectionHandlers,
+  captureTableScroll,
+  getTabulatorOptions,
+  initTabulator,
+  restoreTableScrollSoon,
+} from '../../../lib/tabulatorConfig';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
-import { chainRowFormatters, createReferenceRowFormatter } from '../../../lib/tabulatorReferenceSelection';
+import {
+  chainRowFormatters,
+  createReferenceRowFormatter,
+  refreshReferenceRowClasses,
+} from '../../../lib/tabulatorReferenceSelection';
 import ReportSnapshot from '../../shared/ReportSnapshot';
 import ReportProvenance from '../../shared/ReportProvenance';
 import ReportDataDetails from '../../shared/ReportDataDetails';
@@ -200,6 +211,8 @@ const PromoExplorerPresenter = ({
     && data?.promo_key === selectedPromoKeyRef.current
   );
 
+  const unbindSelectionRef = useRef(() => {});
+
   useEffect(() => {
     let cancelled = false;
     const init = async () => {
@@ -207,8 +220,10 @@ const PromoExplorerPresenter = ({
       const Tabulator = await initTabulator();
       if (cancelled || !tableRef.current) return;
       if (instanceRef.current) {
-        instanceRef.current.setColumns(columns);
-        instanceRef.current.replaceData(rows);
+        const table = instanceRef.current;
+        const scroll = captureTableScroll(table);
+        table.setColumns(columns);
+        afterTabulatorDataRefresh(table, table.replaceData(rows), scroll);
         return;
       }
       instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
@@ -222,15 +237,24 @@ const PromoExplorerPresenter = ({
         exportTitle: 'Promo Explorer',
         rowFormatter: chainRowFormatters(createReferenceRowFormatter(isFocusRow)),
       }));
-      instanceRef.current.on('rowClick', (_event, row) => {
-        onSelectPromoRef.current?.(row?.getData?.());
+      unbindSelectionRef.current = bindTabulatorRowSelectionHandlers(instanceRef.current, {
+        onSelect: (data) => onSelectPromoRef.current?.(data),
       });
     };
     init();
     return () => { cancelled = true; };
   }, [columns, isCompact, panelComponentId, panelInstanceId, rows, selectedSailCode]);
 
+  useEffect(() => {
+    const table = instanceRef.current;
+    const scroll = captureTableScroll(table);
+    refreshReferenceRowClasses(table, isFocusRow);
+    restoreTableScrollSoon(scroll);
+  }, [selectedPromoKey, rows]);
+
   useEffect(() => () => {
+    unbindSelectionRef.current?.();
+    unbindSelectionRef.current = () => {};
     try { instanceRef.current?.destroy?.(); } catch { /* noop */ }
     instanceRef.current = null;
   }, []);
@@ -267,7 +291,7 @@ const PromoExplorerPresenter = ({
         ]}
       />
 
-      <main className="talia-report__content talia-report__content--scroll">
+      <main className="talia-report__content promo-explorer__content">
         <div ref={tableRef} className="talia-table promo-explorer__table" role="grid" />
 
         <ReportDataDetails visible={showDetails} className="promo-explorer__details">

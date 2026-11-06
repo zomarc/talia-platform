@@ -5,7 +5,7 @@
 
 import { assetIdsInMarkdown } from './markdownLite.js';
 
-const TREE_GROUPS = [
+const LINK_GROUPS = [
   { id: 'requirement', label: 'Requirements' },
   { id: 'matrix', label: 'Matrix' },
   { id: 'risk', label: 'Risks' },
@@ -18,14 +18,25 @@ const byReference = (a, b) => String(a?.referenceCode || '').localeCompare(
   { numeric: true },
 );
 
+const byStarThenReference = (a, b) => {
+  const starDelta = Number(Boolean(b?.isStarred)) - Number(Boolean(a?.isStarred));
+  if (starDelta) return starDelta;
+  return byReference(a, b);
+};
+
 /**
- * Tree for the repository: a group per link kind, then the linked record, then documents.
- * A document linked to two records appears under both. Unlinked documents sit on their own.
+ * Tree for the repository: starred documents first, then a group per link kind,
+ * then the linked record, then documents. A document linked to two records appears
+ * under both. Unlinked documents sit on their own. Starred docs also stay in their
+ * link groups (and sort first within each folder).
  */
 export function buildDocumentTree(documents) {
-  const buckets = new Map(TREE_GROUPS.map((group) => [group.id, new Map()]));
+  const buckets = new Map(LINK_GROUPS.map((group) => [group.id, new Map()]));
+  const starred = [];
 
   (documents || []).forEach((document) => {
+    if (document?.isStarred) starred.push(document);
+
     const links = (document?.links || []).filter((link) => buckets.has(link?.targetKind));
     if (!links.length) {
       const unlinked = buckets.get('unlinked');
@@ -47,21 +58,37 @@ export function buildDocumentTree(documents) {
     });
   });
 
-  return TREE_GROUPS.map((group) => ({
+  const linkGroups = LINK_GROUPS.map((group) => ({
     id: group.id,
     label: group.label,
     folders: [...buckets.get(group.id).values()]
       .map((folder) => ({
         ...folder,
-        documents: [...folder.documents].sort(byReference),
+        documents: [...folder.documents].sort(byStarThenReference),
       }))
       .sort((a, b) => String(a.label || '').localeCompare(String(b.label || ''))),
   })).filter((group) => group.folders.some((folder) => folder.documents.length));
+
+  if (!starred.length) return linkGroups;
+
+  return [
+    {
+      id: 'starred',
+      label: 'Starred',
+      folders: [{
+        id: 'starred',
+        label: null,
+        documents: [...starred].sort(byReference),
+      }],
+    },
+    ...linkGroups,
+  ];
 }
 
 export function nextDocumentReference(items) {
   let max = 0;
   (items || []).forEach((item) => {
+    // Ignore response children (D006-1); only advance the primary D### sequence.
     const match = /^D(\d+)$/i.exec(String(item?.referenceCode || '').trim());
     if (match) max = Math.max(max, Number(match[1]));
   });
@@ -77,6 +104,7 @@ export function buildProjectDocumentExport(items) {
         referenceCode: item.referenceCode,
         title: item.title,
         body: item.body || '',
+        isStarred: Boolean(item.isStarred),
         assetIds: assetIdsInMarkdown(item.body),
         links: (item.links || []).map((link) => ({
           targetKind: link.targetKind,

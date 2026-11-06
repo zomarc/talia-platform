@@ -1,0 +1,153 @@
+.mr-retrospect {
+  container-type: inline-size;
+  container-name: mr-retrospect;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.mr-retrospect__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mr-retrospect__body > .talia-report__content {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-component-gap-sm);
+  overflow: hidden;
+}
+
+.mr-retrospect__details {
+  flex: 0 1 auto;
+  max-height: 40%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  border-top: 1px solid var(--theme-border);
+  background: var(--theme-bg-solid);
+}
+
+.mr-retrospect__details[hidden] {
+  display: none !important;
+}
+
+@container mr-retrospect (min-width: 880px) {
+  .mr-retrospect__body {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .mr-retrospect__details {
+    flex: 0 0 28%;
+    width: 28%;
+    max-height: none;
+    max-width: 36rem;
+    min-width: 18rem;
+    border-top: 0;
+    border-left: 1px solid var(--theme-border);
+  }
+}
+
+.mr-retrospect__chart {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 12rem;
+  height: 100%;
+}
+
+.mr-retrospect__chart canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.mr-retrospect__marker-tip {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, -100%);
+  max-width: 16rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 4px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-elevated, var(--theme-bg-solid));
+  color: var(--theme-fg);
+  font-size: var(--theme-font-size-sm);
+  line-height: 1.35;
+  white-space: pre-line;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+}
+
+.mr-retrospect__chart-caption {
+  margin: 0;
+  flex: 0 0 auto;
+  color: var(--theme-text-secondary);
+  font-size: var(--theme-font-size-sm);
+}
+
+.mr-retrospect__body > .talia-report__content > .talia-callout {
+  flex: 0 0 auto;
+}
+
+.mr-retrospect__stepper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--theme-component-gap-sm);
+  flex: 0 0 auto;
+}
+
+.mr-retrospect__stepper input[type='range'] {
+  flex: 1 1 12rem;
+  min-width: 8rem;
+}
+
+.mr-retrospect__step-label {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.mr-retrospect__filter-note {
+  margin: 0;
+  color: var(--theme-text-secondary);
+  font-size: var(--theme-font-size-sm);
+}
+
+.mr-retrospect__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-component-gap-xs);
+  padding: var(--theme-card-padding);
+}
+
+.mr-retrospect__card h3 {
+  margin: 0;
+  font-size: var(--theme-font-size);
+  font-weight: 650;
+}
+
+.mr-retrospect__card dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem var(--theme-component-gap-sm);
+  font-size: var(--theme-font-size-sm);
+}
+
+.mr-retrospect__card dt {
+  color: var(--theme-text-secondary);
+}
+
+.mr-retrospect__card dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}

@@ -8,6 +8,8 @@ export const SAIL_SELECT_EVENT = 'talia:sail.select';
 export const SAIL_CLEAR_EVENT = 'talia:sail.clear';
 export const SHIP_SELECT_EVENT = 'talia:ship.select';
 export const SHIP_CLEAR_EVENT = 'talia:ship.clear';
+export const GROUP_SELECT_EVENT = 'talia:group.select';
+export const GROUP_CLEAR_EVENT = 'talia:group.clear';
 export const CABIN_SELECT_EVENT = 'talia:cabin.select';
 export const CABIN_CLEAR_EVENT = 'talia:cabin.clear';
 export const RESERVATION_SELECT_EVENT = 'talia:reservation.select';
@@ -125,6 +127,61 @@ export const extractShipCodeFromEvent = (detail) => {
   return normalized || null;
 };
 
+/** Group id from a group.select payload (or legacy sail.select row_data.group_id). */
+export const extractGroupIdFromEvent = (detail) => {
+  if (!detail) return null;
+  if (typeof detail === 'string' || typeof detail === 'number') {
+    const text = String(detail).trim();
+    return text || null;
+  }
+  const candidate = detail.group_id
+    ?? detail.groupId
+    ?? detail.row_data?.group_id
+    ?? detail.row_data?.groupId
+    ?? null;
+  if (candidate == null || candidate === '') return null;
+  return String(candidate).trim() || null;
+};
+
+export const emitGroupSelect = (detail) => {
+  try {
+    const raw = detail && typeof detail === 'object' ? detail : { group_id: detail };
+    const groupId = extractGroupIdFromEvent(raw);
+    if (!groupId) {
+      console.warn('[eventBus] emitGroupSelect skipped — group_id required');
+      return;
+    }
+    const payload = {
+      ...raw,
+      group_id: groupId,
+      timestamp: raw.timestamp || new Date().toISOString(),
+      row_data: {
+        ...(raw.row_data && typeof raw.row_data === 'object' ? raw.row_data : {}),
+        group_id: groupId,
+      },
+    };
+    window.lastGroupSelectEvent = { type: GROUP_SELECT_EVENT, detail: payload };
+    window.dispatchEvent(new CustomEvent(GROUP_SELECT_EVENT, { detail: payload }));
+  } catch (error) {
+    console.warn('[eventBus] emitGroupSelect failed', error);
+  }
+};
+
+export const emitGroupClear = (detail = {}) => {
+  try {
+    window.lastGroupSelectEvent = null;
+    window.dispatchEvent(new CustomEvent(GROUP_CLEAR_EVENT, {
+      detail: {
+        ...detail,
+        reason: detail?.reason || 'group-cleared',
+        timestamp: detail?.timestamp || new Date().toISOString(),
+      },
+    }));
+  } catch (error) {
+    console.warn('[eventBus] emitGroupClear failed', error);
+  }
+};
+
 export const emitShipSelect = (detail) => {
   try {
     dispatchCanonicalSelection(SHIP_SELECT_EVENT, detail, 'lastShipSelectEvent');
@@ -206,10 +263,21 @@ const clearCabinForSailScopeChange = () => {
   });
 };
 
+/** Sail scope change drops group focus unless the new sail select carries a group_id. */
+const clearGroupForSailScopeChange = (detail) => {
+  if (!window.lastGroupSelectEvent) return;
+  if (extractGroupIdFromEvent(detail)) return;
+  emitGroupClear({
+    reason: 'sail-scope-changed',
+    timestamp: new Date().toISOString(),
+  });
+};
+
 export const emitSailSelect = (detail) => {
   try {
     clearReservationForSailScopeChange();
     clearCabinForSailScopeChange();
+    clearGroupForSailScopeChange(detail);
     // Translate through inventory_item, persist for late listeners, then dispatch.
     dispatchCanonicalSelection(SAIL_SELECT_EVENT, detail, 'lastSailSelectEvent');
   } catch (error) {
@@ -221,6 +289,12 @@ export const emitSailClear = (detail = {}) => {
   try {
     clearReservationForSailScopeChange();
     clearCabinForSailScopeChange();
+    if (window.lastGroupSelectEvent) {
+      emitGroupClear({
+        reason: 'sail-cleared',
+        timestamp: new Date().toISOString(),
+      });
+    }
     window.lastSailSelectEvent = null;
     window.dispatchEvent(new CustomEvent(SAIL_CLEAR_EVENT, { detail }));
   } catch (error) {

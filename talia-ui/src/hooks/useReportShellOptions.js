@@ -17,6 +17,7 @@ import {
   buildReportShellClassName,
   resolveViewValue,
   VIEW_PROVENANCE,
+  VIEW_SOURCE_NUDGE,
 } from '../lib/componentOptionsCatalog';
 
 const SNAPSHOT_DEF = { id: 'snapshot', default: true };
@@ -55,6 +56,7 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
   const hasLegendsView = catalogIds.has('legends');
   const hasAxisLabelsView = catalogIds.has('axisLabels');
   const hasGraphView = catalogIds.has('graph');
+  const hasSourceNudgeView = catalogIds.has('sourceNudge');
 
   const [headerDetailsVisible] = usePanelDetailsVisibility({
     panelInstanceId,
@@ -79,6 +81,7 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
   const optionsLegends = resolveViewValue(viewsState, LEGENDS_DEF) !== false;
   const optionsAxisLabels = resolveViewValue(viewsState, AXIS_LABELS_DEF) !== false;
   const optionsGraph = resolveViewValue(viewsState, GRAPH_DEF) !== false;
+  const optionsSourceNudge = resolveViewValue(viewsState, VIEW_SOURCE_NUDGE) !== false;
   const tooltipView = hasTooltipViewChoice
     ? String(resolveViewValue(viewsState, TOOLTIP_VIEW_DEF) || TOOLTIP_VIEW_DEF.default)
     : null;
@@ -102,6 +105,10 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
   const showGraph = (!prefsReady && hasGraphView)
     ? false
     : (hasGraphView ? optionsGraph : true);
+  // Default on (method includes source nudge). False only when the view exists and the user turned it off.
+  const useSourceNudge = hasSourceNudgeView
+    ? (prefsReady ? optionsSourceNudge : true)
+    : true;
 
   // Legacy Operations "Show filters" (admin capability) still forces off when disabled.
   const opsFilters = operations.find((op) => op.id === 'showFilters');
@@ -137,6 +144,7 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
     showLegends,
     showAxisLabels,
     showGraph,
+    useSourceNudge,
     tooltipView,
     density: densityPref,
     isCompact,
@@ -159,6 +167,7 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
     hasLegendsView,
     hasAxisLabelsView,
     hasGraphView,
+    hasSourceNudgeView,
   };
 }
 

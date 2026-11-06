@@ -4,8 +4,10 @@ import {
   computeTaliaMaterialisation,
   evaluateGroupPerformance,
   formatMrPct,
+  isCancelledStatus,
   isDistressedRemaining,
   normalizeMr,
+  scoreTaliaHold,
 } from './groupsMaterialisation.js';
 import {
   buildGroupsExplorerRows,
@@ -24,18 +26,64 @@ test('isDistressedRemaining uses 20% threshold', () => {
   assert.equal(isDistressedRemaining(15), true);
 });
 
-test('computeTaliaMaterialisation stays independent of source', () => {
-  const result = computeTaliaMaterialisation({
+test('computeTaliaMaterialisation nudges from source by default', () => {
+  const off = computeTaliaMaterialisation({
+    requestedPax: 100,
+    reservedPax: 20,
+    sourceMr: 0.9,
+    offerHeavy: true,
+    hasNamedBooked: false,
+    useSourceNudge: false,
+  });
+  const on = computeTaliaMaterialisation({
     requestedPax: 100,
     reservedPax: 20,
     sourceMr: 0.9,
     offerHeavy: true,
     hasNamedBooked: false,
   });
-  assert.ok(result.talia_mr < 0.9);
-  assert.equal(result.source_mr, 0.9);
-  assert.ok(result.reasons.length >= 2);
-  assert.ok(result.talia_mr > 0 && result.talia_mr < 1);
+  assert.equal(off.source_mr, 0.9);
+  assert.ok(off.talia_mr < on.talia_mr);
+  assert.ok(on.talia_mr < 0.9);
+  assert.ok(off.reasons.every((line) => !/mild uplift|mild temper/.test(line)));
+  assert.ok(on.reasons.some((line) => /mild uplift|mild temper/.test(line)));
+});
+
+test('scoreTaliaHold zeros cancelled holds', () => {
+  assert.equal(isCancelledStatus('CX'), true);
+  assert.equal(isCancelledStatus('CA'), true);
+  const scored = scoreTaliaHold({
+    status: 'CX',
+    requested: 40,
+    named: 0,
+    probability: 100,
+  });
+  assert.equal(scored.taliaExpectedGuests, 0);
+  assert.equal(scored.sourceExpectedGuests, 0);
+  assert.equal(scored.cancelled, true);
+});
+
+test('scoreTaliaHold treats missing named on BK as requested', () => {
+  const scored = scoreTaliaHold({
+    status: 'BK',
+    requested: 54,
+    named: null,
+    probability: 100,
+  });
+  assert.equal(scored.namedGuests, 54);
+  assert.equal(scored.taliaExpectedGuests, 50);
+  assert.ok(scored.talia_mr > 0.85);
+});
+
+test('scoreTaliaHold keeps missing named on QT at 0', () => {
+  const scored = scoreTaliaHold({
+    status: 'QT',
+    requested: 54,
+    named: null,
+    probability: 100,
+  });
+  assert.equal(scored.namedGuests, 0);
+  assert.ok(scored.taliaExpectedGuests < 20);
 });
 
 test('evaluateGroupPerformance flags weak large groups', () => {

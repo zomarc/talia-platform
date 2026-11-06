@@ -1199,9 +1199,14 @@ export const COMMON_COLUMN_TYPES = {
 export default getWrappedTabulatorClass();
 
 /**
- * Standard Tabulator row selection: single-click selects, double-click opens
- * Details/edit (or whatever the panel treats as "open"). Prefer this over
- * panel-local handlers so activate+click and selection stay consistent.
+ * Standard Tabulator row selection: one gesture selects (and show Details when
+ * applicable); double-click opens. Prefer this over panel-local handlers so
+ * Dockview activate+click and selection stay consistent.
+ *
+ * Selection runs on rowMouseDown as well as rowClick. ReportShell blocks the
+ * native click when activating a panel and replays a synthetic one — Tabulator
+ * often misses that replay, so mousedown is what makes the first return-click
+ * select and emit.
  *
  * @param {object} table — Tabulator instance
  * @param {{ onSelect?: (data: object|null, row: object) => void, onOpen?: (data: object|null, row: object) => void }} handlers
@@ -1210,25 +1215,42 @@ export default getWrappedTabulatorClass();
 export function bindTabulatorRowSelectionHandlers(table, handlers = {}) {
   if (!table || typeof table.on !== 'function') return () => {};
   const { onSelect, onOpen } = handlers;
+  let gestureEmitted = false;
+
+  const emitSelect = (row, { fromClick = false } = {}) => {
+    if (fromClick && gestureEmitted) {
+      gestureEmitted = false;
+      return;
+    }
+    const data = row?.getData?.() ?? null;
+    if (!fromClick) gestureEmitted = true;
+    onSelect?.(data, row);
+  };
+
+  const handleMouseDown = (_event, row) => {
+    emitSelect(row, { fromClick: false });
+  };
 
   const handleClick = (_event, row) => {
-    const data = row?.getData?.() ?? null;
-    onSelect?.(data, row);
+    emitSelect(row, { fromClick: true });
   };
 
   const handleDblClick = (event, row) => {
     // Prevent accidental header/sort side-effects from bubbling on dense tables.
     try { event?.stopPropagation?.(); } catch { /* noop */ }
+    gestureEmitted = false;
     const data = row?.getData?.() ?? null;
     onSelect?.(data, row);
     onOpen?.(data, row);
   };
 
+  table.on('rowMouseDown', handleMouseDown);
   table.on('rowClick', handleClick);
   table.on('rowDblClick', handleDblClick);
 
   return () => {
     try {
+      table.off?.('rowMouseDown', handleMouseDown);
       table.off?.('rowClick', handleClick);
       table.off?.('rowDblClick', handleDblClick);
     } catch {

@@ -311,7 +311,7 @@ import { PANEL_ACTION_IDS } from '../shared/panelActions';
 - Update table data using `replaceData()` when data changes
 - Always create instances with `new Tabulator(..., getTabulatorOptions({ ... }))`
 - Use `selectableRows: 1` for single row selection
-- **Row gestures:** single `rowClick` = select (and show Details when applicable); **double-click** = open edit / primary open action via `bindTabulatorRowSelectionHandlers` from `lib/tabulatorConfig.js`. Do not use double-click for status cycles or other mutations that rewrite/sort the table under the cursor.
+- **Row gestures:** one gesture = select (and show Details when applicable); **double-click** = open edit / primary open action via `bindTabulatorRowSelectionHandlers` from `lib/tabulatorConfig.js` (mousedown + click, so Dockview activate+replay still selects). Do not use double-click for status cycles or other mutations that rewrite/sort the table under the cursor.
 - Use `headerFilter: "list"` for enum dropdown filters with **static** `headerFilterParams.values` (prefer `COMMON_COLUMN_TYPES.dropdown`). Keep `autocomplete: false` for fixed enums so the full option list remains after a value is chosen; reserve `autocomplete: true` + `valuesLookup` for free-text columns that discover values from data.
 - Standardize column labels with short+long naming:
   - `titleShort`: compact column header shown in-table
@@ -367,8 +367,14 @@ useEffect(() => {
 }, [panelInstanceId, panelComponentId]);
 ```
 
-- Tab chrome shows **⬇** → CSV | PDF (print dialog). Do not put export inside `ReportEventMeta` (tab ⓘ remains technical meta only).
-- PDF may include an optional `chartImage` data URL (e.g. Chart.js `toBase64Image()`) rendered above the table. CSV ignores the chart.
+- Tab chrome shows **⬇** → CSV | PDF | Markdown. Do not put export inside `ReportEventMeta` (tab ⓘ remains technical meta only).
+- **Payload contract** (`getPayload` → object):
+  - `title` — export filename stem and print chrome title
+  - `html` — preferred for PDF: full white print report (chart figures + narrative/tables). Use offscreen Chart.js via `lib/printChartCapture.js` / panel `*PrintCharts.js`, not a live dark-theme screenshot
+  - `columns` + `rows` — CSV and Markdown table body (always register when tabular data exists)
+  - `chartImage` — optional single PNG data URL for simple panels when `html` is absent; PDF renders it above the auto table
+  - `markdown` — optional pre-built Markdown document (otherwise built from columns/rows)
+- Prefer `payloadFromReport({ title, html, columns, rows })` for full-report panels, or `payloadFromTabulator` / `payloadFromRows` for table-only panels.
 
 **Example:**
 ```jsx

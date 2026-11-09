@@ -94,6 +94,34 @@
   font-size: var(--theme-font-size-sm);
 }
 
+.mr-retrospect__leaderboard {
+  flex: 0 0 auto;
+  overflow-x: auto;
+}
+
+.mr-retrospect__leaderboard table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--theme-font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.mr-retrospect__leaderboard th,
+.mr-retrospect__leaderboard td {
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--theme-border);
+}
+
+.mr-retrospect__leaderboard th {
+  color: var(--theme-text-secondary);
+  font-weight: 600;
+}
+
+.mr-retrospect__leaderboard tr.is-active td {
+  font-weight: 650;
+}
+
 .mr-retrospect__body > .talia-report__content > .talia-callout {
   flex: 0 0 auto;
 }

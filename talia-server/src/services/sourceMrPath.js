@@ -82,9 +82,9 @@ const inWindow = (sailDate, dateFrom, dateTo) => {
 
 /**
  * As-of named via scoreTaliaHold / resolveAsOfNamed — never finalNamed.
- * Cancelled → expected 0.
+ * Cancelled → expected 0. Default model is MR01.
  * @param {object} hold
- * @param {{ useSourceNudge?: boolean }} [options]
+ * @param {{ useSourceNudge?: boolean, modelId?: string, params?: object }} [options]
  */
 const scoreHold = (hold, options = {}) => {
   const rates = scoreTaliaHold({
@@ -93,6 +93,7 @@ const scoreHold = (hold, options = {}) => {
     named: hold.holdNamed,
     probability: hold.probability,
     useSourceNudge: options.useSourceNudge !== false,
+    params: options.params,
   });
   const named = rates.namedGuests ?? 0;
   const sourceExpected = rates.sourceExpectedGuests;

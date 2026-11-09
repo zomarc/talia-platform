@@ -197,26 +197,32 @@ const HistoricMrPathPresenter = ({
     showLegends,
     showAxisLabels,
     useSourceNudge,
+    mrModelId,
+    mr01Params,
     reportShellClassName,
   } = useReportShellOptions(panelComponentId, panelInstanceId);
   const showPath = hydrated === true && resolveViewValue(viewsState, VIEW_HISTORIC_MR_PATH) === true;
   const showAssumptions = hydrated === true && resolveViewValue(viewsState, VIEW_ASSUMPTIONS) !== false;
   const { expandedKey, toggleExpandedKey } = useSubpanelExpansion(null);
   const [tip, setTip] = useState(null);
+  const scoreOptions = useMemo(() => ({
+    modelId: mrModelId,
+    mr01Params,
+    useSourceNudge,
+  }), [mrModelId, mr01Params, useSourceNudge]);
   const displayPath = useMemo(
-    () => rescorePathPayload(path, { useSourceNudge }),
-    [path, useSourceNudge]
+    () => rescorePathPayload(path, scoreOptions),
+    [path, scoreOptions]
   );
   const displaySeries = useMemo(
-    () => rescorePathDays(series, { useSourceNudge }),
-    [series, useSourceNudge]
+    () => rescorePathDays(series, scoreOptions),
+    [series, scoreOptions]
   );
   const planning = planningValue(displayPath?.sourceExpectedGuests, displayPath?.namedGuests, planningRate);
   const selectedScored = useMemo(() => {
     if (!selectedGroup) return null;
-    if (!useSourceNudge) return selectedGroup;
     return (displayPath?.groups || []).find((row) => row.groupId === selectedGroup.groupId) || selectedGroup;
-  }, [selectedGroup, displayPath, useSourceNudge]);
+  }, [selectedGroup, displayPath]);
   const groupPlanning = planningValue(selectedScored?.sourceExpectedGuests, selectedScored?.namedGuests, planningRate);
   const assumptions = [...(displayPath?.assumptions || []), PLANNING_ASSUMPTION];
   const months = useMemo(() => (displayPath?.months || []).map((row) => ({

@@ -23,10 +23,12 @@ import {
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import {
   aggregateDtdSeries,
+  buildCompareRetrospect,
   buildDtdSeries,
   buildRetrospectAnnotations,
 } from '../../../lib/mrRetrospect';
 import { rescorePathDays } from '../../../lib/mrPathRescore.js';
+import { buildAccuracyLeaderboard } from '../../../lib/mrModels/index.js';
 import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 import PanelDataState from '../../shared/PanelDataState';
 import MrRetrospectPresenter from './MrRetrospectPresenter';
@@ -135,7 +137,24 @@ const MrRetrospectContainer = ({ panelInstanceId, panelComponentId }) => {
   const [groupSeries, setGroupSeries] = useState(null);
   const [sailSeriesList, setSailSeriesList] = useState([]);
   const [seriesLoading, setSeriesLoading] = useState(false);
-  const { useSourceNudge } = useReportShellOptions(panelComponentId, panelInstanceId);
+  const {
+    useSourceNudge,
+    mrModelId,
+    mr01Params,
+    compareModelIds,
+  } = useReportShellOptions(panelComponentId, panelInstanceId);
+
+  const scoreOptions = useMemo(() => ({
+    modelId: mrModelId,
+    mr01Params,
+    useSourceNudge,
+  }), [mrModelId, mr01Params, useSourceNudge]);
+
+  const overlayModelIds = useMemo(() => {
+    const ids = [...(compareModelIds || [])];
+    if (mrModelId && !ids.includes(mrModelId)) ids.unshift(mrModelId);
+    return ids.length ? ids : [mrModelId || 'MR01'];
+  }, [compareModelIds, mrModelId]);
 
   const globalDates = useGlobalDateWindow();
   const globalMonth = useGlobalDepartureMonth();
@@ -313,25 +332,60 @@ const MrRetrospectContainer = ({ panelInstanceId, panelComponentId }) => {
     };
   }, [masterSailRows]);
 
-  const scoredGroupSeries = useMemo(
-    () => rescorePathDays(groupSeries, { useSourceNudge }),
-    [groupSeries, useSourceNudge]
-  );
-  const scoredSailSeries = useMemo(
-    () => sailSeriesList.map((series) => rescorePathDays(series, { useSourceNudge })).filter(Boolean),
-    [sailSeriesList, useSourceNudge]
+  const scoredByModel = useMemo(() => {
+    const map = {};
+    overlayModelIds.forEach((modelId) => {
+      const opts = { ...scoreOptions, modelId };
+      if (scopeMode === 'sail') {
+        map[modelId] = sailSeriesList
+          .map((series) => rescorePathDays(series, opts))
+          .filter(Boolean);
+      } else {
+        map[modelId] = groupSeries ? rescorePathDays(groupSeries, opts) : null;
+      }
+    });
+    return map;
+  }, [groupSeries, overlayModelIds, sailSeriesList, scopeMode, scoreOptions]);
+
+  const retrospectByModel = useMemo(() => {
+    const map = {};
+    overlayModelIds.forEach((modelId) => {
+      const scored = scoredByModel[modelId];
+      if (scopeMode === 'sail') {
+        map[modelId] = aggregateDtdSeries(scored || []);
+      } else {
+        map[modelId] = scored ? buildDtdSeries(scored) : null;
+      }
+    });
+    return map;
+  }, [overlayModelIds, scopeMode, scoredByModel]);
+
+  const retrospect = useMemo(
+    () => buildCompareRetrospect(retrospectByModel, overlayModelIds),
+    [overlayModelIds, retrospectByModel]
   );
 
-  const retrospect = useMemo(() => {
-    if (scopeMode === 'sail') return aggregateDtdSeries(scoredSailSeries);
-    if (!scoredGroupSeries) return null;
-    return buildDtdSeries(scoredGroupSeries);
-  }, [scoredGroupSeries, scoredSailSeries, scopeMode]);
+  const leaderboard = useMemo(() => {
+    const series = overlayModelIds.map((modelId) => {
+      const steps = retrospectByModel[modelId]?.steps || [];
+      return {
+        modelId,
+        points: steps.map((step) => ({
+          dtd: step.dtd,
+          expected: step.taliaExpectedGuests,
+          outcomeNamed: step.outcomeNamed,
+        })),
+      };
+    });
+    return buildAccuracyLeaderboard(series);
+  }, [overlayModelIds, retrospectByModel]);
 
   const annotations = useMemo(() => {
-    if (scopeMode !== 'group' || !scoredGroupSeries) return [];
-    return buildRetrospectAnnotations(scoredGroupSeries);
-  }, [scoredGroupSeries, scopeMode]);
+    if (scopeMode !== 'group') return [];
+    const primary = scoredByModel[overlayModelIds[0]];
+    if (!primary) return [];
+    return buildRetrospectAnnotations(primary);
+  }, [overlayModelIds, scopeMode, scoredByModel]);
 
   useReportPanelLoading(panelInstanceId, panelComponentId, (loading && !path) || seriesLoading);
 
@@ -348,6 +402,9 @@ const MrRetrospectContainer = ({ panelInstanceId, panelComponentId }) => {
       <MrRetrospectPresenter
         path={path}
         retrospect={retrospect}
+        leaderboard={leaderboard}
+        compareModelIds={overlayModelIds}
+        activeModelId={mrModelId}
         annotations={annotations}
         groups={groups}
         selectedGroupId={selectedGroupId}

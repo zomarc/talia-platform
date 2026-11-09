@@ -16,7 +16,7 @@ test('quote illustration does not copy a 100% source rate', () => {
   assert.equal(worked.explanation.sourceExpected, 40);
   const text = worked.explanation.steps.map((item) => item.sentence).join(' ');
   assert.match(text, /65%/);
-  assert.match(text, /cut by 15%/);
+  assert.match(text, /cut to 85%/);
   assert.match(text, /15% of that gap/);
   assert.equal(
     worked.explanation.talia_mr,

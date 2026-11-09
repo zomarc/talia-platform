@@ -51,7 +51,10 @@ const RESERVATION_COLUMNS = [
 
 const TaliaMrMethodContainer = ({ panelInstanceId, panelComponentId }) => {
   const [pickedId, setPickedId] = useState(null);
-  const { useSourceNudge } = useReportShellOptions(panelComponentId, panelInstanceId);
+  const { mrModelId, mr01Params, mr01PresetId, useSourceNudge } = useReportShellOptions(
+    panelComponentId,
+    panelInstanceId
+  );
 
   const {
     data: reservationRows,
@@ -93,9 +96,13 @@ const TaliaMrMethodContainer = ({ panelInstanceId, panelComponentId }) => {
 
   const rows = useMemo(
     () => (selectedSailCode
-      ? buildGroupsExplorerRows(reservationRows || [], { useSourceNudge })
+      ? buildGroupsExplorerRows(reservationRows || [], {
+        modelId: mrModelId,
+        mr01Params,
+        useSourceNudge,
+      })
       : []),
-    [reservationRows, selectedSailCode, useSourceNudge]
+    [reservationRows, selectedSailCode, mrModelId, mr01Params, useSourceNudge]
   );
 
   const cases = useMemo(() => {
@@ -103,10 +110,12 @@ const TaliaMrMethodContainer = ({ panelInstanceId, panelComponentId }) => {
       return rows.map((row) => caseFromGroupRow(row, {
         sailCode: selectedSailCode,
         useSourceNudge,
+        mr01Params,
+        modelId: mrModelId,
       }));
     }
-    return buildIllustrationCases({ useSourceNudge });
-  }, [rows, selectedSailCode, useSourceNudge]);
+    return buildIllustrationCases({ useSourceNudge, mr01Params, modelId: mrModelId });
+  }, [rows, selectedSailCode, useSourceNudge, mr01Params, mrModelId]);
 
   const worked = activeCase(cases, pickedId) || activeCase(cases, pickDefaultCaseId(cases));
 
@@ -144,6 +153,8 @@ const TaliaMrMethodContainer = ({ panelInstanceId, panelComponentId }) => {
       cases={cases}
       worked={worked}
       subtitle={subtitle}
+      modelId={mrModelId}
+      mr01PresetId={mr01PresetId}
       usingIllustrations={!selectedSailCode || rows.length === 0}
       loading={Boolean(selectedSailCode) && loading && rows.length === 0}
       error={error}

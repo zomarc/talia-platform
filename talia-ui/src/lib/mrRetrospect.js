@@ -278,3 +278,45 @@ export function pickStep(series, dtd) {
   }
   return best;
 }
+
+/**
+ * Align multi-model DTD series onto a shared axis for overlay charts.
+ * Primary series supplies the axis; each model contributes expected guests.
+ * @param {Record<string, object>} retrospectByModel modelId → buildDtdSeries result
+ * @param {string[]} modelIds
+ */
+export function buildCompareRetrospect(retrospectByModel = {}, modelIds = []) {
+  const ids = (modelIds || []).filter((id) => retrospectByModel?.[id]);
+  const primary = ids.length ? retrospectByModel[ids[0]] : null;
+  if (!primary) {
+    return {
+      groupId: null,
+      sailDateFrom: null,
+      outcomeNamed: 0,
+      assumptions: [],
+      steps: [],
+      modelIds: [],
+      namesFromHistory: false,
+    };
+  }
+  const steps = (primary.steps || []).map((step) => {
+    const byModel = {};
+    ids.forEach((id) => {
+      const match = (retrospectByModel[id]?.steps || []).find((row) => row.dtd === step.dtd);
+      byModel[id] = {
+        rate: match?.taliaMr ?? null,
+        expectedGuests: match?.taliaExpectedGuests ?? null,
+        gap: match == null ? null : match.taliaExpectedGuests - step.outcomeNamed,
+      };
+    });
+    return {
+      ...step,
+      byModel,
+    };
+  });
+  return {
+    ...primary,
+    steps,
+    modelIds: ids,
+  };
+}

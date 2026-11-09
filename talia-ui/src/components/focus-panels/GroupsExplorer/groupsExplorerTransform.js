@@ -14,8 +14,8 @@ import {
   isNamedBooked,
   revenueEurOf,
 } from '../SailingDemandComposition/sailingDemandComposition.js';
+import { scoreWithModel, DEFAULT_MR_MODEL_ID } from '../../../lib/mrModels/index.js';
 import {
-  computeTaliaMaterialisation,
   evaluateGroupPerformance,
   isDistressedRemaining,
 } from './groupsMaterialisation.js';
@@ -144,17 +144,21 @@ export const buildGroupsExplorerRows = (reservationRows = [], options = {}) => {
       ? bucket.source_probs.reduce((a, b) => a + b, 0) / bucket.source_probs.length
       : null;
 
-    const mr = computeTaliaMaterialisation({
-      requestedPax,
-      reservedPax,
-      requestedCabins,
-      reservedCabins,
-      sourceMr,
-      hasNamedBooked: reservedPax > 0,
-      offerHeavy: bucket.offer_pax > reservedPax,
+    const modelId = options.modelId || DEFAULT_MR_MODEL_ID;
+    const scored = scoreWithModel(modelId, {
+      status: bucket.offer_pax > reservedPax ? 'OF' : (reservedPax > 0 ? 'BK' : 'OF'),
+      requested: requestedPax,
+      named: reservedPax,
+      probability: sourceMr,
       distressedSailing,
+    }, options.mr01Params || {
       useSourceNudge: options.useSourceNudge !== false,
     });
+    const mr = {
+      talia_mr: scored.rate ?? scored.talia_mr,
+      source_mr: scored.source_mr,
+      reasons: scored.reasons,
+    };
 
     const impact = evaluateGroupPerformance({
       talia_mr: mr.talia_mr,

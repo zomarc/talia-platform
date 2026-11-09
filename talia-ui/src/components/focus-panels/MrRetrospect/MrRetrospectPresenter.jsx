@@ -99,8 +99,15 @@ const buildMarkerPlugin = (annotations, steps, colors) => ({
 
 const MARKER_HIT_PX = 10;
 
+const MODEL_LABELS = {
+  MR00: 'MR00 expected',
+  MR01: 'MR01 expected',
+  SR00: 'SR00 expected',
+};
+
 const DtdChart = ({
   steps,
+  modelIds = ['MR01'],
   annotations = [],
   selectedDtd,
   showLegends,
@@ -138,32 +145,29 @@ const DtdChart = ({
         },
       },
     });
+    const ids = modelIds?.length ? modelIds : ['MR01'];
+    const modelDatasets = ids.map((modelId, index) => ({
+      label: MODEL_LABELS[modelId] || `${modelId} expected`,
+      data: steps.map((step) => (
+        step.byModel?.[modelId]?.expectedGuests
+        ?? (modelId === 'MR01' ? step.taliaExpectedGuests : null)
+      )),
+      borderColor: colors[index % colors.length] || colors[0],
+      backgroundColor: colors[index % colors.length] || colors[0],
+      tension: 0.15,
+      pointRadius: steps.map((step) => (step.dtd === selectedDtd ? 5 : 3)),
+    }));
     const chart = new Chart(canvas, {
       type: 'line',
       data: {
         labels,
         datasets: [
-          {
-            label: 'Source expected',
-            data: steps.map((step) => step.sourceExpectedGuests),
-            borderColor: colors[0],
-            backgroundColor: colors[0],
-            tension: 0.15,
-            pointRadius: steps.map((step) => (step.dtd === selectedDtd ? 5 : 3)),
-          },
-          {
-            label: 'Talia expected',
-            data: steps.map((step) => step.taliaExpectedGuests),
-            borderColor: colors[1] || colors[0],
-            backgroundColor: colors[1] || colors[0],
-            tension: 0.15,
-            pointRadius: steps.map((step) => (step.dtd === selectedDtd ? 5 : 3)),
-          },
+          ...modelDatasets,
           {
             label: 'Named (outcome)',
             data: steps.map((step) => step.outcomeNamed),
-            borderColor: colors[2] || colors[0],
-            backgroundColor: colors[2] || colors[0],
+            borderColor: colors[ids.length % colors.length] || colors[0],
+            backgroundColor: colors[ids.length % colors.length] || colors[0],
             borderDash: [5, 4],
             tension: 0,
             pointRadius: 0,
@@ -191,7 +195,7 @@ const DtdChart = ({
       chart.destroy();
       setMarkerTip(null);
     };
-  }, [annotations, steps, selectedDtd, showLegends, showAxisLabels, showTooltip]);
+  }, [annotations, modelIds, steps, selectedDtd, showLegends, showAxisLabels, showTooltip]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -255,9 +259,17 @@ const DtdChart = ({
   );
 };
 
+const formatGap = (value) => {
+  if (value == null || !Number.isFinite(Number(value))) return '—';
+  return Math.round(Number(value)).toLocaleString('en-GB');
+};
+
 const MrRetrospectPresenter = ({
   path,
   retrospect,
+  leaderboard = [],
+  compareModelIds = ['MR01'],
+  activeModelId = 'MR01',
   annotations = [],
   groups = [],
   selectedGroupId,
@@ -291,6 +303,7 @@ const MrRetrospectPresenter = ({
     showTooltip,
     showLegends,
     showAxisLabels,
+    mr01PresetId,
     reportShellClassName,
   } = useReportShellOptions(panelComponentId, panelInstanceId);
 
@@ -364,7 +377,8 @@ const MrRetrospectPresenter = ({
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">MR Retrospect</h2>
           <p className="talia-report__subtitle">
-            What Talia MR would have suggested at each days-before-departure step, versus the named outcome.
+            Point-in-time model expectations versus the named outcome. Active model {activeModelId}
+            {activeModelId === 'MR01' && mr01PresetId ? ` · ${mr01PresetId}` : ''}.
           </p>
         </div>
       </header>
@@ -446,10 +460,21 @@ const MrRetrospectPresenter = ({
         <ReportSnapshot
           items={[
             { key: 'dtd', label: 'DTD', value: String(step.dtd) },
-            { key: 'source', label: 'Source expected', value: formatInt(step.sourceExpectedGuests) },
-            { key: 'talia', label: 'Talia expected', value: formatInt(step.taliaExpectedGuests) },
+            ...compareModelIds.map((modelId) => ({
+              key: `exp-${modelId}`,
+              label: `${modelId} expected`,
+              value: formatInt(step.byModel?.[modelId]?.expectedGuests ?? (
+                modelId === activeModelId ? step.taliaExpectedGuests : null
+              )),
+            })),
             { key: 'named', label: 'Named outcome', value: formatInt(step.outcomeNamed) },
-            { key: 'gap', label: 'Talia gap', value: formatInt(step.taliaGap) },
+            {
+              key: 'gap',
+              label: `${activeModelId} gap`,
+              value: formatInt(
+                step.byModel?.[activeModelId]?.gap ?? step.taliaGap
+              ),
+            },
           ]}
         />
       ) : null}
@@ -501,6 +526,7 @@ const MrRetrospectPresenter = ({
           {showGraph && steps.length ? (
             <DtdChart
               steps={steps}
+              modelIds={compareModelIds}
               annotations={annotations}
               selectedDtd={selectedDtd}
               showLegends={showLegends}
@@ -518,6 +544,34 @@ const MrRetrospectPresenter = ({
                     : 'No sailed groups in this window yet.'}
             </p>
           )}
+          {leaderboard.length ? (
+            <div className="mr-retrospect__leaderboard" aria-label="Model accuracy leaderboard">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Model</th>
+                    <th>Path error</th>
+                    <th>Earliest accurate DTD</th>
+                    <th>Gap @90</th>
+                    <th>Gap @30</th>
+                    <th>Gap @0</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaderboard.map((row) => (
+                    <tr key={row.modelId} className={row.modelId === activeModelId ? 'is-active' : undefined}>
+                      <td>{row.modelId}</td>
+                      <td>{row.pathError == null ? '—' : row.pathError.toFixed(1)}</td>
+                      <td>{row.earliestAccurateDtd == null ? '—' : row.earliestAccurateDtd}</td>
+                      <td>{formatGap(row.gapAt90)}</td>
+                      <td>{formatGap(row.gapAt30)}</td>
+                      <td>{formatGap(row.gapAt0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
           {annotations.length ? (
             <p className="mr-retrospect__chart-caption">
               Vertical marks: source hold changes
@@ -527,7 +581,7 @@ const MrRetrospectPresenter = ({
           {retrospect?.namesFromHistory === false ? (
             <p className="talia-callout">
               Header versions here have no as-of named count: booked holds use requested size as evidence;
-              quotes and offers stay at 0 named. The orange line is the final named outcome for comparison only.
+              quotes and offers stay at 0 named. The dashed line is the final named outcome for comparison only.
             </p>
           ) : null}
         </div>
@@ -555,20 +609,18 @@ const MrRetrospectPresenter = ({
                 <dd>{step.status || '—'}</dd>
                 <dt>Requested</dt>
                 <dd>{formatInt(step.requestedGuests)}</dd>
-                <dt>Source MR</dt>
-                <dd>{formatPct(step.sourceMr)}</dd>
-                <dt>Talia MR</dt>
-                <dd>{formatPct(step.taliaMr)}</dd>
-                <dt>Source expected</dt>
-                <dd>{formatInt(step.sourceExpectedGuests)}</dd>
-                <dt>Talia expected</dt>
-                <dd>{formatInt(step.taliaExpectedGuests)}</dd>
+                {compareModelIds.map((modelId) => (
+                  <React.Fragment key={modelId}>
+                    <dt>{modelId} rate</dt>
+                    <dd>{formatPct(step.byModel?.[modelId]?.rate ?? (modelId === 'MR01' ? step.taliaMr : null))}</dd>
+                    <dt>{modelId} expected</dt>
+                    <dd>{formatInt(step.byModel?.[modelId]?.expectedGuests)}</dd>
+                    <dt>{modelId} − named</dt>
+                    <dd>{formatInt(step.byModel?.[modelId]?.gap)}</dd>
+                  </React.Fragment>
+                ))}
                 <dt>Named outcome</dt>
                 <dd>{formatInt(step.outcomeNamed)}</dd>
-                <dt>Source − named</dt>
-                <dd>{formatInt(step.sourceGap)}</dd>
-                <dt>Talia − named</dt>
-                <dd>{formatInt(step.taliaGap)}</dd>
               </dl>
             </div>
           ) : (
@@ -580,9 +632,9 @@ const MrRetrospectPresenter = ({
       <ReportProvenance visible={showProvenance}>
         <p>
           Replay uses frozen SW_ETL group header history via <code>sourceMrPath</code> /
-          <code>sourceMrPathDays</code>. At each days-before-departure step, Talia MR is the same
-          method as Groups Explorer on the last hold on or before that date. Named outcome is the
-          final group named count. Feed through {formatDayMonYear(path?.feedThrough, path?.feedThrough || '—')}.
+          <code>sourceMrPathDays</code>. Models ({compareModelIds.join(', ')}) score the same hold
+          inputs client-side. Named outcome is the final group named count. Feed through{' '}
+          {formatDayMonYear(path?.feedThrough, path?.feedThrough || '—')}.
         </p>
         {(retrospect?.assumptions || path?.assumptions || []).map((line) => (
           <p key={line}>{line}</p>

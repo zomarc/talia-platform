@@ -18,12 +18,55 @@ export const VIEW_SOURCE_MR_MONTH = { id: 'monthGraph', label: 'By month', type:
 export const VIEW_HISTORIC_MR_PATH = { id: 'pathGraph', label: 'Group path', type: 'boolean', default: false };
 /** Historic MR path: the written method. On until the view is turned off. */
 export const VIEW_ASSUMPTIONS = { id: 'assumptions', label: 'Assumptions', type: 'boolean', default: true };
-/** Let source MR nudge Talia (15% of gap). On by default — part of the method. */
+/** Let source MR nudge Talia (15% of gap). Folded into MR01 params; kept for legacy prefs. */
 export const VIEW_SOURCE_NUDGE = {
   id: 'sourceNudge',
   label: 'Use source rate nudge',
   type: 'boolean',
   default: true,
+};
+/** Active MR model for scoring panels (MR00 / MR01 / SR00). */
+export const VIEW_MR_MODEL = {
+  id: 'mrModel',
+  label: 'MR model',
+  type: 'choice',
+  choices: ['MR00', 'MR01', 'SR00'],
+  default: 'MR01',
+  choiceLabels: {
+    MR00: 'MR00 · Flat 50%',
+    MR01: 'MR01 · Talia',
+    SR00: 'SR00 · Source rate',
+  },
+};
+/** MR01 parameter preset (only applies when MR model is MR01). */
+export const VIEW_MR01_PRESET = {
+  id: 'mr01Preset',
+  label: 'MR01 preset',
+  type: 'choice',
+  choices: ['default', 'noNudge', 'strictPrior'],
+  default: 'default',
+  choiceLabels: {
+    default: 'Default',
+    noNudge: 'No source nudge',
+    strictPrior: 'Stronger prior',
+  },
+};
+/**
+ * Retrospect compare: which models to overlay (comma-separated ids).
+ * Default all three reference models.
+ */
+export const VIEW_MR_COMPARE = {
+  id: 'mrCompare',
+  label: 'Compare models',
+  type: 'choice',
+  choices: ['all', 'MR01', 'MR00+MR01', 'MR01+SR00'],
+  default: 'all',
+  choiceLabels: {
+    all: 'MR00 + MR01 + SR00',
+    MR01: 'MR01 only',
+    'MR00+MR01': 'MR00 + MR01',
+    'MR01+SR00': 'MR01 + SR00',
+  },
 };
 export const VIEW_DETAILS = { id: 'details', label: 'Details', type: 'boolean', default: true };
 /** Admin+ (and SUPER_USER): where this report’s data comes from. Off by default; Views → Provenance. */
@@ -383,7 +426,7 @@ export const DEFAULT_COMPONENT_OPTIONS = {
     operations: [],
   },
   'groups-explorer': {
-    views: [VIEW_DENSITY, VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_COLUMN_FILTERS, VIEW_SOURCE_NUDGE, VIEW_PROVENANCE],
+    views: [VIEW_DENSITY, VIEW_SNAPSHOT, VIEW_DETAILS, VIEW_COLUMN_FILTERS, VIEW_MR_MODEL, VIEW_MR01_PRESET, VIEW_PROVENANCE],
     operations: [],
   },
   'source-mr-review': {
@@ -396,7 +439,8 @@ export const DEFAULT_COMPONENT_OPTIONS = {
       VIEW_TOOLTIP,
       VIEW_LEGENDS,
       VIEW_AXIS_LABELS,
-      VIEW_SOURCE_NUDGE,
+      VIEW_MR_MODEL,
+      VIEW_MR01_PRESET,
       VIEW_PROVENANCE,
     ],
     operations: [],
@@ -410,7 +454,8 @@ export const DEFAULT_COMPONENT_OPTIONS = {
       VIEW_TOOLTIP,
       VIEW_LEGENDS,
       VIEW_AXIS_LABELS,
-      VIEW_SOURCE_NUDGE,
+      VIEW_MR_MODEL,
+      VIEW_MR01_PRESET,
       VIEW_PROVENANCE,
     ],
     operations: [],
@@ -426,7 +471,8 @@ export const DEFAULT_COMPONENT_OPTIONS = {
       VIEW_TOOLTIP,
       VIEW_LEGENDS,
       VIEW_AXIS_LABELS,
-      VIEW_SOURCE_NUDGE,
+      VIEW_MR_MODEL,
+      VIEW_MR01_PRESET,
       VIEW_PROVENANCE,
     ],
     operations: [],
@@ -440,7 +486,9 @@ export const DEFAULT_COMPONENT_OPTIONS = {
       VIEW_TOOLTIP,
       VIEW_LEGENDS,
       VIEW_AXIS_LABELS,
-      VIEW_SOURCE_NUDGE,
+      VIEW_MR_MODEL,
+      VIEW_MR01_PRESET,
+      VIEW_MR_COMPARE,
       VIEW_PROVENANCE,
     ],
     operations: [],

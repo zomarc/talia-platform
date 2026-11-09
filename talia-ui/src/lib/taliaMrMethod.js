@@ -7,10 +7,11 @@ import {
   explainTaliaMaterialisation,
   formatMrPctPrecise,
 } from '../components/focus-panels/GroupsExplorer/groupsMaterialisation.js';
+import { scoreWithModel } from './mrModels/registry.js';
 
 export const FEED_THROUGH_LABEL = '10 February 2025';
 
-export const TALIA_MR_LEAD = 'Talia MR estimates how many requested group guests will be named. It starts from an even prior, then gives most of the weight to guests already named at that point in time. The source rate nudges the result by default (Views can turn that off). Expected guests are the request times this rate. Cancelled holds contribute 0 forward.';
+export const TALIA_MR_LEAD = 'MR01 (Talia) estimates how many requested group guests will be named. It starts from an even prior, then gives most of the weight to guests already named at that point in time. The source rate nudges the result by default (Views → MR01 preset can turn that off). Expected guests are the request times this rate. Cancelled holds contribute 0 forward. Switch models in Views → MR model (MR00 flat 50%, SR00 source rate).';
 
 export const TALIA_MR_SOURCES = [
   {
@@ -207,12 +208,48 @@ const caseIssues = (explanation, meta) => {
 };
 
 const buildCase = (meta, options = {}) => {
-  const explanation = explainTaliaMaterialisation({
-    ...meta.input,
-    useSourceNudge: options.useSourceNudge !== false,
-  });
+  const modelId = String(options.modelId || 'MR01').toUpperCase();
+  const params = options.mr01Params && typeof options.mr01Params === 'object'
+    ? options.mr01Params
+    : {};
+  const useSourceNudge = options.useSourceNudge !== false;
+  let explanation;
+  if (modelId === 'MR01') {
+    explanation = explainTaliaMaterialisation({
+      ...meta.input,
+      useSourceNudge,
+      prior: params.prior,
+      priorWeight: params.priorWeight,
+      namedWeight: params.namedWeight,
+      offerCut: params.offerCut,
+      namedLift: params.namedLift,
+      sourceNudgeStrength: params.sourceNudgeStrength,
+      sourceNudgeMinGap: params.sourceNudgeMinGap,
+      distressCut: params.distressCut,
+      largeGroupPax: params.largeGroupPax,
+    });
+  } else {
+    const scored = scoreWithModel(modelId, {
+      status: meta.input?.offerHeavy ? 'OF' : (meta.input?.hasNamedBooked ? 'BK' : 'OF'),
+      requested: meta.input?.requestedPax,
+      named: meta.input?.reservedPax,
+      probability: meta.input?.sourceMr,
+      distressedSailing: Boolean(meta.input?.distressedSailing),
+    }, { ...params, useSourceNudge });
+    explanation = {
+      talia_mr: scored.rate,
+      source_mr: scored.source_mr,
+      reasons: scored.reasons,
+      steps: scored.steps || [],
+      requested: meta.input?.requestedPax,
+      reserved: meta.input?.reservedPax,
+      sourceExpected: scored.sourceExpectedGuests,
+      taliaExpected: scored.expectedGuests,
+    };
+  }
   return {
     ...meta,
+    modelId,
     explanation,
     issues: caseIssues(explanation, meta),
   };
@@ -264,7 +301,11 @@ export const caseFromGroupRow = (row, context = {}) => {
       offerHeavy: Boolean(row?.offer_heavy),
       distressedSailing: Boolean(row?.distressed_sailing),
     },
-  }, { useSourceNudge: context.useSourceNudge !== false });
+  }, {
+    useSourceNudge: context.useSourceNudge !== false,
+    mr01Params: context.mr01Params,
+    modelId: context.modelId || 'MR01',
+  });
 };
 
 export const pickDefaultCaseId = (cases = []) => {

@@ -54,7 +54,7 @@ const mapSailContextToFilters = (detail) => (
 
 const GroupsExplorerContainer = ({ panelInstanceId, panelComponentId }) => {
   const [selectedGroupKey, setSelectedGroupKey] = useState(null);
-  const { useSourceNudge } = useReportShellOptions(panelComponentId, panelInstanceId);
+  const { mrModelId, mr01Params, useSourceNudge } = useReportShellOptions(panelComponentId, panelInstanceId);
 
   const {
     data: agencies,
@@ -146,9 +146,11 @@ const GroupsExplorerContainer = ({ panelInstanceId, panelComponentId }) => {
     () => buildGroupsExplorerRows(reservationRows || [], {
       agenciesById,
       sellableRemainingPct,
+      modelId: mrModelId,
+      mr01Params,
       useSourceNudge,
     }),
-    [reservationRows, agenciesById, sellableRemainingPct, useSourceNudge]
+    [reservationRows, agenciesById, sellableRemainingPct, mrModelId, mr01Params, useSourceNudge]
   );
 
   const snapshot = useMemo(() => buildGroupsExplorerSnapshot(rows), [rows]);

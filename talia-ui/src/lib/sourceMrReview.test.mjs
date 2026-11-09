@@ -23,12 +23,14 @@ const quote = (groupId, guests, sailDate) => ({
 
 test('quote materialisation does not copy a 100% source rate', () => {
   const row = quote(24567, 750, '2024-10-04');
+  // Source MR Review keeps nudge off unless explicitly enabled (calibration surface).
   const local = computeTaliaMaterialisation({
     requestedPax: 750,
     reservedPax: 0,
     sourceMr: 100,
     hasNamedBooked: false,
     offerHeavy: true,
+    useSourceNudge: false,
   });
   const reviewed = materialiseExtractGroup(row);
   assert.equal(reviewed.talia_mr, local.talia_mr);

@@ -16,9 +16,27 @@ import { usePanelDetailsVisibility } from './usePanelDetailsVisibility';
 import {
   buildReportShellClassName,
   resolveViewValue,
+  VIEW_MR_COMPARE,
+  VIEW_MR_MODEL,
+  VIEW_MR01_PRESET,
   VIEW_PROVENANCE,
   VIEW_SOURCE_NUDGE,
 } from '../lib/componentOptionsCatalog';
+import {
+  COMPARE_MR_MODEL_IDS,
+  DEFAULT_MR_MODEL_ID,
+  MR01_PRESETS,
+  mergeMr01Params,
+} from '../lib/mrModels/index.js';
+
+const resolveCompareModelIds = (choice) => {
+  const raw = String(choice || 'all').trim();
+  if (raw === 'all') return [...COMPARE_MR_MODEL_IDS];
+  if (raw === 'MR01') return ['MR01'];
+  if (raw === 'MR00+MR01') return ['MR00', 'MR01'];
+  if (raw === 'MR01+SR00') return ['MR01', 'SR00'];
+  return [...COMPARE_MR_MODEL_IDS];
+};
 
 const SNAPSHOT_DEF = { id: 'snapshot', default: true };
 const DETAILS_DEF = { id: 'details', default: true };
@@ -57,6 +75,9 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
   const hasAxisLabelsView = catalogIds.has('axisLabels');
   const hasGraphView = catalogIds.has('graph');
   const hasSourceNudgeView = catalogIds.has('sourceNudge');
+  const hasMrModelView = catalogIds.has('mrModel');
+  const hasMr01PresetView = catalogIds.has('mr01Preset');
+  const hasMrCompareView = catalogIds.has('mrCompare');
 
   const [headerDetailsVisible] = usePanelDetailsVisibility({
     panelInstanceId,
@@ -82,6 +103,9 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
   const optionsAxisLabels = resolveViewValue(viewsState, AXIS_LABELS_DEF) !== false;
   const optionsGraph = resolveViewValue(viewsState, GRAPH_DEF) !== false;
   const optionsSourceNudge = resolveViewValue(viewsState, VIEW_SOURCE_NUDGE) !== false;
+  const mrModelRaw = resolveViewValue(viewsState, VIEW_MR_MODEL);
+  const mr01PresetRaw = resolveViewValue(viewsState, VIEW_MR01_PRESET);
+  const mrCompareRaw = resolveViewValue(viewsState, VIEW_MR_COMPARE);
   const tooltipView = hasTooltipViewChoice
     ? String(resolveViewValue(viewsState, TOOLTIP_VIEW_DEF) || TOOLTIP_VIEW_DEF.default)
     : null;
@@ -105,10 +129,31 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
   const showGraph = (!prefsReady && hasGraphView)
     ? false
     : (hasGraphView ? optionsGraph : true);
-  // Default on (method includes source nudge). False only when the view exists and the user turned it off.
+  // Legacy source-nudge view (if still declared). Prefer MR01 preset `noNudge`.
   const useSourceNudge = hasSourceNudgeView
     ? (prefsReady ? optionsSourceNudge : true)
     : true;
+
+  const mrModelId = hasMrModelView
+    ? String((prefsReady ? mrModelRaw : VIEW_MR_MODEL.default) || DEFAULT_MR_MODEL_ID).trim().toUpperCase()
+    : DEFAULT_MR_MODEL_ID;
+  const mr01PresetId = hasMr01PresetView
+    ? String((prefsReady ? mr01PresetRaw : VIEW_MR01_PRESET.default) || 'default').trim()
+    : 'default';
+  const mr01Params = useMemo(() => {
+    const presetParams = (MR01_PRESETS[mr01PresetId] || MR01_PRESETS.default).params;
+    return mergeMr01Params({
+      ...presetParams,
+      // Legacy VIEW_SOURCE_NUDGE still wins when present and off.
+      ...(hasSourceNudgeView && !useSourceNudge ? { useSourceNudge: false } : {}),
+    });
+  }, [hasSourceNudgeView, mr01PresetId, useSourceNudge]);
+  const compareModelIds = useMemo(
+    () => (hasMrCompareView
+      ? resolveCompareModelIds(prefsReady ? mrCompareRaw : VIEW_MR_COMPARE.default)
+      : [...COMPARE_MR_MODEL_IDS]),
+    [hasMrCompareView, mrCompareRaw, prefsReady]
+  );
 
   // Legacy Operations "Show filters" (admin capability) still forces off when disabled.
   const opsFilters = operations.find((op) => op.id === 'showFilters');
@@ -145,6 +190,10 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
     showAxisLabels,
     showGraph,
     useSourceNudge,
+    mrModelId,
+    mr01PresetId,
+    mr01Params,
+    compareModelIds,
     tooltipView,
     density: densityPref,
     isCompact,
@@ -168,6 +217,9 @@ export function useReportShellOptions(panelComponentId, panelInstanceId, registr
     hasAxisLabelsView,
     hasGraphView,
     hasSourceNudgeView,
+    hasMrModelView,
+    hasMr01PresetView,
+    hasMrCompareView,
   };
 }
 

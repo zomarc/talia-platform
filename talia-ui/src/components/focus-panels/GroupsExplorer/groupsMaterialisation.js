@@ -75,13 +75,28 @@ export const explainTaliaMaterialisation = (input = {}) => {
     sentence: `Start at ${formatMrPctPrecise(prior)}. A group with no better evidence begins at an even prior. The calculation does not start from the source rate.`,
   }));
 
+  const priorWeight = Number.isFinite(Number(input.priorWeight)) ? Number(input.priorWeight) : 0.35;
+  const namedWeight = Number.isFinite(Number(input.namedWeight)) ? Number(input.namedWeight) : 0.65;
+  const offerCut = Number.isFinite(Number(input.offerCut)) ? Number(input.offerCut) : 0.85;
+  const namedLift = Number.isFinite(Number(input.namedLift)) ? Number(input.namedLift) : 0.08;
+  const sourceNudgeStrength = Number.isFinite(Number(input.sourceNudgeStrength))
+    ? Number(input.sourceNudgeStrength)
+    : 0.15;
+  const sourceNudgeMinGap = Number.isFinite(Number(input.sourceNudgeMinGap))
+    ? Number(input.sourceNudgeMinGap)
+    : 0.05;
+  const distressCut = Number.isFinite(Number(input.distressCut)) ? Number(input.distressCut) : 0.9;
+  const largeGroupPax = Number.isFinite(Number(input.largeGroupPax))
+    ? Number(input.largeGroupPax)
+    : LARGE_GROUP_PAX;
+
   const requested = Number(input.requestedPax || input.requestedCabins || 0);
   const reserved = Number(input.reservedPax || input.reservedCabins || 0);
   if (requested > 0 && reserved >= 0) {
     const ratio = clamp01(reserved / requested);
     if (ratio != null) {
       const before = mr;
-      mr = (mr * 0.35) + (ratio * 0.65);
+      mr = (mr * priorWeight) + (ratio * namedWeight);
       reasons.push(`Reserved/requested ${(ratio * 100).toFixed(0)}%`);
       steps.push(step({
         id: 'blend',
@@ -89,7 +104,7 @@ export const explainTaliaMaterialisation = (input = {}) => {
         rate: mr,
         delta: mr - before,
         applied: true,
-        sentence: `${Math.round(reserved)} of ${Math.round(requested)} requested guests are named (${formatMrPctPrecise(ratio)}). Named guests take 65% of the weight and the prior keeps 35%, so the rate moves from ${formatMrPctPrecise(before)} to ${formatMrPctPrecise(mr)}. Guests already named are the evidence. The prior is only the starting point.`,
+        sentence: `${Math.round(reserved)} of ${Math.round(requested)} requested guests are named (${formatMrPctPrecise(ratio)}). Named guests take ${Math.round(namedWeight * 100)}% of the weight and the prior keeps ${Math.round(priorWeight * 100)}%, so the rate moves from ${formatMrPctPrecise(before)} to ${formatMrPctPrecise(mr)}. Guests already named are the evidence. The prior is only the starting point.`,
       }));
     }
   } else {
@@ -103,7 +118,7 @@ export const explainTaliaMaterialisation = (input = {}) => {
 
   if (input.offerHeavy && !input.hasNamedBooked) {
     const before = mr;
-    mr *= 0.85;
+    mr *= offerCut;
     reasons.push('Mostly open offer, little named booked');
     steps.push(step({
       id: 'offer',
@@ -111,7 +126,7 @@ export const explainTaliaMaterialisation = (input = {}) => {
       rate: mr,
       delta: mr - before,
       applied: true,
-      sentence: `This is a quote or open offer without named bookings. It is a conversation, not a hold, so the rate is cut by 15%, from ${formatMrPctPrecise(before)} to ${formatMrPctPrecise(mr)}.`,
+      sentence: `This is a quote or open offer without named bookings. It is a conversation, not a hold, so the rate is cut to ${Math.round(offerCut * 100)}% of itself, from ${formatMrPctPrecise(before)} to ${formatMrPctPrecise(mr)}.`,
     }));
   } else {
     steps.push(step({
@@ -126,7 +141,7 @@ export const explainTaliaMaterialisation = (input = {}) => {
 
   if (input.hasNamedBooked) {
     const before = mr;
-    mr = Math.min(1, mr + 0.08);
+    mr = Math.min(1, mr + namedLift);
     reasons.push('Has named booked volume');
     steps.push(step({
       id: 'named',
@@ -134,7 +149,7 @@ export const explainTaliaMaterialisation = (input = {}) => {
       rate: mr,
       delta: mr - before,
       applied: true,
-      sentence: `Guests are already named, so the rate is lifted by 8 points, from ${formatMrPctPrecise(before)} to ${formatMrPctPrecise(mr)}. Naming is evidence the group has started to materialise.`,
+      sentence: `Guests are already named, so the rate is lifted by ${Math.round(namedLift * 1000) / 10} points, from ${formatMrPctPrecise(before)} to ${formatMrPctPrecise(mr)}. Naming is evidence the group has started to materialise.`,
     }));
   } else {
     steps.push(step({
@@ -158,9 +173,9 @@ export const explainTaliaMaterialisation = (input = {}) => {
     }));
   } else if (sourceMr != null) {
     const gap = sourceMr - mr;
-    if (Math.abs(gap) >= 0.05) {
+    if (Math.abs(gap) >= sourceNudgeMinGap) {
       const before = mr;
-      mr = clamp01(mr + (gap * 0.15)) ?? mr;
+      mr = clamp01(mr + (gap * sourceNudgeStrength)) ?? mr;
       reasons.push(
         gap > 0
           ? `Source MR higher (${formatMrPct(sourceMr)}); mild uplift`
@@ -173,14 +188,14 @@ export const explainTaliaMaterialisation = (input = {}) => {
         rate: mr,
         delta: mr - before,
         applied: true,
-        sentence: `The source rate is ${formatMrPctPrecise(sourceMr)}, ${formatMrPctPrecise(Math.abs(gap))} ${direction} than the rate so far. Only 15% of that gap is applied. The source rate can nudge the result. It is never copied. The rate moves from ${formatMrPctPrecise(before)} to ${formatMrPctPrecise(mr)}.`,
+        sentence: `The source rate is ${formatMrPctPrecise(sourceMr)}, ${formatMrPctPrecise(Math.abs(gap))} ${direction} than the rate so far. Only ${Math.round(sourceNudgeStrength * 100)}% of that gap is applied. The source rate can nudge the result. It is never copied. The rate moves from ${formatMrPctPrecise(before)} to ${formatMrPctPrecise(mr)}.`,
       }));
     } else {
       steps.push(step({
         id: 'source',
         title: 'Source rate',
         rate: mr,
-        sentence: `The source rate is ${formatMrPctPrecise(sourceMr)}, within 5 points of the rate so far, so it does not move the result. A nudge that small would be noise.`,
+        sentence: `The source rate is ${formatMrPctPrecise(sourceMr)}, within ${Math.round(sourceNudgeMinGap * 100)} points of the rate so far, so it does not move the result. A nudge that small would be noise.`,
       }));
     }
   } else {
@@ -192,9 +207,9 @@ export const explainTaliaMaterialisation = (input = {}) => {
     }));
   }
 
-  if (input.distressedSailing && requested >= LARGE_GROUP_PAX) {
+  if (input.distressedSailing && requested >= largeGroupPax) {
     const before = mr;
-    mr *= 0.9;
+    mr *= distressCut;
     reasons.push('Large commitment on distressed sailing');
     steps.push(step({
       id: 'distress',
@@ -202,21 +217,21 @@ export const explainTaliaMaterialisation = (input = {}) => {
       rate: mr,
       delta: mr - before,
       applied: true,
-      sentence: `The request is at least ${LARGE_GROUP_PAX} guests on a sailing with little space left, so the rate is cut by 10%, from ${formatMrPctPrecise(before)} to ${formatMrPctPrecise(mr)}. A large hold is harder to place when the ship is already tight.`,
+      sentence: `The request is at least ${largeGroupPax} guests on a sailing with little space left, so the rate is cut to ${Math.round(distressCut * 100)}% of itself, from ${formatMrPctPrecise(before)} to ${formatMrPctPrecise(mr)}. A large hold is harder to place when the ship is already tight.`,
     }));
   } else if (input.distressedSailing) {
     steps.push(step({
       id: 'distress',
       title: 'Tight sailing',
       rate: mr,
-      sentence: `The sailing has little space left, but the request is under ${LARGE_GROUP_PAX} guests, so the 10% distress cut does not apply.`,
+      sentence: `The sailing has little space left, but the request is under ${largeGroupPax} guests, so the distress cut does not apply.`,
     }));
   } else {
     steps.push(step({
       id: 'distress',
       title: 'Tight sailing',
       rate: mr,
-      sentence: `No distress cut. A request of ${LARGE_GROUP_PAX} guests or more is reduced by 10% only when the sailing has little space left. This example has no remaining-space signal.`,
+      sentence: `No distress cut. A request of ${largeGroupPax} guests or more is reduced only when the sailing has little space left. This example has no remaining-space signal.`,
     }));
   }
 
@@ -290,14 +305,18 @@ export const resolveAsOfNamed = ({ status, requested, named } = {}) => {
 };
 
 /**
- * Score one hold/day for path panels. Cancelled status → expected guests 0.
- * Pass `named: null` when the header version has no named count.
+ * Score one hold/day with MR01 arithmetic (compat facade).
+ * Multi-model callers should use `scoreWithModel` from `lib/mrModels`.
+ * Kept here (not delegated to the registry) to avoid a circular ESM import:
+ * mrModels/mr01 → explainTaliaMaterialisation in this file.
  * @param {{
  *   status?: string,
  *   requested?: number,
  *   named?: number|null,
  *   probability?: number|null,
  *   useSourceNudge?: boolean,
+ *   distressedSailing?: boolean,
+ *   params?: object,
  * }} hold
  */
 export const scoreTaliaHold = (hold = {}) => {
@@ -309,10 +328,17 @@ export const scoreTaliaHold = (hold = {}) => {
     named: hold.named,
   });
   const sourceMr = normalizeMr(hold.probability);
+  const params = hold.params && typeof hold.params === 'object' ? hold.params : {};
+  const useSourceNudge = hold.useSourceNudge !== undefined
+    ? hold.useSourceNudge !== false
+    : params.useSourceNudge !== false;
   if (isCancelledStatus(status)) {
     return {
+      modelId: 'MR01',
+      rate: 0,
       talia_mr: 0,
       source_mr: sourceMr,
+      expectedGuests: 0,
       reasons: ['Cancelled — forward expected guests are 0'],
       sourceExpectedGuests: 0,
       taliaExpectedGuests: 0,
@@ -326,13 +352,27 @@ export const scoreTaliaHold = (hold = {}) => {
     sourceMr: hold.probability,
     hasNamedBooked: named > 0,
     offerHeavy: (status === 'QT' || status === 'OF') && named === 0,
-    useSourceNudge: hold.useSourceNudge !== false,
+    distressedSailing: Boolean(hold.distressedSailing),
+    useSourceNudge,
+    prior: params.prior,
+    priorWeight: params.priorWeight,
+    namedWeight: params.namedWeight,
+    offerCut: params.offerCut,
+    namedLift: params.namedLift,
+    sourceNudgeStrength: params.sourceNudgeStrength,
+    sourceNudgeMinGap: params.sourceNudgeMinGap,
+    distressCut: params.distressCut,
+    largeGroupPax: params.largeGroupPax,
   });
+  const expected = Math.round(requested * (rates.talia_mr || 0));
   return {
+    modelId: 'MR01',
+    rate: rates.talia_mr,
     ...rates,
     namedGuests: named,
     sourceExpectedGuests: sourceMr == null ? 0 : Math.round(requested * sourceMr),
-    taliaExpectedGuests: Math.round(requested * (rates.talia_mr || 0)),
+    taliaExpectedGuests: expected,
+    expectedGuests: expected,
     cancelled: false,
   };
 };

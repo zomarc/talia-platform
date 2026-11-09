@@ -133,6 +133,8 @@ const TaliaMrMethodPresenter = ({
   cases = [],
   worked = null,
   subtitle = '',
+  modelId = 'MR01',
+  mr01PresetId = 'default',
   usingIllustrations = true,
   loading = false,
   error = null,
@@ -233,8 +235,13 @@ const TaliaMrMethodPresenter = ({
     <article className={['focus-panel', 'talia-report', 'talia-mr-method', reportShellClassName].filter(Boolean).join(' ')}>
       <header className="talia-report__header">
         <div className="talia-report__header-left">
-          <h2 className="talia-report__title">Talia MR</h2>
-          <p className="talia-report__subtitle">{subtitle}</p>
+          <h2 className="talia-report__title">Talia MR · {modelId}</h2>
+          <p className="talia-report__subtitle">
+            {subtitle}
+            {modelId === 'MR01' && mr01PresetId && mr01PresetId !== 'default'
+              ? ` Preset: ${mr01PresetId}.`
+              : ''}
+          </p>
         </div>
       </header>
 
@@ -373,7 +380,8 @@ const TaliaMrMethodPresenter = ({
               A sailing selection arrives as talia:sail.select. The group rows are the reservation for that sail code.
               The worked examples, when nothing is selected, are group 28657 and group 55576 from stg.SW_ETL_GROUPS,
               stg.SW_ETL_GROUP_HEADER, and stg.SW_ETL_GROUP_SHIP_REQUEST, frozen on 10 February 2025.
-              Talia MR is explainTaliaMaterialisation. The source rate is never the published result.
+              Active model {modelId}. MR01 is explainTaliaMaterialisation (Views → MR model / MR01 preset).
+              The source rate is never copied as the published result.
             </p>
           </ReportProvenance>
         </main>

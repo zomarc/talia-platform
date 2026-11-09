@@ -5,6 +5,7 @@ import {
   addDays,
   aggregateDtdSeries,
   asOfAtDtd,
+  buildCompareRetrospect,
   buildDtdSeries,
   buildRetrospectAnnotations,
   daysBetween,
@@ -100,6 +101,39 @@ test('buildRetrospectAnnotations marks source changes and first named', () => {
   const source = marks.find((row) => row.kind === 'source');
   assert.match(source.tip, /days before departure/);
   assert.match(source.tip, /Hold date/);
+});
+
+test('buildCompareRetrospect overlays per-model expected guests', () => {
+  const series = buildSourceMrPathDays({
+    groupId: 1,
+    sailDate: '2024-06-28',
+    finalNamed: 20,
+    days: [
+      { changed_on: '2024-01-22', group_status: 'BK', n_of_guests: 40, probability: 80, named_guests: 10 },
+    ],
+  });
+  const base = buildDtdSeries(series, { steps: [90, 0] });
+  const mr00 = {
+    ...base,
+    steps: base.steps.map((step) => ({
+      ...step,
+      taliaMr: 0.5,
+      taliaExpectedGuests: 20,
+    })),
+  };
+  const mr01 = {
+    ...base,
+    steps: base.steps.map((step) => ({
+      ...step,
+      taliaMr: 0.7,
+      taliaExpectedGuests: 28,
+    })),
+  };
+  const compare = buildCompareRetrospect({ MR00: mr00, MR01: mr01 }, ['MR00', 'MR01']);
+  assert.deepEqual(compare.modelIds, ['MR00', 'MR01']);
+  assert.equal(compare.steps[0].byModel.MR00.expectedGuests, 20);
+  assert.equal(compare.steps[0].byModel.MR01.expectedGuests, 28);
+  assert.equal(compare.steps[0].byModel.MR01.gap, 28 - compare.steps[0].outcomeNamed);
 });
 
 test('aggregateDtdSeries keeps every group at a hold unique to one group', () => {

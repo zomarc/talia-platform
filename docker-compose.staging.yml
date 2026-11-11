@@ -86,12 +86,12 @@ services:
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: 9999
-      API_EXTERNAL_URL: http://127.0.0.1:8000
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://127.0.0.1:8000}
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:-your-super-secret-and-long-postgres-password}@supabase-db:5432/postgres
-      GOTRUE_SITE_URL: http://127.0.0.1:3000
+      GOTRUE_SITE_URL: ${GOTRUE_SITE_URL:-http://127.0.0.1:3000}
       GOTRUE_URI_ALLOW_LIST: ${GOTRUE_URI_ALLOW_LIST:-http://127.0.0.1:3000,http://localhost:3000,https://taliahub.com}
-      GOTRUE_DISABLE_SIGNUP: false
+      GOTRUE_DISABLE_SIGNUP: ${GOTRUE_DISABLE_SIGNUP:-false}
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_JWT_AUD: authenticated
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
@@ -99,6 +99,12 @@ services:
       GOTRUE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters-long}
       GOTRUE_EXTERNAL_EMAIL_ENABLED: true
       GOTRUE_MAILER_AUTOCONFIRM: true
+      # Celestyal Entra OIDC (enable on the Celestyal instance — see D014)
+      GOTRUE_EXTERNAL_AZURE_ENABLED: ${GOTRUE_EXTERNAL_AZURE_ENABLED:-false}
+      GOTRUE_EXTERNAL_AZURE_CLIENT_ID: ${GOTRUE_EXTERNAL_AZURE_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_AZURE_SECRET: ${GOTRUE_EXTERNAL_AZURE_SECRET:-}
+      GOTRUE_EXTERNAL_AZURE_URL: ${GOTRUE_EXTERNAL_AZURE_URL:-}
+      GOTRUE_EXTERNAL_AZURE_REDIRECT_URI: ${GOTRUE_EXTERNAL_AZURE_REDIRECT_URI:-}
 
   supabase-rest:
     image: public.ecr.aws/supabase/postgrest:v12.0.1
@@ -263,6 +269,10 @@ services:
         VITE_ENABLE_DEV_MODE: ${VITE_ENABLE_DEV_MODE:-true}
         VITE_ENVIRONMENT: ${VITE_ENVIRONMENT:-staging}
         VITE_BUILD_TIME: ${VITE_BUILD_TIME:-}
+        VITE_AUTH_MODE: ${VITE_AUTH_MODE:-}
+        VITE_ENABLE_SSO: ${VITE_ENABLE_SSO:-}
+        VITE_ENABLE_BREAK_GLASS: ${VITE_ENABLE_BREAK_GLASS:-}
+        VITE_OIDC_ROLE_MAP: ${VITE_OIDC_ROLE_MAP:-}
     container_name: talia-ui
     restart: unless-stopped
     ports:

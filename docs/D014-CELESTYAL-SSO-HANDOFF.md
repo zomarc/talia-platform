@@ -123,27 +123,67 @@ Celestyal does **not** need to model every Talia permission in the IdP.
 4. Group → role mapping one-pager (e.g. RM Controllers → MANAGER, Commercial analysts → USER, IT admins → ADMIN).
 5. Confirm MFA and conditional access apply to this app.
 
-### C. Talia delivers (after B)
+### C. Talia delivers (after B) — enablement steps
 
-1. Enable OIDC on instance Supabase Auth.
-2. Set GoTrue allow-list / site URL to the Celestyal hostname.
-3. Login UI: “Sign in with Celestyal”; disable open signup on that instance.
-4. Persist Celestyal `sub` on `talia_users`; map claim → role on insert only.
-5. Smoke test: new user, returning user (role unchanged), disabled IdP user, in-app role change.
-6. Document break-glass SUPER_USER.
+**Shipped in code (this work):**
+
+- Migration `talia_users.oidc_sub` (`20261110120000_talia_users_oidc_sub.sql`)
+- `signInWithCelestyal()` → GoTrue `azure` provider; first-login role seed only
+- Landing page primary **Sign in with Celestyal** when `VITE_AUTH_MODE=oidc`
+- Compose / `.env.staging.example` Azure OIDC env keys
+
+**On the Celestyal instance (ops):**
+
+1. Apply the `oidc_sub` migration to the instance database.
+2. Set GoTrue + UI env (see §8). Restart `supabase-auth` / UI containers.
+3. Confirm reverse proxy forwards `https://<hostname>/auth/v1/*` to Kong/GoTrue.
+4. Smoke tests (§9).
 
 ### D. Handover checklist
 
 - [ ] Hostname live on HTTPS
 - [ ] Callback URI registered exactly
 - [ ] OIDC client secret in Celestyal Key Vault + Talia instance env
-- [ ] Group/role map agreed
-- [ ] Password signup off; SSO primary
+- [ ] Group/role map agreed (`VITE_OIDC_ROLE_MAP`)
+- [ ] `GOTRUE_DISABLE_SIGNUP=true`; SSO primary
 - [ ] Test users in each role
+- [ ] Break-glass SUPER_USER documented and `VITE_ENABLE_BREAK_GLASS` controlled
 
 ---
 
-## 7. Suggested reply to Celestyal (send now)
+## 8. Talia instance env (GoTrue Azure OIDC)
+
+| Variable | Purpose |
+|---|---|
+| `GOTRUE_SITE_URL` | `https://<hostname>` |
+| `API_EXTERNAL_URL` / `SUPABASE_PUBLIC_URL` | `https://<hostname>` |
+| `GOTRUE_URI_ALLOW_LIST` | `https://<hostname>,https://<hostname>/**` |
+| `GOTRUE_DISABLE_SIGNUP` | `true` |
+| `GOTRUE_EXTERNAL_AZURE_ENABLED` | `true` |
+| `GOTRUE_EXTERNAL_AZURE_CLIENT_ID` | from Celestyal |
+| `GOTRUE_EXTERNAL_AZURE_SECRET` | from Key Vault |
+| `GOTRUE_EXTERNAL_AZURE_URL` | `https://login.microsoftonline.com/<tenant-id>/v2.0` |
+| `GOTRUE_EXTERNAL_AZURE_REDIRECT_URI` | `https://<hostname>/auth/v1/callback` |
+| `VITE_AUTH_MODE` | `oidc` |
+| `VITE_ENABLE_SSO` | `true` (optional if `VITE_AUTH_MODE=oidc`) |
+| `VITE_ENABLE_BREAK_GLASS` | `true` only if emergency password form is required |
+| `VITE_OIDC_ROLE_MAP` | JSON group/claim → Talia role |
+
+Reference: `.env.staging.example`, `docker-compose.staging.yml`.
+
+---
+
+## 9. Smoke tests
+
+1. **New user** — SSO login creates `talia_users` with `oidc_sub` and seeded role from map/claim (default `USER`).
+2. **Returning user** — after an admin changes role in Talia, next SSO login **keeps** that role.
+3. **Disabled IdP user** — cannot complete login.
+4. **Break-glass** — with `VITE_ENABLE_BREAK_GLASS=true`, emergency password still works for SUPER_USER.
+5. **Logout** — returns to landing; SSO button is primary.
+
+---
+
+## 10. Suggested reply to Celestyal (send now)
 
 > We’ll use **OpenID Connect**. Please register a confidential OIDC web app for Talia.
 >
@@ -154,3 +194,16 @@ Celestyal does **not** need to model every Talia permission in the IdP.
 > Celestyal SSO will control who can sign in and the **initial** role; **Talia** will manage fine-grained access inside the application after first login.
 
 When the hostname is known, replace `<talia-hostname>` and resend the Redirect URI line only if needed.
+
+---
+
+## 11. Code pointers
+
+| Area | Path |
+|---|---|
+| OIDC role map | `talia-ui/src/lib/oidcRoleMap.js` |
+| Auth context | `talia-ui/src/contexts/SupabaseAuthContext.jsx` |
+| Landing page | `talia-ui/src/components/LandingPage.jsx` |
+| Migration | `talia-server/supabase/migrations/20261110120000_talia_users_oidc_sub.sql` |
+| Staging Compose | `docker-compose.staging.yml` |
+| Env example | `.env.staging.example` |

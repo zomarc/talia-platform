@@ -89,7 +89,7 @@ const PromoExplorerContainer = ({ panelInstanceId, panelComponentId }) => {
   useReportPanelLoading(
     panelInstanceId,
     panelComponentId,
-    (loading || relatedLoading) && !rows.length
+    loading || relatedLoading
   );
 
   const handleSelectPromo = (row) => {

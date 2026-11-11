@@ -51,6 +51,7 @@ Edit `.env.staging`:
 - Set **public URLs** to how users reach the VM (HTTP + ports, or HTTPS hostname with Caddy in the next section).
 - Set **POSTGRES_PASSWORD**, **SUPABASE_JWT_SECRET**, and JWT keys (**SUPABASE_ANON_KEY**, **SUPABASE_SERVICE_ROLE_KEY**) for a **new** environment (do not reuse committed demo values for anything sensitive).
 - Extend **GOTRUE_URI_ALLOW_LIST** with your UI origins if you use auth redirects.
+- For **Celestyal Entra OIDC**, set `GOTRUE_EXTERNAL_AZURE_*`, `GOTRUE_SITE_URL`, `GOTRUE_DISABLE_SIGNUP=true`, and UI flags `VITE_AUTH_MODE=oidc` (see [D014-CELESTYAL-SSO-HANDOFF.md](./D014-CELESTYAL-SSO-HANDOFF.md) §8).
 
 **Without Caddy (HTTP only):** use `http://<PUBLIC_IP>:54321` for `SUPABASE_PUBLIC_URL` and `VITE_SUPABASE_URL`, and `http://<PUBLIC_IP>:4000/graphql` for `VITE_GRAPHQL_ENDPOINT`. Ensure any cloud firewall allows those ports if you need them from the internet (the provided NSG only opens 80/443 by default).
 

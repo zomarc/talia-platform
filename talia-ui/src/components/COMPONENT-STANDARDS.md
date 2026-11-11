@@ -216,7 +216,8 @@ return <div className="my-component">Content</div>;
 - For focus panel reports, prefer `useTableDataWithContext` and container/presenter separation.
 - Standardize loading/error/empty handling via shared wrappers (for example `PanelDataState`) where possible.
 - Pass `panelInstanceId` and `panelComponentId` through containers/hooks so panel-scoped refresh/diagnostics remain generic.
-- **Keep content while refreshing:** do not swap the panel for a spinner when prior data exists (`if (loading && !data)` / `PanelDataState` with `empty`). ReportShell greys the panel via `useReportPanelLoading` + `talia-report-shell--loading`. Spinner only on initial empty load.
+- **Keep content while refreshing:** do not swap the panel for a spinner when prior data exists (`if (loading && !data)` / `PanelDataState` with `loading={loading && !data}`). Full-panel spinner only on initial empty load.
+- **Publish refresh to the tab/shell:** always pass the raw in-flight flag to `useReportPanelLoading(panelInstanceId, panelComponentId, loading)` (or `loading || seriesLoading`, etc.). Do **not** gate it on empty data (`loading && !data`) — that hides the Dockview tab spinner and ReportShell light grey wash (`talia-report-shell--loading` / `::after`) during sail/group-driven refreshes that keep prior content.
 
 ### Apollo Client (GraphQL, When Needed)
 

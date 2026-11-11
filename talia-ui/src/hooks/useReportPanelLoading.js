@@ -2,7 +2,9 @@ import { useId, useLayoutEffect } from 'react';
 import { syncPanelLoadingSource } from '../services/panelLoadingState';
 
 /**
- * Publish a panel's loading state to the Dockview tab header.
+ * Publish a panel's in-flight loading state to the Dockview tab + ReportShell.
+ * Pass the raw fetch busy flag (not `loading && !data`) so refreshes that keep
+ * prior content still show the tab spinner / shell overlay.
  * Safe to call from multiple hooks in the same panel (merged by source id).
  */
 const useReportPanelLoading = (panelInstanceId, panelComponentId, loading) => {

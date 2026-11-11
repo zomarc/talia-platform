@@ -397,6 +397,10 @@ echo -e "${BLUE}  (This script will not expand to full stack or other modes unle
           VITE_APP_VERSION="$UI_APP_VERSION" \
           VITE_ENVIRONMENT="$VITE_ENVIRONMENT" \
           VITE_BUILD_TIME="$UI_BUILD_TIME" \
+          VITE_AUTH_MODE="${VITE_AUTH_MODE:-${STAGING_UI_AUTH_MODE:-}}" \
+          VITE_ENABLE_SSO="${VITE_ENABLE_SSO:-${STAGING_UI_ENABLE_SSO:-}}" \
+          VITE_ENABLE_BREAK_GLASS="${VITE_ENABLE_BREAK_GLASS:-${STAGING_UI_ENABLE_BREAK_GLASS:-}}" \
+          VITE_OIDC_ROLE_MAP="${VITE_OIDC_ROLE_MAP:-${STAGING_UI_OIDC_ROLE_MAP:-}}" \
           npm run build
         )
       fi

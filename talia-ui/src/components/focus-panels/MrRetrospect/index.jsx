@@ -387,7 +387,7 @@ const MrRetrospectContainer = ({ panelInstanceId, panelComponentId }) => {
     return buildRetrospectAnnotations(primary);
   }, [overlayModelIds, scopeMode, scoredByModel]);
 
-  useReportPanelLoading(panelInstanceId, panelComponentId, (loading && !path) || seriesLoading);
+  useReportPanelLoading(panelInstanceId, panelComponentId, loading || seriesLoading);
 
   return (
     <PanelDataState

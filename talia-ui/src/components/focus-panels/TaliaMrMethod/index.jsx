@@ -122,7 +122,7 @@ const TaliaMrMethodContainer = ({ panelInstanceId, panelComponentId }) => {
   useReportPanelLoading(
     panelInstanceId,
     panelComponentId,
-    Boolean(selectedSailCode) && loading && rows.length === 0
+    Boolean(selectedSailCode) && loading
   );
 
   const handlePick = (caseId) => {

@@ -2,6 +2,25 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { GraphQLUtils } from '../lib/apolloClient';
+import {
+  extractOidcRoleHints,
+  resolveOidcSeedRole,
+} from '../lib/oidcRoleMap.js';
+
+/** Celestyal OIDC primary login when VITE_AUTH_MODE=oidc or VITE_ENABLE_SSO=true. */
+export const isOidcAuthMode = () => {
+  const mode = String(import.meta.env.VITE_AUTH_MODE || '').trim().toLowerCase();
+  if (mode === 'oidc') return true;
+  return import.meta.env.VITE_ENABLE_SSO === 'true';
+};
+
+export const isBreakGlassEnabled = () => (
+  import.meta.env.VITE_ENABLE_BREAK_GLASS === 'true'
+  || (!isOidcAuthMode() && (
+    import.meta.env.DEV
+    || import.meta.env.VITE_ENABLE_DEV_MODE === 'true'
+  ))
+);
 
 const SupabaseAuthContext = createContext();
 
@@ -154,55 +173,83 @@ export const SupabaseAuthProvider = ({ children }) => {
     }
   };
 
-  // Get or create Talia user record
+  // Get or create Talia user record.
+  // OIDC: lookup oidc_sub → email → insert. Seed role on insert only; never overwrite role.
   const getOrCreateTaliaUser = async (supabaseUser) => {
-    if (!supabaseUser?.email) return null;
-    
+    if (!supabaseUser?.email && !extractOidcRoleHints(supabaseUser).oidcSub) return null;
+
     try {
-      // First try to get existing talia_user
-      const { data: existingUser, error: fetchError } = await supabase
-        .from('talia_users')
-        .select('*')
-        .eq('email', supabaseUser.email)
-        .single();
-      
-      if (existingUser && !fetchError) {
-        // Update last_login_at
-        await supabase
+      const { oidcSub } = extractOidcRoleHints(supabaseUser);
+      const email = String(supabaseUser.email || '').trim().toLowerCase();
+      const now = new Date().toISOString();
+
+      let existingUser = null;
+      if (oidcSub) {
+        const { data, error } = await supabase
           .from('talia_users')
-          .update({ last_login_at: new Date().toISOString() })
-          .eq('id', existingUser.id);
-        return existingUser;
+          .select('*')
+          .eq('oidc_sub', oidcSub)
+          .maybeSingle();
+        if (!error && data) existingUser = data;
       }
-      
-      // User doesn't exist, create new one
-      // Get max talia_user_id to determine next ID
+      if (!existingUser && email) {
+        const { data, error } = await supabase
+          .from('talia_users')
+          .select('*')
+          .ilike('email', email)
+          .maybeSingle();
+        if (!error && data) existingUser = data;
+      }
+
+      if (existingUser) {
+        const patch = { last_login_at: now };
+        if (oidcSub && !existingUser.oidc_sub) patch.oidc_sub = oidcSub;
+        if (email && !existingUser.email) patch.email = email;
+        const { data: updated } = await supabase
+          .from('talia_users')
+          .update(patch)
+          .eq('id', existingUser.id)
+          .select()
+          .single();
+        // Role is intentionally not patched — Talia owns in-app access after first login.
+        return updated || existingUser;
+      }
+
+      if (!email) {
+        console.error('Cannot create talia_user without email');
+        return null;
+      }
+
       const { data: maxUser } = await supabase
         .from('talia_users')
         .select('talia_user_id')
         .order('talia_user_id', { ascending: false })
         .limit(1)
-        .single();
-      
+        .maybeSingle();
+
       const taliaUserId = maxUser?.talia_user_id ? maxUser.talia_user_id + 1 : 1000;
-      
+      const seedRole = isOidcAuthMode()
+        ? resolveOidcSeedRole(supabaseUser)
+        : resolveUserRole(email);
+
       const { data: newUser, error: createError } = await supabase
         .from('talia_users')
         .insert({
           id: supabaseUser.id,
           talia_user_id: taliaUserId,
-          email: supabaseUser.email,
-          role: resolveUserRole(supabaseUser.email),
-          last_login_at: new Date().toISOString()
+          email,
+          oidc_sub: oidcSub || null,
+          role: seedRole,
+          last_login_at: now,
         })
         .select()
         .single();
-      
+
       if (createError) {
         console.error('Error creating talia_user:', createError);
         return null;
       }
-      
+
       return newUser;
     } catch (error) {
       console.error('Error getting/creating talia_user:', error);
@@ -500,6 +547,30 @@ export const SupabaseAuthProvider = ({ children }) => {
     }
   };
 
+  /** Celestyal Entra OIDC via GoTrue azure provider. */
+  const signInWithCelestyal = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'azure',
+        options: {
+          redirectTo,
+          scopes: 'openid profile email',
+        },
+      });
+      if (oauthError) throw oauthError;
+      return data;
+    } catch (err) {
+      setError(err);
+      console.error('Error signing in with Celestyal SSO:', err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const value = {
     user,
     session,
@@ -507,10 +578,13 @@ export const SupabaseAuthProvider = ({ children }) => {
     error,
     signInWithEmail,
     signInWithPassword,
+    signInWithCelestyal,
     enterDevSession,
     signOut,
     updateUserRole,
     isDevMode,
+    isOidcAuthMode: isOidcAuthMode(),
+    isBreakGlassEnabled: isBreakGlassEnabled(),
     devUsers: DEV_USERS,
     switchDevUser,
   };

@@ -365,13 +365,18 @@
   pointer-events: none;
 }
 
-/* Loading cue is the dock-tab spinner — keep panel content stable (no grey flash). */
+/* Refresh cue: tab spinner + light grey wash; keep prior content visible underneath. */
 .talia-report-shell--loading .talia-report-shell__content {
   pointer-events: none;
 }
 
 .talia-report-shell--loading::after {
-  display: none;
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: color-mix(in srgb, #8b93a7 32%, transparent);
 }
 
 .talia-report-shell__pause-overlay {

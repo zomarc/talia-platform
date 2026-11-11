@@ -277,7 +277,7 @@ const HistoricMrPathContainer = ({ panelInstanceId, panelComponentId }) => {
     };
   }, [masterSailRows]);
 
-  useReportPanelLoading(panelInstanceId, panelComponentId, loading && !path);
+  useReportPanelLoading(panelInstanceId, panelComponentId, loading);
 
   const selectedGroup = useMemo(() => {
     const list = [...(path?.groups || []), ...(path?.highlights || [])];

@@ -155,7 +155,7 @@ const GroupsExplorerContainer = ({ panelInstanceId, panelComponentId }) => {
 
   const snapshot = useMemo(() => buildGroupsExplorerSnapshot(rows), [rows]);
 
-  useReportPanelLoading(panelInstanceId, panelComponentId, loading && !rows.length);
+  useReportPanelLoading(panelInstanceId, panelComponentId, loading);
 
   const handleSelectGroup = (row) => {
     if (!row) return;

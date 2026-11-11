@@ -2306,6 +2306,29 @@ button:focus-visible,
   font-size: 0.875rem;
 }
 
+.landing-page__button--sso {
+  background: #0f4c5c;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+}
+
+.landing-page__button--sso:hover:not(:disabled) {
+  background: #0a3640;
+}
+
+.landing-page__break-glass-toggle {
+  display: block;
+  width: 100%;
+  margin: 0 0 1rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--theme-text-secondary, #6b7280);
+  font-size: 0.75rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .landing-page__button--submit {
   background: #3b82f6;
   font-size: 1rem;

@@ -227,7 +227,7 @@ const SourceMrReviewContainer = ({ panelInstanceId, panelComponentId }) => {
     loadReview();
   }, [loadReview]);
 
-  useReportPanelLoading(panelInstanceId, panelComponentId, loading && !review);
+  useReportPanelLoading(panelInstanceId, panelComponentId, loading);
 
   const selectedGroup = useMemo(() => {
     if (!review) return null;

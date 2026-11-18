@@ -39,6 +39,20 @@ export const typeDefs = `#graphql
     criteria: JSON
   }
 
+  type UiActivityPanelUsage {
+    panelComponent: String!
+    openCount: Int!
+    lastAt: String
+    roles: [String!]!
+  }
+
+  type PanelLineageFlag {
+    panelComponent: String!
+    isKey: Boolean!
+    updatedAt: String
+    updatedBy: String
+  }
+
   type FocusPreference {
     id: ID!
     userId: ID!
@@ -2130,6 +2144,13 @@ export const typeDefs = `#graphql
       userId: String
       userEmail: String
     ): [UiActivityEvent!]!
+    uiActivityPanelUsage(
+      sinceMinutes: Int
+      userId: String
+      userEmail: String
+      userRole: String
+    ): [UiActivityPanelUsage!]!
+    panelLineageFlags: [PanelLineageFlag!]!
     
     # Focus Management
     focuses(filters: FocusFilters): [Focus!]!
@@ -2306,6 +2327,7 @@ export const typeDefs = `#graphql
     updateTaliaUserRole(email: String, taliaUserId: Int, role: String!): TaliaUser!
     logUiActivityEvent(input: UiActivityEventInput!): Boolean!
     purgeUiActivityEvents(olderThanHours: Int!): Int!
+    setPanelLineageKey(panelComponent: String!, isKey: Boolean!): PanelLineageFlag!
     saveRoleCriteria(role: String!, criteria: JSON!): JSON
     saveRoleComponentOps(role: String!, ops: JSON!): JSON
     saveUserCriteriaOverride(userId: String!, criteria: JSON!, locked: Boolean): JSON

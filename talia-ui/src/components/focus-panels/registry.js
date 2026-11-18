@@ -23,6 +23,7 @@ import SourceMrReviewContainer from './SourceMrReview';
 import TaliaMrMethodContainer from './TaliaMrMethod';
 import HistoricMrPathContainer from './HistoricMrPath';
 import MrRetrospectContainer from './MrRetrospect';
+import DataLineagePanel from './DataLineage';
 import PromoExplorerContainer from './PromoExplorer';
 import SailingDemandCompositionContainer from './SailingDemandComposition';
 import BookingProfileContainer from './BookingProfile';
@@ -93,6 +94,8 @@ import {
   VIEW_CONTROLS,
   VIEW_DETAILS,
   VIEW_PROVENANCE,
+  VIEW_LINEAGE_ORIENTATION,
+  VIEW_LINEAGE_DISPLAY,
   VIEW_FILTERS,
   VIEW_LEGENDS,
   VIEW_AXIS_LABELS,
@@ -615,7 +618,8 @@ export const componentRegistry = {
     title: 'Groups Explorer',
     description: 'Group Risk Management — commitment, impact, source vs Talia materialisation rate, agency context',
     props: {},
-    dataRequirements: 'Requires reservation (group_id, probabilities, fact_group_alloc) and agency. Responds to sail.select; emits sail.select and group.select on row click.',
+    tables: ['reservation', 'agency', 'inventory_item', 'sail_booking_summary'],
+    dataRequirements: 'Requires reservation, agency, inventory_item, sail_booking_summary. Responds to sail.select; emits sail.select and group.select on row click.',
     events: {
       emits: [SAIL_SELECT_EVENT, GROUP_SELECT_EVENT],
       respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, GROUP_CLEAR_EVENT]
@@ -636,7 +640,15 @@ export const componentRegistry = {
     title: 'Source MR effectiveness',
     description: 'Historic source materialisation against named guests, with an independent Talia MR (MR01)',
     props: {},
-    dataRequirements: 'Frozen SW_ETL group extract (sw_etl_group and related tables). Emits/responds to group.select; sail.select when opening a sailing.',
+    tables: [
+      'inventory_item',
+      'master_sail',
+      'sw_etl_group',
+      'sw_etl_group_header',
+      'sw_etl_group_ship',
+      'sw_etl_extract_load',
+    ],
+    dataRequirements: 'Frozen SW_ETL extract: sw_etl_group, sw_etl_group_header, sw_etl_group_ship, sw_etl_extract_load; plus inventory_item and master_sail. Emits/responds to group.select; sail.select when opening a sailing.',
     events: {
       emits: [SAIL_SELECT_EVENT, GROUP_SELECT_EVENT],
       respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, GROUP_SELECT_EVENT, GROUP_CLEAR_EVENT]
@@ -669,7 +681,8 @@ export const componentRegistry = {
     title: 'Talia MR',
     description: 'How MR01 (Talia materialisation) is calculated, on the selected sailing or a worked example',
     props: {},
-    dataRequirements: 'Listens for sail.select (book) and group.select (worked case). Picking a case emits group.select. With no selection, shows worked examples from the frozen SW_ETL extract.',
+    tables: ['reservation'],
+    dataRequirements: 'Live book from reservation. Listens for sail.select and group.select; worked examples are static illustrations (not a live SW_ETL fetch).',
     events: {
       emits: [GROUP_SELECT_EVENT],
       respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, GROUP_SELECT_EVENT, GROUP_CLEAR_EVENT]
@@ -701,7 +714,13 @@ export const componentRegistry = {
     title: 'Historic MR path',
     description: 'What the source rate held before departure, and what the selected MR model would have held',
     props: {},
-    dataRequirements: 'Frozen SW_ETL group header history. Sail.select narrows ship/dates; group.select picks the path series.',
+    tables: [
+      'master_sail',
+      'sw_etl_group',
+      'sw_etl_group_header',
+      'sw_etl_group_ship',
+    ],
+    dataRequirements: 'sourceMrPath / sourceMrPathDays over sw_etl_group, sw_etl_group_header, sw_etl_group_ship; master_sail resolves sail windows. Sail.select narrows ship and dates; group.select picks the path series.',
     events: {
       emits: [GROUP_SELECT_EVENT],
       respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, GROUP_SELECT_EVENT, GROUP_CLEAR_EVENT]
@@ -735,7 +754,13 @@ export const componentRegistry = {
     title: 'MR Retrospect',
     description: 'Step days before departure and compare MR models with the named outcome',
     props: {},
-    dataRequirements: 'Frozen SW_ETL header history via sourceMrPath / sourceMrPathDays. Sail.select sets window; group.select focuses one group DTD path.',
+    tables: [
+      'master_sail',
+      'sw_etl_group',
+      'sw_etl_group_header',
+      'sw_etl_group_ship',
+    ],
+    dataRequirements: 'sourceMrPath / sourceMrPathDays over sw_etl_group, sw_etl_group_header, sw_etl_group_ship; master_sail for sail windows. Sail.select sets window; group.select picks one group DTD path.',
     events: {
       emits: [GROUP_SELECT_EVENT],
       respondsTo: [SAIL_SELECT_EVENT, SAIL_CLEAR_EVENT, GROUP_SELECT_EVENT, GROUP_CLEAR_EVENT]
@@ -1421,6 +1446,32 @@ export const componentRegistry = {
     allowedRoles: ['ADMIN', 'SUPER_USER'],
     showInReports: true,
     filePath: 'src/components/focus-panels/EtlTableParameters/index.jsx'
+  },
+  DataLineagePanel: {
+    component: DataLineagePanel,
+    panelId: 'data-lineage',
+    category: 'Admin',
+    title: 'Data Lineage',
+    description: 'Original source → Talia tables → components, with usage and column provenance (D015).',
+    props: {},
+    dataRequirements: 'Requires etl_table_parameters and ui_activity_events; joins registry dataRequirements and Tabulator field usage. ADMIN/SUPER_USER only',
+    tables: ['etl_table_parameters', 'ui_activity_events'],
+    events: { emits: [], respondsTo: [] },
+    allowedRoles: ['ADMIN', 'SUPER_USER'],
+    showInReports: true,
+    supportsDataExport: true,
+    options: {
+      views: [
+        VIEW_LINEAGE_ORIENTATION,
+        VIEW_LINEAGE_DISPLAY,
+        VIEW_FILTERS,
+        VIEW_COLUMN_FILTERS,
+        { ...VIEW_DETAILS, default: true },
+        VIEW_PROVENANCE,
+      ],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/DataLineage/index.jsx'
   },
   PortCityPanel: {
     component: PortCityPanel,

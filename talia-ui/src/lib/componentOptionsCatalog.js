@@ -171,6 +171,24 @@ export const VIEW_PORT_CITY_DISPLAY = {
   default: 'table',
   choiceLabels: { table: 'Table', map: 'Map' },
 };
+/** Data Lineage — table-first vs component-first primary grain. */
+export const VIEW_LINEAGE_ORIENTATION = {
+  id: 'orientation',
+  label: 'Orientation',
+  type: 'choice',
+  choices: ['tables', 'components'],
+  default: 'tables',
+  choiceLabels: { tables: 'Tables', components: 'Components' },
+};
+/** Data Lineage — summary grid vs detailed table. */
+export const VIEW_LINEAGE_DISPLAY = {
+  id: 'display',
+  label: 'Display',
+  type: 'choice',
+  choices: ['grid', 'table'],
+  default: 'grid',
+  choiceLabels: { grid: 'Grid', table: 'Table' },
+};
 export const VIEW_TOOLTIP = { id: 'tooltip', label: 'Tooltip', type: 'boolean', default: true };
 export const VIEW_TOOLTIP_MSE = {
   id: 'tooltipView',
@@ -203,7 +221,7 @@ export const VIEW_ADMIN_SECTION = {
   id: 'section',
   label: 'Section',
   type: 'choice',
-  choices: ['access', 'users', 'mapping', 'themes', 'role-criteria', 'logs'],
+  choices: ['access', 'users', 'mapping', 'themes', 'role-criteria', 'lineage', 'logs'],
   default: 'access',
   choiceLabels: {
     access: 'Focus Access',
@@ -211,6 +229,7 @@ export const VIEW_ADMIN_SECTION = {
     mapping: 'User Mappings',
     themes: 'Themes',
     'role-criteria': 'Role Criteria',
+    lineage: 'Data Lineage',
     logs: 'Logs',
   },
 };

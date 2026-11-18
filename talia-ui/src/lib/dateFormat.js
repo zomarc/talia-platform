@@ -77,6 +77,31 @@ export const formatRelativeTime = (value, fallback = '') => {
   return `${years} year${years === 1 ? '' : 's'} ago`;
 };
 
+/**
+ * Ultra-compact age for dense grids, e.g. "-2d", "-3h", "-15m".
+ * Prefer with a title/tooltip of the absolute timestamp.
+ */
+export const formatCompactRelativeAge = (value, fallback = '—') => {
+  const date = parseDateValue(value);
+  if (!date) return fallback;
+  const seconds = Math.round((Date.now() - date.getTime()) / 1000);
+  if (Number.isNaN(seconds)) return fallback;
+  if (seconds < 0) return formatDayMonYy(value, fallback);
+  if (seconds < 45) return 'now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `-${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `-${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 14) return `-${days}d`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 9) return `-${weeks}w`;
+  const months = Math.floor(days / 30);
+  if (months < 18) return `-${months}mo`;
+  const years = Math.floor(days / 365);
+  return `-${years}y`;
+};
+
 /** Compact sail from–to range, e.g. "18–25 Jul 2026" or "18 Jul – 25 Aug 2026". */
 export const formatSailDateRange = (fromValue, toValue, fallback = '') => {
   const fromDate = parseDateValue(fromValue);

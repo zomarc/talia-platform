@@ -30,6 +30,20 @@ export const uiActivityQueryResolvers = {
       return [];
     }
   },
+
+  uiActivityPanelUsage: async (_parent: any, args: any) => {
+    try {
+      return await supabaseDataService.getUiActivityPanelUsage({
+        sinceMinutes: args?.sinceMinutes,
+        userId: args?.userId,
+        userEmail: args?.userEmail,
+        userRole: args?.userRole,
+      });
+    } catch (error) {
+      console.error('Error fetching UI activity panel usage:', error);
+      return [];
+    }
+  },
 };
 
 export const uiActivityMutationResolvers = {

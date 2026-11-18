@@ -22,6 +22,7 @@ import {
 } from '../config/table-mappings.js';
 import { fetchTableDateFacts as fetchTableDateFactsFromClient } from '../lib/integrationDateRange.js';
 import { uiActivityMutationResolvers, uiActivityQueryResolvers } from './resolver-modules/uiActivityResolvers.js';
+import { panelLineageMutationResolvers, panelLineageQueryResolvers } from './resolver-modules/panelLineageResolvers.js';
 import { engineMutationResolvers, engineQueryResolvers } from './resolver-modules/engineResolvers.js';
 import { requirementMutationResolvers, requirementQueryResolvers } from './resolver-modules/requirementResolvers.js';
 import { functionalityMatrixMutationResolvers, functionalityMatrixQueryResolvers } from './resolver-modules/functionalityMatrixResolvers.js';
@@ -1095,6 +1096,7 @@ export const resolvers = {
     // User Management
     ...userQueryResolvers,
     ...uiActivityQueryResolvers,
+    ...panelLineageQueryResolvers,
     ...engineQueryResolvers,
     ...requirementQueryResolvers,
     ...functionalityMatrixQueryResolvers,
@@ -3618,6 +3620,7 @@ export const resolvers = {
     // User Management
     ...userMutationResolvers,
     ...uiActivityMutationResolvers,
+    ...panelLineageMutationResolvers,
     ...engineMutationResolvers,
     ...requirementMutationResolvers,
     ...functionalityMatrixMutationResolvers,

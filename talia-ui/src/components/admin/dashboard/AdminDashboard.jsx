@@ -9,6 +9,7 @@ import TaliaUserTable from '../users/TaliaUserTable';
 import AdminAccessManager from './AdminAccessManager';
 import AdminThemesPanel from './AdminThemesPanel';
 import AdminRoleCriteriaPanel from './AdminRoleCriteriaPanel';
+import AdminLineagePanel from './AdminLineagePanel';
 import AdminLogsPanel from '../logs/AdminLogsPanel';
 import { useTaliaFocusManagement } from '../../../hooks/useTaliaFocusManagement';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
@@ -48,7 +49,7 @@ const AdminDashboard = ({
         <div className="talia-report__header-left">
           <h2 className="talia-report__title">Admin Dashboard</h2>
           <p className="talia-report__subtitle">
-            Focus access, users, mappings, themes, and logs
+            Focus access, users, mappings, themes, lineage keys, and logs
             {taliaUser?.email ? ` · Signed in as ${taliaUser.email}` : ''}
           </p>
         </div>
@@ -70,6 +71,9 @@ const AdminDashboard = ({
         <button className={`admin-tab ${activeTab === 'role-criteria' ? 'admin-tab-active' : ''}`} onClick={() => selectSection('role-criteria')}>
           Role Criteria
         </button>
+        <button className={`admin-tab ${activeTab === 'lineage' ? 'admin-tab-active' : ''}`} onClick={() => selectSection('lineage')}>
+          Data Lineage
+        </button>
         <button className={`admin-tab ${activeTab === 'logs' ? 'admin-tab-active' : ''}`} onClick={() => selectSection('logs')}>
           Logs
         </button>
@@ -86,6 +90,7 @@ const AdminDashboard = ({
         {activeTab === 'mapping' && <UserMappingTable />}
         {activeTab === 'themes' && <AdminThemesPanel />}
         {activeTab === 'role-criteria' && <AdminRoleCriteriaPanel />}
+        {activeTab === 'lineage' && <AdminLineagePanel />}
         {activeTab === 'logs' && <AdminLogsPanel />}
       </main>
     </div>

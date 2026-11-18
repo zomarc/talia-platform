@@ -653,6 +653,130 @@ export class SupabaseDataService {
     }
   }
 
+  /**
+   * Aggregate panel *usage* for admin lineage views.
+   * Uses kind=query (tracked data refreshes / fetches) — closer to "what people are looking at"
+   * than kind=panel (focus open once). openCount remains the GraphQL field name for compatibility.
+   * Options:<panelId> is folded into <panelId>.
+   */
+  async getUiActivityPanelUsage({
+    sinceMinutes = null,
+    userId = null,
+    userEmail = null,
+    userRole = null,
+  } = {}) {
+    try {
+      let query = this.client
+        .from('ui_activity_events')
+        .select('panel_component, user_role, at, kind')
+        .eq('kind', 'query')
+        .not('panel_component', 'is', null)
+        .order('at', { ascending: false })
+        .limit(25000);
+
+      if (Number.isFinite(sinceMinutes) && sinceMinutes > 0) {
+        const cutoff = new Date(Date.now() - (sinceMinutes * 60 * 1000)).toISOString();
+        query = query.gte('at', cutoff);
+      }
+      if (userId) query = query.eq('user_id', userId);
+      if (userEmail) query = query.ilike('user_email', userEmail);
+      if (userRole) query = query.ilike('user_role', userRole);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const byPanel = new Map();
+      (data || []).forEach((row) => {
+        let key = String(row.panel_component || '').trim();
+        if (!key) return;
+        if (key.toLowerCase().startsWith('options:')) {
+          key = key.slice('options:'.length).trim();
+        }
+        if (!key) return;
+        // Skip chrome / non-panel trackers that are not focus reports.
+        const lower = key.toLowerCase();
+        if (
+          lower === 'statusbar'
+          || lower === 'status-bar'
+          || lower === 'dashboard'
+          || lower === 'themecontext'
+          || lower === 'userprofile'
+          || lower === 'business-bus'
+          || lower === 'directsourcerequest'
+        ) {
+          return;
+        }
+        const entry = byPanel.get(key) || {
+          panelComponent: key,
+          openCount: 0,
+          lastAt: null,
+          roles: new Set(),
+        };
+        entry.openCount += 1;
+        if (row.at && (!entry.lastAt || row.at > entry.lastAt)) entry.lastAt = row.at;
+        if (row.user_role) entry.roles.add(String(row.user_role).trim().toUpperCase());
+        byPanel.set(key, entry);
+      });
+
+      return [...byPanel.values()]
+        .map((entry) => ({
+          panelComponent: entry.panelComponent,
+          openCount: entry.openCount,
+          lastAt: entry.lastAt,
+          roles: [...entry.roles].sort(),
+        }))
+        .sort((a, b) => b.openCount - a.openCount || a.panelComponent.localeCompare(b.panelComponent));
+    } catch (error) {
+      console.error('Error aggregating UI activity panel usage:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Admin key-panel flags for Data Lineage coverage highlighting.
+   */
+  async getPanelLineageFlags() {
+    try {
+      const { data, error } = await this.client
+        .from('panel_lineage_flag')
+        .select('panel_component, is_key, updated_at, updated_by')
+        .order('panel_component', { ascending: true });
+      if (error) throw error;
+      return (data || []).map((row) => ({
+        panelComponent: row.panel_component,
+        isKey: Boolean(row.is_key),
+        updatedAt: row.updated_at || null,
+        updatedBy: row.updated_by || null,
+      }));
+    } catch (error) {
+      console.error('Error fetching panel lineage flags:', error);
+      return [];
+    }
+  }
+
+  async setPanelLineageKey(panelComponent, isKey, updatedBy = null) {
+    const key = String(panelComponent || '').trim();
+    if (!key) throw new Error('panelComponent is required');
+    const payload = {
+      panel_component: key,
+      is_key: Boolean(isKey),
+      updated_at: new Date().toISOString(),
+      updated_by: updatedBy ? String(updatedBy) : null,
+    };
+    const { data, error } = await this.client
+      .from('panel_lineage_flag')
+      .upsert(payload, { onConflict: 'panel_component' })
+      .select('panel_component, is_key, updated_at, updated_by')
+      .single();
+    if (error) throw error;
+    return {
+      panelComponent: data.panel_component,
+      isKey: Boolean(data.is_key),
+      updatedAt: data.updated_at || null,
+      updatedBy: data.updated_by || null,
+    };
+  }
+
   async purgeUiActivityEvents(olderThanHours = 24) {
     try {
       const safeHours = Math.max(1, Number.parseInt(String(olderThanHours || 24), 10) || 24);

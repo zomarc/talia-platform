@@ -168,6 +168,7 @@ Follow **Agency** / **Published Rates** (filters → callout → controls → ac
 - Selection / row-detail content inside Details should use **`.talia-card`** so Appearance **Card Intensity** and **Component & Card Padding** apply. Do not invent a second “Selected …” heading above the card — the card header is enough.
 - Gate **where-data-comes-from** copy with `ReportProvenance` and `VIEW_PROVENANCE` (ADMIN+, off by default). Do not put source/lineage text in Details, callouts, or tab ⓘ.
 - Do **not** use header ≣ for technical meta; do **not** use tab ⓘ for user data tables.
+- **Data lineage (key panels):** Prefer `useTableDataWithContext({ tableName, columns })` so field→table→Synapse attribution can be scraped (`npm run build:lineage-tables`). GraphQL/custom hooks should declare `tables` / `columns` via registry or `dataLineagePanelOverrides`. Admin flags **Key** panels in Data Lineage / Admin Dashboard; coverage gaps are **highlighted**, never fail the app. See Documents **D015**.
 
 ### Shell audit checklist
 

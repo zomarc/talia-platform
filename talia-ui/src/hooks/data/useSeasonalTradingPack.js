@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import seasonalTradingPackService from '../../services/data/seasonalTradingPackService';
 import { REPORT_REFRESH_EVENT } from '../../components/dockview/eventConstants';
+import usePanelRefreshGate from '../usePanelRefreshGate';
 import useReportPanelLoading from '../useReportPanelLoading';
 
 const MAX_ATTEMPTS = 5;
@@ -45,12 +46,15 @@ export const useSeasonalTradingPack = (filters = {}, options = {}) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const requestIdRef = useRef(0);
+  const fetchDataRef = useRef(null);
+  const { shouldSkipRefresh, onResume } = usePanelRefreshGate(panelInstanceId, panelComponentId);
 
   useReportPanelLoading(panelInstanceId, panelComponentId, loading);
 
   const filtersKey = JSON.stringify(filters || {});
 
   const fetchData = useCallback(async () => {
+    if (shouldSkipRefresh()) return;
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
@@ -86,7 +90,14 @@ export const useSeasonalTradingPack = (filters = {}, options = {}) => {
         setLoading(false);
       }
     }
-  }, [filtersKey]); // eslint-disable-line react-hooks/exhaustive-deps -- filters serialized
+  }, [filtersKey, shouldSkipRefresh]); // eslint-disable-line react-hooks/exhaustive-deps -- filters serialized
+
+  fetchDataRef.current = fetchData;
+
+  useEffect(() => {
+    const unsubscribe = onResume(() => { fetchDataRef.current?.(); });
+    return typeof unsubscribe === 'function' ? unsubscribe : undefined;
+  }, [onResume]);
 
   useEffect(() => {
     fetchData();
@@ -106,7 +117,7 @@ export const useSeasonalTradingPack = (filters = {}, options = {}) => {
       const isGlobal = scope === 'all' || (!targetPanel && !targetInstance && !targetComponent);
       const isMatch = (
         (panelComponentId && (targetPanel === panelComponentId || targetComponent === panelComponentId))
-        || (panelInstanceId && targetInstance === panelInstanceId)
+        || (panelInstanceId && (targetInstance === panelInstanceId || targetPanel === panelInstanceId))
       );
       if (!isGlobal && !isMatch) return;
       fetchData();

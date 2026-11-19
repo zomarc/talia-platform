@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import PanelDataState from '../../shared/PanelDataState';
 import EngineActivityPresenter from './EngineActivityPresenter';
 
@@ -53,12 +53,21 @@ const EngineActivityContainer = ({ panelInstanceId, panelComponentId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [runMessage, setRunMessage] = useState(null);
+  const { shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadRef = useRef(null);
 
   const load = useCallback(async () => {
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const data = await trackedFetchGraphql({
+      const data = await fetchGraphql({
         query: STATUS_QUERY,
         component: 'EngineActivity',
         purpose: 'Load talia-engine activity',
@@ -67,29 +76,42 @@ const EngineActivityContainer = ({ panelInstanceId, panelComponentId }) => {
       setStatus(data?.rmEngineStatus || null);
       setRuns(data?.rmEngineRuns || []);
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setError(err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchGraphql, shouldSkipRefresh]);
+
+  loadRef.current = load;
+
+  useEffect(() => {
+    onResumeFetch(() => { loadRef.current?.(); });
+    return () => onResumeFetch(null);
+  }, [onResumeFetch]);
 
   useEffect(() => { load(); }, [load]);
 
   const runNow = useCallback(async () => {
     setRunMessage(null);
-    const data = await trackedFetchGraphql({
-      query: RUN_MUTATION,
-      variables: { input: { limit: 24 } },
-      component: 'EngineActivity',
-      purpose: 'On-demand engine run',
-      tableName: 'rm_engine_runs',
-    });
-    const result = data?.runRmAgents;
-    setRunMessage(result?.success
-      ? `${result.message} (${result.findingCount} findings)`
-      : (result?.error || result?.message || 'Run failed'));
-    await load();
-  }, [load]);
+    try {
+      const data = await fetchGraphql({
+        query: RUN_MUTATION,
+        variables: { input: { limit: 24 } },
+        component: 'EngineActivity',
+        purpose: 'On-demand engine run',
+        tableName: 'rm_engine_runs',
+      });
+      const result = data?.runRmAgents;
+      setRunMessage(result?.success
+        ? `${result.message} (${result.findingCount} findings)`
+        : (result?.error || result?.message || 'Run failed'));
+      await load();
+    } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
+      setRunMessage(err?.message || String(err));
+    }
+  }, [fetchGraphql, load]);
 
   return (
     <PanelDataState

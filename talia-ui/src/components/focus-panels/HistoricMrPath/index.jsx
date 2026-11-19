@@ -3,11 +3,12 @@
  * Dates default to the sailed extract. A sailing selection narrows the window.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import { useGlobalDateWindow } from '../../../hooks/useGlobalDateWindow';
 import { useGlobalDepartureMonth } from '../../../hooks/useGlobalDepartureMonth';
 import { isShipFilterActive, useGlobalShipFilter } from '../../../hooks/useGlobalShipFilter';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import useReportPanelLoading from '../../../hooks/useReportPanelLoading';
 import { formatCriteriaDateSummary, resolveEffectiveCriteriaDateWindow } from '../../../lib/globalCriteriaDateWindow';
 import {
@@ -20,7 +21,6 @@ import {
   SAIL_CLEAR_EVENT,
   SAIL_SELECT_EVENT,
 } from '../../../lib/eventBus';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 import PanelDataState from '../../shared/PanelDataState';
 import HistoricMrPathPresenter from './HistoricMrPathPresenter';
 
@@ -147,6 +147,11 @@ const HistoricMrPathContainer = ({ panelInstanceId, panelComponentId }) => {
   const [localTo, setLocalTo] = useState('');
   const [planningRate, setPlanningRate] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState(null);
+  const { isPaused, shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadPathRef = useRef(null);
   const globalDates = useGlobalDateWindow();
   const globalMonth = useGlobalDepartureMonth();
   const globalShip = useGlobalShipFilter();
@@ -173,10 +178,15 @@ const HistoricMrPathContainer = ({ panelInstanceId, panelComponentId }) => {
   });
 
   const loadPath = useCallback(async () => {
+    // Pause gate: default unpaused; when paused skip network refresh.
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const data = await trackedFetchGraphql({
+      const data = await fetchGraphql({
         query: PATH_QUERY,
         variables: { shipCode: queryShip, dateFrom: queryFrom, dateTo: queryTo },
         component: panelComponentId || COMPONENT,
@@ -185,12 +195,22 @@ const HistoricMrPathContainer = ({ panelInstanceId, panelComponentId }) => {
       });
       setPath(data?.sourceMrPath || null);
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setError(err?.message || 'Failed to load the historic MR path');
       setPath(null);
     } finally {
       setLoading(false);
     }
-  }, [panelComponentId, queryFrom, queryShip, queryTo]);
+  }, [fetchGraphql, panelComponentId, queryFrom, queryShip, queryTo, shouldSkipRefresh]);
+
+  loadPathRef.current = loadPath;
+
+  useEffect(() => {
+    onResumeFetch(() => {
+      loadPathRef.current?.();
+    });
+    return () => onResumeFetch(null);
+  }, [onResumeFetch]);
 
   useEffect(() => {
     loadPath();
@@ -214,8 +234,12 @@ const HistoricMrPathContainer = ({ panelInstanceId, panelComponentId }) => {
       setSeries(null);
       return undefined;
     }
+    if (isPaused) {
+      shouldSkipRefresh();
+      return undefined;
+    }
     let cancelled = false;
-    trackedFetchGraphql({
+    fetchGraphql({
       query: DAYS_QUERY,
       variables: { groupId: selectedGroupId },
       component: panelComponentId || COMPONENT,
@@ -223,13 +247,13 @@ const HistoricMrPathContainer = ({ panelInstanceId, panelComponentId }) => {
       tableName: 'sw_etl_group_header',
     }).then((data) => {
       if (!cancelled) setSeries(data?.sourceMrPathDays || null);
-    }).catch(() => {
-      if (!cancelled) setSeries(null);
+    }).catch((err) => {
+      if (!cancelled && err?.code !== 'PANEL_PAUSED') setSeries(null);
     });
     return () => {
       cancelled = true;
     };
-  }, [panelComponentId, selectedGroupId]);
+  }, [fetchGraphql, isPaused, panelComponentId, selectedGroupId, shouldSkipRefresh]);
 
   useEffect(() => {
     const onSailSelect = (event) => {

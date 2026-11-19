@@ -19,7 +19,6 @@ import DashboardSidebar from "./components/sidebar/DashboardSidebar.jsx";
 import {
   DOCKVIEW_MAXIMIZE_STATE_EVENT,
   REPORT_ACTIVE_PANEL_EVENT,
-  REPORT_PANEL_PAUSE_EVENT,
   REPORT_PANEL_LAYOUT_CYCLE_EVENT,
   DASHBOARD_CYCLE_FOCUS_EVENT,
   DASHBOARD_SELECT_FOCUS_EVENT,
@@ -28,6 +27,7 @@ import {
 } from "./components/dockview/eventConstants";
 import { isEditableTarget } from "./components/shared/games/keyboardGuards";
 import { ARCADE_GAME_PANEL_COMPONENTS } from "./components/shared/games/arcadeGamePanelIds";
+import { togglePanelPause } from "./lib/panelPause";
 // Dev Role Selector is now integrated into ModeSelector dropdown
 // Theme System - using centralized theme context
 import { useTheme } from "./contexts/ThemeContext";
@@ -1517,47 +1517,29 @@ function Dashboard({ user }) {
     const api = apiRef.current;
     const activePanelId = api?.activePanel?.id || null;
     const activePanelComponent = api?.activePanel?.component || null;
-    if (!activePanelId) return;
-    const current = window.__taliaPanelPauseState || {};
-    const isPaused = current[activePanelId] === true;
-    const nextPaused = !isPaused;
-    window.__taliaPanelPauseState = {
-      ...current,
-      [activePanelId]: nextPaused,
-    };
-    window.dispatchEvent(
-      new CustomEvent(REPORT_PANEL_PAUSE_EVENT, {
-        detail: {
-          panelId: activePanelId,
-          panelComponent: activePanelComponent,
-          paused: nextPaused,
-        },
-      })
-    );
-    userActivityTracker.recordHeaderAction('panel-pause-toggle', {
-      status: nextPaused ? 'paused' : 'resumed',
-      panelId: activePanelId,
-      panelComponent: activePanelComponent || undefined,
-    });
+    togglePanelPause(activePanelId, activePanelComponent);
   }, []);
 
   useEffect(() => {
-    const handleArcadePanelKeys = (event) => {
+    const handlePanelHotkeys = (event) => {
       if (event.defaultPrevented) return;
       if (event.repeat) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (isEditableTarget(event)) return;
       const api = apiRef.current;
       const active = api?.activePanel;
+      if (!active) return;
       const component = active?.component || active?.api?.component || null;
-      if (!component || !ARCADE_GAME_PANEL_COMPONENTS.has(component)) return;
       const key = String(event.key || '').toLowerCase();
+      // P pauses/resumes any active panel (report chrome + arcade).
       if (key === 'p') {
         event.preventDefault();
         toggleActivePanelPause();
         return;
       }
+      // W layout cycle remains arcade-only.
       if (key === 'w') {
+        if (!component || !ARCADE_GAME_PANEL_COMPONENTS.has(component)) return;
         const panelId = active?.id || null;
         if (!panelId) return;
         event.preventDefault();
@@ -1566,8 +1548,8 @@ function Dashboard({ user }) {
         );
       }
     };
-    window.addEventListener('keydown', handleArcadePanelKeys);
-    return () => window.removeEventListener('keydown', handleArcadePanelKeys);
+    window.addEventListener('keydown', handlePanelHotkeys);
+    return () => window.removeEventListener('keydown', handlePanelHotkeys);
   }, [toggleActivePanelPause]);
 
   React.useEffect(() => {
@@ -1648,8 +1630,10 @@ function Dashboard({ user }) {
         setCurrentFocus(preferredFocusId);
         selectFocus?.(preferredFocusId);
         pendingPersistedFocusIdRef.current = preferredFocusId;
-        persistedFocusAppliedRef.current = false;
+        // onReady owns the first restore — keep the effect from running a second fromJSON.
+        persistedFocusAppliedRef.current = true;
         handleFocusChange(preferredFocusId).catch((error) => {
+          persistedFocusAppliedRef.current = false;
           reportLayoutRestoreFailure(`Failed to restore persisted focus layout for "${preferredFocusId}".`, error);
         });
       })

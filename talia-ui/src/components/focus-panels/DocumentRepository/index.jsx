@@ -23,7 +23,7 @@ import { getPdfJs } from '../../../lib/documentPdf';
 import { assetIdsInMarkdown } from '../../../lib/markdownLite';
 import { buildProjectDocumentExport, nextDocumentReference } from '../../../lib/projectDocument';
 import { downloadJson } from '../../../lib/riskRegister';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import { canAccessPrivilegedPanels, normalizeRole } from '../../../utils/roleUtils';
 import PanelDataState from '../../shared/PanelDataState';
 import DocumentRepositoryPresenter from './DocumentRepositoryPresenter';
@@ -89,32 +89,41 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
   const [titleFilter, setTitleFilter] = useState('');
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
+  const { shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadItemsRef = useRef(null);
 
   const loadItems = useCallback(async () => {
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const [docData, logData, matrixData, riskData] = await Promise.all([
-        trackedFetchGraphql({
+        fetchGraphql({
           query: PROJECT_DOCUMENTS_QUERY,
           component: panelComponentId || COMPONENT,
           purpose: 'Load project documents',
           tableName: 'project_document',
         }),
-        trackedFetchGraphql({
+        fetchGraphql({
           query: REQUIREMENT_ITEMS_QUERY,
           variables: { filters: { includeDone: true, limit: 2000 } },
           component: panelComponentId || COMPONENT,
           purpose: 'Load requirements for document links',
           tableName: 'talia_requirement_item',
         }),
-        trackedFetchGraphql({
+        fetchGraphql({
           query: FUNCTIONALITY_MATRIX_ITEMS_QUERY,
           component: panelComponentId || COMPONENT,
           purpose: 'Load matrix cells for document links',
           tableName: 'functionality_matrix_item',
         }),
-        trackedFetchGraphql({
+        fetchGraphql({
           query: RISK_REGISTER_ITEMS_QUERY,
           component: panelComponentId || COMPONENT,
           purpose: 'Load risks for document links',
@@ -134,12 +143,20 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
         })),
       });
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setError(err?.message || String(err));
       setItems([]);
     } finally {
       setLoading(false);
     }
-  }, [panelComponentId]);
+  }, [fetchGraphql, panelComponentId, shouldSkipRefresh]);
+
+  loadItemsRef.current = loadItems;
+
+  useEffect(() => {
+    onResumeFetch(() => { if (allowed) loadItemsRef.current?.(); });
+    return () => onResumeFetch(null);
+  }, [allowed, onResumeFetch]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -157,8 +174,9 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
   useEffect(() => {
     const ids = assetIdsInMarkdown(selected?.body).filter((id) => !assetsRef.current[id]);
     if (!ids.length) return undefined;
+    if (shouldSkipRefresh()) return undefined;
     let cancelled = false;
-    trackedFetchGraphql({
+    fetchGraphql({
       query: PROJECT_DOCUMENT_ASSETS_QUERY,
       variables: { ids },
       component: panelComponentId || COMPONENT,
@@ -177,7 +195,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
     return () => {
       cancelled = true;
     };
-  }, [selected?.body, panelComponentId]);
+  }, [fetchGraphql, panelComponentId, selected?.body, shouldSkipRefresh]);
 
   const visibleItems = useMemo(() => {
     const needle = titleFilter.trim().toLowerCase();
@@ -215,7 +233,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
         targetId: link.targetId,
       })),
     };
-    const data = await trackedFetchGraphql({
+    const data = await fetchGraphql({
       query: UPSERT_PROJECT_DOCUMENT_MUTATION,
       variables: { input },
       component: panelComponentId || COMPONENT,
@@ -271,6 +289,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
       const result = await importDocumentFile(file, getPdfJs());
       await applyImportedMarkdown(result);
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);
@@ -288,6 +307,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
     try {
       await applyImportedMarkdown(textToMarkdown(raw));
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);
@@ -319,6 +339,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
         setMessage('Reformatted as Markdown — Save to keep it.');
       }
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);
@@ -334,6 +355,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
         successMessage: 'Saved',
       });
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);
@@ -352,7 +374,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
       setForm((current) => ({ ...current, isStarred: nextStarred }));
     }
     try {
-      await trackedFetchGraphql({
+      await fetchGraphql({
         query: UPSERT_PROJECT_DOCUMENT_MUTATION,
         variables: {
           input: {
@@ -369,6 +391,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
       });
       await loadItems();
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
       await loadItems();
     } finally {
@@ -381,7 +404,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
     if (!window.confirm(`Delete ${selected.referenceCode}?`)) return;
     setBusy(true);
     try {
-      await trackedFetchGraphql({
+      await fetchGraphql({
         query: DELETE_PROJECT_DOCUMENT_MUTATION,
         variables: { id: selected.id },
         component: panelComponentId || COMPONENT,
@@ -393,6 +416,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
       setForm(emptyDocumentForm());
       await loadItems();
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);
@@ -413,7 +437,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
     setMessage(null);
     try {
       const contentBase64 = await readFile(file);
-      const data = await trackedFetchGraphql({
+      const data = await fetchGraphql({
         query: ADD_PROJECT_DOCUMENT_ASSET_MUTATION,
         variables: {
           documentId: selected.id,
@@ -429,7 +453,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
       if (markdown) {
         const nextBody = `${form.body || ''}${form.body ? '\n\n' : ''}${markdown}\n`;
         updateForm('body', nextBody);
-        await trackedFetchGraphql({
+        await fetchGraphql({
           query: UPSERT_PROJECT_DOCUMENT_MUTATION,
           variables: {
             input: {
@@ -450,6 +474,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
       }
       await loadItems();
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);
@@ -459,7 +484,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
   const removeAsset = async (assetId) => {
     setBusy(true);
     try {
-      await trackedFetchGraphql({
+      await fetchGraphql({
         query: DELETE_PROJECT_DOCUMENT_ASSET_MUTATION,
         variables: { id: assetId },
         component: panelComponentId || COMPONENT,
@@ -468,6 +493,7 @@ const DocumentRepositoryContainer = ({ panelInstanceId = null, panelComponentId 
       });
       await loadItems();
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);

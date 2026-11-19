@@ -21,7 +21,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import queryTracker from '../../services/data/queryTracker';
 import { SAIL_SELECT_EVENT, SHIP_SELECT_EVENT } from '../../lib/eventBus';
-import { REPORT_PANEL_PAUSE_EVENT, REPORT_REFRESH_EVENT } from '../../components/dockview/eventConstants';
+import { REPORT_REFRESH_EVENT } from '../../components/dockview/eventConstants';
 import { normalizeGlobalDateRangeKey } from '../../lib/globalDateRange';
 import {
   ALL_DEPARTURE_MONTH_KEY,
@@ -29,6 +29,7 @@ import {
   rowMatchesDepartureMonth,
 } from '../../lib/globalDepartureMonth';
 import { rowMatchesGlobalShip } from '../../lib/globalShipFilter';
+import usePanelRefreshGate from '../usePanelRefreshGate';
 import useReportPanelLoading from '../useReportPanelLoading';
 import sourceAvailability, {
   DEFAULT_REQUIRED_SOURCES,
@@ -398,22 +399,24 @@ const applyGlobalCriteria = (rows, context = null, tableName = null) => (
   )
 );
 
-const isPanelPaused = (panelInstanceId, panelComponentId) => {
-  const state = window.__taliaPanelPauseState || {};
-  if (panelInstanceId && Object.prototype.hasOwnProperty.call(state, panelInstanceId)) {
-    return state[panelInstanceId] === true;
-  }
-  if (panelComponentId && Object.prototype.hasOwnProperty.call(state, panelComponentId)) {
-    return state[panelComponentId] === true;
-  }
-  return false;
-};
+const BACKGROUND_FETCH_DELAY_MS = 75;
 
-/** Defer listener fetches so emitter selection can paint before network work starts. */
-const scheduleContextFetch = (fetchFn, filters, options = null) => {
-  queueMicrotask(() => {
+/**
+ * Schedule a context-driven fetch.
+ * Focused panel runs immediately (after a microtask so selection paint wins);
+ * background panels defer slightly so the focused panel's network starts first.
+ */
+const scheduleContextFetch = (fetchFn, filters, options = null, panelInstanceId = null) => {
+  const run = () => {
     fetchFn(filters, options || undefined);
-  });
+  };
+  const activeId = typeof window !== 'undefined' ? window.__taliaActivePanelId : null;
+  const isFocused = Boolean(panelInstanceId && activeId && panelInstanceId === activeId);
+  if (isFocused) {
+    queueMicrotask(run);
+    return;
+  }
+  window.setTimeout(run, BACKGROUND_FETCH_DELAY_MS);
 };
 
 export const useTableDataWithContext = ({
@@ -456,8 +459,10 @@ export const useTableDataWithContext = ({
   const requiredSourcesRef = useRef(requiredSources);
   const hasCheckedContextRef = useRef(false);
   const lastIncludeNonRealRef = useRef(window.__taliaGlobalCriteria?.includeNonRealSailings === true);
-  const pausedRef = useRef(isPanelPaused(panelInstanceId, panelComponentId));
-  const pendingRefreshOnResumeRef = useRef(false);
+  const { isPausedRef, shouldSkipRefresh, onResume } = usePanelRefreshGate(
+    panelInstanceId,
+    panelComponentId
+  );
   const fetchGenerationRef = useRef(0);
 
   useReportPanelLoading(panelInstanceId, panelComponentId, loading);
@@ -521,8 +526,7 @@ export const useTableDataWithContext = ({
   // Fetch data from GraphQL
   const fetchDataRef = useRef(null);
   fetchDataRef.current = async (currentFilters = null, options = {}) => {
-    if (pausedRef.current) {
-      pendingRefreshOnResumeRef.current = true;
+    if (shouldSkipRefresh()) {
       return;
     }
     const forceFetch = options?.force === true;
@@ -708,8 +712,7 @@ export const useTableDataWithContext = ({
         return;
       }
       console.log(`[useTableDataWithContext] Loaded ${loadedData.length} records from ${tableNameRef.current}`);
-      if (pausedRef.current) {
-        pendingRefreshOnResumeRef.current = true;
+      if (shouldSkipRefresh()) {
         return;
       }
       commitLoadedData(loadedData || [], requestedFiltersKey);
@@ -831,10 +834,10 @@ export const useTableDataWithContext = ({
       const contextDetail = event.type === SHIP_SELECT_EVENT
         ? eventDetail
         : normalizeSelectionContextDetail(eventDetail);
-      if (pausedRef.current) {
+      if (isPausedRef.current) {
         contextRef.current = contextDetail;
         setContext(contextDetail);
-        pendingRefreshOnResumeRef.current = true;
+        shouldSkipRefresh();
         if (event.type === SAIL_SELECT_EVENT) {
           window.lastSailSelectEvent = { type: SAIL_SELECT_EVENT, detail: contextDetail };
         }
@@ -850,7 +853,12 @@ export const useTableDataWithContext = ({
       setContext(contextDetail);
       if (newFilters || fetchWithoutContextRef.current) {
         setLoading(true);
-        scheduleContextFetch(fetchDataRef.current, newFilters);
+        scheduleContextFetch(
+          fetchDataRef.current,
+          newFilters,
+          null,
+          panelInstanceIdRef.current
+        );
       } else {
         // Mapper cannot resolve filters yet — keep selection, do not fetch unfiltered.
         setLoading(false);
@@ -871,10 +879,10 @@ export const useTableDataWithContext = ({
 
     const handleClearEvent = () => {
       fetchGenerationRef.current += 1;
-      if (pausedRef.current) {
+      if (isPausedRef.current) {
         contextRef.current = null;
         setContext(null);
-        pendingRefreshOnResumeRef.current = true;
+        shouldSkipRefresh();
         if (currentEventName === SAIL_SELECT_EVENT) {
           window.lastSailSelectEvent = null;
         }
@@ -889,7 +897,12 @@ export const useTableDataWithContext = ({
       lastFiltersRef.current = null; // Reset filters so we can fetch again
       if (fetchWithoutContextRef.current) {
         setLoading(true);
-        scheduleContextFetch(fetchDataRef.current, null);
+        scheduleContextFetch(
+          fetchDataRef.current,
+          null,
+          null,
+          panelInstanceIdRef.current
+        );
       } else {
         setLoading(false);
         setError(null);
@@ -965,8 +978,7 @@ export const useTableDataWithContext = ({
   // - includeNonRealSailings triggers server re-fetch because it's enforced in GraphQL.
   useEffect(() => {
     const handleGlobalCriteriaChange = (event) => {
-      if (pausedRef.current) {
-        pendingRefreshOnResumeRef.current = true;
+      if (shouldSkipRefresh()) {
         return;
       }
       // Re-apply client filters. Keep previous array identity when the visible
@@ -1010,8 +1022,7 @@ export const useTableDataWithContext = ({
 
   useEffect(() => {
     const handlePanelRefresh = (event) => {
-      if (pausedRef.current) {
-        pendingRefreshOnResumeRef.current = true;
+      if (shouldSkipRefresh()) {
         return;
       }
       const targetPanel = event?.detail?.panelId;
@@ -1036,33 +1047,17 @@ export const useTableDataWithContext = ({
   }, []);
 
   useEffect(() => {
-    const handlePauseChanged = (event) => {
-      const detail = event?.detail || {};
-      const targetPanelId = detail.panelId || null;
-      const targetPanelComponent = detail.panelComponent || null;
-      const thisInstance = panelInstanceIdRef.current;
-      const thisComponent = panelComponentIdRef.current;
-      const isMatch = (
-        (thisInstance && targetPanelId === thisInstance) ||
-        (thisComponent && targetPanelComponent === thisComponent)
-      );
-      if (!isMatch) return;
-      const nextPaused = detail.paused === true;
-      pausedRef.current = nextPaused;
-      if (!nextPaused && pendingRefreshOnResumeRef.current) {
-        pendingRefreshOnResumeRef.current = false;
-        lastFiltersRef.current = null;
-        const currentFilters = contextRef.current ? extractFiltersRef.current(contextRef.current) : null;
-        fetchDataRef.current(currentFilters, { force: true, bypassCache: true });
-      }
-    };
-    window.addEventListener(REPORT_PANEL_PAUSE_EVENT, handlePauseChanged);
-    return () => window.removeEventListener(REPORT_PANEL_PAUSE_EVENT, handlePauseChanged);
-  }, []);
+    const unsubscribe = onResume(() => {
+      lastFiltersRef.current = null;
+      const currentFilters = contextRef.current ? extractFiltersRef.current(contextRef.current) : null;
+      fetchDataRef.current(currentFilters, { force: true, bypassCache: true });
+    });
+    return typeof unsubscribe === 'function' ? unsubscribe : undefined;
+  }, [onResume]);
+
 
   const refetch = useCallback(() => {
-    if (pausedRef.current) {
-      pendingRefreshOnResumeRef.current = true;
+    if (shouldSkipRefresh()) {
       return;
     }
     const currentContext = contextRef.current;

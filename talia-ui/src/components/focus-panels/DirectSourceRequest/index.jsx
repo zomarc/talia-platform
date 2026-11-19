@@ -22,6 +22,7 @@ import {
   fetchDirectB2bAvailability,
 } from '../../../lib/directB2bClient';
 import useExternalSourceAvailability from '../../../hooks/useExternalSourceAvailability';
+import usePanelRefreshGate from '../../../hooks/usePanelRefreshGate';
 
 const DEFAULT_GRAPHQL_ENDPOINT = DIRECT_B2B_DEFAULT_ENDPOINT;
 
@@ -67,6 +68,10 @@ const DEFAULT_QUERY = DIRECT_B2B_AVAILABILITY_QUERY;
 
 const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => {
   const sourceAvailability = useExternalSourceAvailability(DIRECT_B2B_SOURCE_NAMES);
+  const { isPaused, shouldSkipRefresh, onResume } = usePanelRefreshGate(
+    panelInstanceId,
+    panelComponentId
+  );
 
   // Get today's date in ISO format for defaults
   const getTodayISO = () => new Date().toISOString().split('T')[0];
@@ -136,6 +141,12 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
   const requestIdRef = useRef(0);
   const sourceAvailableRef = useRef(sourceAvailability.available);
   const sourceMessageRef = useRef(sourceAvailability.message);
+  const persistedEventRef = useRef(persistedEvent);
+  const testModeRef = useRef(testMode);
+  const manualDatesRef = useRef(manualDates);
+  persistedEventRef.current = persistedEvent;
+  testModeRef.current = testMode;
+  manualDatesRef.current = manualDates;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -161,6 +172,18 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
       }));
     }
   }, [sourceAvailability.available, sourceAvailability.message, sourceAvailability.status]);
+
+  useEffect(() => {
+    if (!isPaused) return undefined;
+    requestIdRef.current += 1;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    inFlightQueryKeyRef.current = null;
+    setLoading(false);
+    return undefined;
+  }, [isPaused]);
 
   // Extract parameters from persisted event - DATE RANGES ONLY
   const extractQueryParams = useCallback((event) => {
@@ -225,9 +248,38 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
     };
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = onResume(() => {
+      if (testModeRef.current) {
+        const dates = manualDatesRef.current || {};
+        lastFetchedQueryKeyRef.current = null;
+        fetchDataRef.current?.({
+          effectiveDate: dates.effectiveDate,
+          startDateFrom: dates.startDate,
+          startDateTo: dates.endDate,
+          _context: { source: 'resume-after-pause' },
+        }, { force: true });
+        return;
+      }
+      const event = persistedEventRef.current;
+      if (!event) return;
+      const params = extractQueryParams(event);
+      if (params) {
+        lastFetchedQueryKeyRef.current = null;
+        fetchDataRef.current?.(params, { force: true });
+      }
+    });
+    return typeof unsubscribe === 'function' ? unsubscribe : undefined;
+  }, [extractQueryParams, onResume]);
+
   // Fetch data from external GraphQL endpoint
   const fetchData = useCallback(async (variables, { force = false } = {}) => {
     if (!mountedRef.current) return;
+    // Pause gate: default unpaused; when paused skip network refresh.
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
 
     const normalizedVariables = normalizeDirectSourceVariables(variables);
     const queryKey = buildQueryKey(normalizedVariables);
@@ -400,7 +452,7 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
         lastFetchedQueryKeyRef.current = queryKey;
       }
     }
-  }, [normalizeDirectSourceVariables]);
+  }, [normalizeDirectSourceVariables, shouldSkipRefresh]);
 
   useEffect(() => {
     fetchDataRef.current = fetchData;

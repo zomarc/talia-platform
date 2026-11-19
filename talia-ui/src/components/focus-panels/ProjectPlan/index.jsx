@@ -3,7 +3,7 @@
  * Phases match the functionality matrix. Milestones match requirement target versions.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { FUNCTIONALITY_MATRIX_ITEMS_QUERY } from '../../../graphql/functionalityMatrixOperations';
 import {
@@ -13,10 +13,10 @@ import {
   SAVE_PROJECT_PLAN_MUTATION,
 } from '../../../graphql/projectAdminOperations';
 import { REQUIREMENT_ITEMS_QUERY } from '../../../graphql/taliaRequirementLogOperations';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import { VIEW_DETAILS, VIEW_PROVENANCE } from '../../../lib/componentOptionsCatalog';
 import { linkedElements } from '../../../lib/projectPlan';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 import { canAccessPrivilegedPanels, normalizeRole } from '../../../utils/roleUtils';
 import PanelDataState from '../../shared/PanelDataState';
 import ProjectPlanPresenter from './ProjectPlanPresenter';
@@ -55,6 +55,11 @@ const ProjectPlanContainer = ({ panelInstanceId = null, panelComponentId = null 
   const [selectedPhase, setSelectedPhase] = useState('0');
   const [selectedMilestoneId, setSelectedMilestoneId] = useState(null);
   const [draft, setDraft] = useState(emptyDraft);
+  const { shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadRef = useRef(null);
 
   const applyCalendar = (calendar) => {
     setPhases(calendar?.phases || []);
@@ -62,36 +67,40 @@ const ProjectPlanContainer = ({ panelInstanceId = null, panelComponentId = null 
   };
 
   const load = useCallback(async () => {
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const [plan, matrix, log, riskData, docs] = await Promise.all([
-        trackedFetchGraphql({
+        fetchGraphql({
           query: PROJECT_PLAN_CALENDAR_QUERY,
           component: panelComponentId || COMPONENT,
           purpose: 'Load project plan',
           tableName: 'project_phase',
         }),
-        trackedFetchGraphql({
+        fetchGraphql({
           query: FUNCTIONALITY_MATRIX_ITEMS_QUERY,
           component: panelComponentId || COMPONENT,
           purpose: 'Load matrix for the plan',
           tableName: 'functionality_matrix_item',
         }),
-        trackedFetchGraphql({
+        fetchGraphql({
           query: REQUIREMENT_ITEMS_QUERY,
           variables: { filters: { includeDone: true, limit: 2000 } },
           component: panelComponentId || COMPONENT,
           purpose: 'Load requirements for the plan',
           tableName: 'talia_requirement_item',
         }),
-        trackedFetchGraphql({
+        fetchGraphql({
           query: RISK_REGISTER_ITEMS_QUERY,
           component: panelComponentId || COMPONENT,
           purpose: 'Load risks for the plan',
           tableName: 'risk_register_item',
         }),
-        trackedFetchGraphql({
+        fetchGraphql({
           query: PROJECT_DOCUMENTS_QUERY,
           component: panelComponentId || COMPONENT,
           purpose: 'Load documents for the plan',
@@ -104,11 +113,19 @@ const ProjectPlanContainer = ({ panelInstanceId = null, panelComponentId = null 
       setRisks(riskData?.riskRegisterItems || []);
       setDocuments(docs?.projectDocuments || []);
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setError(err);
     } finally {
       setLoading(false);
     }
-  }, [panelComponentId]);
+  }, [fetchGraphql, panelComponentId, shouldSkipRefresh]);
+
+  loadRef.current = load;
+
+  useEffect(() => {
+    onResumeFetch(() => { loadRef.current?.(); });
+    return () => onResumeFetch(null);
+  }, [onResumeFetch]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -168,7 +185,7 @@ const ProjectPlanContainer = ({ panelInstanceId = null, panelComponentId = null 
     setBusy(true);
     setMessage(null);
     try {
-      const data = await trackedFetchGraphql({
+      const data = await fetchGraphql({
         query: SAVE_PROJECT_PLAN_MUTATION,
         variables: {
           input: {
@@ -185,6 +202,7 @@ const ProjectPlanContainer = ({ panelInstanceId = null, panelComponentId = null 
       setDraft({ ...emptyDraft(), phaseCode: phase.code });
       setMessage('Saved');
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);

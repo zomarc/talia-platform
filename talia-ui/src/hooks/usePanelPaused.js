@@ -1,34 +1,31 @@
 import { useEffect, useState } from 'react';
 import { REPORT_PANEL_PAUSE_EVENT } from '../components/dockview/eventConstants';
+import { isPanelPaused } from '../lib/panelPause';
 
-const getInitialPausedState = (panelInstanceId, panelComponentId) => {
-  const state = window.__taliaPanelPauseState || {};
-  if (panelInstanceId && Object.prototype.hasOwnProperty.call(state, panelInstanceId)) {
-    return state[panelInstanceId] === true;
-  }
-  if (panelComponentId && Object.prototype.hasOwnProperty.call(state, panelComponentId)) {
-    return state[panelComponentId] === true;
-  }
-  return false;
-};
-
+/**
+ * Reactive pause flag for a panel. Default is not paused.
+ * Prefer usePanelRefreshGate when gating network refresh.
+ */
 const usePanelPaused = (panelInstanceId, panelComponentId = null) => {
-  const [isPaused, setIsPaused] = useState(() => getInitialPausedState(panelInstanceId, panelComponentId));
+  const [isPaused, setIsPaused] = useState(() => (
+    isPanelPaused(panelInstanceId, panelComponentId) === true
+  ));
 
   useEffect(() => {
-    setIsPaused(getInitialPausedState(panelInstanceId, panelComponentId));
+    setIsPaused(isPanelPaused(panelInstanceId, panelComponentId) === true);
 
     const onPauseChanged = (event) => {
       const detail = event?.detail || {};
       const targetPanelId = detail.panelId || null;
       const targetPanelComponent = detail.panelComponent || null;
-      if (panelInstanceId && targetPanelId === panelInstanceId) {
-        setIsPaused(detail.paused === true);
-        return;
-      }
-      if (!panelInstanceId && panelComponentId && targetPanelComponent === panelComponentId) {
-        setIsPaused(detail.paused === true);
-      }
+      const matchedByInstance = Boolean(panelInstanceId && targetPanelId === panelInstanceId);
+      const matchedByComponent = Boolean(
+        !panelInstanceId
+        && panelComponentId
+        && targetPanelComponent === panelComponentId
+      );
+      if (!matchedByInstance && !matchedByComponent) return;
+      setIsPaused(detail.paused === true);
     };
 
     window.addEventListener(REPORT_PANEL_PAUSE_EVENT, onPauseChanged);

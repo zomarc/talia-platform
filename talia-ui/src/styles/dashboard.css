@@ -479,6 +479,22 @@
   font-size: var(--theme-font-size-sm);
 }
 
+.dashboard-dockview .talia-dv-tab__button--pause {
+  min-width: calc(var(--theme-tab-header-font-size) + 6px);
+  width: calc(var(--theme-tab-header-font-size) + 6px);
+  height: calc(var(--theme-tab-header-font-size) + 6px);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--theme-font-size-xs);
+  letter-spacing: -0.05em;
+}
+
+.dashboard-dockview .talia-dv-tab__button--pause-active {
+  color: var(--theme-accent, #c9a227);
+}
+
 .dashboard-dockview .talia-dv-tab__button--group {
   min-width: calc(var(--theme-tab-header-font-size) + 6px);
   width: calc(var(--theme-tab-header-font-size) + 6px);

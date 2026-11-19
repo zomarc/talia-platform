@@ -1,0 +1,283 @@
+/* Contain layout inside the Dockview panel — same contract as MR Retrospect. */
+.driver-analysis {
+  container-type: inline-size;
+  container-name: driver-analysis;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.driver-analysis .talia-report__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-component-gap-sm, 8px);
+  overflow: hidden;
+}
+
+.driver-analysis--updating {
+  position: relative;
+}
+
+.driver-analysis__callout {
+  margin: 0 12px 8px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.driver-analysis__callout--busy {
+  border-color: color-mix(in srgb, var(--theme-accent, #5b9fd4) 45%, transparent);
+  background: color-mix(in srgb, var(--theme-accent, #5b9fd4) 10%, transparent);
+}
+
+.driver-analysis__busy {
+  font-weight: 650;
+  color: var(--theme-accent, #5b9fd4);
+}
+
+.driver-analysis__spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--theme-accent, #5b9fd4) 35%, transparent);
+  border-top-color: var(--theme-accent, #5b9fd4);
+  animation: driver-analysis-spin 0.7s linear infinite;
+  flex: 0 0 auto;
+}
+
+@keyframes driver-analysis-spin {
+  to { transform: rotate(360deg); }
+}
+
+.driver-analysis__focus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+  margin: 0 12px 8px;
+  font-size: 0.78rem;
+}
+
+.driver-analysis__focus-label {
+  color: var(--theme-text-secondary, #7c8ba0);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  letter-spacing: 0.03em;
+}
+
+.driver-analysis__focus-sail {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-accent, #5b9fd4) 18%, transparent);
+  color: var(--theme-fg, #e6ebff);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.driver-analysis__focus-meta {
+  color: var(--theme-text-secondary, #9aa8bc);
+  font-size: 0.75rem;
+}
+
+.driver-analysis__filter {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 0.72rem;
+  color: var(--theme-text-secondary, #9aa8bc);
+}
+
+.driver-analysis__filter select {
+  width: min(100%, 420px);
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--theme-border, #3a4558) 80%, transparent);
+  background: var(--theme-panel, #1a2230);
+  color: var(--theme-fg, #e6ebff);
+}
+
+.driver-analysis__story {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: 12px;
+  align-items: stretch;
+  margin: 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+@container driver-analysis (min-width: 880px) {
+  .driver-analysis__story {
+    flex-direction: row;
+  }
+
+  .driver-analysis__story-rail {
+    flex: 0 0 28%;
+    width: 28%;
+    max-width: 22rem;
+    min-width: 16rem;
+    overflow: auto;
+  }
+}
+
+.driver-analysis__chart-host {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 12rem;
+  height: 100%;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--theme-border, #3a4558) 70%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--theme-panel, #1a2230) 92%, transparent);
+}
+
+.driver-analysis__chart-host canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.driver-analysis__chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-height: 12rem;
+  padding: 24px;
+  text-align: center;
+  color: var(--theme-text-secondary, #9aa8bc);
+  border: 1px dashed color-mix(in srgb, var(--theme-border, #3a4558) 80%, transparent);
+  border-radius: 6px;
+}
+
+.driver-analysis__story-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.driver-analysis__card {
+  padding: 10px 12px;
+}
+
+.driver-analysis__kicker {
+  margin: 0 0 6px;
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--theme-text-secondary, #9aa8bc);
+}
+
+.driver-analysis__muted {
+  margin: 4px 0 0;
+  color: var(--theme-text-secondary, #9aa8bc);
+  font-size: 0.8rem;
+}
+
+.driver-analysis__steps {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.84rem;
+}
+
+.driver-analysis__list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.driver-analysis__list--compact {
+  gap: 4px;
+  font-size: 0.78rem;
+}
+
+.driver-analysis__drivers {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--theme-border, #3a4558) 70%, transparent);
+  border-radius: 6px;
+}
+
+.driver-analysis__driver-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.driver-analysis__driver-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 140px) 1fr 40px;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.78rem;
+}
+
+.driver-analysis__driver-label {
+  color: var(--theme-fg, #e6ebff);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.driver-analysis__driver-track {
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-border, #3a4558) 55%, transparent);
+  overflow: hidden;
+}
+
+.driver-analysis__driver-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--theme-accent, #5b9fd4);
+}
+
+.driver-analysis__driver-pct {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--theme-text-secondary, #9aa8bc);
+}
+
+.driver-analysis__details {
+  flex: 0 1 auto;
+  max-height: 36%;
+  min-height: 0;
+  overflow: auto;
+}
+
+.driver-analysis__details[hidden] {
+  display: none !important;
+}
+
+.driver-analysis .talia-table {
+  max-height: 14rem;
+  overflow: auto;
+}

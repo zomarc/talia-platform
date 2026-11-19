@@ -2,8 +2,8 @@
  * Port City — container for dwh.Dim_Port_City nearest-port labels.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import PanelDataState from '../../shared/PanelDataState';
 import PortCityPresenter from './PortCityPresenter';
 
@@ -55,6 +55,11 @@ const PortCityContainer = ({ panelInstanceId, panelComponentId }) => {
   const [page, setPage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadRef = useRef(null);
 
   const filtersFor = useCallback((extra = {}) => {
     const filters = {
@@ -72,13 +77,17 @@ const PortCityContainer = ({ panelInstanceId, panelComponentId }) => {
   }, [countryCode, distanceBand, portKind, region, search]);
 
   const load = useCallback(async () => {
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const rows = [];
       let summary = null;
       for (let offset = 0; offset < 200000; offset += PAGE_SIZE) {
-        const data = await trackedFetchGraphql({
+        const data = await fetchGraphql({
           query: PAGE_QUERY,
           variables: { filters: filtersFor({ limit: PAGE_SIZE, offset }) },
           component: 'PortCity',
@@ -95,11 +104,19 @@ const PortCityContainer = ({ panelInstanceId, panelComponentId }) => {
       }
       setPage(summary ? { ...summary, rows } : null);
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setError(err?.message || 'Failed to load port cities');
     } finally {
       setLoading(false);
     }
-  }, [filtersFor]);
+  }, [fetchGraphql, filtersFor, shouldSkipRefresh]);
+
+  loadRef.current = load;
+
+  useEffect(() => {
+    onResumeFetch(() => { loadRef.current?.(); });
+    return () => onResumeFetch(null);
+  }, [onResumeFetch]);
 
   useEffect(() => {
     const timer = setTimeout(load, 250);
@@ -112,7 +129,7 @@ const PortCityContainer = ({ panelInstanceId, panelComponentId }) => {
     <PanelDataState
       loading={loading && rows.length === 0}
       error={error}
-      empty={loading && rows.length === 0}
+      empty={!loading && rows.length === 0}
       loadingMessage="Loading port locations..."
     >
       <PortCityPresenter

@@ -23,6 +23,8 @@ import {
 import { useComponentOptions } from "../../hooks/useComponentOptions";
 import { resolveChoiceLabel } from "../../lib/componentOptionsCatalog";
 import reportRegistry from "../focus-panels/registry";
+import { togglePanelPause } from "../../lib/panelPause";
+import { isArcadeGamePanelComponent } from "../shared/games/arcadeGamePanelIds";
 
 const SIDE_EXPAND_DECISION_TIMEOUT_MS = 3000;
 
@@ -661,14 +663,30 @@ const TaliaDockviewTab = ({
       {isPaused && (
         <span
           className="talia-dv-tab__active-indicator talia-dv-tab__active-indicator--paused"
-          title="Panel paused (press P to resume)"
-          aria-label="Panel paused (press P to resume)"
+          title="Panel paused (press P or Play to resume)"
+          aria-label="Panel paused (press P or Play to resume)"
         >
-          =
+          ❚❚
         </span>
       )}
       {isPrimaryActive && (
       <div className="talia-dv-tab__actions">
+            {!isArcadeGamePanelComponent(panelComponent) && (
+              <button
+                type="button"
+                className={`talia-dv-tab__button talia-dv-tab__button--pause${isPaused ? ' talia-dv-tab__button--pause-active' : ''}`}
+                title={isPaused ? 'Resume panel refreshes (P)' : 'Pause panel refreshes (P)'}
+                aria-label={isPaused ? 'Resume panel refreshes' : 'Pause panel refreshes'}
+                aria-pressed={isPaused}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  togglePanelPause(panelId, panelComponent);
+                }}
+                onDoubleClick={(event) => event.stopPropagation()}
+              >
+                {isPaused ? '▶' : '❚❚'}
+              </button>
+            )}
             {isReportTab && hasOptions && (
               <div className="talia-dv-tab__export">
                 <button

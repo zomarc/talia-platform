@@ -2,9 +2,10 @@
  * Hooks for booking profile (dimensional REAL + optional YoY + budget).
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import bookingProfileService from '../../services/data/bookingProfileService';
 import { REPORT_REFRESH_EVENT } from '../../components/dockview/eventConstants';
+import usePanelRefreshGate from '../usePanelRefreshGate';
 import useReportPanelLoading from '../useReportPanelLoading';
 
 /**
@@ -25,10 +26,13 @@ export const useBookingProfileDimensional = (sailCode, options = {}) => {
   const [budget, setBudget] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const fetchDataRef = useRef(null);
+  const { shouldSkipRefresh, onResume } = usePanelRefreshGate(panelInstanceId, panelComponentId);
 
   useReportPanelLoading(panelInstanceId, panelComponentId, loading);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (shouldSkipRefresh()) return;
     if (!sailCode) {
       setLoading(false);
       setData(null);
@@ -75,11 +79,26 @@ export const useBookingProfileDimensional = (sailCode, options = {}) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    breakdown,
+    budgetBreakdown,
+    includeBudget,
+    includeComparison,
+    previousYearSailCode,
+    sailCode,
+    shouldSkipRefresh,
+  ]);
+
+  fetchDataRef.current = fetchData;
+
+  useEffect(() => {
+    const unsubscribe = onResume(() => { fetchDataRef.current?.(); });
+    return typeof unsubscribe === 'function' ? unsubscribe : undefined;
+  }, [onResume]);
 
   useEffect(() => {
     fetchData();
-  }, [sailCode, breakdown, includeComparison, previousYearSailCode, includeBudget, budgetBreakdown]);
+  }, [fetchData]);
 
   return { data, budget, loading, error, refetch: fetchData };
 };
@@ -98,10 +117,13 @@ export const useReservationBookingCurve = (sailCode, options = {}) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const fetchDataRef = useRef(null);
+  const { shouldSkipRefresh, onResume } = usePanelRefreshGate(panelInstanceId, panelComponentId);
 
   useReportPanelLoading(panelInstanceId, panelComponentId, loading);
 
   const fetchData = useCallback(async () => {
+    if (shouldSkipRefresh()) return;
     if (!sailCode) {
       setLoading(false);
       setData(null);
@@ -123,7 +145,14 @@ export const useReservationBookingCurve = (sailCode, options = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [sailCode, marketBreakdown, seriesMode, includeCompetitor]);
+  }, [sailCode, marketBreakdown, seriesMode, includeCompetitor, shouldSkipRefresh]);
+
+  fetchDataRef.current = fetchData;
+
+  useEffect(() => {
+    const unsubscribe = onResume(() => { fetchDataRef.current?.(); });
+    return typeof unsubscribe === 'function' ? unsubscribe : undefined;
+  }, [onResume]);
 
   useEffect(() => {
     fetchData();
@@ -139,7 +168,7 @@ export const useReservationBookingCurve = (sailCode, options = {}) => {
       const isGlobal = scope === 'all' || (!targetPanel && !targetInstance && !targetComponent);
       const isMatch = (
         (panelComponentId && (targetPanel === panelComponentId || targetComponent === panelComponentId))
-        || (panelInstanceId && targetInstance === panelInstanceId)
+        || (panelInstanceId && (targetInstance === panelInstanceId || targetPanel === panelInstanceId))
       );
       if (!isGlobal && !isMatch) return;
       fetchData();

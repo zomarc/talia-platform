@@ -2,7 +2,7 @@
  * Risk register — ADMIN+ container.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { FUNCTIONALITY_MATRIX_ITEMS_QUERY } from '../../../graphql/functionalityMatrixOperations';
 import {
@@ -11,6 +11,7 @@ import {
   UPSERT_RISK_REGISTER_ITEM_MUTATION,
 } from '../../../graphql/projectAdminOperations';
 import { REQUIREMENT_ITEMS_QUERY } from '../../../graphql/taliaRequirementLogOperations';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import {
   VIEW_AXIS_LABELS,
@@ -24,7 +25,6 @@ import {
   downloadJson,
   nextRiskReference,
 } from '../../../lib/riskRegister';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 import { canAccessPrivilegedPanels, normalizeRole } from '../../../utils/roleUtils';
 import PanelDataState from '../../shared/PanelDataState';
 import RiskRegisterPresenter from './RiskRegisterPresenter';
@@ -102,28 +102,37 @@ const RiskRegisterContainer = ({ panelInstanceId = null, panelComponentId = null
   const [form, setForm] = useState(() => emptyRiskForm());
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const { shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadItemsRef = useRef(null);
 
   const display = viewsState?.display === 'heat' ? 'heat' : 'list';
 
   const loadItems = useCallback(async () => {
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const [riskData, logData, matrixData] = await Promise.all([
-        trackedFetchGraphql({
+        fetchGraphql({
           query: RISK_REGISTER_ITEMS_QUERY,
           component: panelComponentId || COMPONENT,
           purpose: 'Load risk register',
           tableName: 'risk_register_item',
         }),
-        trackedFetchGraphql({
+        fetchGraphql({
           query: REQUIREMENT_ITEMS_QUERY,
           variables: { filters: { includeDone: true, limit: 2000 } },
           component: panelComponentId || COMPONENT,
           purpose: 'Load requirements for risk links',
           tableName: 'talia_requirement_item',
         }),
-        trackedFetchGraphql({
+        fetchGraphql({
           query: FUNCTIONALITY_MATRIX_ITEMS_QUERY,
           component: panelComponentId || COMPONENT,
           purpose: 'Load matrix cells for risk links',
@@ -142,12 +151,20 @@ const RiskRegisterContainer = ({ panelInstanceId = null, panelComponentId = null
         })),
       });
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setError(err?.message || String(err));
       setItems([]);
     } finally {
       setLoading(false);
     }
-  }, [panelComponentId]);
+  }, [fetchGraphql, panelComponentId, shouldSkipRefresh]);
+
+  loadItemsRef.current = loadItems;
+
+  useEffect(() => {
+    onResumeFetch(() => { if (allowed) loadItemsRef.current?.(); });
+    return () => onResumeFetch(null);
+  }, [allowed, onResumeFetch]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -208,7 +225,7 @@ const RiskRegisterContainer = ({ panelInstanceId = null, panelComponentId = null
           targetId: link.targetId,
         })),
       };
-      const data = await trackedFetchGraphql({
+      const data = await fetchGraphql({
         query: UPSERT_RISK_REGISTER_ITEM_MUTATION,
         variables: { input },
         component: panelComponentId || COMPONENT,
@@ -221,6 +238,7 @@ const RiskRegisterContainer = ({ panelInstanceId = null, panelComponentId = null
       setMessage('Saved');
       await loadItems();
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);
@@ -233,7 +251,7 @@ const RiskRegisterContainer = ({ panelInstanceId = null, panelComponentId = null
     setBusy(true);
     setMessage(null);
     try {
-      await trackedFetchGraphql({
+      await fetchGraphql({
         query: DELETE_RISK_REGISTER_ITEM_MUTATION,
         variables: { id: selected.id },
         component: panelComponentId || COMPONENT,
@@ -245,6 +263,7 @@ const RiskRegisterContainer = ({ panelInstanceId = null, panelComponentId = null
       setForm(emptyRiskForm());
       await loadItems();
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);

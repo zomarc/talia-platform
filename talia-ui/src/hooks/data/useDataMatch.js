@@ -4,9 +4,10 @@
  * unless explicitly overridden by local Data Match filters.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { trackedFetchGraphql } from '../../services/data/trackedGraphql';
 import { REPORT_REFRESH_EVENT } from '../../components/dockview/eventConstants';
+import usePanelRefreshGate from '../usePanelRefreshGate';
 import useReportPanelLoading from '../useReportPanelLoading';
 
 const GRAPHQL_URL = '/api/graphql';
@@ -54,6 +55,8 @@ export const useDataMatch = (filters = {}, options = {}) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [globalCriteria, setGlobalCriteria] = useState(() => getGlobalCriteriaSnapshot());
+  const fetchDataRef = useRef(null);
+  const { shouldSkipRefresh, onResume } = usePanelRefreshGate(panelInstanceId, panelComponentId);
 
   const effectiveFilters = useMemo(
     () => getCleanFilters(filters, globalCriteria),
@@ -67,6 +70,7 @@ export const useDataMatch = (filters = {}, options = {}) => {
   useReportPanelLoading(panelInstanceId, panelComponentId, loading);
 
   const fetchData = useCallback(async () => {
+    if (shouldSkipRefresh()) return;
     setLoading(true);
     setError(null);
     try {
@@ -107,7 +111,14 @@ export const useDataMatch = (filters = {}, options = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [effectiveFilters]);
+  }, [effectiveFilters, shouldSkipRefresh]);
+
+  fetchDataRef.current = fetchData;
+
+  useEffect(() => {
+    const unsubscribe = onResume(() => { fetchDataRef.current?.(); });
+    return typeof unsubscribe === 'function' ? unsubscribe : undefined;
+  }, [onResume]);
 
   useEffect(() => {
     fetchData();
@@ -115,11 +126,12 @@ export const useDataMatch = (filters = {}, options = {}) => {
 
   useEffect(() => {
     const handleGlobalCriteriaChange = () => {
+      if (shouldSkipRefresh()) return;
       setGlobalCriteria(getGlobalCriteriaSnapshot());
     };
     window.addEventListener(DASHBOARD_GLOBAL_CRITERIA_EVENT, handleGlobalCriteriaChange);
     return () => window.removeEventListener(DASHBOARD_GLOBAL_CRITERIA_EVENT, handleGlobalCriteriaChange);
-  }, []);
+  }, [shouldSkipRefresh]);
 
   useEffect(() => {
     const handleRefresh = (event) => {
@@ -131,7 +143,7 @@ export const useDataMatch = (filters = {}, options = {}) => {
       const isGlobal = scope === 'all' || (!targetPanel && !targetInstance && !targetComponent);
       const isMatch = (
         (panelComponentId && (targetPanel === panelComponentId || targetComponent === panelComponentId)) ||
-        (panelInstanceId && targetInstance === panelInstanceId)
+        (panelInstanceId && (targetInstance === panelInstanceId || targetPanel === panelInstanceId))
       );
       if (!isGlobal && !isMatch) return;
       setGlobalCriteria(getGlobalCriteriaSnapshot());

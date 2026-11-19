@@ -54,7 +54,7 @@ import {
 } from '../../../lib/dataLineageView';
 import fieldLabels from '../../../lib/tabulatorColumnLabelDictionary';
 import tabulatorFieldUsageCatalog from '../../../lib/tabulatorFieldUsageCatalog';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import { canAccessPrivilegedPanels, normalizeRole } from '../../../utils/roleUtils';
 import PanelDataState from '../../shared/PanelDataState';
 import componentRegistry from '../registry';
@@ -177,6 +177,11 @@ const DataLineageContainer = ({ panelInstanceId = null, panelComponentId = null 
   const [userEmails, setUserEmails] = useState([]);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState(null);
+  const { shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadUsageRef = useRef(null);
   const [keySaving, setKeySaving] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
 
@@ -212,11 +217,15 @@ const DataLineageContainer = ({ panelInstanceId = null, panelComponentId = null 
 
   const loadUsage = useCallback(async () => {
     if (!allowed) return;
+    if (shouldSkipRefresh()) {
+      setUsageLoading(false);
+      return;
+    }
     setUsageLoading(true);
     setUsageError(null);
     try {
       const sinceMinutes = sinceMinutesForRecency(recency);
-      const data = await trackedFetchGraphql({
+      const data = await fetchGraphql({
         query: USAGE_QUERY,
         variables: {
           sinceMinutes,
@@ -238,6 +247,7 @@ const DataLineageContainer = ({ panelInstanceId = null, panelComponentId = null 
         .sort((a, b) => a.localeCompare(b));
       setUserEmails(emails);
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setUsageError(err?.message || String(err));
       setUsageRows([]);
       setSuggestedUsageRows([]);
@@ -245,7 +255,14 @@ const DataLineageContainer = ({ panelInstanceId = null, panelComponentId = null 
     } finally {
       setUsageLoading(false);
     }
-  }, [allowed, recency, userFilter, roleFilter, panelInstanceId, panelComponentId]);
+  }, [allowed, fetchGraphql, recency, userFilter, roleFilter, shouldSkipRefresh]);
+
+  loadUsageRef.current = loadUsage;
+
+  useEffect(() => {
+    onResumeFetch(() => { loadUsageRef.current?.(); });
+    return () => onResumeFetch(null);
+  }, [onResumeFetch]);
 
   useEffect(() => {
     loadUsage();
@@ -261,7 +278,7 @@ const DataLineageContainer = ({ panelInstanceId = null, panelComponentId = null 
     if (!key || keySaving) return;
     setKeySaving(true);
     try {
-      const data = await trackedFetchGraphql({
+      const data = await fetchGraphql({
         query: SET_KEY_MUTATION,
         variables: { panelComponent: key, isKey: Boolean(isKey) },
         component: 'DataLineage',
@@ -276,11 +293,12 @@ const DataLineageContainer = ({ panelInstanceId = null, panelComponentId = null 
         });
       }
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setUsageError(err?.message || String(err));
     } finally {
       setKeySaving(false);
     }
-  }, [keySaving]);
+  }, [fetchGraphql, keySaving]);
 
   useEffect(() => {
     const onRefresh = (event) => {

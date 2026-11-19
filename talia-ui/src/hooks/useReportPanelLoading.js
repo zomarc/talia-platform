@@ -1,24 +1,33 @@
 import { useId, useLayoutEffect } from 'react';
+import { usePanelShell } from '../contexts/PanelShellContext';
+import { isPanelPaused } from '../lib/panelPause';
 import { syncPanelLoadingSource } from '../services/panelLoadingState';
 
 /**
  * Publish a panel's in-flight loading state to the Dockview tab + ReportShell.
  * Pass the raw fetch busy flag (not `loading && !data`) so refreshes that keep
  * prior content still show the tab spinner / shell overlay.
- * Safe to call from multiple hooks in the same panel (merged by source id).
+ *
+ * Framework: while paused, never publish loading (no wash / tab spinner).
  */
 const useReportPanelLoading = (panelInstanceId, panelComponentId, loading) => {
   const sourceId = useId();
+  const shell = usePanelShell();
+  const instanceId = panelInstanceId || shell?.panelInstanceId || null;
+  const componentId = panelComponentId || shell?.panelComponentId || null;
+  const paused = shell?.isPaused === true
+    || isPanelPaused(instanceId, componentId) === true;
+  const effectiveLoading = paused ? false : loading === true;
 
   useLayoutEffect(() => {
-    if (!panelInstanceId && !panelComponentId) {
+    if (!instanceId && !componentId) {
       return undefined;
     }
-    syncPanelLoadingSource(panelInstanceId, panelComponentId, sourceId, loading === true);
+    syncPanelLoadingSource(instanceId, componentId, sourceId, effectiveLoading);
     return () => {
-      syncPanelLoadingSource(panelInstanceId, panelComponentId, sourceId, false);
+      syncPanelLoadingSource(instanceId, componentId, sourceId, false);
     };
-  }, [panelInstanceId, panelComponentId, loading, sourceId]);
+  }, [instanceId, componentId, effectiveLoading, sourceId]);
 };
 
 export default useReportPanelLoading;

@@ -3,7 +3,7 @@
  * Table filters are applied client-side so facet dropdowns always list the full catalog.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import {
   DELETE_REQUIREMENT_ITEM_MUTATION,
@@ -12,6 +12,7 @@ import {
   UPSERT_REQUIREMENT_ITEM_MUTATION,
   UPSERT_REQUIREMENT_ITEMS_MUTATION,
 } from '../../../graphql/taliaRequirementLogOperations';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import {
   buildRequirementInputsFromPack,
   buildRequirementsLogExportPack,
@@ -19,7 +20,6 @@ import {
   parseRequirementsLogExportPack,
   parseRequirementsLogPackJsonFileText,
 } from '../../../lib/taliaRequirementsLogExportPack';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 import { canAccessPrivilegedPanels, normalizeRole } from '../../../utils/roleUtils';
 import PanelDataState from '../../shared/PanelDataState';
 import RequirementsLogPresenter, { EMPTY_REQUIREMENT_FORM } from './RequirementsLogPresenter';
@@ -62,14 +62,23 @@ const RequirementsLogContainer = ({ panelInstanceId, panelComponentId }) => {
   const [message, setMessage] = useState(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(EMPTY_REQUIREMENT_FORM);
+  const { shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadItemsRef = useRef(null);
 
   const loadItems = useCallback(async () => {
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       // Always load the full board (done included) so facet dropdowns stay complete.
       // Visibility of done/cancelled is applied client-side with the other filters.
-      const data = await trackedFetchGraphql({
+      const data = await fetchGraphql({
         query: REQUIREMENT_ITEMS_QUERY,
         variables: { filters: { includeDone: true, limit: 2000 } },
         component: panelComponentId || COMPONENT,
@@ -78,12 +87,20 @@ const RequirementsLogContainer = ({ panelInstanceId, panelComponentId }) => {
       });
       setAllItems(Array.isArray(data?.requirementItems) ? data.requirementItems : []);
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setError(err?.message || String(err));
       setAllItems([]);
     } finally {
       setLoading(false);
     }
-  }, [panelComponentId]);
+  }, [fetchGraphql, panelComponentId, shouldSkipRefresh]);
+
+  loadItemsRef.current = loadItems;
+
+  useEffect(() => {
+    onResumeFetch(() => { if (allowed) loadItemsRef.current?.(); });
+    return () => onResumeFetch(null);
+  }, [allowed, onResumeFetch]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -129,7 +146,7 @@ const RequirementsLogContainer = ({ panelInstanceId, panelComponentId }) => {
     setBusy(true);
     setMessage(null);
     try {
-      const data = await trackedFetchGraphql({
+      const data = await fetchGraphql({
         query: UPSERT_REQUIREMENT_ITEM_MUTATION,
         variables: { input },
         component: panelComponentId || COMPONENT,
@@ -140,12 +157,13 @@ const RequirementsLogContainer = ({ panelInstanceId, panelComponentId }) => {
       await loadItems();
       return data?.upsertRequirementItem || null;
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return null;
       setMessage(err?.message || String(err));
       throw err;
     } finally {
       setBusy(false);
     }
-  }, [loadItems, panelComponentId]);
+  }, [fetchGraphql, loadItems, panelComponentId]);
 
   const cycleStatus = useCallback(async (item) => {
     if (!item?.id) return;
@@ -153,7 +171,7 @@ const RequirementsLogContainer = ({ panelInstanceId, panelComponentId }) => {
     setBusy(true);
     setMessage(null);
     try {
-      await trackedFetchGraphql({
+      await fetchGraphql({
         query: SET_REQUIREMENT_ITEM_STATUS_MUTATION,
         variables: { id: item.id, status },
         component: panelComponentId || COMPONENT,
@@ -162,11 +180,12 @@ const RequirementsLogContainer = ({ panelInstanceId, panelComponentId }) => {
       });
       await loadItems();
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);
     }
-  }, [loadItems, panelComponentId]);
+  }, [fetchGraphql, loadItems, panelComponentId]);
 
   const deleteItem = useCallback(async (id) => {
     if (!id) return;
@@ -174,7 +193,7 @@ const RequirementsLogContainer = ({ panelInstanceId, panelComponentId }) => {
     setBusy(true);
     setMessage(null);
     try {
-      await trackedFetchGraphql({
+      await fetchGraphql({
         query: DELETE_REQUIREMENT_ITEM_MUTATION,
         variables: { id },
         component: panelComponentId || COMPONENT,
@@ -185,11 +204,12 @@ const RequirementsLogContainer = ({ panelInstanceId, panelComponentId }) => {
       setForm(EMPTY_REQUIREMENT_FORM);
       await loadItems();
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);
     }
-  }, [loadItems, panelComponentId]);
+  }, [fetchGraphql, loadItems, panelComponentId]);
 
   const exportPack = useCallback(() => {
     const pack = buildRequirementsLogExportPack(items);
@@ -211,7 +231,7 @@ const RequirementsLogContainer = ({ panelInstanceId, panelComponentId }) => {
         setMessage('Pack contained no items');
         return;
       }
-      await trackedFetchGraphql({
+      await fetchGraphql({
         query: UPSERT_REQUIREMENT_ITEMS_MUTATION,
         variables: { inputs },
         component: panelComponentId || COMPONENT,
@@ -221,11 +241,12 @@ const RequirementsLogContainer = ({ panelInstanceId, panelComponentId }) => {
       setMessage(`Imported ${inputs.length} item(s) (${mode})`);
       await loadItems();
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);
     }
-  }, [loadItems, panelComponentId]);
+  }, [fetchGraphql, loadItems, panelComponentId]);
 
   if (!allowed) {
     return (

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { canAccessPrivilegedPanels, normalizeRole } from '../../../utils/roleUtils';
 import { getTabulatorOptions, initTabulator } from '../../../lib/tabulatorConfig';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import usePanelDetailsVisibility from '../../../hooks/usePanelDetailsVisibility';
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import {
@@ -147,6 +147,11 @@ const ColumnTerminologyPanel = ({ panelInstanceId, panelComponentId }) => {
   const [saveMessage, setSaveMessage] = useState('');
   const [saveError, setSaveError] = useState('');
   const [selectedField, setSelectedField] = useState('');
+  const { shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadDefinitionsRef = useRef(null);
   const [showDetails] = usePanelDetailsVisibility({
     panelInstanceId,
     panelComponentId,
@@ -177,10 +182,14 @@ const ColumnTerminologyPanel = ({ panelInstanceId, panelComponentId }) => {
   };
 
   const loadDefinitions = async () => {
+    if (shouldSkipRefresh()) {
+      setLoadingDefinitions(false);
+      return;
+    }
     setLoadingDefinitions(true);
     setSaveError('');
     try {
-      const payload = await trackedFetchGraphql({
+      const payload = await fetchGraphql({
         query: COLUMN_TERMINOLOGY_DEFINITIONS_QUERY,
         component: panelComponentId || 'ColumnTerminologyPanel',
         purpose: 'Load shared column terminology definitions',
@@ -192,11 +201,14 @@ const ColumnTerminologyPanel = ({ panelInstanceId, panelComponentId }) => {
       setDirtyFields(new Set());
       setGlobalTabulatorLabelOverrides(definitions);
     } catch (error) {
+      if (error?.code === 'PANEL_PAUSED') return;
       setSaveError(error?.message || String(error));
     } finally {
       setLoadingDefinitions(false);
     }
   };
+
+  loadDefinitionsRef.current = loadDefinitions;
 
   const toDefinitionPayload = (row) => ({
     field: String(row?.field || '').trim(),
@@ -226,7 +238,7 @@ const ColumnTerminologyPanel = ({ panelInstanceId, panelComponentId }) => {
         window.setTimeout(() => setSaveMessage(''), 2000);
         return;
       }
-      const payload = await trackedFetchGraphql({
+      const payload = await fetchGraphql({
         query: SAVE_COLUMN_TERMINOLOGY_DEFINITIONS_MUTATION,
         variables: { definitions },
         component: panelComponentId || 'ColumnTerminologyPanel',
@@ -248,6 +260,7 @@ const ColumnTerminologyPanel = ({ panelInstanceId, panelComponentId }) => {
       );
       window.setTimeout(() => setSaveMessage(''), 2000);
     } catch (error) {
+      if (error?.code === 'PANEL_PAUSED') return;
       setSaveError(error?.message || String(error));
     } finally {
       setSavingDefinitions(false);
@@ -291,6 +304,11 @@ const ColumnTerminologyPanel = ({ panelInstanceId, panelComponentId }) => {
       tooltip: (_event, cell) => formatCompactDateTime(cell.getValue(), ''),
     },
   ]), []);
+
+  useEffect(() => {
+    onResumeFetch(() => { if (allowed) loadDefinitionsRef.current?.(); });
+    return () => onResumeFetch(null);
+  }, [allowed, onResumeFetch]);
 
   useEffect(() => {
     if (!allowed) return;

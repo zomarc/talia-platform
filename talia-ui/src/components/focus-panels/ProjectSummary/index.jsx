@@ -2,9 +2,9 @@
  * Project Summary container — published overview, plan, and open risks.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import { VIEW_PROVENANCE } from '../../../lib/componentOptionsCatalog';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import { buildManagementBrief } from '../../../lib/projectSummaryBrief';
@@ -75,18 +75,27 @@ const ProjectSummaryContainer = ({ panelInstanceId, panelComponentId }) => {
   const [brief, setBrief] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadRef = useRef(null);
 
   const load = useCallback(async () => {
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
-    const summaryRequest = trackedFetchGraphql({
+    const summaryRequest = fetchGraphql({
       query: PROJECT_SUMMARY_QUERY,
       component: panelComponentId || 'project-summary',
       purpose: 'Load latest project summary',
       tableName: 'project_summary',
     });
     const briefRequest = allowed
-      ? trackedFetchGraphql({
+      ? fetchGraphql({
         query: PROJECT_SUMMARY_BRIEF_QUERY,
         component: panelComponentId || 'project-summary',
         purpose: 'Load plan and risks for the project summary',
@@ -95,6 +104,12 @@ const ProjectSummaryContainer = ({ panelInstanceId, panelComponentId }) => {
       : Promise.resolve(null);
 
     const [summaryResult, briefResult] = await Promise.allSettled([summaryRequest, briefRequest]);
+    const summaryPaused = summaryResult.status === 'rejected' && summaryResult.reason?.code === 'PANEL_PAUSED';
+    const briefPaused = briefResult.status === 'rejected' && briefResult.reason?.code === 'PANEL_PAUSED';
+    if (summaryPaused || briefPaused) {
+      setLoading(false);
+      return;
+    }
     if (summaryResult.status === 'fulfilled') {
       setSummary(summaryResult.value?.projectSummaryLatest || null);
     } else {
@@ -120,7 +135,14 @@ const ProjectSummaryContainer = ({ panelInstanceId, panelComponentId }) => {
       setError(summaryResult.reason);
     }
     setLoading(false);
-  }, [allowed, panelComponentId]);
+  }, [allowed, fetchGraphql, panelComponentId, shouldSkipRefresh]);
+
+  loadRef.current = load;
+
+  useEffect(() => {
+    onResumeFetch(() => { loadRef.current?.(); });
+    return () => onResumeFetch(null);
+  }, [onResumeFetch]);
 
   useEffect(() => {
     load();

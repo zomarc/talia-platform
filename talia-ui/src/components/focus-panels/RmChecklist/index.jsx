@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { emitSailSelect, SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import { setInventoryItems } from '../../../services/data/inventoryReferenceService';
 import useGlobalDateWindow from '../../../hooks/useGlobalDateWindow';
 import useGlobalDepartureMonth from '../../../hooks/useGlobalDepartureMonth';
@@ -115,6 +115,11 @@ const RmChecklistContainer = ({ panelInstanceId, panelComponentId }) => {
   const [error, setError] = useState(null);
   const [runMessage, setRunMessage] = useState(null);
   const [selectedFindingId, setSelectedFindingId] = useState(null);
+  const { shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadFindingsRef = useRef(null);
   const { dateFrom, dateTo } = useGlobalDateWindow();
   const departureMonth = useGlobalDepartureMonth();
   const shipCode = useGlobalShipFilter();
@@ -191,10 +196,14 @@ const RmChecklistContainer = ({ panelInstanceId, panelComponentId }) => {
   );
 
   const loadFindings = useCallback(async () => {
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const data = await trackedFetchGraphql({
+      const data = await fetchGraphql({
         query: FINDINGS_QUERY,
         variables: {
           filters: {
@@ -208,11 +217,19 @@ const RmChecklistContainer = ({ panelInstanceId, panelComponentId }) => {
       });
       setRows(data?.rmFindings || []);
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setError(err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchGraphql, shouldSkipRefresh]);
+
+  loadFindingsRef.current = loadFindings;
+
+  useEffect(() => {
+    onResumeFetch(() => { loadFindingsRef.current?.(); });
+    return () => onResumeFetch(null);
+  }, [onResumeFetch]);
 
   useEffect(() => {
     const onSelect = (event) => {
@@ -307,15 +324,20 @@ const RmChecklistContainer = ({ panelInstanceId, panelComponentId }) => {
   }, [mappedRows, selectedFindingId, visibleRows]);
 
   const updateStatus = useCallback(async (findingId, status) => {
-    await trackedFetchGraphql({
-      query: STATUS_MUTATION,
-      variables: { findingId, status },
-      component: 'RmChecklist',
-      purpose: 'Update Finding status',
-      tableName: 'rm_findings',
-    });
-    await loadFindings();
-  }, [loadFindings]);
+    try {
+      await fetchGraphql({
+        query: STATUS_MUTATION,
+        variables: { findingId, status },
+        component: 'RmChecklist',
+        purpose: 'Update Finding status',
+        tableName: 'rm_findings',
+      });
+      await loadFindings();
+    } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
+      throw err;
+    }
+  }, [fetchGraphql, loadFindings]);
 
   const runSailCodes = useMemo(() => {
     if (scope === CHECKLIST_SCOPE_THIS && selectedSailCode) {
@@ -329,23 +351,28 @@ const RmChecklistContainer = ({ panelInstanceId, panelComponentId }) => {
 
   const runRegulator = useCallback(async () => {
     setRunMessage(null);
-    const data = await trackedFetchGraphql({
-      query: RUN_MUTATION,
-      variables: {
-        input: runSailCodes?.length
-          ? { sailCodes: runSailCodes, limit: runSailCodes.length }
-          : { limit: 40 },
-      },
-      component: 'RmChecklist',
-      purpose: 'Run Regulator RM Agent',
-      tableName: 'rm_findings',
-    });
-    const result = data?.runRmAgents;
-    setRunMessage(result?.success
-      ? `${result.message} (${result.findingCount} findings)`
-      : (result?.error || result?.message || 'Run failed'));
-    await loadFindings();
-  }, [loadFindings, runSailCodes]);
+    try {
+      const data = await fetchGraphql({
+        query: RUN_MUTATION,
+        variables: {
+          input: runSailCodes?.length
+            ? { sailCodes: runSailCodes, limit: runSailCodes.length }
+            : { limit: 40 },
+        },
+        component: 'RmChecklist',
+        purpose: 'Run Regulator RM Agent',
+        tableName: 'rm_findings',
+      });
+      const result = data?.runRmAgents;
+      setRunMessage(result?.success
+        ? `${result.message} (${result.findingCount} findings)`
+        : (result?.error || result?.message || 'Run failed'));
+      await loadFindings();
+    } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
+      setRunMessage(err?.message || String(err));
+    }
+  }, [fetchGraphql, loadFindings, runSailCodes]);
 
   return (
     <PanelDataState

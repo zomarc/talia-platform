@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import InventoryMemoPresenter from './InventoryMemoPresenter';
 import PanelDataState from '../../shared/PanelDataState';
 import { MEMO_CREATE_EVENT, SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 
 const claimedMemoCreates = new Map();
 
@@ -24,7 +24,7 @@ const claimMemoCreate = (key) => {
   return true;
 };
 
-const fetchInventoryItems = async (selection) => {
+const fetchInventoryItems = async (fetchGraphql, selection) => {
   const query = `
     query GetInventoryItems($filters: InventoryItemFilters) {
       inventoryItems(filters: $filters) {
@@ -44,7 +44,7 @@ const fetchInventoryItems = async (selection) => {
     shipCode: selection.shipCode || undefined,
     limit: 10
   };
-  const data = await trackedFetchGraphql({
+  const data = await fetchGraphql({
     query,
     variables: { filters },
     component: 'Inventory Memo',
@@ -54,7 +54,7 @@ const fetchInventoryItems = async (selection) => {
   return data?.inventoryItems || [];
 };
 
-const fetchMemos = async (inventoryItemId) => {
+const fetchMemos = async (fetchGraphql, inventoryItemId) => {
   const query = `
     query GetInventoryMemos($inventoryItemId: ID!) {
       inventoryMemos(inventoryItemId: $inventoryItemId) {
@@ -67,7 +67,7 @@ const fetchMemos = async (inventoryItemId) => {
       }
     }
   `;
-  const data = await trackedFetchGraphql({
+  const data = await fetchGraphql({
     query,
     variables: { inventoryItemId },
     component: 'Inventory Memo',
@@ -77,7 +77,7 @@ const fetchMemos = async (inventoryItemId) => {
   return data?.inventoryMemos || [];
 };
 
-const addMemo = async ({
+const addMemo = async (fetchGraphql, {
   inventoryItemId,
   selection,
   mmsi,
@@ -111,7 +111,7 @@ const addMemo = async ({
     memoText,
     memoType
   };
-  const data = await trackedFetchGraphql({
+  const data = await fetchGraphql({
     query: mutation,
     variables: { input },
     component: 'Inventory Memo',
@@ -131,29 +131,48 @@ const InventoryMemoContainer = ({ panelInstanceId, panelComponentId }) => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const { shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadDataRef = useRef(null);
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
 
-  const loadData = async (nextSelection) => {
+  const loadData = useCallback(async (nextSelection) => {
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const items = await fetchInventoryItems(nextSelection);
+      const items = await fetchInventoryItems(fetchGraphql, nextSelection);
       const selectedItem = items[0] || null;
       setInventoryItem(selectedItem);
       setMmsi(selectedItem?.mmsi || '');
       if (selectedItem?.id) {
-        const rows = await fetchMemos(String(selectedItem.id));
+        const rows = await fetchMemos(fetchGraphql, String(selectedItem.id));
         setMemos(rows);
       } else {
         setMemos([]);
       }
     } catch (e) {
+      if (e?.code === 'PANEL_PAUSED') return;
       setError(e);
       setInventoryItem(null);
       setMemos([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchGraphql, shouldSkipRefresh]);
+
+  loadDataRef.current = loadData;
+
+  useEffect(() => {
+    onResumeFetch(() => { loadDataRef.current?.(selectionRef.current); });
+    return () => onResumeFetch(null);
+  }, [onResumeFetch]);
 
   useEffect(() => {
     const onSelect = (event) => {
@@ -180,7 +199,7 @@ const InventoryMemoContainer = ({ panelInstanceId, panelComponentId }) => {
       window.removeEventListener(SAIL_SELECT_EVENT, onSelect);
       window.removeEventListener(SAIL_CLEAR_EVENT, onClear);
     };
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
     const onCreate = async (event) => {
@@ -199,10 +218,10 @@ const InventoryMemoContainer = ({ panelInstanceId, panelComponentId }) => {
       try {
         let inventoryItemId = null;
         if (nextSelection.sailCode) {
-          const items = await fetchInventoryItems(nextSelection);
+          const items = await fetchInventoryItems(fetchGraphql, nextSelection);
           inventoryItemId = items[0]?.id || null;
         }
-        await addMemo({
+        await addMemo(fetchGraphql, {
           inventoryItemId,
           selection: nextSelection,
           mmsi: detail.mmsi || '',
@@ -215,6 +234,7 @@ const InventoryMemoContainer = ({ panelInstanceId, panelComponentId }) => {
         if (nextSelection.sailCode) setSelection(nextSelection);
         await loadData(nextSelection.sailCode ? nextSelection : { sailCode: '', shipCode: '', shipName: '' });
       } catch (e) {
+        if (e?.code === 'PANEL_PAUSED') return;
         setError(e);
       } finally {
         setSaving(false);
@@ -222,7 +242,7 @@ const InventoryMemoContainer = ({ panelInstanceId, panelComponentId }) => {
     };
     window.addEventListener(MEMO_CREATE_EVENT, onCreate);
     return () => window.removeEventListener(MEMO_CREATE_EVENT, onCreate);
-  }, []);
+  }, [fetchGraphql, loadData]);
 
   const subtitle = useMemo(() => {
     if (selection.sailCode) {
@@ -236,7 +256,7 @@ const InventoryMemoContainer = ({ panelInstanceId, panelComponentId }) => {
     setSaving(true);
     setError(null);
     try {
-      await addMemo({
+      await addMemo(fetchGraphql, {
         inventoryItemId: inventoryItem?.id || null,
         selection,
         mmsi,
@@ -246,6 +266,7 @@ const InventoryMemoContainer = ({ panelInstanceId, panelComponentId }) => {
       setMemoText('');
       await loadData(selection);
     } catch (e) {
+      if (e?.code === 'PANEL_PAUSED') return;
       setError(e);
     } finally {
       setSaving(false);

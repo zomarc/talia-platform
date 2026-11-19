@@ -3,11 +3,12 @@
  * Always keeps the current-sail REAL curve even if model/map queries fail.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import profileCompareService from '../../services/data/profileCompareService';
 import bookingProfileService from '../../services/data/bookingProfileService';
 import inventoryProfileSeriesService from '../../services/data/inventoryProfileSeriesService';
 import { REPORT_REFRESH_EVENT } from '../../components/dockview/eventConstants';
+import usePanelRefreshGate from '../usePanelRefreshGate';
 import useReportPanelLoading from '../useReportPanelLoading';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -183,10 +184,13 @@ export const useProfileCompare = (sailCode, options = {}) => {
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
   const [overlays, setOverlays] = useState([]);
+  const fetchDataRef = useRef(null);
+  const { shouldSkipRefresh, onResume } = usePanelRefreshGate(panelInstanceId, panelComponentId);
 
   useReportPanelLoading(panelInstanceId, panelComponentId, loading || busy);
 
   const fetchData = useCallback(async () => {
+    if (shouldSkipRefresh()) return;
     if (!sailCode) {
       setLoading(false);
       setData(null);
@@ -267,7 +271,14 @@ export const useProfileCompare = (sailCode, options = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [sailCode]);
+  }, [sailCode, shouldSkipRefresh]);
+
+  fetchDataRef.current = fetchData;
+
+  useEffect(() => {
+    const unsubscribe = onResume(() => { fetchDataRef.current?.(); });
+    return typeof unsubscribe === 'function' ? unsubscribe : undefined;
+  }, [onResume]);
 
   useEffect(() => {
     fetchData();

@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import PanelDataState from '../../shared/PanelDataState';
 import ItineraryExtractPresenter from './ItineraryExtractPresenter';
 import { PORT_COORDINATES, resolvePortCoordinate } from '../../shared/maps/portCoordinates';
@@ -227,6 +227,11 @@ const ItineraryExtractContainer = ({ panelInstanceId, panelComponentId }) => {
   const [publicImagePool, setPublicImagePool] = useState([]);
   const [viewScope, setViewScope] = useState(() => window.__taliaViewScope === 'wide' ? 'wide' : 'local');
   const [selectionContext, setSelectionContext] = useState(() => window.lastSailSelectEvent?.detail || null);
+  const { shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadPublicDataRef = useRef(null);
 
   const extractReferenceSailCodeFromEvent = (detail) => (
     detail?.reference_sail_code ||
@@ -261,88 +266,83 @@ const ItineraryExtractContainer = ({ panelInstanceId, panelComponentId }) => {
     return () => window.removeEventListener(DASHBOARD_VIEW_SCOPE_EVENT, handleScopeChange);
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    const loadPublicCatalog = async () => {
-      try {
-        const payload = await trackedFetchGraphql({
-          query: `
-            query GetPublicItineraryCatalog($limit: Int) {
-              publicItineraryCatalog(limit: $limit) {
-                url
-                title
-                description
-                image
-                durationNights
-                slug
-              }
+  const loadPublicData = useCallback(async () => {
+    if (shouldSkipRefresh()) return;
+    try {
+      const payload = await fetchGraphql({
+        query: `
+          query GetPublicItineraryCatalog($limit: Int) {
+            publicItineraryCatalog(limit: $limit) {
+              url
+              title
+              description
+              image
+              durationNights
+              slug
             }
-          `,
-          variables: { limit: 120 },
-          tableName: 'public_itinerary_catalog',
-          component: 'Itinerary Extract',
-          purpose: 'Fetch public itinerary catalog via talia graphql'
-        });
-        if (!active) return;
-        const items = Array.isArray(payload?.publicItineraryCatalog) ? payload.publicItineraryCatalog : [];
-        const normalized = items.map((entry) => ({
-          url: String(entry?.url || '').trim(),
-          title: String(entry?.title || '').trim(),
-          description: String(entry?.description || '').trim(),
-          image: String(entry?.image || '').trim(),
-          durationNights: Number(entry?.durationNights || 0) || extractDurationNightsFromText(entry?.title),
+          }
+        `,
+        variables: { limit: 120 },
+        tableName: 'public_itinerary_catalog',
+        component: 'Itinerary Extract',
+        purpose: 'Fetch public itinerary catalog via talia graphql'
+      });
+      const items = Array.isArray(payload?.publicItineraryCatalog) ? payload.publicItineraryCatalog : [];
+      const normalized = items.map((entry) => ({
+        url: String(entry?.url || '').trim(),
+        title: String(entry?.title || '').trim(),
+        description: String(entry?.description || '').trim(),
+        image: String(entry?.image || '').trim(),
+        durationNights: Number(entry?.durationNights || 0) || extractDurationNightsFromText(entry?.title),
+      }))
+        .filter((entry) => entry.url && entry.title && entry.image);
+      setPublicCatalog(normalized);
+    } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
+      setPublicCatalog([]);
+    }
+    try {
+      const payload = await fetchGraphql({
+        query: `
+          query GetPublicImagePool($limit: Int) {
+            publicImagePool(limit: $limit) {
+              sourcePage
+              sourceLabel
+              imageUrl
+              title
+            }
+          }
+        `,
+        variables: { limit: 20 },
+        tableName: 'public_image_pool',
+        component: 'Itinerary Extract',
+        purpose: 'Fetch public image pool via talia graphql'
+      });
+      const items = Array.isArray(payload?.publicImagePool) ? payload.publicImagePool : [];
+      const normalized = items
+        .map((entry) => ({
+          sourcePage: String(entry?.sourcePage || '').trim(),
+          sourceLabel: String(entry?.sourceLabel || '').trim(),
+          imageUrl: String(entry?.imageUrl || '').trim(),
         }))
-          .filter((entry) => entry.url && entry.title && entry.image);
-        setPublicCatalog(normalized);
-      } catch {
-        if (active) setPublicCatalog([]);
-      }
-    };
-    loadPublicCatalog();
-    return () => {
-      active = false;
-    };
-  }, []);
+        .filter((entry) => entry.sourcePage && entry.imageUrl);
+      setPublicImagePool(normalized);
+    } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
+      setPublicImagePool([]);
+    }
+  }, [fetchGraphql, shouldSkipRefresh]);
+
+  loadPublicDataRef.current = loadPublicData;
 
   useEffect(() => {
-    let active = true;
-    const loadImagePool = async () => {
-      try {
-        const payload = await trackedFetchGraphql({
-          query: `
-            query GetPublicImagePool($limit: Int) {
-              publicImagePool(limit: $limit) {
-                sourcePage
-                sourceLabel
-                imageUrl
-                title
-              }
-            }
-          `,
-          variables: { limit: 20 },
-          tableName: 'public_image_pool',
-          component: 'Itinerary Extract',
-          purpose: 'Fetch public image pool via talia graphql'
-        });
-        if (!active) return;
-        const items = Array.isArray(payload?.publicImagePool) ? payload.publicImagePool : [];
-        const normalized = items
-          .map((entry) => ({
-            sourcePage: String(entry?.sourcePage || '').trim(),
-            sourceLabel: String(entry?.sourceLabel || '').trim(),
-            imageUrl: String(entry?.imageUrl || '').trim(),
-          }))
-          .filter((entry) => entry.sourcePage && entry.imageUrl);
-        setPublicImagePool(normalized);
-      } catch {
-        if (active) setPublicImagePool([]);
-      }
-    };
-    loadImagePool();
-    return () => {
-      active = false;
-    };
-  }, []);
+    onResumeFetch(() => { loadPublicDataRef.current?.(); });
+    return () => onResumeFetch(null);
+  }, [onResumeFetch]);
+
+  useEffect(() => {
+    loadPublicData();
+  }, [loadPublicData]);
 
   const {
     data: inventoryRows,

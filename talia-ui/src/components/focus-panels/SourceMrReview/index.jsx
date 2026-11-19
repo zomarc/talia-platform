@@ -2,11 +2,12 @@
  * Source MR effectiveness — frozen SW_ETL extract versus Talia MR.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import { useGlobalDateWindow } from '../../../hooks/useGlobalDateWindow';
 import { useGlobalDepartureMonth } from '../../../hooks/useGlobalDepartureMonth';
 import { isShipFilterActive, useGlobalShipFilter } from '../../../hooks/useGlobalShipFilter';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import useReportPanelLoading from '../../../hooks/useReportPanelLoading';
 import { formatCriteriaDateSummary, resolveEffectiveCriteriaDateWindow } from '../../../lib/globalCriteriaDateWindow';
 import {
@@ -20,7 +21,6 @@ import {
   SAIL_SELECT_EVENT,
 } from '../../../lib/eventBus';
 import { setInventoryItems } from '../../../services/data/inventoryReferenceService';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 import PanelDataState from '../../shared/PanelDataState';
 import SourceMrReviewPresenter from './SourceMrReviewPresenter';
 
@@ -153,6 +153,11 @@ const SourceMrReviewContainer = ({ panelInstanceId, panelComponentId }) => {
   const [localTo, setLocalTo] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState(null);
   const [history, setHistory] = useState([]);
+  const { isPaused, shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadReviewRef = useRef(null);
   const globalDates = useGlobalDateWindow();
   const globalMonth = useGlobalDepartureMonth();
   const globalShip = useGlobalShipFilter();
@@ -191,10 +196,14 @@ const SourceMrReviewContainer = ({ panelInstanceId, panelComponentId }) => {
   }, [inventoryRows]);
 
   const loadReview = useCallback(async () => {
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const data = await trackedFetchGraphql({
+      const data = await fetchGraphql({
         query: REVIEW_QUERY,
         variables: { shipCode: queryShip, dateFrom: queryFrom, dateTo: queryTo },
         component: panelComponentId || COMPONENT,
@@ -216,12 +225,20 @@ const SourceMrReviewContainer = ({ panelInstanceId, panelComponentId }) => {
       }
       // When busGroupId differs from candidate, the group-select effect loads history.
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setError(err?.message || 'Failed to load the source MR extract');
       setReview(null);
     } finally {
       setLoading(false);
     }
-  }, [panelComponentId, queryFrom, queryShip, queryTo]);
+  }, [fetchGraphql, panelComponentId, queryFrom, queryShip, queryTo, shouldSkipRefresh]);
+
+  loadReviewRef.current = loadReview;
+
+  useEffect(() => {
+    onResumeFetch(() => { loadReviewRef.current?.(); });
+    return () => onResumeFetch(null);
+  }, [onResumeFetch]);
 
   useEffect(() => {
     loadReview();
@@ -259,12 +276,16 @@ const SourceMrReviewContainer = ({ panelInstanceId, panelComponentId }) => {
       setHistory([]);
       return;
     }
+    if (isPaused) {
+      shouldSkipRefresh();
+      return;
+    }
     if (review?.candidate?.groupId === groupId && review.candidate.history) {
       setHistory(review.candidate.history || []);
       return;
     }
     try {
-      const data = await trackedFetchGraphql({
+      const data = await fetchGraphql({
         query: HISTORY_QUERY,
         variables: { groupId },
         component: panelComponentId || COMPONENT,
@@ -272,10 +293,11 @@ const SourceMrReviewContainer = ({ panelInstanceId, panelComponentId }) => {
         tableName: 'sw_etl_group_header',
       });
       setHistory(data?.sourceMrGroupHistory?.history || []);
-    } catch {
+    } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setHistory([]);
     }
-  }, [panelComponentId, review]);
+  }, [fetchGraphql, isPaused, panelComponentId, review, shouldSkipRefresh]);
 
   const handleSelectGroup = useCallback(async (group, { broadcast = true } = {}) => {
     if (!group?.groupId) return;

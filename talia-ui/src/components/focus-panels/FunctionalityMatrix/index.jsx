@@ -3,7 +3,7 @@
  * Loads matrix cells and the Requirements Log catalog used for assignment.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import {
   ADD_FUNCTIONALITY_MATRIX_NOTE_MUTATION,
@@ -14,6 +14,7 @@ import {
   UPSERT_FUNCTIONALITY_MATRIX_ITEM_MUTATION,
 } from '../../../graphql/functionalityMatrixOperations';
 import { REQUIREMENT_ITEMS_QUERY } from '../../../graphql/taliaRequirementLogOperations';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import { useReportShellOptions } from '../../../hooks/useReportShellOptions';
 import {
   VIEW_AXIS_LABELS,
@@ -27,7 +28,6 @@ import {
   downloadFunctionalityMatrixExport,
   nextReferenceCode,
 } from '../../../lib/functionalityMatrix';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 import { canAccessPrivilegedPanels, normalizeRole } from '../../../utils/roleUtils';
 import PanelDataState from '../../shared/PanelDataState';
 import FunctionalityMatrixPresenter from './FunctionalityMatrixPresenter';
@@ -101,21 +101,30 @@ const FunctionalityMatrixContainer = ({ panelInstanceId = null, panelComponentId
   const [noteDraft, setNoteDraft] = useState('');
   const [elementFilter, setElementFilter] = useState('all');
   const [phaseFilter, setPhaseFilter] = useState('all');
+  const { shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadItemsRef = useRef(null);
 
   const display = viewsState?.display === 'list' ? 'list' : 'grid';
 
   const loadItems = useCallback(async () => {
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const [matrixData, logData] = await Promise.all([
-        trackedFetchGraphql({
+        fetchGraphql({
           query: FUNCTIONALITY_MATRIX_ITEMS_QUERY,
           component: panelComponentId || COMPONENT,
           purpose: 'Load Functionality Matrix',
           tableName: TABLE,
         }),
-        trackedFetchGraphql({
+        fetchGraphql({
           query: REQUIREMENT_ITEMS_QUERY,
           variables: { filters: { includeDone: true, limit: 2000 } },
           component: panelComponentId || COMPONENT,
@@ -126,12 +135,20 @@ const FunctionalityMatrixContainer = ({ panelInstanceId = null, panelComponentId
       setItems(Array.isArray(matrixData?.functionalityMatrixItems) ? matrixData.functionalityMatrixItems : []);
       setLogItems(Array.isArray(logData?.requirementItems) ? logData.requirementItems : []);
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setError(err?.message || String(err));
       setItems([]);
     } finally {
       setLoading(false);
     }
-  }, [panelComponentId]);
+  }, [fetchGraphql, panelComponentId, shouldSkipRefresh]);
+
+  loadItemsRef.current = loadItems;
+
+  useEffect(() => {
+    onResumeFetch(() => { if (allowed) loadItemsRef.current?.(); });
+    return () => onResumeFetch(null);
+  }, [allowed, onResumeFetch]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -209,7 +226,7 @@ const FunctionalityMatrixContainer = ({ panelInstanceId = null, panelComponentId
         phase: form.phase,
       };
       if (!drafting && selectedId) input.id = selectedId;
-      const data = await trackedFetchGraphql({
+      const data = await fetchGraphql({
         query: UPSERT_FUNCTIONALITY_MATRIX_ITEM_MUTATION,
         variables: { input },
         component: panelComponentId || COMPONENT,
@@ -218,7 +235,7 @@ const FunctionalityMatrixContainer = ({ panelInstanceId = null, panelComponentId
       });
       const saved = data?.upsertFunctionalityMatrixItem;
       if (!saved?.id) throw new Error('Save did not return a requirement');
-      const linked = await trackedFetchGraphql({
+      const linked = await fetchGraphql({
         query: SET_FUNCTIONALITY_MATRIX_LINKS_MUTATION,
         variables: {
           matrixItemId: saved.id,
@@ -235,6 +252,7 @@ const FunctionalityMatrixContainer = ({ panelInstanceId = null, panelComponentId
       setMessage(`Saved ${stored.referenceCode}`);
       await loadItems();
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);
@@ -250,7 +268,7 @@ const FunctionalityMatrixContainer = ({ panelInstanceId = null, panelComponentId
     setBusy(true);
     setMessage(null);
     try {
-      await trackedFetchGraphql({
+      await fetchGraphql({
         query: DELETE_FUNCTIONALITY_MATRIX_ITEM_MUTATION,
         variables: { id: selectedId },
         component: panelComponentId || COMPONENT,
@@ -263,6 +281,7 @@ const FunctionalityMatrixContainer = ({ panelInstanceId = null, panelComponentId
       setMessage('Requirement removed');
       await loadItems();
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);
@@ -275,7 +294,7 @@ const FunctionalityMatrixContainer = ({ panelInstanceId = null, panelComponentId
     setBusy(true);
     setMessage(null);
     try {
-      await trackedFetchGraphql({
+      await fetchGraphql({
         query: ADD_FUNCTIONALITY_MATRIX_NOTE_MUTATION,
         variables: { matrixItemId: selectedId, body },
         component: panelComponentId || COMPONENT,
@@ -285,6 +304,7 @@ const FunctionalityMatrixContainer = ({ panelInstanceId = null, panelComponentId
       setNoteDraft('');
       await loadItems();
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);
@@ -295,7 +315,7 @@ const FunctionalityMatrixContainer = ({ panelInstanceId = null, panelComponentId
     setBusy(true);
     setMessage(null);
     try {
-      await trackedFetchGraphql({
+      await fetchGraphql({
         query: DELETE_FUNCTIONALITY_MATRIX_NOTE_MUTATION,
         variables: { id: noteId },
         component: panelComponentId || COMPONENT,
@@ -304,6 +324,7 @@ const FunctionalityMatrixContainer = ({ panelInstanceId = null, panelComponentId
       });
       await loadItems();
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setMessage(err?.message || String(err));
     } finally {
       setBusy(false);

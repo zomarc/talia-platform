@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PanelDataState from '../../shared/PanelDataState';
 import GroupBookingReviewPresenter from './GroupBookingReviewPresenter';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import { SAIL_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 
 const RESERVATION_REVIEW_QUERY = `
@@ -56,8 +56,19 @@ const GroupBookingReviewContainer = ({ panelInstanceId, panelComponentId }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [context, setContext] = useState(() => normalizeSailContext(window.lastSailSelectEvent?.detail));
+  const { shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadRowsRef = useRef(null);
+  const contextRef = useRef(context);
+  contextRef.current = context;
 
   const loadRows = useCallback(async (nextContext = context) => {
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -68,7 +79,7 @@ const GroupBookingReviewContainer = ({ panelInstanceId, panelComponentId }) => {
       if (!nextContext?.sailCode && nextContext?.ship) {
         filters.ship = nextContext.ship;
       }
-      const payload = await trackedFetchGraphql({
+      const payload = await fetchGraphql({
         query: RESERVATION_REVIEW_QUERY,
         variables: { filters },
         component: panelComponentId || 'GroupBookingReview',
@@ -78,11 +89,19 @@ const GroupBookingReviewContainer = ({ panelInstanceId, panelComponentId }) => {
       const nextRows = Array.isArray(payload?.reservations) ? payload.reservations : [];
       setRows(nextRows.map(classifyReservation));
     } catch (fetchError) {
+      if (fetchError?.code === 'PANEL_PAUSED') return;
       setError(fetchError);
     } finally {
       setLoading(false);
     }
-  }, [context, panelComponentId]);
+  }, [context, fetchGraphql, panelComponentId, shouldSkipRefresh]);
+
+  loadRowsRef.current = loadRows;
+
+  useEffect(() => {
+    onResumeFetch(() => { loadRowsRef.current?.(contextRef.current); });
+    return () => onResumeFetch(null);
+  }, [onResumeFetch]);
 
   useEffect(() => {
     loadRows(context);

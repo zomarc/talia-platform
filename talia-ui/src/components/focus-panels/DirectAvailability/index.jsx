@@ -10,6 +10,7 @@ import {
   fetchDirectB2bAvailability,
 } from '../../../lib/directB2bClient';
 import useExternalSourceAvailability from '../../../hooks/useExternalSourceAvailability';
+import usePanelRefreshGate from '../../../hooks/usePanelRefreshGate';
 import DirectAvailabilityPresenter from './DirectAvailabilityPresenter';
 
 const DEFAULT_GRAPHQL_ENDPOINT = DIRECT_B2B_DEFAULT_ENDPOINT;
@@ -164,8 +165,12 @@ const extractQueryParams = (event) => {
   };
 };
 
-const DirectAvailabilityContainer = () => {
+const DirectAvailabilityContainer = ({ panelInstanceId = null, panelComponentId = null } = {}) => {
   const sourceAvailability = useExternalSourceAvailability(DIRECT_B2B_SOURCE_NAMES);
+  const { isPaused, shouldSkipRefresh, onResume } = usePanelRefreshGate(
+    panelInstanceId,
+    panelComponentId
+  );
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -190,6 +195,8 @@ const DirectAvailabilityContainer = () => {
   const requestIdRef = useRef(0);
   const sourceAvailableRef = useRef(sourceAvailability.available);
   const sourceMessageRef = useRef(sourceAvailability.message);
+  const persistedEventRef = useRef(persistedEvent);
+  persistedEventRef.current = persistedEvent;
 
   useEffect(() => {
     const becameAvailable = sourceAvailability.available && !sourceAvailableRef.current;
@@ -224,8 +231,39 @@ const DirectAvailabilityContainer = () => {
     };
   }, []);
 
+  // Pausing aborts in-flight work; resume re-runs the last selection if a refresh was skipped.
+  useEffect(() => {
+    const unsubscribe = onResume(() => {
+      const event = persistedEventRef.current;
+      if (!event) return;
+      const params = extractQueryParams(event);
+      if (params?._context?.sailCode) {
+        lastFetchedQueryKeyRef.current = null;
+        fetchDataRef.current?.(params, { force: true });
+      }
+    });
+    return typeof unsubscribe === 'function' ? unsubscribe : undefined;
+  }, [onResume]);
+
+  useEffect(() => {
+    if (!isPaused) return undefined;
+    requestIdRef.current += 1;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    inFlightQueryKeyRef.current = null;
+    setLoading(false);
+    return undefined;
+  }, [isPaused]);
+
   const fetchData = useCallback(async (variables, { force = false } = {}) => {
     if (!mountedRef.current || !variables?._context?.sailCode) return;
+    // Pause gate: default unpaused; when paused skip network refresh.
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
 
     const queryKey = buildQueryKey(variables);
     if (!force && queryKey) {
@@ -313,7 +351,7 @@ const DirectAvailabilityContainer = () => {
         lastFetchedQueryKeyRef.current = queryKey;
       }
     }
-  }, []);
+  }, [shouldSkipRefresh]);
 
   useEffect(() => {
     fetchDataRef.current = fetchData;

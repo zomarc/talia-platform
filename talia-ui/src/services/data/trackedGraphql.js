@@ -1,5 +1,6 @@
 import queryTracker from './queryTracker';
 import { GraphQLUtils } from '../../lib/apolloClient.js';
+import { assertPanelNotPaused } from '../../lib/panelPause';
 import sourceAvailability from '../sourceAvailabilityService';
 
 const getQueryText = (query) => {
@@ -52,6 +53,9 @@ export const trackedFetchGraphql = async ({
   timeoutMs = null,
   requiredSources = null,
   skipSourceGate = false,
+  panelInstanceId = null,
+  panelComponentId = null,
+  skipPauseGate = false,
 }) => {
   const completeQuery = startTrackedGraphqlOperation({
     query,
@@ -62,6 +66,10 @@ export const trackedFetchGraphql = async ({
   });
 
   try {
+    // Pause gate (default: not paused). Requires panelInstanceId from the panel.
+    if (!skipPauseGate) {
+      assertPanelNotPaused(panelInstanceId, panelComponentId);
+    }
     if (!skipSourceGate) {
       const sources = requiredSources || sourceAvailability.inferSourcesForUrl(url);
       sourceAvailability.assertCanRefresh(sources);

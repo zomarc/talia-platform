@@ -3,11 +3,12 @@
  * and compare what Talia MR would have suggested with the named outcome.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import { useGlobalDateWindow } from '../../../hooks/useGlobalDateWindow';
 import { useGlobalDepartureMonth } from '../../../hooks/useGlobalDepartureMonth';
 import { isShipFilterActive, useGlobalShipFilter } from '../../../hooks/useGlobalShipFilter';
+import usePanelTrackedFetch from '../../../hooks/usePanelTrackedFetch';
 import useReportPanelLoading from '../../../hooks/useReportPanelLoading';
 import { formatCriteriaDateSummary, resolveEffectiveCriteriaDateWindow } from '../../../lib/globalCriteriaDateWindow';
 import {
@@ -29,7 +30,6 @@ import {
 } from '../../../lib/mrRetrospect';
 import { rescorePathDays } from '../../../lib/mrPathRescore.js';
 import { buildAccuracyLeaderboard } from '../../../lib/mrModels/index.js';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 import PanelDataState from '../../shared/PanelDataState';
 import MrRetrospectPresenter from './MrRetrospectPresenter';
 
@@ -137,6 +137,11 @@ const MrRetrospectContainer = ({ panelInstanceId, panelComponentId }) => {
   const [groupSeries, setGroupSeries] = useState(null);
   const [sailSeriesList, setSailSeriesList] = useState([]);
   const [seriesLoading, setSeriesLoading] = useState(false);
+  const { isPaused, shouldSkipRefresh, fetchGraphql, onResumeFetch } = usePanelTrackedFetch(
+    panelInstanceId,
+    panelComponentId
+  );
+  const loadPathRef = useRef(null);
   const {
     useSourceNudge,
     mrModelId,
@@ -188,10 +193,14 @@ const MrRetrospectContainer = ({ panelInstanceId, panelComponentId }) => {
   );
 
   const loadPath = useCallback(async () => {
+    if (shouldSkipRefresh()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const data = await trackedFetchGraphql({
+      const data = await fetchGraphql({
         query: PATH_QUERY,
         variables: { shipCode: queryShip, dateFrom: queryFrom, dateTo: queryTo },
         component: panelComponentId || COMPONENT,
@@ -200,12 +209,20 @@ const MrRetrospectContainer = ({ panelInstanceId, panelComponentId }) => {
       });
       setPath(data?.sourceMrPath || null);
     } catch (err) {
+      if (err?.code === 'PANEL_PAUSED') return;
       setError(err?.message || 'Failed to load MR retrospect');
       setPath(null);
     } finally {
       setLoading(false);
     }
-  }, [panelComponentId, queryFrom, queryShip, queryTo]);
+  }, [fetchGraphql, panelComponentId, queryFrom, queryShip, queryTo, shouldSkipRefresh]);
+
+  loadPathRef.current = loadPath;
+
+  useEffect(() => {
+    onResumeFetch(() => { loadPathRef.current?.(); });
+    return () => onResumeFetch(null);
+  }, [onResumeFetch]);
 
   useEffect(() => {
     loadPath();
@@ -229,9 +246,13 @@ const MrRetrospectContainer = ({ panelInstanceId, panelComponentId }) => {
       setGroupSeries(null);
       return undefined;
     }
+    if (isPaused) {
+      shouldSkipRefresh();
+      return undefined;
+    }
     let cancelled = false;
     setSeriesLoading(true);
-    trackedFetchGraphql({
+    fetchGraphql({
       query: DAYS_QUERY,
       variables: { groupId: selectedGroupId },
       component: panelComponentId || COMPONENT,
@@ -239,19 +260,23 @@ const MrRetrospectContainer = ({ panelInstanceId, panelComponentId }) => {
       tableName: 'sw_etl_group_header',
     }).then((data) => {
       if (!cancelled) setGroupSeries(data?.sourceMrPathDays || null);
-    }).catch(() => {
-      if (!cancelled) setGroupSeries(null);
+    }).catch((err) => {
+      if (!cancelled && err?.code !== 'PANEL_PAUSED') setGroupSeries(null);
     }).finally(() => {
       if (!cancelled) setSeriesLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [panelComponentId, scopeMode, selectedGroupId]);
+  }, [fetchGraphql, isPaused, panelComponentId, scopeMode, selectedGroupId, shouldSkipRefresh]);
 
   useEffect(() => {
     if (scopeMode !== 'sail') {
       setSailSeriesList([]);
+      return undefined;
+    }
+    if (isPaused) {
+      shouldSkipRefresh();
       return undefined;
     }
     const ids = forwardGroups.slice(0, SAIL_SERIES_LIMIT).map((row) => row.groupId).filter(Boolean);
@@ -261,7 +286,7 @@ const MrRetrospectContainer = ({ panelInstanceId, panelComponentId }) => {
     }
     let cancelled = false;
     setSeriesLoading(true);
-    Promise.all(ids.map((groupId) => trackedFetchGraphql({
+    Promise.all(ids.map((groupId) => fetchGraphql({
       query: DAYS_QUERY,
       variables: { groupId },
       component: panelComponentId || COMPONENT,
@@ -277,7 +302,7 @@ const MrRetrospectContainer = ({ panelInstanceId, panelComponentId }) => {
     return () => {
       cancelled = true;
     };
-  }, [forwardGroups, panelComponentId, scopeMode]);
+  }, [fetchGraphql, forwardGroups, isPaused, panelComponentId, scopeMode, shouldSkipRefresh]);
 
   useEffect(() => {
     const onSailSelect = (event) => {

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import usePanelRefreshGate from '../../../hooks/usePanelRefreshGate';
 import useReportPanelLoading from '../../../hooks/useReportPanelLoading';
 import { useTableDataWithContext } from '../../../hooks/data/useTableDataWithContext';
 import { useGlobalBookedComposition } from '../../../hooks/useGlobalBookedComposition';
@@ -89,6 +90,7 @@ const toDateKey = (value) => {
 };
 
 const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) => {
+  const { isPaused, shouldSkipRefresh } = usePanelRefreshGate(panelInstanceId, panelComponentId);
   const marketDimension = useGlobalMarketDimension();
   const bookedComposition = useGlobalBookedComposition();
   const commercialEnabled = useGlobalCommercialTargets();
@@ -346,6 +348,10 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
       setReviewLoading(false);
       return undefined;
     }
+    if (isPaused) {
+      shouldSkipRefresh();
+      return undefined;
+    }
     let cancelled = false;
     const sailCodes = [...new Set(
       masters
@@ -402,7 +408,7 @@ const MasterSailingExplorerContainer = ({ panelInstanceId, panelComponentId }) =
     return () => {
       cancelled = true;
     };
-  }, [explorerBundle?.masters]);
+  }, [explorerBundle?.masters, isPaused, shouldSkipRefresh]);
 
   const commercialByVoyage = useMemo(
     () => (commercialEnabled ? indexCommercialByVoyage(commercialSailRows) : new Map()),

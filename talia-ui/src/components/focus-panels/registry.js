@@ -23,7 +23,6 @@ import SourceMrReviewContainer from './SourceMrReview';
 import TaliaMrMethodContainer from './TaliaMrMethod';
 import HistoricMrPathContainer from './HistoricMrPath';
 import MrRetrospectContainer from './MrRetrospect';
-import DataLineagePanel from './DataLineage';
 import PromoExplorerContainer from './PromoExplorer';
 import SailingDemandCompositionContainer from './SailingDemandComposition';
 import BookingProfileContainer from './BookingProfile';
@@ -67,8 +66,10 @@ import ContextRowMonitor from './ContextRowMonitor';
 import DataManagementPanel from './DataManagement';
 import RmChecklistContainer from './RmChecklist';
 import EngineActivityContainer from './EngineActivity';
+import DriverAnalysisContainer from './DriverAnalysis';
 import ColumnTerminologyPanel from './ColumnTerminology';
 import EtlTableParametersPanel from './EtlTableParameters';
+import DataLineagePanel from './DataLineage';
 import PortCityPanel from './PortCity';
 import RequirementsLogPanel from './RequirementsLog';
 import FunctionalityMatrixPanel from './FunctionalityMatrix';
@@ -94,8 +95,6 @@ import {
   VIEW_CONTROLS,
   VIEW_DETAILS,
   VIEW_PROVENANCE,
-  VIEW_LINEAGE_ORIENTATION,
-  VIEW_LINEAGE_DISPLAY,
   VIEW_FILTERS,
   VIEW_LEGENDS,
   VIEW_AXIS_LABELS,
@@ -106,6 +105,8 @@ import {
   VIEW_PORT_CITY_DISPLAY,
   VIEW_REQUIREMENTS_DISPLAY,
   VIEW_MATRIX_DISPLAY,
+  VIEW_LINEAGE_ORIENTATION,
+  VIEW_LINEAGE_DISPLAY,
   VIEW_RISK_DISPLAY,
   VIEW_GRAPH,
   VIEW_SOURCE_MR_MONTH,
@@ -1423,6 +1424,39 @@ export const componentRegistry = {
       operations: [],
     },
     filePath: 'src/components/focus-panels/EngineActivity/index.jsx'
+  },
+  DriverAnalysis: {
+    component: DriverAnalysisContainer,
+    panelId: 'driver-analysis',
+    category: 'Dashboards',
+    title: 'Driver Analysis',
+    description: 'Historic peerset prior on the booking horizon, projected to NOW with material/revenue value.',
+    props: {},
+    dataRequirements: 'rm_science_evidence via GraphQL; run requires talia-engine Python element',
+    events: {
+      emits: [SAIL_SELECT_EVENT],
+      respondsTo: [
+        SAIL_SELECT_EVENT,
+        SAIL_CLEAR_EVENT,
+        SHIP_SELECT_EVENT,
+        SHIP_CLEAR_EVENT,
+      ],
+    },
+    supportsRefresh: true,
+    minRole: 'MANAGER',
+    showInReports: true,
+    options: {
+      views: [
+        { ...VIEW_SNAPSHOT, default: true },
+        { ...VIEW_DETAILS, default: false },
+        VIEW_LEGENDS,
+        VIEW_AXIS_LABELS,
+        VIEW_TOOLTIP,
+        VIEW_PROVENANCE,
+      ],
+      operations: [],
+    },
+    filePath: 'src/components/focus-panels/DriverAnalysis/index.jsx'
   },
   ColumnTerminologyPanel: {
     component: ColumnTerminologyPanel,

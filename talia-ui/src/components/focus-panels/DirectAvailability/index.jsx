@@ -3,12 +3,16 @@ import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 import { CABIN_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
+import {
+  DIRECT_B2B_AVAILABILITY_QUERY,
+  DIRECT_B2B_DEFAULT_ENDPOINT,
+  DIRECT_B2B_FAIL_FAST_MS,
+  DIRECT_B2B_SOURCE_NAMES,
+  fetchDirectB2bAvailability,
+} from '../../../lib/directB2bClient';
 import DirectAvailabilityPresenter from './DirectAvailabilityPresenter';
 
-const DEFAULT_GRAPHQL_ENDPOINT = 'https://thaliatest.b2b.celestyal.com:3000/graphql';
-const REQUEST_TIMEOUT_MS = 15000;
-const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 700;
+const DEFAULT_GRAPHQL_ENDPOINT = DIRECT_B2B_DEFAULT_ENDPOINT;
 
 const DATA_SOURCE_QUERY = `
   query DirectAvailabilityDataSources {
@@ -19,11 +23,6 @@ const DATA_SOURCE_QUERY = `
     }
   }
 `;
-
-const DIRECT_SOURCE_READ_NAMES = [
-  'celestyal_b2b_api_read',
-  'celestyal_b2b_api',
-];
 
 const buildPersistedEventKey = (event) => {
   if (!event?.detail) return null;
@@ -52,45 +51,7 @@ const buildQueryKey = (variables) => {
   ].join('|');
 };
 
-const DEFAULT_QUERY = `query Availability($effectiveDate: DateTime!, $startDateFrom: Date!, $startDateTo: Date!) {
-  availableVoyages(
-    params: {
-      effectiveDate: $effectiveDate
-      startDateRange: { from: $startDateFrom, to: $startDateTo }
-    }
-  ) {
-    sail {
-      from {
-        dateTime
-        sailRefIdent
-      }
-      to {
-        dateTime
-        sailRefIdent
-      }
-    }
-    pkg {
-      code
-      name
-      sailDays
-      sailIdent
-    }
-    availableCategories {
-      cabinCategory {
-        code
-      }
-      availabilityResult
-      canBookNestedCabins
-      canBookCabins
-      availability {
-        totalCabins
-        availableCabins
-        totalAvailableAbsolute
-        totalAvailableWeighted
-      }
-    }
-  }
-}`;
+const DEFAULT_QUERY = DIRECT_B2B_AVAILABILITY_QUERY;
 
 const toISODate = (date) => new Date(date).toISOString().split('T')[0];
 const shiftDate = (date, days) => {
@@ -234,11 +195,16 @@ const DirectAvailabilityContainer = () => {
   const inFlightQueryKeyRef = useRef(null);
   const hasHydratedRef = useRef(false);
   const lastPersistedEventKeyRef = useRef(null);
+  const abortControllerRef = useRef(null);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
     };
   }, []);
 
@@ -254,7 +220,7 @@ const DirectAvailabilityContainer = () => {
         });
         const sources = data?.dataSources || [];
         const directSource =
-          DIRECT_SOURCE_READ_NAMES
+          DIRECT_B2B_SOURCE_NAMES
             .map((name) => sources.find((source) => source.sourceName === name))
             .find(Boolean) || null;
         if (!cancelled) {
@@ -286,46 +252,28 @@ const DirectAvailabilityContainer = () => {
     }
     inFlightQueryKeyRef.current = queryKey;
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     setLoading(true);
     setError(null);
     const startTime = Date.now();
     const endpoint = endpointRef.current || DEFAULT_GRAPHQL_ENDPOINT;
-    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     let succeeded = false;
 
     try {
-      let result = null;
-      let lastError = null;
-      let attempts = 0;
-      while (attempts <= MAX_RETRIES) {
-        try {
-          attempts += 1;
-          result = await Promise.race([
-            trackedFetchGraphql({
-              url: endpoint,
-              query: DEFAULT_QUERY,
-              variables: {
-                effectiveDate: variables.effectiveDate,
-                startDateFrom: variables.startDateFrom,
-                startDateTo: variables.startDateTo
-              },
-              component: 'DirectAvailability',
-              purpose: 'Fetch current direct availability',
-              tableName: 'availableVoyages',
-              headers: { 'Content-Type': 'application/json', Accept: 'application/json' }
-            }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout after ${REQUEST_TIMEOUT_MS}ms`)), REQUEST_TIMEOUT_MS))
-          ]);
-          lastError = null;
-          break;
-        } catch (error) {
-          lastError = error;
-          if (attempts > MAX_RETRIES) break;
-          await delay(RETRY_DELAY_MS * attempts);
-        }
-      }
-      if (lastError) throw lastError;
-      if (!mountedRef.current) return;
+      const result = await fetchDirectB2bAvailability({
+        endpoint,
+        variables,
+        component: 'DirectAvailability',
+        purpose: 'Fetch current direct availability',
+        signal: abortController.signal,
+        timeoutMs: DIRECT_B2B_FAIL_FAST_MS,
+      });
+      if (!mountedRef.current || abortController.signal.aborted) return;
 
       const voyages = result?.availableVoyages || [];
       const flattenedData = flattenVoyageData(voyages, variables?._context?.sailCode);
@@ -347,12 +295,18 @@ const DirectAvailabilityContainer = () => {
       }));
       succeeded = true;
     } catch (err) {
+      if (abortController.signal.aborted && !mountedRef.current) {
+        return;
+      }
       console.error('[DirectAvailability] Error:', err);
       if (mountedRef.current) {
         setError(err);
         setData([]);
       }
     } finally {
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = null;
+      }
       if (queryKey && inFlightQueryKeyRef.current === queryKey) {
         inFlightQueryKeyRef.current = null;
       }

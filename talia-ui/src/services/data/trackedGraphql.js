@@ -35,7 +35,9 @@ export const trackedFetchGraphql = async ({
   component = 'Unknown',
   purpose = 'Fetch GraphQL operation',
   tableName = 'unknown',
-  headers = {}
+  headers = {},
+  signal = null,
+  timeoutMs = null,
 }) => {
   const completeQuery = startTrackedGraphqlOperation({
     query,
@@ -44,6 +46,26 @@ export const trackedFetchGraphql = async ({
     purpose,
     tableName
   });
+
+  const controller = new AbortController();
+  let timeoutId = null;
+  const onExternalAbort = () => {
+    if (!controller.signal.aborted) controller.abort();
+  };
+
+  if (signal) {
+    if (signal.aborted) {
+      onExternalAbort();
+    } else {
+      signal.addEventListener('abort', onExternalAbort, { once: true });
+    }
+  }
+
+  const parsedTimeout = Number(timeoutMs);
+  if (Number.isFinite(parsedTimeout) && parsedTimeout > 0) {
+    timeoutId = setTimeout(onExternalAbort, parsedTimeout);
+  }
+
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -52,7 +74,8 @@ export const trackedFetchGraphql = async ({
         ...GraphQLUtils.getRequestHeaders(),
         ...headers,
       },
-      body: JSON.stringify({ query: getQueryText(query), variables })
+      body: JSON.stringify({ query: getQueryText(query), variables }),
+      signal: controller.signal,
     });
     const payload = await response.json();
     if (!response.ok || payload?.errors?.length) {
@@ -61,8 +84,19 @@ export const trackedFetchGraphql = async ({
     finalizeTracker(completeQuery, { data: payload?.data || null });
     return payload?.data || null;
   } catch (error) {
-    finalizeTracker(completeQuery, { error });
-    throw error;
+    const abortedByTimeout = controller.signal.aborted && !(signal && signal.aborted);
+    const normalized = (error?.name === 'AbortError' || controller.signal.aborted)
+      ? new Error(
+          abortedByTimeout && Number.isFinite(parsedTimeout) && parsedTimeout > 0
+            ? `Timeout after ${parsedTimeout}ms`
+            : 'Request cancelled'
+        )
+      : error;
+    finalizeTracker(completeQuery, { error: normalized });
+    throw normalized;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+    if (signal) signal.removeEventListener('abort', onExternalAbort);
   }
 };
 

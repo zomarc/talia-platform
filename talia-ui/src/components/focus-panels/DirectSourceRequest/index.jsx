@@ -14,12 +14,15 @@ import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 import { SAIL_SELECT_EVENT } from '../../../lib/eventBus';
 import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
+import {
+  DIRECT_B2B_AVAILABILITY_QUERY,
+  DIRECT_B2B_DEFAULT_ENDPOINT,
+  DIRECT_B2B_FAIL_FAST_MS,
+  DIRECT_B2B_SOURCE_NAMES,
+  fetchDirectB2bAvailability,
+} from '../../../lib/directB2bClient';
 
-// Default external GraphQL endpoint
-const DEFAULT_GRAPHQL_ENDPOINT = 'https://thaliatest.b2b.celestyal.com:3000/graphql';
-const REQUEST_TIMEOUT_MS = 15000;
-const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 700;
+const DEFAULT_GRAPHQL_ENDPOINT = DIRECT_B2B_DEFAULT_ENDPOINT;
 
 const DATA_SOURCE_QUERY = `
   query DirectSourceDataSources {
@@ -30,11 +33,6 @@ const DATA_SOURCE_QUERY = `
     }
   }
 `;
-
-const DIRECT_SOURCE_READ_NAMES = [
-  'celestyal_b2b_api_read',
-  'celestyal_b2b_api',
-];
 
 const LOCAL_PARITY_QUERY = `
   query DirectSourceParity($sailCode: String!) {
@@ -74,45 +72,7 @@ const buildPersistedEventKey = (event) => {
   return `${sailCode || ''}|${sailDate || ''}`;
 };
 
-const DEFAULT_QUERY = `query Availability($effectiveDate: DateTime!, $startDateFrom: Date!, $startDateTo: Date!) {
-  availableVoyages(
-    params: {
-      effectiveDate: $effectiveDate
-      startDateRange: { from: $startDateFrom, to: $startDateTo }
-    }
-  ) {
-    sail {
-      from {
-        dateTime
-        sailRefIdent
-      }
-      to {
-        dateTime
-        sailRefIdent
-      }
-    }
-    pkg {
-      code
-      name
-      sailDays
-      sailIdent
-    }
-    availableCategories {
-      cabinCategory {
-        code
-      }
-      availabilityResult
-      canBookNestedCabins
-      canBookCabins
-      availability {
-        totalCabins
-        availableCabins
-        totalAvailableAbsolute
-        totalAvailableWeighted
-      }
-    }
-  }
-}`;
+const DEFAULT_QUERY = DIRECT_B2B_AVAILABILITY_QUERY;
 
 const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => {
 
@@ -133,7 +93,6 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
   const RANGE_DAYS_BEFORE = 14;
   const RANGE_DAYS_AFTER = 14;
 
-  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const toIsoDate = (value) => {
     if (!value) return null;
     const date = new Date(value);
@@ -181,11 +140,16 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
   const inFlightQueryKeyRef = useRef(null);
   const hasHydratedRef = useRef(false);
   const lastPersistedEventKeyRef = useRef(null);
+  const abortControllerRef = useRef(null);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
     };
   }, []);
 
@@ -264,7 +228,7 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
         });
         const sources = data?.dataSources || [];
         const directSource =
-          DIRECT_SOURCE_READ_NAMES
+          DIRECT_B2B_SOURCE_NAMES
             .map((name) => sources.find((source) => source.sourceName === name))
             .find(Boolean) || null;
         const endpoint = directSource?.connectionConfig?.endpoint || DEFAULT_GRAPHQL_ENDPOINT;
@@ -298,6 +262,12 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
     }
     inFlightQueryKeyRef.current = queryKey;
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     setLoading(true);
     setError(null);
 
@@ -309,42 +279,16 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
       console.log('[DirectSourceRequest] Fetching from:', endpoint);
       console.log('[DirectSourceRequest] Variables:', normalizedVariables);
 
-      let result = null;
-      let lastError = null;
-      let attempts = 0;
-      while (attempts <= MAX_RETRIES) {
-        try {
-          attempts += 1;
-          result = await Promise.race([
-            trackedFetchGraphql({
-              url: endpoint,
-              query: DEFAULT_QUERY,
-              variables: {
-                effectiveDate: normalizedVariables.effectiveDate,
-                startDateFrom: normalizedVariables.startDateFrom,
-                startDateTo: normalizedVariables.startDateTo
-              },
-              component: 'DirectSourceRequest',
-              purpose: 'Fetch external availability',
-              tableName: 'availableVoyages',
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-              },
-            }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout after ${REQUEST_TIMEOUT_MS}ms`)), REQUEST_TIMEOUT_MS))
-          ]);
-          lastError = null;
-          break;
-        } catch (error) {
-          lastError = error;
-          if (attempts > MAX_RETRIES) break;
-          await delay(RETRY_DELAY_MS * attempts);
-        }
-      }
-      if (lastError) throw lastError;
+      const result = await fetchDirectB2bAvailability({
+        endpoint,
+        variables: normalizedVariables,
+        component: 'DirectSourceRequest',
+        purpose: 'Fetch external availability',
+        signal: abortController.signal,
+        timeoutMs: DIRECT_B2B_FAIL_FAST_MS,
+      });
 
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || abortController.signal.aborted) return;
 
       const voyages = result?.availableVoyages || [];
       console.log('[DirectSourceRequest] Received', voyages.length, 'voyages');
@@ -440,19 +384,25 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
         lastExecuted: new Date().toISOString(),
         executionTime: Date.now() - startTime,
         recordCount: displayRows.length,
-        retryCount: attempts - 1,
+        retryCount: 0,
         parity,
         validation
       }));
       succeeded = true;
 
     } catch (err) {
+      if (abortController.signal.aborted && !mountedRef.current) {
+        return;
+      }
       console.error('[DirectSourceRequest] Error:', err);
       if (mountedRef.current) {
         setError(err);
         setData(null);
       }
     } finally {
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = null;
+      }
       if (queryKey && inFlightQueryKeyRef.current === queryKey) {
         inFlightQueryKeyRef.current = null;
       }

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import ErrorMessage from '../../shared/ErrorMessage';
 import { CABIN_CLEAR_EVENT, SAIL_SELECT_EVENT } from '../../../lib/eventBus';
-import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 import {
   DIRECT_B2B_AVAILABILITY_QUERY,
   DIRECT_B2B_DEFAULT_ENDPOINT,
@@ -10,19 +9,10 @@ import {
   DIRECT_B2B_SOURCE_NAMES,
   fetchDirectB2bAvailability,
 } from '../../../lib/directB2bClient';
+import useExternalSourceAvailability from '../../../hooks/useExternalSourceAvailability';
 import DirectAvailabilityPresenter from './DirectAvailabilityPresenter';
 
 const DEFAULT_GRAPHQL_ENDPOINT = DIRECT_B2B_DEFAULT_ENDPOINT;
-
-const DATA_SOURCE_QUERY = `
-  query DirectAvailabilityDataSources {
-    dataSources {
-      sourceName
-      displayName
-      connectionConfig
-    }
-  }
-`;
 
 const buildPersistedEventKey = (event) => {
   if (!event?.detail) return null;
@@ -175,6 +165,7 @@ const extractQueryParams = (event) => {
 };
 
 const DirectAvailabilityContainer = () => {
+  const sourceAvailability = useExternalSourceAvailability(DIRECT_B2B_SOURCE_NAMES);
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -197,6 +188,29 @@ const DirectAvailabilityContainer = () => {
   const lastPersistedEventKeyRef = useRef(null);
   const abortControllerRef = useRef(null);
   const requestIdRef = useRef(0);
+  const sourceAvailableRef = useRef(sourceAvailability.available);
+  const sourceMessageRef = useRef(sourceAvailability.message);
+
+  useEffect(() => {
+    const becameAvailable = sourceAvailability.available && !sourceAvailableRef.current;
+    sourceAvailableRef.current = sourceAvailability.available;
+    sourceMessageRef.current = sourceAvailability.message;
+    if (sourceAvailability.status?.endpoint) {
+      endpointRef.current = sourceAvailability.status.endpoint;
+      setQueryInfo((prev) => ({
+        ...prev,
+        endpoint: sourceAvailability.status.endpoint,
+        endpointSource: sourceAvailability.status.sourceName || prev.endpointSource,
+      }));
+    }
+    if (becameAvailable && persistedEvent) {
+      const params = extractQueryParams(persistedEvent);
+      if (params?._context?.sailCode) {
+        lastFetchedQueryKeyRef.current = null;
+        fetchDataRef.current?.(params, { force: true });
+      }
+    }
+  }, [sourceAvailability.available, sourceAvailability.message, sourceAvailability.status, persistedEvent]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -210,40 +224,6 @@ const DirectAvailabilityContainer = () => {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    const loadEndpoint = async () => {
-      try {
-        const data = await trackedFetchGraphql({
-          query: DATA_SOURCE_QUERY,
-          component: 'DirectAvailability',
-          purpose: 'Load direct availability endpoint',
-          tableName: 'data_source'
-        });
-        const sources = data?.dataSources || [];
-        const directSource =
-          DIRECT_B2B_SOURCE_NAMES
-            .map((name) => sources.find((source) => source.sourceName === name))
-            .find(Boolean) || null;
-        if (!cancelled) {
-          const endpoint = directSource?.connectionConfig?.endpoint || DEFAULT_GRAPHQL_ENDPOINT;
-          endpointRef.current = endpoint;
-          setQueryInfo((prev) => ({
-            ...prev,
-            endpoint,
-            endpointSource: directSource?.sourceName || 'default'
-          }));
-        }
-      } catch (err) {
-        console.warn('[DirectAvailability] Failed to load data source config:', err?.message || err);
-      }
-    };
-    loadEndpoint();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const fetchData = useCallback(async (variables, { force = false } = {}) => {
     if (!mountedRef.current || !variables?._context?.sailCode) return;
 
@@ -252,6 +232,16 @@ const DirectAvailabilityContainer = () => {
       if (inFlightQueryKeyRef.current === queryKey) return;
       if (lastFetchedQueryKeyRef.current === queryKey) return;
     }
+
+    // Shared probe owns reachability. NO / not-yet → do not refresh.
+    if (!sourceAvailableRef.current) {
+      inFlightQueryKeyRef.current = null;
+      setLoading(false);
+      setError(new Error(sourceMessageRef.current || 'External source unavailable — refresh skipped.'));
+      setData([]);
+      return;
+    }
+
     inFlightQueryKeyRef.current = queryKey;
 
     if (abortControllerRef.current) {
@@ -280,6 +270,7 @@ const DirectAvailabilityContainer = () => {
         purpose: 'Fetch current direct availability',
         signal: abortController.signal,
         timeoutMs: DIRECT_B2B_FAIL_FAST_MS,
+        sourceNames: DIRECT_B2B_SOURCE_NAMES,
       });
       if (!isCurrentRequest()) return;
 

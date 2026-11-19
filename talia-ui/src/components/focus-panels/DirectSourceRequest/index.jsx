@@ -21,18 +21,9 @@ import {
   DIRECT_B2B_SOURCE_NAMES,
   fetchDirectB2bAvailability,
 } from '../../../lib/directB2bClient';
+import useExternalSourceAvailability from '../../../hooks/useExternalSourceAvailability';
 
 const DEFAULT_GRAPHQL_ENDPOINT = DIRECT_B2B_DEFAULT_ENDPOINT;
-
-const DATA_SOURCE_QUERY = `
-  query DirectSourceDataSources {
-    dataSources {
-      sourceName
-      displayName
-      connectionConfig
-    }
-  }
-`;
 
 const LOCAL_PARITY_QUERY = `
   query DirectSourceParity($sailCode: String!) {
@@ -75,6 +66,7 @@ const buildPersistedEventKey = (event) => {
 const DEFAULT_QUERY = DIRECT_B2B_AVAILABILITY_QUERY;
 
 const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => {
+  const sourceAvailability = useExternalSourceAvailability(DIRECT_B2B_SOURCE_NAMES);
 
   // Get today's date in ISO format for defaults
   const getTodayISO = () => new Date().toISOString().split('T')[0];
@@ -142,6 +134,8 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
   const lastPersistedEventKeyRef = useRef(null);
   const abortControllerRef = useRef(null);
   const requestIdRef = useRef(0);
+  const sourceAvailableRef = useRef(sourceAvailability.available);
+  const sourceMessageRef = useRef(sourceAvailability.message);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -154,6 +148,19 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
       }
     };
   }, []);
+
+  useEffect(() => {
+    sourceAvailableRef.current = sourceAvailability.available;
+    sourceMessageRef.current = sourceAvailability.message;
+    if (sourceAvailability.status?.endpoint) {
+      endpointRef.current = sourceAvailability.status.endpoint;
+      setQueryInfo((prev) => ({
+        ...prev,
+        endpoint: sourceAvailability.status.endpoint,
+        endpointSource: sourceAvailability.status.sourceName || prev.endpointSource,
+      }));
+    }
+  }, [sourceAvailability.available, sourceAvailability.message, sourceAvailability.status]);
 
   // Extract parameters from persisted event - DATE RANGES ONLY
   const extractQueryParams = useCallback((event) => {
@@ -218,40 +225,6 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    const loadEndpoint = async () => {
-      try {
-        const data = await trackedFetchGraphql({
-          query: DATA_SOURCE_QUERY,
-          component: 'DirectSourceRequest',
-          purpose: 'Load direct source endpoint',
-          tableName: 'data_source',
-        });
-        const sources = data?.dataSources || [];
-        const directSource =
-          DIRECT_B2B_SOURCE_NAMES
-            .map((name) => sources.find((source) => source.sourceName === name))
-            .find(Boolean) || null;
-        const endpoint = directSource?.connectionConfig?.endpoint || DEFAULT_GRAPHQL_ENDPOINT;
-        endpointRef.current = endpoint;
-        if (!cancelled) {
-          setQueryInfo((prev) => ({
-            ...prev,
-            endpoint,
-            endpointSource: directSource?.sourceName || 'default',
-          }));
-        }
-      } catch (err) {
-        console.warn('[DirectSourceRequest] Failed to load data source config:', err?.message || err);
-      }
-    };
-    loadEndpoint();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // Fetch data from external GraphQL endpoint
   const fetchData = useCallback(async (variables, { force = false } = {}) => {
     if (!mountedRef.current) return;
@@ -262,6 +235,16 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
       if (inFlightQueryKeyRef.current === queryKey) return;
       if (lastFetchedQueryKeyRef.current === queryKey) return;
     }
+
+    // Shared probe owns reachability. NO / not-yet → do not refresh.
+    if (!sourceAvailableRef.current) {
+      inFlightQueryKeyRef.current = null;
+      setLoading(false);
+      setError(new Error(sourceMessageRef.current || 'External source unavailable — refresh skipped.'));
+      setData(null);
+      return;
+    }
+
     inFlightQueryKeyRef.current = queryKey;
 
     if (abortControllerRef.current) {
@@ -294,6 +277,7 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
         purpose: 'Fetch external availability',
         signal: abortController.signal,
         timeoutMs: DIRECT_B2B_FAIL_FAST_MS,
+        sourceNames: DIRECT_B2B_SOURCE_NAMES,
       });
 
       if (!isCurrentRequest()) return;

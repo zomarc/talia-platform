@@ -8,6 +8,12 @@ import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 import uiPackageJson from '../../../../package.json';
 import NetworkPathDiagram from './NetworkPathDiagram.jsx';
 import { INSTANCE_PROFILE_QUERY } from './instanceConnectionQuery.js';
+import externalSourceAvailability, {
+  EXTERNAL_B2B_READ_ALIASES,
+  EXTERNAL_B2B_WRITE_ALIASES,
+  initExternalSourceAvailability,
+} from '../../../services/externalSourceAvailabilityService';
+import { DIRECT_B2B_FAIL_FAST_MS } from '../../../lib/directB2bFailFast';
 
 const UPDATE_DATA_SOURCE_MUTATION = `
   mutation UpdateDataSourceConnection($sourceName: String!, $connectionConfig: JSON!) {
@@ -138,11 +144,14 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
       }));
       return;
     }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), DIRECT_B2B_FAIL_FAST_MS);
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: 'query { __typename }' }),
+        signal: controller.signal,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
@@ -152,15 +161,44 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
         [key]: { checked: true, online: true, detail: 'Probe OK.' },
       }));
     } catch (e) {
+      const timedOut = e?.name === 'AbortError' || controller.signal.aborted;
       setGqlChecks((prev) => ({
         ...prev,
         [key]: {
           checked: true,
           online: false,
-          detail: e.message || 'Probe failed.',
+          detail: timedOut
+            ? `Probe timed out after ${DIRECT_B2B_FAIL_FAST_MS}ms`
+            : (e.message || 'Probe failed.'),
         },
       }));
+    } finally {
+      clearTimeout(timer);
     }
+  }, []);
+
+  // External B2B YES/NO comes from the shared periodic probe service — not this panel.
+  useEffect(() => {
+    initExternalSourceAvailability();
+    return externalSourceAvailability.subscribe((snapshot) => {
+      const readName = EXTERNAL_B2B_READ_ALIASES.find((name) => snapshot[name]) || EXTERNAL_B2B_READ_ALIASES[0];
+      const writeName = EXTERNAL_B2B_WRITE_ALIASES.find((name) => snapshot[name]) || EXTERNAL_B2B_WRITE_ALIASES[0];
+      const read = snapshot[readName];
+      const write = snapshot[writeName];
+      setGqlChecks((prev) => ({
+        ...prev,
+        externalRead: {
+          checked: read?.checked === true,
+          online: read?.available === true,
+          detail: read?.detail || 'Status pending.',
+        },
+        externalWrite: {
+          checked: write?.checked === true,
+          online: write?.available === true,
+          detail: write?.detail || 'Status pending.',
+        },
+      }));
+    });
   }, []);
 
   useEffect(() => {
@@ -168,14 +206,10 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
       ...prev,
       local: { checked: false, online: true, detail: 'Status pending.' },
       browser: { checked: false, online: true, detail: 'Status pending.' },
-      externalRead: { checked: false, online: true, detail: 'Status pending.' },
-      externalWrite: { checked: false, online: true, detail: 'Status pending.' },
     }));
     probeGraphqlEndpoint(localGraphqlAddress, 'local');
     probeGraphqlEndpoint(browserGraphqlAddress, 'browser');
-    probeGraphqlEndpoint(externalReadGraphqlAddress, 'externalRead');
-    probeGraphqlEndpoint(externalWriteGraphqlAddress, 'externalWrite');
-  }, [browserGraphqlAddress, externalReadGraphqlAddress, externalWriteGraphqlAddress, localGraphqlAddress, probeGraphqlEndpoint]);
+  }, [browserGraphqlAddress, localGraphqlAddress, probeGraphqlEndpoint]);
 
   const handleSaveDirectEndpoint = useCallback(async (mode) => {
     const source = mode === 'write' ? directWriteSource : directReadSource;

@@ -1,31 +1,23 @@
 /**
- * Fail-fast client for the external Celestyal B2B GraphQL availability API.
+ * Celestyal B2B GraphQL availability fetch.
  *
- * Browser TCP to an unreachable host can hang for a long time. Callers must
- * abort (via timeoutMs / AbortSignal) so query tracking and UI loading clear.
+ * Reachability is owned by externalSourceAvailabilityService.
+ * Callers must check isAvailable() first and skip refresh when NO.
  */
 
 import { trackedFetchGraphql } from '../services/data/trackedGraphql';
 import {
   DIRECT_B2B_DEFAULT_ENDPOINT,
   DIRECT_B2B_FAIL_FAST_MS,
-  clearDirectB2bDown,
-  getDirectB2bDownRemainingMs,
-  isDirectB2bDown,
-  isDirectB2bUnavailableError,
-  markDirectB2bDown,
+  DIRECT_B2B_SOURCE_NAMES,
 } from './directB2bFailFast';
+import externalSourceAvailability from '../services/externalSourceAvailabilityService';
 
 export {
   DIRECT_B2B_DEFAULT_ENDPOINT,
   DIRECT_B2B_DOWN_COOLDOWN_MS,
   DIRECT_B2B_FAIL_FAST_MS,
   DIRECT_B2B_SOURCE_NAMES,
-  clearDirectB2bDown,
-  getDirectB2bDownRemainingMs,
-  isDirectB2bDown,
-  isDirectB2bUnavailableError,
-  markDirectB2bDown,
 } from './directB2bFailFast';
 
 export const DIRECT_B2B_AVAILABILITY_QUERY = `query Availability($effectiveDate: DateTime!, $startDateFrom: Date!, $startDateTo: Date!) {
@@ -69,8 +61,8 @@ export const DIRECT_B2B_AVAILABILITY_QUERY = `query Availability($effectiveDate:
 }`;
 
 /**
- * Query external B2B availability with a hard abort timeout and short cooldown
- * after hard failures so sail.select storms do not keep the UI spinning.
+ * Fetch availability only when the shared probe says YES.
+ * Hard abort timeout remains as a safety net.
  */
 export const fetchDirectB2bAvailability = async ({
   endpoint = DIRECT_B2B_DEFAULT_ENDPOINT,
@@ -79,17 +71,22 @@ export const fetchDirectB2bAvailability = async ({
   purpose = 'Fetch external availability',
   signal = null,
   timeoutMs = DIRECT_B2B_FAIL_FAST_MS,
+  sourceNames = DIRECT_B2B_SOURCE_NAMES,
 } = {}) => {
-  if (isDirectB2bDown()) {
-    const remainingMs = getDirectB2bDownRemainingMs();
-    throw new Error(
-      `External source unavailable (retry in ${Math.ceil(remainingMs / 1000)}s)`
-    );
+  const resolvedName = externalSourceAvailability.resolveSourceName(sourceNames)
+    || sourceNames?.[0]
+    || 'celestyal_b2b_api_read';
+
+  if (!externalSourceAvailability.isAvailable(sourceNames)) {
+    throw new Error(externalSourceAvailability.getUnavailableMessage(sourceNames));
   }
+
+  const status = externalSourceAvailability.getStatus(resolvedName);
+  const url = endpoint || status.endpoint || DIRECT_B2B_DEFAULT_ENDPOINT;
 
   try {
     const data = await trackedFetchGraphql({
-      url: endpoint || DIRECT_B2B_DEFAULT_ENDPOINT,
+      url,
       query: DIRECT_B2B_AVAILABILITY_QUERY,
       variables: {
         effectiveDate: variables?.effectiveDate,
@@ -106,19 +103,26 @@ export const fetchDirectB2bAvailability = async ({
       signal,
       timeoutMs,
     });
-    clearDirectB2bDown();
+    externalSourceAvailability.reportSuccess(resolvedName, 'Reachable (query OK).');
     return data;
   } catch (error) {
     const message = String(error?.message || error || '');
-    // Intentional supersede/unmount cancels must not trip the cooldown.
     if (message === 'Request cancelled') {
       throw error;
     }
-    if (isDirectB2bUnavailableError(error)) {
-      markDirectB2bDown();
-      if (message.toLowerCase().includes('timeout')) {
-        throw new Error('External source unavailable (timed out)');
-      }
+    const lower = message.toLowerCase();
+    if (
+      lower.includes('timeout')
+      || lower.includes('failed to fetch')
+      || lower.includes('network')
+      || lower.includes('load failed')
+    ) {
+      externalSourceAvailability.reportFailure(
+        resolvedName,
+        lower.includes('timeout')
+          ? 'External source unavailable (timed out)'
+          : message
+      );
     }
     throw error;
   }

@@ -1311,6 +1311,8 @@ export const componentRegistry = {
       theme: { type: 'object', required: false, description: 'Theme object for styling' }
     },
     dataRequirements: 'Queries external GraphQL endpoint at https://thaliatest.b2b.celestyal.com:3000/graphql',
+    // Framework source gate — refresh only when this source is YES.
+    requiredSources: ['celestyal_b2b_api_read'],
     events: {
       emits: [directSourceSelect],
       respondsTo: [SAIL_SELECT_EVENT]
@@ -1329,6 +1331,7 @@ export const componentRegistry = {
       theme: { type: 'object', required: false, description: 'Theme object for styling' }
     },
     dataRequirements: 'Queries external GraphQL endpoint using sail.select context and shows only selected-sail rows',
+    requiredSources: ['celestyal_b2b_api_read'],
     events: {
       emits: [cabinSelect, cabinClear],
       respondsTo: [SAIL_SELECT_EVENT]

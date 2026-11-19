@@ -15,6 +15,7 @@
  * @param {boolean} [options.fetchWithoutContext=true] - Whether to auto-fetch when no event context is available
  * @param {number} [options.cacheTtlMs=15000] - Shared cache TTL for identical requests
  * @param {string[]} [options.columns] - Optional column projection (server allowlist)
+ * @param {string|string[]} [options.requiredSources] - Framework source ids that must be YES before refresh
  * @returns {Object} { data, loading, error, refetch, context }
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -29,6 +30,9 @@ import {
 } from '../../lib/globalDepartureMonth';
 import { rowMatchesGlobalShip } from '../../lib/globalShipFilter';
 import useReportPanelLoading from '../useReportPanelLoading';
+import sourceAvailability, {
+  DEFAULT_REQUIRED_SOURCES,
+} from '../../services/sourceAvailabilityService';
 
 const GRAPHQL_URL = '/api/graphql';
 const DEFAULT_CACHE_TTL_MS = 15000;
@@ -424,6 +428,7 @@ export const useTableDataWithContext = ({
   cacheTtlMs = DEFAULT_CACHE_TTL_MS,
   filters: staticFilters = null,
   columns = null,
+  requiredSources = DEFAULT_REQUIRED_SOURCES,
 }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -448,6 +453,7 @@ export const useTableDataWithContext = ({
   const cacheTtlMsRef = useRef(cacheTtlMs);
   const staticFiltersRef = useRef(staticFilters);
   const columnsRef = useRef(columns);
+  const requiredSourcesRef = useRef(requiredSources);
   const hasCheckedContextRef = useRef(false);
   const lastIncludeNonRealRef = useRef(window.__taliaGlobalCriteria?.includeNonRealSailings === true);
   const pausedRef = useRef(isPanelPaused(panelInstanceId, panelComponentId));
@@ -469,7 +475,8 @@ export const useTableDataWithContext = ({
     cacheTtlMsRef.current = cacheTtlMs;
     staticFiltersRef.current = staticFilters;
     columnsRef.current = columns;
-  }, [contextMapper, tableName, limit, enabled, eventName, panelInstanceId, panelComponentId, fetchWithoutContext, cacheTtlMs, staticFilters, columns]);
+    requiredSourcesRef.current = requiredSources;
+  }, [contextMapper, tableName, limit, enabled, eventName, panelInstanceId, panelComponentId, fetchWithoutContext, cacheTtlMs, staticFilters, columns, requiredSources]);
 
   const wasEnabledRef = useRef(enabled);
 
@@ -575,6 +582,17 @@ export const useTableDataWithContext = ({
       setData([]);
       setLoadedFiltersKey(null);
       lastFiltersRef.current = null;
+      return;
+    }
+
+    // Framework source gate: YES → refresh, NO → fail immediately (no hang).
+    const sources = requiredSourcesRef.current || DEFAULT_REQUIRED_SOURCES;
+    if (!sourceAvailability.canRefresh(sources)) {
+      setLoading(false);
+      setError(new Error(
+        sourceAvailability.getUnavailableMessage(sources)
+        || 'Required data source unavailable — refresh skipped.'
+      ));
       return;
     }
 

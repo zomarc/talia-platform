@@ -8,11 +8,10 @@ import { trackedFetchGraphql } from '../../../services/data/trackedGraphql';
 import uiPackageJson from '../../../../package.json';
 import NetworkPathDiagram from './NetworkPathDiagram.jsx';
 import { INSTANCE_PROFILE_QUERY } from './instanceConnectionQuery.js';
-import externalSourceAvailability, {
-  EXTERNAL_B2B_READ_ALIASES,
-  EXTERNAL_B2B_WRITE_ALIASES,
-  initExternalSourceAvailability,
-} from '../../../services/externalSourceAvailabilityService';
+import sourceAvailability, {
+  SOURCE_IDS,
+  initSourceAvailability,
+} from '../../../services/sourceAvailabilityService';
 import { DIRECT_B2B_FAIL_FAST_MS } from '../../../lib/directB2bFailFast';
 
 const UPDATE_DATA_SOURCE_MUTATION = `
@@ -177,16 +176,23 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
     }
   }, []);
 
-  // External B2B YES/NO comes from the shared periodic probe service — not this panel.
+  // Full source catalog YES/NO comes from the framework probe service.
   useEffect(() => {
-    initExternalSourceAvailability();
-    return externalSourceAvailability.subscribe((snapshot) => {
-      const readName = EXTERNAL_B2B_READ_ALIASES.find((name) => snapshot[name]) || EXTERNAL_B2B_READ_ALIASES[0];
-      const writeName = EXTERNAL_B2B_WRITE_ALIASES.find((name) => snapshot[name]) || EXTERNAL_B2B_WRITE_ALIASES[0];
-      const read = snapshot[readName];
-      const write = snapshot[writeName];
+    initSourceAvailability();
+    return sourceAvailability.subscribe((statuses) => {
+      const byId = Object.fromEntries((statuses || []).map((entry) => [entry.id, entry]));
+      const read = byId[SOURCE_IDS.B2B_READ];
+      const write = byId[SOURCE_IDS.B2B_WRITE];
+      const talia = byId[SOURCE_IDS.TALIA_GRAPHQL];
       setGqlChecks((prev) => ({
         ...prev,
+        local: talia
+          ? {
+              checked: talia.checked === true,
+              online: talia.available === true,
+              detail: talia.detail || 'Status pending.',
+            }
+          : prev.local,
         externalRead: {
           checked: read?.checked === true,
           online: read?.available === true,
@@ -201,15 +207,14 @@ export default function InstanceConnectionPanel({ formatDateTime }) {
     });
   }, []);
 
+  // Browser-facing GraphQL address may differ from /api/graphql — probe separately.
   useEffect(() => {
     setGqlChecks((prev) => ({
       ...prev,
-      local: { checked: false, online: true, detail: 'Status pending.' },
       browser: { checked: false, online: true, detail: 'Status pending.' },
     }));
-    probeGraphqlEndpoint(localGraphqlAddress, 'local');
     probeGraphqlEndpoint(browserGraphqlAddress, 'browser');
-  }, [browserGraphqlAddress, localGraphqlAddress, probeGraphqlEndpoint]);
+  }, [browserGraphqlAddress, probeGraphqlEndpoint]);
 
   const handleSaveDirectEndpoint = useCallback(async (mode) => {
     const source = mode === 'write' ? directWriteSource : directReadSource;

@@ -1,5 +1,6 @@
 import queryTracker from './queryTracker';
 import { GraphQLUtils } from '../../lib/apolloClient.js';
+import sourceAvailability from '../sourceAvailabilityService';
 
 const getQueryText = (query) => {
   if (typeof query === 'string') return query;
@@ -49,6 +50,8 @@ export const trackedFetchGraphql = async ({
   headers = {},
   signal = null,
   timeoutMs = null,
+  requiredSources = null,
+  skipSourceGate = false,
 }) => {
   const completeQuery = startTrackedGraphqlOperation({
     query,
@@ -57,6 +60,16 @@ export const trackedFetchGraphql = async ({
     purpose,
     tableName
   });
+
+  try {
+    if (!skipSourceGate) {
+      const sources = requiredSources || sourceAvailability.inferSourcesForUrl(url);
+      sourceAvailability.assertCanRefresh(sources);
+    }
+  } catch (error) {
+    finalizeTracker(completeQuery, { error });
+    throw error;
+  }
 
   const controller = new AbortController();
   let timeoutId = null;

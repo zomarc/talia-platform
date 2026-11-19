@@ -1,8 +1,8 @@
 /**
  * Celestyal B2B GraphQL availability fetch.
  *
- * Reachability is owned by externalSourceAvailabilityService.
- * Callers must check isAvailable() first and skip refresh when NO.
+ * Reachability is owned by the framework sourceAvailabilityService.
+ * Callers (and trackedFetchGraphql) must only refresh when canRefresh is YES.
  */
 
 import { trackedFetchGraphql } from '../services/data/trackedGraphql';
@@ -11,7 +11,9 @@ import {
   DIRECT_B2B_FAIL_FAST_MS,
   DIRECT_B2B_SOURCE_NAMES,
 } from './directB2bFailFast';
-import externalSourceAvailability from '../services/externalSourceAvailabilityService';
+import sourceAvailability, {
+  SOURCE_IDS,
+} from '../services/sourceAvailabilityService';
 
 export {
   DIRECT_B2B_DEFAULT_ENDPOINT,
@@ -60,10 +62,6 @@ export const DIRECT_B2B_AVAILABILITY_QUERY = `query Availability($effectiveDate:
   }
 }`;
 
-/**
- * Fetch availability only when the shared probe says YES.
- * Hard abort timeout remains as a safety net.
- */
 export const fetchDirectB2bAvailability = async ({
   endpoint = DIRECT_B2B_DEFAULT_ENDPOINT,
   variables,
@@ -73,15 +71,8 @@ export const fetchDirectB2bAvailability = async ({
   timeoutMs = DIRECT_B2B_FAIL_FAST_MS,
   sourceNames = DIRECT_B2B_SOURCE_NAMES,
 } = {}) => {
-  const resolvedName = externalSourceAvailability.resolveSourceName(sourceNames)
-    || sourceNames?.[0]
-    || 'celestyal_b2b_api_read';
-
-  if (!externalSourceAvailability.isAvailable(sourceNames)) {
-    throw new Error(externalSourceAvailability.getUnavailableMessage(sourceNames));
-  }
-
-  const status = externalSourceAvailability.getStatus(resolvedName);
+  const resolvedName = sourceAvailability.resolveSourceId(sourceNames) || SOURCE_IDS.B2B_READ;
+  const status = sourceAvailability.getStatus(resolvedName);
   const url = endpoint || status.endpoint || DIRECT_B2B_DEFAULT_ENDPOINT;
 
   try {
@@ -102,12 +93,13 @@ export const fetchDirectB2bAvailability = async ({
       },
       signal,
       timeoutMs,
+      requiredSources: [resolvedName],
     });
-    externalSourceAvailability.reportSuccess(resolvedName, 'Reachable (query OK).');
+    sourceAvailability.reportSuccess(resolvedName, 'Reachable (query OK).');
     return data;
   } catch (error) {
     const message = String(error?.message || error || '');
-    if (message === 'Request cancelled') {
+    if (message === 'Request cancelled' || error?.code === 'SOURCE_UNAVAILABLE') {
       throw error;
     }
     const lower = message.toLowerCase();
@@ -117,7 +109,7 @@ export const fetchDirectB2bAvailability = async ({
       || lower.includes('network')
       || lower.includes('load failed')
     ) {
-      externalSourceAvailability.reportFailure(
+      sourceAvailability.reportFailure(
         resolvedName,
         lower.includes('timeout')
           ? 'External source unavailable (timed out)'

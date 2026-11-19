@@ -33,7 +33,7 @@ import {
 } from './lib/eventBus.js';
 import { normalizeRole, canUseAdvancedHeader } from './utils/roleUtils.js';
 import userActivityTracker, { initUserActivityTracking } from './services/userActivityTracker.js';
-import { initExternalSourceAvailability } from './services/externalSourceAvailabilityService.js';
+import { initSourceAvailability } from './services/sourceAvailabilityService.js';
 import { applyInstanceBrowserIdentity } from './lib/instanceIdentity.js';
 import { enforceDashboardUiState } from './services/dashboardUiState.js';
 
@@ -67,9 +67,9 @@ try {
   initChartDefaults();
   // Initialize lightweight user activity tracking for admin telemetry.
   initUserActivityTracking();
-  // Periodic fail-fast probes for external data sources (B2B, etc.).
-  // Panels ask YES/NO here — they must not invent their own reachability logic.
-  initExternalSourceAvailability();
+  // Framework source catalog + periodic fail-fast probes.
+  // Refresh paths ask YES/NO here — panels stay simple.
+  initSourceAvailability();
   
   console.log('[main.jsx] Theme and Chart.js initialized');
 } catch (e) {

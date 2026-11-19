@@ -109,8 +109,16 @@ export const fetchDirectB2bAvailability = async ({
     clearDirectB2bDown();
     return data;
   } catch (error) {
+    const message = String(error?.message || error || '');
+    // Intentional supersede/unmount cancels must not trip the cooldown.
+    if (message === 'Request cancelled') {
+      throw error;
+    }
     if (isDirectB2bUnavailableError(error)) {
       markDirectB2bDown();
+      if (message.toLowerCase().includes('timeout')) {
+        throw new Error('External source unavailable (timed out)');
+      }
     }
     throw error;
   }

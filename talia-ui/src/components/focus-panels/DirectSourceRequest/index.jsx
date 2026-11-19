@@ -141,11 +141,13 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
   const hasHydratedRef = useRef(false);
   const lastPersistedEventKeyRef = useRef(null);
   const abortControllerRef = useRef(null);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      requestIdRef.current += 1;
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
@@ -267,6 +269,12 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
     }
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
+    const requestId = ++requestIdRef.current;
+    const isCurrentRequest = () => (
+      mountedRef.current
+      && requestIdRef.current === requestId
+      && abortControllerRef.current === abortController
+    );
 
     setLoading(true);
     setError(null);
@@ -288,7 +296,7 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
         timeoutMs: DIRECT_B2B_FAIL_FAST_MS,
       });
 
-      if (!mountedRef.current || abortController.signal.aborted) return;
+      if (!isCurrentRequest()) return;
 
       const voyages = result?.availableVoyages || [];
       console.log('[DirectSourceRequest] Received', voyages.length, 'voyages');
@@ -391,26 +399,21 @@ const DirectSourceRequestContainer = ({ panelInstanceId, panelComponentId }) => 
       succeeded = true;
 
     } catch (err) {
-      if (abortController.signal.aborted && !mountedRef.current) {
-        return;
-      }
+      if (!isCurrentRequest()) return;
+      const message = String(err?.message || err || '');
+      if (message === 'Request cancelled') return;
       console.error('[DirectSourceRequest] Error:', err);
-      if (mountedRef.current) {
-        setError(err);
-        setData(null);
-      }
+      setError(err);
+      setData(null);
     } finally {
-      if (abortControllerRef.current === abortController) {
-        abortControllerRef.current = null;
-      }
+      if (!isCurrentRequest()) return;
+      abortControllerRef.current = null;
       if (queryKey && inFlightQueryKeyRef.current === queryKey) {
         inFlightQueryKeyRef.current = null;
       }
-      if (mountedRef.current) {
-        setLoading(false);
-        if (queryKey && succeeded) {
-          lastFetchedQueryKeyRef.current = queryKey;
-        }
+      setLoading(false);
+      if (queryKey && succeeded) {
+        lastFetchedQueryKeyRef.current = queryKey;
       }
     }
   }, [normalizeDirectSourceVariables]);

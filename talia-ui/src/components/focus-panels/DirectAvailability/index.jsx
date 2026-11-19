@@ -196,11 +196,13 @@ const DirectAvailabilityContainer = () => {
   const hasHydratedRef = useRef(false);
   const lastPersistedEventKeyRef = useRef(null);
   const abortControllerRef = useRef(null);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      requestIdRef.current += 1;
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
@@ -257,6 +259,12 @@ const DirectAvailabilityContainer = () => {
     }
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
+    const requestId = ++requestIdRef.current;
+    const isCurrentRequest = () => (
+      mountedRef.current
+      && requestIdRef.current === requestId
+      && abortControllerRef.current === abortController
+    );
 
     setLoading(true);
     setError(null);
@@ -273,7 +281,7 @@ const DirectAvailabilityContainer = () => {
         signal: abortController.signal,
         timeoutMs: DIRECT_B2B_FAIL_FAST_MS,
       });
-      if (!mountedRef.current || abortController.signal.aborted) return;
+      if (!isCurrentRequest()) return;
 
       const voyages = result?.availableVoyages || [];
       const flattenedData = flattenVoyageData(voyages, variables?._context?.sailCode);
@@ -295,26 +303,23 @@ const DirectAvailabilityContainer = () => {
       }));
       succeeded = true;
     } catch (err) {
-      if (abortController.signal.aborted && !mountedRef.current) {
-        return;
-      }
+      // Superseded / unmounted aborts must not paint "Request cancelled" or clear
+      // the newer request's loading state — that race was freezing focus switches.
+      if (!isCurrentRequest()) return;
+      const message = String(err?.message || err || '');
+      if (message === 'Request cancelled') return;
       console.error('[DirectAvailability] Error:', err);
-      if (mountedRef.current) {
-        setError(err);
-        setData([]);
-      }
+      setError(err);
+      setData([]);
     } finally {
-      if (abortControllerRef.current === abortController) {
-        abortControllerRef.current = null;
-      }
+      if (!isCurrentRequest()) return;
+      abortControllerRef.current = null;
       if (queryKey && inFlightQueryKeyRef.current === queryKey) {
         inFlightQueryKeyRef.current = null;
       }
-      if (mountedRef.current) {
-        setLoading(false);
-        if (queryKey && succeeded) {
-          lastFetchedQueryKeyRef.current = queryKey;
-        }
+      setLoading(false);
+      if (queryKey && succeeded) {
+        lastFetchedQueryKeyRef.current = queryKey;
       }
     }
   }, []);

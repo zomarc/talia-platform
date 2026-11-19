@@ -28,6 +28,17 @@ export const startTrackedGraphqlOperation = ({
   purpose
 });
 
+const isTaliaGraphqlUrl = (url) => {
+  const value = String(url || '').trim();
+  if (!value || value.startsWith('/')) return true;
+  try {
+    if (typeof window === 'undefined' || !window.location?.origin) return false;
+    return new URL(value, window.location.origin).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+};
+
 export const trackedFetchGraphql = async ({
   url = '/api/graphql',
   query,
@@ -49,8 +60,13 @@ export const trackedFetchGraphql = async ({
 
   const controller = new AbortController();
   let timeoutId = null;
+  let timedOut = false;
   const onExternalAbort = () => {
     if (!controller.signal.aborted) controller.abort();
+  };
+  const onTimeoutAbort = () => {
+    timedOut = true;
+    onExternalAbort();
   };
 
   if (signal) {
@@ -63,17 +79,21 @@ export const trackedFetchGraphql = async ({
 
   const parsedTimeout = Number(timeoutMs);
   if (Number.isFinite(parsedTimeout) && parsedTimeout > 0) {
-    timeoutId = setTimeout(onExternalAbort, parsedTimeout);
+    timeoutId = setTimeout(onTimeoutAbort, parsedTimeout);
   }
+
+  // External B2B hosts: skip Talia auth headers so we do not add extra CORS
+  // preflight surface area on an already-unreachable endpoint.
+  const requestHeaders = {
+    'Content-Type': 'application/json',
+    ...(isTaliaGraphqlUrl(url) ? GraphQLUtils.getRequestHeaders() : {}),
+    ...headers,
+  };
 
   try {
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...GraphQLUtils.getRequestHeaders(),
-        ...headers,
-      },
+      headers: requestHeaders,
       body: JSON.stringify({ query: getQueryText(query), variables }),
       signal: controller.signal,
     });
@@ -84,10 +104,10 @@ export const trackedFetchGraphql = async ({
     finalizeTracker(completeQuery, { data: payload?.data || null });
     return payload?.data || null;
   } catch (error) {
-    const abortedByTimeout = controller.signal.aborted && !(signal && signal.aborted);
-    const normalized = (error?.name === 'AbortError' || controller.signal.aborted)
+    const wasAborted = error?.name === 'AbortError' || controller.signal.aborted;
+    const normalized = wasAborted
       ? new Error(
-          abortedByTimeout && Number.isFinite(parsedTimeout) && parsedTimeout > 0
+          timedOut && Number.isFinite(parsedTimeout) && parsedTimeout > 0
             ? `Timeout after ${parsedTimeout}ms`
             : 'Request cancelled'
         )

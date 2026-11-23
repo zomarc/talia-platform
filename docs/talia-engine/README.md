@@ -8,6 +8,7 @@ Planning docs plus the **v0 Agent Runtime** in `/talia-engine` (TypeScript, port
 | [RM-AGENT-FRAMEWORK.md](./RM-AGENT-FRAMEWORK.md) | Framework sketch |
 | [contracts/finding.schema.json](./contracts/finding.schema.json) | Frozen Finding JSON Schema (v0) |
 | [../../talia-engine/README.md](../../talia-engine/README.md) | How to run the runtime |
+| [DRIVER-ANALYSIS.md](./DRIVER-ANALYSIS.md) | Prior / peerset / value science element (advisory Evidence) |
 
 **Terminology is normative in** [ADR-001](../adr/ADR-001-rm-agent-framework-terminology.md).
 

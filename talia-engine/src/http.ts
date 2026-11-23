@@ -1,6 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { engineSnapshot, runRmAgents } from './runtime/runner.js';
 import { pythonStatus, runPythonAnalyze } from './python/runner.js';
+import { promoteEvidenceToSource, runDriverAnalysis } from './science/driverAnalysis.js';
+import { SCIENCE_TASK_ID } from './contracts/evidence.js';
 
 const VERSION = '0.1.0';
 
@@ -75,6 +77,39 @@ export function createEngineServer() {
           task: String(body.task || 'ping'),
           payload: body.payload && typeof body.payload === 'object' ? body.payload : {},
         }));
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/science/driver-analysis') {
+        const body = await readJson(req);
+        const result = await runDriverAnalysis({
+          sailCodes: Array.isArray(body.sailCodes) ? body.sailCodes : undefined,
+          shipCode: body.shipCode ? String(body.shipCode) : undefined,
+          historicLimit: body.historicLimit,
+          forwardLimit: body.forwardLimit,
+          persist: body.persist !== false,
+          trigger: 'on_demand',
+        });
+        send(res, 200, {
+          success: true,
+          task_id: SCIENCE_TASK_ID,
+          run: result.run,
+          artifact_count: result.artifacts.length,
+          portfolio_revenue_value: result.portfolio_revenue_value,
+          artifacts: result.artifacts,
+          citations: result.citations,
+          python: result.python,
+        });
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/science/evidence/promote') {
+        const body = await readJson(req);
+        const evidenceId = String(body.evidenceId || '');
+        const artifact = body.artifact;
+        if (!evidenceId || !artifact) {
+          send(res, 400, { success: false, error: 'evidenceId and artifact required' });
+          return;
+        }
+        send(res, 200, await promoteEvidenceToSource(evidenceId, artifact));
         return;
       }
       send(res, 404, { error: 'not found' });

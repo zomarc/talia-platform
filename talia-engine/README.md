@@ -35,3 +35,14 @@ Default port **4100**. Reads World State from local Supabase and writes `rm_find
 4. UI Checklist + Engine Activity (via talia-server GraphQL)
 
 Probability, Competitor, Assistant, and reservation write-back are not in v0.
+
+## Driver Analysis (science element)
+
+Discrete Python job `science.driver_analysis.v0` — peerset / prior / decision moments /
+material+revenue value. Advisory Evidence in `rm_science_evidence` (not Findings).
+
+```bash
+npm run driver-analysis
+```
+
+See [docs/talia-engine/DRIVER-ANALYSIS.md](../docs/talia-engine/DRIVER-ANALYSIS.md).

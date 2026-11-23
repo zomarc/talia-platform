@@ -145,7 +145,7 @@ Celestyal does **not** need to model every Talia permission in the IdP.
 - [ ] Callback URI registered exactly
 - [ ] OIDC client secret in Celestyal Key Vault + Talia instance env
 - [ ] Group/role map agreed (`VITE_OIDC_ROLE_MAP`)
-- [ ] `GOTRUE_DISABLE_SIGNUP=true`; SSO primary
+- [ ] `GOTRUE_DISABLE_SIGNUP=false` so first SSO can create `auth.users`; SSO primary; gate via Entra
 - [ ] Test users in each role
 - [ ] Break-glass SUPER_USER documented and `VITE_ENABLE_BREAK_GLASS` controlled
 
@@ -158,11 +158,11 @@ Celestyal does **not** need to model every Talia permission in the IdP.
 | `GOTRUE_SITE_URL` | `https://<hostname>` |
 | `API_EXTERNAL_URL` / `SUPABASE_PUBLIC_URL` | `https://<hostname>` |
 | `GOTRUE_URI_ALLOW_LIST` | `https://<hostname>,https://<hostname>/**` |
-| `GOTRUE_DISABLE_SIGNUP` | `true` |
+| `GOTRUE_DISABLE_SIGNUP` | `false` (required so first SSO login can create `auth.users`; gate who can sign in via Entra app assignment, not GoTrue) |
 | `GOTRUE_EXTERNAL_AZURE_ENABLED` | `true` |
 | `GOTRUE_EXTERNAL_AZURE_CLIENT_ID` | from Celestyal |
 | `GOTRUE_EXTERNAL_AZURE_SECRET` | from Key Vault |
-| `GOTRUE_EXTERNAL_AZURE_URL` | `https://login.microsoftonline.com/<tenant-id>/v2.0` |
+| `GOTRUE_EXTERNAL_AZURE_URL` | `https://login.microsoftonline.com/<tenant-id>` (no trailing `/v2.0` — GoTrue appends `/oauth2/v2.0/authorize`) |
 | `GOTRUE_EXTERNAL_AZURE_REDIRECT_URI` | `https://<hostname>/auth/v1/callback` |
 | `VITE_AUTH_MODE` | `oidc` |
 | `VITE_ENABLE_SSO` | `true` (optional if `VITE_AUTH_MODE=oidc`) |
@@ -180,6 +180,14 @@ Reference: `.env.staging.example`, `docker-compose.staging.yml`.
 3. **Disabled IdP user** — cannot complete login.
 4. **Break-glass** — with `VITE_ENABLE_BREAK_GLASS=true`, emergency password still works for SUPER_USER.
 5. **Logout** — returns to landing; SSO button is primary.
+
+### Ops note — `permission denied for table identities`
+
+After DB restore/ownership drift, GoTrue (`supabase_auth_admin`) may lack rights on `auth.identities` / `auth.users`. Callback then bounces to `/?error=server_error&error_description=...permission denied for table identities...`. Fix with `scripts/supabase/fix-auth-schema-grants.sql` as `postgres`, then `ALTER ROLE supabase_auth_admin BYPASSRLS` as `supabase_admin`.
+
+### Ops note — nginx `502` on `/auth/v1/callback`
+
+GoTrue’s OAuth callback `Location` (tokens / long Azure `code`) exceeds default nginx `proxy_buffer_size`. Error log: `upstream sent too big header while reading response header from upstream`. On the host site for `talia.celestyal.com`, set for the Kong auth location: `proxy_buffer_size 128k; proxy_buffers 8 128k; proxy_busy_buffers_size 256k;` and `large_client_header_buffers 8 64k;`.
 
 ---
 

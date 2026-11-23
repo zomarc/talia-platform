@@ -2117,6 +2117,67 @@ export const typeDefs = `#graphql
     milestones: [ProjectMilestoneInput!]!
   }
 
+  type ScienceEvidence {
+    evidenceId: ID!
+    taskId: String!
+    methodVersion: String!
+    role: String!
+    asOf: String!
+    scopeType: String!
+    scope: JSON!
+    subjectType: String!
+    subjectId: String!
+    subject: JSON!
+    peerset: JSON!
+    prior: JSON!
+    decisionMoments: JSON!
+    materialValue: JSON!
+    revenueValue: JSON!
+    covariateRanks: JSON!
+    forwardNow: JSON
+    reasons: JSON!
+    diagnostics: JSON!
+    payload: JSON!
+    tenantId: String
+    runId: String
+    createdAt: String
+    updatedAt: String
+  }
+
+  input ScienceEvidenceFilters {
+    subjectId: String
+    subjectIds: [String!]
+    role: String
+    horizon: String
+    limit: Int
+  }
+
+  input RunDriverAnalysisInput {
+    sailCodes: [String!]
+    shipCode: String
+    historicLimit: Int
+    forwardLimit: Int
+  }
+
+  type RunDriverAnalysisResult {
+    success: Boolean!
+    runId: String
+    artifactCount: Int!
+    portfolioRevenueValue: Float
+    message: String
+    error: String
+    artifacts: [ScienceEvidence!]
+    citations: JSON
+  }
+
+  type PromoteScienceEvidenceResult {
+    success: Boolean!
+    role: String
+    blockers: [String!]!
+    citation: JSON
+    evidence: ScienceEvidence
+  }
+
   input RunRmAgentsInput {
     sailCodes: [String!]
     agentIds: [String!]
@@ -2287,6 +2348,7 @@ export const typeDefs = `#graphql
     rmFindings(filters: RmFindingFilters): [RmFinding!]!
     rmEngineRuns(limit: Int): [RmEngineRun!]!
     rmEngineStatus: RmEngineStatus!
+    scienceEvidence(filters: ScienceEvidenceFilters): [ScienceEvidence!]!
 
     # Requirements Log (ADMIN+)
     requirementItems(filters: RequirementItemFilters): [RequirementItem!]!
@@ -2399,6 +2461,8 @@ export const typeDefs = `#graphql
     # talia-engine (Phase A)
     updateRmFindingStatus(findingId: ID!, status: String!): RmFinding!
     runRmAgents(input: RunRmAgentsInput): RunRmAgentsResult!
+    runDriverAnalysis(input: RunDriverAnalysisInput): RunDriverAnalysisResult!
+    promoteScienceEvidence(evidenceId: ID!): PromoteScienceEvidenceResult!
 
     # Requirements Log (ADMIN+)
     upsertRequirementItem(input: RequirementItemInput!): RequirementItem!

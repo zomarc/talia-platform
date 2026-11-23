@@ -4,15 +4,20 @@ export function engineUrl(): string {
   return String(DEFAULT_ENGINE_URL).replace(/\/$/, '');
 }
 
-async function engineFetch(pathname: string, init?: RequestInit) {
+async function engineFetch(pathname: string, init?: RequestInit, timeoutMs?: number) {
   const url = `${engineUrl()}${pathname}`;
+  const ms = Number(
+    timeoutMs
+    ?? process.env.TALIA_ENGINE_TIMEOUT_MS
+    ?? 20000
+  );
   const response = await fetch(url, {
     ...init,
     headers: {
       'content-type': 'application/json',
       ...(init?.headers || {}),
     },
-    signal: AbortSignal.timeout(Number(process.env.TALIA_ENGINE_TIMEOUT_MS || 20000)),
+    signal: AbortSignal.timeout(ms),
   });
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -53,6 +58,31 @@ export async function requestEngineRun(input: {
   limit?: number;
 }) {
   return engineFetch('/runs', {
+    method: 'POST',
+    body: JSON.stringify(input || {}),
+  });
+}
+
+export async function requestDriverAnalysis(input: {
+  sailCodes?: string[];
+  shipCode?: string;
+  historicLimit?: number;
+  forwardLimit?: number;
+  persist?: boolean;
+} = {}) {
+  // World-state + Python can exceed the default 20s RM-agent timeout.
+  const timeoutMs = Number(process.env.TALIA_ENGINE_DRIVER_TIMEOUT_MS || 120000);
+  return engineFetch('/science/driver-analysis', {
+    method: 'POST',
+    body: JSON.stringify(input || {}),
+  }, timeoutMs);
+}
+
+export async function requestEvidencePromote(input: {
+  evidenceId: string;
+  artifact: Record<string, unknown>;
+}) {
+  return engineFetch('/science/evidence/promote', {
     method: 'POST',
     body: JSON.stringify(input || {}),
   });

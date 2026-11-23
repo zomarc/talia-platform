@@ -8,7 +8,8 @@
     "dev": "npx tsx watch src/index.ts",
     "start": "npx tsx src/index.ts",
     "run": "npx tsx src/cli.ts run",
-    "test": "npx tsx --test src/rm_agents/regulator.test.ts src/contracts/finding.test.ts src/python/runner.test.ts"
+    "driver-analysis": "npx tsx src/cli.ts driver-analysis",
+    "test": "npx tsx --test src/rm_agents/regulator.test.ts src/contracts/finding.test.ts src/contracts/evidence.test.ts src/python/runner.test.ts src/science/driverAnalysis.test.ts"
   },
   "engines": {
     "node": ">=18.0.0"

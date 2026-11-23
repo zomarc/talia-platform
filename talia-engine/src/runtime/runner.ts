@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { validateFinding, type Finding } from '../contracts/finding.js';
 import { loadWorldState } from '../adapters/worldStateClient.js';
 import { persistRun, replaceOpenFindings } from '../adapters/findingWriter.js';
+import { loadSourceCitationsBySail } from '../adapters/evidenceWriter.js';
 import { getRmAgent, listRmAgents } from './registry.js';
 import { lastRun, listRuns, rememberRun, updateRun, type EngineRun } from './runStore.js';
 
@@ -46,10 +47,28 @@ export async function runRmAgents(options: RunOptions = {}) {
       ? options.sailCodes.map((id) => ({ type: 'sailing', id }))
       : 'all-configured' as const;
 
+    let scienceCitations: Record<string, { evidence_id: string; task_id: string; role: string; subject_id: string; fields?: string[] }> = {};
+    try {
+      scienceCitations = await loadSourceCitationsBySail(world.sails.map((s) => s.sail_code));
+    } catch {
+      scienceCitations = {};
+    }
+
     const findings: Finding[] = [];
     for (const agent of agents) {
       const produced = await agent.evaluate({ as_of: asOf, subjects, world });
       for (const finding of produced) {
+        const citation = scienceCitations[String(finding.subject?.id || '')];
+        if (citation) {
+          const prior = finding.evidence && typeof finding.evidence === 'object' ? finding.evidence : {};
+          const existing = Array.isArray((prior as any).science_citations)
+            ? (prior as any).science_citations
+            : [];
+          finding.evidence = {
+            ...prior,
+            science_citations: [...existing, citation],
+          };
+        }
         const errors = validateFinding(finding);
         if (errors.length) {
           throw new Error(`${agent.id} invalid Finding: ${errors.join('; ')}`);

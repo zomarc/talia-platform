@@ -630,13 +630,23 @@ const sampleFitDataColumnWidths = (table, sampleSize = FIT_DATA_SAMPLE_ROWS) => 
 /** One-pass layout refresh; preserve scroll without a second rAF redraw (that caused pixel bounce). */
 const refreshTableLayout = (table) => {
   if (!table) return;
-  const snapshot = captureTableScroll(table);
-  table.layoutRefresh?.(true);
-  sampleFitDataColumnWidths(table);
-  equalizeMarkedColumnWidths(table);
-  table.redraw?.(true);
-  equalizeMarkedColumnWidths(table);
-  restoreTableScroll(snapshot);
+  const meta = tableMeta.get(table) || {};
+  // groupVisibilityChanged can fire dozens of times while MSE collapses months;
+  // never nest full redraws on the same table.
+  if (meta.syncLayoutDepth) return;
+  meta.syncLayoutDepth = 1;
+  tableMeta.set(table, meta);
+  try {
+    const snapshot = captureTableScroll(table);
+    table.layoutRefresh?.(true);
+    sampleFitDataColumnWidths(table);
+    equalizeMarkedColumnWidths(table);
+    table.redraw?.(true);
+    equalizeMarkedColumnWidths(table);
+    restoreTableScroll(snapshot);
+  } finally {
+    meta.syncLayoutDepth = 0;
+  }
 };
 
 /** Schedule layout refresh after data/visibility changes (safe before tableBuilt). */
@@ -834,21 +844,21 @@ const ensureLayoutListenerBound = () => {
             && meta?.panelInstanceId
             && meta.panelInstanceId === activePanelId
           );
-          // Prefer the active panel's tables; also flush any deferred refresh and
-          // any visible table that never registered a panel id (common today).
-          if (
-            belongsToActivePanel
-            || meta?.pendingLayoutRefresh
-            || !meta?.panelInstanceId
-          ) {
+          // Only force-layout the active panel. Flushing every pending/unscoped
+          // table on tab switch re-drew Master Sailing Explorer and hung Chrome.
+          if (belongsToActivePanel) {
             applyLayoutModeToTable(table, { force: true });
-            if (belongsToActivePanel && meta?.lastVisibleScroll) {
+            if (meta?.lastVisibleScroll) {
               restoreTableScroll({
                 holder: getTableScrollHolder(table),
                 top: meta.lastVisibleScroll.top,
                 left: meta.lastVisibleScroll.left,
               });
             }
+            return;
+          }
+          if (!meta?.panelInstanceId && meta?.pendingLayoutRefresh) {
+            scheduleTabulatorLayoutRefresh(table);
           }
         });
       });
@@ -1029,7 +1039,14 @@ const getWrappedTabulatorClass = () => {
         }
       });
       this.on?.('groupVisibilityChanged', () => {
-        refreshTableLayout(this);
+        const meta = tableMeta.get(this) || {};
+        if (meta.groupLayoutRaf) return;
+        meta.groupLayoutRaf = window.requestAnimationFrame(() => {
+          meta.groupLayoutRaf = 0;
+          tableMeta.set(this, meta);
+          scheduleTabulatorLayoutRefresh(this);
+        });
+        tableMeta.set(this, meta);
       });
       this.on?.('tableDestroyed', () => {
         const gone = tableMeta.get(this);

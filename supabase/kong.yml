@@ -19,6 +19,13 @@ services:
           - /auth/v1/
     plugins:
       - name: cors
+      # nginx terminates TLS; Kong sees http and would otherwise advertise http to GoTrue
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - X-Forwarded-Proto:https
+              - X-Forwarded-Port:443
 
   - name: rest-v1
     url: http://supabase-rest:3000/

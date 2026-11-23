@@ -62,14 +62,27 @@ export function extractOidcRoleHints(supabaseUser = {}) {
     groups.push(String(value).trim());
   };
 
+  const customClaims = {
+    ...(meta.custom_claims && typeof meta.custom_claims === 'object' ? meta.custom_claims : {}),
+    ...(identityData.custom_claims && typeof identityData.custom_claims === 'object'
+      ? identityData.custom_claims
+      : {}),
+  };
+
+  // Entra via GoTrue Azure often nests groups under custom_claims.
   pushGroup(meta.groups);
   pushGroup(meta.group);
   pushGroup(meta.roles);
+  pushGroup(customClaims.groups);
+  pushGroup(customClaims.group);
+  pushGroup(customClaims.roles);
   pushGroup(identityData.groups);
   pushGroup(identityData.group);
 
   const explicit = meta.talia_role
     || meta.taliaRole
+    || customClaims.talia_role
+    || customClaims.taliaRole
     || identityData.talia_role
     || identityData.taliaRole
     || null;

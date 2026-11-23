@@ -1,0 +1,234 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://talia.local/contracts/science.driver_analysis.v0.schema.json",
+  "title": "ScienceEvidence",
+  "description": "Advisory (then source) artifact from science.driver_analysis.v0. Must not invent Finding score or recommended_action.",
+  "type": "object",
+  "required": [
+    "evidence_id",
+    "task_id",
+    "method_version",
+    "role",
+    "as_of",
+    "scope",
+    "subject",
+    "peerset",
+    "prior",
+    "decision_moments",
+    "material_value",
+    "revenue_value",
+    "covariate_ranks",
+    "forward_now",
+    "reasons",
+    "diagnostics"
+  ],
+  "properties": {
+    "evidence_id": { "type": "string", "minLength": 1 },
+    "task_id": { "type": "string", "const": "science.driver_analysis.v0" },
+    "method_version": { "type": "string", "minLength": 1 },
+    "role": { "type": "string", "enum": ["advisory", "source"] },
+    "as_of": { "type": "string", "format": "date-time" },
+    "scope": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string" },
+        "ship_code": { "type": ["string", "null"] },
+        "season": { "type": ["string", "null"] },
+        "label": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "subject": {
+      "type": "object",
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "type": "string" },
+        "id": { "type": "string" },
+        "ship_code": { "type": ["string", "null"] },
+        "sail_date_from": { "type": ["string", "null"] },
+        "horizon": { "type": "string", "enum": ["historic", "forward_now"] }
+      },
+      "additionalProperties": true
+    },
+    "peerset": {
+      "type": "object",
+      "required": ["cluster_id", "members", "n", "selection"],
+      "properties": {
+        "cluster_id": { "type": "string" },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["sail_code", "weight", "in_reason"],
+            "properties": {
+              "sail_code": { "type": "string" },
+              "weight": { "type": "number" },
+              "in_reason": { "type": "string" },
+              "ship_code": { "type": ["string", "null"] },
+              "sail_date_from": { "type": ["string", "null"] },
+              "end_lf": { "type": ["number", "null"] }
+            },
+            "additionalProperties": true
+          }
+        },
+        "n": { "type": "integer", "minimum": 0 },
+        "selection": { "type": "string" },
+        "manual_peer_sail_code": { "type": ["string", "null"] },
+        "manual_vs_learned": { "type": ["object", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "prior": {
+      "type": "object",
+      "required": ["pace", "revenue"],
+      "properties": {
+        "pace": {
+          "type": "object",
+          "required": ["mean_lf", "band_low", "band_high", "curve"],
+          "properties": {
+            "mean_lf": { "type": "number" },
+            "band_low": { "type": "number" },
+            "band_high": { "type": "number" },
+            "curve": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["weeks_until_sailing", "lf"],
+                "properties": {
+                  "weeks_until_sailing": { "type": "number" },
+                  "lf": { "type": "number" },
+                  "band_low": { "type": ["number", "null"] },
+                  "band_high": { "type": ["number", "null"] }
+                },
+                "additionalProperties": true
+              }
+            }
+          },
+          "additionalProperties": true
+        },
+        "revenue": {
+          "type": "object",
+          "required": ["mean_yield_per_guest", "implied_end_revenue"],
+          "properties": {
+            "mean_yield_per_guest": { "type": "number" },
+            "implied_end_revenue": { "type": "number" },
+            "currency": { "type": "string" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "decision_moments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "weeks_until_sailing",
+          "when_label",
+          "posture",
+          "actual_lf",
+          "prior_lf",
+          "supportable_alternate",
+          "material_delta_guests",
+          "revenue_delta",
+          "rationale"
+        ],
+        "properties": {
+          "weeks_until_sailing": { "type": "number" },
+          "when_label": { "type": "string" },
+          "posture": { "type": "string" },
+          "actual_lf": { "type": "number" },
+          "prior_lf": { "type": "number" },
+          "supportable_alternate": { "type": "string" },
+          "material_delta_guests": { "type": "number" },
+          "revenue_delta": { "type": "number" },
+          "rationale": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "material_value": {
+      "type": "object",
+      "required": ["guests_delta", "lf_delta", "unit"],
+      "properties": {
+        "guests_delta": { "type": "number" },
+        "lf_delta": { "type": "number" },
+        "cabins_delta": { "type": ["number", "null"] },
+        "unit": { "type": "string" },
+        "label": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "revenue_value": {
+      "type": "object",
+      "required": ["amount", "currency", "basis"],
+      "properties": {
+        "amount": { "type": "number" },
+        "currency": { "type": "string" },
+        "basis": { "type": "string" },
+        "label": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "covariate_ranks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["feature", "importance", "direction", "stability", "note"],
+        "properties": {
+          "feature": { "type": "string" },
+          "importance": { "type": "number" },
+          "direction": { "type": "string" },
+          "stability": { "type": "number" },
+          "partial_association": { "type": ["number", "null"] },
+          "note": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "forward_now": {
+      "type": ["object", "null"],
+      "properties": {
+        "weeks_until_sailing": { "type": "number" },
+        "observed_lf": { "type": "number" },
+        "prior_lf": { "type": "number" },
+        "material_at_stake_guests": { "type": "number" },
+        "revenue_at_stake": { "type": "number" },
+        "groups_mr_context": { "type": "object" },
+        "drivers_of_gap": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "statement", "historic_proof", "forward_implication"],
+        "properties": {
+          "id": { "type": "string" },
+          "statement": { "type": "string" },
+          "historic_proof": { "type": "string" },
+          "forward_implication": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "required": ["n_historic", "n_forward", "honesty"],
+      "properties": {
+        "n_historic": { "type": "integer" },
+        "n_forward": { "type": "integer" },
+        "honesty": { "type": "string" },
+        "assumptions": { "type": "array", "items": { "type": "string" } },
+        "missing_features": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "run_id": { "type": ["string", "null"] },
+    "tenant_id": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}

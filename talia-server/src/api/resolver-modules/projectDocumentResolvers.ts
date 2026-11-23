@@ -207,6 +207,14 @@ export const projectDocumentMutationResolvers = {
     if (referenceCode) patch.reference_code = referenceCode;
     if (input?.isStarred != null) patch.is_starred = Boolean(input.isStarred);
 
+    const explainDocumentDbError = (message: string) => {
+      const text = String(message || '');
+      if (/is_starred/i.test(text) || /column .* does not exist/i.test(text)) {
+        return `${text} — apply migration 20261104172145_project_document_is_starred.sql (Documents star column).`;
+      }
+      return text;
+    };
+
     if (id) {
       const { data: existing, error: findError } = await supabase
         .from('project_document')
@@ -216,7 +224,7 @@ export const projectDocumentMutationResolvers = {
       if (findError) throw new Error(findError.message);
       if (!existing) throw new Error('Document not found');
       const { error } = await supabase.from('project_document').update(patch).eq('id', id);
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(explainDocumentDbError(error.message));
       if (Array.isArray(input.links)) await replaceLinks(id, input.links);
       return loadOne(id);
     }
@@ -227,7 +235,7 @@ export const projectDocumentMutationResolvers = {
       .insert(patch)
       .select('id')
       .single();
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(explainDocumentDbError(error.message));
     if (Array.isArray(input.links)) await replaceLinks(data.id, input.links);
     return loadOne(data.id);
   },

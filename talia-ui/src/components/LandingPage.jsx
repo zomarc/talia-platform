@@ -1,6 +1,23 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { GraphQLUtils } from '../lib/apolloClient';
+import taliaLogo from '../assets/talia-default-logo.png';
+
+const readUrlAuthError = () => {
+  if (typeof window === 'undefined') return '';
+  const search = new URLSearchParams(window.location.search || '');
+  const hash = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+  const raw = search.get('error_description')
+    || hash.get('error_description')
+    || search.get('error')
+    || hash.get('error');
+  if (!raw) return '';
+  try {
+    return decodeURIComponent(String(raw).replace(/\+/g, ' '));
+  } catch {
+    return String(raw);
+  }
+};
 
 const LandingPage = () => {
   const {
@@ -17,6 +34,8 @@ const LandingPage = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [showBreakGlass, setShowBreakGlass] = useState(!isOidcAuthMode);
+  const urlAuthError = useMemo(() => readUrlAuthError(), []);
+  const displayError = error?.message || urlAuthError;
 
   const handleCelestyalSso = async () => {
     setLoading(true);
@@ -84,111 +103,130 @@ const LandingPage = () => {
 
   return (
     <div className="landing-page">
-      <div className="landing-page__card">
-        <div className="landing-page__header">
-          <h1 className="landing-page__title">Talia UI</h1>
-          <p className="landing-page__subtitle">Cruise Management Dashboard</p>
+      <aside className="landing-page__brand" aria-label="Talia">
+        <div className="landing-page__brand-glow" aria-hidden="true" />
+        <div className="landing-page__brand-inner">
+          <img
+            className="landing-page__logo"
+            src={taliaLogo}
+            alt="Talia"
+          />
+          <p className="landing-page__brand-line">Revenue management for the voyage</p>
         </div>
+      </aside>
 
-        {error && (
-          <div className="landing-page__alert landing-page__alert--error">
-            {error.message || 'An error occurred'}
-          </div>
-        )}
+      <main className="landing-page__panel">
+        <div className="landing-page__panel-inner">
+          <header className="landing-page__header">
+            <p className="landing-page__eyebrow">Welcome</p>
+            <h1 className="landing-page__title">Sign in</h1>
+            <p className="landing-page__subtitle">Cruise management workspace</p>
+          </header>
 
-        {message && (
-          <div className="landing-page__alert landing-page__alert--success">
-            {message}
-          </div>
-        )}
+          {displayError && (
+            <div className="landing-page__alert landing-page__alert--error" role="alert">
+              {displayError}
+            </div>
+          )}
 
-        {isOidcAuthMode ? (
-          <>
-            <p className="landing-page__notice">
-              Sign in with your Celestyal account. Access inside Talia is controlled by your Talia role.
-            </p>
-            <button
-              type="button"
-              onClick={handleCelestyalSso}
-              disabled={loading}
-              className="landing-page__button landing-page__button--sso"
-            >
-              {loading ? 'Redirecting…' : 'Sign in with Celestyal'}
-            </button>
-            {isBreakGlassEnabled ? (
+          {message && (
+            <div className="landing-page__alert landing-page__alert--success" role="status">
+              {message}
+            </div>
+          )}
+
+          {isOidcAuthMode ? (
+            <>
+              <p className="landing-page__notice">
+                Sign in with your Celestyal account. Access inside Talia is controlled by your Talia role.
+              </p>
               <button
                 type="button"
-                className="landing-page__break-glass-toggle"
-                onClick={() => setShowBreakGlass((open) => !open)}
-              >
-                {showBreakGlass ? 'Hide emergency admin' : 'Emergency admin'}
-              </button>
-            ) : null}
-          </>
-        ) : (
-          <div className="landing-page__notice">
-            <strong>Development Mode:</strong> Simple email/password authentication
-          </div>
-        )}
-
-        {(!isOidcAuthMode || showBreakGlass) && isBreakGlassEnabled ? (
-          <>
-            {!isOidcAuthMode || isDevMode ? (
-              <button
-                type="button"
-                onClick={handleAdminLogin}
+                onClick={handleCelestyalSso}
                 disabled={loading}
-                className="landing-page__button landing-page__button--admin"
+                className="landing-page__button landing-page__button--sso"
               >
-                {loading ? 'Signing in...' : 'Quick Admin Access (Dev Only)'}
+                {loading ? 'Redirecting…' : 'Sign in with Celestyal'}
               </button>
-            ) : null}
+              {isBreakGlassEnabled ? (
+                <button
+                  type="button"
+                  className="landing-page__break-glass-toggle"
+                  onClick={() => setShowBreakGlass((open) => !open)}
+                >
+                  {showBreakGlass ? 'Hide emergency admin' : 'Emergency admin'}
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <div className="landing-page__notice">
+              <strong>Development Mode:</strong> Simple email/password authentication
+            </div>
+          )}
 
-            <form onSubmit={handleSubmit} className="landing-page__form">
-              <div className="landing-page__field">
-                <label className="landing-page__label">Email Address</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  required
+          {(!isOidcAuthMode || showBreakGlass) && isBreakGlassEnabled ? (
+            <>
+              {!isOidcAuthMode || isDevMode ? (
+                <button
+                  type="button"
+                  onClick={handleAdminLogin}
                   disabled={loading}
-                  className="landing-page__input"
-                />
-              </div>
-              <div className="landing-page__field landing-page__field--spaced">
-                <label className="landing-page__label">Password</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  required
-                  disabled={loading}
-                  className="landing-page__input"
-                />
-                {!isOidcAuthMode ? (
-                  <p className="landing-page__hint">
-                    New users will be created automatically
-                  </p>
-                ) : (
-                  <p className="landing-page__hint">
-                    Break-glass only — not for day-to-day access
-                  </p>
-                )}
-              </div>
-              <button
-                type="submit"
-                disabled={loading || !email || !password}
-                className="landing-page__button landing-page__button--submit"
-              >
-                {loading ? 'Signing in...' : (isOidcAuthMode ? 'Emergency sign in' : 'Sign In')}
-              </button>
-            </form>
-          </>
-        ) : null}
-      </div>
+                  className="landing-page__button landing-page__button--admin"
+                >
+                  {loading ? 'Signing in...' : 'Quick Admin Access (Dev Only)'}
+                </button>
+              ) : null}
+
+              <form onSubmit={handleSubmit} className="landing-page__form">
+                <div className="landing-page__field">
+                  <label className="landing-page__label" htmlFor="landing-email">Email Address</label>
+                  <input
+                    id="landing-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    required
+                    disabled={loading}
+                    className="landing-page__input"
+                    autoComplete="username"
+                  />
+                </div>
+                <div className="landing-page__field landing-page__field--spaced">
+                  <label className="landing-page__label" htmlFor="landing-password">Password</label>
+                  <input
+                    id="landing-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    required
+                    disabled={loading}
+                    className="landing-page__input"
+                    autoComplete="current-password"
+                  />
+                  {!isOidcAuthMode ? (
+                    <p className="landing-page__hint">
+                      New users will be created automatically
+                    </p>
+                  ) : (
+                    <p className="landing-page__hint">
+                      Break-glass only — not for day-to-day access
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading || !email || !password}
+                  className="landing-page__button landing-page__button--submit"
+                >
+                  {loading ? 'Signing in...' : (isOidcAuthMode ? 'Emergency sign in' : 'Sign In')}
+                </button>
+              </form>
+            </>
+          ) : null}
+        </div>
+      </main>
     </div>
   );
 };

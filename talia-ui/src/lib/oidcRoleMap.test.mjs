@@ -39,5 +39,13 @@ test('resolveOidcSeedRole prefers explicit talia_role then group map', () => {
     }, { 'rm-controllers': 'MANAGER' }),
     'MANAGER'
   );
+  assert.equal(
+    resolveOidcSeedRole({
+      user_metadata: {
+        custom_claims: { groups: ['40a4cefa-1557-4b41-9817-ca0a8c985d53'] },
+      },
+    }, { '40a4cefa-1557-4b41-9817-ca0a8c985d53': 'ADMIN' }),
+    'ADMIN'
+  );
   assert.equal(resolveOidcSeedRole({}, {}), 'USER');
 });

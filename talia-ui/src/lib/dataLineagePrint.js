@@ -35,7 +35,19 @@ export function buildDataLineageExportRows({ detail, listRows = [], orientation 
         synapse: '',
         talia: row.tableNames || '',
         field: '',
-        provenance: `${row.usageCount || 0} opens · ${row.rolesLabel || '—'}`,
+        provenance: `${row.usageCount || 0} refreshes · ${row.rolesLabel || '—'}`,
+        lastOpen: formatWhen(row.lastAt),
+      });
+      return;
+    }
+    if (orientation === 'fields') {
+      rows.push({
+        section: 'Catalog',
+        item: row.label || row.field || '',
+        synapse: row.sourceLabel || '',
+        talia: row.tableNames || '',
+        field: row.field || '',
+        provenance: `${row.componentCount || 0} components · ${row.usageCount || 0} refreshes · ${row.topComponents || ''}`,
         lastOpen: formatWhen(row.lastAt),
       });
       return;
@@ -130,6 +142,7 @@ export const DATA_LINEAGE_EXPORT_COLUMNS = [
 
 /**
  * Printable HTML mirroring the on-screen detail card + compact catalog summary.
+ * @param {string} [diagramSvg] Inline Mermaid SVG for the Synapse → Talia → Component graph.
  */
 export function buildDataLineageExportHtml({
   detail = null,
@@ -137,6 +150,7 @@ export function buildDataLineageExportHtml({
   orientation = 'tables',
   scopeLabel = '',
   filtersLabel = '',
+  diagramSvg = '',
 } = {}) {
   const catalogRows = (listRows || []).slice(0, 200).map((row) => {
     if (orientation === 'components') {
@@ -144,6 +158,17 @@ export function buildDataLineageExportHtml({
         <td>${esc(row.title)}</td>
         <td>${esc(row.category)}</td>
         <td>${esc(row.tableNames)}</td>
+        <td class="num">${esc(row.usageCount || 0)}</td>
+        <td>${esc(formatWhen(row.lastAt))}</td>
+      </tr>`;
+    }
+    if (orientation === 'fields') {
+      return `<tr>
+        <td>${esc(row.field)}</td>
+        <td>${esc(row.label || '—')}</td>
+        <td>${esc(row.sourceLabel || '—')}</td>
+        <td class="num">${esc(row.componentCount || 0)}</td>
+        <td>${esc(row.topComponents || '—')}</td>
         <td class="num">${esc(row.usageCount || 0)}</td>
         <td>${esc(formatWhen(row.lastAt))}</td>
       </tr>`;
@@ -159,8 +184,10 @@ export function buildDataLineageExportHtml({
   }).join('');
 
   const catalogHead = orientation === 'components'
-    ? '<tr><th>Component</th><th>Category</th><th>Tables</th><th>Opens</th><th>Last</th></tr>'
-    : '<tr><th>Synapse</th><th>Talia</th><th>#</th><th>Used by</th><th>Opens</th><th>Last</th></tr>';
+    ? '<tr><th>Component</th><th>Category</th><th>Tables</th><th>Refreshes</th><th>Last</th></tr>'
+    : orientation === 'fields'
+      ? '<tr><th>Field</th><th>Label</th><th>Source</th><th>#</th><th>Components</th><th>Refreshes</th><th>Last</th></tr>'
+      : '<tr><th>Synapse</th><th>Talia</th><th>#</th><th>Used by</th><th>Refreshes</th><th>Last</th></tr>';
 
   const summaryHtml = (detail?.summary || []).map((item) => (
     `<div class="metric"><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></div>`
@@ -210,8 +237,23 @@ export function buildDataLineageExportHtml({
     .groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3mm; }
     .group { break-inside: avoid; page-break-inside: avoid; border: 1px solid #e2e2e2; padding: 2mm; }
     code { font-family: "IBM Plex Mono", Menlo, Consolas, monospace; font-size: 10px; }
+    .diagram {
+      margin: 0 0 4mm;
+      padding: 3mm;
+      border: 1px solid #d5dee4;
+      border-radius: 3mm;
+      background: #f8fafb;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .diagram svg {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+    }
     @media print {
-      body { margin: 8mm; }
+      body { margin: 8mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
@@ -219,6 +261,13 @@ export function buildDataLineageExportHtml({
 <body>
   <h1>Data Lineage${detail?.title ? ` — ${esc(detail.title)}` : ''}</h1>
   <p class="meta">${esc(filtersLabel || scopeLabel || 'Current view')}${detail?.subtitle ? ` · ${esc(detail.subtitle)}` : ''}</p>
+
+  ${diagramSvg ? `
+    <h2>Source lineage diagram</h2>
+    <p class="muted">Synapse → Talia → Component (pipeline lineage, not FK relationships).</p>
+    <p class="muted">Edges: solid = some usage · thick teal = high refreshes · dashed muted = zero usage in window · dashed gold = advisory logical link (not a Synapse FK).</p>
+    <div class="diagram">${diagramSvg}</div>
+  ` : ''}
 
   ${detail ? `
     <h2>Selection</h2>
@@ -231,7 +280,7 @@ export function buildDataLineageExportHtml({
     ${unmappedRows ? `<h2>Presenter / computed</h2><table><thead><tr><th>Field</th><th>Provenance</th></tr></thead><tbody>${unmappedRows}</tbody></table>` : ''}
   ` : ''}
 
-  <h2>Catalog (${orientation === 'components' ? 'components' : 'tables'})</h2>
+  <h2>Catalog (${orientation === 'components' ? 'components' : orientation === 'fields' ? 'fields' : 'tables'})</h2>
   <table>
     <thead>${catalogHead}</thead>
     <tbody>${catalogRows || '<tr><td colspan="6">No rows in current filter.</td></tr>'}</tbody>

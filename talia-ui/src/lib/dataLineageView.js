@@ -5,7 +5,7 @@
  * etl_table_parameters is only a secondary Seaware/original reference.
  */
 
-import { groupColumnsByTable } from './dataLineageColumns.js';
+import { buildColumnTableIndex, groupColumnsByTable, normalizeFieldKey } from './dataLineageColumns.js';
 
 export const RECENCY_OPTIONS = Object.freeze([
   { id: '7d', label: '7 days', sinceMinutes: 7 * 24 * 60 },
@@ -306,6 +306,197 @@ export function buildTableOrientationRows({
 }
 
 /**
+ * Field-first rows: shared/used columns × components × Synapse/Talia source + refresh usage.
+ */
+export function buildFieldOrientationRows({
+  panelCatalog = [],
+  fieldCatalog = {},
+  panelTableColumns = {},
+  syncTableColumns = {},
+  tableByTarget = new Map(),
+  usageMap = new Map(),
+  fieldLabels = {},
+} = {}) {
+  const panelByLookup = new Map();
+  (panelCatalog || []).forEach((panel) => {
+    if (panel?.panelId) panelByLookup.set(String(panel.panelId), panel);
+    if (panel?.componentKey) panelByLookup.set(String(panel.componentKey), panel);
+  });
+
+  const resolvePanel = (raw) => {
+    const key = String(raw || '').trim();
+    if (!key) return null;
+    return panelByLookup.get(key) || panelByLookup.get(key.toLowerCase()) || null;
+  };
+
+  /** @type {Map<string, { field: string, panels: Map<string, object>, provenances: Set<string> }>} */
+  const byField = new Map();
+
+  const ensureField = (rawName) => {
+    const field = String(rawName || '').trim();
+    if (!field || field === '—') return null;
+    const key = normalizeFieldKey(field) || field.toLowerCase();
+    if (!byField.has(key)) {
+      byField.set(key, {
+        field,
+        panels: new Map(),
+        provenances: new Set(),
+      });
+    } else {
+      // Prefer first non-empty casing that looks like a real field name.
+      const entry = byField.get(key);
+      if (field.length > String(entry.field || '').length) entry.field = field;
+    }
+    return byField.get(key);
+  };
+
+  const attachPanel = (entry, panel, provenance) => {
+    if (!entry || !panel) return;
+    const id = String(panel.panelId || panel.componentKey || '');
+    if (!id) return;
+    if (!entry.panels.has(id)) entry.panels.set(id, panel);
+    if (provenance) entry.provenances.add(provenance);
+  };
+
+  Object.entries(fieldCatalog || {}).forEach(([field, panelIds]) => {
+    const entry = ensureField(field);
+    if (!entry) return;
+    entry.provenances.add('tabulator');
+    (panelIds || []).forEach((panelId) => {
+      attachPanel(entry, resolvePanel(panelId), 'tabulator');
+    });
+  });
+
+  (panelCatalog || []).forEach((panel) => {
+    (panel.columns || []).forEach((col) => {
+      const name = typeof col === 'string' ? col : col?.name;
+      const entry = ensureField(name);
+      attachPanel(entry, panel, 'override');
+    });
+
+    const declared = panelTableColumns?.[panel.componentKey]
+      || panelTableColumns?.[panel.panelId]
+      || {};
+    Object.values(declared).forEach((cols) => {
+      (cols || []).forEach((col) => {
+        const entry = ensureField(col);
+        attachPanel(entry, panel, 'fetch');
+      });
+    });
+  });
+
+  const allTables = [
+    ...new Set([
+      ...[...(tableByTarget?.keys?.() || [])],
+      ...Object.keys(syncTableColumns || {}),
+    ]),
+  ];
+  const columnIndex = buildColumnTableIndex({
+    panelTables: allTables,
+    panelTableColumns: syncTableColumns,
+    syncTableColumns,
+  });
+
+  // Also prefer panel-fetch columns in the index for better attribution.
+  (panelCatalog || []).forEach((panel) => {
+    const declared = panelTableColumns?.[panel.componentKey]
+      || panelTableColumns?.[panel.panelId]
+      || {};
+    const tables = Object.keys(declared);
+    const fetchIndex = buildColumnTableIndex({
+      panelTables: tables,
+      panelTableColumns: declared,
+      syncTableColumns: {},
+    });
+    fetchIndex.forEach((hit, key) => {
+      columnIndex.set(key, hit);
+    });
+  });
+
+  const rows = [];
+  byField.forEach((entry) => {
+    const components = [];
+    const roleSet = new Set();
+    let usageCount = 0;
+    let lastAt = null;
+
+    entry.panels.forEach((panel) => {
+      const usage = usageForPanel(usageMap, panel);
+      usageCount += usage.openCount;
+      if (usage.lastAt && (!lastAt || usage.lastAt > lastAt)) lastAt = usage.lastAt;
+      (usage.roles || []).forEach((r) => roleSet.add(r));
+      components.push({
+        componentKey: panel.componentKey,
+        panelId: panel.panelId,
+        title: panel.title,
+        openCount: usage.openCount,
+      });
+    });
+
+    components.sort((a, b) => b.openCount - a.openCount || String(a.title).localeCompare(String(b.title)));
+
+    const norm = normalizeFieldKey(entry.field);
+    const hit = columnIndex.get(norm);
+    const taliaTables = [];
+    const synapseSources = [];
+    let sourceLabel = '—';
+    let provenance = 'unmapped';
+
+    if (hit?.table) {
+      taliaTables.push(hit.table);
+      const edge = tableByTarget.get(String(hit.table).toLowerCase());
+      const synapse = edge?.synapseSource || edge?.sourceLabel || null;
+      if (synapse) {
+        synapseSources.push(synapse);
+        sourceLabel = synapse;
+      } else {
+        sourceLabel = hit.table;
+      }
+      if (hit.source === 'panel-fetch') provenance = 'fetch';
+      else if (hit.source === 'sync-config') provenance = 'sync';
+      else provenance = hit.source || 'sync';
+    } else if (entry.provenances.has('tabulator')) {
+      provenance = 'tabulator';
+    } else if (entry.provenances.has('override')) {
+      provenance = 'override';
+    } else if (entry.provenances.has('fetch')) {
+      provenance = 'fetch';
+    }
+
+    // Prefer explicit provenance tags when table attribution exists.
+    if (hit && entry.provenances.has('tabulator')) provenance = 'tabulator';
+    if (hit && entry.provenances.has('override') && provenance !== 'tabulator') provenance = 'override';
+
+    const label = fieldLabels?.[entry.field]?.long
+      || fieldLabels?.[entry.field]?.short
+      || null;
+
+    rows.push({
+      id: `field:${norm || entry.field}`,
+      kind: 'field',
+      field: entry.field,
+      label,
+      title: label || entry.field,
+      taliaTables,
+      synapseSources,
+      sourceLabel,
+      provenance,
+      components,
+      componentCount: components.length,
+      consumerCount: components.length,
+      topComponents: components.slice(0, 3).map((c) => c.title).join(', '),
+      usageCount,
+      lastAt,
+      roles: [...roleSet].sort(),
+      rolesLabel: [...roleSet].sort().join(', ') || '—',
+      tableNames: taliaTables.join(', ') || '—',
+    });
+  });
+
+  return sortByUsage(rows);
+}
+
+/**
  * Build component-first rows.
  */
 export function buildComponentOrientationRows(panelCatalog = [], usageMap = new Map(), tableByTarget = new Map()) {
@@ -371,11 +562,32 @@ export function filterRowsByScope(rows = [], scope = 'used', orientation = 'tabl
   if (orientation === 'components') {
     return (rows || []).filter((row) => (Number(row?.tableCount) || 0) > 0);
   }
+  if (orientation === 'fields') {
+    return (rows || []).filter((row) => (Number(row?.componentCount) || 0) > 0);
+  }
   return (rows || []).filter((row) => (Number(row?.consumerCount) || 0) > 0);
+}
+
+/** Keep fields used by 2+ components (common / shared columns). */
+export function filterRowsBySharedOnly(rows = [], sharedOnly = false) {
+  if (!sharedOnly) return [...(rows || [])];
+  return (rows || []).filter((row) => (Number(row?.componentCount) || 0) >= 2);
 }
 
 export function sortByUsage(rows = []) {
   return [...(rows || [])].sort((a, b) => {
+    // Fields: prefer component overlap, then refreshes.
+    if (a?.kind === 'field' || b?.kind === 'field') {
+      const ca = Number(a?.componentCount) || 0;
+      const cb = Number(b?.componentCount) || 0;
+      if (cb !== ca) return cb - ca;
+      const ua = Number(a?.usageCount) || 0;
+      const ub = Number(b?.usageCount) || 0;
+      if (ub !== ua) return ub - ua;
+      const fa = String(a?.field || a?.title || a?.id || '');
+      const fb = String(b?.field || b?.title || b?.id || '');
+      return fa.localeCompare(fb);
+    }
     const ua = Number(a?.usageCount) || 0;
     const ub = Number(b?.usageCount) || 0;
     if (ub !== ua) return ub - ua;
@@ -474,6 +686,45 @@ export function buildSelectionDetail({
         taliaTable: selection.taliaTable,
         sourceLabel: selection.synapseSource || '—',
       }],
+    };
+  }
+
+  if (selection.kind === 'field') {
+    const tables = (selection.taliaTables || []).map((taliaTable) => {
+      const meta = tableSourcesMap?.[taliaTable]
+        || tableSourcesMap?.[String(taliaTable).toLowerCase()]
+        || {};
+      return {
+        taliaTable,
+        sourceLabel: selection.synapseSources?.[0] || meta.source || '—',
+      };
+    });
+    const lineage = tables.length
+      ? tables
+      : [{ taliaTable: '—', sourceLabel: selection.sourceLabel || '—' }];
+
+    return {
+      kind: 'field',
+      title: selection.label || selection.field,
+      subtitle: selection.field,
+      summary: [
+        { label: 'Components', value: String(selection.componentCount || 0) },
+        { label: 'Refreshes', value: String(selection.usageCount || 0) },
+        { label: 'Last refresh', value: formatWhenIso(selection.lastAt) },
+        { label: 'Source', value: selection.sourceLabel || '—' },
+        { label: 'Provenance', value: selection.provenance || '—' },
+      ],
+      notes: [
+        selection.tableNames && selection.tableNames !== '—'
+          ? `Talia table(s): ${selection.tableNames}`
+          : 'No Talia table column matched — presenter / computed or unmapped.',
+      ],
+      lineage,
+      columnGroups: [],
+      unmappedColumns: [],
+      columns: [],
+      consumers: selection.components || [],
+      tables: lineage,
     };
   }
 

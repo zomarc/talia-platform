@@ -191,6 +191,18 @@ export function withLineageCoverage(rows = [], {
       };
     }
 
+    if (row?.kind === 'field') {
+      return {
+        ...row,
+        isKey: false,
+        isSuggested: false,
+        coverageStatus: 'ok',
+        coverageLabel: '',
+        coverageIssue: false,
+        coverageGap: false,
+      };
+    }
+
     const isKey = matchesKeySet(row, keySet);
     const isSuggested = !isKey && (
       matchesKeySet(row, suggestedSet)

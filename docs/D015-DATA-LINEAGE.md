@@ -20,8 +20,9 @@ Admins need a single place to answer:
 2. What is the **Talia mirror / target table**?
 3. Which **components** use which tables?
 4. For a selected entity, which **columns** are in play and what is the **provenance** of that data?
+5. Can we **see** Synapse → Talia → component lineage graphically (to improve upstream source quality)?
 
-The panel is available as both a **grid summary** and a **detailed table**, with a toggle between **table-first** and **component-first** orientation. Components are ordered / highlighted by **usage count**, with filters for **Role**, **User**, and **Recency**.
+The panel supports **grid**, **table**, and **diagram** displays, with orientation **tables** / **components** / **fields**. Components and tables are ordered / highlighted by **usage count** (data refreshes), with filters for **Source**, **Component**, **Role**, **User**, and **Recency**.
 
 ---
 
@@ -31,8 +32,8 @@ The panel is available as both a **grid summary** and a **detailed table**, with
 
 | Option | Choices | Purpose |
 |--------|---------|--------|
-| **Orientation** | `tables` / `components` | Table-first vs component-first primary grain |
-| **Display** | `grid` / `table` | Summary cards vs detailed Tabulator |
+| **Orientation** | `tables` / `components` / `fields` | Table-, component-, or field-first primary grain |
+| **Display** | `grid` / `table` / `diagram` | Summary cards, Tabulator, or source-lineage Mermaid graph |
 
 ### Summary grains
 
@@ -40,18 +41,30 @@ The panel is available as both a **grid summary** and a **detailed table**, with
 
 **Component-first row:** component | tables used | usage count | last used | roles that used it.
 
+**Field-first row:** field | label | Synapse/Talia source | components using it | component count | refreshes (sum of panel refresh counts) | last refresh. Sorted by component overlap then refreshes. Details lists refreshes **per component**.
+
 **Grid:** compact summary cards sorted/highlighted by usage intensity.
 
 **Table:** Tabulator with header filters; row click selects entity and opens Details.
 
-**Details (`ReportDataDetails`):** selected entity’s columns (field-usage catalog when component-scoped; ETL upsert key when table-scoped) plus provenance (source schema/table → target → panels). Does not replace Column Terminology.
+**Diagram:** Mermaid flowchart of **Synapse source → Talia table → Component** (pipeline lineage for source remapping). This is **not** a classical FK ERD — Talia intentionally has few/no database foreign keys. Node click opens Details.
+
+- **Component** / **Source** filters scope the graph like grid/table. With Component set, only that panel appears; **Co-consumers** (filter checkbox or Views) restores shared-field fan-out without clearing the filter.
+- **Usage-weighted edges:** thick/teal = high refreshes; solid = some usage; dashed/muted = zero in the current Role/User/Recency window. Diagram **Legends** (Views → Legends / StatusBar Legends) explains edge styles via `.talia-chart-legend`.
+- **Logical links (Views, off by default):** advisory Talia↔Talia relationships from `dataLineageLogicalLinks.js` (inventory hierarchy, proposed agency joins, etc.). Drawn only when both endpoints are already on the canvas. Statuses are `proposed` / `provisional` / `confirmed`. **Never** Synapse FKs, **never** runtime join drivers — purpose is to surface remapping discussion areas while upstream models stay messy/changing.
+- Role colours: Sources (slate-blue), Talia (teal), Components (warm accent). PDF export embeds a light-theme render of the same graph.
+
+**Details (`ReportDataDetails`):** selected entity’s columns (field-usage catalog when component-scoped; ETL upsert key when table-scoped; per-component refreshes when field-scoped) plus provenance (source schema/table → target → panels). Does not replace Column Terminology.
 
 ### Filters (`.talia-report-filters`)
 
 - **Data** scope (used / opened / all)
+- **Source** — Synapse source label
+- **Component** — consuming panel
+- **Shared only** — fields orientation (2+ components)
 - **Category** (All / Application / Admin / specific) — components orientation
-- **Key** (All / Key only / Suggested)
-- **Coverage** (All / Issues only)
+- **Key** (All / Key only / Suggested) — components orientation
+- **Coverage** (All / Issues only) — components / tables
 - **Role**
 - **User** (email)
 - **Recency** (`7d` / `30d` / `90d` / `all`)

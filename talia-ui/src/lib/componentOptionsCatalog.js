@@ -103,11 +103,11 @@ export const VIEW_PLACEHOLDER_CAPTION = {
   label: 'Label',
   type: 'text',
   default: 'Place Holder',
-  placeholder: 'Text shown in the panel',
+  placeholder: 'Text shown on the panel header',
   maxLength: 80,
 };
-/** Place Holder panel — corner-to-corner wireframe. */
-export const VIEW_WIREFRAME = { id: 'wireframe', label: 'Wireframe', type: 'boolean', default: true };
+/** Place Holder panel — X marks on blank blocks. */
+export const VIEW_WIREFRAME = { id: 'wireframe', label: 'Wireframe X', type: 'boolean', default: true };
 export const VIEW_NESTED = {
   id: 'viewMode',
   label: 'Nested',
@@ -171,23 +171,40 @@ export const VIEW_PORT_CITY_DISPLAY = {
   default: 'table',
   choiceLabels: { table: 'Table', map: 'Map' },
 };
-/** Data Lineage — table-first vs component-first primary grain. */
+/** Data Lineage — table / component / field primary grain. */
 export const VIEW_LINEAGE_ORIENTATION = {
   id: 'orientation',
   label: 'Orientation',
   type: 'choice',
-  choices: ['tables', 'components'],
+  choices: ['tables', 'components', 'fields'],
   default: 'tables',
-  choiceLabels: { tables: 'Tables', components: 'Components' },
+  choiceLabels: { tables: 'Tables', components: 'Components', fields: 'Fields' },
 };
-/** Data Lineage — summary grid vs detailed table. */
+/** Data Lineage — summary grid, detailed table, or source-lineage diagram. */
 export const VIEW_LINEAGE_DISPLAY = {
   id: 'display',
   label: 'Display',
   type: 'choice',
-  choices: ['grid', 'table'],
+  choices: ['grid', 'table', 'diagram'],
   default: 'grid',
-  choiceLabels: { grid: 'Grid', table: 'Table' },
+  choiceLabels: { grid: 'Grid', table: 'Table', diagram: 'Diagram' },
+};
+/** Data Lineage diagram — with a Component filter, also show shared co-consumers. */
+export const VIEW_LINEAGE_CO_CONSUMERS = {
+  id: 'coConsumers',
+  label: 'Co-consumers',
+  type: 'boolean',
+  default: false,
+};
+/**
+ * Data Lineage diagram — advisory Talia↔Talia links (not Synapse FKs).
+ * Off by default; for remapping discussion only.
+ */
+export const VIEW_LINEAGE_LOGICAL_LINKS = {
+  id: 'logicalLinks',
+  label: 'Logical links',
+  type: 'boolean',
+  default: false,
 };
 export const VIEW_TOOLTIP = { id: 'tooltip', label: 'Tooltip', type: 'boolean', default: true };
 export const VIEW_TOOLTIP_MSE = {
@@ -521,7 +538,7 @@ export const DEFAULT_COMPONENT_OPTIONS = {
     operations: [],
   },
   'ui-placeholder': {
-    views: [VIEW_WIREFRAME, VIEW_PLACEHOLDER_CAPTION],
+    views: [VIEW_WIREFRAME, VIEW_PLACEHOLDER_CAPTION, VIEW_CONTROLS, VIEW_PROVENANCE],
     operations: [],
   },
   'data-management-panel': {

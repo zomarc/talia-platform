@@ -1,5 +1,5 @@
 /**
- * Data Lineage presenter — grid or table, table/component orientation, Details.
+ * Data Lineage presenter — grid or table, table/component/field orientation, Details.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -21,6 +21,10 @@ import {
   SCOPE_OPTIONS,
 } from '../../../lib/dataLineageView';
 import {
+  renderLineageDiagramSvg,
+  toPrintableLineageDiagramSource,
+} from '../../../lib/dataLineageDiagram';
+import {
   buildDataLineageExportHtml,
   buildDataLineageExportRows,
   DATA_LINEAGE_EXPORT_COLUMNS,
@@ -31,6 +35,7 @@ import { getTabulatorOptions, initTabulator, captureTableScroll } from '../../..
 import ReportDataDetails from '../../shared/ReportDataDetails';
 import ReportProvenance from '../../shared/ReportProvenance';
 import SubpanelExpandButton from '../../shared/SubpanelExpandButton';
+import LineageDiagramFrame from './LineageDiagramFrame';
 import './data-lineage.css';
 
 const SIDE_WIDTH_MIN = 280;
@@ -70,6 +75,7 @@ const tableColumns = [
     titleShort: '#',
     hozAlign: 'right',
     width: 90,
+    sorter: 'number',
     headerFilter: 'number',
   },
   {
@@ -86,6 +92,7 @@ const tableColumns = [
     titleShort: 'Refs',
     hozAlign: 'right',
     width: 90,
+    sorter: 'number',
     headerFilter: 'number',
     headerTooltip: 'Tracked data refreshes / fetches in the filter window',
   },
@@ -167,6 +174,7 @@ const componentColumns = [
     titleShort: 'Refs',
     hozAlign: 'right',
     width: 90,
+    sorter: 'number',
     headerFilter: 'number',
     headerTooltip: 'Tracked data refreshes / fetches in the filter window',
   },
@@ -176,6 +184,77 @@ const componentColumns = [
     titleShort: 'Roles',
     headerFilter: 'input',
     minWidth: 120,
+  },
+  {
+    field: 'lastAt',
+    title: 'Last refresh',
+    titleShort: 'Last',
+    width: 72,
+    hozAlign: 'right',
+    formatter: formatLastAgeCell,
+  },
+];
+
+const fieldColumns = [
+  {
+    field: 'field',
+    title: 'Field',
+    titleShort: 'Field',
+    headerFilter: 'input',
+    minWidth: 140,
+    widthGrow: 2,
+  },
+  {
+    field: 'label',
+    title: 'Label',
+    titleShort: 'Label',
+    headerFilter: 'input',
+    minWidth: 120,
+    widthGrow: 1,
+    formatter: (cell) => String(cell.getValue() || '—'),
+  },
+  {
+    field: 'sourceLabel',
+    title: 'Source',
+    titleShort: 'Source',
+    headerFilter: 'input',
+    minWidth: 140,
+    widthGrow: 2,
+  },
+  {
+    field: 'tableNames',
+    title: 'Talia table',
+    titleShort: 'Talia',
+    headerFilter: 'input',
+    minWidth: 120,
+    widthGrow: 1,
+  },
+  {
+    field: 'topComponents',
+    title: 'Components',
+    titleShort: 'Used by',
+    headerFilter: 'input',
+    minWidth: 160,
+    widthGrow: 2,
+  },
+  {
+    field: 'componentCount',
+    title: 'Component count',
+    titleShort: '#',
+    hozAlign: 'right',
+    width: 100,
+    sorter: 'number',
+    headerFilter: 'number',
+  },
+  {
+    field: 'usageCount',
+    title: 'Refreshes',
+    titleShort: 'Refs',
+    hozAlign: 'right',
+    width: 90,
+    sorter: 'number',
+    headerFilter: 'number',
+    headerTooltip: 'Sum of panel data refreshes for components using this field',
   },
   {
     field: 'lastAt',
@@ -209,13 +288,18 @@ const CoverageBadges = ({ row }) => (
 );
 
 const LineageCard = ({ row, selected, orientation, onSelect }) => {
-  const title = orientation === 'components' ? row.title : row.taliaTable;
-  const meta = orientation === 'components'
-    ? (row.tableNames || '—')
-    : (row.sourceLabel || '—');
-  const secondary = orientation === 'components'
-    ? `${row.tableCount || 0} tables`
-    : `${row.consumerCount || 0} consumers`;
+  let title = row.taliaTable;
+  let meta = row.sourceLabel || '—';
+  let secondary = `${row.consumerCount || 0} consumers`;
+  if (orientation === 'components') {
+    title = row.title;
+    meta = row.tableNames || '—';
+    secondary = `${row.tableCount || 0} tables`;
+  } else if (orientation === 'fields') {
+    title = row.label || row.field;
+    meta = row.sourceLabel || '—';
+    secondary = `${row.componentCount || 0} components`;
+  }
 
   return (
     <button
@@ -232,10 +316,18 @@ const LineageCard = ({ row, selected, orientation, onSelect }) => {
     >
       <span className="dl-card__title-row">
         <span className="dl-card__title">{title}</span>
-        <CoverageBadges row={row} />
+        {orientation === 'fields' ? null : <CoverageBadges row={row} />}
       </span>
+      {orientation === 'fields' && row.field && row.label ? (
+        <span className="dl-card__meta"><code>{row.field}</code></span>
+      ) : null}
       <span className="dl-card__meta">{meta}</span>
       <span className="dl-card__meta">{secondary}</span>
+      {orientation === 'fields' && row.topComponents ? (
+        <span className="dl-card__meta dl-card__meta--truncate" title={row.topComponents}>
+          {row.topComponents}
+        </span>
+      ) : null}
       <span className="dl-card__usage">
         <strong>{row.usageCount || 0}</strong>
         {' '}
@@ -263,7 +355,7 @@ const DetailBody = ({
   if (!detail) {
     return (
       <div className="dl-empty-side">
-        <p className="dl-muted">Select a card or row to inspect Synapse → Talia → columns.</p>
+        <p className="dl-muted">Select a card or row to inspect Synapse → Talia → fields / columns.</p>
       </div>
     );
   }
@@ -273,6 +365,10 @@ const DetailBody = ({
   const unmapped = detail.unmappedColumns || [];
   const keyTarget = detail.panelId || detail.componentKey || null;
   const canToggleKey = detail.kind === 'component' && keyTarget && typeof onSetKey === 'function';
+  const showConsumers = (detail.kind === 'table' || detail.kind === 'field')
+    && detail.consumers?.length;
+  const consumersLabel = detail.kind === 'field' ? 'Components (refreshes)' : 'Consumers';
+  const showColumnSections = detail.kind !== 'field';
 
   return (
     <div className={`talia-card talia-card--expandable dl-detail${expanded ? ' talia-card--expanded' : ''}${detail.coverageIssue ? ' dl-detail--issue' : ''}`}>
@@ -347,12 +443,12 @@ const DetailBody = ({
             <p className="dl-muted">No table lineage mapped.</p>
           )}
 
-          {detail.kind === 'table' && detail.consumers?.length ? (
+          {showConsumers ? (
             <>
-              <p className="dl-section-label">Consumers</p>
+              <p className="dl-section-label">{consumersLabel}</p>
               <ul className="dl-detail-list">
                 {detail.consumers.map((c) => (
-                  <li key={c.componentKey}>
+                  <li key={c.componentKey || c.panelId}>
                     {c.title}
                     {' '}
                     <span className="dl-muted">({c.openCount || 0} refreshes)</span>
@@ -363,6 +459,7 @@ const DetailBody = ({
           ) : null}
         </div>
 
+        {showColumnSections ? (
         <div className="dl-detail__columns">
           <p className="dl-section-label">Columns by table</p>
           {columnGroups.length ? (
@@ -426,6 +523,7 @@ const DetailBody = ({
             </section>
           ) : null}
         </div>
+        ) : null}
       </div>
     </div>
   );
@@ -439,6 +537,15 @@ const DataLineagePresenter = ({
   userFilter = '',
   recency = '30d',
   scopeFilter = 'used',
+  sharedOnly = false,
+  sourceFilter = '',
+  componentFilter = '',
+  includeCoConsumers = false,
+  viewsCoConsumers = false,
+  onIncludeCoConsumers,
+  showLogicalLinks = false,
+  sourceOptions = [],
+  componentOptions = [],
   categoryFilter = CATEGORY_FILTER_DEFAULT,
   categoryOptions = [],
   keyFilter = KEY_FILTER_DEFAULT,
@@ -449,6 +556,9 @@ const DataLineagePresenter = ({
   onUserFilter,
   onRecency,
   onScopeFilter,
+  onSharedOnly,
+  onSourceFilter,
+  onComponentFilter,
   onCategoryFilter,
   onKeyFilter,
   onCoverageFilter,
@@ -457,10 +567,12 @@ const DataLineagePresenter = ({
   selectedId,
   onSelect,
   detail,
+  diagramModel = null,
   showFilters = true,
   showDetails = true,
   showProvenance = false,
   showColumnFilters = true,
+  showLegends = true,
   reportShellClassName = 'talia-report',
   usageError = null,
   usageLoading = false,
@@ -473,6 +585,7 @@ const DataLineagePresenter = ({
   const rowsRef = useRef(rows);
   const onSelectRef = useRef(onSelect);
   const stageRef = useRef(null);
+  const diagramFrameRef = useRef(null);
   const { expandedKey, toggleExpandedKey } = useSubpanelExpansion(null);
   const detailExpanded = expandedKey === 'detail';
   const [sideWidth, setSideWidth] = useState(SIDE_WIDTH_DEFAULT);
@@ -512,45 +625,99 @@ const DataLineagePresenter = ({
     const role = roleFilter || 'All roles';
     const user = userFilter || 'All users';
     const rec = RECENCY_OPTIONS.find((o) => o.id === recency)?.label || recency;
+    const source = sourceFilter || 'All sources';
+    const component = componentOptions.find((o) => o.id === componentFilter)?.title
+      || (componentFilter ? componentFilter : 'All components');
+    if (orientation === 'fields') {
+      return `${scope} · ${sharedOnly ? 'Shared only' : 'All fields'} · ${source} · ${component} · ${role} · ${user} · ${rec}`;
+    }
     let category = 'All categories';
     if (categoryFilter === CATEGORY_FILTER_APPLICATION) category = 'Application';
     else if (categoryFilter === CATEGORY_FILTER_ADMIN) category = 'Admin';
     else if (categoryFilter && categoryFilter !== CATEGORY_FILTER_ALL) category = categoryFilter;
     const key = KEY_FILTER_OPTIONS.find((o) => o.id === keyFilter)?.label || keyFilter;
     const cov = COVERAGE_FILTER_OPTIONS.find((o) => o.id === coverageFilter)?.label || coverageFilter;
-    return `${scope} · ${category} · ${key} · ${cov} · ${role} · ${user} · ${rec}`;
-  }, [scopeFilter, categoryFilter, keyFilter, coverageFilter, roleFilter, userFilter, recency]);
+    return `${scope} · ${category} · ${key} · ${cov} · ${source} · ${component} · ${role} · ${user} · ${rec}`;
+  }, [
+    orientation,
+    scopeFilter,
+    sharedOnly,
+    sourceFilter,
+    componentFilter,
+    componentOptions,
+    categoryFilter,
+    keyFilter,
+    coverageFilter,
+    roleFilter,
+    userFilter,
+    recency,
+  ]);
 
   useEffect(() => registerPanelDataExport({
     panelInstanceId,
     panelComponentId: panelComponentId || 'data-lineage',
-    getPayload: () => ({
-      title: detail?.title ? `Data Lineage — ${detail.title}` : 'Data Lineage',
-      html: buildDataLineageExportHtml({
-        detail,
-        listRows: rows,
-        orientation,
-        filtersLabel,
-      }),
-      columns: DATA_LINEAGE_EXPORT_COLUMNS,
-      rows: buildDataLineageExportRows({
-        detail,
-        listRows: rows,
-        orientation,
-      }),
-    }),
-  }), [panelInstanceId, panelComponentId, detail, rows, orientation, filtersLabel]);
+    getPayload: async () => {
+      let diagramSvg = '';
+      const mermaidSource = diagramModel?.mermaidSource || '';
+      if (mermaidSource && (diagramModel?.nodeCount || 0) > 0) {
+        try {
+          diagramSvg = await renderLineageDiagramSvg(
+            toPrintableLineageDiagramSource(mermaidSource),
+          );
+        } catch {
+          diagramSvg = '';
+        }
+        if (!diagramSvg) {
+          const live = diagramFrameRef.current?.querySelector?.('.pd-mermaid svg');
+          if (live) diagramSvg = live.outerHTML;
+        }
+      }
+      return {
+        title: detail?.title ? `Data Lineage — ${detail.title}` : 'Data Lineage',
+        html: buildDataLineageExportHtml({
+          detail,
+          listRows: rows,
+          orientation,
+          filtersLabel,
+          diagramSvg,
+        }),
+        columns: DATA_LINEAGE_EXPORT_COLUMNS,
+        rows: buildDataLineageExportRows({
+          detail,
+          listRows: rows,
+          orientation,
+        }),
+      };
+    },
+  }), [panelInstanceId, panelComponentId, detail, rows, orientation, filtersLabel, diagramModel]);
 
-  const columns = useMemo(
-    () => (orientation === 'components' ? componentColumns : tableColumns),
-    [orientation],
-  );
+  const columns = useMemo(() => {
+    if (orientation === 'components') return componentColumns;
+    if (orientation === 'fields') return fieldColumns;
+    return tableColumns;
+  }, [orientation]);
 
   const subtitle = useMemo(() => {
-    const grain = orientation === 'components' ? 'components' : 'tables';
+    const grain = orientation === 'components'
+      ? 'components'
+      : orientation === 'fields'
+        ? 'fields'
+        : 'tables';
     const used = rows.filter((r) => (r.usageCount || 0) > 0).length;
     return `${rows.length} ${grain} · ${used} with refreshes in window${usageLoading ? ' · updating usage…' : ''}`;
   }, [rows, orientation, usageLoading]);
+
+  const orientationLabel = orientation === 'components'
+    ? 'Components'
+    : orientation === 'fields'
+      ? 'Fields'
+      : 'Tables';
+
+  const displayLabel = display === 'table'
+    ? 'Table'
+    : display === 'diagram'
+      ? 'Diagram'
+      : 'Grid';
 
   // Rebuild Tabulator when orientation changes (different columns).
   useEffect(() => {
@@ -579,7 +746,12 @@ const DataLineagePresenter = ({
         instanceRef.current = new Tabulator(tableRef.current, getTabulatorOptions({
           data: [],
           columns,
-          initialSort: [{ column: 'usageCount', dir: 'desc' }],
+          initialSort: orientation === 'fields'
+            ? [
+              { column: 'componentCount', dir: 'desc' },
+              { column: 'usageCount', dir: 'desc' },
+            ]
+            : [{ column: 'usageCount', dir: 'desc' }],
           height: '100%',
           selectableRows: 1,
           resizableColumns: true,
@@ -619,7 +791,7 @@ const DataLineagePresenter = ({
         instanceRef.current = null;
       }
     };
-  }, [display, columns, panelComponentId, panelInstanceId]);
+  }, [display, columns, orientation, panelComponentId, panelInstanceId]);
 
   useEffect(() => {
     const table = instanceRef.current;
@@ -656,10 +828,17 @@ const DataLineagePresenter = ({
           <p className="talia-report__subtitle">
             {subtitle}
             {' · '}
-            {orientation === 'components' ? 'Components' : 'Tables'}
+            {orientationLabel}
             {' / '}
-            {display === 'table' ? 'Table' : 'Grid'}
+            {displayLabel}
             {' (Views)'}
+            {display === 'diagram' ? ' · Source lineage — not FK relationships' : ''}
+            {display === 'diagram' && includeCoConsumers && componentFilter
+              ? ' · Co-consumers on'
+              : ''}
+            {display === 'diagram' && showLogicalLinks
+              ? ' · Logical links (advisory)'
+              : ''}
           </p>
         </div>
       </header>
@@ -679,6 +858,69 @@ const DataLineagePresenter = ({
               ))}
             </select>
           </div>
+          <div className="talia-report-filters__group talia-report-filters__group--inline">
+            <label className="talia-report-filters__label" htmlFor="dl-source">Source</label>
+            <select
+              id="dl-source"
+              className="talia-report-filters__input"
+              value={sourceFilter}
+              onChange={(e) => onSourceFilter?.(e.target.value)}
+            >
+              <option value="">All sources</option>
+              {sourceOptions.map((src) => (
+                <option key={src} value={src}>{src}</option>
+              ))}
+            </select>
+          </div>
+          <div className="talia-report-filters__group talia-report-filters__group--inline">
+            <label className="talia-report-filters__label" htmlFor="dl-component">Component</label>
+            <select
+              id="dl-component"
+              className="talia-report-filters__input"
+              value={componentFilter}
+              onChange={(e) => onComponentFilter?.(e.target.value)}
+            >
+              <option value="">All components</option>
+              {componentOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.title}</option>
+              ))}
+            </select>
+          </div>
+          {componentFilter ? (
+            <div className="talia-report-filters__group talia-report-filters__group--inline">
+              <label
+                className="talia-report-filters__label"
+                htmlFor="dl-co-consumers"
+                title={viewsCoConsumers
+                  ? 'Also on in Views → Co-consumers (turn off there to disable)'
+                  : 'Show other panels that share these tables/fields'}
+              >
+                <input
+                  id="dl-co-consumers"
+                  type="checkbox"
+                  checked={Boolean(includeCoConsumers)}
+                  disabled={Boolean(viewsCoConsumers)}
+                  onChange={(e) => onIncludeCoConsumers?.(e.target.checked)}
+                />
+                {' '}
+                Co-consumers
+              </label>
+            </div>
+          ) : null}
+          {orientation === 'fields' ? (
+            <div className="talia-report-filters__group talia-report-filters__group--inline">
+              <label className="talia-report-filters__label" htmlFor="dl-shared">
+                <input
+                  id="dl-shared"
+                  type="checkbox"
+                  checked={Boolean(sharedOnly)}
+                  onChange={(e) => onSharedOnly?.(e.target.checked)}
+                />
+                {' '}
+                Shared only
+              </label>
+            </div>
+          ) : null}
           {orientation === 'components' ? (
             <>
               <div className="talia-report-filters__group talia-report-filters__group--inline">
@@ -815,7 +1057,40 @@ const DataLineagePresenter = ({
           style={showDetails && !detailExpanded ? { '--dl-side-width': `${sideWidth}px` } : undefined}
         >
           <div className="dl-main">
-            {display === 'grid' ? (
+            {display === 'diagram' ? (
+              <div className="dl-diagram-wrap">
+                {diagramModel?.truncated ? (
+                  <div className="talia-callout" role="status">
+                    Component nodes omitted to keep the diagram readable — set the Component filter
+                    (or switch Orientation to Components) to include them.
+                  </div>
+                ) : null}
+                {showLogicalLinks ? (
+                  <div className="talia-callout" role="status">
+                    Logical links are advisory Talia↔Talia relationships for remapping discussion —
+                    not Synapse FKs and not used at runtime. Only drawn when both tables are already
+                    on the canvas
+                    {diagramModel?.logicalLinkCount
+                      ? ` (${diagramModel.logicalLinkCount} visible).`
+                      : ' (none for current filters).'}
+                  </div>
+                ) : null}
+                {componentFilter && !includeCoConsumers && display === 'diagram' ? (
+                  <div className="talia-callout" role="status">
+                    Showing only the selected component. Enable Co-consumers
+                    (or Views → Co-consumers) to see other panels that share these tables/fields.
+                  </div>
+                ) : null}
+                <LineageDiagramFrame
+                  frameRef={diagramFrameRef}
+                  source={diagramModel?.mermaidSource || ''}
+                  nodeToRowId={diagramModel?.nodeToRowId || {}}
+                  labelToRowId={diagramModel?.labelToRowId || {}}
+                  onNodeSelect={onSelect}
+                  showLegends={showLegends}
+                />
+              </div>
+            ) : display === 'grid' ? (
               <div className="dl-grid" role="list">
                 {rows.map((row) => (
                   <LineageCard
@@ -855,7 +1130,11 @@ const DataLineagePresenter = ({
               />
             ) : (
               <div className="dl-empty-side">
-                <p className="dl-muted">Select a card or row to inspect Synapse → Talia → columns.</p>
+                <p className="dl-muted">
+                  {orientation === 'fields'
+                    ? 'Select a field to see source and components with refresh counts.'
+                    : 'Select a card or row to inspect Synapse → Talia → columns.'}
+                </p>
               </div>
             )}
           </ReportDataDetails>

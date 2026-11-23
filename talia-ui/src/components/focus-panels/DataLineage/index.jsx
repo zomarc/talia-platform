@@ -14,7 +14,10 @@ import {
   VIEW_COLUMN_FILTERS,
   VIEW_DETAILS,
   VIEW_FILTERS,
+  VIEW_LEGENDS,
+  VIEW_LINEAGE_CO_CONSUMERS,
   VIEW_LINEAGE_DISPLAY,
+  VIEW_LINEAGE_LOGICAL_LINKS,
   VIEW_LINEAGE_ORIENTATION,
   VIEW_PROVENANCE,
   resolveViewValue,
@@ -38,13 +41,21 @@ import {
   withLineageCoverage,
 } from '../../../lib/dataLineageCoverage';
 import {
+  buildLineageDiagramModel,
+  filterRowsBySourceAndComponent,
+  listLineageComponentOptions,
+  listLineageSources,
+} from '../../../lib/dataLineageDiagram';
+import {
   CATEGORY_FILTER_DEFAULT,
   buildComponentOrientationRows,
+  buildFieldOrientationRows,
   buildSelectionDetail,
   buildSynapseEdges,
   buildTableOrientationRows,
   filterRowsByCategory,
   filterRowsByScope,
+  filterRowsBySharedOnly,
   indexByTarget,
   indexEtlReferenceByTarget,
   indexUsageByPanel,
@@ -64,6 +75,9 @@ const LINEAGE_OPTIONS = {
   views: [
     VIEW_LINEAGE_ORIENTATION,
     VIEW_LINEAGE_DISPLAY,
+    VIEW_LINEAGE_CO_CONSUMERS,
+    VIEW_LINEAGE_LOGICAL_LINKS,
+    VIEW_LEGENDS,
     VIEW_FILTERS,
     VIEW_COLUMN_FILTERS,
     { ...VIEW_DETAILS, default: true },
@@ -150,6 +164,7 @@ const DataLineageContainer = ({ panelInstanceId = null, panelComponentId = null 
     showDetails,
     showProvenance,
     showColumnFilters,
+    showLegends,
     reportShellClassName,
   } = useReportShellOptions(
     panelComponentId || 'data-lineage',
@@ -157,12 +172,20 @@ const DataLineageContainer = ({ panelInstanceId = null, panelComponentId = null 
     LINEAGE_OPTIONS,
   );
 
-  const orientation = resolveViewValue(viewsState, VIEW_LINEAGE_ORIENTATION) === 'components'
+  const orientationRaw = resolveViewValue(viewsState, VIEW_LINEAGE_ORIENTATION);
+  const orientation = orientationRaw === 'components'
     ? 'components'
-    : 'tables';
-  const display = resolveViewValue(viewsState, VIEW_LINEAGE_DISPLAY) === 'table'
+    : orientationRaw === 'fields'
+      ? 'fields'
+      : 'tables';
+  const displayRaw = resolveViewValue(viewsState, VIEW_LINEAGE_DISPLAY);
+  const display = displayRaw === 'table'
     ? 'table'
-    : 'grid';
+    : displayRaw === 'diagram'
+      ? 'diagram'
+      : 'grid';
+  const viewsCoConsumers = resolveViewValue(viewsState, VIEW_LINEAGE_CO_CONSUMERS) === true;
+  const showLogicalLinks = resolveViewValue(viewsState, VIEW_LINEAGE_LOGICAL_LINKS) === true;
 
   const [roleFilter, setRoleFilter] = useState('');
   const [userFilter, setUserFilter] = useState('');
@@ -171,6 +194,15 @@ const DataLineageContainer = ({ panelInstanceId = null, panelComponentId = null 
   const [categoryFilter, setCategoryFilter] = useState(CATEGORY_FILTER_DEFAULT);
   const [keyFilter, setKeyFilter] = useState(KEY_FILTER_DEFAULT);
   const [coverageFilter, setCoverageFilter] = useState(COVERAGE_FILTER_DEFAULT);
+  const [sharedOnly, setSharedOnly] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState('');
+  const [componentFilter, setComponentFilter] = useState('');
+  // Filter-bar quick toggle (OR'd with Views → Co-consumers). Must sit after componentFilter.
+  const [fanOutChecked, setFanOutChecked] = useState(false);
+  useEffect(() => {
+    if (!componentFilter) setFanOutChecked(false);
+  }, [componentFilter]);
+  const includeCoConsumers = viewsCoConsumers || fanOutChecked;
   const [usageRows, setUsageRows] = useState([]);
   const [suggestedUsageRows, setSuggestedUsageRows] = useState([]);
   const [lineageFlags, setLineageFlags] = useState([]);
@@ -334,6 +366,18 @@ const DataLineageContainer = ({ panelInstanceId = null, panelComponentId = null 
     () => buildComponentOrientationRows(panelCatalog, usageMap, tableByTarget),
     [panelCatalog, usageMap, tableByTarget],
   );
+  const fieldRowsAll = useMemo(
+    () => buildFieldOrientationRows({
+      panelCatalog,
+      fieldCatalog: tabulatorFieldUsageCatalog,
+      panelTableColumns: generatedPanelTableColumns,
+      syncTableColumns: generatedSyncTableColumns,
+      tableByTarget,
+      usageMap,
+      fieldLabels,
+    }),
+    [panelCatalog, usageMap, tableByTarget],
+  );
 
   const categoryOptions = useMemo(
     () => listLineageCategories(componentRowsAll),
@@ -346,12 +390,28 @@ const DataLineageContainer = ({ panelInstanceId = null, panelComponentId = null 
     [suggestedUsageRows],
   );
 
+  const sourceOptions = useMemo(
+    () => listLineageSources([...tableRowsAll, ...componentRowsAll, ...fieldRowsAll]),
+    [tableRowsAll, componentRowsAll, fieldRowsAll],
+  );
+  const componentOptions = useMemo(
+    () => listLineageComponentOptions(panelCatalog),
+    [panelCatalog],
+  );
+
   const { rows, coverageSummary } = useMemo(() => {
-    const base = orientation === 'components' ? componentRowsAll : tableRowsAll;
+    const base = orientation === 'components'
+      ? componentRowsAll
+      : orientation === 'fields'
+        ? fieldRowsAll
+        : tableRowsAll;
     const scoped = filterRowsByScope(base, scopeFilter, orientation);
-    const categorized = orientation === 'components'
-      ? filterRowsByCategory(scoped, categoryFilter)
+    const shared = orientation === 'fields'
+      ? filterRowsBySharedOnly(scoped, sharedOnly)
       : scoped;
+    const categorized = orientation === 'components'
+      ? filterRowsByCategory(shared, categoryFilter)
+      : shared;
     const covered = withLineageCoverage(withUsageIntensity(categorized), {
       keySet,
       suggestedSet,
@@ -362,32 +422,89 @@ const DataLineageContainer = ({ panelInstanceId = null, panelComponentId = null 
     const keyed = orientation === 'components'
       ? filterRowsByKey(covered, keyFilter)
       : covered;
+    const coverageFiltered = orientation === 'components' || orientation === 'tables'
+      ? filterRowsByCoverage(keyed, coverageFilter)
+      : keyed;
+    const filtered = filterRowsBySourceAndComponent(coverageFiltered, {
+      sourceFilter,
+      componentFilter,
+      orientation,
+    });
     return {
-      rows: filterRowsByCoverage(keyed, coverageFilter),
+      rows: filtered,
       coverageSummary: summarizeLineageCoverage(keyed),
     };
   }, [
     orientation,
     componentRowsAll,
     tableRowsAll,
+    fieldRowsAll,
     scopeFilter,
+    sharedOnly,
     categoryFilter,
     keyFilter,
     coverageFilter,
+    sourceFilter,
+    componentFilter,
     keySet,
     suggestedSet,
     fieldByPanel,
   ]);
 
+  // Diagram may surface component nodes while Orientation is tables/fields.
+  // Keep those rows selectable for Details without switching orientation.
+  const diagramSelectableRows = useMemo(() => {
+    const byId = new Map();
+    rows.forEach((row) => {
+      if (row?.id) byId.set(row.id, row);
+    });
+    // Always keep component rows selectable for diagram clicks / PDF context.
+    componentRowsAll.forEach((row) => {
+      if (row?.id && !byId.has(row.id)) byId.set(row.id, row);
+    });
+    return [...byId.values()];
+  }, [rows, componentRowsAll]);
+
+  // Always build so PDF export can embed the graph from any Display mode.
+  const diagramModel = useMemo(() => {
+    // Only merge in the filtered component row(s) so the diagram stays scoped;
+    // full componentRowsAll is for selection lookup, not for edge expansion.
+    const diagramRows = orientation === 'components'
+      ? rows
+      : [
+        ...rows,
+        ...componentRowsAll.filter((row) => {
+          if (!componentFilter) return false;
+          return row.panelId === componentFilter || row.componentKey === componentFilter;
+        }),
+      ];
+    return buildLineageDiagramModel({
+      rows: diagramRows,
+      orientation,
+      componentFilter,
+      includeCoConsumers,
+      showLogicalLinks,
+      appearance: 'screen',
+      interactive: true,
+    });
+  }, [
+    rows,
+    orientation,
+    componentFilter,
+    componentRowsAll,
+    includeCoConsumers,
+    showLogicalLinks,
+  ]);
+
   useEffect(() => {
-    if (selectedId && !rows.some((row) => row.id === selectedId)) {
-      setSelectedId(null);
-    }
-  }, [rows, selectedId]);
+    if (!selectedId) return;
+    const stillVisible = diagramSelectableRows.some((row) => row.id === selectedId);
+    if (!stillVisible) setSelectedId(null);
+  }, [diagramSelectableRows, selectedId]);
 
   const selection = useMemo(
-    () => rows.find((row) => row.id === selectedId) || null,
-    [rows, selectedId],
+    () => diagramSelectableRows.find((row) => row.id === selectedId) || null,
+    [diagramSelectableRows, selectedId],
   );
 
   const detail = useMemo(() => {
@@ -442,16 +559,28 @@ const DataLineageContainer = ({ panelInstanceId = null, panelComponentId = null 
         userFilter={userFilter}
         recency={recency}
         scopeFilter={scopeFilter}
+        sharedOnly={sharedOnly}
+        sourceFilter={sourceFilter}
+        componentFilter={componentFilter}
+        includeCoConsumers={includeCoConsumers}
+        viewsCoConsumers={viewsCoConsumers}
+        onIncludeCoConsumers={setFanOutChecked}
+        showLogicalLinks={showLogicalLinks}
+        sourceOptions={sourceOptions}
+        componentOptions={componentOptions}
         categoryFilter={categoryFilter}
         categoryOptions={categoryOptions}
         keyFilter={keyFilter}
         coverageFilter={coverageFilter}
-        coverageSummary={coverageSummary}
+        coverageSummary={orientation === 'fields' ? null : coverageSummary}
         userEmails={userEmails}
         onRoleFilter={setRoleFilter}
         onUserFilter={setUserFilter}
         onRecency={setRecency}
         onScopeFilter={setScopeFilter}
+        onSharedOnly={setSharedOnly}
+        onSourceFilter={setSourceFilter}
+        onComponentFilter={setComponentFilter}
         onCategoryFilter={setCategoryFilter}
         onKeyFilter={setKeyFilter}
         onCoverageFilter={setCoverageFilter}
@@ -460,10 +589,12 @@ const DataLineageContainer = ({ panelInstanceId = null, panelComponentId = null 
         selectedId={selectedId}
         onSelect={setSelectedId}
         detail={detail}
+        diagramModel={diagramModel}
         showFilters={showFilters}
         showDetails={showDetails}
         showProvenance={showProvenance}
         showColumnFilters={showColumnFilters}
+        showLegends={showLegends}
         reportShellClassName={reportShellClassName}
         usageError={usageError || (etlError ? `ETL reference unavailable: ${etlError}` : null)}
         usageLoading={usageLoading}

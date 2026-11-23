@@ -27,7 +27,8 @@
 - **Next**: v0.2.0 (Enhanced data features)
 
 ### **Current / recent**
-- **v0.4.0** - Demo baseline: Documents import, architecture print, Historic MR Path ✅
+- **v0.5.0** - Firm/dev baseline: Data Lineage diagram, PlaceHolder wireframe, science evidence, SSO polish ✅
+- **v0.4.0** - Demo baseline: Documents import, architecture print, Historic MR Path
 - **v0.3.1** - talia-engine RM Agent Runtime (Advise), integration health, Ship × Day Pressure
 - **v0.3.0** - Focus management / discuss presenter baseline
 - **v1.0.0** - First production release (planned)

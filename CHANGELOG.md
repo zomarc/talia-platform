@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.0] - 2026-11-23
+
+### Summary
+
+Firm/dev baseline after Celestyal MVP work: Data Lineage source diagram for remapping discussion, PlaceHolder wireframe canvas, science/evidence engine path, and SSO/auth hardening.
+
+### Added
+
+- **Data Lineage (D015):** Diagram display (Synapse → Talia → Component), Component-scoped filters with Co-consumers fan-out, usage-weighted edges, Views → Legends strip, advisory logical links (not Synapse FKs), PDF diagram embed.
+- **PlaceHolder:** Wireframe canvas for early panel sketching (blocks, charts, controls) before full presenters.
+- **Science / evidence:** Engine contracts + Driver Analysis path, `rm_science_evidence` migration, GraphQL/server consumers for evidence citation.
+- **Framework:** Panel pause that stops refreshes; source-availability gate for panel data fetches.
+
+### Changed
+
+- Celestyal SSO / OIDC role map and landing polish for MVP auth.
+- Kong / MVP build script and staging env example updates for the Azure instance.
+
+### Notes
+
+- Logical lineage links are advisory for remapping discussion only — never runtime join drivers.
+- Engine package remains on its own semver; platform packages are **0.5.0**.
+
+---
+
 ## [0.4.0] - 2026-11-03
 
 ### Summary

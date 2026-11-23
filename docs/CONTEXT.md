@@ -174,7 +174,7 @@ cd talia-server && npm run start
 
 ### **Versioning Strategy**
 - **x.y.z Format**: Production.BaselineOrFeature.DevRelease
-- **Current Version**: 0.4.0 (Demo baseline — Documents import, architecture print, Historic MR Path)
+- **Current Version**: 0.5.0 (Firm/dev baseline — Data Lineage diagram, PlaceHolder, science evidence, SSO)
 - **Development**: Feature releases increment y, testable increments z
 
 ## 📝 **Development Notes**
